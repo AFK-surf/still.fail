@@ -147,7 +147,7 @@ pub fn hover_card(
     }
     Mouse => {
       let on_trigger = c.hovered(trigger)
-      let on_card = was && pointer_in(c, c.id(key + "/panel"))
+      let on_card = was && (pointer_in(c, c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
       if was {
         !after(c, key + "/out", !(on_trigger || on_card), close_delay)
       } else {

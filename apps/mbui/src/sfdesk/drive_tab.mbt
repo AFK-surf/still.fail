@@ -37,6 +37,7 @@ let ftab : FChatTab = {
 
 ///|
 fn tab_reset() -> Unit {
+  panel_screens.clear()
   ftab.building = false
   ftab.places.clear()
   ftab.scope = ""
@@ -127,8 +128,8 @@ pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
 /// The tab for the chat `chat` (its key: what 添加 puts things into), whose station is `station`, filling the box it is
 /// drawn in, one on every screen: the places or a folder (its way, its rows picked by a press, its ways of showing as
 /// wide as its list leaves, its preview), 添加 at its foot; with a pointer its rows dragged onto the chat too.
-pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station : String) -> Unit {
-  ftab.scope = ws
+pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station : String, only_station? : Bool = false, scope? : String = ws) -> Unit {
+  ftab.scope = scope
   // (what is picked is for this chat's message)
   if ftab.chat != chat {
     ftab.picked.clear()
@@ -145,13 +146,13 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     _ => ()
   }
   let (list, _) = dv_stations(src, ws)
-  let stations = list.unwrap_or([]).filter(fn(s) { s.drive })
+  let stations = list.unwrap_or([]).filter(fn(s) { s.drive && (!only_station || s.station == station) })
   let start : DriveAt? = match stations.iter().find_first(fn(s) { s.station == station }) {
     Some(s) if s.anywhere && s.home != "" => Some({ station, root: Some(s.home), path: "" })
     Some(s) if s.roots.length() == 1 => Some({ station, root: Some(s.roots[0].path), path: "" })
     _ => None
   }
-  let place = match ftab.places.get(ws) {
+  let place = match ftab.places.get(scope) {
     Some(p) => p
     None => start
   }
@@ -160,6 +161,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     c.box(style=ftab_body, fn() {
       match place {
         None => ftab_places(c, stations)
+        Some(at) if at.root is None => ftab_places(c, stations)
         Some(at) =>
           match stations.iter().find_first(fn(s) { s.station == at.station }) {
             Some(st) => ftab_folder(c, src, ws, st, at)
@@ -281,7 +283,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
       if c.clicked(sid) {
-        ftab.places[ws] = None
+        ftab.places[ftab.scope] = None
       }
       let sb = c.box(style=ftab_step, id=sid, fn() { c.text(st.name, style=ftab_step_words) |> ignore })
       c.semantics(sb, Button, id=sid, label=st.name)

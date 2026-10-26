@@ -50,3 +50,5 @@ Besides the web's `web/ui`: what a search found as its rows show it (`marked.mbt
 (`ink.mbt`), formulas (`math.mbt`), the station glyph (`glyph.mbt`), Android's drawables (`picture.mbt`), the phone's
 page bar (`nav_bar.mbt`), a way to where something is (`way.mbt`: the web's crumbs, its steps leaving for a … short of room), a sidebar's rows (`side_rows.mbt`: the web's `Sidebar.css.ts` navRow, navNew, navScroll and `SidebarList.tsx` NavItem, NavAction; a row's ground as it moves, `nav_ground`), the fonts (`faces.mbt`), a linear gradient's ground (`gradient.mbt`: a small picture of it stretched over
 the box, for the notifications page's preview screen, until mbui's renderer fills gradients itself).
+
+Station cards use `submenu_row` for screens and files. On Small it opens the library's menu presenter; on Medium and Large it opens a nonmodal menu beside the row, leaving the parent card reachable. The row is inset by `panel_pad`, so the placement offset is twice that inset: the visible panel edges remain 6 px apart. `MenuItem.heading` labels pinned folders without making the heading selectable.

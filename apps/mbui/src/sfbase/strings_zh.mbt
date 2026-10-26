@@ -1929,4 +1929,7 @@ let zh : Map[String, String] = {
   "web-pages.workspace.owner": "所属账号",
   "web-pages.workspace.people": "{n} 人",
   "web-pages.workspace.resizeSidebar": "调整侧边栏宽度",
+  "web-pages.drive.viewAll": "查看所有文件",
+  "web-pages.drive.pinnedFolders": "固定文件夹",
+  "web-pages.screen.none": "暂无屏幕",
 }

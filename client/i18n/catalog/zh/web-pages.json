@@ -1947,5 +1947,8 @@
   "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",
   "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的会话。agent 会重新读取对话消息，执行历史只在需要时读取。",
   "web-pages.chat.contextActions": "上下文操作",
-  "web-pages.chat.contextManage": "管理"
+  "web-pages.chat.contextManage": "管理",
+  "web-pages.drive.viewAll": "查看所有文件",
+  "web-pages.drive.pinnedFolders": "固定文件夹",
+  "web-pages.screen.none": "暂无屏幕"
 }

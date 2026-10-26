@@ -1575,4 +1575,7 @@ let zh : Map[String, String] = {
   "web-pages.vault.uses.none": "暂无使用记录",
   "web-pages.vault.uses.title": "使用记录",
   "web-pages.vault.vaults": "库",
+  "web-pages.drive.viewAll": "查看所有文件",
+  "web-pages.drive.pinnedFolders": "固定文件夹",
+  "web-pages.screen.none": "暂无屏幕",
 }

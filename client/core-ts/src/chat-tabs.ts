@@ -43,6 +43,18 @@ function isScreen(key: string): boolean {
   }
 }
 
+/** Station pages opened beside a chat, keyed by the station rather than its current folder. */
+function isStationPage(key: string): boolean {
+  const prefix = key.startsWith("drive:") ? "drive:" : key.startsWith("station:") ? "station:" : null;
+  if (prefix === null) return false;
+  try {
+    const v: unknown = JSON.parse(key.slice(prefix.length));
+    return Array.isArray(v) && v.length === 1 && typeof v[0] === "string" && v[0].length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /// The agents' session keys and their jobs' ids, as the chat view has them.
 function chatHas(agents: readonly unknown[]): { histories: Set<string>; jobs: Set<string> } {
   const histories = new Set<string>();
@@ -69,7 +81,7 @@ export function tabsOf(kept: unknown, agents: readonly unknown[], noChat: boolea
   const auto = chosen === null && noChat && session !== null;
   const tabs = chosen ?? (auto && session !== null ? [session] : []);
   const has = chatHas(agents);
-  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || isScreen(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
+  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || isScreen(key) || isStationPage(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
   const open = agents.length ? tabs.filter(known) : tabs;
   const active = isObject(kept) && typeof kept.active === "string" ? kept.active : null;
   const shown = active !== null && open.includes(active) ? active : open[0];

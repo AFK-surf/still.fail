@@ -1907,3 +1907,7 @@ web-pages.workspace.noSuchStation
 web-pages.workspace.owner
 web-pages.workspace.people
 web-pages.workspace.resizeSidebar
+
+web-pages.drive.viewAll
+web-pages.drive.pinnedFolders
+web-pages.screen.none

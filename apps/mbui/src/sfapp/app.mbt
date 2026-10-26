@@ -106,13 +106,13 @@ fn reset() -> Unit {
 ///|
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
 /// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
-fn pages_shell() -> Shell {
+fn pages_shell(src : Source) -> Shell {
   {
     home,
     close_overlays,
     open_invite,
     behind: peeks_stop_all,
-    open: open_where,
+    open: fn(p) { open_where(src, p) },
     detail: detail_where,
     back: back_where,
     show: fn() {
@@ -147,10 +147,14 @@ fn back_where() -> (() -> Unit)? {
 /// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
 /// main_page), the page pane brought over on the tape to show it (sfdesk's show_page: also the chat already shown,
 /// chosen again); laid out Small on the phone's stack (a new chat risen from the foot).
-fn open_where(p : Page) -> Unit {
+fn open_where(src : Source, p : Page) -> Unit {
   if !@sfdesk.is_wide(@ui.current()) {
     stack_open(p)
     return
+  }
+  match app.nav.top() {
+    Chat(r) => if @sfdesk.station_page_beside(src, r, p) { return }
+    _ => ()
   }
   match p {
     Chat(r) => open_chat_beside(r)
@@ -269,7 +273,7 @@ let page_whole : @ui.Style = @ui.css("w=Full h=Full")
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // (the made-up core, where one is linked, on this frame's runtime)
   (@sfbase.made_frame.val)(c)
-  shell.val = pages_shell()
+  shell.val = pages_shell(src)
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
   menu_bar(c, src)
@@ -309,6 +313,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
   // beside what the system has at the window's sides (sides.mbt)
+  c.after_build("station-tabs-left", fn() { @sfdesk.station_tabs_sweep(c, src) })
   c.with_theme(@sf.ui_theme(), fn() { beside_sides(c, fn() { view_in(c, src, t) }) })
 }
 

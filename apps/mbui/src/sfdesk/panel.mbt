@@ -20,6 +20,7 @@ fn side_shows(v : ChatView, tab : String) -> Bool {
   tab == "letters" ||
   tab_service(tab) is Some(_) ||
   tab_file(tab) is Some(_) ||
+  station_tab(tab) is Some(_) ||
   v.agents.iter().any(fn(a) { a.key == tab })
 }
 
@@ -503,6 +504,8 @@ fn side_panel(
         service_pane(c, src, r, job)
       } else if tab_file(front) is Some((session, path, name)) {
         file_pane(c, src, r, session, path, name)
+      } else if station_tab_pane(c, src, w, r, front) {
+        ()
       } else if front != "" {
         // one of its agents' execution histories
         agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
@@ -538,6 +541,10 @@ fn side_panel(
 /// What a tab is called and how its close is said: an agent's by its label, a web service's by its name, a
 /// visualization's by its file's name, 任务's, 文件's, agent 往来's by theirs.
 fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (String, String) {
+  match station_tab_name(src, tab) {
+    Some(label) => return (label, @sf.t("web-pages.chat.close", args=[("name", label)]))
+    None => ()
+  }
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
   let service = match tab_service(tab) {
     Some(job) => Some((src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value)
@@ -576,6 +583,13 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
 /// colour when `front`: in front, or lit by the hand).
 fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
   let t = @sf.theme()
+  match station_tab(tab) {
+    Some((kind, _, _)) => {
+      @sf.icon(c, if kind == "drive" { "folder" } else { "monitor" }, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
+      return
+    }
+    None => ()
+  }
   match v.agents.iter().find_first(fn(a) { a.key == tab }) {
     Some(a) => {
       @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore

@@ -1074,6 +1074,7 @@ pub fn dropdown(
   entries : Array[@kit.Entry],
   icons : Map[String, String],
   w : Double,
+  submenu? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = 6.0,
@@ -1095,6 +1096,7 @@ pub fn dropdown(
     open,
     trigger,
     entries,
+    submenu~,
     side~,
     along~,
     offset~,
@@ -1147,6 +1149,7 @@ pub(all) struct MenuItem {
   danger : Bool
   disabled : Bool
   chosen : Bool?
+  heading : Bool
   select : () -> Unit
 }
 
@@ -1158,8 +1161,9 @@ pub fn menu_item_of(
   danger? : Bool = false,
   disabled? : Bool = false,
   chosen? : Bool,
+  heading? : Bool = false,
 ) -> MenuItem {
-  { label, icon, danger, disabled, chosen, select }
+  { label, icon, danger, disabled, chosen, heading, select }
 }
 
 ///|
@@ -1172,6 +1176,7 @@ let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 ///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
+  submenu_hover.val = ""
   held_felt.clear()
   presenters_reset()
   menu_open.val = ""
@@ -1187,6 +1192,7 @@ fn menu_items(
   key : String,
   trigger : Int,
   items : Array[MenuItem?],
+  submenu? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = 6.0,
@@ -1202,10 +1208,10 @@ fn menu_items(
       Some(item) => {
         let v = i.to_string()
         entries.push(
-          match item.chosen {
+          if item.heading { @kit.menu_label(item.label) } else { match item.chosen {
             Some(on) => @kit.menu_radio(v, on, label=item.label, disabled=item.disabled)
             None => @kit.menu_item(v, label=item.label, disabled=item.disabled)
-          },
+          } },
         )
         if item.icon != "" {
           icons[v] = item.icon
@@ -1216,7 +1222,7 @@ fn menu_items(
       }
     }
   }
-  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, side~, along~, offset~, at?, danger~)
+  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~)
   if open && !m.open {
     menu_open.val = ""
   }
