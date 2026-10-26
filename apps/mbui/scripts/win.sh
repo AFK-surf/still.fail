@@ -88,8 +88,13 @@ END
 RC
   # (rc's options with -, not /: Git Bash hands /fo to Windows programs as a path)
   (cd "$r" && rc.exe -nologo -fo app.res app.rc) || return 1
-  export MBUI_WIN_RES=$r/app.res
-  echo "win.sh: $name 0.1.$n ($id), its resources $(wc -c < "$r/app.res") bytes"
+  # (named by what is in it: moon links the program again only for a link of other inputs, the link's flags among
+  # them, and so for resources that changed, another variant's or version's, as their name does; the same name, an
+  # app built before linked none of them and kept the resources it had)
+  local res=$r/app-$(sha256sum "$r/app.res" | cut -c1-16).res
+  cp "$r/app.res" "$res"
+  export MBUI_WIN_RES=$res
+  echo "win.sh: $name 0.1.$n ($id), its resources $(wc -c < "$res") bytes ($(basename "$res"))"
 }
 # put [core]: the engine and the shell beside the app's .exe, the core's bytecode too when asked
 put() {
