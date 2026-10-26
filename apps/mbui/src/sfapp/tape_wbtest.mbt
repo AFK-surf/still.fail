@@ -1107,3 +1107,56 @@ test "on the tape a passage left picked keeps nothing from coming over: the side
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
 }
+
+///|
+/// The settings in a window `w` × 760 of a Mac's, a page of theirs opened by `open` as the app begins or after its
+/// first frame, the tape's move over.
+fn tape_settings(w : Double, open : () -> Unit, first? : Bool = false) -> @ui.Tester {
+  reset()
+  let src = fixture("settings")
+  if first {
+    open()
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=760.0, platform=0)
+  t.draw()
+  if !first {
+    open()
+  }
+  t.run_for(@sfdesk.side_move_ms)
+  t
+}
+
+///|
+/// Whether the settings page holding `words` is the one in use, whole in the window `w` wide: its words past what shows
+/// of the sidebar at its left, and their end in the window.
+fn settings_page_whole(t : @ui.Tester, words : String, w : Double) -> Bool {
+  match t.rect_of(words) {
+    Some((x, _, tw, _)) => x >= @sfdesk.tape_shows && x + tw <= w && @sfdesk.wide.tape_at == @sfdesk.TapePane::Page
+    None => false
+  }
+}
+
+///|
+test "on the tape a settings page opened at one of its own (⌘K's, the bell's 通知设置, 快捷键 from its dialog) comes over, whole in the window" {
+  let t = tape_settings(600.0, fn() { @sfdesk.open_settings_at(@settings.Route::LocalStation) })
+  assert_true(@sfdesk.wide.tape)
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of(local_none)}")
+}
+
+///|
+test "on the tape a settings page a fixture opens as the app begins (a scripted run's, a picture's) is the one in use, as a row of their list opens it: whole in the window" {
+  let t = tape_settings(600.0, fn() { open_fixture_mode("settings-local-station") }, first=true)
+  assert_true(@sfdesk.wide.tape)
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of(local_none)}")
+}
+
+///|
+test "on the tape the gear's settings: their list in use, its first row's page showing beside it" {
+  let t = tape_settings(600.0, fn() { open_page(Settings) })
+  assert_true(@sfdesk.wide.tape)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+}
+
+///|
+/// 本机 Station's words where this machine has none (the Tester's host says none).
+let local_none : String = "本机没有单独安装的 station"
