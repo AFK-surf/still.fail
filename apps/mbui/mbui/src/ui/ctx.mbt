@@ -1543,6 +1543,11 @@ fn Ctx::hand_at(self : Ctx, id : Int) -> Bool {
 /// one (Ctx::hovered).
 fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
   let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  // (what a press there would be on, where it reaches what is drawn smaller than its room: that one lit, as a click
+  // there is its, press_reach)
+  let pressed = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
+  let reached = press_reach(self.hit_ids, self.hit_rects, self.hit_clips, pressed, x, y)
+  let k = if reached != pressed { reached } else { k }
   self.hover = if k >= 0 { self.hit_ids[k] } else { 0 }
   self.hover_in.clear()
   self.holders(k, self.hover_in)
@@ -1803,13 +1808,8 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
   let clips = if targets { g().hit_clips } else { [] }
   // (a press: past what is only pointed at)
   let k = hit_at(ids, rects, clips, x, y, pressed=targets)
-  // a finger: what is smaller than a fingertip is reached from round it (Pointing)
-  if targets && pointing() is Finger {
-    match finger_reach(ids, rects, clips, k, x, y) {
-      Some(id) => return id
-      None => ()
-    }
-  }
+  // what is drawn smaller than its room is reached from round it, by a finger or a pointer alike (press_reach)
+  let k = if targets { press_reach(ids, rects, clips, k, x, y) } else { k }
   if k >= 0 {
     ids[k]
   } else {
@@ -1818,64 +1818,116 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
 }
 
 ///|
-/// The least a finger's target is across, each way: the system's (Android's 48 dp, Compose's
-/// minimumInteractiveComponentSize; iOS's 44 pt). For what a view reaches by hand itself (a drag area's own taps).
+/// The least a target is across, each way, as a press reaches it (room_least, on every system and with either input:
+/// one room, press_reach's): for what a view reaches by hand itself (a drag area's own taps).
 pub fn finger_target() -> Double {
-  if h_platform() == 1 {
-    44.0
-  } else {
-    48.0
-  }
+  room_least
 }
 
 ///|
-/// What a finger at (x, y) reaches that it does not touch (Compose's minimum touch target): a target smaller than
-/// finger_target, grown to it round its middle (not drawn so, nor laid out), drawn over `top` (the target the finger
-/// is on, -1 none) and within it (a row's small button, not the row's neighbour: the one touched keeps it), within
-/// what cuts it; of several, the nearest.
-fn finger_reach(
+/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `room_least`, it grown
+/// to it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
+/// (`edge`: the window, what cuts it) rather than cut short there; cut where it passes what holds it that takes presses
+/// (`cut`: a row's small button keeps to its row, the row's own room round it the row's). What the hit test reaches
+/// (press_reach) and the room rules measure (rooms.mbt), one.
+fn press_room(
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  cut : (Double, Double, Double, Double),
+  edge : (Double, Double, Double, Double),
+) -> (Double, Double, Double, Double) {
+  let (ax0, ax1) = room_across(x0, x1, cut.0, cut.2, edge.0, edge.2)
+  let (ay0, ay1) = room_across(y0, y1, cut.1, cut.3, edge.1, edge.3)
+  (ax0, ay0, ax1, ay1)
+}
+
+///|
+/// One way of press_room: `lo`–`hi` grown to room_least round its middle where shorter, moved in from `elo`–`ehi`'s
+/// ends, cut to `clo`–`chi`.
+fn room_across(
+  lo : Double,
+  hi : Double,
+  clo : Double,
+  chi : Double,
+  elo : Double,
+  ehi : Double,
+) -> (Double, Double) {
+  let mut a = lo
+  let mut b = hi
+  if hi - lo < room_least {
+    let mid = (lo + hi) / 2.0
+    a = mid - room_least / 2.0
+    b = mid + room_least / 2.0
+    // (moved in from an edge it passes, not cut short at it)
+    if a < elo {
+      b = b + (elo - a)
+      a = elo
+    }
+    if b > ehi {
+      a = a - (b - ehi)
+      b = ehi
+    }
+  }
+  (dmax(a, dmax(clo, elo)), dmin(b, dmin(chi, ehi)))
+}
+
+///|
+/// What a press (or the pointer) at (x, y) is on: `top` (the topmost target there, its index; -1 none), or a target
+/// drawn over it and within it smaller than its room whose room (press_room, cut to `top`, moved in from what cuts it
+/// and the window) holds (x, y), the nearest of several (where rooms meet, each has the part nearer it): a row's small
+/// button from round it, not the row's neighbour's. On what takes the pointer (`capture`: a picture a drag pans) the
+/// press is its own, nothing over it reached (a viewer's 下一张 over the picture: a drag beside it pans). By a finger
+/// and a pointer alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not), so what
+/// lights under the pointer is what a click there presses. What is only pointed at is never reached for.
+fn press_reach(
   ids : Array[Int],
   rects : Array[Double],
   clips : Array[Double],
   top : Int,
   x : Double,
   y : Double,
-) -> Int? {
-  let least = finger_target()
+) -> Int {
+  if top >= 0 && captures.contains(ids[top]) {
+    return top
+  }
   let points = g().points
-  let mut best : Int? = None
-  let mut best_d = 1.0e9
+  let (ww, wh) = (g().width, g().height)
+  let mut best = top
+  let mut best_d = 1.0e18
   for k in (top + 1)..<ids.length() {
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     let (w, h) = (x1 - x0, y1 - y0)
-    // (what is only pointed at is never reached for)
-    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= room_least && h >= room_least) {
       continue
     }
-    let gx = dmax(0.0, (least - w) / 2.0)
-    let gy = dmax(0.0, (least - h) / 2.0)
-    if x < x0 - gx || x >= x1 + gx || y < y0 - gy || y >= y1 + gy {
-      continue
-    }
-    // within what cuts it (a list's edge), and within what the finger is on
-    let b = k * clip_n
-    if b + clip_n <= clips.length() &&
-      (x < clips[b] || x >= clips[b + 2] || y < clips[b + 1] || y >= clips[b + 3]) {
-      continue
-    }
+    // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window
+    let mut cut = (0.0, 0.0, ww, wh)
     if top >= 0 {
       let t = top * 4
       if x0 < rects[t] || y0 < rects[t + 1] || x1 > rects[t + 2] || y1 > rects[t + 3] {
         continue
       }
+      cut = (rects[t], rects[t + 1], rects[t + 2], rects[t + 3])
+    }
+    let mut edge = (0.0, 0.0, ww, wh)
+    let b = k * clip_n
+    if b + clip_n <= clips.length() {
+      edge = (dmax(0.0, clips[b]), dmax(0.0, clips[b + 1]), dmin(ww, clips[b + 2]), dmin(wh, clips[b + 3]))
+    }
+    let (rx0, ry0, rx1, ry1) = press_room(x0, y0, x1, y1, cut, edge)
+    // (and within the rounded corners of what cuts it, as a press on it is)
+    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 || !in_round_clip(clips, k, x, y) {
+      continue
     }
     let dx = dmax(0.0, dmax(x0 - x, x - x1))
     let dy = dmax(0.0, dmax(y0 - y, y - y1))
     let d = dx * dx + dy * dy
     if d < best_d {
       best_d = d
-      best = Some(ids[k])
+      best = k
     }
   }
   best

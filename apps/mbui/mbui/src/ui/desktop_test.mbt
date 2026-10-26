@@ -725,15 +725,20 @@ test "desktop: a finger held still asks for the menu once, though what the menu 
 }
 
 ///|
-test "desktop: a finger reaches a target smaller than a fingertip from round it, not its neighbour's; a mouse does not" {
+test "desktop: a finger or a pointer reaches a target smaller than its room from round it, not its neighbour's; lit there" {
   let clicks : Array[String] = []
+  let lit : Array[String] = []
   let view = fn(c : @ui.Ctx) {
     let row = c.id("row")
     let a = c.id("a")
     let b = c.id("b")
+    lit.clear()
     for p in [("row", row), ("a", a), ("b", b)] {
       if c.clicked(p.1) {
         clicks.push(p.0)
+      }
+      if c.hovered(p.1) {
+        lit.push(p.0)
       }
     }
     // a row 300 by 60, two 20 by 20 buttons in it 4 apart at its end
@@ -743,20 +748,46 @@ test "desktop: a finger reaches a target smaller than a fingertip from round it,
     })
     |> ignore
   }
-  let t = @ui.Tester::new(view, platform=2)
-  // 10 over the first button (at 240..260, 20..40): its own
-  t.tap(250.0, 12.0)
-  // on the first, by its edge nearest the second: the first keeps it
-  t.tap(259.0, 30.0)
-  // between them, nearer the second
-  t.tap(263.5, 30.0)
-  // far from both: the row's
-  t.tap(100.0, 30.0)
-  assert_eq(clicks, ["a", "a", "b", "row"])
-  clicks.clear()
+  // a finger, and a mouse alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not)
+  for platform in [2, 0] {
+    clicks.clear()
+    let t = @ui.Tester::new(view, platform~)
+    // 8 over the first button (at 240..260, 20..40): its own, its room 44 round its middle
+    t.tap(250.0, 12.0)
+    // on the first, by its edge nearest the second: the first keeps it
+    t.tap(259.0, 30.0)
+    // between them, nearer the second
+    t.tap(263.5, 30.0)
+    // far from both: the row's
+    t.tap(100.0, 30.0)
+    assert_eq(clicks, ["a", "a", "b", "row"], msg="platform \{platform}")
+  }
+  // the pointer resting where a click reaches the first: the first lit (and the row that holds it), as a click there
+  // is its
   let t = @ui.Tester::new(view, platform=0)
-  t.tap(250.0, 12.0)
-  assert_eq(clicks, ["row"])
+  t.move(250.0, 12.0)
+  t.draw()
+  assert_true(lit.contains("a") && !lit.contains("b"), msg="\{lit}")
+}
+
+///|
+test "desktop: a target smaller than its room at the window's edge has its room moved in from the edge, not cut short" {
+  let clicks : Array[String] = []
+  let view = fn(c : @ui.Ctx) {
+    let a = c.id("a")
+    if c.clicked(a) {
+      clicks.push("a")
+    }
+    c.box(w=Px(200.0), h=Px(100.0), fn() { c.box(id=a, w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore })
+    |> ignore
+  }
+  let t = @ui.Tester::new(view, w=200.0, h=100.0, platform=0)
+  // drawn at 0..20 each way in the window's corner: its room 0..44 each way, not -12..32 cut to 0..32
+  t.tap(38.0, 38.0)
+  assert_eq(clicks, ["a"])
+  // past it: nothing
+  t.tap(46.0, 10.0)
+  assert_eq(clicks, ["a"])
 }
 
 ///|

@@ -586,7 +586,7 @@ test "the room a list keeps for the composer opened with one line is as tall as 
 }
 
 ///|
-test "on a phone a finger 4 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
+test "on a phone a finger 3 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
   for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
     let calls : Array[Made] = []
     let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
@@ -601,7 +601,7 @@ test "on a phone a finger 4 off the send button, beside it or over it, sends: th
     t.draw()
     let (cx, cy) = t.locate("icon:arrow-up")[0]
     let half = @sf.theme().round.side / 2.0
-    t.tap(cx + off.0 * (half + 4.0), cy + off.1 * (half + 4.0))
+    t.tap(cx + off.0 * (half + 3.0), cy + off.1 * (half + 3.0))
     t.frame()
     assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{off}")
   }

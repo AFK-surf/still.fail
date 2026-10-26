@@ -120,8 +120,8 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
 
 ///|
 /// A phone's buttons are drawn the phone web's 38 (mButton: a pill that sits with the words round it); a finger reaches
-/// one from a fingertip round it all the same (mbui's finger_reach: a target under the system's least, 48 on Android,
-/// grown to it round its middle where the finger is on nothing else), so none is drawn taller for its reach.
+/// one from a fingertip round it all the same (mbui's press_reach: a target under 44 grown to it
+/// round its middle where the finger is on nothing else), so none is drawn taller for its reach.
 test "分享给其他 workspace on a phone: 完成 is reached a little over its pill, as a fingertip does" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
@@ -136,8 +136,8 @@ test "分享给其他 workspace on a phone: 完成 is reached a little over its 
     .iter()
     .fold(init=(0.0, 0.0, 0.0, 0.0), fn(a, r) { if r.2 > a.2 { (r.0, r.1, r.2, r.3) } else { a } })
   assert_true(pill.3 < 44.0, msg="drawn \{pill.3} high")
-  // (4 over its top: outside what is drawn, within a fingertip's reach)
-  t.tap(cx, pill.1 - 4.0)
+  // (2 over its top: outside what is drawn, within its room, 44 round its middle)
+  t.tap(cx, pill.1 - 2.0)
   t.frame()
   assert_eq(named(calls, "chat.xshare").length(), 1)
 }

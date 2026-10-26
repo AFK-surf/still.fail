@@ -13,8 +13,13 @@
 /// capsule in a smooth corner standing as a circle reads it (smooth.mbt round_like): a tablet's composer on the tape
 /// 6 lower, the chat's list showing more of the message at its top, its time under its words as every message's: 1
 /// apart more. (2026-10-27: a chat row's state line and the marks in it parts of the row, only pointed at,
-/// not targets of their own: 2090 room fewer.)
-let rooms_known : Map[String, Int] = { "room": 458, "apart": 7248, "hover": 28 }
+/// not targets of their own: 2090 room fewer. The same day one room for the hit test, a finger's and a pointer's,
+/// and the rules (Ctx's press_reach, press_room): moved in from the window's edge, cut to what holds it, where two
+/// meet each the part nearer it. A room overlapping another's is no fault of its own any more, only what is left
+/// of each once they are parted: the 7248 apart, two targets each, counted as room where what is left is under
+/// 44 (rows 32 high one after another, 32 keys 4 apart, a message's name, time and words), 9098 room; apart now
+/// what is drawn over each other, none.)
+let rooms_known : Map[String, Int] = { "room": 9098, "apart": 0, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

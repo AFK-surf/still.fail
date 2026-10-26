@@ -390,7 +390,7 @@ fn recent_mark_in(corner : Double) -> Double {
 
 ///|
 /// Whether a tap at (`across`, `down`) on a photo's tile, from its start and top, is on its ring: reached from round
-/// it, as a finger reaches what is smaller than its tip (mbui's finger_reach: the ring grown to @ui.finger_target round
+/// it, as a finger reaches what is smaller than its tip (mbui's press_reach: the ring grown to @ui.finger_target round
 /// its middle).
 fn recent_on_ring(across : Double, down : Double, corner : Double) -> Bool {
   let tip = @ui.finger_target()

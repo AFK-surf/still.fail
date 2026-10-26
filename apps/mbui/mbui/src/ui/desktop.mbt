@@ -628,6 +628,8 @@ pub fn Ctx::field_focused(self : Ctx) -> Bool {
 fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
   let under : Array[Int] = []
   let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
+  // (and what is drawn smaller than its room, reached from round it as a press is: press_reach)
+  let k = press_reach(self.hit_ids, self.hit_rects, self.hit_clips, k, x, y)
   if k >= 0 {
     self.holders(k, under)
     under.push(self.hit_ids[k])

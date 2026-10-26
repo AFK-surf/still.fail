@@ -608,7 +608,7 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
     }
   }
   ignore(spec)
-  // (a finger reaches it from round it, the system's least target: @ui's finger_reach)
+  // (a finger reaches it from round it, the system's least target: @ui's press_reach)
   let b = c.box(style=if hot { @sf.round_face().then(round_hot) } else { @sf.round_face() }, id~, fn() {
     @sf.icon(c, "plus", size=plus_icon, color=if no_files {
       @sf.alpha(p.text, faint)
