@@ -211,8 +211,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy, uses, usesPage 
   return (
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
-        {/* The same dot as on its tile in the chat's bar: how this device reaches it, not only whether it is up. */}
-        {link ? <StationDot link={link} /> : <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />}
+        <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
         <MarkPick emoji={s.emoji} icon={s.icon} name={s.name} editable={onMark !== undefined} busy={markBusy} onPick={(m) => { if (!same(m, s.emoji, s.icon)) onMark?.(s, m); }} />
         <span className={css.cardTitle}>
           <Link className={css.name} to={page} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</Link>
