@@ -1,8 +1,8 @@
-// The publishing with keyboard and mouse (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's info, over the whole
-// window, what a snapshot would hold; 发布 publishes it (chat.publish), the link in the presenters' dialog after.
+// Sharing a chat as a picture with keyboard and mouse (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's
+// info, over the whole window, the picture as it would be; 复制图片 puts it on the clipboard, one PNG of it all.
 
 ///|
-test "wide: 公开分享 from the chat's info: the snapshot's messages over the window under its bar; 发布 publishes it, its link to copy after" {
+test "wide: 分享图片 from the chat's info: the picture as it would be over the window under its bar; 复制图片 copies it whole" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
@@ -10,10 +10,7 @@ test "wide: 公开分享 from the chat's info: the snapshot's messages over the 
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      match name {
-        "chat.publish" => done(Ok({ "id": "p3", "link": "https://share.still.fail/#st.p3.key" }))
-        _ => (base.call)(name, params, done)
-      }
+      (base.call)(name, params, done)
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -22,17 +19,26 @@ test "wide: 公开分享 from the chat's info: the snapshot's messages over the 
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()
-  t.tap_text("公开分享")
+  t.tap_text("分享图片")
   t.frame()
   t.frame()
   assert_eq(named(calls, "chat.publishPreview").length(), 1)
-  assert_true(t.find("持有链接的任何人都可查看这些消息；station 离线时无法打开") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("部署登录页") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("已隐藏 1 处") is Some(_))
-  let (bx, by, bw, bh) = t.query(Button, label="发布").unwrap().rect
-  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.click(Button, label="复制图片")
   t.frame()
-  let sent = named(calls, "chat.publish")
-  assert_eq(sent.length(), 1)
-  assert_eq(number(Some(sent[0].params), "upto"), 9.0)
-  assert_true(t.find("https://share.still.fail/#st.p3.key") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_eq(named(calls, "chat.publish").length(), 0)
+  assert_eq(t.shots().length(), 1)
+  // the picture on the clipboard: as wide as the chat's column (760) at two pixels a point, as tall as it all is
+  match t.clipboard_png() {
+    Some(png) =>
+      match png_size(png) {
+        Some((pw, ph)) => {
+          assert_true(pw == 1520 && ph > 600, msg="\{(pw, ph)}")
+          assert_eq(t.clipboard_label(), "still.fail")
+        }
+        None => fail("not a PNG")
+      }
+    None => fail("no picture copied")
+  }
 }

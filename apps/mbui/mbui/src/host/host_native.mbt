@@ -819,6 +819,41 @@ fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> B
   ffi_drawn_pixels(x, y, w, h, out) == 1
 }
 
+// Instances never presented (a shot's) drawn as a frame and read back (apple_render.m, gles_render.h, win_render.cpp:
+// mb_render_pixels_of).
+
+#borrow(inst, out)
+extern "C" fn ffi_drawn_pixels_of(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  x : Int,
+  y : Int,
+  w : Int,
+  h : Int,
+  out : FixedArray[Byte],
+) -> Int = "mb_render_pixels_of"
+
+///|
+/// Instances `inst` drawn as a frame on the ground `r`, `g`, `b`, and their pixels in the rectangle `x`, `y`, `w` by `h`
+/// as drawn_pixels gives the frame's: false where it is not all in the frame.
+fn drawn_pixels_of(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  x : Int,
+  y : Int,
+  w : Int,
+  h : Int,
+  out : FixedArray[Byte],
+) -> Bool {
+  ffi_drawn_pixels_of(inst, count, r, g, b, x, y, w, h, out) == 1
+}
+
 // A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m, and on Android
 // android_host.c on android/…/BrowserLogin.java).
 

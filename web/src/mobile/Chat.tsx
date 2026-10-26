@@ -48,8 +48,7 @@ import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatCcTo, ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
-import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
-import * as publishCss from "../Publish.css.ts";
+import { PublishPicture, savePicture, takePicture, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import { sendingHere, sentAfter } from "../madeChat.ts";
@@ -844,9 +843,9 @@ function shownPublish(view: ChatView): ChatPublish | undefined {
 }
 
 /**
- * Making the chat public (docs/public-share.md), a card of its own: 「公开分享」 opens the sheet that publishes it, for
- * those who may (not a read-only member); each of its links under it, when and by whom, 复制, and 撤销 for who
- * published it or an owner or admin (asked first; gone from here at once).
+ * Sharing the chat, a card of its own: 「分享图片」 opens the sheet that draws it as a picture, for those who may (not a
+ * read-only member); each public link made of it before pictures under it (docs/public-share.md: they still open), when
+ * and by whom, 复制, and 撤销 for who published it or an owner or admin (asked first; gone from here at once).
  */
 function PublishList({ here, thread, publish }: { here: Here; thread: ChatThread; publish: ChatPublish }) {
   const app = useApp();
@@ -854,7 +853,7 @@ function PublishList({ here, thread, publish }: { here: Here; thread: ChatThread
     <InfoList>
       {publish.may && (
         <InfoRow onClick={() => app.sheet({ height: 0.9, content: () => <PublishSheet here={here} thread={thread.id} /> })}>
-          <Web size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.publish")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+          <Photo size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.shareImage")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
         </InfoRow>
       )}
       {publish.links.map((l) => <PublishedRow key={l.id} here={here} thread={thread.id} link={l} />)}
@@ -872,6 +871,7 @@ function PublishedRow({ here, thread, link }: { here: Here; thread: number; link
   });
   return (
     <div className={`${listsCss.mInfoRow} ${css.mPublished}`}>
+      <Web size={16} className={partsCss.mSubtle} />
       <span className={`${partsCss.mGrow} ${css.mPublishedText}`}>{link.time?.createdAt?.ago} · {link.byName}</span>
       <LinkButton label={t("common.copy")} onClick={copy} />
       {link.mayRevoke && <LinkButton label={t("web-pages.chat.publish.revoke")} onClick={revoke} />}
@@ -880,38 +880,43 @@ function PublishedRow({ here, thread, link }: { here: Here; thread: number; link
 }
 
 /**
- * Publishes the chat (the phone's; the wide screen's is Publish.tsx PublishDialog): what it would hold, the attachments
- * to tick (all at first; one too big is shown, never ticked), who can read it, 「发布」. Published, its link with a
- * way to copy it; the chat's sheet lists it from then on.
+ * Shares the chat as a picture (the phone's; the wide screen's is Publish.tsx PublishDialog): the picture as it would
+ * be, the attachments to tick (all at first), how much was hidden, 「保存图片」: the picture handed to the system's share
+ * sheet (where it is saved to the photos, or sent), or saved as a file where there is none.
  */
 function PublishSheet({ here, thread }: { here: Here; thread: number }) {
   const app = useApp();
-  const call = useStationCall(here.station);
   const preview = usePublishPreview(here.station, thread);
   const ticking = useTicking();
-  const [made, setMade] = useState<ChatPublished | null>(null);
-  const publishing = useDoing("chat.publish", { station: here.station, thread });
+  const paper = useRef<HTMLDivElement | null>(null);
+  const [taking, setTaking] = useState(false);
   const p = "ok" in preview ? preview.ok : null;
-  const ticked = p ? tickedOf(p, ticking.off) : null;
-  const go = () => {
-    if (!p || !ticked) return;
-    stationApi(call).publish(thread, p.upto, ticked)
-      .then(setMade, (e: unknown) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: e instanceof Error ? e.message : String(e) })));
+  const save = async () => {
+    if (!paper.current || taking) return;
+    setTaking(true);
+    try {
+      const png = await takePicture(paper.current);
+      const file = new File([png], "still.fail.png", { type: "image/png" });
+      if (!navigator.canShare?.({ files: [file] })) savePicture(png);
+      else {
+        // (the press long past by the time it is made, where the browser holds a share to it: saved as a file then)
+        await navigator.share({ files: [file] }).catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === "NotAllowedError") savePicture(png);
+          else if (!(e instanceof DOMException && e.name === "AbortError")) throw e;
+        });
+      }
+    } catch (e) {
+      app.toast(t("web-pages.chat.shareImage.failed", { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setTaking(false);
+    }
   };
-  const copy = (link: string) => void navigator.clipboard.writeText(link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
   return (
     <>
       <SheetGrab />
-      <SheetHead title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} />
+      <SheetHead title={t("web-pages.chat.shareImage")} />
       <div className={`${sheetsCss.mSheetScroll} ${css.mPublishBody}`}>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.chat.publish.lead")}</p>
-        {made ? (
-          <>
-            <div className={publishCss.madeLink}>{made.link}</div>
-            <Button primary label={t("common.link.copy")} onClick={() => copy(made.link)} />
-            <Button primary={false} label={t("common.done")} onClick={() => app.sheet(null)} />
-          </>
-        ) : "reading" in preview ? (
+        {"reading" in preview ? (
           <WaitLine text={t("web-pages.chat.publish.reading")} />
         ) : "error" in preview ? (
           <p className={partsCss.mError}>{preview.error}</p>
@@ -919,9 +924,9 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
           <p className={partsCss.mMuted}>{t("web-pages.chat.publish.empty")}</p>
         ) : (
           <>
-            <PublishMessages messages={p!.messages} ticking={ticking} whole />
+            <PublishPicture preview={p!} ticking={ticking} paper={paper} />
             {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
-            <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} onClick={go} />
+            <Button primary label={t("web-pages.chat.shareImage.save")} busy={taking} onClick={() => void save()} />
           </>
         )}
       </div>

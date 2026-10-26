@@ -202,6 +202,8 @@ struct FakeHost {
   /// a real host asked in its place for what is drawn by (Tester::new's `live`), and its pictures, by the fake's ids
   live : Live?
   live_images : Map[Int, Int]
+  /// the words of each shot taken (shot.mbt), in the order they were drawn in it: a test's (Tester::shots)
+  shots : Array[Array[String]]
 }
 
 ///|
@@ -1148,6 +1150,52 @@ fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
         _ => false
       }
     None => @hostapi.image_pixels(id, out)
+  }
+}
+
+///|
+/// Instances never presented (a shot's: shot.mbt) drawn as a frame is on the frame's ground, and their pixels in a
+/// rectangle of it (as h_drawn_pixels) into `out`: a live Tester's host's, its pictures that host's own as a film draws a
+/// frame (film.mbt draw_frame: one it has not, nothing), the fake host's every pixel a mid grey, opaque.
+fn h_drawn_pixels_of(
+  inst : FixedArray[Double],
+  count : Int,
+  x : Int,
+  y : Int,
+  w : Int,
+  h : Int,
+  out : FixedArray[Byte],
+) -> Bool {
+  let (r, gg, b) = g().clear
+  match fake.val {
+    Some({ live: Some(l), .. } as f) => {
+      let len = count * inst_size
+      let mine = FixedArray::make(if len > 0 { len } else { 1 }, 0.0)
+      inst.blit_to(mine, len~)
+      for k in 0..<count {
+        let at = k * inst_size
+        if mine[at + 5] == 4.0 {
+          match f.live_images.get(mine[at + 20].to_int()) {
+            Some(id) => mine[at + 20] = id.to_double()
+            None => {
+              // nothing drawn: a rect of no colour, no border, no blur
+              mine[at + 5] = 0.0
+              for j in 6..<12 {
+                mine[at + j] = 0.0
+              }
+            }
+          }
+        }
+      }
+      l.host.drawn_pixels_of(mine, count, r, gg, b, x, y, w, h, out)
+    }
+    Some(_) => {
+      for i in 0..<(w * h * 4) {
+        out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
+      }
+      true
+    }
+    None => @hostapi.drawn_pixels_of(inst, count, r, gg, b, x, y, w, h, out)
   }
 }
 

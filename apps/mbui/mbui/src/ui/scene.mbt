@@ -579,6 +579,10 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
 /// Node `i` drawn, and what it holds: a hit target of its own holds the targets drawn in it (Ctx::hit_ends: what
 /// holds the one under the pointer is pointed at too, Ctx::hovered).
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
+  // a shot's layer: never on the screen, painted apart (Ctx::paint_shots)
+  if self.nodes[i].shot && !shooting.val {
+    return
+  }
   // a layer (overlay.mbt): what is over everything under it (Ctx::paint_top) stays under it, and what is so in it is
   // put over the rest of it
   let layer = self.nodes[i].portal

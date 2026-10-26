@@ -773,9 +773,10 @@ void mb_render_set_bands(double top, double bottom, uint32_t ground) {
 // the texture the last frame is drawn again into for the CPU to read (read_last), kept while its size is
 static id<MTLTexture> read_tex;
 
-// The last frame's instances (upload's copy) drawn again into a texture the CPU reads, and its pixels: BGRA,
-// premultiplied, rows from the top, the size set (mb_render_set_size), *pw × *ph; the caller frees them.
-static uint8_t *read_last(int *pw, int *ph) {
+// Instances `f` (`count` of them, as upload copies a frame's) drawn on the ground `bg` into a texture the CPU reads,
+// and its pixels: BGRA, premultiplied, rows from the top, the size set (mb_render_set_size), *pw × *ph; the caller
+// frees them.
+static uint8_t *read_of(const float *f, int32_t count, const double bg[3], int *pw, int *ph) {
   int w = (int)round(vw * vscale), h = (int)round(vh * vscale);
   if (!read_tex || (int)read_tex.width != w || (int)read_tex.height != h) {
     MTLTextureDescriptor *td = [MTLTextureDescriptor
@@ -789,9 +790,9 @@ static uint8_t *read_last(int *pw, int *ph) {
     read_tex = [dev newTextureWithDescriptor:td];
   }
   id<MTLTexture> tex = read_tex;
-  id<MTLBuffer> buf = [dev newBufferWithBytes:last_inst length:(last_count > 0 ? last_count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
+  id<MTLBuffer> buf = [dev newBufferWithBytes:f length:(count > 0 ? count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  encode(cb, tex, rpipe_off, buf, last_count, last_bg[0], last_bg[1], last_bg[2]);
+  encode(cb, tex, rpipe_off, buf, count, bg[0], bg[1], bg[2]);
 #if TARGET_OS_OSX
   id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
   [bl synchronizeResource:tex];
@@ -805,6 +806,11 @@ static uint8_t *read_last(int *pw, int *ph) {
   *pw = w;
   *ph = h;
   return px;
+}
+
+// The last frame's instances (upload's copy) drawn again, read back as read_of reads them.
+static uint8_t *read_last(int *pw, int *ph) {
+  return read_of(last_inst, last_count, last_bg, pw, ph);
 }
 
 // A frame drawn offscreen and read back (a film's, mbui/src/film): `inst` as mb_render_present takes them, kept as
@@ -842,6 +848,40 @@ int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonb
     free(px);
   }
   return 1;
+}
+
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the window's size is, on the ground r,
+// g, b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's (the last
+// frame kept as it was): 1 when read, 0 where the rectangle is not all in it.
+int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x, int32_t y,
+                            int32_t w, int32_t h, moonbit_bytes_t out) {
+  if (!dev || count < 0 || w <= 0 || h <= 0 || x < 0 || y < 0) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
+  int ok = 0;
+  @autoreleasepool {
+    size_t n = (size_t)count * MB_INST;
+    float *f = malloc((n > 0 ? n : MB_INST) * sizeof(float));
+    for (size_t i = 0; i < n; i++) f[i] = (float)inst[i];
+    double bg[3] = {r, g, b};
+    int fw, fh;
+    uint8_t *px = read_of(f, count, bg, &fw, &fh);
+    free(f);
+    if (x + w <= fw && y + h <= fh) {
+      for (int k = 0; k < h; k++) {
+        const uint8_t *s = px + ((size_t)(y + k) * fw + x) * 4;
+        uint8_t *d = out + (size_t)k * w * 4;
+        for (int j = 0; j < w; j++, s += 4, d += 4) {
+          d[0] = s[2];
+          d[1] = s[1];
+          d[2] = s[0];
+          d[3] = s[3];
+        }
+      }
+      ok = 1;
+    }
+    free(px);
+  }
+  return ok;
 }
 
 int mb_render_snapshot(const char *path) {

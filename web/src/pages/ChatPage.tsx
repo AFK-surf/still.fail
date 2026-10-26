@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, Monitor, More, PanelClose, PanelOpen, Phone, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, Monitor, More, PanelClose, PanelOpen, Phone, Photo, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { Letters } from "../Letters.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
@@ -736,11 +736,11 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
 }
 
 /**
- * Making the chat public (docs/public-share.md), in its info: the row that opens what publishes it, for those who may
- * (not a read-only member), its links under it (PublishedLinks).
+ * Sharing the chat as a picture, in its info: the row that opens the page it is made in, for those who may (not a
+ * read-only member); the public links made of it before pictures under it (PublishedLinks, docs/public-share.md).
  */
 function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void }) {
-  return <PanelRow icon={<Web size={14} />} label={t("web-pages.chat.publish")} onClick={publish.may ? onOpen : undefined} />;
+  return <PanelRow icon={<Photo size={14} />} label={t("web-pages.chat.shareImage")} onClick={publish.may ? onOpen : undefined} />;
 }
 
 /**

@@ -1,6 +1,7 @@
-// A chat made public, as its sheet lists it (docs/public-share.md; web/src/mobile/Chat.tsx PublishList, PublishedRow):
-// 公开分享 opens the publishing (sfpages' publish.mbt, one on every screen), each of its links under it, 复制 and 撤销
-// (`chat.unpublish`, asked first; gone from the list at once: the core's).
+// A chat shared, as its sheet lists it (web/src/mobile/Chat.tsx PublishList, PublishedRow): 分享图片 opens the sharing
+// (sfpages' publish.mbt, one on every screen: the chat drawn as one long picture), and under it each public link made
+// of it before pictures (docs/public-share.md: still open), 复制 and 撤销 (`chat.unpublish`, asked first; gone from the
+// list at once: the core's).
 
 ///|
 /// The chat's public links as its sheet shows them (Publish.kt shownPublish): to those who may publish it, or when it
@@ -23,8 +24,8 @@ let publish_row_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=f
 let published_words : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.full_words)
 
 ///|
-/// Making the chat public, a card of its own in its sheet (Publish.kt PublishList): 公开分享 opens the sheet that
-/// publishes it, for those who may (not a read-only member); each of its links under it, when and by whom, 复制, and
+/// Sharing the chat, a card of its own in its sheet (Publish.kt PublishList): 分享图片 opens the page that draws it as a
+/// picture, for those who may (not a read-only member); each of its public links under it, when and by whom, 复制, and
 /// 撤销 for who published it or an owner or admin (asked first; gone from here at once).
 fn publish_list(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, p : Json?, close : () -> Unit) -> Unit {
   let t = @sf.theme()
@@ -44,8 +45,8 @@ fn publish_list_rows(
   info_list(c, fn() {
     if flag(p, "may") &&
       info_row(c, "info/publish", fn() {
-        @sf.icon(c, "web", size=16.0, color=t.p.text) |> ignore
-        c.text(tr("web-pages.chat.publish"), style=publish_row_words.then(@sf.full_words)) |> ignore
+        @sf.icon(c, "photo", size=16.0, color=t.p.text) |> ignore
+        c.text(tr("web-pages.chat.shareImage"), style=publish_row_words.then(@sf.full_words)) |> ignore
         chevron(c)
       }) {
       // (the chat's sheet put down, the publishing over the window)
@@ -59,10 +60,12 @@ fn publish_list_rows(
 }
 
 ///|
-/// One of the chat's links (Publish.kt PublishedRow): how long ago and by whom; 复制; 撤销 when the viewer may.
+/// One of the chat's links (Publish.kt PublishedRow): a link's mark (the web's globe, under 分享图片's picture), how long
+/// ago and by whom; 复制; 撤销 when the viewer may.
 fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l : Json?, close : () -> Unit) -> Unit {
   let id = text(l, "id")
   info_row(c, "", fn() {
+    @sf.icon(c, "web", size=published_mark, color=@sf.theme().p.muted) |> ignore
     let said = [text(field(field(l, "time"), "createdAt"), "ago"), text(l, "byName")].filter(fn(s) { s != "" })
     c.text(said.join(" · "), style=published_words) |> ignore
     if text_action(c, "publish/copy/" + id, tr("common.copy")) {
@@ -87,6 +90,10 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
   })
   |> ignore
 }
+
+///|
+/// A public link's mark, as large as the rows' icons.
+let published_mark : Double = 16.0
 
 ///|
 /// A link's words as a button, in the link's colour with no frame (Publish.kt TextAction): 14, a little room round

@@ -684,6 +684,37 @@ int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonb
   return 1;
 }
 
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the surface's size is, on the ground r, g,
+// b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's: the frame
+// kept set aside while they are drawn in its place, then put back (what a native view's picture redraws is the frame
+// as it was). 1 when read, 0 where the rectangle is not all in it.
+int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x, int32_t y,
+                            int32_t w, int32_t h, moonbit_bytes_t out) {
+  if (count <= 0) return 0;
+  float *kf = fbuf;
+  size_t kc = fcap;
+  int32_t kn = kept_count;
+  double kr = kept_r, kg = kept_g, kb = kept_b;
+  size_t n = (size_t)count * MB_INST;
+  // (a row of the shapes' pieces more: segs_upload reads whole rows)
+  fcap = n + SEGS_ROW * 4;
+  fbuf = malloc(fcap * sizeof(float));
+  for (size_t i = 0; i < n; i++) fbuf[i] = (float)inst[i];
+  kept_count = count;
+  kept_r = r;
+  kept_g = g;
+  kept_b = b;
+  int32_t ok = mb_render_drawn_pixels(x, y, w, h, out);
+  free(fbuf);
+  fbuf = kf;
+  fcap = kc;
+  kept_count = kn;
+  kept_r = kr;
+  kept_g = kg;
+  kept_b = kb;
+  return ok;
+}
+
 static void draw_kept(void) {
   int32_t count = kept_count;
   double r = kept_r, g = kept_g, b = kept_b;

@@ -887,9 +887,10 @@ static int write_png(const wchar_t *path, const uint8_t *bgra, int w, int h, int
   return ok;
 }
 
-// The last presented frame drawn again into a texture of its own, the size of the window's, and copied where the CPU
-// reads it (a staging texture, to Map; NULL where it could not be made).
-static ID3D11Texture2D *redrawn(int w, int h) {
+// Instances `f` (`count` of them) drawn on the ground `bg` into a texture of their own, `w` × `h`, and copied where the
+// CPU reads it (a staging texture, to Map; NULL where it could not be made). What the vertex buffer holds is drawn: the
+// caller has put `f` there.
+static ID3D11Texture2D *redrawn_of(int w, int h, int32_t count, const float *bg, const float *f) {
   D3D11_TEXTURE2D_DESC td = {};
   td.Width = (UINT)w;
   td.Height = (UINT)h;
@@ -905,7 +906,7 @@ static ID3D11Texture2D *redrawn(int w, int h) {
     tex->Release();
     return NULL;
   }
-  encode(view, w, h, last_count, last_bg, last_inst);
+  encode(view, w, h, count, bg, f);
   td.Usage = D3D11_USAGE_STAGING;
   td.BindFlags = 0;
   td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
@@ -914,6 +915,66 @@ static ID3D11Texture2D *redrawn(int w, int h) {
   tex->Release();
   if (rtv) ctx->OMSetRenderTargets(1, &rtv, NULL);
   return staging;
+}
+
+// The last presented frame drawn again (its instances are what the vertex buffer holds), as redrawn_of draws.
+static ID3D11Texture2D *redrawn(int w, int h) {
+  return redrawn_of(w, h, last_count, last_bg, last_inst);
+}
+
+// `count` instances of `f` into the vertex buffer, grown to hold them: 0 where it could not be written.
+static int fill_vbuf(const float *f, int32_t count) {
+  size_t need = (size_t)(count > 0 ? count : 1) * MB_INST * sizeof(float);
+  if (vbuf_cap < need) {
+    if (vbuf) vbuf->Release();
+    vbuf_cap = need * 2;
+    D3D11_BUFFER_DESC bd = {(UINT)vbuf_cap, D3D11_USAGE_DYNAMIC, D3D11_BIND_VERTEX_BUFFER,
+                            D3D11_CPU_ACCESS_WRITE, 0, 0};
+    dev->CreateBuffer(&bd, NULL, &vbuf);
+  }
+  D3D11_MAPPED_SUBRESOURCE m;
+  if (!vbuf || FAILED(ctx->Map(vbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return 0;
+  if (count > 0) memcpy(m.pData, f, (size_t)count * MB_INST * sizeof(float));
+  ctx->Unmap(vbuf, 0);
+  return 1;
+}
+
+// Instances never presented (a shot's, mbui/src/ui/shot.mbt) drawn as a frame the window's size is, on the ground r,
+// g, b, and their pixels in the rectangle x, y, w × h into `out` as mb_render_drawn_pixels gives the frame's; the
+// vertex buffer given back the frame's after (a snapshot draws it again). 1 when read, 0 where the rectangle is not
+// all in it.
+extern "C" int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double g, double b, int32_t x,
+                                       int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
+  int fw = fb_w, fh = fb_h;
+  if (!dev || count <= 0 || fw <= 0 || fh <= 0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fw || y + h > fh) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)w * h * 4) return 0;
+  size_t n = (size_t)count * MB_INST;
+  float *f = (float *)malloc(n * sizeof(float));
+  for (size_t i = 0; i < n; i++) f[i] = (float)inst[i];
+  float bg[3] = {(float)r, (float)g, (float)b};
+  ID3D11Texture2D *staging = fill_vbuf(f, count) ? redrawn_of(fw, fh, count, bg, f) : NULL;
+  free(f);
+  // (the frame's own back where it was)
+  if (last_inst) fill_vbuf(last_inst, last_count);
+  if (!staging) return 0;
+  int ok = 0;
+  D3D11_MAPPED_SUBRESOURCE m;
+  if (SUCCEEDED(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
+    for (int k = 0; k < h; k++) {
+      const uint8_t *s = (const uint8_t *)m.pData + (size_t)(y + k) * m.RowPitch + (size_t)x * 4;
+      uint8_t *d = out + (size_t)k * w * 4;
+      for (int j = 0; j < w; j++, s += 4, d += 4) {
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+        d[3] = s[3];
+      }
+    }
+    ctx->Unmap(staging, 0);
+    ok = 1;
+  }
+  staging->Release();
+  return ok;
 }
 
 extern "C" int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t out) {
