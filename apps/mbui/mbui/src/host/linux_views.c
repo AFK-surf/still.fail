@@ -5,8 +5,8 @@
 // GtkGLArea over it (linux_app.c); the app paints a hole (kind 9: MB_VIEWS_UNDER in gles_render.h, the canvas taken
 // away there) where one shows, and what it paints after the hole draws over it, as apple_views.m and win_views.cpp
 // have it. A press where one shows goes to it (the area holds none there: its contains), not to the app. Kind 2, a
-// page of HTML, and kind 3, a site whose every request the app answers (view_site_*); no video player yet (kind 1
-// opens none: 0).
+// page of HTML, and kind 3, a site whose every request the app answers (view_site_*); kind 1, a video player,
+// GStreamer's, drawn in the canvas (linux_player.h).
 //
 // A site loads from a scheme of its own that never reaches the network (stillfail-preview://svc/…, as Apple's), a page
 // from its HTML with no base (about:blank's, as Apple's): no link of either followed, a site's said to the app. Nothing
@@ -15,12 +15,14 @@
 // Threads: everything here runs on the main thread, WebKit's signals among them, but a site's answer's body, which
 // WebKit reads on a thread of GIO's as the app sends it (Body).
 #include <dlfcn.h>
+#include <epoxy/gl.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <gtk/gtk.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <libsoup/soup.h>
 #include "linux.h"
 #include "mini_json.h"  // the app's head of an answer
@@ -366,6 +368,9 @@ static View *of_web(void *web) {
     if ((void *)v->web == web) return v;
   return NULL;
 }
+
+// (kind 1: the video players, GStreamer's)
+#include "linux_player.h"
 
 // Its state for the app (host_native.mbt's set_outside, kind 2): 1 ready (a page loaded), -1 failed, 0 waiting on the
 // app now (a site's request): told between frames (mb_views_tell).
@@ -820,7 +825,7 @@ static void make_web(View *v) {
 // The host API MoonBit calls
 
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
-  if (kind == 1) vlog("view: no video player on Linux yet");
+  if (kind == 1) return player_open(arg);
   if (kind != 2 && kind != 3) return 0;
   if (!mb_app_under() || !wk_here()) return 0;
   View *v = g_new0(View, 1);
@@ -849,6 +854,16 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 
 void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0, double cx1,
                         double cy1, double radius, int32_t shown) {
+  Player *pl = player_of(vid);
+  if (pl) {
+    // (drawn in the canvas where the app paints it: placed as told, on the same device pixels)
+    double s = mb_app_scale() > 0 ? mb_app_scale() : 1, px0 = round(x * s), py0 = round(y * s);
+    double bx = round(cx0 * s), by = round(cy0 * s);
+    if (shown)
+      vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, px0, py0, round((x + fmax(0, w)) * s) - px0,
+           round((y + fmax(0, h)) * s) - py0, bx, by, round(cx1 * s), round(cy1 * s), radius > 0 ? radius * s : 0);
+    return;
+  }
   View *v = find(vid);
   if (!v) return;
   int s = shown != 0;
@@ -864,6 +879,11 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
 }
 
 void mb_host_view_close(int32_t vid) {
+  Player *pl = player_of(vid);
+  if (pl) {
+    player_close(pl);
+    return;
+  }
   View **p = &views;
   while (*p && (*p)->vid != vid) p = &(*p)->next;
   View *v = *p;
@@ -898,6 +918,11 @@ void mb_host_view_close(int32_t vid) {
 }
 
 void mb_host_view_control(int32_t vid, int32_t op, double value) {
+  Player *pl = player_of(vid);
+  if (pl) {
+    player_control(pl, op, value);
+    return;
+  }
   View *v = find(vid);
   if (v && op == 21) {
     grab_page(v);
@@ -918,6 +943,8 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
 int32_t mb_host_view_info(int32_t vid, double *out) {
   for (int i = 0; i < 10; i++) out[i] = 0;
   out[0] = -1;
+  Player *pl = player_of(vid);
+  if (pl) return player_info(pl, out);
   View *v = find(vid);
   if (!v) return -1;
   if (v->kind == 2) out[5] = v->html_len;
@@ -925,25 +952,37 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   return v->failed ? -1 : v->loaded ? 1 : 0;
 }
 
-// a player's: none here
+// a player's reads, the app answering them
 int32_t mb_host_view_read_next(int32_t id, double *out) {
-  (void)id, (void)out;
-  return 0;
+  Player *pl = player_of(id);
+  return pl ? player_read_next(pl, out) : 0;
 }
 void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
-  (void)id, (void)req, (void)data, (void)total, (void)more;
+  Player *pl = player_of(id);
+  if (pl) player_read_answer(pl, req, data, total, more);
 }
 
-// a page's grab: how it stands (what 2), the PNG
+// a grab, a page's (its PNG) or a player's (its frame shown, a JPEG): how it stands (what 2); a player's frames' times
+// (what 1) none read here
 moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
-  View *v = find(vid);
-  if (!v || what != 2) return moonbit_make_string_raw(0);
+  Player *pl = player_of(vid);
+  View *v = pl ? NULL : find(vid);
+  if ((!pl && !v) || what != 2) return moonbit_make_string_raw(0);
   char n[16];
-  snprintf(n, sizeof n, "%d", v->still_state);
+  snprintf(n, sizeof n, "%d", pl ? pl->still_state : v->still_state);
   return mstr(n);
 }
-int32_t mb_host_view_text_known(int32_t vid, int32_t what) { return find(vid) && what == 2; }
+int32_t mb_host_view_text_known(int32_t vid, int32_t what) { return (player_of(vid) || find(vid)) && what == 2; }
 moonbit_bytes_t mb_host_view_still(int32_t vid) {
+  Player *pl = player_of(vid);
+  if (pl) {
+    gsize n = pl->still ? g_bytes_get_size(pl->still) : 0;
+    moonbit_bytes_t out = moonbit_make_bytes((int32_t)n, 0);
+    if (n) memcpy(out, g_bytes_get_data(pl->still, NULL), n);
+    g_clear_pointer(&pl->still, g_bytes_unref);
+    if (pl->still_state == 2) pl->still_state = 0;
+    return out;
+  }
   View *v = find(vid);
   gsize n = v && v->still ? g_bytes_get_size(v->still) : 0;
   moonbit_bytes_t out = moonbit_make_bytes((int32_t)n, 0);

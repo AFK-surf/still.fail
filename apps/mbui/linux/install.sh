@@ -9,7 +9,9 @@
 #   ./still.fail-mbui/install.sh
 # It needs GTK 4.12 or later: Ubuntu 24.04, Debian 13, Fedora 40 and newer. Pages in messages and sites show where
 # WebKitGTK 6.0 is installed (Ubuntu's and Debian's libwebkitgtk-6.0-4, Fedora's webkitgtk6.0); without it the app
-# says it cannot show them. PDFs show where poppler's GLib library is installed (most desktops have it).
+# says it cannot show them. PDFs show where poppler's GLib library is installed (most desktops have it). Videos play
+# where GStreamer is, its base and good plugins with a decoder of H.264, which most phones' videos are (gst-libav's or
+# openh264's); one it cannot play the app says so of.
 set -e
 from=$(cd "$(dirname "$0")" && pwd)
 data=${XDG_DATA_HOME:-$HOME/.local/share}
@@ -42,3 +44,7 @@ echo "still.fail mbui $(cat "$app/VERSION") installed: $app (in your application
   echo "Pages in messages and sites need WebKitGTK 6.0: install libwebkitgtk-6.0-4 (Ubuntu, Debian) or webkitgtk6.0 (Fedora)"
 { ldconfig -p || /sbin/ldconfig -p; } 2> /dev/null | grep -q "libpoppler-glib.so.8" ||
   echo "PDFs need poppler: install libpoppler-glib8t64 (Ubuntu, Debian) or poppler-glib (Fedora)"
+# (GStreamer's plugins where the system keeps them: Debian's and Ubuntu's /usr/lib/<arch>/, Fedora's /usr/lib64/)
+plugins=$(ls /usr/lib*/gstreamer-1.0 /usr/lib/*/gstreamer-1.0 2> /dev/null || true)
+{ echo "$plugins" | grep -q "libgstplayback.so" && echo "$plugins" | grep -qE "libgst(libav|openh264)[.]so"; } ||
+  echo "Videos need GStreamer with an H.264 decoder: install gstreamer1.0-plugins-good and gstreamer1.0-libav (Ubuntu, Debian) or gstreamer1-plugins-good and gstreamer1-plugin-openh264 (Fedora)"

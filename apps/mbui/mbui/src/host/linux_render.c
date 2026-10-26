@@ -15,12 +15,17 @@
 
 #define LOG(...) (fprintf(stderr, "mbui: " __VA_ARGS__), fputc('\n', stderr))
 
-// The native views are under the canvas (linux_views.c): where one shows, the canvas is taken away (gles_render.h).
+// The native views' pages are under the canvas (linux_views.c): where one shows, the canvas is taken away
+// (gles_render.h); a player's picture is drawn in it (linux_player.h), as Android's views' are.
 #define MB_VIEWS_UNDER 1
-static GLuint white_tex;  // a view's picture here: one white texel (its coverage is what is drawn), in the context now
+static GLuint white_tex;  // a page's picture here: one white texel (its coverage is what is drawn), in the context now
 
-// what an instance's image (slot 20) is drawn from: a stream's picture, a decoded image's, a view's white texel
+static int view_under(int tid) { return !mb_view_is_player(tid - MB_VIEW_TEX); }
+
+// what an instance's image (slot 20) is drawn from: a stream's picture, a decoded image's, a player's frame, a page's
+// white texel
 static GLuint image_tex(int id) {
+  if (id > MB_VIEW_TEX && !view_under(id)) return (GLuint)mb_player_tex(id - MB_VIEW_TEX);
   if (id > MB_VIEW_TEX) {
     if (!white_tex) {
       static const uint8_t white[4] = {255, 255, 255, 255};
@@ -82,6 +87,7 @@ void mb_render_setup(void) {
   n_puts = 0;
   mb_images_lost();
   mb_streams_lost();
+  mb_players_lost();
   white_tex = 0;
 }
 
