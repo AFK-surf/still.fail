@@ -209,7 +209,7 @@ let search_field_ground : @ui.Style = @ui.style(w=Full, radius=Full, bg=@sf.sear
 ///|
 /// What it holds: its icon 8 before the words.
 // kept across runs: a value (no field of it changes)
-let search_field_in : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let search_field_in : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 /// The field, its ground and what it holds.
