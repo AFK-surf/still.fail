@@ -32,6 +32,12 @@ fn close(frames : Int) -> Bool {
 }
 
 ///|
+fn snapshot(path : String) -> Bool {
+  ignore(path)
+  false
+}
+
+///|
 fn spin(ms : Double) -> Unit {
   ignore(ms)
 }

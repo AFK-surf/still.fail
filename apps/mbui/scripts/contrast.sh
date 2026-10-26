@@ -35,7 +35,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   film="$dir/$mode.mp4"
   said="$dir/$mode.txt"
   MBUI_LOCALE=zh MBUI_DARK=$dark MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 \
-    MBUI_FILM_WINDOW_CORNER=$corner MBUI_FILM="$PWD/$film" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 \
+    MBUI_FILM_WINDOW_CORNER=$corner MBUI_FILM="$PWD/$film" MBUI_FILM_LAST="$PWD/$dir/$mode.png" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 \
     | grep 'DRIVE CONTRAST' | sed 's|^.*DRIVE CONTRAST ||' > "$said"
   sed "s|^|$win-$theme $mode: |" "$said" >> out/contrast/faults.txt
   # the last frame as it is (<mode>.png) and with each fault outlined just outside its edges (<mode>-marked.png), at
@@ -48,7 +48,8 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
     bx=${xy%,*}; by=${xy#*,}
     boxes="$boxes,drawbox=x=$(echo "$bx*2-4" | bc):y=$(echo "$by*2-4" | bc):w=$(echo "$bw*2+8" | bc):h=$(echo "$bh*2+8" | bc):color=red@0.9:t=3"
   done < "$said"
-  "$FF" -loglevel error -y -sseof -0.05 -i "$film" -frames:v 1 "$dir/$mode.png" &&
+  # (the last frame as drawn, MBUI_FILM_LAST: never one taken out of the film, whose H.264 is lossy)
+  [ -s "$dir/$mode.png" ] &&
     "$FF" -loglevel error -y -i "$dir/$mode.png" -vf "null$boxes" "$dir/$mode-marked.png" && rm -f "$film" "$film.textrec"
 done
 echo "contrast: $(wc -l < out/contrast/faults.txt) faults, out/contrast/faults.txt"

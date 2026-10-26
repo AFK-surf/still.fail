@@ -14,6 +14,7 @@
 
 void mb_render_init_offscreen(double w, double h, double scale);
 uint8_t *mb_render_read(const double *inst, int32_t count, double r, double g, double b, int *w, int *h);
+int mb_render_snapshot(const char *path);
 
 static NSString *ns(moonbit_string_t s) {
   return [NSString stringWithCharacters:(const unichar *)s length:(NSUInteger)Moonbit_array_length(s)];
@@ -196,6 +197,14 @@ moonbit_string_t mbf_read_text(moonbit_string_t path) {
 int32_t mbf_write_text(moonbit_string_t path, moonbit_string_t text) {
   @autoreleasepool {
     return [ns(text) writeToFile:ns(path) atomically:YES encoding:NSUTF8StringEncoding error:nil] ? 1 : 0;
+  }
+}
+
+// The frame drawn last as it was drawn (the renderer's own pixels, not the film's encoding of them) written to `path`
+// as a PNG: 1, or 0.
+int32_t mbf_snapshot(moonbit_string_t path) {
+  @autoreleasepool {
+    return mb_render_snapshot(ns(path).fileSystemRepresentation);
   }
 }
 

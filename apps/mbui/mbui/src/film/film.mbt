@@ -11,7 +11,10 @@
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
 //   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
-//   device's set bigger]
+//   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
+// The film is H.264, lossy: each frame's pixels are the encoder's guess of them, and a guess that leans on the frames
+// before it and on how the encoder spends its bits. A picture compared to the byte (before and after a change) is the
+// last frame as drawn (MBUI_FILM_LAST), never one taken out of the film.
 // What it cannot show: what is not drawn by mbui (the system's keyboard and dialogs, a native view's content: a
 // video playing, a web page), and a stream's frames (none decoded under a Tester).
 
@@ -42,6 +45,7 @@ pub fn film(
   inset? : Bool = false,
   window_corner? : Double = 0.0,
   max? : Int = 3000,
+  last? : String = "",
 ) -> Bool {
   if !supported {
     say("film: this host has no film")
@@ -109,6 +113,8 @@ pub fn film(
       }
     },
   )
+  // (the last frame as drawn, before the film is closed: what was drawn last is still the renderer's)
+  let shot = last == "" || drawn.val > 0 && snapshot(last)
   let closed = close(put.val)
   let text = logs
     .filter(fn(l) { l.has_prefix("TEXTREC ") })
@@ -126,9 +132,10 @@ pub fn film(
     (if lost.val > 0 { ", \{lost.val} not written" } else { "" }) +
     (if closed { "" } else { ", not finished" }) +
     (if kept { "" } else { ", its text not kept" }) +
+    (if shot { "" } else { ", its last frame not written" }) +
     (if passed { "" } else { ", the script did not pass" }),
   )
-  closed && lost.val == 0 && passed
+  closed && lost.val == 0 && passed && shot
 }
 
 ///|
@@ -200,6 +207,7 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
     inset=arg("MBUI_FILM_INSET") == "1",
     window_corner~,
     max~,
+    last=arg("MBUI_FILM_LAST"),
   )
   exit(if ok { 0 } else { 1 })
 }
