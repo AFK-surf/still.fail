@@ -3428,7 +3428,9 @@ let options_card_radius : Double = list_card_corner
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, `room` at most, on the text at
-/// 5%); its row's ground under the pointer. The option tapped, on the frame after.
+/// 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
+/// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped,
+/// on the frame after.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -3438,14 +3440,17 @@ pub fn options_card(
   chosen? : Int? = None,
   wide? : Bool = false,
   room? : Double = 0.0,
+  history? : Bool = false,
 ) -> Int? {
   let t = theme()
-  let free = enabled && busy is None
+  let free = enabled && busy is None && !history
   let mut picked : Int? = None
   let ot = option_type()
+  let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
+  let padding = if history { 0.0 } else { options_card_pad }
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
-    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=if wide { alpha(t.p.text, 0.05) } else { t.p.chip }, pad=options_card_pad, fn() {
+    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=ground, pad=padding, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
@@ -3466,7 +3471,7 @@ pub fn options_card(
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=if enabled || chosen == Some(i) { 1.0 } else { 0.5 },
+          opacity=if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 },
           id~,
           fn() {
             c.box(
@@ -3496,6 +3501,12 @@ pub fn options_card(
             if busy == Some(i) {
               c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore })
               |> ignore
+            }
+            if history && chosen == Some(i) {
+              let check_room = @ui.style(h=Fixed(ot.label_line), justify=JCenter)
+              c.box(style=check_room, fn() {
+                icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+              }) |> ignore
             }
             // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
             if free {
