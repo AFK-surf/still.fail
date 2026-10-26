@@ -1658,6 +1658,31 @@ test "page-screen" {
 }
 
 ///|
+test "tier-outside-shell" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"pages\": {\"roots\": [\"src/pages\", \"src/shell\"]}, \"shell\": {\"files\": [\"src/shell/frame.mbt\"], \"reads\": [\"@sf.layout\", \"is_wide\"], \"state\": [\"wide\"]}}",
+    ),
+  )
+  // a page reading the tier, asking the shell whether it is wide and reading its state; the shell's own, a page's test,
+  // a field named so on something else and the native input's in the shell not counted
+  found(
+    [
+      (
+        "src/pages/row.mbt",
+        "fn v(c : Ctx) -> Unit {\n  let l = @sf.layout(c.width)\n  if is_wide(c) && wide.tape {\n    ()\n  }\n  let x = s.wide.tape\n}\n",
+      ),
+      ("src/shell/frame.mbt", "fn f(c : Ctx) -> Unit {\n  let l = @sf.layout(c.width)\n  if wide.tape { @sf.native_input() |> ignore }\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(is_wide(c))\n}\n"),
+    ],
+    "tier-outside-shell",
+    3,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "page-old-part" {
   let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"], \"old_parts\": [\"button\"]}}"))
   // a page taking the settings' older button; another of their parts, the library's button and a test's not counted

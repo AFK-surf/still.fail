@@ -232,8 +232,8 @@ Four, at the end of the way there:
 | `src/sfpages` | The pages, each file named after the web's. |
 | `src/sfshell` | The shell, and the app's `view`, which the main calls. |
 
-- **What goes:** `src/sfapp` and `src/sfdesk`. A page moves into `sfpages`; the frames' pieces (the phone's stack,
-  bars and bottom bar, the desk's frame, tape, rail, columns and switcher) move into `sfshell`.
+- **What goes:** `src/sfapp` and `src/sfdesk`. A page moves into `sfpages`; what is left, the frames' pieces (the
+  phone's stack, bars and bottom bar, the desk's frame, tape, rail, columns and switcher), is renamed `sfshell`.
 - **Which way they import:** `sfshell` imports `sfpages`, `sfpages` imports `sfbase`, all three the library. What a
   page needs of the shell it is given through sfbase or the library as the app starts (a wire: the bar over a page in a
   panel of its own is the shell's, `@sf.pane_bar`), never by importing it.
@@ -264,34 +264,35 @@ the tiers' table). What still pops: the shell's own ways to the root and the fra
 rail's), and the routers that open a page where it goes. Merged into `sfpages` so far: the chats' lists (one track of
 全部, 我参与的, 监控中 in every tier, `ListsFrame`), the device waiting in the workspace's lock, the composer, 接力.
 
-Five steps, each one PR or a few. What changes nothing on screen merges once green; what changes something is
-shown before and after, a batch at a time.
+Four steps, each one PR or a few. What changes nothing on screen merges once green; what changes something is
+shown before and after, a batch at a time. The shell stays where it is until the pages have left it (2026-10-26: moved
+first, the whole app's tests would have moved with it and again as the pages left).
 
-1. **The shell apart, `sfshell`.** The shell and the pages call each other today, so this goes in two halves:
-   - **1a, the pages' ways into the shell cut,** nothing on screen changed, one kind a PR:
-     - Done: the settings' pages' frame (sfdesk's `page_look.mbt`): they call the library's `@sf.page` itself, which
-       takes what its frame gives it (`PageFrame`), says a place's top page's actions to the bar over it
-       (`@sf.named_actions`) and, in a panel of its own on the tape, its title, back and actions to the shell's bar
-       there (`@sf.pane_bar`); what back says is sfbase's `back_label`. The pieces of one arrangement those pages still
-       draw (`narrow_*`, `desk_*`) wait in `settings_page.mbt` for the settings' merge (step 3).
-     - Done: the sidebars' rows into the library (`side_rows.mbt`: `nav_row`, `nav_item` over `list_row`, the band's
-       action, the list under the band, a row's ground); the sidebar's top row stays the shell's.
-     - Done: a way (`way.mbt`, the crumbs of the files, the folder picker, the station picker) the library's; the files'
-       tabs as the core keeps them (`files_tabs.mbt`) sfbase's. The settings' core one, sfbase's (`settings_core`: the
-       shell's way home, the pages' login card given as the app starts); the system bars' reach (`status_top`,
-       `nav_foot`) sfbase's; what a list chose shown through the shell (`show_chosen`, Shell's `show`: on the tape the
-       page brought over); a place gone to `go_place`. The toast was never a page's: the shell draws it from what
-       sfbase says (`toast_later`).
-     - The chat's side panel (`panel.mbt`) into `sfpages`.
-   - **1b, the shell moved** as it is into `sfshell`, its `view` the main's; `tier-outside-shell` in, its bars as they
-     are then, only falling. The tape's files (`frame`, `chats`, `brand`) in one PR, merged the day it is made.
-2. **The pages of one copy moved** into `sfpages` by area (the screen and the player; the settings' pages only the
-   desk has; the rest), what they read of the tier handed to the library or the shell as they go.
-3. **The pages of two copies merged,** an area a PR, as the pages above are (what the page is for, said first; drawn
-   and tested in the three tiers with both inputs; both old copies deleted): the settings and the places, the files and
-   the viewer, the history and 奏, a new chat, the chat (the page, the message list, the side panel) last. Before each,
-   what each copy has is listed, so nothing is lost.
-4. **The tests and fixtures follow the code:** a page's into `sfpages`, the shell's into `sfshell`; sfapp's tests by
-   what they test (`open_fixture_over` with them).
-5. **Closed:** `sfapp` and `sfdesk` deleted, `page-shell-import` and `tier-outside-shell` at 0, `page-screen` 0 in
-   `sfpages`.
+1. **The pages' ways into the shell cut** (done), nothing on screen changed, one kind a PR:
+   - the settings' pages' frame (sfdesk's `page_look.mbt`): they call the library's `@sf.page` itself, which takes
+     what its frame gives it (`PageFrame`), says a place's top page's actions to the bar over it (`@sf.named_actions`)
+     and, in a panel of its own on the tape, its title, back and actions to the shell's bar there (`@sf.pane_bar`);
+     what back says is sfbase's `back_label`. The pieces of one arrangement those pages still draw (`narrow_*`,
+     `desk_*`) wait in `settings_page.mbt` for the settings' merge (step 3);
+   - the sidebars' rows into the library (`side_rows.mbt`); the sidebar's top row stays the shell's;
+   - a way (`way.mbt`: the crumbs of the files, the folder picker, the station picker) the library's; the files' tabs
+     as the core keeps them (`files_tabs.mbt`) sfbase's; the settings' core one, sfbase's (`settings_core`: the
+     shell's way home, the pages' login card given as the app starts); what a list chose shown through the shell
+     (`show_chosen`, Shell's `show`); a place gone to `go_place`; a chat's side panel asks whether its page is a panel
+     of its own (`@sf.in_pane`), not the tape. The toast was never a page's: the shell draws it from what sfbase says.
+2. **The rule:** `tier-outside-shell` (detlint.json `shell.files`, the shell's files in sfapp and sfdesk; `shell.reads`,
+   `shell.state`): a page reading the tier or the shell's state (`@sf.layout`, `is_wide`, `wide.*`, the room of the
+   system bars, `status_top` / `nav_foot`) counted, its bars only falling. What room a page keeps for the system bars
+   and the shell's own is the shell's, given it as its frame (`PageFrame`'s `top`, `foot`); `page-screen` counts no
+   shell file.
+3. **The pages moved into `sfpages`,** each area taking its tests and fixtures with it, its counts falling to 0:
+   - those of one copy as they are (the screen and the player; the settings' pages only the desk has; the rest),
+     what they read of the tier handed to the library or the shell as they go;
+   - those of two copies merged, an area a PR, as the pages above are (what the page is for, said first; drawn and
+     tested in the three tiers with both inputs; both old copies deleted): the settings and the places, the files and
+     the viewer, the history and 奏, a new chat, the chat (the page, the message list, the side panel) last. Before
+     each, what each copy has is listed, so nothing is lost.
+4. **The shell named:** what is left of `sfapp` and `sfdesk` (the shell's files and the whole app's tests) one package,
+   `sfshell`, its `view` the main's; `@sfapp.` and `@sfdesk.` are `@sfshell.` everywhere, nothing else changed. The
+   tape's files with it, the day it is made. `page-shell-import` (`sfpages` imports no `sfshell`) in; `tier-outside-shell`
+   and `page-screen` at 0.
