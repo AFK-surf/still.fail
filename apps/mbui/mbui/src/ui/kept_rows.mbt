@@ -314,13 +314,19 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
       }
     })
   })
-  // (what holds it, a part kept, asks what it asked of time)
+  // (what holds it asks what it asked of time: a row it is in, being built, as a part's build tells what holds it; the
+  // part its list is in, built before its rows are laid, told itself)
   let (rlive, rdue, rlater) = (kp.live, kp.due, kp.due_later)
   part_now.row = row_was
   part_now.part = part_was
-  part_now.live = live
-  part_now.due = due
-  part_now.due_later = due_later
+  part_now.live = live || rlive
+  if rdue < due {
+    part_now.due = rdue
+    part_now.due_later = rlater
+  } else {
+    part_now.due = due
+    part_now.due_later = due_later
+  }
   if st.part != 0 {
     match kept_parts.get(st.part) {
       Some(p) => {
