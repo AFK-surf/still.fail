@@ -8,7 +8,7 @@
 
 ///|
 /// What is picked for a new chat in the made-up workspace, and in the model control's panel.
-priv struct NewFix {
+pub(all) struct NewFix {
   mut station : String
   mut model : String
   mut runtime : String
@@ -25,7 +25,7 @@ priv struct NewFix {
 }
 
 ///|
-let new_fix : NewFix = {
+pub let new_fix : NewFix = {
   station: "st1",
   model: "claude-opus-5-5",
   runtime: "claude",
@@ -43,7 +43,7 @@ let new_fix : NewFix = {
 /// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
 /// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
 /// made-up stations' `net`: Studio's, none of MBA's).
-fn fix_station(id : String) -> Json {
+pub fn fix_station(id : String) -> Json {
   match id {
     "st2" =>
       {
@@ -88,7 +88,7 @@ fn fix_station(id : String) -> Json {
 
 ///|
 /// A meter of a station's machine (Meter), what is left of it `left` percent, `big` its figure in `unit`.
-fn fix_meter(short : String, left : Int, level : String, big : String, unit : String) -> Json {
+pub fn fix_meter(short : String, left : Int, level : String, big : String, unit : String) -> Json {
   {
     "short": Json::string(short),
     "left": Json::number(left.to_double()),
@@ -103,14 +103,14 @@ fn fix_meter(short : String, left : Int, level : String, big : String, unit : St
 /// The models of newchat-crowded, in the core's order: as many series and names as long as a person's phone showed
 /// them (2026-10-26), the one it starts on running on three runtimes.
 // kept across runs: a table, never written
-let fix_crowded_models : Array[String] = [
+pub let fix_crowded_models : Array[String] = [
   "claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra", "deepseek-v4-1-flash", "grok-4-7-build-fast", "kimi-for-coding",
   "swe-2",
 ]
 
 ///|
 /// A model of newchat-crowded's (the ones not the plain fixture's), as the core's `pick` lists it.
-fn fix_crowded_model(model : String, name : String, family : String, maker : String, runtimes : Array[String]) -> Json {
+pub fn fix_crowded_model(model : String, name : String, family : String, maker : String, runtimes : Array[String]) -> Json {
   {
     "model": Json::string(model),
     "name": Json::string(name),
@@ -125,7 +125,7 @@ fn fix_crowded_model(model : String, name : String, family : String, maker : Str
 }
 
 ///|
-fn fix_model(model : String) -> Json {
+pub fn fix_model(model : String) -> Json {
   match model {
     "gpt-6-astra" => fix_crowded_model(model, "GPT-6 Astra", "Astra", "openai", ["codex"])
     "deepseek-v4-1-flash" => fix_crowded_model(model, "DeepSeek V4.1 Flash", "DeepSeek", "deepseek", ["claude", "codex", "dsh"])
@@ -172,7 +172,7 @@ fn fix_model(model : String) -> Json {
 }
 
 ///|
-fn fix_runtime_of(model : String) -> String {
+pub fn fix_runtime_of(model : String) -> String {
   match items(Some(fix_model(model)), "runtimes").get(0) {
     Some(String(r)) => r
     _ => "claude"
@@ -180,7 +180,7 @@ fn fix_runtime_of(model : String) -> String {
 }
 
 ///|
-fn fix_pick() -> Json {
+pub fn fix_pick() -> Json {
   let n = new_fix
   let changed = n.d_model != n.model || n.d_effort != n.effort || n.d_runtime != n.runtime || n.d_profile != ""
   let picked = fn(model : String, runtime : String, effort : String, profile : String) -> Json {
@@ -246,7 +246,7 @@ fn fix_pick() -> Json {
 
 ///|
 /// A chat's model control (`pick` of `session:<key>`): the new chat's, with what picks its account again beside 自动.
-fn fix_session_pick() -> Json {
+pub fn fix_session_pick() -> Json {
   match fix_pick() {
     Object(o) => {
       o["repick"] = Json::string("重新分配")
@@ -257,7 +257,7 @@ fn fix_session_pick() -> Json {
 }
 
 ///|
-fn fix_new_chat(f : Fixture) -> Json {
+pub fn fix_new_chat(f : Fixture) -> Json {
   let n = new_fix
   // its stations read stations_slow_ms after the page first asks (MBUI_FIXTURE=stations-slow: Home, for the films of
   // what shows meanwhile)
@@ -353,7 +353,7 @@ fn fix_new_chat(f : Fixture) -> Json {
 ///|
 /// The frequent combinations of newchat-crowded: one naming its runtime, as the core names one of a model that runs on
 /// more than one.
-fn fix_crowded_frequent() -> Json {
+pub fn fix_crowded_frequent() -> Json {
   let n = new_fix
   let combo = fn(model : String, runtime : String, effort : String, name : String, runtime_text : String, effort_text : String) {
     let o : Map[String, Json] = {
@@ -385,7 +385,7 @@ fn fix_crowded_frequent() -> Json {
 
 ///|
 /// The frequent combinations of the plain fixture.
-fn fix_frequent() -> Json {
+pub fn fix_frequent() -> Json {
   let n = new_fix
   [
     {
@@ -420,11 +420,11 @@ fn fix_frequent() -> Json {
 
 ///|
 /// How long stations-slow's stations take to be read.
-let stations_slow_ms : Double = 1200.0
+pub let stations_slow_ms : Double = 1200.0
 
 ///|
 /// The new chat's topics, None for any other.
-fn fixture_new_topic(f : Fixture, name : String) -> Json? {
+pub fn fixture_new_topic(f : Fixture, name : String) -> Json? {
   match name {
     "newChat" => Some(fix_new_chat(f))
     "pick" => Some(fix_pick())
@@ -434,7 +434,7 @@ fn fixture_new_topic(f : Fixture, name : String) -> Json? {
 
 ///|
 /// The new chat's calls, None for any other.
-fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let n = new_fix
   let take = fn(key : String, set : (String) -> Unit) {
@@ -495,120 +495,9 @@ fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, J
 }
 
 ///|
-/// What a fixture mode opens over Home at the start (src/sffix): a new chat, with one of its sheets; the bar's panel;
-/// a place.
-pub fn open_mode(mode : String) -> Unit {
-  if mode.has_prefix("newchat") {
-    app.nav.rise(NewChat)
-    if mode.has_prefix("newchat-crowded") {
-      // (it starts on the model that runs on three runtimes, on the one of them its combination names)
-      let n = new_fix
-      n.crowded = true
-      n.model = "deepseek-v4-1-flash"
-      n.runtime = "dsh"
-      n.d_model = n.model
-      n.d_runtime = n.runtime
-    }
-    match mode {
-      "newchat-station" => @sfpages.new_chat_ask("station")
-      "newchat-model" | "newchat-crowded-model" => @sfpages.new_chat_ask("model")
-      _ => ()
-    }
-  } else if mode == "home-bars" {
-    bar.open_panel(true)
-  } else if mode == "place" {
-    app.nav.replace(Files)
-  } else if mode == "archived" {
-    // 已归档: on the wide frame the sidebar's list of them, the newest beside it (lists.mbt archive_pane); laid out
-    // Small its page
-    app.nav.push(Archived)
-  } else if mode.has_prefix("place-") {
-    // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
-    // place-usage
-    app.nav.replace(Place(mode.view(start_offset=6).to_string()))
-  } else if mode.has_prefix("files-") {
-    // the files' page in the wide frame (wide_files.mbt) at Studio's 文档: files-columns (设计稿 open beside it, chosen),
-    // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
-    // tabs, the one shown split)
-    let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
-    app.nav.push(Files)
-    // (in columns, 设计稿 open beside 文档: the page at it, chosen in the column before as coming to it chooses)
-    app.nav.push(Drive(if mode == "files-columns" { { ..docs, path: "设计稿" } } else { docs }))
-    // what the made-up core is told before the first frame: the way shown, a tree's folder open, what is chosen
-    let browse = fn(params : Map[String, Json]) {
-      let o : Map[String, Json] = {
-        "owner": "page",
-        "station": "ws1/st1",
-        "root": Json::string(fix_docs),
-        "path": "",
-        "place": Json::string(@sfdesk.place_name("page/0")),
-      }
-      for k, v in params {
-        o[k] = v
-      }
-      fix_browse_do(None, mode, "drive.browse", Json::object(o)) |> ignore
-    }
-    match mode {
-      "files-tree" => {
-        fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
-        browse({ "act": "tree", "folder": "设计稿", "view": "tree" })
-        @sfdesk.nav_open("ws1/st1")
-      }
-      "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
-      // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
-      "files-clash" =>
-        @sfdesk.drag_ask({
-          into: { station: "ws1/st1", root: Some(fix_docs), path: "会议记录" },
-          into_name: "会议记录",
-          total: 1,
-          clashes: [
-            {
-              name: "说明.txt",
-              dir: false,
-              size: 2048.0,
-              station: "MBA",
-              there: dv_entry(fix_entry("说明.txt", false, 320, "10/01")),
-            },
-          ],
-          answers: {},
-          all: false,
-          done: fn(_) {  },
-        })
-      // the bar's 传输 open: a copy to MBA going (as the core says it)
-      "files-transfers" => {
-        fix_transfer({
-          "from": { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "", "names": ["演示录屏.mp4"] },
-          "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
-          "move": false,
-        })
-        @sfdesk.transfers_open()
-      }
-      // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
-      "files-preview" => {
-        fix_browse_prefs_set({ "driveViews": { "preview": "shown" } }) |> ignore
-        browse({ "act": "choose", "view": "columns", "folder": "", "name": "发布清单.md" })
-      }
-      // two tabs, the one shown split: 文档 in front, the home beside it
-      "files-split" =>
-        fix_browse_prefs_set({ "filesTabs": { "ws1": Json::string(fix_split_tabs().stringify()) } }) |> ignore
-      _ => ()
-    }
-  } else if mode == "rail-menu" {
-    // the rail's menu, as a right click on 对话 opens it (rail.mbt rail_menu: the places not in it, each its ＋)
-    @sfdesk.open_rail_menu("chats")
-  } else if mode == "switcher" || mode == "switcher-found" {
-    // ⌘K in the wide frame (sfdesk/switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
-    @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
-  } else if mode == "home-sheet" || mode == "home-accounts" {
-    // (home-accounts: two accounts signed in, what a new workspace asks which of)
-    home_sheet_at_start.val = true
-  }
-}
-
-///|
 /// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
 /// beside it; 照片 of MBA the other.
-fn fix_split_tabs() -> Json {
+pub fn fix_split_tabs() -> Json {
   {
     "tabs": [
       {

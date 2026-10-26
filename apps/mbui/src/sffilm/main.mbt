@@ -26,14 +26,14 @@ fn main {
         // MBUI_UPDATES_MS=<ms>: a made-up source of newer builds answering that late (none newer unless offered);
         // MBUI_UPDATE=<version>: a newer build offered
         if @film.arg("MBUI_UPDATES_MS") != "" {
-          @sfapp.fixture_updates(ms=whole_ms(@film.arg("MBUI_UPDATES_MS")))
+          @sffixture.fixture_updates(ms=whole_ms(@film.arg("MBUI_UPDATES_MS")))
         }
         if @film.arg("MBUI_UPDATE") != "" {
-          @sfapp.fixture_update(@film.arg("MBUI_UPDATE"))
+          @sffixture.fixture_update(@film.arg("MBUI_UPDATE"))
         }
-        let s = if late > 0.0 { @sfapp.round_trip(s, late) } else { s }
+        let s = if late > 0.0 { @sffixture.round_trip(s, late) } else { s }
         // MBUI_SAID=1: what people, agents and stations wrote at its longest (sfapp's fixture_said.mbt)
-        let s = if @film.arg("MBUI_SAID") == "1" { @sfapp.said_longest_source(s) } else { s }
+        let s = if @film.arg("MBUI_SAID") == "1" { @sffixture.said_longest_source(s) } else { s }
         if dark {
           @sf.set_dark(Some(true))
         }

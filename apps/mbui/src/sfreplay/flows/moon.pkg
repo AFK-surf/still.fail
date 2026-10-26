@@ -2,6 +2,7 @@ import {
   "stillfail/core",
   "stillfail/sfreplay",
   "stillfail/sfapp",
+  "stillfail/sffixture",
   "stillfail/sfpages",
   "stillfail/sf",
   "mbui/ui",

@@ -5,7 +5,7 @@
 
 ///|
 // kept across runs: a value (never changed)
-let said_paths : Map[String, Array[String]] = {
+pub let said_paths : Map[String, Array[String]] = {
   "adbCard": [
     "line",
   ],

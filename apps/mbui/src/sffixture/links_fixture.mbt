@@ -5,7 +5,7 @@
 /// tests': an item's (/o/<ws>/<station>/<session>, `service`, `history`, `entry`), a chat's
 /// (/w/<ws>/s/<station>/chats/<key>), an invitation's (/invite#<token>), a screen's (/w/…/s/…/screen/<id>),
 /// `?history=` alone; null for any other.
-fn fixture_link_parse(url : String) -> Json {
+pub fn fixture_link_parse(url : String) -> Json {
   let (path, query) = match url.find("?") {
     Some(i) => (url.view(end_offset=i).to_string(), url.view(start_offset=i + 1).to_string())
     None => (url, "")
@@ -57,4 +57,3 @@ fn fixture_link_parse(url : String) -> Json {
   }
   Json::object(o)
 }
-

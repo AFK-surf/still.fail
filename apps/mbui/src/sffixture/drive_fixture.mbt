@@ -10,14 +10,14 @@
 // chat-station-file (one sent as a file, a folder as a zip going up), chat-station-sheet (its card's sheet).
 
 ///|
-let fix_home : String = "/Users/lin"
+pub let fix_home : String = "/Users/lin"
 
 ///|
-let fix_docs : String = "/Users/lin/文档"
+pub let fix_docs : String = "/Users/lin/文档"
 
 ///|
 /// Studio's as a member sees it (drive-roots): its two folders pinned (备份盘 missing), nothing else browsed.
-fn fixture_station_member() -> Json {
+pub fn fixture_station_member() -> Json {
   {
     "viewer": { "via": "mesh", "role": "member" },
     "drive": {
@@ -31,7 +31,7 @@ fn fixture_station_member() -> Json {
 }
 
 ///|
-fn fixture_station_drive(up : Bool) -> Json {
+pub fn fixture_station_drive(up : Bool) -> Json {
   if up {
     {
       "viewer": { "via": "mesh", "role": "owner" },
@@ -60,7 +60,7 @@ fn fixture_station_drive(up : Bool) -> Json {
 
 ///|
 /// A made-up entry: its name, a folder or not, its size, how long ago it changed (its time in words).
-fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
+pub fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
   let kind = if dir { "folder" } else { fix_kind(name) }
   {
     "name": Json::string(name),
@@ -76,7 +76,7 @@ fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
 
 ///|
 /// A made-up file's extension, lower case (what its kind is made up from).
-fn fix_ext(name : String) -> String {
+pub fn fix_ext(name : String) -> String {
   match name.rev_find(".") {
     Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
     _ => ""
@@ -84,7 +84,7 @@ fn fix_ext(name : String) -> String {
 }
 
 ///|
-fn fix_kind(name : String) -> String {
+pub fn fix_kind(name : String) -> String {
   match fix_ext(name) {
     "md" => "markdown"
     "txt" | "log" => "text"
@@ -100,10 +100,10 @@ fn fix_kind(name : String) -> String {
 
 ///|
 /// The fixture's folders as the pages left them: by root and path, their entries.
-let fix_folders : Map[String, Array[Json]] = {}
+pub let fix_folders : Map[String, Array[Json]] = {}
 
 ///|
-fn fix_folder(root : String, path : String) -> Array[Json] {
+pub fn fix_folder(root : String, path : String) -> Array[Json] {
   let key = root + "\n" + path
   match fix_folders.get(key) {
     Some(a) => a
@@ -144,7 +144,7 @@ fn fix_folder(root : String, path : String) -> Array[Json] {
 }
 
 ///|
-fn fix_folder_json(root : String, path : String) -> Json {
+pub fn fix_folder_json(root : String, path : String) -> Json {
   let entries = fix_folder(root, path)
   let folders = entries.filter(fn(e) { flag(Some(e), "dir") }).length()
   let files = entries.length() - folders
@@ -166,14 +166,14 @@ fn fix_folder_json(root : String, path : String) -> Json {
 
 ///|
 /// Where the made-up texts were left (drivePlace), by path.
-let fix_places : Map[String, Json] = {}
+pub let fix_places : Map[String, Json] = {}
 
 ///|
 /// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.
-let fix_transfers : Array[Json] = []
+pub let fix_transfers : Array[Json] = []
 
 ///|
-fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
+pub fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let p = Some(Json::object(params))
   match name {
     "workspace" => Some({ "id": "ws1", "name": "星火工作室", "manager": true, "role": "owner" })
@@ -205,7 +205,7 @@ fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -
 
 ///|
 /// A copy asked (`drive.transfer`), shown in the `driveTransfers` topic as going: 38% on.
-fn fix_transfer(params : Json) -> Unit {
+pub fn fix_transfer(params : Json) -> Unit {
   let p = Some(params)
   let from = field(p, "from")
   let to = field(p, "to")
@@ -244,7 +244,7 @@ fn fix_transfer(params : Json) -> Unit {
 }
 
 ///|
-fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let root = text(p, "root")
   match name {
@@ -350,11 +350,11 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
 
 ///|
 /// What `drive.read` was asked, in order (each its params).
-let fix_reads : Array[Json] = []
+pub let fix_reads : Array[Json] = []
 
 ///|
 /// A part of a made-up file (`drive.read`): the novel, the Markdown, or a line.
-fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Json]? {
+pub fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Json]? {
   if name != "drive.read" {
     return None
   }
@@ -381,7 +381,7 @@ fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Jso
 
 ///|
 /// A made-up novel of a few chapters (every sentence made up here).
-fn novel_text() -> String {
+pub fn novel_text() -> String {
   match fix_novel.val {
     Some(s) => s
     None => {
@@ -417,107 +417,18 @@ fn novel_text() -> String {
 
 ///|
 // kept across runs: made from the words above alone, the same every time
-let fix_novel : Ref[String?] = { val: None }
+pub let fix_novel : Ref[String?] = { val: None }
 
 ///|
-fn fixture_markdown() -> String {
+pub fn fixture_markdown() -> String {
   "# 发布清单\n\n这份清单在每次发布前过一遍，**每一项**都要有人确认。\n\n## 准备\n\n- 版本号已经改好\n- 更新说明写完，交给 *两个人* 读过\n- 截图换成新的\n\n## 检查\n\n1. 在手机上装一遍，从头点到尾\n2. 看一眼 `release.log` 里有没有报错\n3. 旧版本升级上来，草稿还在\n\n> 有一项不确定，就先不发。\n\n---\n\n最后更新：十月中旬。\n"
-}
-
-///|
-/// The fixture's drive pages opened as MBUI_FIXTURE says (see the top of this file).
-pub fn open_drive_fixture(mode : String) -> Unit {
-  let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
-  match mode {
-    "files" => app.nav.push(Files)
-    // a station's folders pinned, as a member sees them (its drive's page with no folder asked; chat_fixture.mbt)
-    "drive-roots" => {
-      app.nav.push(Files)
-      app.nav.push(Drive({ ..docs, root: None }))
-    }
-    "drive" | "drive-loading" | "drive-upload" | "drive-download" => {
-      app.nav.push(Files)
-      app.nav.push(Drive(docs))
-      // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'
-      // progress (keep.mbt)
-      if mode == "drive-download" {
-        fix_drive_downloads("ws1/st1", fix_docs)
-      }
-      if mode == "drive-upload" {
-        let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {
-          ups.serial += 1
-          ups.uploads.push({
-            serial: ups.serial,
-            station: "ws1/st1",
-            root: fix_docs,
-            dir: "",
-            name,
-            bytes: Bytes::new(size),
-            sent,
-            state,
-            error,
-            replace: false,
-            id: "",
-          })
-        }
-        up("旅行照片.zip", 6291456, 2621440, "going", "")
-        up("长篇小说.txt", 2048, 0, "taken", "")
-        up("会议录音.m4a", 3145728, 0, "failed", "station 已离线")
-        ups.pumping = true
-      }
-    }
-    "drive-sub" => {
-      app.nav.push(Files)
-      app.nav.push(Drive(docs))
-      app.nav.push(Drive({ ..docs, path: "设计稿" }))
-    }
-    "drive-empty" => {
-      app.nav.push(Files)
-      app.nav.push(Drive({ ..docs, path: "空文件夹" }))
-    }
-    "reader" | "reader-bars" | "reader-contents" | "reader-layout" | "reader-md" => {
-      let path = if mode == "reader-md" { "发布清单.md" } else { "长篇小说.txt" }
-      let at = { ..docs, path }
-      app.nav.push(Files)
-      app.nav.push(Drive(docs))
-      app.nav.push(DriveRead(at))
-      let r = @sf.reading_for(reader_key(at))
-      if mode != "reader" && mode != "reader-md" {
-        r.chrome = true
-      }
-      if mode == "reader-contents" {
-        r.panel = @sf.ReaderPanel::Contents
-        r.contents_put = false
-      }
-      if mode == "reader-layout" {
-        r.panel = @sf.ReaderPanel::Layout
-        r.contents_put = false
-      }
-    }
-    // (chat-station-files: ＋'s Station 文件 put up as the app's source is made, fixture_station_files)
-    // (chat-attach-row: put in before the draft's kept files are read, so it is the first of the files' row)
-    "chat-station-ref" | "chat-attach-row" =>
-      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "path", true)
-    // one sent as a file (up at the chat's station), a folder as a zip still going; a card's sheet open
-    // (open_fixture_src)
-    "chat-station-file" | "chat-station-sheet" => {
-      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "file", true)
-      fix_draft_ref("ws1/st1:s-c1", "设计稿", true, 0.0, "file", false)
-    }
-    // the player (play_fixture.mbt), a service's page (service_fixture.mbt)
-    _ => {
-      open_play_fixture(mode)
-      open_service_fixture(mode)
-      open_share_fixture(mode)
-    }
-  }
 }
 
 ///|
 /// Studio's 文档/`name` in draft `key` as ＋'s Station 文件 puts it there (writing_drop: composer.add, the file with
 /// where it is, `mode` how it goes: "path", named by it; "file", sent as one), up already (`done`, as the fixture's
 /// composer.add has it) or still going.
-fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mode : String, done : Bool) -> Unit {
+pub fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mode : String, done : Bool) -> Unit {
   let path = fix_docs + "/" + name
   let one : Map[String, Json] = {
     "id": Json::string("ref-" + name),

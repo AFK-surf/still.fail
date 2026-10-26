@@ -9,7 +9,7 @@
 /// and the pages keep (each by its key, as prefs.set merges it), and the topics' values worked out since the fixture last
 /// changed (by their params); how often a test changed what it holds itself (not by a call of the fixture's, which
 /// counts in its version): counted in the topics' versions as the core counts every change (fixture_topic).
-priv struct FixBrowse {
+pub(all) struct FixBrowse {
   mut state : Json
   mut id : Int
   prefs : Map[String, Map[String, Json]]
@@ -19,18 +19,18 @@ priv struct FixBrowse {
 }
 
 ///|
-let fix_browse : FixBrowse = { state: Json::null(), id: 0, prefs: {}, shown: {}, version: -1, changes: 0 }
+pub let fix_browse : FixBrowse = { state: Json::null(), id: 0, prefs: {}, shown: {}, version: -1, changes: 0 }
 
 ///|
 /// What the browsing holds changed: the topics' values worked out again, their versions on by one.
-fn fix_browse_changed() -> Unit {
+pub fn fix_browse_changed() -> Unit {
   fix_browse.shown.clear()
   fix_browse.changes += 1
   @settings.fixture_changed()
 }
 
 ///|
-fn fix_browse_reset() -> Unit {
+pub fn fix_browse_reset() -> Unit {
   fix_browse.state = Json::null()
   fix_browse.id = 0
   fix_browse.prefs.clear()
@@ -42,11 +42,11 @@ fn fix_browse_reset() -> Unit {
 ///|
 /// The prefs the browsing reads and the pages keep, as the core's prefs topic gives them.
 // kept across runs: a table, never written
-let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites"]
+pub let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites"]
 
 ///|
 /// The prefs kept here, into the prefs topic's value.
-fn fix_browse_prefs_into(o : Map[String, Json]) -> Unit {
+pub fn fix_browse_prefs_into(o : Map[String, Json]) -> Unit {
   for k in fix_browse_prefs {
     o[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
   }
@@ -54,7 +54,7 @@ fn fix_browse_prefs_into(o : Map[String, Json]) -> Unit {
 
 ///|
 /// A prefs.set (or a patch the browsing made) of those kept here, merged as the core merges it (null: let go).
-fn fix_browse_prefs_set(params : Json) -> Bool {
+pub fn fix_browse_prefs_set(params : Json) -> Bool {
   let mut changed = false
   for k in fix_browse_prefs {
     match field(Some(params), k) {
@@ -84,7 +84,7 @@ fn fix_browse_prefs_set(params : Json) -> Bool {
 
 ///|
 /// A made-up folder's entries as the browsing orders them (drive-browse.ts Ordered), null while the drive is read.
-fn fix_browse_folder(mode : String, root : String, path : String) -> Json {
+pub fn fix_browse_folder(mode : String, root : String, path : String) -> Json {
   if mode == "drive-loading" {
     return Json::null()
   }
@@ -104,7 +104,7 @@ fn fix_browse_folder(mode : String, root : String, path : String) -> Json {
 
 ///|
 /// The workspace's stations with a drive as the browsing names them (their address, name and home).
-fn fix_browse_stations(f : Fixture, ws : String) -> Json {
+pub fn fix_browse_stations(f : Fixture, ws : String) -> Json {
   let out : Array[Json] = []
   match fixture_topic_inner(f, "stations", { "scope": Json::string(ws) }) {
     Some(Array(list)) =>
@@ -127,7 +127,7 @@ fn fix_browse_stations(f : Fixture, ws : String) -> Json {
 ///|
 /// A step of the browsing (`op`: {topic} or {name, params}) as the real core answered it: the folders it reads given as
 /// it asks for them. Err where it is not kept (or there is no kept core here).
-fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, Json] {
+pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, Json] {
   let kept = match @sf.kept_call.val {
     Some(k) => k
     None => return Err({ "code": "not_kept", "message": "no kept core's answers here" })
@@ -205,7 +205,7 @@ fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, Json]
 
 ///|
 /// The `driveBrowse` or `filesTabs` topic's value, as the core gives it now.
-fn fix_browse_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
+pub fn fix_browse_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   if fix_browse.version != f.version {
     fix_browse.shown.clear()
     fix_browse.version = f.version
@@ -234,7 +234,7 @@ fn fix_browse_topic(f : Fixture, name : String, params : Map[String, Json]) -> J
 
 ///|
 /// A call of the browsing's (drive-browse.ts CALLS), answered: what it holds after it kept, the prefs it changed set.
-fn fixture_browse_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_browse_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   match name {
     "drive.browse" | "drive.arrange" | "drive.name" | "drive.moves" | "files.tabs" | "files.go" => ()
     _ => return None
@@ -246,7 +246,7 @@ fn fixture_browse_call(f : Fixture, name : String, params : Json) -> Result[Json
 
 ///|
 /// A call of the browsing's done by the made-up core (by a fixture's mode too, before the app's first frame).
-fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) -> Result[Json, Json] {
+pub fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) -> Result[Json, Json] {
   match fix_browse_step(f, mode, { "name": Json::string(name), "params": params }) {
     Ok(a) => {
       match field(Some(a), "state") {
@@ -270,7 +270,7 @@ fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) -> R
 ///|
 /// The stations a workspace lists, those with a drive, this machine's (`here`) first: as the core gives the `stations`
 /// topic asked with `drive` (drive-browse.ts withDrive, kept).
-fn fix_browse_with_drive(f : Fixture, stations : Json?, here : String) -> Json? {
+pub fn fix_browse_with_drive(f : Fixture, stations : Json?, here : String) -> Json? {
   ignore(f)
   let stations = match stations {
     Some(s) => s

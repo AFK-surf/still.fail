@@ -1683,6 +1683,29 @@ test "tier-outside-shell" {
 }
 
 ///|
+test "fixture-import" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"pages\": {\"roots\": [\"src/app\"]}, \"library\": {\"roots\": [\"src/ui\"]}, \"fixture\": {\"package\": \"@fix\", \"openers\": [\"src/app/fixture_open.mbt\"]}}",
+    ),
+  )
+  // a page's and the library's use of the made-up core; the opener's, a test's and a tool's not counted
+  found(
+    [
+      ("src/app/page.mbt", "fn v() -> Unit {\n  let d = @fix.docs\n}\n"),
+      ("src/ui/part.mbt", "fn p() -> Unit {\n  @fix.reset()\n}\n"),
+      ("src/app/fixture_open.mbt", "fn o() -> Unit {\n  @fix.reset()\n}\n"),
+      ("src/app/page_wbtest.mbt", "test \"t\" {\n  let s = @fix.core(\"home\")\n}\n"),
+      ("src/tool/main.mbt", "fn main {\n  @fix.core(\"home\") |> ignore\n}\n"),
+    ],
+    "fixture-import",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
 test "page-old-part" {
   let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"], \"old_parts\": [\"button\"]}}"))
   // a page taking the settings' older button; another of their parts, the library's button and a test's not counted

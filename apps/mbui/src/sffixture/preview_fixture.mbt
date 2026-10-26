@@ -8,7 +8,7 @@
 
 ///|
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
-fn preview_files() -> Array[(Attachment, () -> Bytes)] {
+pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   let at = fn(name : String, size : Double, w : Double, h : Double) -> Attachment {
     { name, path: "uploads/fx/" + name, size, width: w, height: h, thumbhash: "", owner: "s-c1", upload: "", duration: 0.0, frames: 0 }
   }
@@ -36,7 +36,7 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 
 ///|
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
-fn fixture_preview(mode : String) -> Unit {
+pub fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
     "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
@@ -84,12 +84,12 @@ fn fixture_preview(mode : String) -> Unit {
 
 ///|
 /// What the fixture was asked with bytes, in order: the call and its params.
-let fix_fetches : Array[(String, Json)] = []
+pub let fix_fetches : Array[(String, Json)] = []
 
 ///|
 /// What the fixture answers with bytes: a made-up file whole (`station.file`) or a part of it (`station.file.part`;
 /// a video's reads never answered).
-fn fixture_fetch(
+pub fn fixture_fetch(
   name : String,
   params : Json,
   done : (Result[(Json, Bytes), Json]) -> Unit,
@@ -129,7 +129,7 @@ fn fixture_fetch(
 
 ///|
 /// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen.
-fn fixture_png(w : Int, h : Int) -> Bytes {
+pub fn fixture_png(w : Int, h : Int) -> Bytes {
   let rgba = FixedArray::make(w * h * 4, b'\x00')
   for y in 0..<h {
     for x in 0..<w {
@@ -167,7 +167,7 @@ fn fixture_png(w : Int, h : Int) -> Bytes {
 
 ///|
 /// A PDF of two pages (US Letter), shapes and a few lines in Helvetica, its cross-reference table counted exactly.
-fn fixture_pdf() -> Bytes {
+pub fn fixture_pdf() -> Bytes {
   let page1 =
     #|0.898 0.439 0.290 rg 56 680 500 56 re f
     #|BT /F1 28 Tf 1 1 1 rg 72 700 Td (Design notes) Tj ET
@@ -215,7 +215,7 @@ fn fixture_pdf() -> Bytes {
 }
 
 ///|
-let fixture_html : String =
+pub let fixture_html : String =
   #|<!doctype html>
   #|<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   #|<style>
@@ -233,7 +233,7 @@ let fixture_html : String =
   #|</body></html>
 
 ///|
-let fixture_code : String =
+pub let fixture_code : String =
   #|// 列表的行按真实高度排，没量过的先按估计的高度占位
   #|export function moved(rows: number[], at: number, n: number): number[] {
   #|  const out = rows.slice(0, at);
@@ -244,7 +244,7 @@ let fixture_code : String =
   #|export const estimate = 66;
 
 ///|
-let fixture_md : String =
+pub let fixture_md : String =
   #|# 发布前要做的
   #|
   #|- 版本号和更新说明
@@ -256,7 +256,7 @@ let fixture_md : String =
   #|`scripts/shots.sh` 会把新截图和旧的比一遍。
 
 ///|
-let fixture_csv : String =
+pub let fixture_csv : String =
   #|名字,平台,帧时间（毫秒）,通过
   #|首页,安卓,0.42,是
   #|聊天,安卓,0.57,是
@@ -265,7 +265,7 @@ let fixture_csv : String =
 
 ///|
 /// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two.
-fn fixture_image_near(params : Map[String, Json]) -> Json? {
+pub fn fixture_image_near(params : Map[String, Json]) -> Json? {
   match params.get("path") {
     Some(String("uploads/fx/界面草图.png")) =>
       Some({

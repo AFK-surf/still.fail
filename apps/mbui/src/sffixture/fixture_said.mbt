@@ -7,11 +7,11 @@
 ///|
 /// What is put after each piece of words someone outside the app wrote: longer than any window is wide, a line break in
 /// it, and words that break late (a run's number, a file's name).
-let said_more : String = " — 后面还有很长的一段话：agent 把 run 40208168565 和 squeeze_wbtest 的结果都写在这里，一直写下去也没有停\nand then a second line in English, written on and on for longer than any window is wide"
+pub let said_more : String = " — 后面还有很长的一段话：agent 把 run 40208168565 和 squeeze_wbtest 的结果都写在这里，一直写下去也没有停\nand then a second line in English, written on and on for longer than any window is wide"
 
 ///|
 /// Words someone outside the app wrote, at their longest; none stays none (what is not there is not made).
-fn said_longest(s : String) -> String {
+pub fn said_longest(s : String) -> String {
   if s == "" {
     s
   } else {
@@ -22,7 +22,7 @@ fn said_longest(s : String) -> String {
 ///|
 /// `value` with the words at `path` (fields by name, `*` each item of a list or a map, `<tag>=<word>` a union's variant
 /// where its tag says that word) at their longest, the rest as it was.
-fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
+pub fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
   match path {
     [step, .. rest] if step.contains("=") =>
       // (a union's variant: on where its tag says that word)
@@ -67,10 +67,10 @@ fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
 ///|
 /// said_paths, each path as its steps.
 // kept across runs: said_paths as steps, made once (never changed)
-let said_steps : Ref[Map[String, Array[Array[String]]]?] = Ref(None)
+pub let said_steps : Ref[Map[String, Array[Array[String]]]?] = Ref(None)
 
 ///|
-fn said_steps_of(topic : String) -> Array[Array[String]] {
+pub fn said_steps_of(topic : String) -> Array[Array[String]] {
   let all = match said_steps.val {
     Some(m) => m
     None => {
@@ -107,4 +107,3 @@ pub fn said_longest_source(src : Source) -> Source {
     },
   }
 }
-

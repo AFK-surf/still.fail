@@ -5,13 +5,13 @@
 // search-results, search-jobs); anything else finds nothing.
 
 ///|
-fn found_mark(from : Int, to : Int) -> Json {
+pub fn found_mark(from : Int, to : Int) -> Json {
   { "from": Json::number(from.to_double()), "to": Json::number(to.to_double()) }
 }
 
 ///|
 /// Where `word` is in `text` (UTF-16), each time.
-fn found_marks(text : String, word : String) -> Json {
+pub fn found_marks(text : String, word : String) -> Json {
   let out : Array[Json] = []
   let mut at = 0
   while at + word.length() <= text.length() {
@@ -26,12 +26,12 @@ fn found_marks(text : String, word : String) -> Json {
 }
 
 ///|
-fn found_time(ago : String) -> Json {
+pub fn found_time(ago : String) -> Json {
   { "createdAt": { "at": 0, "ago": Json::string(ago), "full": "", "until": "", "past": true } }
 }
 
 ///|
-fn found_message(seq : Int, by : String, text : String, word : String, ago : String) -> Json {
+pub fn found_message(seq : Int, by : String, text : String, word : String, ago : String) -> Json {
   {
     "station": "ws1/st1",
     "thread": 2,
@@ -46,7 +46,7 @@ fn found_message(seq : Int, by : String, text : String, word : String, ago : Str
 }
 
 ///|
-fn found_item(kind : String, key : String, title : String, text : String, word : String, more : Map[String, Json]) -> Json {
+pub fn found_item(kind : String, key : String, title : String, text : String, word : String, more : Map[String, Json]) -> Json {
   let o : Map[String, Json] = {
     "kind": Json::string(kind),
     "key": Json::string(key),
@@ -63,7 +63,7 @@ fn found_item(kind : String, key : String, title : String, text : String, word :
 }
 
 ///|
-fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
+pub fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
   let query = match params.get("query") {
     Some(String(q)) => q
     _ => ""
@@ -180,7 +180,7 @@ fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
 
 ///|
 /// A chat of SearchResultsTest's: on studio or on mac, active `minutes` ago.
-fn login_chat(id : String, title : String, minutes : Int, station? : String = "ws1/st1", name? : String = "studio") -> Json {
+pub fn login_chat(id : String, title : String, minutes : Int, station? : String = "ws1/st1", name? : String = "studio") -> Json {
   row(id, title, station, "\{minutes} 分钟前", {
     "session": Json::string("ember:" + id),
     "stationName": Json::string(name),
@@ -190,7 +190,7 @@ fn login_chat(id : String, title : String, minutes : Int, station? : String = "w
 }
 
 ///|
-fn login_message(chat : Json, seq : Int, by : String, text : String, minutes : Int) -> Json {
+pub fn login_message(chat : Json, seq : Int, by : String, text : String, minutes : Int) -> Json {
   {
     "station": Json::string(text_of(chat, "station")),
     "thread": 1,
@@ -205,12 +205,12 @@ fn login_message(chat : Json, seq : Int, by : String, text : String, minutes : I
 }
 
 ///|
-fn text_of(v : Json, key : String) -> String {
+pub fn text_of(v : Json, key : String) -> String {
   text(Some(v), key)
 }
 
 ///|
-fn login_job(chat : Json, id : String, title : String, line : String, port : Int?, minutes : Int) -> Json {
+pub fn login_job(chat : Json, id : String, title : String, line : String, port : Int?, minutes : Int) -> Json {
   let more : Map[String, Json] = {
     "stationName": Json::string(text_of(chat, "stationName")),
     "station": Json::string(text_of(chat, "station")),
@@ -233,7 +233,7 @@ fn login_job(chat : Json, id : String, title : String, line : String, port : Int
 
 ///|
 /// What "登录" finds (SearchResultsTest's `all`, and `onlyJobs` for the services and tasks alone).
-fn login_search(kind : String) -> Json {
+pub fn login_search(kind : String) -> Json {
   let safari = login_chat("c-2", "登录页在 Safari 上没反应", 12)
   let sso = login_chat("c-5", "SSO 登录接入", 95, station="ws1/mac", name="mac")
   let jobs = [

@@ -8,7 +8,7 @@
 /// A face still.fail keeps: its id, its name, whether it is for code, its files' weights (0: one variable file), how
 /// big they are gzipped.
 // kept across runs: a table, never written
-let fixture_face_list : Array[(String, String, Bool, Array[Int], Double)] = [
+pub let fixture_face_list : Array[(String, String, Bool, Array[Int], Double)] = [
   ("inter", "Inter", false, [0], 457818.0),
   ("noto-sans-sc", "思源黑体", false, [0], 11276563.0),
   ("noto-serif-sc", "思源宋体", false, [0], 15454579.0),
@@ -21,14 +21,14 @@ let fixture_face_list : Array[(String, String, Bool, Array[Int], Double)] = [
 ///|
 /// Every made-up face's file, gzipped (made by Python's gzip), and the hash of it unzipped.
 // kept across runs: a value (never written)
-let fixture_face_gz : String = "H4sIAAAAAAAC/0tUyE1MSdUtLVBIS0xOVUjLL1IoyQDReSXFCgWJ6anqxQolqcUlxQBVWnvtKQAAAA=="
+pub let fixture_face_gz : String = "H4sIAAAAAAAC/0tUyE1MSdUtLVBIS0xOVUjLL1IoyQDReSXFCgWJ6anqxQolqcUlxQBVWnvtKQAAAA=="
 
 ///|
 // kept across runs: a value (never written)
-let fixture_face_sha : String = "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+pub let fixture_face_sha : String = "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
 
 ///|
-fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
+pub fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
   let (id, name, mono, weights, bytes) = e
   let base = "https://app.still.fail/releases/fonts/" + id + "/1"
   // (a whole number of bytes, as the core says a file's size)
@@ -55,7 +55,7 @@ fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
 
 ///|
 /// The faces as they go out (`faces`): each place's as `fonts` chose it, text as ui's where none is chosen for it.
-fn fixture_faces(fonts : Map[String, String]) -> Json {
+pub fn fixture_faces(fonts : Map[String, String]) -> Json {
   let of = fn(place : String) -> Json {
     let mut found = None
     for e in fixture_face_list {
@@ -87,7 +87,7 @@ fn fixture_faces(fonts : Map[String, String]) -> Json {
 
 ///|
 /// The chosen faces as kept (`fonts`).
-fn fixture_fonts(fonts : Map[String, String]) -> Json {
+pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
   let m : Map[String, Json] = {}
   for k, v in fonts {
     m[k] = v.to_json()
@@ -97,7 +97,7 @@ fn fixture_fonts(fonts : Map[String, String]) -> Json {
 
 ///|
 /// The core's `fonts`: what is being fetched, how far; what failed.
-fn fixture_fonts_topic(f : Fixture) -> Json {
+pub fn fixture_fonts_topic(f : Fixture) -> Json {
   let fetching : Map[String, Json] = {}
   if f.mode == "settings-fonts-coming" {
     fetching["noto-sans-sc"] = (0.42).to_json()
@@ -108,7 +108,7 @@ fn fixture_fonts_topic(f : Fixture) -> Json {
 ///|
 /// A call of the faces' files, made up, its answer to `done`: a face fetched at once (in settings-fonts-coming never:
 /// under way), its unzipped file kept. False: not one of theirs.
-fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Result[Json, Json]) -> Unit) -> Bool {
+pub fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Result[Json, Json]) -> Unit) -> Bool {
   match name {
     "fonts.fetch" => {
       if f.mode != "settings-fonts-coming" {
@@ -128,7 +128,7 @@ fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Result[
 
 ///|
 /// A face's file (gzipped once a face was fetched; not here before), or its preview.
-fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), Json]? {
+pub fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), Json]? {
   let file = @codec.from_base64_exact(fixture_face_gz).unwrap()
   match name {
     "fonts.file" =>

@@ -199,7 +199,8 @@
     "page-old-sheet": {},
     "corners-each": {},
     "cursor-hand": {},
-    "tier-outside-shell": {}
+    "tier-outside-shell": {},
+    "fixture-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -247,6 +248,7 @@
     "page-old-sheet": {},
     "corners-each": {},
     "cursor-hand": {},
-    "tier-outside-shell": {}
+    "tier-outside-shell": {},
+    "fixture-import": {}
   }
 }

@@ -2,7 +2,7 @@
 // 对话's and 用量's figures as a busy week's, 用量's offering 分享卡片.
 
 ///|
-fn fixture_rail_card(params : Map[String, Json]) -> Json? {
+pub fn fixture_rail_card(params : Map[String, Json]) -> Json? {
   let place = match params.get("place") {
     Some(String(p)) => p
     _ => ""

@@ -44,6 +44,10 @@ priv struct Config {
   // what puts a sheet up in an older host of its own (the settings' `open_sheet`, a chat's), not the library's
   // presenters (page-old-sheet)
   old_sheets : Array[String]
+  // the made-up core (`fixture.package`, `@sffixture`): only the files that open a mode over the app
+  // (`fixture.openers`) say it, of the app's pages and its library, outside their tests (fixture-import)
+  fixture_pkg : String
+  fixture_openers : Array[String]
 }
 
 ///|
@@ -92,6 +96,11 @@ fn Config::new(d : @rjson.Value) -> Config {
     shell: strs(sect(d, "shell").get("files"), []),
     shell_reads: strs(sect(d, "shell").get("reads"), []),
     shell_state: strs(sect(d, "shell").get("state"), []),
+    fixture_pkg: match sect(d, "fixture").get("package") {
+      Some(Str(s)) => s
+      _ => ""
+    },
+    fixture_openers: strs(sect(d, "fixture").get("openers"), []),
   }
 }
 
@@ -154,6 +163,16 @@ fn lint_mbt(
     for k, tk in toks {
       if tk.kind == "ident" && cfg.one_look.contains(tk.text) && !f.in_test(k) {
         add("page-look", k, f.line_text(k))
+      }
+    }
+  }
+  // the made-up core said by the app (its pages, its library), not in a file that opens a mode over the app nor a test
+  if cfg.fixture_pkg != "" &&
+    (under(f.rel, cfg.pages) || under(f.rel, cfg.library)) &&
+    !under(f.rel, cfg.fixture_openers) {
+    for k, tk in toks {
+      if tk.kind == "at" && tk.text == cfg.fixture_pkg && !f.in_test(k) {
+        add("fixture-import", k, f.line_text(k))
       }
     }
   }

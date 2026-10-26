@@ -8,7 +8,7 @@
 ///|
 /// A download made up: its file (`station`; a chat's session `key`, or a drive's `root` and `path`, a folder `zip`ped;
 /// its name), how big, how much is here, how it stands.
-priv struct FixDownload {
+pub(all) struct FixDownload {
   station : String
   key : String
   root : String
@@ -22,7 +22,7 @@ priv struct FixDownload {
 
 ///|
 /// A download's id, as the made-up core gives it.
-fn fix_download_id(d : FixDownload) -> String {
+pub fn fix_download_id(d : FixDownload) -> String {
   if d.root == "" {
     d.station + "|" + d.key + "|" + d.name
   } else {
@@ -32,15 +32,15 @@ fn fix_download_id(d : FixDownload) -> String {
 
 ///|
 /// The fixture's downloads, newest first.
-let fix_downloads : Array[FixDownload] = []
+pub let fix_downloads : Array[FixDownload] = []
 
 ///|
 /// How long each twentieth of a download made up takes.
-let fix_download_step_ms : Double = 200.0
+pub let fix_download_step_ms : Double = 200.0
 
 ///|
 /// A download as the core lists it (views/downloads.ts shown), its words as the core's (core-logic.download.*).
-fn fix_download_shown(d : FixDownload) -> Json {
+pub fn fix_download_shown(d : FixDownload) -> Json {
   let percent = if d.size > 0.0 { (d.loaded / d.size * 100.0).floor().to_int() } else { 100 }
   let total = @sf.file_size(d.size)
   let o : Map[String, Json] = {
@@ -84,14 +84,14 @@ fn fix_download_shown(d : FixDownload) -> Json {
 
 ///|
 /// The `downloads` topic made up.
-fn fixture_downloads_topic() -> Json {
+pub fn fixture_downloads_topic() -> Json {
   { "downloads": Json::array(fix_downloads.map(fix_download_shown)) }
 }
 
 ///|
 /// `download.start`, `download.retry`, `download.take`, `download.done` and `download.cancel` made up; None for any
 /// other call.
-fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+pub fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   match name {
     "download.start" => {
@@ -149,7 +149,7 @@ fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[J
 ///|
 /// `download.read` made up: a part of the download `id`'s file, as the made-up chat's files are (preview_fixture.mbt);
 /// false when there is no such download.
-fn fixture_download_read(params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) -> Bool {
+pub fn fixture_download_read(params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) -> Bool {
   let p = Some(params)
   for d in fix_downloads {
     if fix_download_id(d) == text(p, "id") && d.root != "" {
@@ -184,7 +184,7 @@ fn fixture_download_read(params : Json, done : (Result[(Json, Bytes), Json]) -> 
 
 ///|
 /// MBUI_FIXTURE=drive-download: a file of the drive downloading (40% here), a folder of it being zipped for it.
-fn fix_drive_downloads(station : String, root : String) -> Unit {
+pub fn fix_drive_downloads(station : String, root : String) -> Unit {
   fix_downloads.push({
     station,
     key: "",
@@ -201,7 +201,7 @@ fn fix_drive_downloads(station : String, root : String) -> Unit {
 
 ///|
 /// MBUI_FIXTURE=chat-download: the chat with its agent's 发布包.zip and a recording last, to be downloaded.
-fn with_download_message(v : Json) -> Json {
+pub fn with_download_message(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
