@@ -20,6 +20,10 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
   )
   assert_true(head[0].2 < studio[0].2 && studio[0].2 < mba[0].2, msg="the line over the stations, in their order")
   assert_true(away[0].1 > mba[0].1 + mba[0].3, msg="what it is doing after its name")
+  // how many are up of all, the tasks at work; each up station's machine under its name
+  assert_true(t.find("在线设备") is Some(_) && t.find("1/2") is Some(_) && t.find("后台任务") is Some(_))
+  let machine = word("Apple M2 Max · CPU 62% · 内存 54%")
+  assert_true(machine.length() == 1 && machine[0].2 > studio[0].2 && machine[0].2 < mba[0].2, msg="\{machine}")
   // nothing of it, nor of anything else, against the corners' rule; no tip over it in its place
   assert_eq(t.corner_faults(), [])
   // the card to share, opened from it: the picture, 复制图片 under it

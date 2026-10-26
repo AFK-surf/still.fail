@@ -755,6 +755,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
     "chats" => fixture_chats(f, params)
     "fleet" => Some(fixture_fleet(f))
+    "railCard" => fixture_rail_card(f, params)
     "search" => fixture_search(f, params)
     // the archive's chats (the settings' made-up ones): the wide frame's sidebar lists them
     "archive" => @settings.fixture_topic(f.mode, name, params)
