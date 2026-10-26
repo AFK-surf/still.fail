@@ -240,7 +240,7 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
   match (card, @sf.screen_of_link(href)) {
     (Some(k), Some((station, screen))) if k.peek && !k.gone => {
       c.box(style=peek_card, id=open, fn() {
-        screen_peek(c, key, station, screen, k)
+        screen_peek(c, key, station, screen, k, target=open)
         link_card_words(c, title, line, false, peek_card_words)
       })
       |> ignore
@@ -308,6 +308,8 @@ pub(all) struct Peek {
   mut got : Int
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
+  /// its card's target (0: none): a card its list's row drew again, not built, still says it (Ctx::rect_of)
+  mut target : Int
 }
 
 ///|
@@ -344,6 +346,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         acked: 0,
         got: 0,
         pictures: [],
+        target: 0,
       }
       peeks[key] = p
       p
@@ -355,9 +358,17 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 /// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
 /// forward), its mark until a picture comes (a tab behind another casts none); in its shape as its station lists it,
 /// within bounds, so the card does not change size as it comes. The newest picture decoded is shown, cropped to the
-/// preview from its top; a newer one is drawn over it once it is decoded.
-pub fn screen_peek(c : @ui.Ctx, key : String, station : String, screen : String, card : ScreenCard) -> Unit {
+/// preview from its top; a newer one is drawn over it once it is decoded. `target`: its card's (peeks_settle).
+pub fn screen_peek(
+  c : @ui.Ctx,
+  key : String,
+  station : String,
+  screen : String,
+  card : ScreenCard,
+  target? : Int = 0,
+) -> Unit {
   let p = peek_for(key, station, screen)
+  p.target = target
   peeks_built[key] = true
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
   let ratio = if listed > 0.0 {
@@ -513,18 +524,23 @@ pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
       })
     }
   }
-  c.after_build("screen-peeks", fn() { peeks_settle(src) })
+  c.after_build("screen-peeks", fn() { peeks_settle(c, src) })
 }
 
 ///|
 /// Once the frame's builds are over: a preview asked for where its card is on the screen and the app shown, stopped
 /// where it is not (and its card let go of, as Android's list lets go of a row out of view); the pictures under the
-/// one shown let go of (their bytes, emptied: nothing draws them again).
-pub fn peeks_settle(src : Source) -> Unit {
+/// one shown let go of (their bytes, emptied: nothing draws them again). A card is on the screen where it was built in
+/// this frame, or drawn in the last: a message's row kept (mbui's kept_rows.mbt) is drawn again as it was, not built,
+/// and its card's target said again; were that taken for gone from view, every frame that draws it again (the pointer
+/// moved, something else moving) would stop its preview and the next built would ask for it anew, its picture gone
+/// meanwhile: the card flashing.
+pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
-    let want = shown && peeks_built.contains(key)
+    let on = peeks_built.contains(key) || (p.target != 0 && c.rect_of(p.target) is Some(_))
+    let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }
       PeekEnded => if !want { p.run = PeekOff }
@@ -536,7 +552,7 @@ pub fn peeks_settle(src : Source) -> Unit {
         newest = i
       }
     }
-    if !peeks_built.contains(key) {
+    if !on {
       newest = p.pictures.length()
       if p.run == PeekOff {
         gone.push(key)

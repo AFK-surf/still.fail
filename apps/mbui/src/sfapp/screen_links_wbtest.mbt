@@ -210,6 +210,32 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
 }
 
 ///|
+test "a preview goes on while its card's row is drawn again, not built: asked for once, its picture kept" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls)
+  scroll_to_words(t, "发布清单预览")
+  let s = streams[running(streams, cancelled)[0] - 1]
+  let view = text(Some(s.params), "view")
+  // (its frame told here, not by a host: built whole, as a host's answer builds what is kept)
+  (s.on_value)({ "frame": { "ts": 101 } }, Some(fixture_file_png("peek.png")))
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
+  t.keep_parts(true)
+  // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
+  t.move(100.0, 300.0)
+  t.move(140.0, 300.0)
+  t.move(180.0, 300.0)
+  assert_true(t.rows_kept() > 0)
+  t.run_for(peek_ms)
+  assert_eq(streams.length(), 1)
+  assert_eq(running(streams, cancelled).length(), 1)
+  assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
+}
+
+///|
 test "a preview's frames: each acknowledged peek_ms after the one before, the picture before shown until the next is decoded" {
   let streams = []
   let cancelled = []
