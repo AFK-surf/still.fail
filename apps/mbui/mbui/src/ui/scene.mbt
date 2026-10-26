@@ -727,6 +727,9 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let bg = if n.bones != 0L { self.bone_ground(bg, n.bones) } else { bg }
   let border_c = if n.bones != 0L { self.bone_ground(n.border_c, n.bones) } else { n.border_c }
   if (bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
+    // (where its border is drawn over what it holds, its ground stops at the border's inside, the border's band left
+    // clear: a border seen through is over what is behind the box, as one drawn with its ground is, never over the
+    // box's own ground: a panel's line over its white was a pale ring round it on a dimmed page)
     self.emit_rect(
       n.x,
       n.y,
@@ -734,8 +737,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.fh,
       n.radius,
       bg,
-      if border_over || n.dashed { 0.0 } else { n.border_w },
-      border_c,
+      if n.dashed { 0.0 } else { n.border_w },
+      if border_over { 0L } else { border_c },
       alpha,
     )
     self.notch_last(n)
