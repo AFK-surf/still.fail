@@ -146,7 +146,8 @@ pub fn composer(
   }
   if whose != composing.draft {
     composing.draft = whose
-    if @sf.native_input() is Mouse && !c.field_focused() {
+    // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
+    if !@sf.soft_keyboard() && !c.field_focused() {
       c.focus_editor(composer_field_key)
     }
   }
@@ -505,7 +506,7 @@ fn composer_text(
       color=p.text,
       placeholder_color=@sf.alpha(p.subtle, hint_in.get()),
       caret_color=p.accent,
-      enter_sends=@sf.native_input() is Mouse,
+      enter_sends=@sf.enter_sends(),
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
       leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
       files=!no_files,
@@ -550,7 +551,7 @@ fn composer_text(
 /// What the box says instead of its placeholder with keyboard and mouse and nothing that takes keys focused: that the composer's
 /// key puts the cursor there ("" otherwise).
 fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
-  if locked || (@sf.native_input() is Finger) || c.field_focused() {
+  if locked || @sf.soft_keyboard() || c.field_focused() {
     return ""
   }
   match @settings.key_label(prefs, "composer.focus") {
@@ -586,7 +587,7 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
     // on a touch system the phone's sheet of what can go in (attach.mbt), with keyboard and mouse the system's picker at once
     if c.clicked(id) {
-      if @sf.native_input() is Finger {
+      if @sf.attach_from_sheet() {
         attach_open(id, src, w.key)
       } else {
         pick_files(w)

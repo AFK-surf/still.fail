@@ -281,12 +281,7 @@
       "src/sfpages/composer.mbt": 1
     },
     "page-screen": {
-      "src/sfapp/composer.mbt": 2,
-      "src/sfdesk/appearance.mbt": 1,
-      "src/sfdesk/frame.mbt": 2,
-      "src/sfdesk/resources.mbt": 1,
-      "src/sfpages/composer.mbt": 4,
-      "src/sfpages/relay.mbt": 1
+      "src/sfdesk/frame.mbt": 2
     },
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,

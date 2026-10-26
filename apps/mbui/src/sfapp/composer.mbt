@@ -1738,13 +1738,12 @@ fn composer_bar(
     @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Out), by=holds)
   }
   let k = ct()
-  // pointed at with a mouse, its ground and the text's ink under the pointer,
-  // its tip with its keys (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
-  let mouse = @sf.native_input() is Mouse
-  if mouse && !no_files {
+  // its ground under a resting pointer (@sf.pointer_rests), its tip (with its keys where there are keys: the tip's own,
+  // held to show with a finger) (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
+  if !no_files {
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
-  let plus_hot = mouse && !no_files && c.lit(plus)
+  let plus_hot = @sf.pointer_rests() && !no_files && c.lit(plus)
   let plus_button = fn() {
     let b = c.box(
       w=Px(k.button),
@@ -1776,7 +1775,7 @@ fn composer_bar(
     // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
     // (its ink a step lighter under a mouse's pointer, in any layout: Chat.css.ts sendBtn, the text at 82%)
-    let hot = mouse && ready && c.lit(send)
+    let hot = @sf.pointer_rests() && ready && c.lit(send)
     let b = c.box(
       w=Px(k.button),
       h=Px(k.button),
@@ -1842,7 +1841,7 @@ fn composer_bar(
           caret_color=t.p.accent,
           // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
           // screen's keyboard) Enter is a new line, whatever the layout (the web's `hover: hover`, mobile/Chat.tsx)
-          enter_sends=@sf.native_input() is Mouse,
+          enter_sends=@sf.enter_sends(),
           paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
           files=!no_files,
