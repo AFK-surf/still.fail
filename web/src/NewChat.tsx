@@ -4,11 +4,11 @@
 import { Folder, Key, PanelClose, Plus } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { Link, useNavigate } from "react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Tabs } from "radix-ui";
 import type { RuntimeKind, StationView } from "./api.ts";
 import type { NewChatView } from "./core/shapes.ts";
-import { useReady } from "./core/react.ts";
+import { core, useReady } from "./core/react.ts";
 import { useNewChat, usePick } from "./pick.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
@@ -50,6 +50,9 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   // What the core keeps of it (../pick.ts): held back a moment for its first value from the device (LOCAL_MS, not for
   // the network), so the page comes as it will be.
   useReady({ topic: "newChat", scope }, LOCAL_MS);
+  // What the workspace goes back to (settings left, another workspace's, the app opened again): this new chat, not the
+  // chat shown before it (the core keeps it: views/marks.ts lastChat).
+  useEffect(() => void core().focus({ newChat: scope }).catch(() => undefined), [scope]);
   const chat = useNewChat(scope);
   const choice = chat.value;
   const onStation = (id: string) => chat.pick({ station: id });

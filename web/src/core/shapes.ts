@@ -5161,7 +5161,7 @@ export interface PrefsView {
 	lastChat?: Record<string, string>;
 	/**
 	 * The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
-	 * was): what the workspace's page goes back to.
+	 * was; a new chat shown, none): what the workspace's page goes back to.
 	 */
 	openChat?: Record<string, OpenChat>;
 	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */

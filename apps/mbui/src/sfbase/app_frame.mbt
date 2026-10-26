@@ -48,13 +48,15 @@ let told_bars : Ref[Bool?] = Ref(None)
 let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
-/// What this app last told the core of its attention (`client.focus`): shown, in front, the workspace in view; and
-/// where to tell it again when the system says the app left the front between frames.
+/// What this app last told the core of its attention (`client.focus`): shown, in front, the workspace in view, whether
+/// its new chat is the page shown; and where to tell it again when the system says the app left the front between
+/// frames.
 priv struct Attention {
   mut told : Bool
   mut visible : Bool
   mut focused : Bool
   mut workspace : String
+  mut new_chat : Bool
   mut src : Source?
 }
 
@@ -64,6 +66,7 @@ let attention : Attention = {
   visible: false,
   focused: false,
   workspace: "",
+  new_chat: false,
   src: None,
 }
 
@@ -72,14 +75,16 @@ let attention : Attention = {
 /// not (`client.focus {visible, focused}`, as the system says: @ui.app_visible, app_focused) and the workspace in view
 /// (`workspace`); a chat's own place (`chat`, `left`) is chat.mbt's. Only a change is told. What is read follows from
 /// it: the core marks a chat read only while a page in view (visible) shows its end, and shows no notice of a chat
-/// one in front shows.
-pub fn attend(src : Source, workspace : String) -> Unit {
+/// one in front shows. `new_chat`: the page on top is the workspace's new chat (`newChat`), which the core keeps as
+/// what the workspace goes back to (the wide frame lands on it as the app opens again: sfdesk's frame.mbt land) in
+/// place of the chat shown before it.
+pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
   if attention.src is None {
     // the system's say between frames (Android's activity pausing: no frame comes after it)
     @ui.on_app_change(fn(_, _) {
       match attention.src {
         Some(s) => {
-          attend(s, attention.workspace)
+          attend(s, attention.workspace, attention.new_chat)
           // what lives only while shown let go as the app goes behind (the screens live in their cards: ScreenLinks.kt
           // Peek, under STARTED)
           if !@ui.app_visible() {
@@ -97,17 +102,22 @@ pub fn attend(src : Source, workspace : String) -> Unit {
   if attention.told &&
     visible == attention.visible &&
     focused == attention.focused &&
-    workspace == attention.workspace {
+    workspace == attention.workspace &&
+    new_chat == attention.new_chat {
     return
   }
   attention.told = true
   attention.visible = visible
   attention.focused = focused
   attention.workspace = workspace
+  attention.new_chat = new_chat
   let params : Map[String, Json] = {
     "visible": Json::boolean(visible),
     "focused": Json::boolean(focused),
     "workspace": Json::string(workspace),
+  }
+  if new_chat {
+    params["newChat"] = Json::string(workspace)
   }
   (src.call)("client.focus", Json::object(params), fn(_) {  })
 }
@@ -252,6 +262,7 @@ fn app_frame_reset() -> Unit {
   attention.visible = false
   attention.focused = false
   attention.workspace = ""
+  attention.new_chat = false
   attention.src = None
   share_over.val = false
 }

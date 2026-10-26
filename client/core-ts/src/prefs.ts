@@ -191,6 +191,18 @@ export function chatOpened(data: Data, station: string, key: string): void {
   data.set(PREFS, prefs);
 }
 
+/// A new chat shown in `workspace` (`client.focus {newChat}`): it is what the workspace goes back to, so no chat is kept
+/// as the one last open there (`openChat`, nor the path an older core kept: `lastChat`).
+export function newChatOpened(data: Data, workspace: string): void {
+  const prefs = kept(data);
+  const open = isObject(prefs.openChat) && workspace in prefs.openChat;
+  const path = isObject(prefs.lastChat) && workspace in prefs.lastChat;
+  if (!open && !path) return;
+  if (open) delete (prefs.openChat as Map_)[workspace];
+  if (path) delete (prefs.lastChat as Map_)[workspace];
+  data.set(PREFS, prefs);
+}
+
 /// A decision set aside on this device (待定), kept as `decisionsDeferred` by where it is, with when.
 export function deferDecision(data: Data, at: string, now: number): void {
   const prefs = kept(data);
