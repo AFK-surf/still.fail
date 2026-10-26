@@ -16,7 +16,11 @@ if "override" in scenario:
 spec = importlib.util.spec_from_file_location("deploy", "cloud/deploy.py")
 deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
-deploy.read_template = lambda *args: {"vars": {"PUBLIC_ORIGIN": "https://app.example.test", "BETA_ORIGIN": "https://beta.example.test"}}
+deploy.read_template = lambda *args: {"vars": {
+    "PUBLIC_ORIGIN": "https://app.example.test",
+    "BETA_ORIGIN": "https://beta.example.test",
+    "ADMIN_ORIGIN": "https://admin.example.test",
+}}
 deploy.account_id = lambda: "test-account"
 
 def wrangler(*args, **kwargs):
