@@ -3931,6 +3931,55 @@ let sync_tick_ms : Double = 200.0
 let sync_out_ms : Double = 400.0
 
 ///|
+/// A key of a bar for what comes by itself (what comes to this device: sfdesk transfers.mbt), as update_key draws one:
+/// round, `side` across, its `glyph` `mark` big in its middle, a ring round it as far as what comes has come (`coming`;
+/// none while nothing comes), update_key's dot where something waits on a press (`dot`: the accent's) or `failed`
+/// (red's); pressed, what comes (the page's). True on its press.
+pub fn progress_key(
+  c : @ui.Ctx,
+  key : String,
+  side : Double,
+  mark : Double,
+  glyph : String,
+  label : String,
+  coming : Double?,
+  dot~ : Bool,
+  failed~ : Bool,
+) -> Bool {
+  let t = theme()
+  let id = c.id(key)
+  let b = c.box(
+    style=(if c.lit(id) { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
+    id~,
+    fn() {
+      icon(c, glyph, size=mark, color=t.p.text) |> ignore
+      if coming is Some(_) {
+        c.layer(fn() {
+          c.box(style=update_ring_at, fn() {
+            progress_spinner(c, key, coming, size=mark + 2.0 * (update_ring_clear + spin_stroke)) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      if failed || dot {
+        c.layer(fn() {
+          c.box(style=update_dot_at, fn() {
+            c.box(style=update_dot_ring, fn() { c.box(style=if failed { update_dot_bad } else { update_dot }, fn() {  }) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      press_ripple(c, id, side / 2.0)
+    },
+  )
+  c.semantics(b, Button, id~, label~)
+  c.clicked(id)
+}
+
+///|
 /// The key: round, what it holds in its middle.
 // kept across runs: a value (no field of it changes)
 let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")

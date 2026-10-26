@@ -680,7 +680,7 @@ function OutboxUpload() {
 function FileDownloads() {
   const size = 52_428_800;
   const of = (state: DownloadShown["state"], loaded: number, statusText: string): DownloadShown =>
-    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, active: state !== "failed", statusText, startedAt: 0 });
+    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", title: "dist.zip", size, loaded, progress: loaded / size, state, active: state !== "failed", statusText, startedAt: 0 });
   const file = { name: "dist.zip", size, path: "work/dist.zip" };
   return (
     <div style={{ padding: 40, maxWidth: 820, display: "grid", gap: 12, justifyItems: "start" }}>

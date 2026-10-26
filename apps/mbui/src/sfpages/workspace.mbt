@@ -614,20 +614,14 @@ pub fn workspace_menu_open() -> Bool {
 /// The workspaces at the rail's foot (Rail.tsx RailWorkspaces, Rail.css.ts workspaces, workspaceItem), on the rail's
 /// squares (`parts`): each on a square, 6 apart; a letter on a square of its own, a mark (an icon, an emoji) on nothing, the places' ground under
 /// the pointer; the one in view a short bar at its left; another with what waits in it (the core's marks' tone) its
-/// mark at its corner. Over them the ＋ (making one, another account, invitations), seen as the pointer comes over them
-/// or while an invitation waits. Pressed, that workspace.
+/// mark at its corner. Over them the ＋ (making one, another account, invitations), always seen (the web's only as the
+/// pointer comes over them). Pressed, that workspace.
 pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], parts : SquareParts) -> Unit {
   let t = @sf.theme()
   let marks = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "workspaces")
   let area = c.id("rail/workspaces")
   let add = c.id("rail/ws-add")
   let open = ws_menu.val
-  // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
-  let over = open ||
-    @sf.pointed_or_finger(
-      c,
-      c.lit(area) || c.lit(add) || all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) }),
-    )
   let waiting = invitations_waiting(src).length() > 0
   let switch_to = fn(x : Workspace) { switch_workspace(src, x.id) }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
@@ -646,9 +640,9 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
     let plus = (parts.square)(
       if hot { t.p.hover } else { 0L },
       fn() {
-        // (drawn either way, unseen where it is not shown: what the hand points at changes what is seen, never a box)
+        // (always seen: what stands over it, what comes to this device, would else stand alone over a gap)
         let ink = if hot { t.p.text } else { t.p.muted }
-        @sf.icon(c, "plus", size=rail_plus_size, color=if over || waiting { ink } else { @sf.alpha(ink, 0.0) }) |> ignore
+        @sf.icon(c, "plus", size=rail_plus_size, color=ink) |> ignore
         // an invitation waiting: the accent's dot (workspace.css.ts inviteDot)
         if waiting {
           (parts.corner)("invite")

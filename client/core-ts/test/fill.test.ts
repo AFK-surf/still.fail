@@ -43,8 +43,14 @@ function files(host: FakeHost, all: Map<string, Uint8Array>, away: Set<string> =
 async function rig<T extends { host: FakeHost; core: Core }>(t: T) {
   const ui = t.core.connect();
   let n = 100;
-  const ask = async (name: string, params: Record<string, unknown>) => {
+  // (a viewer's read says where it was opened, unless a test says otherwise: `from` given, null for none)
+  const ask = async (name: string, given: Record<string, unknown>) => {
     const id = ++n;
+    const params = { ...given };
+    if (params.keep !== undefined && !("from" in params)) {
+      if (name === "station.file.part") params.from = { thread: 7, session: "s-c1", file: { name: params.name, path: `work/k1/${String(params.name)}`, size: params.size } };
+      if (name === "drive.read") params.from = { root: params.root, path: params.path };
+    }
     call(t.core, ui, id, name, params);
     await t.host.settle();
     return t.host.takeEmitted().map(([, m]) => m as Record<string, unknown>).find((m) => m.id === id && ("ok" in m || "error" in m));
@@ -146,6 +152,81 @@ test("one read long ago is left as it is: only what was opened lately is brought
   await t.host.time.pass(IDLE_MS * 2);
   assert.equal(r.parts("old.mp4"), 1);
   core.close();
+});
+
+test("what is brought is listed as it stands; one stopped goes, what was kept of it with it; the prefs turn it off or bound it", async () => {
+  const film = bytesOf(10 * MB, 3);
+  const clip = bytesOf(6 * MB, 4);
+  const big = bytesOf(8 * MB, 5);
+  const t = await started();
+  files(t.host, new Map([["film.mp4", film], ["clip.mp4", clip], ["big.mp4", big]]));
+  const r = await rig(t);
+  const keeping = () => (t.core.inner.downloads.view().keeping as { name: string; state: string; loaded: number; statusText: string }[]);
+  for (const [name, f] of [["film.mp4", film], ["clip.mp4", clip], ["big.mp4", big]] as const) {
+    await r.ask("station.file.part", { station: ST, key: "k1", name, offset: 0, length: MB, keep: true, size: f.length });
+  }
+  // listed as they are let go, before any comes: the one read last first
+  assert.deepEqual(keeping().map((k) => [k.name, k.loaded]), [["big.mp4", MB], ["clip.mp4", MB], ["film.mp4", MB]]);
+  assert.ok(keeping().every((k) => k.statusText.length > 0));
+  // the one coming, while its part comes
+  const held = t.host.hold(`name=big.mp4&offset=${MB}&length=${4 * MB}`);
+  await t.host.time.pass(IDLE_MS + 100);
+  assert.deepEqual(keeping().map((k) => [k.name, k.state]), [["big.mp4", "going"], ["clip.mp4", "queued"], ["film.mp4", "queued"]]);
+  // stopped: no longer listed, nothing of it kept; the next goes on (held as it comes)
+  const id = chatKeptId(ST, "k1", "big.mp4");
+  const next = t.host.hold(`name=clip.mp4&offset=${MB}&length=${4 * MB}`);
+  await r.ask("fill.stop", { id });
+  held();
+  await t.host.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), false);
+  assert.deepEqual(keeping().map((k) => [k.name, k.state]), [["clip.mp4", "going"], ["film.mp4", "queued"]]);
+  // turned off: none listed, the part coming stopped, none brought
+  await r.ask("prefs.set", { fillOff: true });
+  assert.deepEqual(keeping(), []);
+  next();
+  const before = r.parts("film.mp4") + r.parts("clip.mp4");
+  await t.host.time.pass(IDLE_MS * 3);
+  assert.equal(r.parts("film.mp4") + r.parts("clip.mp4"), before);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "clip.mp4"), clip.length), false);
+  // on again, up to 7 MB: the clip, not the film
+  await r.ask("prefs.set", { fillOff: null, fillMax: 7 * MB });
+  await t.host.time.pass(IDLE_MS + 100);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "clip.mp4"), clip.length), true);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "film.mp4"), film.length), false);
+  assert.deepEqual(keeping(), []);
+  // any size (its part held as it comes), then all of them stopped at once
+  const last = t.host.hold(`name=film.mp4&offset=${MB}&length=${4 * MB}`);
+  await r.ask("prefs.set", { fillMax: 0 });
+  assert.deepEqual(keeping().map((k) => k.name), ["film.mp4"]);
+  await r.ask("fill.stopAll", {});
+  last();
+  await t.host.settle();
+  assert.deepEqual(keeping(), []);
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(chatKeptId(ST, "k1", "film.mp4"))), false);
+  t.core.close();
+});
+
+test("only what was opened is brought, where it was opened listed with it as its viewer said it, and with its download", async () => {
+  const film = bytesOf(6 * MB, 2);
+  const zip = bytesOf(2 * MB, 3);
+  const t = await started();
+  files(t.host, new Map([["film.mp4", film], ["dist.zip", zip]]));
+  const r = await rig(t);
+  const from = (name: string, size: number) => ({ thread: 7, session: "s-c1", file: { name, path: `work/k1/${name}`, size } });
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: MB, keep: true, size: film.length, from: from("film.mp4", film.length) });
+  const [k] = t.core.inner.downloads.view().keeping as { from?: unknown }[];
+  assert.deepEqual(k.from, from("film.mp4", film.length));
+  // one saying no place (a still read off a film in its message), or one not of that shape: not brought
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "dist.zip", offset: 0, length: MB, keep: true, size: zip.length, from: null });
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "dist.zip", offset: MB, length: 4 * 1024, keep: true, size: zip.length, from: { thread: "x" } });
+  assert.deepEqual((t.core.inner.downloads.view().keeping as { name: string }[]).map((x) => x.name), ["film.mp4"]);
+  // a download asked from where it was opened
+  const held = t.host.hold(`name=dist.zip&offset=${MB}&length=${MB}`);
+  await r.ask("download.start", { station: ST, key: "k1", name: "dist.zip", size: zip.length, from: from("dist.zip", zip.length) });
+  const [d] = t.core.inner.downloads.view().downloads as { from?: unknown }[];
+  assert.deepEqual(d.from, from("dist.zip", zip.length));
+  held();
+  t.core.close();
 });
 
 test("a drive's video a player let go of goes on as a chat's file does", async () => {

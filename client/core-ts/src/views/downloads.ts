@@ -13,10 +13,11 @@
 //
 // Topic:
 //   downloads {}                  this device's downloads, newest first: under way, waiting for their station, all
-//                                 here to be saved, being saved, or failed
+//                                 here to be saved, being saved, or failed; and (`keeping`) what was opened and let go,
+//                                 being brought after everything else (fill.ts)
 // Calls:
-//   download.start {station, key, name, size}
-//                                 a chat's file (its session `key`, its `name` at the station, its `size` as the message
+//   download.start {station, key, name, size, from?}
+//                                 a chat's file (`from`: where it was opened, KeptFrom, listed with it) (its session `key`, its `name` at the station, its `size` as the message
 //                                 says) fetched to be saved: one of it under way or ready is that one (a failed one, or
 //                                 one waiting for its station, starts again); answers {download}
 //   download.start {..., keep: true}
@@ -49,6 +50,8 @@ import { t } from "../i18n.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { request } from "../ops.ts";
+import { conform } from "../conform.ts";
+import { isObject } from "../util.ts";
 
 type Of = Extract<Call, { kind: "download" }>;
 
@@ -83,6 +86,8 @@ type Download = {
   keptBefore: boolean;
   /// Only to be kept on this device, not saved (`download.start`'s `keep`).
   keep: boolean;
+  /// A chat's file's: where it was opened (KeptFrom), as the page that asked said it.
+  opened?: unknown;
   /// The percent last told (the list is told again as it moves on a whole percent, not at every piece).
   told: number;
   fiber: Fiber.Fiber<void, never> | null;
@@ -90,7 +95,7 @@ type Download = {
 
 /// What is written down of one (drive-kept.ts `download`): enough to go on with it as the core starts again (a
 /// chat's from before drives were downloaded: `key`, no `from`).
-type Noted = Pick<Download, "id" | "station" | "name" | "size" | "keptBefore" | "startedAt"> & { from?: From; key?: string; keep?: boolean };
+type Noted = Pick<Download, "id" | "station" | "name" | "size" | "keptBefore" | "startedAt"> & { from?: From; key?: string; keep?: boolean; opened?: unknown };
 
 /// The kept file a download fetches into and is read from: its id among those kept, its kind there, as it was (the
 /// mtime a drive's folder said); null for a folder not zipped yet.
@@ -110,6 +115,12 @@ const unreached = (e: CoreError) => e.status === undefined && (e.code === "host"
 
 const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : 100);
 
+/// What a file is called to people: a file sent up as its sender named it, without what the station put before it
+/// (station/src/api/routes/hub.ts uploadPath: the time and a mark).
+export function titleOf(name: string): string {
+  return name.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f]{6}-(?=.)/, "");
+}
+
 /// A download as the list shows it: `active` while it is not failed (its progress shown, it can be called off).
 export function shown(d: Download): Record<string, unknown> {
   const statusText =
@@ -124,7 +135,7 @@ export function shown(d: Download): Record<string, unknown> {
   return {
     id: d.id,
     station: d.station,
-    ...(from.kind === "chat" ? { key: from.key, name: from.file } : { root: from.root, path: from.path, name: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
+    ...(from.kind === "chat" ? { key: from.key, name: from.file, title: titleOf(from.file) } : { root: from.root, path: from.path, name: d.name, title: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
     size: d.size,
     loaded: d.loaded,
     progress: d.size > 0 ? d.loaded / d.size : d.state === "going" || d.state === "waiting" ? 0 : 1,
@@ -134,6 +145,7 @@ export function shown(d: Download): Record<string, unknown> {
     ...(d.error !== null ? { error: d.error } : {}),
     ...(d.keep ? { keep: true } : {}),
     startedAt: d.startedAt,
+    ...(d.opened !== undefined ? { from: d.opened } : {}),
   };
 }
 
@@ -156,8 +168,8 @@ export class Downloads {
   }
 
   /// The `downloads` topic: newest first.
-  view(): { downloads: Record<string, unknown>[] } {
-    return { downloads: [...this.#held.values()].sort((a, b) => b.startedAt - a.startedAt).map(shown) };
+  view(): { downloads: Record<string, unknown>[]; keeping: Record<string, unknown>[] } {
+    return { downloads: [...this.#held.values()].sort((a, b) => b.startedAt - a.startedAt).map(shown), keeping: this.#inner.fill?.shown() ?? [] };
   }
 
   /// How far it has come: told again as it moves on a whole percent.
@@ -169,7 +181,7 @@ export class Downloads {
   }
 
   #note(d: Download): Effect.Effect<void> {
-    const noted: Noted = { id: d.id, station: d.station, from: d.from, name: d.name, size: d.size, keptBefore: d.keptBefore, startedAt: d.startedAt, ...(d.keep ? { keep: true } : {}) };
+    const noted: Noted = { id: d.id, station: d.station, from: d.from, name: d.name, size: d.size, keptBefore: d.keptBefore, startedAt: d.startedAt, ...(d.keep ? { keep: true } : {}), ...(d.opened !== undefined ? { opened: d.opened } : {}) };
     return this.#inner.driveKept.noteDownload(d.id, noted);
   }
 
@@ -316,7 +328,7 @@ export class Downloads {
           if (from === null) continue;
           // (asked again before this was read: that one)
           if (this.#held.has(n.id)) continue;
-          const d: Download = { id: n.id, station: n.station, from, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: Math.floor(n.startedAt ?? 0), keptBefore: n.keptBefore === true, keep: n.keep === true, told: -1, fiber: null };
+          const d: Download = { id: n.id, station: n.station, from, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: Math.floor(n.startedAt ?? 0), keptBefore: n.keptBefore === true, keep: n.keep === true, told: -1, fiber: null, ...(n.opened !== undefined ? { opened: n.opened } : {}) };
           this.#held.set(d.id, d);
           this.#go(d);
         }
@@ -362,6 +374,9 @@ export class Downloads {
           }
           return { download: shown(was) };
         });
+      // (a chat's file: where it was opened, KeptFrom, leading back there from the list)
+      const shaped = from.kind === "chat" && isObject(p.from) ? conform("KeptFrom", p.from) : null;
+      const opened = shaped !== null && "ok" in shaped ? shaped.ok : undefined;
       return Effect.gen(function* () {
         const was = held.get(id);
         if (was !== undefined) {
@@ -372,7 +387,7 @@ export class Downloads {
         // (asked again while that was read: the one made then)
         const again = held.get(id);
         if (again !== undefined) return yield* that(again);
-        const d: Download = { id, station, from, name, size, loaded: 0, state: "going", error: null, startedAt: Math.floor(self.#inner.host.nowMs()), keptBefore, keep, told: -1, fiber: null };
+        const d: Download = { id, station, from, name, size, loaded: 0, state: "going", error: null, startedAt: Math.floor(self.#inner.host.nowMs()), keptBefore, keep, told: -1, fiber: null, ...(opened !== undefined ? { opened } : {}) };
         held.set(id, d);
         yield* self.#note(d);
         self.#go(d);

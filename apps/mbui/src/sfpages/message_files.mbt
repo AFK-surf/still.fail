@@ -290,8 +290,9 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 ///|
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
 /// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
-/// downloads it, how far there over a bar. Held or right clicked, its menu: 引用; 加载 (brought onto this device by
-/// the core, whatever page shows, to play from here at once), 停止加载 while it comes.
+/// downloads it, or brings it after everything else once opened and let go (fill.ts), how far there over a bar. Held or
+/// right clicked, its menu: 引用; 加载 (brought onto this device by the core, whatever page shows, to play from here at
+/// once), 停止加载 while it comes.
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
@@ -309,7 +310,17 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     []
   } else {
     let (station, size) = (here.station, a.size)
-    [Some(@sf.menu_item_of(@sf.t("web-main.file.load"), fn() { download_start(src, station, owner, name, size, keep=true) }, icon="download"))]
+    // (where it was asked: its chat and the file, as its viewer would say it, the list leading back here)
+    let from : Map[String, Json] = { "session": Json::string(here.session), "file": attachment_json(a, a.owner) }
+    match here.view.thread {
+      Some(n) => from["thread"] = Json::number(n)
+      None => ()
+    }
+    [
+      Some(
+        @sf.menu_item_of(@sf.t("web-main.file.load"), fn() { download_start(src, station, owner, name, size, keep=true, from=Json::object(from)) }, icon="download"),
+      ),
+    ]
   }
   file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
   @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
@@ -318,6 +329,9 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let thumb = here.station + "/" + owner + "/" + a.path
   let still = video_still(c, src, here.station, owner, a, thumb)
   let dl = download_of(src, here.station, owner, stored_name(a.path))
+  // (downloading, else opened and let go, being brought after everything else: fill.ts)
+  let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }
+  let dl = if kept is Some(_) { kept } else { dl }
   let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
     if still != "" && still != "!" {
       c.layer(fn() {
@@ -333,7 +347,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     c.layer(fn() {
       c.box(style=video_foot_room, fn() {
         c.box(style=video_name_band, fn() {
-          let coming = flag(dl, "active")
+          let coming = flag(dl, "active") || kept is Some(_)
           if coming {
             c.text(text(dl, "statusText"), style=video_name) |> ignore
             c.box(style=video_bar, fn() { @sf.progress(c, "video/" + a.path, Some(number(dl, "progress"))) }) |> ignore
@@ -361,12 +375,15 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 }
 
 ///|
-/// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, how far in its size's
-/// place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
+/// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, or brings it after
+/// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
 fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?) -> Unit {
   let owner = owner_of(here, a)
   let dl = download_of(src, here.station, owner, stored_name(a.path))
-  let active = flag(dl, "active")
+  // opened and let go, being brought after everything else (fill.ts): how far in its size's place, ✕ stops it
+  let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }
+  let dl = if kept is Some(_) { kept } else { dl }
+  let active = flag(dl, "active") || kept is Some(_)
   let failed = text(dl, "state") == "failed"
   let key = "msg-card/" + @sfbase.file_key(a)
   file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by))
@@ -381,12 +398,12 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
     remove=active,
     retry=failed && !active,
     open=true,
-    remove_label=@sf.t("web-main.file.cancelDownload"),
+    remove_label=if kept is Some(_) { @sf.t("web-pages.files.stopKeeping") } else { @sf.t("web-main.file.cancelDownload") },
     retry_label=@sf.t("web-main.file.retryDownload"),
   )
   let id = text(dl, "id")
   if done.removed {
-    c.tell(key + "/cancel", fn() { download_cancel(src, id) })
+    c.tell(key + "/cancel", fn() { if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) } })
   } else if done.retried {
     c.tell(key + "/retry", fn() { download_retry(src, id) })
   } else if done.opened {

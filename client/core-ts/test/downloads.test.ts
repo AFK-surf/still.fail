@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { FakeHost } from "../src/testing.ts";
 import { Core } from "../src/core.ts";
+import { titleOf } from "../src/views/downloads.ts";
 import { HostError } from "../src/error.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { apply as applyOps } from "../src/delta.ts";
@@ -118,6 +119,13 @@ test("a chat's file downloaded a part at a time, ready for the page that takes i
   assert.deepEqual(await r.view(), []);
   assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), false);
   r.core.close();
+});
+
+test("a file sent up is called as its sender named it, not as the station keeps it", () => {
+  assert.equal(titleOf("2026-10-24T21-59-13-dc7ed5-e2e-tune.m4a"), "e2e-tune.m4a");
+  assert.equal(titleOf("build.zip"), "build.zip");
+  // (nothing after the mark: kept as it is)
+  assert.equal(titleOf("2026-10-24T21-59-13-dc7ed5-"), "2026-10-24T21-59-13-dc7ed5-");
 });
 
 test("saved, a file a viewer kept before stays kept: the device keeps what it kept before the download", async () => {

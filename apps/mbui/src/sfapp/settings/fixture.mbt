@@ -328,7 +328,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-completion" => "completion"
     "settings-policy" | "settings-policy-text" | "settings-policy-option" => "policy:ws1/st1"
     "settings-bars" => "bars"
-    "settings-kept" | "settings-kept-many" => "kept"
+    "settings-kept" | "settings-kept-many" | "settings-kept-fill" => "kept"
     "settings-changelog" => "changelog"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"

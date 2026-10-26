@@ -1648,6 +1648,7 @@ let en : Map[String, String] = {
   "web-pages.files.size": "Size",
   "web-pages.files.skip": "Skip",
   "web-pages.files.split": "Split",
+  "web-pages.files.stopKeeping": "Stop caching",
   "web-pages.files.switchNote": "Opens the same folder where there is one · ⌥ for a new tab",
   "web-pages.files.switchStation": "Switch station",
   "web-pages.files.tabs": "File tabs",

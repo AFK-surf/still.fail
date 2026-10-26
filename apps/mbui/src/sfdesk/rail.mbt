@@ -217,6 +217,8 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     })
     |> ignore
     c.spacer()
+    // what comes and goes (transfers.mbt), over the workspaces
+    rail_transfers(c, src, w.id)
     // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
     @sfpages.workspace_squares(c, src, w, all, {
       square: fn(ground, body, id) { rail_square(c, ground, body, id~) },

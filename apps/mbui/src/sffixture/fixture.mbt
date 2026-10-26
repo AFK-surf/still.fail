@@ -821,6 +821,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       }
       // the drive's ways, the files' page's tabs and favourites (browse_fixture.mbt)
       fix_browse_prefs_into(o)
+      // whether what was opened and let go is brought, up to how big (downloads_fixture.mbt)
+      fix_fill_prefs_into(o)
       Some(Json::object(o))
     }
     "fonts" => Some(fixture_fonts_topic(f))
@@ -1148,6 +1150,7 @@ pub fn fixture(mode : String) -> Source {
           }
           // the drive's ways, the files' page's tabs, its favourites
           fix_browse_prefs_set(params) |> ignore
+          fix_fill_prefs_set(params)
           // a place's face (null: back to the app's own)
           match field(Some(params), "fonts") {
             Some(Object(m)) =>

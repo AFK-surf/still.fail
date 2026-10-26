@@ -76,15 +76,17 @@ export type Call =
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array; progress: boolean }
   /// `keep` with the file's `size` as its message says: what is read kept on the device, with its chat, and what is
   /// kept answered (drive-kept.ts `chat`); without a size, nothing kept.
-  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean; keep: number | null }
+  /// `from`: where it was opened (KeptFrom: its chat, the file as its message has it), kept with it while it is kept, so
+  /// what lists it (`downloads`' `keeping`, a download) leads back there.
+  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean; keep: number | null; from?: unknown }
   /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean; from?: unknown }
   | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "fileOpen"; station: string; key: string; path: string }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
   /// `quiet`: as a chat's file's part's.
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null; quiet?: boolean }
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null; quiet?: boolean; from?: unknown }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
@@ -160,8 +162,20 @@ export type Call =
   | { kind: "browse"; name: string; params: Record<string, unknown> }
   /// A chat's file downloaded to this device (views/downloads.ts): its params read there.
   | { kind: "download"; action: "start" | "retry" | "take" | "read" | "done" | "cancel"; params: Record<string, unknown> }
+  /// What was opened and let go, brought after everything else (fill.ts): one no longer brought (`fill.stop {id}`), or
+  /// all (`fill.stopAll`), what was kept of each let go.
+  | { kind: "fill"; action: "stop" | "stopAll"; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
+
+/// Where a file read was opened (`from`, as KeptFrom has it), as a call has it; none where it says none, or one that
+/// is not that.
+function fromOf(params: unknown): { from?: unknown } {
+  const from = isObject(params) ? (params as Record<string, unknown>).from : undefined;
+  if (from === undefined || from === null) return {};
+  const shaped = conform("KeptFrom", from);
+  return "ok" in shaped ? { from: shaped.ok } : {};
+}
 
 /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page, and
 /// those that hand it what they read as it comes (`stream`: a player's part of a file, let go of as it seeks elsewhere
@@ -357,6 +371,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   if (name === "download.start" || name === "download.retry" || name === "download.take" || name === "download.read" || name === "download.done" || name === "download.cancel") {
     return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
+  if (name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
@@ -884,7 +899,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return {
         kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean,
-        keep: p.keep && !p.thumb && p.size !== null ? (p.size as number) : null,
+        keep: p.keep && !p.thumb && p.size !== null ? (p.size as number) : null, ...fromOf(params),
       };
     }
     case "station.file.part": {
@@ -901,7 +916,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return {
         kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
-        keep: p.keep && p.size !== null ? (p.size as number) : null,
+        keep: p.keep && p.size !== null ? (p.size as number) : null, ...fromOf(params),
       };
     }
     // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
@@ -922,7 +937,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       const said = p.keep !== null && p.mtime !== null && p.size !== null;
       return {
         kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
-        keep: said ? (p.keep as KeepKind) : null, mtime: said ? (p.mtime as number) : null, size: said ? (p.size as number) : null,
+        keep: said ? (p.keep as KeepKind) : null, mtime: said ? (p.mtime as number) : null, size: said ? (p.size as number) : null, ...fromOf(params),
       };
     }
     case "drive.upload.part": {
