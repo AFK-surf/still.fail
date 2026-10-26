@@ -236,9 +236,10 @@ fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
 }
 
 ///|
-/// Back to Home (the stack's root), the sheets and the menu closed.
+/// Back to Home (the stack's root), what is over the pages put down (close_overlays: a file open over the window too,
+/// as a notification tapped opens its chat over Home).
 fn home() -> Unit {
-  lower_sheet()
+  close_overlays()
   nav_home()
 }
 

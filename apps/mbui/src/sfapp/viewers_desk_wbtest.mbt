@@ -24,9 +24,10 @@ fn desk_tester(mode : String) -> @ui.Tester {
 }
 
 ///|
-/// Where a tool of the bar is, by how many from its end (download 0): 12 in from the window's side, 32 each, 2 apart.
+/// Where a tool of the bar is, by how many from its end (download 0): the last at the window's corner as a page's bar's
+/// last is (window_end_in), 32 each, 2 apart.
 fn desk_tool_x(from_end : Int) -> Double {
-  1280.0 - 12.0 - 16.0 - from_end.to_double() * 34.0
+  1280.0 - @sf.window_end_in(12.0) - 16.0 - from_end.to_double() * 34.0
 }
 
 ///|

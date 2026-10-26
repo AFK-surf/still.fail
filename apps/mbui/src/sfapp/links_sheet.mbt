@@ -328,9 +328,13 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
 }
 
 ///|
-/// The sheets and the menus over the pages closed, as a page opens from a link (AppState: sheet, menu null).
+/// What is over the pages put down, as a page opens from a link or a notification (AppState: sheet, menu null): the
+/// sheets and the menus, a file open over the window (viewer.mbt) and a chat being shared as a picture (publish.mbt),
+/// which would otherwise stay over the page that opened under them.
 fn close_overlays() -> Unit {
   lower_sheet()
   app.menu = false
   @sf.close_all_presented()
+  @sfbase.close_now()
+  @sfpages.publish_reset()
 }

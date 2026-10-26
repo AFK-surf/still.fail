@@ -631,7 +631,7 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
         control_chosen(c, s, now)
       }
     }
-  })
+  }, capsule_end=true)
   if back {
     close()
   }

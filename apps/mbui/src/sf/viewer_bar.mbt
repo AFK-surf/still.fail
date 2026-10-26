@@ -28,7 +28,9 @@ pub fn page_viewer_ink() -> ViewerInk {
 ///|
 /// The bar (`key` its own): back to `back`, `name` and `meta` under it (`title`, where the file is, over them while
 /// they are pointed at: ViewerBar.tsx's title), `tools` at its end (viewer_tool, viewer_download); `hidden`, gone up
-/// out of the way. True on the frame after its way back was pressed.
+/// out of the way. Its last tool stands at the window's top right corner as a page's bar's last button does
+/// (window_end_in: following the window's corner, as far in as from the bar's top), or clear of it where the last is
+/// a capsule of words (`capsule_end`: window_clear_in). True on the frame after its way back was pressed.
 pub fn viewer_bar(
   c : @ui.Ctx,
   key : String,
@@ -39,6 +41,7 @@ pub fn viewer_bar(
   ink : ViewerInk,
   tools : () -> Unit,
   title? : String = "",
+  capsule_end? : Bool = false,
 ) -> Bool {
   let gone = @motion.animate(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
       viewer_bar_ms,
@@ -96,18 +99,22 @@ pub fn viewer_bar(
       if live {
         tip(c, key + "/name-tip", middle, title)
       }
+      // clear of the window's buttons at its right where they are the app's (Windows': window_keys); else at the
+      // window's corner as a page's bar's last is
+      let end = if @ui.window_keys_own() {
+        window_keys_room_at(c.width) + viewer_bar_in
+      } else if capsule_end {
+        window_clear_in(viewer_bar_in)
+      } else {
+        window_end_in(viewer_bar_in)
+      }
       // (short of room, the tools kept whole: the way back and the name give way)
-      c.box(style=viewer_bar_end, keep=true, fn() {
+      c.box(style=viewer_bar_end.then(@ui.style(pr=room(end))), keep=true, fn() {
         tools_across.val = true
         tools()
         tools_across.val = false
       })
       |> ignore
-      // and of those at its right where they are the app's (Windows': window_keys), past its own 12 in
-      let keys = window_keys_room_at(c.width) - viewer_bar_in
-      if keys > 0.0 {
-        c.box(style=@ui.style(w=Fixed(keys), h=Full), fn() {  }) |> ignore
-      }
     })
     |> ignore
   })
@@ -136,7 +143,7 @@ pub fn viewer_tool(
   let id = c.id(key)
   let live = !disabled
   let hot = live && (c.lit(id) || c.pressed(id))
-  let b = c.box(style=viewer_tool_box.then(viewer_lit(ink)), selected=on, disabled~, id=if live { id } else { 0 }, fn() {
+  let b = c.box(style=viewer_tool_box.then(viewer_tool_corner()).then(viewer_lit(ink)), selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)
@@ -147,13 +154,24 @@ pub fn viewer_tool(
 }
 
 ///|
+/// The corner of a tool in the bar across the top: at a window's corner the one a page's bar's buttons share there
+/// (bar_keys_link: the window's followed, not a circle beside an arc it could never follow), the last of them in that
+/// corner concentric with it; round elsewhere (a panel's, a square window's, the floating head's).
+pub fn viewer_tool_corner() -> @ui.Style {
+  match bar_keys_link() {
+    Some(link) if tools_across.val => @ui.style(radius=Linked(link))
+    _ => @ui.style()
+  }
+}
+
+///|
 /// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed. `coming`: how far a
 /// download of it has come (0 to 1), a ring of the file's ink in its place meanwhile, not pressed again.
 pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false, coming? : Double) -> Bool {
   match coming {
     Some(part) => {
       let label = t("web-main.preview.download")
-      let b = c.box(style=viewer_tool_box, disabled=true, fn() {
+      let b = c.box(style=viewer_tool_box.then(viewer_tool_corner()), disabled=true, fn() {
         progress_ring(c, viewer_tool_icon, part, ink.ink) |> ignore
       })
       c.semantics(b, Button, label~, disabled=true)
@@ -262,11 +280,12 @@ let viewer_buttons_w : Double = 72.0
 let viewer_bar_box : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Its row: all its 45 (no line under it: its glass sets it apart from what goes under it), 12 in, 16 between its
-/// three parts.
+/// Its row: all its 45 (no line under it: its glass sets it apart from what goes under it), its buttons as far under
+/// its top as a page's bar's (bar_keys_top: that bar's 45 has its line under them), 12 in at its start, 16 between its
+/// three parts (its end's room viewer_bar's).
 // kept across runs: a value (no field of it changes)
-let viewer_bar_row : @ui.Style = @ui.css("row w=Full px=S3 gap=S4 align=ACenter").then(
-  @ui.style(h=Fixed(viewer_bar_h)),
+let viewer_bar_row : @ui.Style = @ui.css("row w=Full pl=S3 gap=S4 align=ACenter").then(
+  @ui.style(h=Fixed(viewer_bar_h), pb=room(hairline_h)),
 )
 
 ///|
