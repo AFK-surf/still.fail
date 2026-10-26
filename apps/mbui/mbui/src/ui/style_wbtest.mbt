@@ -237,18 +237,23 @@ test "hover: what holds the one pointed at is pointed at too, as drawn; what lie
 }
 
 ///|
-test "hover: a box only pointed at is pointed at, and a press on it is what holds it's (a chip's tip in a row)" {
+test "hover: a box only pointed at is pointed at, and a press on it is what holds it's (a chip's tip in a row), on it" {
   let pressed : Array[String] = []
   let view = fn(c : Ctx) {
     c.box(w=Px(200.0), h=Px(100.0), fn() {
       // a row (0 … 160) and in it a chip (60 … 100) that says what it is on hover, pressing nothing of its own
       let row = c.id("row")
+      let chip = c.id("chip")
       if c.clicked(row) {
         pressed.push("row")
       }
+      // (where in the row: on its chip)
+      if c.clicked_on(row, chip) {
+        pressed.push("on the chip")
+      }
       c.cursor(row, Hand)
       c.box(w=Px(160.0), h=Px(40.0), id=row, fn() {
-        c.box(w=Px(40.0), h=Px(20.0), ml=60.0, mt=10.0, id=c.id("chip"), taps=false, points=true, fn() {  }) |> ignore
+        c.box(w=Px(40.0), h=Px(20.0), ml=60.0, mt=10.0, id=chip, taps=false, points=true, fn() {  }) |> ignore
       })
       |> ignore
       // one only measured by: not pointed at
@@ -266,8 +271,13 @@ test "hover: a box only pointed at is pointed at, and a press on it is what hold
   assert_eq(g().rect_of(g().id("measured")), None)
   // the row's shape over it, the chip saying none
   assert_eq(desk.shown, Cursor::Hand.code())
-  // pressed there, the row is
+  // pressed there, the row is, on its chip
   t.tap(70.0, 20.0)
+  t.draw()
+  assert_eq(pressed, ["row", "on the chip"])
+  // pressed beside it, the row, on none of its parts
+  pressed.clear()
+  t.tap(20.0, 20.0)
   t.draw()
   assert_eq(pressed, ["row"])
 }

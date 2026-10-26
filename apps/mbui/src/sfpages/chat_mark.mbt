@@ -120,8 +120,8 @@ let mark_pop_peak_at : Double = 0.6
 
 ///|
 /// The state line `text` (the core's stateText): `lead` what leads it, `lead_text` a card's lead word, `rest` what
-/// follows the lead; `alert` (a message that did not go) in red. `slot`: the icon's place's id (`taps` on it go to the
-/// row: the row asks for them by it), its tip `key`.
+/// follows the lead; `alert` (a message that did not go) in red. `slot`: the icon's place's id (only pointed at: a press
+/// on it is what holds it's, the row's), its tip `key`.
 pub fn state_line(
   c : @ui.Ctx,
   key : String,
@@ -154,7 +154,7 @@ pub fn state_line(
       }
       // (read out whole: its aria-label)
       c.box(style=state_lead_line, label=text, fn() {
-        let b = c.box(style=state_slot, id=slot, fn() { lead_icon(c, lead, ink) })
+        let b = c.box(style=state_slot, id=slot, taps=false, points=true, fn() { lead_icon(c, lead, ink) })
         // (role="img": its words, the row pressed through it)
         c.semantics(b, Image, id=slot, label~)
         if rest != "" {

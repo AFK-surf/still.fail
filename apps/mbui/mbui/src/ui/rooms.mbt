@@ -3,9 +3,11 @@
 // rule, the boxes (Ctx::named) and by how much:
 //
 // room: what shows whole and takes presses (its click read, Ctx::clicked; or said, Ctx::takes_presses) has room to be
-//   pressed `room_least` across each way at least, on every screen with either input. Drawn smaller, a press reaches
-//   it from round it (finger_reach): its room is it grown so round its middle, within what holds it that takes presses
-//   too (a row's button: in the row's room, not its neighbour's) and within the window.
+//   pressed `room_least` across each way at least, on every screen with either input. A part of what holds it (a row's
+//   state line, its station's mark) is only pointed at (Ctx::box's `points`: a press on it is the row's, where in the
+//   row Ctx::clicked_on says), no target of its own. Drawn smaller, a press reaches it from round it (finger_reach): its
+//   room is it grown so round its middle, within what holds it that takes presses too (a row's button: in the row's
+//   room, not its neighbour's) and within the window.
 // apart: two such rooms in one layer, neither holding the other, never overlap: a press there would be either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
 //   mouse's way; touch has one as easy only where what it stands on asks for a menu (Ctx::menu_asked: a hold opens
@@ -86,17 +88,6 @@ fn Ctx::takes_at(self : Ctx, i : Int) -> Bool {
 }
 
 ///|
-/// Whether node `i`, in what takes presses, is a part of it rather than a control of its own: said to be a picture, words
-/// or a group (Ctx::semantics: a row's station mark, its state line, with a tip of its own), not a button, a link, a
-/// switch… A press on it is what holds it's.
-fn Ctx::press_part(self : Ctx, i : Int, roles : Map[Int, Role]) -> Bool {
-  match roles.get(i) {
-    Some(Image) | Some(Text) | Some(Group) | Some(Status) | Some(Tooltip) => true
-    _ => false
-  }
-}
-
-///|
 fn Ctx::room_faults(self : Ctx) -> Array[String] {
   let out : Array[String] = []
   let n = self.count
@@ -105,17 +96,14 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
   let holder = Array::make(n, -1)
   let takes = Array::make(n, false)
   let targets : Array[Int] = []
-  // (what each node is said to be, the last said)
-  let roles : Map[Int, Role] = {}
-  for s in self.sems {
-    roles[s.node] = s.role
-  }
   for i in 0..<n {
     let p = self.nodes[i].parent
     if p >= 0 && p < n {
       holder[i] = if takes[p] { p } else { holder[p] }
     }
-    if self.takes_at(i) && !(holder[i] >= 0 && self.press_part(i, roles)) {
+    // (a part of what holds it, a row's state line, its station's mark, is only pointed at, Ctx::box's `points`: a
+    // press on it is what holds it's, no target of its own)
+    if self.takes_at(i) {
       takes[i] = true
       if whole[i] {
         targets.push(i)
