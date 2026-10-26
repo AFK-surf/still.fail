@@ -925,6 +925,9 @@ let dark_palette : Palette = {
   warn_ink: 0xDC992FFFL,
   red: 0xFF816CFFL,
   neutral_bg: 0xECECED1BL,
+  // an outline a step lighter than the web's (3D3F44), as the grounds it lies on are (its canvas 1F2023 → 26272B): a
+  // quote's bar on a card's chip still seen
+  line_strong: 0x44464BFFL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
   // the sidebar a step under the page's ground, as the web's dark one under its canvas (1F2023 → 19191B)
@@ -1456,6 +1459,10 @@ pub fn ui_theme() -> @ui.Theme {
     // what a style's Muted and Subtle say
     muted: t.p.muted,
     subtle: t.p.subtle,
+    // the red and the outline the palette's too (Android's red, B1301F, not mbui's paper theme's B52D1B): what a
+    // style's Danger and Border say are what `p.red` and `p.line_strong` are
+    danger: t.p.red,
+    border: t.p.line_strong,
     // the panes' grounds the palette's (touch's sidebar a step under its beige page, what is chosen a step
     // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
     sidebar: t.p.sidebar,

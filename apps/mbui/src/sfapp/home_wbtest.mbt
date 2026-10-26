@@ -344,13 +344,13 @@ test "a row's state line tapped while it names a message opens the chat there; i
 ///|
 test "a row's state line in red while a message of the viewer's in it did not go (Home.kt StateLine alert)" {
   reset()
-  // (the theme as the frame has it)
+  // (the theme as the app's frame has it: its palette, and mbui's roles over it)
   let red = Ref(0L)
   let muted = Ref(0L)
   let t = @ui.Tester::new(
     fn(c) {
-      red.val = @sf.theme().p.red
-      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去", alert=true)
+      red.val = @sf.begin(c).p.red
+      c.with_theme(@sf.ui_theme(), fn() { @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去", alert=true) })
     },
     w=390.0,
     h=40.0,
@@ -361,8 +361,8 @@ test "a row's state line in red while a message of the viewer's in it did not go
   assert_true(t.drawn_glyphs().iter().all(fn(g) { g.2 == red.val }))
   let t2 = @ui.Tester::new(
     fn(c) {
-      muted.val = @sf.theme().p.muted
-      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去")
+      muted.val = @sf.begin(c).p.muted
+      c.with_theme(@sf.ui_theme(), fn() { @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去") })
     },
     w=390.0,
     h=40.0,
