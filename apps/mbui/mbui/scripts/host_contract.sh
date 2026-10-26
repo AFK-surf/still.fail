@@ -50,6 +50,8 @@
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
+#   scripts/host_contract.sh windows fontscale  the system's Text size (Accessibility's: 150%) as the host gives it to
+#        the app (kitdemo's MBUI_FONTSCALECHECK, src/kitdemo/gallery/fontscalecheck.mbt): 1.5
 #   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
 #        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
 #        their names, as their control types and the checkbox's state, the button invoked and the app pressed by it
@@ -667,6 +669,19 @@ INSTALL
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
     echo "play contract ($H): $have" ;;
+  fontscale)
+    [ "$H" = windows ] || { echo "fontscale contract: Windows'"; exit 1; }
+    # the system's Text size set as Settings sets it (its value in the person's registry, 100-225), the app run, what
+    # the host gave it said; then as it was
+    K='HKCU\Software\Microsoft\Accessibility'
+    was=$(reg.exe query "$K" //v TextScaleFactor 2>/dev/null | tr -d '\r' | sed -n 's/.*REG_DWORD *0x\([0-9a-f]*\).*/\1/p')
+    reg.exe add "$K" //v TextScaleFactor //t REG_DWORD //d 150 //f > /dev/null
+    run "MBUI_FONTSCALECHECK=1" $O/fontscale.log || true
+    if [ -n "$was" ]; then reg.exe add "$K" //v TextScaleFactor //t REG_DWORD //d $((16#$was)) //f > /dev/null
+    else reg.exe delete "$K" //v TextScaleFactor //f > /dev/null; fi
+    have=$(grep -a "FONTSCALE" $O/fontscale.log | sed 's/.*FONTSCALE/FONTSCALE/' | tr -d '\r')
+    [ "$have" = "FONTSCALE 1.5" ] || { echo "fontscale contract (windows): the host said \"$have\", not FONTSCALE 1.5 (Text size 150%)"; tail -20 $O/fontscale.log; exit 1; }
+    echo "fontscale contract (windows): Text size 150% given the app as 1.5" ;;
   a11y)
     [ "$H" = windows ] || { echo "a11y contract: Windows' (Android's is TalkBack's on its emulator; the others tell no reader yet)"; exit 1; }
     # the app's widgets as UI Automation's client finds them (test/host/a11ycheck.ps1), the button pressed through it
@@ -812,5 +827,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale; ios: free, done)" >&2; exit 1 ;;
 esac

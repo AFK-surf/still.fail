@@ -27,6 +27,7 @@ fn reset() -> Unit {
   badge_check_set.val = false
   secret_check_put.val = false
   a11y_check_box.val = Off
+  font_scale_said.val = false
   cb.val = On
   size.val = "m"
   bold.val = true

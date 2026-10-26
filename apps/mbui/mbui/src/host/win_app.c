@@ -1109,8 +1109,7 @@ void mb_host_back_enabled(int32_t on) { back_on = on; }
 // The app in front or not (@hostapi.set_app_state), whether the system is set to dark (@hostapi.system_dark), the
 // title bar as the app is drawn (@hostapi.set_dark), the app's menus (@hostapi.menu_setup) and its environment
 // (@hostapi.env): win_life.h.
-// Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
-double mb_host_font_scale(void) { return 1.0; }
+// (words as the app sizes them, @hostapi.font_scale: the system's Text size, win_a11y.cpp)
 // What the app was started to be used with (@hostapi.native_pointing): touch where the machine has a touch screen ready
 // and no mouse, or is a tablet used as one (a convertible folded flat, a detachable off its keyboard); else keyboard
 // and mouse. Slate mode (SM_CONVERTIBLESLATEMODE 0) counts only on a machine that can be a tablet, as Chromium reads it

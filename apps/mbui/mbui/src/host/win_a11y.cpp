@@ -9,6 +9,10 @@
 // told. As they change the readers are told: the window's children anew, the focus moved, a node's
 // name, check, expansion, selection or value. All of it on the window's thread (COM's threading: the UI thread is a
 // single-threaded apartment), the app's and the readers' calls alike.
+//
+// And the size of words the person set for reading (Settings, Accessibility, Text size: UISettings' TextScaleFactor,
+// 1 to 2.25), the app's words that much bigger (@hostapi.font_scale, as Android's fontScale): read once, then as the
+// system says it changed (a frame asked for then).
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
 #endif
@@ -17,6 +21,10 @@
 #include <ole2.h>
 #include <oleauto.h>
 #include <uiautomation.h>
+#include <roapi.h>
+#include <wrl.h>
+#include <wrl/wrappers/corewrappers.h>
+#include <windows.ui.viewmanagement.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +35,7 @@
 
 #pragma comment(lib, "uiautomationcore.lib")
 #pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "runtimeobject.lib")
 
 extern "C" void mb_post(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
 
@@ -638,6 +647,43 @@ void mb_host_a11y_tree(moonbit_string_t s) {
       f->Release();
     }
   }
+}
+
+// ---- the size of words ----
+
+static double text_scale = 1.0;
+static int text_scale_asked;
+static Microsoft::WRL::ComPtr<ABI::Windows::UI::ViewManagement::IUISettings2> ui_settings;
+static EventRegistrationToken text_scale_told;
+
+static void text_scale_read(void) {
+  double f = 1.0;
+  if (ui_settings && SUCCEEDED(ui_settings->get_TextScaleFactor(&f)) && f >= 1.0) text_scale = f;
+}
+
+// Words as the app sizes them (@hostapi.font_scale): the system's Text size (1 as it is)
+double mb_host_font_scale(void) {
+  if (!text_scale_asked) {
+    text_scale_asked = 1;
+    using namespace Microsoft::WRL;
+    using namespace Microsoft::WRL::Wrappers;
+    using namespace ABI::Windows::UI::ViewManagement;
+    using ABI::Windows::Foundation::ITypedEventHandler;
+    ComPtr<IInspectable> made;
+    if (SUCCEEDED(RoActivateInstance(HStringReference(RuntimeClass_Windows_UI_ViewManagement_UISettings).Get(), &made)) &&
+        SUCCEEDED(made.As(&ui_settings))) {
+      text_scale_read();
+      // (said on a thread of the system's: kept, and a frame asked for, which reads it)
+      ui_settings->add_TextScaleFactorChanged(
+          Callback<ITypedEventHandler<UISettings *, IInspectable *>>([](IUISettings *, IInspectable *) -> HRESULT {
+            text_scale_read();
+            mb_app_wake();
+            return S_OK;
+          }).Get(),
+          &text_scale_told);
+    }
+  }
+  return text_scale;
 }
 
 // WM_GETOBJECT (win_app.c): the window's fragment root for UI Automation's ask; 1 answered (its answer in *r). The
