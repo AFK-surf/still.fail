@@ -1,5 +1,5 @@
 // What Slack calls people and channels, as the readers know it: the station's names book (<data>/slack-names.json,
-// src/slack/names.ts, kept by the connects' connections) and the connects' Slack workspaces (config.json), each read
+// src/connects/names.ts, kept by the connects' connections) and the connects' Slack workspaces (config.json), each read
 // again when its file changed. A name not in the book is not known yet: the connection looks it up when it hears of
 // the person or channel, and the pages are told to read again then.
 import { readFileSync, statSync } from "node:fs";

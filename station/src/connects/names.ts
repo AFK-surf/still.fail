@@ -1,6 +1,7 @@
-// What Slack calls people and channels, kept on disk (<data>/slack-names.json, as chat/names.rs keeps it) so the
-// admin API never waits on Slack for a name: a name not known yet answers null at once, is fetched in the background,
-// and `onLearn` tells the pages to read again (once per burst). Failed lookups are not tried again for a while.
+// What a chat platform calls people and channels, kept on disk (Slack's <data>/slack-names.json, as chat/names.rs kept
+// it; Feishu's feishu-names.json) so the admin API never waits on the platform for a name: a name not known yet answers
+// null at once, is fetched in the background, and `onLearn` tells the pages to read again (once per burst). Failed
+// lookups are not tried again for a while. The readers read the same file (read/slack-known.ts).
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { Clock, Effect, Exit, FiberSet, Scope } from "effect";
 import { liveClock } from "../ops/fibers.ts";
@@ -43,7 +44,7 @@ export class NameBook {
         if (kept === null || typeof kept !== "object" || Array.isArray(kept)) throw new Error("not an object");
         for (const [key, entry] of Object.entries(kept)) this.entries.set(key, entry as Entry);
       } catch (error) {
-        log.warn("slack", "slack names file unreadable; starting empty", { error: (error as Error).message });
+        log.warn("connects", "names file unreadable; starting empty", { path: this.path, error: (error as Error).message });
       }
     }
     this.clock = options.clock ?? liveClock;
@@ -128,7 +129,7 @@ export class NameBook {
       writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.entries)));
       renameSync(tmp, this.path);
     } catch (error) {
-      log.warn("slack", "cannot save slack names", { error: (error as Error).message });
+      log.warn("connects", "names not saved", { path: this.path, error: (error as Error).message });
     }
   }
 }
