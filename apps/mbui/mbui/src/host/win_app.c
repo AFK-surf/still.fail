@@ -917,7 +917,8 @@ void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   if (!clipboard_words(s, 1) || clear_ms <= 0) return;
   secret_seq = GetClipboardSequenceNumber();
   if (!at_end) atexit(secret_off_at_end), at_end = 1;
-  SetTimer(hwnd, MB_TIMER_SECRET, clear_ms < USER_TIMER_MAXIMUM ? (UINT)clear_ms : USER_TIMER_MAXIMUM, NULL);
+  UINT ms = clear_ms < USER_TIMER_MAXIMUM ? (UINT)clear_ms : USER_TIMER_MAXIMUM;
+  SetTimer(hwnd, MB_TIMER_SECRET, ms, NULL);  // det-ok(host-delay): the app's clear_ms
 }
 
 // A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
