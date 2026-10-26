@@ -349,13 +349,14 @@ pub fn vault_foot(
       }
     })
   }
-  // a secret the person types in: its field over the buttons (a login's account first, where the agent named none)
+  // a secret the person types in: its field over the buttons (a login's account first, where the agent named none),
+  // its ends where theirs are on a page card (last on it: out in its foot corners)
   let mut secret = ""
   let mut username = ""
   let mut entered = false
   match (answer, typed) {
     (Approve(_), Some(ty)) =>
-      c.box(style=ask_typed, fn() {
+      c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
         if ty.kind == "login" && ty.username == "" {
           let words = tr("android-settings.vault.ask.typed.username")
           username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, field=typed_field(request, "/username")).text

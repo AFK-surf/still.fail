@@ -573,6 +573,15 @@ pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false)
 }
 
 ///|
+/// What stands over such a row of capsules `height` high, across the card (a field over its buttons): out to the sides
+/// they reach (foot_reach), so that its ends and theirs line up, the buttons' words then where the field's are, not at
+/// its edge.
+pub fn over_foot_reach(height : Double) -> @ui.Style {
+  let out = room(card_foot_in(height) - card_pad)
+  @ui.style(ml=out, mr=out)
+}
+
+///|
 /// The ladder's steps and inset as a style's: a card's corner, a row's or a block's, a small block's; the inset; a
 /// list card's padding (list_pad) and its rows' words' room in them (a row's own, text_in: list_pad and that from the
 /// card's edge, 16, as a menu's words in its panel); what a card's corner keeps clear past its words (its corner less
