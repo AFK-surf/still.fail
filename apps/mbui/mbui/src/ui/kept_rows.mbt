@@ -12,8 +12,8 @@
 // row that holds what must be built each frame (a field, a native view, a list of its own, a scroll bar its list's rows
 // share, what is drawn over everything) is always built.
 //
-// Its list's rows are laid on the pixels as it scrolls (place_list's snap): a row is drawn again only moved by whole
-// device pixels, as its laying out there would set its words and boxes.
+// Its list's rows are laid on the pixels, each as tall as whole pixels (Ctx::row_slot, rows_on_pixels): a row is drawn
+// again only moved by whole device pixels, as its laying out there would set its words and boxes.
 //
 // Drawn again, it says again what its build and its paint said of the frame: its targets (where presses, the wheel and
 // the pointer go), what takes the focus, what asks for a menu, the pointer's shape, what tells outside, its words. Its
@@ -441,8 +441,8 @@ fn Ctx::rows_placed(
           (self.px >= n.x && self.px < n.x + n.fw && self.py >= n.y && self.py < n.y + n.fh)
         )
       )
-    // (moved by whole device pixels, as scrolling moves rows: laid out there, its words and boxes would be set on the
-    // pixels as they are)
+    // (moved by whole device pixels, as its list lays rows (Ctx::rows_on_pixels): laid out there, its words and boxes
+    // would be set on the pixels as they are)
     let whole = (dy * self.scale - (dy * self.scale).round()).abs() < 0.000001
     // (what it holds near the list's top: held now, or as it was drawn)
     let mut held = rk.held
@@ -459,7 +459,7 @@ fn Ctx::rows_placed(
     // built where it is
     let k = n.item
     let r2 = self.row_of(li, st, k, iw, force=true)
-    let h = self.layout(r2, ix, n.y, iw, nan)
+    let h = self.row_slot(r2, self.layout(r2, ix, n.y, iw, nan))
     if h != n.fh {
       moved = moved + (h - n.fh)
       st.set_height(k, h)

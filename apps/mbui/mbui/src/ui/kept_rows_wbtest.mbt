@@ -173,6 +173,72 @@ test "a list's rows dragged: built only as they come, as the press changes hands
 }
 
 ///|
+/// 40 rows none of whose heights is a whole number of pixels at 2.625 (Android's 420 dpi), at the list's end its last
+/// as tall as `foot` says (what is under the messages: the composer's room, words sent flying in).
+fn pixel_rows(foot : @signals.Signal[Double]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.list(
+      "rows",
+      40,
+      40.0,
+      fn(i) {
+        let h = if i == 39 { foot.get() } else { 37.3 + (i % 5).to_double() * 1.37 }
+        c.box(h=Px(h), fn() { c.text("row \{i}", size=13.0) |> ignore }) |> ignore
+      },
+      stick_end=true,
+    )
+    |> ignore
+  }
+}
+
+///|
+/// The rows of the last frame's list whose tops are off the device's pixels: what moves them part of a pixel sets their
+/// lines apart (each glyph is set on the pixels where it is).
+fn rows_off_pixels() -> Array[String] {
+  let c = g()
+  let off = []
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list {
+      let mut r = c.nodes[i].first
+      while r >= 0 {
+        let v = c.nodes[r].y * c.scale
+        if (v - v.round()).abs() > 0.000001 {
+          off.push("row \{c.nodes[r].item} at \{c.nodes[r].y}")
+        }
+        r = c.nodes[r].next
+      }
+    }
+  }
+  off
+}
+
+///|
+test "a list's rows on the device's pixels however it stands: at its end as what is under them grows, dragged, said from another row" {
+  let foot = @signals.signal(20.0)
+  let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
+  t.keep_parts(true)
+  t.draw()
+  assert_eq(rows_off_pixels(), [])
+  // at its end, what is under the rows growing by parts of a pixel
+  foot.set(20.37)
+  t.draw()
+  assert_eq(rows_off_pixels(), [])
+  foot.set(23.85)
+  t.draw()
+  assert_eq(rows_off_pixels(), [])
+  // dragged by part of a pixel, then past a row's height: said from the row now first in view
+  t.press_at(200.0, 300.0)
+  t.move(200.0, 310.0)
+  t.move(200.0, 320.73)
+  assert_eq(rows_off_pixels(), [])
+  t.move(200.0, 390.31)
+  assert_eq(rows_off_pixels(), [])
+  t.release(200.0, 390.31)
+  t.run_for(rows_fling_ms)
+  assert_eq(rows_off_pixels(), [])
+}
+
+///|
 /// The pointer over the rows, the wheel turned notch by notch: the row under it lit as they pass.
 fn rows_wheel(t : Tester, k : TestRows) -> Unit {
   ignore(k)
