@@ -2,7 +2,9 @@
 // the size as it learns the picture's: the JPEG loader then decodes at a reduced size), turned by the EXIF
 // orientation, premultiplied; the texture made from that in the GL context as the next frame begins, and only then
 // the image ready (its decode told). A file's path (file:// too), or http(s) through libsoup; or bytes. What it was
-// made from kept, to decode it again for a new context.
+// made from kept, to decode it again for a new context. Also a PDF's pages drawn into images (poppler's, below).
+#include <dlfcn.h>
+#include <cairo.h>
 #include <epoxy/gl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
@@ -23,6 +25,7 @@ typedef struct {
   int max_px;
   char *src;    // what it was made from: a path or a URL, or
   GBytes *data;
+  struct page *page;  // a PDF's page (pdf_page_load)
 } image;
 
 // by id (ids are not reused); the main thread grows it, the pool's threads fill entries in (under lock)
@@ -33,6 +36,9 @@ static GThreadPool *pool;
 static int log_times;
 
 static void work(gpointer item, gpointer user);
+static uint8_t *draw_page(struct page *pg, int max_px, int *w, int *h, int *ow, int *oh);
+static struct page *page_hold(struct page *pg);
+static void page_free(struct page *pg);
 
 static void setup(void) {
   if (pool) return;
@@ -122,8 +128,27 @@ static void work(gpointer item, gpointer user) {
   g_mutex_lock(&lock);
   char *src = g_strdup(imgs[id].src);
   GBytes *data = imgs[id].data ? g_bytes_ref(imgs[id].data) : NULL;
+  // (a page of its own, its document held: the image may be freed while it is drawn)
+  struct page *page = imgs[id].page ? page_hold(imgs[id].page) : NULL;
   int max_px = imgs[id].max_px;
   g_mutex_unlock(&lock);
+  if (page) {
+    int w = 0, h = 0, ow = 0, oh = 0;
+    uint8_t *px = draw_page(page, max_px, &w, &h, &ow, &oh);
+    page_free(page);
+    g_mutex_lock(&lock);
+    image *im = &imgs[id];
+    if (im->state == 0 && !im->px) {
+      im->w = w, im->h = h, im->ow = ow, im->oh = oh;
+      im->px = px;
+      if (!px) im->state = -1, im->untold = !im->told;
+      px = NULL;
+    }
+    g_mutex_unlock(&lock);
+    free(px);  // freed meanwhile
+    mb_app_wake();
+    return;
+  }
   if (!data && src) {
     if (!strncmp(src, "http://", 7) || !strncmp(src, "https://", 8)) {
       data = fetch(src);
@@ -157,7 +182,8 @@ static void work(gpointer item, gpointer user) {
   mb_app_wake();
 }
 
-static int start(char *src, GBytes *data, int max_px) {
+// an image made from a path or a URL, bytes, or a PDF's page, as one of the pool's threads gets to it
+static int start_page(char *src, GBytes *data, struct page *page, int max_px) {
   setup();
   g_mutex_lock(&lock);
   if (nimgs == 0) nimgs = 1;  // 0 is no image
@@ -169,11 +195,14 @@ static int start(char *src, GBytes *data, int max_px) {
   imgs[id] = (image){0};
   imgs[id].src = src;
   imgs[id].data = data;
+  imgs[id].page = page;
   imgs[id].max_px = max_px;
   g_mutex_unlock(&lock);
   g_thread_pool_push(pool, GINT_TO_POINTER(id), NULL);
   return id;
 }
+
+static int start(char *src, GBytes *data, int max_px) { return start_page(src, data, NULL, max_px); }
 
 static char *utf8_of(moonbit_string_t s) {
   glong n = 0;
@@ -212,6 +241,7 @@ void mb_host_image_free(int32_t id) {
   free(im.px);
   g_free(im.src);
   if (im.data) g_bytes_unref(im.data);
+  if (im.page) page_free(im.page);
 }
 
 // the textures of images freed, deleted as the next frame's are made (the context current then)
@@ -322,4 +352,175 @@ int32_t mb_host_image_pixels(int32_t id, moonbit_bytes_t out) {
   glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)was);
   glDeleteFramebuffers(1, &fb);
   return ok;
+}
+
+// ---- PDFs (host_native.mbt pdf_*): poppler's (its GLib face, libpoppler-glib.so.8, loaded as the first is opened:
+// nothing of it linked, so the app starts where it is not installed; there pdf_open answers 0 and the app says it
+// cannot show the PDF). A page drawn on white with cairo into an image, at most max_px on its longer side and turned
+// as the page says (its /Rotate), on the pool's threads; one page of a document at a time (poppler draws none of a
+// document from two threads at once). ----
+
+static struct {
+  void *(*doc_new)(GBytes *, const char *, GError **);
+  int (*n_pages)(void *);
+  void *(*get_page)(void *, int);
+  void (*page_size)(void *, double *, double *);
+  void (*render)(void *, cairo_t *);
+} pp;
+static int pp_state;  // 0 not looked for, 1 here, -1 not
+
+static int pp_here(void) {
+  if (pp_state) return pp_state > 0;
+  pp_state = -1;
+  void *h = dlopen("libpoppler-glib.so.8", RTLD_NOW | RTLD_LOCAL);
+  if (!h) {
+    fprintf(stdout, "pdf: no poppler (%s): PDFs cannot be shown\n", dlerror());
+    return 0;
+  }
+  *(void **)&pp.doc_new = dlsym(h, "poppler_document_new_from_bytes");
+  *(void **)&pp.n_pages = dlsym(h, "poppler_document_get_n_pages");
+  *(void **)&pp.get_page = dlsym(h, "poppler_document_get_page");
+  *(void **)&pp.page_size = dlsym(h, "poppler_page_get_size");
+  *(void **)&pp.render = dlsym(h, "poppler_page_render");
+  if (!pp.doc_new || !pp.n_pages || !pp.get_page || !pp.page_size || !pp.render) {
+    fprintf(stdout, "pdf: a poppler without what it draws with: PDFs cannot be shown\n");
+    return 0;
+  }
+  pp_state = 1;
+  return 1;
+}
+
+typedef struct {
+  GMutex lock;    // one page of it drawn at a time
+  void *doc;      // PopplerDocument; NULL: it could not be opened
+  int refs;       // the app's (until pdf_close) and each page's image's
+} pdf;
+
+struct page {
+  pdf *doc;
+  int at;
+};
+
+static GPtrArray *pdfs;  // by id (ids are not reused; 0 is none)
+static GMutex pdfs_lock;
+
+static void pdf_unref(pdf *d) {
+  g_mutex_lock(&pdfs_lock);
+  int last = --d->refs == 0;
+  g_mutex_unlock(&pdfs_lock);
+  if (!last) return;
+  if (d->doc) g_object_unref(d->doc);
+  g_mutex_clear(&d->lock);
+  g_free(d);
+}
+
+static pdf *pdf_of(int id) {
+  return pdfs && id > 0 && (guint)id < pdfs->len ? g_ptr_array_index(pdfs, id) : NULL;
+}
+
+static struct page *page_hold(struct page *pg) {
+  struct page *held = g_new(struct page, 1);
+  g_mutex_lock(&pdfs_lock);
+  pg->doc->refs++;
+  g_mutex_unlock(&pdfs_lock);
+  held->doc = pg->doc;
+  held->at = pg->at;
+  return held;
+}
+
+static void page_free(struct page *pg) {
+  pdf_unref(pg->doc);
+  g_free(pg);
+}
+
+int32_t mb_host_pdf_open(moonbit_bytes_t data) {
+  if (!pp_here()) return 0;
+  if (!pdfs) pdfs = g_ptr_array_new(), g_ptr_array_add(pdfs, NULL);
+  pdf *d = g_new0(pdf, 1);
+  g_mutex_init(&d->lock);
+  d->refs = 1;
+  GBytes *b = g_bytes_new(data, (gsize)Moonbit_array_length(data));
+  // (encrypted with no password, as one forbidding only printing or copying is: opened)
+  d->doc = pp.doc_new(b, NULL, NULL);
+  g_bytes_unref(b);
+  g_ptr_array_add(pdfs, d);
+  return (int32_t)pdfs->len - 1;
+}
+
+int32_t mb_host_pdf_pages(int32_t doc) {
+  pdf *d = pdf_of(doc);
+  if (!d || !d->doc) return -1;
+  g_mutex_lock(&d->lock);
+  int n = pp.n_pages(d->doc);
+  g_mutex_unlock(&d->lock);
+  return n;
+}
+
+// a page's size in points, turned as it is shown (poppler's: its /Rotate taken in)
+void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) {
+  out[0] = out[1] = 0;
+  pdf *d = pdf_of(doc);
+  if (!d || !d->doc) return;
+  g_mutex_lock(&d->lock);
+  void *pg = page >= 0 && page < pp.n_pages(d->doc) ? pp.get_page(d->doc, page) : NULL;
+  if (pg) pp.page_size(pg, &out[0], &out[1]), g_object_unref(pg);
+  g_mutex_unlock(&d->lock);
+}
+
+int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) {
+  pdf *d = pdf_of(doc);
+  if (!d || !d->doc) return 0;
+  struct page *pg = g_new(struct page, 1);
+  g_mutex_lock(&pdfs_lock);
+  d->refs++;
+  g_mutex_unlock(&pdfs_lock);
+  pg->doc = d;
+  pg->at = page;
+  return start_page(NULL, NULL, pg, max_px > 0 ? (max_px < 8192 ? max_px : 8192) : 1024);
+}
+
+// (its pages' images hold it until they are freed)
+void mb_host_pdf_close(int32_t doc) {
+  pdf *d = pdf_of(doc);
+  if (!d) return;
+  g_ptr_array_index(pdfs, doc) = NULL;
+  pdf_unref(d);
+}
+
+// A page drawn: premultiplied RGBA, upright, its size in points (rounded) as the original's; NULL past its pages.
+static uint8_t *draw_page(struct page *p, int max_px, int *w, int *h, int *ow, int *oh) {
+  pdf *d = p->doc;
+  uint8_t *out = NULL;
+  g_mutex_lock(&d->lock);
+  void *pg = p->at >= 0 && p->at < pp.n_pages(d->doc) ? pp.get_page(d->doc, p->at) : NULL;
+  double pw = 0, ph = 0;
+  if (pg) pp.page_size(pg, &pw, &ph);
+  if (pg && pw > 0 && ph > 0) {
+    double k = max_px / fmax(pw, ph);
+    int iw = (int)fmax(1, round(pw * k)), ih = (int)fmax(1, round(ph * k));
+    cairo_surface_t *sf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, iw, ih);
+    cairo_t *cr = cairo_create(sf);
+    cairo_set_source_rgb(cr, 1, 1, 1);
+    cairo_paint(cr);
+    cairo_scale(cr, iw / pw, ih / ph);
+    pp.render(pg, cr);
+    cairo_destroy(cr);
+    cairo_surface_flush(sf);
+    if (cairo_surface_status(sf) == CAIRO_STATUS_SUCCESS) {
+      // cairo's ARGB32 is premultiplied BGRA in memory (a little-endian word): RGBA's red and blue swapped
+      const uint8_t *src = cairo_image_surface_get_data(sf);
+      int stride = cairo_image_surface_get_stride(sf);
+      out = malloc((size_t)iw * ih * 4);
+      for (int y = 0; y < ih; y++) {
+        const uint8_t *r = src + (size_t)y * stride;
+        uint8_t *o = out + (size_t)y * iw * 4;
+        for (int x = 0; x < iw; x++, r += 4, o += 4) o[0] = r[2], o[1] = r[1], o[2] = r[0], o[3] = r[3];
+      }
+      *w = iw, *h = ih, *ow = (int)round(pw), *oh = (int)round(ph);
+    }
+    cairo_surface_destroy(sf);
+  }
+  if (pg) g_object_unref(pg);
+  g_mutex_unlock(&d->lock);
+  return out;
 }

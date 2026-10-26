@@ -9,7 +9,7 @@
 #   ./still.fail-mbui/install.sh
 # It needs GTK 4.12 or later: Ubuntu 24.04, Debian 13, Fedora 40 and newer. Pages in messages and sites show where
 # WebKitGTK 6.0 is installed (Ubuntu's and Debian's libwebkitgtk-6.0-4, Fedora's webkitgtk6.0); without it the app
-# says it cannot show them.
+# says it cannot show them. PDFs show where poppler's GLib library is installed (most desktops have it).
 set -e
 from=$(cd "$(dirname "$0")" && pwd)
 data=${XDG_DATA_HOME:-$HOME/.local/share}
@@ -37,3 +37,5 @@ command -v gtk-update-icon-cache > /dev/null && gtk-update-icon-cache -q -t "$da
 echo "still.fail mbui $(cat "$app/VERSION") installed: $app (in your applications as still.fail mbui)"
 { ldconfig -p || /sbin/ldconfig -p; } 2> /dev/null | grep -q "libwebkitgtk-6.0.so.4" ||
   echo "Pages in messages and sites need WebKitGTK 6.0: install libwebkitgtk-6.0-4 (Ubuntu, Debian) or webkitgtk6.0 (Fedora)"
+{ ldconfig -p || /sbin/ldconfig -p; } 2> /dev/null | grep -q "libpoppler-glib.so.8" ||
+  echo "PDFs need poppler: install libpoppler-glib8t64 (Ubuntu, Debian) or poppler-glib (Fedora)"
