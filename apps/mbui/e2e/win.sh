@@ -9,7 +9,9 @@
 # iroh-relay of its own (n0's Windows build), a test station enrolled there (this checkout's station/dist, on its
 # Windows natives, ember's fake claude its agent), and alice's other device (e2e/peer.ts) making the chat. Checked beside
 # it: the browser came back to the app's own page, the core's store holds alice's sign-in, secure.* round-trips through
-# DPAPI, Home lists the chat the station has, both runs' scripts pass.
+# DPAPI, Home lists the chat the station has, both runs' scripts pass. Then the app as an app (its identity in its
+# resources: mbui's src/host/win_life.h): a window's program; started again with a link of its schemes, it hands the
+# link to the one that runs and ends; its window closed, it goes on, put away; started again, it comes back.
 #   apps/mbui/e2e/win.sh        (E2E_PORT: the cloud's ports from it, 18787 by default; the relay's E2E_PORT - 47)
 #   E2E_APP=FILE: the app is waited for, the still.fail it runs against made meanwhile: FILE is what its build writes
 #   once the app is whole (`ok`; anything else: it failed). mbui.yml starts this before the app's build ends: the
@@ -151,10 +153,60 @@ app again 1100x760
 check "started again on its files: signed in at once, Home" 'grep -q "^DRIVE PASS" "$OUT/again.log"'
 check "and the browser was not asked again" '[ "$(grep -c "^BACK " "$OUT/browser.log")" = 1 ]'
 
+# the app as an app: life.drive in the one run, what it asks of the runner (`log do: …`) done beside it (life_do),
+# each said done in its MBUI_DONE_DIR
+gui_program() {  # its PE header's Subsystem 2 (IMAGE_SUBSYSTEM_WINDOWS_GUI): no console window comes with it
+  node -e 'const b = require("fs").readFileSync(process.argv[1]); const pe = b.readUInt32LE(0x3c); process.exit(b.readUInt16LE(pe + 0x5c) === 2 ? 0 : 1)' "$(w "$EXE")"
+}
+product_name() { powershell.exe -NoProfile -Command "(Get-Item '$(w "$EXE")').VersionInfo.ProductName" | tr -d '\r'; }
+LIFE_DONE=$OUT/life-done
+life_do() {
+  local what=$1 said=ok how
+  case $what in
+    # started again with a link of its schemes: handed to this one, which takes it
+    handed)
+      MBUI_SCHEMES=stillfail-e2e timeout 60 "$EXE" stillfail-e2e://o/handed > "$OUT/life-handed.log" 2>&1 ||
+        said="the app started again ended $?"
+      [ "$said" != ok ] || grep -q "handed to it with a link" "$OUT/life-handed.log" ||
+        said="it did not hand its link over: $(tail -3 "$OUT/life-handed.log" | tr '\r\n' '  ')" ;;
+    # its window closed (put away), then the app started again (brought back)
+    away)
+      how=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(w "$D/win/away.ps1")" -Class "mbui fail.still.mbui" 2>&1 | tr -d '\r')
+      echo "$how" > "$OUT/life-away.txt"
+      case $how in hidden | minimized) ;; *) said="not put away: $how" ;; esac
+      if [ "$said" = ok ]; then
+        timeout 60 "$EXE" > "$OUT/life-back.log" 2>&1 || said="the app started again ended $?"
+        [ "$said" != ok ] || grep -q "handed to it" "$OUT/life-back.log" ||
+          said="it did not hand over: $(tail -3 "$OUT/life-back.log" | tr '\r\n' '  ')"
+      fi ;;
+    *) said="nothing called $what to do" ;;
+  esac
+  echo "e2e: life: $what: $said"
+  echo "$said" > "$LIFE_DONE/$what"
+}
+rm -rf "$LIFE_DONE" && mkdir -p "$LIFE_DONE"
+MBUI_SCHEMES=stillfail-e2e MBUI_CLOUD=$ORIGIN MBUI_CORE_DATA="$(w "$CORE")" MBUI_WIN=1100x760 MBUI_SHOT_DIR="$(w "$OUT/shots")" \
+  MBUI_DONE_DIR="$(w "$LIFE_DONE")" MBUI_DRIVE_B64=$(base64 < "$D/win/life.drive" | tr -d '\n') \
+  timeout 240 "$EXE" > "$OUT/life.log" 2>&1 &
+life_pid=$!
+# (what the run asks of the runner, as its lines come)
+tail -n +1 -F --pid=$life_pid "$OUT/life.log" 2>/dev/null | while IFS= read -r line; do
+  line=${line%$'\r'}
+  case $line in "DRIVE LOG do: "*) life_do "${line#DRIVE LOG do: }" ;; esac
+done
+wait $life_pid
+echo "e2e: life exited $?"
+check "a window's program: no console window of its own (its subsystem)" gui_program
+check "its identity in its resources (its name)" '[ "$(product_name)" = "still.fail mbui" ]'
+check "started again with a link of its schemes, it handed the link to the one that ran, which took it" \
+  'grep -q "opened with a link (stillfail-e2e://)" "$OUT/life.log"'
+check "its window closed, it went on, put away ($(cat "$OUT/life-away.txt" 2>/dev/null))" 'grep -q "^win: put away" "$OUT/life.log"'
+check "started again, it came back, shown again (its script passed)" 'grep -q "^DRIVE PASS" "$OUT/life.log"'
+
 for p in ${station:-} $cloud $relay; do
   taskkill //F //T //PID "$(cat /proc/$p/winpid 2>/dev/null || echo 0)" > /dev/null 2>&1 || kill $p 2>/dev/null || true
 done
 echo "e2e: $fails failed" | tee -a "$OUT/result.txt"
-for f in signin again; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
+for f in signin again life; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
 [ $station_ok = 1 ] || for f in enroll station peer; do echo "== $f.log (the end)"; tail -20 "$OUT/$f.log" 2>/dev/null; done
 [ $fails = 0 ]

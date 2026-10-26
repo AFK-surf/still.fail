@@ -5,7 +5,9 @@
 // keys macOS's); the pages' own (keymap.mbt's actions) show the keys they have here, which the pages take before the
 // menu does (as the desktop app's), and chosen, are those keys pressed (said back as the system's `menu`: app.mbt
 // system_said, @settings.ask_action); those of a chat only while one is open. 检查更新 opens the update dialog over
-// what is open (updates.mbt update_dialog), as 关于's version row does.
+// what is open (updates.mbt update_dialog), as 关于's version row does. On Windows, which has no menu bar, its last
+// menu is the menu of the app's icon in the notification area ("role": "tray": 打开 and 退出, as the desktop app's
+// tray had them), where the app goes as its window closes; the Mac leaves it out.
 
 ///|
 // kept across runs: a table, never written
@@ -45,6 +47,7 @@ pub let menu_zh : Map[String, String] = {
   "desktop.menu.front": "前置全部窗口",
   "desktop.menu.help": "帮助",
   "desktop.menu.shortcuts": "快捷键一览",
+  "desktop.tray.open": "打开 {app}",
 }
 
 ///|
@@ -151,6 +154,11 @@ pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
       role("desktop.menu.front", "front"),
     ]),
     menu("desktop.menu.help", "actions", [act("shortcuts", true)]),
+    menu("desktop.tray.open", "tray", [
+      role("desktop.tray.open", "show"),
+      sep,
+      role("desktop.menu.quit", "quit"),
+    ]),
   ]).stringify()
 }
 

@@ -9,6 +9,12 @@ test "the menu bar: the system's menus, the pages' actions with their keys here,
   assert_true(zh.contains("{\"title\":\"检查更新…\",\"action\":\"update.check\"}"))
   assert_true(zh.contains("\"title\":\"窗口\""))
   assert_true(zh.contains("\"role\":\"window\""))
+  // the menu of the app's icon in Windows' notification area: back, or quit
+  assert_true(
+    zh.contains(
+      "{\"title\":\"打开 {app}\",\"items\":[{\"title\":\"打开 {app}\",\"role\":\"show\"},{\"separator\":true},{\"title\":\"退出 {app}\",\"role\":\"quit\"}],\"role\":\"tray\"}",
+    ),
+  )
   // the pages' own: their keys, those of a chat only with one open
   assert_true(zh.contains("{\"title\":\"新建对话\",\"action\":\"chat.new\",\"enabled\":true,\"keys\":\"Mod+N\"}"))
   assert_true(zh.contains("{\"title\":\"归档对话\",\"action\":\"chat.archive\",\"enabled\":false,\"keys\":\"Shift+Mod+E\"}"))
@@ -26,6 +32,7 @@ test "the menu bar: the system's menus, the pages' actions with their keys here,
   @sf.set_language(None)
   assert_true(en.contains("{\"title\":\"Quit {app}\",\"role\":\"quit\"}"))
   assert_true(en.contains("{\"title\":\"Paste\",\"role\":\"paste\"}"))
+  assert_true(en.contains("{\"title\":\"Open {app}\",\"role\":\"show\"}"))
 }
 
 ///|

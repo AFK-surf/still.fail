@@ -1556,6 +1556,8 @@ void mb_host_menu_setup(moonbit_string_t json_s) {
   NSMenu *bar = [NSMenu new];
   for (NSDictionary *m in menus) {
     if (![m isKindOfClass:NSDictionary.class]) continue;
+    // (the notification area's icon's, Windows': the Dock has the app's own)
+    if ([m[@"role"] isEqual:@"tray"]) continue;
     NSString *title = [m[@"title"] isKindOfClass:NSString.class] ? m[@"title"] : @"";
     // (`"role": "actions"`: one of the app's actions only, MBShownKeysMenu; what is enabled the app says, not AppKit)
     NSMenu *menu = [m[@"role"] isEqual:@"actions"] ? [[MBShownKeysMenu alloc] initWithTitle:title]
