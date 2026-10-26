@@ -145,7 +145,7 @@ pub fn viewer_frame_act(
         if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~) {
           acted = true
         }
-      })
+      }, capsule_end=true)
     })
     |> ignore
   }
@@ -259,7 +259,7 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
 pub fn viewer_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=(if wide { vfr_text_tool_wide } else { vfr_text_tool_box }).then(viewer_lit(ink)), id~, fn() {
+  let b = c.box(style=(if wide { vfr_text_tool_wide } else { vfr_text_tool_box }).then(viewer_tool_corner()).then(viewer_lit(ink)), id~, fn() {
     c.text(words, style=vfr_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
     |> ignore
   })
