@@ -15,9 +15,9 @@ import { Fibers } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import { commandWords, domainOf, programOf } from "./parse.ts";
+import { commandWords, domainOf, programOf, webPage } from "../ops/command-output.ts";
 import { type Answered, type Callback, Refused, relay } from "./relay.ts";
-import { type LoginPages, webPage } from "./pages.ts";
+import type { LoginPages } from "./pages.ts";
 import { type Key, KEYS, LoginRun, type Screen } from "./run.ts";
 
 export { Refused };

@@ -19,9 +19,6 @@ export type PagesBrowser = {
 /// The screen a tab of the station's browser is (browser/tabs.ts).
 export const tabScreen = (targetId: string) => `browser:${targetId}`;
 
-/// Only a web page is opened.
-export const webPage = (url: string | null | undefined): url is string => typeof url === "string" && /^https?:\/\//i.test(url);
-
 export class LoginPages {
   readonly #browser: PagesBrowser;
   /// The tab open for each login, by its key.

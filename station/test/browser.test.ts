@@ -20,7 +20,7 @@ import { McpEndpoint } from "../src/tools/mcp.ts";
 import WebSocket, { WebSocketServer } from "ws";
 import { TabView, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
-import { browserTools, howTo } from "../src/tools/browser.ts";
+import { browserTools, howTo } from "../src/browser/tool.ts";
 import { asked } from "../src/mesh/screens.ts";
 
 const dirs: string[] = [];

@@ -188,7 +188,7 @@ station: 命令轮询到结果，写凭据，退出 0 → done
   - `index.ts`：进行中和刚结束的登录（在内存里），以及在这台上做过的登录的记录（`<data>/logins/history.json`：命令、谁、什么时候、怎么结束的，不记网址、码和输出）。
   - `parse.ts`：从网址和输出里认出回环、设备码、只要回车的提示（通用规则，不按工具）。
   - `relay.ts`：把回调转给登录命令的端口，核对端口归属。
-- 路由 `station/src/api/routes/logins.ts`，工具 `station/src/tools/login.ts`。
+- 路由 `station/src/api/routes/logins.ts`，工具 `station/src/logins/tool.ts`。
 - 现有 Profile 登录（`accounts/login.ts`）先不动；以后可以改成用同一套跑（`codex login` 不加 `--device-auth` 就是回环 1455 端口）。
 
 ### PTY
@@ -254,7 +254,7 @@ step    = loopback | device | open | terminal          // 现在要人做的那�
 
 ### station 之间
 
-agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑，比如它用 station_task 在 B 上跑的命令要登录）：`login {station: "B", …}`（名字或 id，和 station_task 一样认）。A 把这次调用原样经 `stillfail/station/1` 的 `login.call` 交给 B（带上 A 上的会话、chat 的发起人和标题），B 在自己的 `Logins` 上做（`tools/login.ts` 的 `act`：起、看、答、取消），把给 agent 的那段话回给 A：话里说登录在 B 上（「on <B 的名字>」），卡片要带 `"station": "<B 的 key>"`，链接是 B 的。B 记下发起它的是 A 的哪个会话（`Starter.peer`），只让 A 动它自己起的登录；B 上没有这次登录的 chat。登录再问问题、结束时，B 经 `login.told` 告诉 A：A 关掉这个 id 的卡片（结束时），给那个会话发 station 通知。权限和远程任务一样（同 workspace 的 station 就能调，见 station-peers.md）。旧 station 不认 `login.call`，A 告诉 agent 那台要更新。
+agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑，比如它用 station_task 在 B 上跑的命令要登录）：`login {station: "B", …}`（名字或 id，和 station_task 一样认）。A 把这次调用原样经 `stillfail/station/1` 的 `login.call` 交给 B（带上 A 上的会话、chat 的发起人和标题），B 在自己的 `Logins` 上做（`logins/tool.ts` 的 `act`：起、看、答、取消），把给 agent 的那段话回给 A：话里说登录在 B 上（「on <B 的名字>」），卡片要带 `"station": "<B 的 key>"`，链接是 B 的。B 记下发起它的是 A 的哪个会话（`Starter.peer`），只让 A 动它自己起的登录；B 上没有这次登录的 chat。登录再问问题、结束时，B 经 `login.told` 告诉 A：A 关掉这个 id 的卡片（结束时），给那个会话发 station 通知。权限和远程任务一样（同 workspace 的 station 就能调，见 station-peers.md）。旧 station 不认 `login.call`，A 告诉 agent 那台要更新。
 
 ## agent 的 `login` 工具
 

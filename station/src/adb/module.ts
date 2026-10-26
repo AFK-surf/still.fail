@@ -5,7 +5,7 @@ import { writeLine } from "../mesh/serve.ts";
 import { readOnly } from "../mesh/credential.ts";
 import { Agents } from "../sessions/agents.ts";
 import { ControlPlane, Parts } from "../services.ts";
-import { adbTools } from "../tools/adb.ts";
+import { adbTools } from "./tool.ts";
 import { Shares, answerAdb } from "./link.ts";
 
 export const AdbLive = Layer.effectDiscard(

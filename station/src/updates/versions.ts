@@ -2,7 +2,7 @@
 // channels, what is offered, and the words the pages show while something updates.
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { plainText } from "../logins/parse.ts";
+import { plainText } from "../ops/command-output.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { platform as machine } from "../platform/index.ts";
 

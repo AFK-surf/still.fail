@@ -5,9 +5,9 @@
 // login card or the link. What the agent is told never holds the page's address or the code (each shown as <link>, <code>):
 // it has no use for them, and so never posts them to Slack or a chat. Nothing types a secret: a prompt read without echo is
 // refused.
-import type { Logins, Login, Starter } from "../logins/index.ts";
-import type { Screen } from "../logins/run.ts";
-import type { Tool } from "./mcp.ts";
+import type { Logins, Login, Starter } from "./index.ts";
+import type { Screen } from "./run.ts";
+import type { Tool } from "../tools/mcp.ts";
 
 
 /// How long a call waits for the command to settle (go quiet: what it waits on is then known), at most.

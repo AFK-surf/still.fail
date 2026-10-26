@@ -1,4 +1,5 @@
-// What a login command's output and the page it opens say (docs/remote-login.md, 网址和端口的解析): the pages it names,
+// What a command's output and the page it opens say (docs/remote-login.md, 网址和端口的解析; a login command's, mostly:
+// the profiles' sign-in, accounts/login.ts, and a person's remote login, logins/): the pages it names,
 // whether one of them comes back to a loopback port on this machine (and to which path, with which state), a device
 // code to enter, a prompt that asks for Enter. Pure: read from text, nothing run.
 
@@ -240,3 +241,6 @@ export function commandWords(line: string): string[] | null {
   if (has || word !== "") words.push(word);
   return words;
 }
+
+/// Whether `url` is a web page (http or https), as a login's page must be to open in a browser.
+export const webPage = (url: string | null | undefined): url is string => typeof url === "string" && /^https?:\/\//i.test(url);

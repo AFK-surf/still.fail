@@ -7,8 +7,6 @@ import { tr, stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { ThreadRow } from "../store/rows.ts";
 import { threadAddress } from "../agents/instructions.ts";
-import { FeishuSurface } from "../feishu/surface.ts";
-import { SlackSurface } from "../slack/surface.ts";
 import type { ChatSurface, Place, ThreadRef } from "./chat.ts";
 import type { Connect } from "./config.ts";
 import type { Hub } from "./hub.ts";
@@ -51,7 +49,7 @@ function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface
     .flatMap((c) => {
       const chat = hub.chatOf(c.id);
       if (chat === undefined || !chat.places || !chat.begin) return [];
-      const kind: RelayConnect["kind"] = c.kind === "feishu" ? (chat instanceof FeishuSurface && chat.domain === "lark" ? "lark" : "feishu") : "slack";
+      const kind: RelayConnect["kind"] = c.kind === "feishu" ? (chat.platform?.() === "lark" ? "lark" : "feishu") : "slack";
       return [{ id: c.id, chat, kind, bind: c.bind }];
     });
 }
@@ -73,7 +71,7 @@ function preferredOf(hub: Hub, session: string, connects: { id: string; bind: Co
 
 /// The team (Slack workspace, Feishu tenant) a surface's bot is in, and its bot's picture, once they are known.
 function identityOf(chat: ChatSurface): { team: string | null; botImage: string | null } {
-  const me = chat instanceof SlackSurface || chat instanceof FeishuSurface ? chat.identity() : null;
+  const me = chat.identity?.() ?? null;
   return { team: me?.team || null, botImage: me?.botImage || null };
 }
 

@@ -1,7 +1,7 @@
 // What a search finds on this station (docs/search.md): GET /search?q=&kinds=&limit=&offset=, as the asker may see it
 // (their workspace's, and what only a member who may write reaches). `{groups: [{kind, hits, more}], building}`
 // (`building` always false). People find chats, messages, services and tasks, files: the execution history, skills and
-// memory, the profiles are the agents' to search (tools/search.ts).
+// memory, the profiles are the agents' to search (search/tool.ts).
 import { type Request, error, json, param } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";

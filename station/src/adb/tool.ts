@@ -1,7 +1,7 @@
 // adb_devices (the Rust station's adb.rs): the Android phones people shared with this station's agents. The phones are the
 // station process's (its adb tunnels over the mesh, not ported yet): it gives them here as `phones`; until it does,
 // there are none, as with the Rust station before it registered its lister.
-import type { Tool } from "./mcp.ts";
+import type { Tool } from "../tools/mcp.ts";
 
 type Json = any;
 

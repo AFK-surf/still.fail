@@ -34,8 +34,8 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
-import { loopbackOf, urlsIn } from "../logins/parse.ts";
-import { type LoginPages, webPage } from "../logins/pages.ts";
+import { loopbackOf, urlsIn, webPage } from "../ops/command-output.ts";
+import type { LoginPages } from "../logins/pages.ts";
 
 export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifying" | "done" | "failed" | "cancelled";
 
