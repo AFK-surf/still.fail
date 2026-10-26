@@ -14,6 +14,8 @@ fn flight_photo() -> Attachment {
     thumbhash: "",
     owner: "s-c1",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
 }
 

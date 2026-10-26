@@ -109,6 +109,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
       say(c, @sf.t("android-misc.drive.downloading", args=[("name", name)]))
       download_drive_file(c, src, at.station, root, at.path, name, listed=listed)
     },
+    facts: @sf.no_facts,
   }
 }
 

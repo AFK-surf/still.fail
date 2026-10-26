@@ -2,19 +2,31 @@
 // the core's client/core-ts/src/imageSize.ts, read the same way and tested on the same files): PNG, GIF and WebP from
 // their first bytes; a JPEG from its frame's header, turned as the EXIF note before it says (a phone's photo is kept on
 // its side, shown upright); an MP4 or QuickTime film from its picture track's header, turned as its matrix says (a
-// phone's recording, the same). Nothing is decoded; unknown files give null.
+// phone's recording, the same). Nothing is decoded; unknown files give null. A film's length and how many frames its
+// picture has are read from the same header (shownFacts), so a message carries them and a page shows them before it
+// reads the film's head and its end.
 import { closeSync, openSync, readSync } from "node:fs";
 
 /// How much is read at once; a JPEG's markers and a film's boxes looked through at most so many.
 const CHUNK = 64 * 1024;
 const STEPS = 256;
 
+/// What a picture or a film says of itself, as a message keeps it: the size it is shown at; a film's length (ms) and
+/// how many frames its picture has, where its header says them.
+export type Facts = { width: number; height: number; duration?: number; frames?: number };
+
 /// The size the picture or film at `path` is shown at.
 export function shownSize(path: string): [number, number] | null {
+  const facts = shownFacts(path);
+  return facts && [facts.width, facts.height];
+}
+
+/// What the picture or film at `path` says of itself.
+export function shownFacts(path: string): Facts | null {
   try {
     const file = openSync(path, "r");
     try {
-      return sizeIn(new Parts((at, n) => {
+      return factsIn(new Parts((at, n) => {
         const b = Buffer.alloc(n);
         return b.subarray(0, readSync(file, b, 0, n, at));
       }));
@@ -28,14 +40,15 @@ export function shownSize(path: string): [number, number] | null {
 
 /// The size a picture's or a film's bytes `b` (all of them, or as far as they go) say it is shown at.
 export function sizeOf(b: Uint8Array): [number, number] | null {
-  return sizeIn(new Parts((at, n) => b.subarray(at, at + n)));
+  const facts = factsIn(new Parts((at, n) => b.subarray(at, at + n)));
+  return facts && [facts.width, facts.height];
 }
 
-function sizeIn(p: Parts): [number, number] | null {
+function factsIn(p: Parts): Facts | null {
   const head = p.get(0, 32) ?? p.rest(0);
-  if (head.length >= 4 && head[0] === 0xff && head[1] === 0xd8) return jpegSize(p);
-  if (head.length >= 8 && ascii(head, 4, "ftyp")) return filmSize(p);
-  return headerSize(head);
+  if (head.length >= 8 && ascii(head, 4, "ftyp")) return filmFacts(p);
+  const size = head.length >= 4 && head[0] === 0xff && head[1] === 0xd8 ? jpegSize(p) : headerSize(head);
+  return size && { width: size[0], height: size[1] };
 }
 
 function headerSize(b: Uint8Array): [number, number] | null {
@@ -110,9 +123,9 @@ function exifTurned(b: Uint8Array): boolean | null {
   return null;
 }
 
-/// An MP4's or QuickTime film's size: its first track with a picture's (an audio track's tkhd says 0 by 0), its sides
-/// swapped where its matrix turns it a quarter.
-function filmSize(p: Parts): [number, number] | null {
+/// An MP4's or QuickTime film's facts: its first track with a picture's size (an audio track's tkhd says 0 by 0), its
+/// sides swapped where its matrix turns it a quarter; that track's length and how many frames it has (filmTime).
+function filmFacts(p: Parts): Facts | null {
   const moov = child(p, 0, Number.MAX_SAFE_INTEGER, "moov");
   if (!moov) return null;
   let at = moov.start;
@@ -122,11 +135,49 @@ function filmSize(p: Parts): [number, number] | null {
     if (b.type === "trak") {
       const tkhd = child(p, b.start, b.end, "tkhd");
       const size = tkhd ? trackSize(p, tkhd) : null;
-      if (size) return size;
+      if (size) return { width: size[0], height: size[1], ...filmTime(p, moov, b) };
     }
     at = b.end;
   }
   return null;
+}
+
+/// A picture track's length in ms (its media header's, else the film's own: mvhd) and how many frames it has (its
+/// sample sizes' count: stsz, or stz2); none said of a film written in fragments (nothing in its header yet).
+function filmTime(p: Parts, moov: Box, trak: Box): { duration?: number; frames?: number } {
+  const out: { duration?: number; frames?: number } = {};
+  const mdia = child(p, trak.start, trak.end, "mdia");
+  const mdhd = mdia && child(p, mdia.start, mdia.end, "mdhd");
+  const mvhd = child(p, moov.start, moov.end, "mvhd");
+  const ms = (mdhd && timeOf(p, mdhd)) ?? (mvhd && timeOf(p, mvhd));
+  if (ms) out.duration = ms;
+  const stbl = mdia && ["minf", "stbl"].reduce<Box | null>((b, type) => b && child(p, b.start, b.end, type), mdia);
+  if (stbl) {
+    const sizes = child(p, stbl.start, stbl.end, "stsz") ?? child(p, stbl.start, stbl.end, "stz2");
+    // after its version and flags, a size for every sample (stsz) or a field's size (stz2), then their count
+    const count = sizes && p.get(sizes.start + 8, 4);
+    const frames = count ? new DataView(count.buffer, count.byteOffset, 4).getUint32(0) : 0;
+    if (frames > 0) out.frames = frames;
+  }
+  return out;
+}
+
+/// What a media or a movie header (mdhd, mvhd: the same up to there) says its length is, in ms; null for none (0, or
+/// all ones: not known).
+function timeOf(p: Parts, header: Box): number | null {
+  const version = p.get(header.start, 1);
+  if (!version) return null;
+  // after its version and flags, its two times (64-bit ones in version 1), its scale, then its length
+  const wide = version[0] === 1;
+  const b = p.get(header.start + (wide ? 20 : 12), wide ? 12 : 8);
+  if (!b) return null;
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const scale = v.getUint32(0);
+  const length = wide ? v.getUint32(4) * 2 ** 32 + v.getUint32(8) : v.getUint32(4);
+  const unknown = wide ? v.getUint32(4) === 0xffffffff && v.getUint32(8) === 0xffffffff : length === 0xffffffff;
+  if (scale === 0 || length === 0 || unknown) return null;
+  const ms = Math.round(length * 1000 / scale);
+  return ms > 0 && Number.isSafeInteger(ms) ? ms : null;
 }
 
 /// A track header's picture size (16.16 each), turned as its matrix says; null for a track with no picture.

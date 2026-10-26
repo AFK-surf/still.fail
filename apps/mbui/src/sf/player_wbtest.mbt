@@ -2,8 +2,9 @@
 // paused): a phone's and a desktop's, watched and looked at closely.
 
 ///|
-/// A film (or a song) of a folder, as a viewer opens it: played as it comes (the fake host's view needs no bytes).
-fn film(name : String, kind? : String = "video") -> ViewerFile {
+/// A film (or a song) of a folder, as a viewer opens it: played as it comes (the fake host's view needs no bytes);
+/// what its message says of it, `facts`.
+fn film(name : String, kind? : String = "video", facts? : FileFacts = no_facts) -> ViewerFile {
   {
     name,
     size: 1000.0,
@@ -19,6 +20,7 @@ fn film(name : String, kind? : String = "video") -> ViewerFile {
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },
     save: fn() {  },
+    facts,
   }
 }
 
@@ -43,6 +45,7 @@ fn player_tester(
   gone : Array[String],
   backs : Array[Int],
   kind? : String = "video",
+  facts? : FileFacts = no_facts,
 ) -> @ui.Tester {
   viewer_reset()
   set_viewer_host(viewer_host_default())
@@ -50,7 +53,7 @@ fn player_tester(
     args.fold(init=test_words.get(key).unwrap_or(key), fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
   })
   let siblings : Array[ViewerEntry] = list.map(fn(n) { { name: n, size: 1.0, mtime: 0.0, mime: "", kind, dir: false } })
-  let file = film(name, kind~)
+  let file = film(name, kind~, facts~)
   @ui.Tester::new(
     fn(c) {
       begin(c) |> ignore
@@ -238,6 +241,36 @@ test "a desktop's: a film on black, the bar on it in its words; its speeds a men
   assert_true(t.find("0.25×") is Some(_))
   t.tap_text("0.25×")
   assert_true(told(t, 4, value="0.25"))
+}
+
+///|
+test "a desktop's: the bar's way back under the pointer lit on the film's black as the controls' buttons are, not with the page's hover" {
+  let t = player_tester(false, "a.mp4", [], [], [])
+  t.draw()
+  let (x, y) = t.find("影片").unwrap()
+  let under = fn(colour : Int64) {
+    t.drawn_rects().iter().any(fn(r) { r.4 == colour && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 })
+  }
+  let lit = alpha(media_dark_text, media_hot_share)
+  assert_false(under(lit))
+  t.move(x, y)
+  t.frame()
+  assert_true(under(lit))
+  // (the page's: dark on the black)
+  assert_false(under(theme().p.hover))
+}
+
+///|
+test "a desktop's: the bar says the film's size, length and rate as its message does, before the host has read them; else the host's" {
+  let facts : FileFacts = { width: 1280.0, height: 720.0, duration: 12500.0, frames: 375 }
+  let t = player_tester(false, "a.mp4", [], [], [], facts~)
+  t.draw()
+  // (the fake host's view: 640 × 360, 10 s, its frames not read)
+  assert_true(t.find("1280×720 · 0:13 · 30 fps") is Some(_))
+  assert_true(t.find("640×360") is None)
+  let t = player_tester(false, "a.mp4", [], [], [])
+  t.draw()
+  assert_true(t.find("640×360 · 0:10") is Some(_))
 }
 
 ///|

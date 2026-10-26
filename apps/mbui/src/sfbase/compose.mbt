@@ -597,6 +597,12 @@ pub fn attachment_json(a : Attachment, owner : String) -> Json {
   if a.thumbhash != "" {
     o["thumbhash"] = Json::string(a.thumbhash)
   }
+  if a.duration > 0.0 {
+    o["duration"] = Json::number(a.duration)
+  }
+  if a.frames > 0 {
+    o["frames"] = Json::number(a.frames.to_double())
+  }
   if owner != "" {
     o["owner"] = Json::string(owner)
   }

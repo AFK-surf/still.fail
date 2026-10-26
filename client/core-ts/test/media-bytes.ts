@@ -44,13 +44,27 @@ function tkhd(width: number, height: number, turn: number, version: number): num
     u32(width * 65536), u32(height * 65536));
 }
 
+/// A media or a movie header (mdhd, mvhd: `version` 0 or 1) saying `ms` at `scale` a second, `rest` bytes after it.
+function timed(type: string, version: number, ms: number, scale: number, rest: number): number[] {
+  const length = Math.round(ms * scale / 1000);
+  const times = version === 1 ? [...u32(0), ...u32(0), ...u32(0), ...u32(0), ...u32(scale), ...u32(Math.floor(length / 2 ** 32)), ...u32(length >>> 0)] : [...u32(0), ...u32(0), ...u32(scale), ...u32(length)];
+  return box(type, [version, 0, 0, 0], times, new Array<number>(rest).fill(0));
+}
+
 /// An MP4 film whose picture is `width` by `height` (none: 0 by 0, a sound track's), its header first or at its
 /// `end` (as a phone's recorder writes it), turned `turn` degrees; a sound track before the picture's; its data box's
-/// size said in 64 bits (`large`).
-export function film(width: number, height: number, o: { at?: "start" | "end"; turn?: number; version?: number; sound?: boolean; large?: boolean } = {}): Uint8Array {
+/// size said in 64 bits (`large`); `ms` long as its picture track's media header says (at QuickTime's 600 a second;
+/// the film's own header says it instead with `movie`), `frames` the count of its picture's sample sizes.
+export function film(width: number, height: number, o: { at?: "start" | "end"; turn?: number; version?: number; sound?: boolean; large?: boolean; ms?: number; movie?: boolean; frames?: number } = {}): Uint8Array {
   const ftyp = box("ftyp", ascii("isom"), u32(512), ascii("isomiso2mp41"));
-  const tracks = [...(o.sound ? [box("trak", tkhd(0, 0, 0, 0), box("mdia", []))] : []), box("trak", tkhd(width, height, o.turn ?? 0, o.version ?? 0), box("mdia", []))];
-  const moov = box("moov", box("mvhd", new Array<number>(100).fill(0)), ...tracks);
+  const version = o.version ?? 0;
+  const mdhd = o.ms !== undefined && !o.movie ? [timed("mdhd", version, o.ms, 600, 4)] : [];
+  // every sample the same size (100), so none is listed
+  const minf = o.frames !== undefined ? [box("minf", box("stbl", box("stsz", [0, 0, 0, 0], u32(100), u32(o.frames))))] : [];
+  const picture = box("trak", tkhd(width, height, o.turn ?? 0, version), box("mdia", ...mdhd, ...minf));
+  const tracks = [...(o.sound ? [box("trak", tkhd(0, 0, 0, 0), box("mdia", []))] : []), picture];
+  const mvhd = o.ms !== undefined && o.movie ? timed("mvhd", 0, o.ms, 1000, 80) : box("mvhd", new Array<number>(100).fill(0));
+  const moov = box("moov", mvhd, ...tracks);
   const data = new Array<number>(200_000).fill(7);
   const mdat = o.large ? [...u32(1), ...ascii("mdat"), ...u32(0), ...u32(data.length + 16), ...data] : box("mdat", data);
   return new Uint8Array(o.at === "end" ? [...ftyp, ...mdat, ...moov] : [...ftyp, ...moov, ...mdat]);

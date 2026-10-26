@@ -3,7 +3,7 @@
 ///|
 test "a message's quote naming one of its files: that file in the quote's card, the rest as they were" {
   let a = fn(name : String) -> Attachment {
-    { name, path: "/w/" + name, size: 1.0, width: 0.0, height: 0.0, thumbhash: "", owner: "", upload: "" }
+    { name, path: "/w/" + name, size: 1.0, width: 0.0, height: 0.0, thumbhash: "", owner: "", upload: "", duration: 0.0, frames: 0 }
   }
   let files = [a("shot.png"), a("notes.txt")]
   let quotes : Array[Quote] = [

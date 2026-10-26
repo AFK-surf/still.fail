@@ -165,7 +165,7 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
 pub fn viewer_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=if wide { vfr_text_tool_wide } else { vfr_text_tool_box }, id~, fn() {
+  let b = c.box(style=(if wide { vfr_text_tool_wide } else { vfr_text_tool_box }).then(viewer_lit(ink)), id~, fn() {
     c.text(words, style=vfr_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
     |> ignore
   })
@@ -333,7 +333,7 @@ let vfr_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let vfr_text_tool_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S9 px=S2 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}
+  #|h=S8 min_w=S9 px=S2 radius=Full align=ACenter justify=JCenter
 )
 
 ///|

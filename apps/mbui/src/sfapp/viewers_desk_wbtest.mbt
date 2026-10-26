@@ -51,6 +51,12 @@ test "desk: an image on the canvas under the bar, back to its chat by name, whic
 }
 
 ///|
+test "desk: a chat's film says its size, length and rate in the bar as its message does, none of it read yet" {
+  let t = desk_tester("chat-preview-video")
+  assert_true(t.find("1280×720 · 0:13 · 30 fps") is Some(_))
+}
+
+///|
 test "desk: a click on the image does nothing, one round it closes the preview" {
   let t = desk_tester("chat-preview-image")
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is

@@ -457,6 +457,25 @@ fn frames_of(p : @kit.Media, s : @kit.MediaStatus, pos : Double) -> Frames {
 }
 
 ///|
+/// A film's own facts as its bar says them (the web player's bar): its size in pixels, how long, its rate. What its
+/// message says, there from the first frame (FileFacts: the station read them from its header), else what the host
+/// has read of it (its head, and its end where its header is kept there).
+fn film_facts(said : FileFacts, s : @kit.MediaStatus, fr : Frames) -> String {
+  let (w, h) = if said.width > 0.0 && said.height > 0.0 { (said.width, said.height) } else { (s.width, s.height) }
+  guard w > 0.0 && h > 0.0 else { "" }
+  let dur = if said.duration > 0.0 { said.duration } else { s.duration }
+  let fps = if said.frames > 0 && said.duration > 0.0 {
+    said.frames.to_double() * 1000.0 / said.duration
+  } else {
+    fr.fps
+  }
+  joined(
+    ["\{w.to_int()}×\{h.to_int()}", if dur > 0.0 { clock(dur) } else { "" }, if fps > 0.0 { "\{fps.round().to_int()} fps" } else { "" }],
+    " · ",
+  )
+}
+
+///|
 /// When frame `i` starts (the first or the last past either end).
 fn Frames::start_of(self : Frames, i : Int) -> Double {
   match self.starts {
@@ -831,9 +850,16 @@ fn desk_player(
   let v = view_for(key)
   let picture = !f.audio
   let ink = media_ink(picture)
-  // the bar over a film on its black, in its words; a song's on the page
+  // the bar over a film on its black, in its words, its buttons lit as the controls' are; a song's on the page
   let bar_ink : ViewerInk = if picture {
-    { ground: ink.stage, ink: ink.text, muted: ink.muted, line: alpha(ink.text, player_dark_line) }
+    {
+      ground: ink.stage,
+      ink: ink.text,
+      muted: ink.muted,
+      line: alpha(ink.text, player_dark_line),
+      hover: alpha(ink.text, media_hot_share),
+      chosen: alpha(ink.text, player_dark_chosen),
+    }
   } else {
     page_viewer_ink()
   }
@@ -1007,19 +1033,8 @@ fn desk_player(
     player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, panel)
     // the bar along the top
     c.layer(fn() {
-      // which of the folder's, its size; a film's own facts after them: its size in pixels, how long, its rate
-      let facts = if picture && s.width > 0.0 && s.height > 0.0 {
-        joined(
-          [
-            "\{s.width.to_int()}×\{s.height.to_int()}",
-            if s.duration > 0.0 { clock(s.duration) } else { "" },
-            if fr.fps > 0.0 { "\{fr.fps.round().to_int()} fps" } else { "" },
-          ],
-          " · ",
-        )
-      } else {
-        ""
-      }
+      // which of the folder's, its size; a film's own facts after them
+      let facts = if picture { film_facts(file.facts, s, fr) } else { "" }
       let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
       if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
           if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
@@ -1275,7 +1290,8 @@ fn desk_play_list(
   } else {
     (pal.canvas, pal.line, pal.text, pal.muted, pal.selected)
   }
-  let ink : ViewerInk = { ground, ink: words, muted: quiet, line }
+  let hover = if picture { alpha(words, media_hot_share) } else { pal.hover }
+  let ink : ViewerInk = { ground, ink: words, muted: quiet, line, hover, chosen }
   c.box(style=desk_panel_place, fn() {
     c.box(style=desk_panel_top(), fn() {  }) |> ignore
     c.box(style=desk_panel_row, fn() {

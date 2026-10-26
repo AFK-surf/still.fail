@@ -120,6 +120,8 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     thumbhash: "",
     owner: "s-c1",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
   let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
@@ -253,6 +255,8 @@ fn video_in_chat() -> @ui.Tester {
     thumbhash: "",
     owner: "s-c1",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
   let t = @ui.Tester::new(
     fn(c) {
@@ -361,6 +365,8 @@ fn posterless(size : Double) -> @ui.Tester {
     thumbhash: "",
     owner: "s-c1",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
   let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()

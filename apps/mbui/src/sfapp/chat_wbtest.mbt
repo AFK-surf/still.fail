@@ -168,6 +168,8 @@ test "images take their own proportions before they load" {
     thumbhash: "",
     owner: "",
     upload: "",
+    duration: 0.0,
+    frames: 0,
   }
   assert_eq(@sfpages.image_box(a, @sfpages.image_least), (139.0, 300.0, false))
   assert_eq(@sfpages.image_box({ ..a, width: 1600.0, height: 900.0 }, @sfpages.image_least), (360.0, 203.0, false))

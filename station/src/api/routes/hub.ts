@@ -33,7 +33,7 @@ import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../drive/thumbs.ts";
-import { shownSize } from "../../sessions/image-size.ts";
+import { shownFacts } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
@@ -340,13 +340,17 @@ export const routes = (tools: Tools): Route[] => {
       }
       if (owner === undefined || !exists(path)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
       // Its size as the sender read it; else, for a picture or a film, as its header says (a sender that could not read
-      // it: the desktop's could not, nor a phone's core a JPEG's or any film's, image-size.ts).
+      // it: the desktop's could not, nor a phone's core a JPEG's or any film's, image-size.ts); a film's length and
+      // frames as its header says.
       const read = [dimension(o.width), dimension(o.height)];
-      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : (shownSize(path) ?? read);
+      const facts = shownFacts(path);
+      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : (facts ? [facts.width, facts.height] : read);
       const name = str(o.name) ?? path.slice(owner.dir.length + 1);
       const size = typeof o.size === "number" && o.size > 0 ? Math.min(Math.trunc(o.size), Number.MAX_SAFE_INTEGER) : 0;
       const attachment: Attachment = { name: chars(name, 200), path, size };
       if (width !== undefined && height !== undefined) Object.assign(attachment, { width, height });
+      if (facts?.duration !== undefined) attachment.duration = facts.duration;
+      if (facts?.frames !== undefined) attachment.frames = facts.frames;
       out.push(attachment);
     }
     return out;

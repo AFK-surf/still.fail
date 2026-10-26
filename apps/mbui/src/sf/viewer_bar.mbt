@@ -6,19 +6,23 @@
 // alone, a text read on down) it slides up its height and fades (240 ms, ease-out), and takes no presses.
 
 ///|
-/// The colours a bar is drawn in: the file's ground under it, its words, what is quieter, its line.
+/// The colours a bar is drawn in: the file's ground under it, its words, what is quieter, its line; a button's ground
+/// under the pointer (`hover`) and while what it opens is open (`chosen`), over that ground (a film's black has its
+/// own: the page's hover on it is dark on black, or near none: Player.css.ts's film --hover and --selected).
 pub(all) struct ViewerInk {
   ground : Int64
   ink : Int64
   muted : Int64
   line : Int64
+  hover : Int64
+  chosen : Int64
 }
 
 ///|
 /// The page's own (a preview's: the canvas, the page's words).
 pub fn page_viewer_ink() -> ViewerInk {
   let p = theme().p
-  { ground: p.canvas, ink: p.text, muted: p.muted, line: p.line }
+  { ground: p.canvas, ink: p.text, muted: p.muted, line: p.line, hover: p.hover, chosen: p.selected }
 }
 
 ///|
@@ -68,7 +72,7 @@ pub fn viewer_bar(
         if live && c.clicked(id) {
           went = true
         }
-        let b = c.box(style=viewer_back_box, id=if live { id } else { 0 }, fn() {
+        let b = c.box(style=viewer_back_box.then(viewer_lit(ink)), id=if live { id } else { 0 }, fn() {
           icon(c, "chevron-left", size=viewer_back_icon, color=ink.ink) |> ignore
           // (short of room, its words leave it whole and the chevron stays, as a page's bar's way back does)
           c.box(drop=1, fn() {
@@ -127,7 +131,7 @@ pub fn viewer_tool(
   let id = c.id(key)
   let live = !disabled
   let hot = live && (c.lit(id) || c.pressed(id))
-  let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
+  let b = c.box(style=viewer_tool_box.then(viewer_lit(ink)), selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)
@@ -279,7 +283,7 @@ let viewer_bar_middle : @ui.Style = @ui.css("align=ACenter clip")
 ///|
 /// The way back (ViewerBar.css.ts back): 32 high, 4 before the chevron and 10 after the words, the page's corner.
 // kept across runs: a value (no field of it changes)
-let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align=ACenter radius=Xl hovered{bg=Hover}")
+let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align=ACenter radius=Xl")
 
 ///|
 /// Words in the bar: the way back's and the name 13 on 20 (the name in 600), what is said of it 11 on 16.
@@ -296,8 +300,14 @@ let viewer_meta_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4,
 
 ///|
 /// A tool (page.css.ts iconBtn): 32, round, as a bar's buttons are (in the corner of a bar 44 high, 6 in, as round as
-/// it is there), the page's hover under the pointer, its chosen ground on.
+/// it is there), the bar's hover under the pointer, its chosen ground on (viewer_lit).
 // kept across runs: a value (no field of it changes)
 let viewer_tool_box : @ui.Style = @ui.css(
-  #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} selected{bg=Selected} disabled{opacity=O35}
+  #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter disabled{opacity=O35}
 )
+
+///|
+/// What a bar's buttons are under the pointer and while on: its ink's hover and chosen grounds.
+pub fn viewer_lit(ink : ViewerInk) -> @ui.Style {
+  @ui.style(hovered=@ui.patch(bg=Data(ink.hover)), selected=@ui.patch(bg=Data(ink.chosen)))
+}
