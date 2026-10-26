@@ -1,6 +1,7 @@
 // Text with DirectWrite: shaping into clusters with their advances, and
-// rasterizing each cluster with Direct2D into the RGBA atlas when it is first
-// drawn. Segoe UI, with Han, kana and CJK punctuation mapped to Microsoft
+// rasterizing each cluster with Direct2D into the RGBA atlas: drawn ahead by
+// threads of their own where the app says which it will draw, else when it is
+// first drawn. Segoe UI, with Han, kana and CJK punctuation mapped to Microsoft
 // YaHei UI ahead of the system fallback (which supplies Segoe UI Emoji).
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -36,10 +37,19 @@ static IDWriteFontFallback *fallback;
 static IDWriteRenderingParams *params;
 static ID2D1Factory *d2d;
 static IWICImagingFactory *wic;
-static IWICBitmap *bitmap;
-static ID2D1RenderTarget *rt;
-static ID2D1SolidColorBrush *white;
-static double text_scale = 1, rt_scale;
+// Where a glyph is drawn: a bitmap of RT_SIZE pixels, Direct2D's target over it at the scale it was made for, a white
+// brush. The frames' thread has its own (the factories made in init); each thread drawing ahead its own, of its own
+// factories (Direct2D's single-threaded one, WIC's).
+struct Target {
+  ID2D1Factory *d2d;
+  IWICImagingFactory *wic;
+  IWICBitmap *bitmap;
+  ID2D1RenderTarget *rt;
+  ID2D1SolidColorBrush *white;
+  double scale;
+};
+static Target main_target;
+static double text_scale = 1;
 static glyph_entry *entries;
 static int n_entries, cap_entries;
 static WCHAR *pool;
@@ -83,7 +93,8 @@ static void init(void) {
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
   CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory),
                    (void **)&wic);
-  wic->CreateBitmap(RT_SIZE, RT_SIZE, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &bitmap);
+  main_target.d2d = d2d;
+  main_target.wic = wic;
 }
 
 // The faces given (mb_host_face_add, style.mbt): each its files, made into a collection of their own (DirectWrite's
@@ -335,9 +346,10 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
 // digits all one width (style.mbt style_tabular): tnum. One typography for each of the three ways they go together.
 static IDWriteTypography *typographies[4];
 
-static void set_style_features(IDWriteTextLayout *l, int len, int style) {
+// the typography of a style's features (NULL: none, the font's own)
+static IDWriteTypography *typography_for(int style) {
   int k = ((style & 8) ? 1 : 0) | ((style & 32) ? 2 : 0);
-  if (!k) return;
+  if (!k) return NULL;
   if (!typographies[k]) {
     IDWriteTypography *t = NULL;
     dw->CreateTypography(&t);
@@ -348,7 +360,12 @@ static void set_style_features(IDWriteTextLayout *l, int len, int style) {
     if (k & 2) t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, 1});
     typographies[k] = t;
   }
-  l->SetTypography(typographies[k], {0, (UINT32)len});
+  return typographies[k];
+}
+
+static void set_style_features(IDWriteTextLayout *l, int len, int style) {
+  IDWriteTypography *t = typography_for(style);
+  if (t) l->SetTypography(t, {0, (UINT32)len});
 }
 
 static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight, int style) {
@@ -515,15 +532,19 @@ static void reset_atlas(void) {
 }
 
 // What was measured and drawn before a face changed: its formats made again, its glyphs drawn again.
+static void ahead_forget(void);
+
 static void faces_changed(void) {
   for (int i = 0; i < n_formats; i++) formats[i].f->Release();
   n_formats = 0;
+  ahead_forget();
   reset_atlas();
 }
 
 extern "C" void mb_text_set_scale(double scale) {
   if (scale == text_scale) return;
   text_scale = scale;
+  ahead_forget();
   reset_atlas();
 }
 
@@ -574,31 +595,38 @@ struct ColorProbe : public IDWriteTextRenderer {
   }
 };
 
-static void ensure_target(void) {
-  if (rt && rt_scale == text_scale) return;
-  if (white) white->Release();
-  if (rt) rt->Release();
-  float dpi = (float)(96.0 * text_scale);
+static void target_ensure(Target *t, double scale) {
+  if (t->rt && t->scale == scale) return;
+  if (t->white) t->white->Release();
+  if (t->rt) t->rt->Release();
+  t->white = NULL;
+  t->rt = NULL;
+  if (!t->bitmap && FAILED(t->wic->CreateBitmap(RT_SIZE, RT_SIZE, GUID_WICPixelFormat32bppPBGRA,
+                                                  WICBitmapCacheOnDemand, &t->bitmap)))
+    return;
+  float dpi = (float)(96.0 * scale);
   D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties(
       D2D1_RENDER_TARGET_TYPE_SOFTWARE,
       D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
-  d2d->CreateWicBitmapRenderTarget(bitmap, &p, &rt);
-  rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-  rt->SetTextRenderingParams(params);
-  rt->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 1), &white);
-  rt_scale = text_scale;
+  if (FAILED(t->d2d->CreateWicBitmapRenderTarget(t->bitmap, &p, &t->rt))) return;
+  t->rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+  t->rt->SetTextRenderingParams(params);
+  t->rt->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 1), &t->white);
+  t->scale = scale;
 }
 
-// Glyph `key` drawn in white, a pixel round its bounds: its box (in its entry) and its picture, held for
-// mb_host_glyph_put (where it goes in the atlas is MoonBit's: hostapi's atlas.mbt).
-static void rasterize(int key) {
-  glyph_entry *e = &entries[key];
-  free(held_px);
-  held_px = NULL;
-  held_key = -1;
-  e->w = e->h = 0;
-  IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
-  double sc = text_scale;
+// A cluster drawn: its picture (pw × ph pixels, RGBA, NULL none), its box in points as its entry has it, whether it is
+// in its own colours (an emoji)
+struct Drawn {
+  int pw, ph;
+  uint8_t *px;
+  double w, h, ox, oy;
+  int color;
+};
+
+// A cluster's layout drawn in white at `sc` pixels a point, a pixel round its bounds, on `t`.
+static void draw_layout(IDWriteTextLayout *l, double sc, Target *t, Drawn *d) {
+  *d = {};
   ColorProbe probe;
   l->Draw(NULL, &probe, 0, 0);
   int color = probe.color;
@@ -630,19 +658,17 @@ static void rasterize(int key) {
   x0 = px0 / sc;
   y0 = base + py0 / sc;
   int pw = px1 - px0, ph = py1 - py0;
-  if (pw <= 0 || ph <= 0 || pw > RT_SIZE || ph > RT_SIZE) {
-    l->Release();
-    return;
-  }
-  ensure_target();
-  rt->BeginDraw();
-  rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-  rt->DrawTextLayout(D2D1::Point2F((FLOAT)-x0, (FLOAT)-y0), l, white,
-                     D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT | D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
-  rt->EndDraw();
+  if (pw <= 0 || ph <= 0 || pw > RT_SIZE || ph > RT_SIZE) return;
+  target_ensure(t, sc);
+  if (!t->rt) return;
+  t->rt->BeginDraw();
+  t->rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+  t->rt->DrawTextLayout(D2D1::Point2F((FLOAT)-x0, (FLOAT)-y0), l, t->white,
+                        D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT | D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
+  t->rt->EndDraw();
   WICRect r = {0, 0, pw, ph};
   IWICBitmapLock *lock = NULL;
-  if (SUCCEEDED(bitmap->Lock(&r, WICBitmapLockRead, &lock))) {
+  if (SUCCEEDED(t->bitmap->Lock(&r, WICBitmapLockRead, &lock))) {
     UINT stride = 0, bytes = 0;
     BYTE *src = NULL;
     lock->GetStride(&stride);
@@ -650,36 +676,285 @@ static void rasterize(int key) {
     uint8_t *px = (uint8_t *)malloc((size_t)pw * ph * 4);
     for (int y = 0; y < ph; y++) {
       const BYTE *s = src + (size_t)y * stride;
-      uint8_t *d = px + (size_t)y * pw * 4;
-      for (int x = 0; x < pw; x++, s += 4, d += 4) {
-        d[0] = s[2];
-        d[1] = s[1];
-        d[2] = s[0];
-        d[3] = s[3];
+      uint8_t *o = px + (size_t)y * pw * 4;
+      for (int x = 0; x < pw; x++, s += 4, o += 4) {
+        o[0] = s[2];
+        o[1] = s[1];
+        o[2] = s[0];
+        o[3] = s[3];
         // premultiplied: drawn in white, a mask's pixel has its colour equal to its alpha; an emoji's does not
-        if (color == 1 && d[3] > 64 && (d[0] + 32 < d[3] || d[1] + 32 < d[3] || d[2] + 32 < d[3])) color = 2;
+        if (color == 1 && o[3] > 64 && (o[0] + 32 < o[3] || o[1] + 32 < o[3] || o[2] + 32 < o[3])) color = 2;
       }
     }
     lock->Release();
-    // a color font's glyph drawn in the text's colour (Segoe UI Emoji's flags are letters): a mask after all
-    color = color == 2;
-    held_key = key;
-    held_w = pw;
-    held_h = ph;
-    held_px = px;
+    d->pw = pw;
+    d->ph = ph;
+    d->px = px;
   }
-  e->w = pw / sc;
-  e->h = ph / sc;
-  e->ox = x0;
-  e->oy = y0 - (nl ? lm.baseline : 0);
-  e->color = color;
-  l->Release();
+  // a color font's glyph drawn in the text's colour (Segoe UI Emoji's flags are letters): a mask after all
+  d->color = color == 2;
+  d->w = pw / sc;
+  d->h = ph / sc;
+  d->ox = x0;
+  d->oy = y0 - (nl ? lm.baseline : 0);
 }
 
-// (a glyph drawn as it is first asked for: nothing ahead)
+// ---- drawing ahead: the glyphs a frame shaped and did not draw (text.mbt glyphs_ahead), drawn by threads of their own,
+// as Android's MBText and the Apple hosts' queue draw them; each taken as it is first asked for, from what was drawn
+// ahead: waited for while a thread draws it, drawn here when none has begun it ----
+
+// One glyph asked to be drawn ahead: what it is drawn from (its words, its format and features as the frames' thread
+// had them, held; its scale), set before a thread has it and not changed after; under ahead_lock its state and, once
+// drawn, its picture. `dropped`: the frames' thread let go of it, the thread that has it frees it.
+enum { AHEAD_ASKED, AHEAD_DRAWING, AHEAD_DRAWN };
+struct Ahead {
+  int key;
+  WCHAR *text;
+  int len;
+  IDWriteTextFormat *format;
+  IDWriteTypography *typography;
+  double scale;
+  int state;
+  bool dropped;
+  Drawn drawn;
+};
+
+// The most glyphs asked for or drawn ahead and not placed yet (the oldest drawn let go past it).
+#define AHEAD_MOST 1024
+static CRITICAL_SECTION ahead_lock;
+static CONDITION_VARIABLE ahead_more, ahead_done;
+static int ahead_started;
+// (under ahead_lock) what the threads are to draw, in the order asked
+static Ahead **ahead_queue;
+static int ahead_head, ahead_n, ahead_cap;
+// (the frames' thread's) what was asked for and not placed yet, by key, and in the order asked
+static Ahead **ahead_of;  // by key, n_entries' room
+static int ahead_of_cap;
+static Ahead **ahead_order;
+static int order_head, order_n, order_cap;
+
+static void ahead_free(Ahead *a) {
+  if (a->format) a->format->Release();
+  if (a->typography) a->typography->Release();
+  free(a->text);
+  free(a->drawn.px);
+  free(a);
+}
+
+static IDWriteTextLayout *layout_with(const WCHAR *s, int len, IDWriteTextFormat *f, IDWriteTypography *typo) {
+  IDWriteTextLayout *l = NULL;
+  if (FAILED(dw->CreateTextLayout(s, (UINT32)len, f, 1e6f, 1e6f, &l))) return NULL;
+  IDWriteTextLayout2 *l2 = NULL;
+  if (SUCCEEDED(l->QueryInterface(__uuidof(IDWriteTextLayout2), (void **)&l2))) {
+    l2->SetFontFallback(fallback);
+    l2->Release();
+  }
+  if (typo) l->SetTypography(typo, {0, (UINT32)len});
+  return l;
+}
+
+// A thread drawing ahead: what is asked, oldest first, with a target of its own (on COM's multithreaded apartment)
+static DWORD WINAPI ahead_thread(void *) {
+  CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  Target t = {};
+  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), NULL, (void **)&t.d2d);
+  CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory), (void **)&t.wic);
+  for (;;) {
+    EnterCriticalSection(&ahead_lock);
+    while (ahead_n == 0) SleepConditionVariableCS(&ahead_more, &ahead_lock, INFINITE);
+    Ahead *a = ahead_queue[ahead_head];
+    ahead_head = (ahead_head + 1) % ahead_cap;
+    ahead_n--;
+    bool gone = a->dropped;
+    if (!gone) a->state = AHEAD_DRAWING;
+    LeaveCriticalSection(&ahead_lock);
+    if (gone) {
+      ahead_free(a);
+      continue;
+    }
+    Drawn d = {};
+    IDWriteTextLayout *l = t.d2d && t.wic ? layout_with(a->text, a->len, a->format, a->typography) : NULL;
+    if (l) {
+      draw_layout(l, a->scale, &t, &d);
+      l->Release();
+    }
+    EnterCriticalSection(&ahead_lock);
+    a->drawn = d;
+    a->state = AHEAD_DRAWN;
+    bool free_it = a->dropped;
+    WakeAllConditionVariable(&ahead_done);
+    LeaveCriticalSection(&ahead_lock);
+    if (free_it) ahead_free(a);
+  }
+}
+
+// (the frames' thread) its hold on `a` let go: freed here when no thread has it, else by the one that does
+static void ahead_drop(Ahead *a) {
+  EnterCriticalSection(&ahead_lock);
+  bool mine = a->state == AHEAD_DRAWN;
+  a->dropped = true;
+  LeaveCriticalSection(&ahead_lock);
+  if (mine) ahead_free(a);
+}
+
+static void order_remove_front(void) {
+  order_head = (order_head + 1) % order_cap;
+  order_n--;
+}
+
+// Everything asked for let go: the faces or the scale changed, and what is drawn with them with it.
+static void ahead_forget(void) {
+  for (int i = 0; i < order_n; i++) {
+    Ahead *a = ahead_order[(order_head + i) % order_cap];
+    if (!a) continue;
+    if (a->key < ahead_of_cap) ahead_of[a->key] = NULL;
+    ahead_drop(a);
+  }
+  order_n = order_head = 0;
+}
+
+// The oldest asked, let go if it is drawn (the threads draw about in the order asked: hardly any is when it is not);
+// false when not.
+static bool drop_oldest_drawn(void) {
+  while (order_n > 0 && !ahead_order[order_head]) order_remove_front();
+  if (order_n == 0) return false;
+  Ahead *a = ahead_order[order_head];
+  EnterCriticalSection(&ahead_lock);
+  bool drawn = a->state == AHEAD_DRAWN;
+  LeaveCriticalSection(&ahead_lock);
+  if (!drawn) return false;
+  ahead_of[a->key] = NULL;
+  order_remove_front();
+  ahead_free(a);
+  return true;
+}
+
+// What was drawn ahead of `key` at the scale of now, taken (true, its picture in *d); false when it was not (asked
+// and not begun: no longer asked, drawn here).
+static bool drawn_ahead(int key, Drawn *d) {
+  Ahead *a = key < ahead_of_cap ? ahead_of[key] : NULL;
+  if (!a) return false;
+  ahead_of[key] = NULL;
+  for (int i = 0; i < order_n; i++) {
+    Ahead **at = &ahead_order[(order_head + i) % order_cap];
+    if (*at == a) {
+      *at = NULL;
+      break;
+    }
+  }
+  EnterCriticalSection(&ahead_lock);
+  if (a->state == AHEAD_ASKED) {
+    // (left to its thread, which passes over it)
+    a->dropped = true;
+    LeaveCriticalSection(&ahead_lock);
+    return false;
+  }
+  while (a->state == AHEAD_DRAWING) SleepConditionVariableCS(&ahead_done, &ahead_lock, INFINITE);
+  LeaveCriticalSection(&ahead_lock);
+  bool ok = a->scale == text_scale;
+  if (ok) {
+    *d = a->drawn;
+    a->drawn.px = NULL;
+  }
+  ahead_free(a);
+  return ok;
+}
+
 extern "C" void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
-  (void)keys;
-  (void)n;
+  if (n <= 0) return;
+  if (!ahead_started) {
+    ahead_started = 1;
+    InitializeCriticalSection(&ahead_lock);
+    InitializeConditionVariable(&ahead_more);
+    InitializeConditionVariable(&ahead_done);
+    // (a page's few hundred glyphs drawn in the time a frame or two takes, over the cores there are, the frames'
+    // thread's left to it)
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int threads = (int)si.dwNumberOfProcessors - 1;
+    threads = threads < 1 ? 1 : threads > 4 ? 4 : threads;
+    for (int i = 0; i < threads; i++) {
+      HANDLE h = CreateThread(NULL, 0, ahead_thread, NULL, 0, NULL);
+      if (h) SetThreadPriority(h, THREAD_PRIORITY_BELOW_NORMAL), CloseHandle(h);
+    }
+  }
+  if (ahead_of_cap < n_entries) {
+    int cap = n_entries * 2;
+    ahead_of = (Ahead **)realloc(ahead_of, (size_t)cap * sizeof *ahead_of);
+    memset(ahead_of + ahead_of_cap, 0, (size_t)(cap - ahead_of_cap) * sizeof *ahead_of);
+    ahead_of_cap = cap;
+  }
+  int asked = 0;
+  for (int32_t i = 0; i < n; i++) {
+    int k = keys[i];
+    if (k < 0 || k >= n_entries || ahead_of[k]) continue;
+    if (order_n >= AHEAD_MOST && !drop_oldest_drawn()) break;
+    glyph_entry *e = &entries[k];
+    Ahead *a = (Ahead *)calloc(1, sizeof(Ahead));
+    a->key = k;
+    a->len = e->len;
+    a->text = (WCHAR *)malloc(sizeof(WCHAR) * (e->len ? e->len : 1));
+    memcpy(a->text, pool + e->off, sizeof(WCHAR) * e->len);
+    a->format = format_for(e->size, e->weight, e->style);
+    a->format->AddRef();
+    a->typography = typography_for(e->style);
+    if (a->typography) a->typography->AddRef();
+    a->scale = text_scale;
+    a->state = AHEAD_ASKED;
+    ahead_of[k] = a;
+    if (order_n + 1 > order_cap) {
+      int cap = order_cap ? order_cap * 2 : 256;
+      Ahead **next = (Ahead **)malloc((size_t)cap * sizeof *next);
+      for (int j = 0; j < order_n; j++) next[j] = ahead_order[(order_head + j) % order_cap];
+      free(ahead_order);
+      ahead_order = next;
+      order_head = 0;
+      order_cap = cap;
+    }
+    ahead_order[(order_head + order_n++) % order_cap] = a;
+    EnterCriticalSection(&ahead_lock);
+    if (ahead_n + 1 > ahead_cap) {
+      int cap = ahead_cap ? ahead_cap * 2 : 256;
+      Ahead **next = (Ahead **)malloc((size_t)cap * sizeof *next);
+      for (int j = 0; j < ahead_n; j++) next[j] = ahead_queue[(ahead_head + j) % ahead_cap];
+      free(ahead_queue);
+      ahead_queue = next;
+      ahead_head = 0;
+      ahead_cap = cap;
+    }
+    ahead_queue[(ahead_head + ahead_n++) % ahead_cap] = a;
+    LeaveCriticalSection(&ahead_lock);
+    asked++;
+  }
+  if (asked) WakeAllConditionVariable(&ahead_more);
+}
+
+// Glyph `key` drawn in white, a pixel round its bounds: its box (in its entry) and its picture, held for
+// mb_host_glyph_put (where it goes in the atlas is MoonBit's: hostapi's atlas.mbt). From what was drawn ahead of it,
+// else drawn here.
+static void rasterize(int key) {
+  glyph_entry *e = &entries[key];
+  free(held_px);
+  held_px = NULL;
+  held_key = -1;
+  e->w = e->h = 0;
+  Drawn d = {};
+  if (!drawn_ahead(key, &d)) {
+    IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
+    draw_layout(l, text_scale, &main_target, &d);
+    l->Release();
+  }
+  if (d.px) {
+    held_key = key;
+    held_w = d.pw;
+    held_h = d.ph;
+    held_px = d.px;
+  }
+  e->w = d.w;
+  e->h = d.h;
+  e->ox = d.ox;
+  e->oy = d.oy;
+  e->color = d.color;
 }
 
 extern "C" void mb_host_glyph(int32_t key, double *out) {
