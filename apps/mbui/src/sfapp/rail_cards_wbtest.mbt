@@ -1,12 +1,20 @@
 ///|
-test "wide: the rail's 对话, Profile and 用量 places, the pointer resting on each, say what they are about at a glance: figures first, what they are made of, the last 7 days" {
+test "wide: the rail's 对话 and 用量 places, the pointer resting on each, say what they are about at a glance: figures first, what they are made of, the last 7 days, 分享卡片 on 用量's; Station and Profile only their tip" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   rail_card_shown(t, "对话", ["3 个对话正在运行", "等你处理", "出错", "未读", "今天归档"])
-  rail_card_shown(t, "Profile", [
-    "1 个账号额度用完了", "额度充足", "快用完", "已用完", "用 6 个 Claude 订阅账号消耗了 489% 的周额度", "claude-3 的额度 2 小时后刷新",
-  ])
-  rail_card_shown(t, "用量", ["近 7 天折合 $1,911", "$362", "输入 token", "Opus 5.5", "$1,207 · 63%", "10/20", "10/26"])
+  rail_card_shown(t, "用量", ["近 7 天折合 $1,911", "$362", "输入 token", "Opus 5.5", "$1,207 · 63%", "10/20", "10/26", "分享卡片"])
+  // (2026-10-26 用户「stations 和 profiles tab 的 hover 卡片去掉吧」)
+  for label in ["Station：" + @sfdesk.rail_stations_label(fixture("home"), "ws1"), "Profile"] {
+    let place = t.query(Button, label~).unwrap()
+    let (x, y, w, h) = place.rect
+    t.move(x + w / 2.0, y + h / 2.0)
+    t.run_for(@sfpages.hover_open_ms * 2.0)
+    assert_true(t.find("分享卡片") is None, msg=label)
+    assert_true(t.query(Button, label="分享卡片") is None, msg=label)
+    t.move(x + w + 600.0, y + h / 2.0)
+    t.run_for(@sfpages.hover_open_ms * 2.0)
+  }
 }
 
 ///|

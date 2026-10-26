@@ -53,7 +53,6 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       Some(a) if a.length() == 0 => blocks.push(fn() { first_station(c, core, here) })
       Some(a) => {
-        blocks.push(fn() { stations_now_card(c, core, here) })
         for st in a {
           blocks.push(fn() { station_card(c, core, st) })
         }
@@ -62,44 +61,6 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     blocks.push(fn() { gap(c, 30.0) })
     scroll_page(c, "stations", blocks)
   })
-}
-
-///|
-/// How many agents are at work on the workspace's stations, over their cards (the chats' view's glyph, as the rail's
-/// card over the Station place says it, sfpages' stations_now): the stations' glyph and the number in a line, and while
-/// any is at work, pressed for the card to share of them (Core's `share_card`).
-fn stations_now_card(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let t = @sf.theme()
-  let chats = (core.topic)("chats", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).value
-  let glyph = field(chats, "glyph")
-  let running = count(glyph, "running")
-  let now = match text(glyph, "now") {
-    "" => text(glyph, "label")
-    now => now
-  }
-  let counts : @sf.GlyphCounts = {
-    online: count(glyph, "online"),
-    dim: count(glyph, "dim"),
-    failing: count(glyph, "failing"),
-    working: count(glyph, "working"),
-    asleep: false,
-    connecting: count(glyph, "connecting"),
-  }
-  if card(c, key=if running > 0 { "stations/now" } else { "" }, fn() {
-      card_head(
-        c,
-        fn() { @sf.station_glyph(c, counts, card_mark, t.p.text, t.p.red) |> ignore },
-        now,
-        if running > 0 { Some(@sf.t("web-main.stations.shareCard")) } else { None },
-        fn() {
-          if running > 0 {
-            chevron(c)
-          }
-        },
-      )
-    }) {
-    (core.share_card)()
-  }
 }
 
 ///|

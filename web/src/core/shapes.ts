@@ -5429,14 +5429,8 @@ export interface RailStat {
 
 export interface RailRow {
 	name: string;
-	/** At its end: what a station is doing, what a model cost. */
+	/** At its end: what a model cost. */
 	value: string;
-	/** Its value's: red | amber. */
-	tone?: string;
-	/** Under its name: a station's chip, CPU and memory. */
-	sub?: string;
-	/** Its sub's: red | amber, as full as the fullest of them. */
-	subTone?: string;
 }
 
 export interface RailDay {
@@ -5447,21 +5441,19 @@ export interface RailDay {
 }
 
 /**
- * The card over a rail's place as the pointer rests on it (the `railCard` view, views/rail-cards.ts): 对话 (chats), Station
- * (stations), Profile (profiles), 用量 (usage).
+ * The card over a rail's place as the pointer rests on it (the `railCard` view, views/rail-cards.ts): 对话 (chats), 用量
+ * (usage).
  */
 export interface RailCard {
 	/** How the place stands, in a line: 9 个 agent 正在运行, 近 7 天折合 $1,911. */
 	head: string;
 	/** A few figures, each its value over what it is of. */
 	stats: RailStat[];
-	/** What it is made of, a line each (each station, each kind of subscription, the models that cost most). */
+	/** What it is made of, a line each (the models that cost most). */
 	rows: RailRow[];
 	/** The last 7 days as bars (用量's: each day's cost); absent elsewhere. */
 	days?: RailDay[];
-	/** A line more, where one says what the figures do not (the account that refills soonest). */
-	note?: string;
-	/** Station's: 分享卡片 is offered (an agent is at work). Absent otherwise. */
+	/** 用量's: 分享卡片 is offered (something was spent). Absent otherwise. */
 	share?: boolean;
 }
 
