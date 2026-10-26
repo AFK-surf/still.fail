@@ -293,13 +293,17 @@ fn history_row(
 
 ///|
 /// The history's rows to come while it is read the first time (the library's Waiting, in its bones): a turn's items
-/// of made-up words, as its list draws them.
+/// of made-up words, as its list draws them, its calls' groups and the agent's own words between them, as a turn
+/// mostly is.
 fn steps_sample(c : @ui.Ctx, station : String, key : String) -> Unit {
-  let lines = [16, 24, 12, 20, 9, 18]
-  for i, n in lines {
+  let lines = [("group", 16), ("text", 24), ("group", 12), ("group", 20), ("text", 9), ("group", 18)]
+  for i, line in lines {
+    let (kind, n) = line
+    let words = Json::string(@sf.sample_words(n))
+    let content : Json = if kind == "group" { { "summary": words } } else { { "text": words, "line": words } }
     let item : Map[String, Json] = {
       "key": Json::string("sample" + i.to_string()),
-      "body": { "kind": "text", "content": { "text": Json::string(@sf.sample_words(n)) } },
+      "body": { "kind": Json::string(kind), "content": content },
     }
     // (the turn's head over its first)
     if i == 0 {
@@ -367,7 +371,7 @@ fn ev(
       })
       |> ignore
     }
-    c.box(style=if state != "" { h_icon_state } else { h_icon }, fn() {
+    c.box(style=h_icon, fn() {
       if icon == "pulse" {
         c.box(style=h_pulse, fn() {  }) |> ignore
       } else {
@@ -418,14 +422,15 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
       ev(c, "said", "", "", rail_last=rail, fn() {
         let words = text(content, "text")
         one_line(c, ik + "/text", fn() {
-          c.box(style=h_tag, fn() {
+          // (a chip: in bones one piece)
+          let tag = c.box(style=h_tag, fn() {
             c.text(
               @sf.t(if flag(content, "subagent") { "web-main.history.subagent" } else { "web-main.history.notSent" }),
               style=h_tag_words,
             )
             |> ignore
           })
-          |> ignore
+          c.bone_whole(tag)
         }, text(content, "line"), "", fn() { md_view(c, ik + "/text-md", words, field(content, "md"), small=true) })
       })
     "post" => {
@@ -791,7 +796,7 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
       c.layer(fn() { c.box(style=h_rail_room_last, fn() { c.box(style=h_rail, fn() {  }) |> ignore }) |> ignore }) |> ignore
     }
     let b = c.box(style=h_group_head, id~, fn() {
-      c.box(style=if hot { h_icon_hot } else { h_icon }, fn() {
+      c.box(style=h_icon, fn() {
         @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=14.0, color=if hot {
           @sf.theme().p.text
         } else {
@@ -1240,18 +1245,11 @@ let h_state : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Neutral").then(@sf
 let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
 
 ///|
-/// An event's mark (hIcon): 20 square, on the canvas (the rail passes behind it); in a state's block, on its colour; in a
-/// group's line pointed at, on its ground.
+/// An event's mark (hIcon): 20 square, on whatever it stands on (a state's block, a group's line pointed at): the
+/// turn's rail runs from under it, so nothing of it covers the rail (a ground of its own would stand out as a square
+/// on a pane that is not the canvas).
 // kept across runs: a value (no field of it changes)
-let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter bg=Bg")
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_icon_state : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_icon_hot : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
+let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 /// The model's pulse (activityPulse): a 7 dot in the accent.

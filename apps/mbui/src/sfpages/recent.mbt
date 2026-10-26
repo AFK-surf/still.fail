@@ -179,10 +179,11 @@ pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
     recent.chosen.clear()
   }
   let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
-  c.box(style=recent_add_row, fn() {
-    let b = c.box(style=recent_add, id~, fn() {
+  let corner = attach_block_corner()
+  c.box(style=recent_add_row.then(@ui.style(pb=@sf.room_of(attach_foot()))), fn() {
+    let b = c.box(style=recent_add.then(@ui.style(radius=Exact(corner))), id~, fn() {
       c.text(words, style=recent_add_words) |> ignore
-      @motion.ripple(c, id, @sf.row_corner)
+      @motion.ripple(c, id, corner)
     })
     c.semantics(b, Button, id~, label=words)
   })
@@ -220,8 +221,10 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
     _ => Some(@sf.t("android-chat.attach.recent.allow"))
   }
   let tiles = 1 + photos.length() + (if ask is Some(_) { 1 } else { 0 })
+  let (side, top) = recent_in()
+  let corner = attach_block_corner()
   let width = c.width
-  let content = 12.0 * 2.0 + tiles.to_double() * recent_step - 6.0
+  let content = side * 2.0 + tiles.to_double() * recent_step - 6.0
   let least = if content > width { width - content } else { 0.0 }
   let id = c.id("attach/strip")
   let a = @motion.anim(c, "attach/strip", 0.0)
@@ -243,14 +246,14 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           Some((x0, y0, _, _)) => (x0, y0)
           None => (0.0, 0.0)
         }
-        // (from the first tile's start and top: the row's 12 and 4 in)
-        let x = d.x - x0 - 12.0 - a.get()
-        let y = d.y - y0 - 4.0
+        // (from the first tile's start and top: as far in as the row has them)
+        let x = d.x - x0 - side - a.get()
+        let y = d.y - y0 - top
         let i = (x / recent_step).to_int()
         let across = x - i.to_double() * recent_step
         if x >= 0.0 && across <= recent_tile_w && i < tiles {
           if i >= 1 && i <= photos.length() {
-            if recent_on_ring(across, y) || recent.chosen.length() > 0 {
+            if recent_on_ring(across, y, corner) || recent.chosen.length() > 0 {
               recent_choose(photos[i - 1].src)
             } else {
               tapped(i)
@@ -265,18 +268,18 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   }
   let off = a.get()
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
-    c.box(style=recent_strip_row, fn() {
+    c.box(style=recent_strip_row.then(@ui.style(pl=@sf.room_of(side), pr=@sf.room_of(side), pt=@sf.room_of(top))), fn() {
       c.box(style=recent_tiles, tx=off, fn() {
-        recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
+        recent_tile(c, corner, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           let n = match recent.chosen.search(p.src) {
             Some(k) => k + 1
             None => 0
           }
-          recent_tile(c, fn() {
-            c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=@sf.row_corner, fit=FitCover, bg=0L) |> ignore
+          recent_tile(c, corner, fn() {
+            c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=corner, fit=FitCover, bg=0L) |> ignore
             c.layer(fn() {
-              c.box(style=recent_marks, fn() {
+              c.box(style=recent_marks.then(@ui.style(p=@sf.room_of(recent_mark_in(corner)))), fn() {
                 // its ring in its top corner, chosen its number on the primary
                 c.box(style=recent_ring_room, fn() {
                   c.box(style=if n > 0 { recent_ring_on } else { recent_ring }, fn() {
@@ -302,7 +305,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
         }
         match ask {
           Some(words) =>
-            recent_tile(c, fn() {
+            recent_tile(c, corner, fn() {
               c.box(style=recent_ask, fn() {
                 @sf.icon(c, "photo", size=22.0, color=t.p.muted) |> ignore
                 c.text(words, style=recent_ask_words) |> ignore
@@ -320,36 +323,70 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 }
 
 ///|
-/// The strip's row: 12 in from the sheet's sides, 4 under its top, 12 over its foot, its tiles 6 apart (Attach.kt
-/// RecentPhotos' contentPadding and spacing).
+/// The strip's row: as far in as recent_in has it, 12 over its foot, its tiles 6 apart (Attach.kt RecentPhotos'
+/// contentPadding and spacing).
 // kept across runs: a value (no field of it changes)
-let recent_strip_row : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pt=S1 pb=S3 gap=S1_5 clip")
+let recent_strip_row : @ui.Style = @ui.css("row w=Full pb=S3 gap=S1_5 clip")
+
+///|
+/// The room under ＋'s tiles (照片 文件 Station 文件, 添加 n 个): in a sheet 18 (Attach.kt); in a small panel none past
+/// its padding, so they stand as far from its foot as the strip from its sides and top.
+pub fn attach_foot() -> Double {
+  if @sf.in_small_panel() {
+    0.0
+  } else {
+    18.0
+  }
+}
+
+///|
+/// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet 12 and 4 (Attach.kt
+/// RecentPhotos' contentPadding); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
+/// corner, concentric with it: recent_corner).
+fn recent_in() -> (Double, Double) {
+  if @sf.in_small_panel() {
+    (@sf.panel_pad, 0.0)
+  } else {
+    (12.0, 4.0)
+  }
+}
+
+///|
+/// How round ＋'s tiles are (the strip's, 照片 文件 Station 文件, 添加 n 个): a block's (the ladder's row_corner) in a
+/// sheet; in a small panel, concentric with its corner at its padding, as its rows are.
+pub fn attach_block_corner() -> Double {
+  if @sf.in_small_panel() {
+    @sf.small_panel_inner(@sf.r_menu)
+  } else {
+    @sf.row_corner
+  }
+}
 
 ///|
 /// What is marked on a photo's tile: its ring at its top end, a video's play mark at its foot's start, each concentric
-/// with the tile's corner (capsule_in).
+/// with the tile's corner (recent_mark_in).
 // kept across runs: a value (no field of it changes)
-let recent_marks : @ui.Style = @ui.css("w=Full h=Full justify=JBetween align=AStart").then(
-  @ui.style(p=@sf.room_of(recent_mark_in)),
-)
+let recent_marks : @ui.Style = @ui.css("w=Full h=Full justify=JBetween align=AStart")
 
 ///|
 /// The marks' side (Attach.kt Thumbnail's play mark: 22).
 let recent_mark_side : Double = 22.0
 
 ///|
-/// How far in a mark stands from its tile's sides: concentric with its corner (18 round: 7).
-let recent_mark_in : Double = @sf.capsule_in(@sf.row_corner, recent_mark_side)
+/// How far in a mark stands from the sides of a tile `corner` round: concentric with its corner (18 round: 7).
+fn recent_mark_in(corner : Double) -> Double {
+  @sf.capsule_in(corner, recent_mark_side)
+}
 
 ///|
 /// Whether a tap at (`across`, `down`) on a photo's tile, from its start and top, is on its ring: reached from round
 /// it, as a finger reaches what is smaller than its tip (mbui's finger_reach: the ring grown to @ui.finger_target round
 /// its middle).
-fn recent_on_ring(across : Double, down : Double) -> Bool {
+fn recent_on_ring(across : Double, down : Double, corner : Double) -> Bool {
   let tip = @ui.finger_target()
   let reach = (if tip > recent_mark_side { tip } else { recent_mark_side }) / 2.0
-  let x = recent_tile_w - recent_mark_in - recent_mark_side / 2.0
-  let y = recent_mark_in + recent_mark_side / 2.0
+  let x = recent_tile_w - recent_mark_in(corner) - recent_mark_side / 2.0
+  let y = recent_mark_in(corner) + recent_mark_side / 2.0
   (across - x).abs() <= reach && (down - y).abs() <= reach
 }
 
@@ -380,17 +417,16 @@ let recent_ring_on : @ui.Style = recent_ring.then(@ui.css("bg=Primary align=ACen
 let recent_ring_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-/// 添加 n 个's row, where the tiles under the strip were (attach_tiles: 18 under it).
+/// 添加 n 个's row, where the tiles under the strip were (as far over the foot: attach_foot).
 // kept across runs: a value (no field of it changes)
-let recent_add_row : @ui.Style = @ui.css("row w=Full pb=S4_5")
+let recent_add_row : @ui.Style = @ui.css("row w=Full")
 
 ///|
-/// 添加 n 个: as high and round as the tiles it stands for (attach_tile), on the primary.
+/// 添加 n 个: as high and round as the tiles it stands for (attach_tile, attach_block_corner), on the primary.
 // kept across runs: a value (no field of it changes)
 let recent_add : @ui.Style = @ui.style(
   w=Full,
   h=Fixed(recent_add_h),
-  radius=@sf.row_radius,
   bg=Primary,
   align=ACenter,
   justify=JCenter,
@@ -404,19 +440,18 @@ let recent_add_h : Double = 70.0
 let recent_add_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-/// A tile of the strip (92 × 122, the chip's grey under it).
-fn recent_tile(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=recent_tile_box, body) |> ignore
+/// A tile of the strip (92 × 122, the chip's grey under it), `corner` round (recent_corner).
+fn recent_tile(c : @ui.Ctx, corner : Double, body : () -> Unit) -> Unit {
+  c.box(style=recent_tile_box.then(@ui.style(radius=Exact(corner))), body) |> ignore
 }
 
 ///|
-/// A tile: 92 × 122, a block's corner (the ladder's row_corner: what is marked in its corners concentric with it), a
-/// quiet ground under it.
+/// A tile: 92 × 122 (as round as attach_block_corner: what is marked in its corners concentric with it), a quiet ground
+/// under it.
 // kept across runs: a value (no field of it changes)
 let recent_tile_box : @ui.Style = @ui.style(
   w=Fixed(recent_tile_w),
   h=Fixed(recent_tile_h),
-  radius=@sf.row_radius,
   bg=Neutral,
   clip=true,
   align=ACenter,

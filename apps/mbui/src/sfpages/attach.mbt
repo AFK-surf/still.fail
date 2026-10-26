@@ -8,7 +8,7 @@
 ///|
 /// ＋'s panel for draft `key`, opened by ＋ (`plus`): the gallery's recent photos read again as it opens.
 fn attach_open(plus : Int, src : Source, key : String) -> Unit {
-  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus))
+  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus), w=attach_w)
   recent_opened()
 }
 
@@ -68,18 +68,19 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   if adding {
     return
   }
-  c.box(style=attach_tiles, fn() {
+  let corner = attach_block_corner()
+  c.box(style=attach_tiles.then(@ui.style(pb=@sf.room_of(attach_foot()))), fn() {
     for item in [
       (photos, @sf.t("android-chat.attach.photos"), "photo"),
       (files, @sf.t("android-chat.attach.files"), "file"),
       (station, @sf.t("web-pages.chat.files"), "server"),
     ] {
       let (id, label, icon) = item
-      c.box(style=attach_tile, id~, fn() {
+      c.box(style=attach_tile.then(@ui.style(radius=Exact(corner))), id~, fn() {
         @sf.icon(c, icon, size=attach_icon, color=p.text) |> ignore
         c.text(label, style=attach_words) |> ignore
-        // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here)
-        @motion.ripple(c, id, attach_corner)
+        // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here, or a small panel's: attach_block_corner)
+        @motion.ripple(c, id, corner)
       })
       |> ignore
     }
@@ -88,19 +89,18 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
 }
 
 ///|
-/// The tiles' row (Attach.kt: 12 from the sides, the panel's room there; 18 under them, 8 between).
+/// The tiles' row (Attach.kt: 12 from the sides, the panel's room there; attach_foot under them, 8 between).
 // kept across runs: a value (no field of it changes)
-let attach_tiles : @ui.Style = @ui.css("row w=Full pb=S4_5 gap=S2")
+let attach_tiles : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// A tile: 70 high, its icon over its name, on a quiet ground, a block's corner (the ladder's, as the strip's tiles).
+/// A tile: 70 high, its icon over its name, on a quiet ground, as round as the strip's tiles (attach_block_corner).
 // kept across runs: a value (no field of it changes)
 let attach_tile : @ui.Style = @ui.style(
   w=@sf.grow,
   h=Fixed(attach_tile_h),
   px=S1,
   gap=S1_5,
-  radius=@sf.row_radius,
   bg=Neutral,
   align=ACenter,
   justify=JCenter,
@@ -117,4 +117,6 @@ let attach_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 let attach_icon : Double = 22.0
 
 ///|
-let attach_corner : Double = @sf.row_corner
+/// The panel's width beside ＋ (a sheet is the window's): a phone's, as Attach.kt's sheet is laid out, so each tile has
+/// the room for its name (a small panel's 280 cut Station 文件's) and the strip shows its photos past the camera.
+pub let attach_w : Double = 360.0
