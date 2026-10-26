@@ -99,3 +99,10 @@ let window_band_mac : Double = 28.0
 fn nav_foot() -> Double {
   @ui.system_bars().bottom
 }
+
+///|
+/// What a page drawn over the whole window keeps room for (a screen's: under the status bar, over the navigation bar),
+/// the shell's to say (PageFrame).
+fn system_frame() -> PageFrame {
+  { back: None, top: status_top(), foot: nav_foot(), named: false }
+}

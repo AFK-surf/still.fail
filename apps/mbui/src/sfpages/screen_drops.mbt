@@ -157,7 +157,7 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
           self.pump()
         } else if next <= have {
           // nothing more taken: a part the station could not take
-          self.drop_failed(d, tr("android-chat.file.uploadFailed"))
+          self.drop_failed(d, @sf.t("android-chat.file.uploadFailed"))
         } else {
           d.sent = next
           let more = if next == have + len {

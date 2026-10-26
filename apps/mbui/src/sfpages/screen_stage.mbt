@@ -133,7 +133,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
               tint=c.color(if s.shown_any { Veil } else { VeilDeep }),
               solid=c.color(if s.shown_any { Veil } else { VeilDeep }),
             ),
-            fn() { ended(c, s, phase) },
+            fn() { screen_ended(c, s, phase) },
           )
           |> ignore
         })
@@ -195,9 +195,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
 /// has been waited on a moment (LATER_MS).
 fn screen_waiting(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
   let words = match phase {
-    "live" => if s.shown_any { None } else { Some(tr("android-misc.screen.starting")) }
-    "connecting" => Some(s.message().unwrap_or(tr("common.connecting")))
-    "reconnecting" => Some(s.message().unwrap_or(tr("common.reconnecting")))
+    "live" => if s.shown_any { None } else { Some(@sf.t("android-misc.screen.starting")) }
+    "connecting" => Some(s.message().unwrap_or(@sf.t("common.connecting")))
+    "reconnecting" => Some(s.message().unwrap_or(@sf.t("common.reconnecting")))
     _ => None
   }
   guard words is Some(w) else { return }
@@ -212,9 +212,9 @@ fn screen_waiting(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
 ///|
 /// What happened and why (each once, not the headline again), and 重新打开 where it may be had again, light on the
 /// screen's dark; the way out is the bar's ×, not a second one here.
-fn ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
+fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
   c.box(style=ended_box, fn() {
-    let headline = tr("android-misc.screen." + phase)
+    let headline = @sf.t("android-misc.screen." + phase)
     c.text(headline, style=ended_title) |> ignore
     // why, as the core says it (and what to turn on where, macOS's grants)
     let whys : Array[String] = []
@@ -231,10 +231,10 @@ fn ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
       let id = c.id("screen-again/" + s.view)
       let dark = c.theme().dark
       let i = c.box(style=if dark { again_solid } else { again_soft }, id~, fn() {
-        c.text(tr("web-pages.screen.again"), style=if dark { again_solid_words } else { again_soft_words })
+        c.text(@sf.t("web-pages.screen.again"), style=if dark { again_solid_words } else { again_soft_words })
         |> ignore
       })
-      c.semantics(i, Button, id~, label=tr("web-pages.screen.again"), actions=[Activate])
+      c.semantics(i, Button, id~, label=@sf.t("web-pages.screen.again"), actions=[Activate])
       if c.clicked(id) {
         c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
       }
@@ -273,13 +273,13 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
     // failed under them, as wide as its words (lines of their own)
     @sf.row_lines(c, fn() {
       c.box(style=drop_words, fn() { c.text(d.name, style=drop_name) |> ignore }) |> ignore
-      if d.state == "failed" && screen_row_key(c, "retry", "retry", tr("android-misc.drive.retry")) {
+      if d.state == "failed" && screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry")) {
         s.retry(d)
       }
       let close = if d.state == "done" || d.state == "failed" {
-        tr("common.close")
+        @sf.t("common.close")
       } else {
-        tr("common.cancel")
+        @sf.t("common.cancel")
       }
       if screen_row_key(c, "dismiss", "close", close) {
         s.dismiss(d)
@@ -291,16 +291,16 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
           // what is done with it there goes through the view: while driving it
           if s.driving() {
             c.box(style=drop_buttons, fn() {
-              if s.pastes() && soft_button(c, "paste-path", tr("android-misc.screen.pastePath")) {
+              if s.pastes() && soft_button(c, "paste-path", @sf.t("android-misc.screen.pastePath")) {
                 let path = d.path()
                 c.tell("screen-paste-path/\{d.serial}", fn() {
-                  s.paste(s.src, path, screen_act(c, tr("android-misc.screen.pasteWhat")))
+                  s.paste(s.src, path, screen_act(c, @sf.t("android-misc.screen.pasteWhat")))
                 })
               }
-              if d.reveal && soft_button(c, "reveal", tr("android-misc.screen.reveal")) {
+              if d.reveal && soft_button(c, "reveal", @sf.t("android-misc.screen.reveal")) {
                 let path = d.path()
                 c.tell("screen-reveal/\{d.serial}", fn() {
-                  s.reveal(s.src, path, screen_act(c, tr("android-misc.screen.revealWhat")))
+                  s.reveal(s.src, path, screen_act(c, @sf.t("android-misc.screen.revealWhat")))
                 })
               }
             })
@@ -308,16 +308,16 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
           }
         }
         "failed" =>
-          c.text(fill("android-misc.drive.upload.failed", [("error", d.error)]), style=drop_failed_words)
+          c.text(@sf.t("android-misc.drive.upload.failed", args=[("error", d.error)]), style=drop_failed_words)
           |> ignore
         _ => {
           let size = d.bytes.length()
           // (its size known once it goes, as Android's provider says it then)
           c.text(
             if d.state == "waiting" {
-              tr("android-misc.screen.sendWaiting")
+              @sf.t("android-misc.screen.sendWaiting")
             } else {
-              fill("android-misc.drive.upload.going", [
+              @sf.t("android-misc.drive.upload.going", args=[
                 ("sent", @sf.file_size(d.sent.to_double())),
                 ("size", @sf.file_size(size.to_double())),
               ])

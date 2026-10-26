@@ -35,8 +35,16 @@ fn screen_rig(
   platform? : Int = 2,
   until_gone? : Bool = false,
 ) -> ScreenRig {
+  @sfbase.reset()
   reset()
-  let base = fixture(if dark { "home-dark" } else { "home" })
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  @sf.set_dark(Some(dark))
+  // the core as this page reads it: the device's prefs, and what is told it (screen_page alone over it, no app)
+  let base = @sfbase.made_source(
+    topic=fn(name, _) { if name == "prefs" { Some(Json::object({})) } else { None } },
+    call=fn(_, _, done) { done(Ok(Json::null())) },
+  )
   let calls : Array[(String, Json, Bytes?)] = []
   let views : Array[((Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit)] = []
   let cancelled : Array[Int] = []
@@ -103,7 +111,36 @@ fn screen_rig(
     },
     cancel: fn(id) { cancelled.push(id) },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  // the page alone, while it is the stack's top, the presenters over it; left (closed), let go of as the shell lets a
+  // page go (screen_left)
+  let shown : Ref[ScreenAt?] = Ref(None)
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        match app.nav.top() {
+          Screen(at) => {
+            shown.val = Some(at)
+            screen_page(c, src, at, @sf.no_frame)
+          }
+          _ =>
+            match shown.val {
+              Some(at) => {
+                shown.val = None
+                c.after_build("screen-left", fn() { screen_left(src, at.station, at.screen) })
+              }
+              None => ()
+            }
+        }
+        @sf.presented(c)
+        // what the page said, as the shell shows it (sfbase's toasts, at the window's foot)
+        @sfbase.toasts(c, @sf.toast_bottom)
+      })
+    },
+    w~,
+    h~,
+    platform~,
+  )
   t.draw()
   app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone }))
   nav_rested(t)
@@ -431,7 +468,7 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   r.tap_label("触控板")
   assert_eq(text(r.told("prefs.set").last(), "screenTouch"), "direct")
   assert_true(!r.sess().pad(r.sess().src))
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
 
@@ -679,6 +716,8 @@ test "the call itself failed: said with the core's words; 重新打开 there" {
   assert_true(r.t.find("无法打开此屏幕") is Some(_))
   assert_true(r.t.find("station 不在线") is Some(_))
   assert_true(r.t.find("重新打开") is Some(_))
+  // (past the moment 正在连接 would have been said, asked for as the page opened)
+  r.t.run_for(@sf.later_ms)
   screen_done(r.t)
 }
 
@@ -729,14 +768,14 @@ test "driving it: 粘贴 beside the keyboard (发送文件 in 控制中心); 粘
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
   assert_true(r.t.find("无法粘贴：这个屏幕不支持剪贴板") is Some(_))
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   // nothing on the clipboard: said, nothing sent
   r.t.clipboard_gives("")
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
   assert_true(r.t.find("剪贴板是空的") is Some(_))
   assert_eq(r.told("screen.clipboard").length(), 2)
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
 
@@ -752,7 +791,7 @@ test "a copy made on the screen lands on the device's clipboard: text as it is, 
   // not a PNG: not put there
   r.say({ "clipboard": { "type": "png", "size": 6.0 } }, bytes=b"\xFF\xD8\xFF\xE0\x00\x10")
   assert_eq(r.t.clipboard_png(), Some(png))
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
 
@@ -772,7 +811,7 @@ test "the device's picture pasted as PNG; past 8 MB said, not sent; a text-only 
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
   assert_true(r.t.find("图片过大，上限 8 MB") is Some(_))
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   r.state(
     "live",
     others=[],
@@ -784,7 +823,7 @@ test "the device's picture pasted as PNG; past 8 MB said, not sent; a text-only 
   r.t.draw()
   assert_true(r.t.find("此屏幕不支持粘贴图片") is Some(_))
   assert_eq(r.told("screen.clipboard").length(), 1)
-  r.t.run_for(toast_ms)
+  r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
 
@@ -806,6 +845,10 @@ test "files go onto the machine one after another, the first beside the one of i
   let r = screen_rig()
   driven(r)
   r.answer.val = fn(name, p) {
+    // the name beside the one taken, as the core gives it (drive.name, beside: `a 2.pdf`)
+    if name == "drive.name" && text(Some(p), "name") == "季度报告.pdf" {
+      return Some(Ok({ "name": "季度报告 2.pdf" }))
+    }
     if name != "drive.upload.part" {
       return None
     }
@@ -851,12 +894,25 @@ test "files go onto the machine one after another, the first beside the one of i
 fn screen_done(t : @ui.Tester) -> Unit {
   to_sheet_rest(t)
   if @kit.toast_rest("toast") != -1.0 {
-    t.run_for(toast_ms)
+    t.run_for(@sf.toast_ms)
     let rest = @kit.toast_rest("toast")
     if rest > t.time() {
       t.run_for(rest - t.time())
     }
   }
-  to_bar_rest(t)
   t.assert_idle()
+}
+
+///|
+/// The app's words for `key`, as the page says them (@sf.t over the app's tables, sfbase's).
+fn tr(key : String) -> String {
+  @sf.t(key)
+}
+
+///|
+/// On to where the stack's slide is over (the page put on it or taken off): the stack the shell draws, not drawn here,
+/// its slide's time (@ui.nav_push_ms).
+fn nav_rested(t : @ui.Tester) -> Unit {
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
 }

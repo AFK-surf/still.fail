@@ -1285,7 +1285,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
   open_mode(mode)
   // a station's screen (screen_fixture.mbt)
-  open_screen_fixture(mode)
+  @sfpages.open_screen_fixture(mode)
   if mode.has_prefix("settings") {
     open_setting(@settings.fixture_page(mode))
   }
