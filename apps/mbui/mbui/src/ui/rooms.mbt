@@ -5,10 +5,12 @@
 // room: what shows whole and takes presses (its click read, Ctx::clicked; or said, Ctx::takes_presses) has room to be
 //   pressed `room_least` across each way at least, on every screen with either input. A part of what holds it (a row's
 //   state line, its station's mark) is only pointed at (Ctx::box's `points`: a press on it is the row's, where in the
-//   row Ctx::clicked_on says), no target of its own. Drawn smaller, a press reaches it from round it (finger_reach): its
-//   room is it grown so round its middle, within what holds it that takes presses too (a row's button: in the row's
-//   room, not its neighbour's) and within the window.
-// apart: two such rooms in one layer, neither holding the other, never overlap: a press there would be either's.
+//   row Ctx::clicked_on says), no target of its own. Drawn smaller, a press reaches it from round it, by a finger or a
+//   pointer alike (Ctx's press_reach): its room is it grown so round its middle, moved in from the window's edge
+//   rather than cut short there, within what holds it that takes presses (a row's button: in the row's room, not its
+//   neighbour's) (press_room); where two rooms meet, each has the part nearer it, as the hit test gives it.
+// apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
+//   either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
 //   mouse's way; touch has one as easy only where what it stands on asks for a menu (Ctx::menu_asked: a hold opens
 //   it).
@@ -110,27 +112,20 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  // each one's room as the hit test reaches it (press_room): grown round its middle, moved in from the window's edge
+  // rather than cut short there, cut to what holds it that takes presses
   let rooms : Array[(Double, Double, Double, Double)] = []
   for i in targets {
     let b = self.nodes[i]
-    let gx = dmax(0.0, (room_least - b.fw) / 2.0)
-    let gy = dmax(0.0, (room_least - b.fh) / 2.0)
-    let (hx0, hy0, hx1, hy1) = match holder[i] {
-      -1 => (0.0, 0.0, self.width, self.height)
+    let window = (0.0, 0.0, self.width, self.height)
+    let cut = match holder[i] {
+      -1 => window
       h => {
         let a = self.nodes[h]
         (a.x, a.y, a.x + a.fw, a.y + a.fh)
       }
     }
-    let x0 = dmax(dmax(b.x - gx, hx0), 0.0)
-    let y0 = dmax(dmax(b.y - gy, hy0), 0.0)
-    let x1 = dmin(dmin(b.x + b.fw + gx, hx1), self.width)
-    let y1 = dmin(dmin(b.y + b.fh + gy, hy1), self.height)
-    rooms.push((x0, y0, x1, y1))
-    let (w, h) = (x1 - x0, y1 - y0)
-    if w < room_least - gap_slack || h < room_least - gap_slack {
-      out.push("room: \{self.named(i)} has \{w.round()}×\{h.round()} to be pressed in, under \{room_least}")
-    }
+    rooms.push(press_room(b.x, b.y, b.x + b.fw, b.y + b.fh, cut, window))
   }
   // whether target `a` holds `b`
   let holds = fn(a : Int, b : Int) {
@@ -143,19 +138,55 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
     }
     false
   }
+  // where two rooms meet, each has the part nearer what it is drawn as (press_reach: the nearest): the two cut where
+  // the gap between them is halved, across the way they stand apart most. Drawn over each other, a press there would
+  // be either's.
   for j in 0..<targets.length() {
-    let (ax0, ay0, ax1, ay1) = rooms[j]
     for k in (j + 1)..<targets.length() {
       let (a, b) = (targets[j], targets[k])
       if layer[a] != layer[b] || holds(a, b) || holds(b, a) {
         continue
       }
-      let (bx0, by0, bx1, by1) = rooms[k]
-      let ow = dmin(ax1, bx1) - dmax(ax0, bx0)
-      let oh = dmin(ay1, by1) - dmax(ay0, by0)
-      if ow > gap_slack && oh > gap_slack {
-        out.push("apart: \{self.named(a)} and \{self.named(b)}: their rooms overlap by \{ow.round()}×\{oh.round()}")
+      let (na, nb) = (self.nodes[a], self.nodes[b])
+      let (ax0, ay0, ax1, ay1) = (na.x, na.y, na.x + na.fw, na.y + na.fh)
+      let (bx0, by0, bx1, by1) = (nb.x, nb.y, nb.x + nb.fw, nb.y + nb.fh)
+      let gx = dmax(bx0 - ax1, ax0 - bx1)
+      let gy = dmax(by0 - ay1, ay0 - by1)
+      if gx < -gap_slack && gy < -gap_slack {
+        out.push("apart: \{self.named(a)} and \{self.named(b)} are drawn over each other by \{(-gx).round()}×\{(-gy).round()}")
+        continue
       }
+      let (rax0, ray0, rax1, ray1) = rooms[j]
+      let (rbx0, rby0, rbx1, rby1) = rooms[k]
+      if dmin(rax1, rbx1) - dmax(rax0, rbx0) <= 0.0 || dmin(ray1, rby1) - dmax(ray0, rby0) <= 0.0 {
+        continue
+      }
+      if gx >= gy {
+        if ax1 <= bx0 {
+          let m = (ax1 + bx0) / 2.0
+          rooms[j] = (rax0, ray0, dmin(rax1, m), ray1)
+          rooms[k] = (dmax(rbx0, m), rby0, rbx1, rby1)
+        } else {
+          let m = (bx1 + ax0) / 2.0
+          rooms[j] = (dmax(rax0, m), ray0, rax1, ray1)
+          rooms[k] = (rbx0, rby0, dmin(rbx1, m), rby1)
+        }
+      } else if ay1 <= by0 {
+        let m = (ay1 + by0) / 2.0
+        rooms[j] = (rax0, ray0, rax1, dmin(ray1, m))
+        rooms[k] = (rbx0, dmax(rby0, m), rbx1, rby1)
+      } else {
+        let m = (by1 + ay0) / 2.0
+        rooms[j] = (rax0, dmax(ray0, m), rax1, ray1)
+        rooms[k] = (rbx0, rby0, rbx1, dmin(rby1, m))
+      }
+    }
+  }
+  for j, i in targets {
+    let (x0, y0, x1, y1) = rooms[j]
+    let (w, h) = (x1 - x0, y1 - y0)
+    if w < room_least - gap_slack || h < room_least - gap_slack {
+      out.push("room: \{self.named(i)} has \{w.round()}×\{h.round()} to be pressed in, under \{room_least}")
     }
   }
   out

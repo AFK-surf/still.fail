@@ -98,7 +98,7 @@ pub(all) struct Type {
 ///|
 /// A round control standing in a field's capsule (the composer's ＋ and send: mPlus, mSend; attachBtn, sendBtn): how
 /// wide it shows and its glyph's size (a finger reaches it from round it as it reaches any target smaller than the
-/// system's least: @ui's finger_reach).
+/// system's least: @ui's press_reach).
 pub(all) struct Round {
   side : Double
   glyph : Double
@@ -132,7 +132,7 @@ pub(all) struct Theme {
 ///|
 /// A page's bar of keys (page_bar.mbt) on the screen in force: its keys round, `key` across with a `icon` icon, its
 /// capsule `field` high. The web's and the phone's alike (PreviewBar's iconBtn 28, its icons 14, previewAddress 30;
-/// Preview.kt the same): a finger reaches a key from round it (finger_reach), so a phone's are drawn no larger.
+/// Preview.kt the same): a finger reaches a key from round it (press_reach), so a phone's are drawn no larger.
 pub(all) struct Bars {
   key : Double
   icon : Double
@@ -1005,7 +1005,7 @@ let narrow_control_h : Double = 44.0
 ///|
 /// What a row takes at least, by the screen: on a touch device 44 high, what it shows in its middle (a row is as wide as
 /// its list, its height the one a finger aims at); with keyboard and mouse nothing more. A button is drawn its own size
-/// on either: a finger reaches one smaller than its tip from round it (mbui's finger_reach, the system's 44 or 48), what
+/// on either: a finger reaches one smaller than its tip from round it (mbui's press_reach, 44), what
 /// shows and what a finger takes not the same (the user, 2026-10-26: 视觉跟触控区域可以不一样).
 pub fn finger_least_h() -> @ui.Style {
   if theme().touch {

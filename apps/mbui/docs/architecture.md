@@ -74,8 +74,8 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
   - **The native input** (the ways and the sizes, not the arrangement):
     - the sizes: the type scale, icons and row heights; touch's are the phone's, keyboard and mouse's the web's.
       What is drawn smaller keeps its room to be pressed (rule 2: 44×44 at least, overlapping no other's; a button
-      drawn its own size, a press reaching it from round it, mbui's finger_reach: what shows and what a press takes
-      need not be the same, the user, 2026-10-26). The colours are neither the screen's nor the input's: one palette
+      drawn its own size, a press reaching it from round it, a finger's or a pointer's alike, mbui's press_reach: what
+      shows and what a press takes need not be the same, the user, 2026-10-26). The colours are neither the screen's nor the input's: one palette
       everywhere, the phone's (warm paper, white cards on it), light or dark as set. The panes side by side are told
       apart by their grounds: the sidebar a step under the page's beige `bg`, what is chosen in it a step under that;
     - what a page offers to reach things (rule 1, each input a way as easy): with touch the search field at the top of

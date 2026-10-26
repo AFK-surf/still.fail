@@ -1,7 +1,7 @@
 // A page's bar of keys over what it shows (web Preview.tsx PreviewBar, Preview.css.ts previewBar, previewAddress; the
 // phone's Preview.kt PreviewBar alike): a row of round keys and one capsule where it is, the same on every screen. Its
 // room the theme's (Bars): a key's, an icon's, the capsule's; a finger reaches a key from round it all the same
-// (mbui's finger_reach), so none is drawn larger for a phone.
+// (mbui's press_reach), so none is drawn larger for a phone.
 
 ///|
 /// The bar: 8 in, 6 over and under, its keys 2 apart, in their middle.

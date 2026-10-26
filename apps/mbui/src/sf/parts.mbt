@@ -200,7 +200,7 @@ pub fn icon_button(
   shortcut? : String = "",
 ) -> Bool {
   let t = theme()
-  // (drawn its own size with a finger too: a finger reaches it from round it, mbui's finger_reach)
+  // (drawn its own size with a finger too: a finger reaches it from round it, mbui's press_reach)
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
