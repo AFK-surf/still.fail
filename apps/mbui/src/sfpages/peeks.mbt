@@ -285,7 +285,7 @@ fn state_colours(state : String) -> (Int64, Int64) {
     "open" | "passed" => (p.green_ink, p.green_bg)
     "merged" | "completed" => {
       let ink = if @sf.theme().dark { merged_dark } else { merged_light }
-      (ink, @sf.alpha(ink, merged_share))
+      (ink, @sf.tone_ground(ink))
     }
     "closed" | "failed" => (p.red, p.red_bg)
     "pending" => (p.warn_ink, p.amber_bg)
@@ -294,15 +294,12 @@ fn state_colours(state : String) -> (Int64, Int64) {
 }
 
 ///|
-/// GitHub's purple for what was merged or completed (Hover.css.ts: #8250df at 14% under it); the dark theme's its own
-/// lighter one (GitHub's dark #a371f7), as the page's.
-let merged_light : Int64 = 0x8250DFFFL
+/// GitHub's purple for what was merged or completed (Hover.css.ts), each theme's a step deeper or lighter than GitHub's
+/// (#8250df, #a371f7) to read on its ground, the purple at the theme's tone opacity (@sf.tone_ground).
+let merged_light : Int64 = 0x6830BFFFL
 
 ///|
-let merged_dark : Int64 = 0xA371F7FFL
-
-///|
-let merged_share : Double = 0.14
+let merged_dark : Int64 = 0xC4A9FFFFL
 
 ///|
 fn pr_state_key(state : String) -> String {
@@ -913,7 +910,7 @@ let peek_person : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let peek_avatar : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Hover")
+let peek_avatar : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Line")
 
 ///|
 let peek_avatar_d : Double = peek_capsule_h
