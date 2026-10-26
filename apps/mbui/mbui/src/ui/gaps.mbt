@@ -33,7 +33,15 @@
 //    rows are as wide as it, their grounds its own edge to edge), nor a page's or a pane's, among its heads and bars in
 //    its column, as far in as its words say.
 //
-// Rules 2 (siblings of a kind equally spaced) and 6 (gaps on the scale) are still.fail's too, not measured yet.
+// 2. In a box that lays them out one after another (a column, a row), what it shows beside each other of one kind (the
+//    same kind of node, the same ground and corner, as wide in a column or as tall in a row: rows, cards, sections)
+//    stand equally apart: each pair of them next to each other as far apart as the most of those pairs are. What
+//    lays them out spread (JBetween) is not asked.
+// 6. What a box shows next to each other (in one column or one row, the box laying them out from its start, its end
+//    or its middle, not spread) stands a step of the spacing scale apart, or touches (the scale is
+//    style_tokens.mbt's space_scale(), said once): a gap worked out off it (a margin of 7, 13 left between two blocks)
+//    is a fault, most often two spaces added (one block's padding under it and the next's over it, a gap and a
+//    padding): what that distance is (a gap between blocks, a padding at a block's edge) is said once.
 
 ///|
 /// How thin a box is a line (a rule between rows, a progress bar's track), not a block with a ground.
@@ -633,6 +641,8 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  // 2 and 6. neighbours equally apart, on the scale
+  self.gap_steps(whole, layer, out)
   // 7. a column of rows that light up, the theme's lit_reach in from the edges of the box with a ground round them
   if self.lit_reach > 0.0 {
     // (each row that lights up only under the hand, or is pressed as a whole and rounded, its ground or its ripple
@@ -707,6 +717,117 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// Whether node `i` shows something next to its siblings (words, a drawing, a ground, a picture, or what it holds), not a
+/// box that only makes room (a spacer).
+fn Ctx::gap_shows(self : Ctx, i : Int) -> Bool {
+  let b = self.nodes[i]
+  b.fw > 0.0 &&
+  b.fh > 0.0 &&
+  (b.kind != kind_box || b.first >= 0 || b.grounded() || b.shapes.length() > 0 || b.lines.length() > 0)
+}
+
+///|
+/// Rules 2 and 6 (see the file's head): in each box laying out what it shows one after another, the gaps between
+/// neighbours, `whole` and `layer` as gap_faults has them.
+fn Ctx::gap_steps(self : Ctx, whole : Array[Bool], layer : Array[Int], out : Array[String]) -> Unit {
+  let scale = space_scale()
+  for i in 0..<self.count {
+    let p = self.nodes[i]
+    if p.kind != kind_box || p.first < 0 || !whole[i] || p.justify == JBetween {
+      continue
+    }
+    // (what it lays out in its flow, in order: what shows, and what only takes room (a spacer, a box grown to push the
+    // next to the end) or is not measured, which no gap is measured across: -1)
+    let shown : Array[Int] = []
+    let mut k = p.first
+    while k >= 0 {
+      let ch = self.nodes[k]
+      let aside = ch.layer || ch.portal || ch.placed_at()
+      if !aside {
+        // (one laid over the one before it on purpose, a margin below 0 pulling it back (a stack of faces) is no gap)
+        if whole[k] && layer[k] == layer[i] && self.gap_shows(k) && ch.mar_l >= 0.0 && ch.mar_t >= 0.0 {
+          shown.push(k)
+        } else {
+          shown.push(-1)
+        }
+      }
+      k = ch.next
+    }
+    if shown.length() < 2 {
+      continue
+    }
+    let column = p.dir == Column
+    // (neighbours in its direction, sharing its column or its row: the gap between them, along it)
+    let gaps : Array[(Int, Int, Double)] = []
+    for x in 0..<(shown.length() - 1) {
+      let (a, b) = (shown[x], shown[x + 1])
+      if a < 0 || b < 0 {
+        continue
+      }
+      let na = self.nodes[a]
+      let nb = self.nodes[b]
+      let d = if column {
+        let shares = dmin(na.x + na.fw, nb.x + nb.fw) - dmax(na.x, nb.x) > gap_slack
+        if shares { Some(nb.y - (na.y + na.fh)) } else { None }
+      } else {
+        let shares = dmin(na.y + na.fh, nb.y + nb.fh) - dmax(na.y, nb.y) > gap_slack
+        if shares { Some(nb.x - (na.x + na.fw)) } else { None }
+      }
+      match d {
+        Some(d) if d >= -gap_slack => gaps.push((a, b, d))
+        _ => ()
+      }
+    }
+    // 6. each gap a step of the scale, or none
+    for g in gaps {
+      let (a, b, d) = g
+      if d > gap_slack && !scale.iter().any(fn(s) { (d - s.px()).abs() <= gap_slack }) {
+        out.push("rule 6: \{self.named(a)} and \{self.named(b)} \{d} apart, off the scale, in \{self.named(i)}")
+      }
+    }
+    // 2. neighbours of one kind equally apart
+    let kind_of = fn(k : Int) {
+      let n = self.nodes[k]
+      let across = if column { n.fw } else { n.fh }
+      "\{n.kind}/\{n.grounded()}/\{n.bg}/\{n.radius}/\{n.border_w}/\{across.round()}"
+    }
+    let kinds : Map[String, Array[(Int, Int, Double)]] = {}
+    for g in gaps {
+      let (a, b, _) = g
+      let ka = kind_of(a)
+      if ka == kind_of(b) {
+        match kinds.get(ka) {
+          Some(list) => list.push(g)
+          None => kinds[ka] = [g]
+        }
+      }
+    }
+    for entry in kinds {
+      let (_, list) = entry
+      if list.length() < 2 {
+        continue
+      }
+      // (as far apart as the most of them are)
+      let mut most = 0
+      let mut usual = list[0].2
+      for g in list {
+        let here = list.filter(fn(o) { (o.2 - g.2).abs() <= gap_slack }).length()
+        if here > most {
+          most = here
+          usual = g.2
+        }
+      }
+      for g in list {
+        let (a, b, d) = g
+        if (d - usual).abs() > gap_slack {
+          out.push("rule 2: \{self.named(a)} and \{self.named(b)} \{d} apart, the others of their kind \{usual}, in \{self.named(i)}")
+        }
+      }
+    }
+  }
 }
 
 ///|
