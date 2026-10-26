@@ -5,11 +5,11 @@
 ///|
 /// The chat open at its end (on `platform`'s screen: Android's, a finger), then a row up at a time until the image
 /// `name` is drawn; where it is.
-fn image_in_chat(name : String, platform? : Int = 2) -> (@ui.Tester, Double, Double) {
+fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double, Double) {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform~)
   nav_rested(t)
   let mut tries = 0
   while t.locate("img:" + name).length() == 0 && tries < 12 {
@@ -74,8 +74,8 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
 
 ///|
 test "an image right clicked: its one menu, again on that menu still the one; in the preview over the chat, the picture's own, never the chat's 引用" {
-  // (macOS: a mouse, menus beside what opened them)
-  let (t, x, y) = image_in_chat("compare.png", platform=0)
+  // (macOS: a mouse; Large, menus beside what opened them, the chat its own column: docs/architecture.md, rule 3)
+  let (t, x, y) = image_in_chat("compare.png", platform=0, w=1280.0)
   // (引用 a press reaches: a menu's, not what lies under what is over it)
   let quotes = fn() { t.reachable("引用").length() }
   let before = quotes()
@@ -104,7 +104,7 @@ test "an image right clicked: its one menu, again on that menu still the one; in
   }
   assert_true(viewer.val is Some(_))
   // on its picture, in the middle: its own menu, 复制图片 (as its bar's 复制)
-  t.right_click(195.0, 422.0)
+  t.right_click(640.0, 422.0)
   assert_true(t.reachable("复制图片").length() > 0)
   assert_eq(quotes(), 0)
 }
