@@ -230,6 +230,9 @@ static NSMutableDictionary<NSNumber *, MBNative *> *views;
 // a site's own scheme: nothing else answers it
 static NSString *const kSiteScheme = @"stillfail-preview";
 static int32_t next_vid;
+// a view put elsewhere on the screen since the canvas's last frame was presented (moved, shown, hidden, closed): that
+// frame is presented in the transaction that puts it there (apple.h mb_views_take_moved)
+static int views_moved;
 static void *kStatus = &kStatus, *kReady = &kReady;
 
 static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long long total) {
@@ -1078,6 +1081,7 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
       v.cx1 == cx1 && v.cy1 == cy1 && v.radius == radius)
     return;
   BOOL resized = !v.placed || v.w != w || v.h != h;
+  views_moved = 1;
   v.placed = YES;
   v.shown = s;
   v.x = x; v.y = y; v.w = w; v.h = h;
@@ -1135,6 +1139,7 @@ void mb_host_view_close(int32_t vid) {
     [v.reqs removeAllObjects];
     vlog(@"view %d: closed", vid);
   }
+  if (v.box.superview && !v.box.hidden) views_moved = 1;
   [v.box removeFromSuperview];
 }
 
@@ -1446,6 +1451,12 @@ int mb_views_pass_through(double x, double y) {
 }
 
 int mb_views_count(void) { return (int)views.count; }
+
+int mb_views_take_moved(void) {
+  int m = views_moved;
+  views_moved = 0;
+  return m;
+}
 
 // Whether a page's picture for snapshots is being taken (apple.h).
 int mb_views_snapping(void) {

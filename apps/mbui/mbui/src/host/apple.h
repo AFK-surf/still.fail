@@ -99,3 +99,6 @@ const char *mb_views_touch_at(double x, double y, double *slop);
 // the canvas's size in pixels, scale pixels per point), for snapshots
 int mb_views_count(void);
 void mb_views_draw_under(CGContextRef ctx, double scale);
+// whether a view was put elsewhere on the screen (moved, shown, hidden, closed) since this was last asked: the frame
+// presented now shows its hole there, so it is presented in the same Core Animation transaction (apple_render.m)
+int mb_views_take_moved(void);
