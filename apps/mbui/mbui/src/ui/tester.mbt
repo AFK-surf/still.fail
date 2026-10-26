@@ -141,7 +141,7 @@ fn leaked_state() -> Array[String] {
   check("words", words_marks.length() + words_kept.length() + words_sel.length())
   check("list_counts", list_counts.length())
   check("timers", helds.length() + marks_at.length())
-  check("drawing", dr.entries.length() + dr.overlay.length() + dr.carry.length())
+  check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
   check("inst_owners", inst_owners.owner.length())
   out

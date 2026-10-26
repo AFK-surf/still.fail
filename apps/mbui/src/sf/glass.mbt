@@ -67,6 +67,22 @@ pub fn glass_bar_ball() -> @ui.Glass {
 }
 
 ///|
+/// The bar's ball held (the lens over the places, iOS 26's tab bar's): liquid glass, nearly clear, its rim bending
+/// the places under it; a touch of the page's paper so it reads as glass in both themes.
+pub fn glass_lens() -> @ui.Glass {
+  let t = theme()
+  @ui.Glass::liquid(
+    blur=0.0,
+    tint=alpha(t.p.raised, if t.dark { 0.04 } else { 0.08 }),
+    solid=over(t.p.bg, alpha(t.p.raised, 0.72)),
+    bezel=16.0,
+    refraction=12.0,
+    chroma=0.08,
+    adaptive=false,
+  )
+}
+
+///|
 /// The page's primary action in the bar's notch (Bar.kt: 令, a "+"): the accent at 86% over a 20px blur, its rim
 /// 0.4 / 0.75 / 0.4.
 pub fn glass_action() -> @ui.Glass {

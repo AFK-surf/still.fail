@@ -168,6 +168,15 @@ pub let bar_show_ms : Double = 380.0
 let bar_hide_ms : Double = 300.0
 
 ///|
+/// The lens: a capsule over the ball's place, as large as it is drawn.
+// kept across runs: a value (no field of it changes)
+let lens_box : @ui.Style = @ui.css("w=Full h=Full radius=Full")
+
+///|
+/// How much larger than the ball its lens is, held (liquid glass over the places, iOS 26's tab bar's).
+let lens_grow : Double = 0.18
+
+///|
 /// How long the ball takes to fade in or out, and to grow back or shrink.
 let ball_fade_ms : Double = 200.0
 
@@ -1369,8 +1378,11 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
           )
           |> ignore
         })
-        if m.ball_alpha.value < 1.0 {
-          c.look(ball, @ui.look(alpha=m.ball_alpha.value))
+        // (held, the lens over the places takes its place: it fades as the lens comes)
+        let lensed = if c.glass_solid() { 0.0 } else { dmin(1.0, m.held.x) }
+        let ball_shows = m.ball_alpha.value * (1.0 - lensed)
+        if ball_shows < 1.0 {
+          c.look(ball, @ui.look(alpha=ball_shows))
         }
       }
       match m.swap {
@@ -1403,6 +1415,21 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
             place_at(c, key, now_cs[j], bar_mid, slot, idle, lit, tint, dots, presses) |> ignore
           }
         }
+        Some(_) => ()
+      }
+      // the ball in the finger: a lens of liquid glass over the places as it is held (as it grows), what is under its
+      // rim bent; gone as it is let go. Where glass is solid there is nothing to bend: the ball alone.
+      if m.held.x > 0.01 && m.ball_alpha.value > 0.0 && !c.glass_solid() {
+        let grow = 1.0 + lens_grow * m.held.x
+        let lw = sw * grow
+        let lh = sh * grow
+        let lens = at(c, bcx - lw / 2.0, m.ball_y.x - lh / 2.0, lw, lh, body=fn() {
+          c.box(style=lens_box, glass=@sf.glass_lens(), fn() {  }) |> ignore
+        })
+        c.look(lens, @ui.look(alpha=dmin(1.0, m.held.x) * m.ball_alpha.value))
+      }
+      match m.swap {
+        None => ()
         Some(s) => {
           // a bar being chosen: the stack of bars slides down inside the closing glass, the chosen one into the
           // bar's place, what is not chosen cut off by the glass's edge (Bar.kt). It starts as the rows and the bar

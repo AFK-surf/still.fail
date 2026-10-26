@@ -158,6 +158,11 @@ priv struct DrawState {
   mut mode : Int
   mut overlaying : Bool
   overlay : Array[(Int, Double)]
+  /// what is over the scrim of the modal layer up (put_over's 3), painted once that scrim is (Ctx::paint_raised); the
+  /// scrims built this frame (overlay.mbt), and whether those are being painted
+  raised : Array[(Int, Double)]
+  scrims : Array[Int]
+  mut raising : Bool
   /// what is painted over everything of its layer wherever it is painted (an editor's handles: on Android windows of
   /// their own over the app's window, a dialog's over them), as this frame's instances [from, to): put after the rest
   /// of its layer (the page, or one of overlay.mbt's) once that is painted (Ctx::raise_tops), so that nothing of it
@@ -179,6 +184,9 @@ let dr : DrawState = {
   mode: 0,
   overlaying: false,
   overlay: [],
+  raised: [],
+  scrims: [],
+  raising: false,
   tops: [],
   carry: [],
 }
@@ -246,6 +254,9 @@ fn reset_drawing() -> Unit {
   dr.mode = 0
   dr.overlaying = false
   dr.overlay.clear()
+  dr.raised.clear()
+  dr.scrims.clear()
+  dr.raising = false
   dr.tops.clear()
   dr.carry.clear()
   list_counts.clear()
@@ -263,6 +274,8 @@ fn drawing_begin() -> Unit {
   dr.bypass = -1
   dr.mode = 0
   dr.overlay.clear()
+  dr.raised.clear()
+  dr.scrims.clear()
 }
 
 ///|
@@ -367,10 +380,12 @@ pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
 ///|
 /// Node `i` drawn over its siblings (1), or over everything, the window's whole room its clip (2: what flies over
 /// bars and the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
-/// where that moves it: drawn_paint). Tapped where it is laid out, in its place among the rest.
+/// where that moves it: drawn_paint), or over the scrim of the modal layer up this frame and under what that layer
+/// holds (3: what a menu is of, held, standing out of what the menu dims, as iOS's context menu has it; in its place
+/// where no layer with a scrim is up). Tapped where it is laid out, in its place among the rest.
 pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
   // (over everything: painted after the rest, out of what a part kept draws, kept_part.mbt)
-  if z == 2 {
+  if z >= 2 {
     part_live()
   }
   // what a list's row holds: the row, over the list's other rows
@@ -577,14 +592,18 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     return true
   }
+  // (over a scrim where one is up; else in its place: put_over's 3)
+  if e.z == 3 && dr.scrims.is_empty() {
+    e.z = 0
+  }
   let look = e.look
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh)
-  if look.is_still() && e.z != 2 && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
+  if look.is_still() && e.z < 2 && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
     return false
   }
-  if dr.mode == 0 && (!look.is_still() || e.z == 2 || cutting) {
+  if dr.mode == 0 && (!look.is_still() || e.z >= 2 || cutting) {
     if !e.only {
       // its tap rects, where it is laid out (what it would draw so is dropped)
       let i0 = self.ninst
@@ -601,6 +620,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     if e.z == 2 && !dr.overlaying {
       dr.overlay.push((i, alpha))
+      return true
+    }
+    if e.z == 3 && !dr.raising {
+      dr.raised.push((i, alpha))
       return true
     }
   }
@@ -651,7 +674,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     )
   }
   let was = dr.mode
-  if !look.is_still() || e.z == 2 || e.only || cutting {
+  if !look.is_still() || e.z >= 2 || e.only || cutting {
     dr.mode = mode_draw
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
@@ -669,7 +692,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if moved {
     pop_clip()
   }
-  if dr.mode == mode_draw || !look.is_still() || e.z == 2 || e.only || cutting {
+  if dr.mode == mode_draw || !look.is_still() || e.z >= 2 || e.only || cutting {
     // tapped as laid out, not here (drawn only, not at all)
     self.hits_cut(h0)
     self.next_scroll_ids.truncate(s0)
@@ -922,6 +945,26 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
   }
   dr.mode = 0
   dr.overlaying = false
+}
+
+///|
+/// What is over a scrim (put_over's 3), once scrim `i` is painted: each as it looks, the window its clip, under what
+/// the scrim's layer holds. What no scrim painted took (its layer's scrim not painted after it), over everything.
+fn Ctx::paint_raised(self : Ctx) -> Unit {
+  if dr.raised.is_empty() || dr.raising {
+    return
+  }
+  dr.raising = true
+  let was = dr.mode
+  dr.mode = mode_draw
+  let todo = dr.raised.copy()
+  dr.raised.clear()
+  for p in todo {
+    let (i, alpha) = p
+    self.paint(i, alpha)
+  }
+  dr.mode = was
+  dr.raising = false
 }
 
 ///|

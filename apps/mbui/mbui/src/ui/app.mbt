@@ -338,6 +338,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // what is over everything of the page wherever it was painted (an editor's handles), after the rest of it (a layer's
   // after the rest of the layer: Ctx::paint); what flies over everything over them still
   c.raise_tops()
+  // (what is over a scrim no scrim painted after it took: over everything)
+  c.paint_raised()
   c.paint_overlays()
   c.raise_tops()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)

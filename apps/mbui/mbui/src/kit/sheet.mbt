@@ -236,6 +236,8 @@ pub fn sheet(
       })
     })
     c.semantics(i, Dialog, label~, modal=true)
+    // (where it stands, for what is to stay clear of it: sheet_top)
+    @motion.measure(c, i, sheet_measured)
   })
   if now && o.dismissed is Some(_) {
     now = false
@@ -247,6 +249,20 @@ pub fn sheet(
   s.was_open = now
   { open: now, shown: true, dragged }
 }
+
+///|
+/// Where the top of the sheet up is in the window this frame, as it is laid out (None where none is up): for what
+/// stays clear of it as it comes and goes (a row held for the menu in it, lifted over its scrim: put_over's 3), read
+/// once this frame is laid out (@motion.placed).
+pub fn sheet_top(c : @ui.Ctx) -> Double? {
+  match @motion.measured_rect(c, sheet_measured) {
+    Some((_, y, _, _)) => Some(y)
+    None => None
+  }
+}
+
+///|
+let sheet_measured : String = "kit-sheet"
 
 ///|
 /// When sheet `key` (the key it is built by, the last built by it) is at rest: its height's and its sinking's springs

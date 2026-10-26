@@ -620,6 +620,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     inst_owners.painting = i
   }
   self.paint_node(i, alpha_in)
+  // a scrim: what is put over it (put_over's 3) over it, under the rest of its layer
+  if !dr.raised.is_empty() && dr.mode != mode_hits && dr.scrims.contains(i) {
+    self.paint_raised()
+  }
   if inst_owners.on {
     inst_owners.painting = was
   }
