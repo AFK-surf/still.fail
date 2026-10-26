@@ -265,7 +265,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         hints = null;
         hintTid = tid;
         android.os.PerformanceHintManager pm = getContext().getSystemService(android.os.PerformanceHintManager.class);
-        long target = framePeriod;
+        long target = framePeriod * 7 / 10;
         try {
             hints = pm == null ? null : pm.createHintSession(new int[] {tid}, target);
         } catch (RuntimeException e) {
@@ -278,7 +278,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private android.os.PerformanceHintManager.Session hints;
     private int hintTid;
     private long hintTarget;
-    /** The display's frame (ns), read as the view is shown and as the display changes its rate (main thread). */
+    /**
+     * The display's frame (ns), read as the view is shown and as the display changes its rate, and since Android 13 from
+     * each vsync's timelines (main thread).
+     */
     private volatile long framePeriod = 16_666_667L;
 
     private final android.hardware.display.DisplayManager.DisplayListener displays =
@@ -363,10 +366,15 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         super.onDetachedFromWindow();
     }
 
-    /** A frame's work done (GL thread): how long it took, against the display's frame as it is now. */
+    /**
+     * A frame's work done (GL thread): how long it took, against 70% of the display's frame as it is now. The system
+     * clocks the CPUs so that a frame takes about as long as its target, one a little over as often as one a little
+     * under; one over the display's frame misses the next vsync, so the target leaves room under it, as HWUI's does
+     * (its frames' targets are 70% of their time).
+     */
     private void frameWorked(long nanos) {
         if (hints == null) return;
-        long target = framePeriod;
+        long target = framePeriod * 7 / 10;
         if (target != hintTarget) {
             hintTarget = target;
             hints.updateTargetWorkDuration(target);
@@ -434,7 +442,16 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         static void post(MBView v) {
             if (v.vsyncTimed == null) {
                 v.vsyncTimed = (Choreographer.VsyncCallback) d -> {
-                    v.vsyncAt = new long[] {d.getFrameTimeNanos(), d.getPreferredFrameTimeline().getExpectedPresentationTimeNanos()};
+                    long shows = d.getPreferredFrameTimeline().getExpectedPresentationTimeNanos();
+                    v.vsyncAt = new long[] {d.getFrameTimeNanos(), shows};
+                    // the display's frame now, as far apart as its timelines are: the rate the app's frames are shown
+                    // at (since Android 16 the display's listener is told no change of rate unless it asks, so the
+                    // frame read as the view was shown, at 60 Hz, stayed while the display went to 120 as the app
+                    // moved); taken as the rate changes, not as the compositor's guess of it moves by a little
+                    Choreographer.FrameTimeline[] tl = d.getFrameTimelines();
+                    long period = tl.length > 1
+                            ? tl[1].getExpectedPresentationTimeNanos() - tl[0].getExpectedPresentationTimeNanos() : 0;
+                    if (period > 0 && Math.abs(period - v.framePeriod) * 16 > v.framePeriod) v.framePeriod = period;
                     v.wanted.set(false);
                     v.requestRender();
                 };
