@@ -133,6 +133,15 @@ client, so any client that acknowledges what it drew is paced.
   3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
   next frame (macOS: VideoToolbox's `AverageBitRate`; Windows: the encoder's `CODECAPI_AVEncCommonMeanBitRate`); a
   browser tab's JPEGs keep theirs.
+- **Still.** A source makes a picture only when the screen changed, so a still screen shows its last frame's picture as
+  it was encoded: a view's first at the start rate, a whole desktop in a few kilobytes, stayed a blur for as long as
+  nothing on it moved (a Mac's desktop left alone, for minutes). Once no frame has gone for 0.5 s (`STILL_MS`) and the
+  rate asked has gone up past 1.1 times the one the last frame was encoded at, the source is asked for a key frame
+  (`ScreenView.keyframe`: the helper encodes the same picture again, at the rate asked now); its acknowledgement lets
+  the rate go up a step, and so on to the source's own (screen-pace.ts `Sharpener`): the picture sharp a few steps after
+  the screen stopped, as a still image is refined. A screen that keeps changing never waits that long; a link that
+  cannot carry the larger picture lowers the rate, and nothing more is sent. A source with no rate of its own (a tab's
+  JPEGs, each as sharp as the next) is not asked.
 - **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
   (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web and by
   MediaCodec's hardware decoder on Android. A client whose decoder fails on it before its first frame opens the view

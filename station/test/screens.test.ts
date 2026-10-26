@@ -28,7 +28,7 @@ import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
-import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED } from "../src/mesh/screen-pace.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate } from "../src/mesh/screen-pace.ts";
 import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
@@ -89,8 +89,38 @@ class FakeView implements ScreenView {
   }
 }
 
+/// A view of a screen that stays still after its first picture (a desktop left alone): no picture more until a key
+/// frame is asked, which sends that picture again; it says the bit rates it was asked, as a video's source does.
+class StillView extends FakeView {
+  rates: number[] = [];
+  /// The frame asked for and not given yet: given as a key frame is asked, none as the view closes.
+  #asked: { n: number; give: (frame: Frame | null) => void } | null = null;
+  override next(): Promise<Frame | null> {
+    if (this.closed) return Promise.resolve(null);
+    const n = ++this.asked;
+    if (n === 1) return Promise.resolve({ config: { codec: "h264", width: 1920, height: 1080, description: new Uint8Array([1, 100, 0, 31]) }, key: true, ts: 1000, data: new Uint8Array([0, 0, 0, 1, 1]) });
+    return new Promise((give) => (this.#asked = { n, give }));
+  }
+  override keyframe() {
+    this.keyframes++;
+    const asked = this.#asked;
+    this.#asked = null;
+    asked?.give({ key: true, ts: asked.n * 1000, data: new Uint8Array([0, 0, 0, 1, asked.n]) });
+  }
+  override close() {
+    super.close();
+    this.#asked?.give(null);
+    this.#asked = null;
+  }
+  rate(bits: number) {
+    this.rates.push(bits);
+  }
+}
+
 class FakeSource implements ScreenSource {
   readonly kind = "browser" as const;
+  /// What its views are (a still screen's: StillView).
+  make: () => FakeView = () => new FakeView();
   views: FakeView[] = [];
   opened: ViewOptions[] = [];
   name = "Tab";
@@ -113,7 +143,7 @@ class FakeSource implements ScreenSource {
   async open(options: ViewOptions): Promise<ScreenView> {
     this.opened.push(options);
     if (this.refuse) throw this.refuse;
-    const view = new FakeView();
+    const view = this.make();
     this.views.push(view);
     return view;
   }
@@ -215,6 +245,39 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
   await v.stream.write(frame(KIND.keyframe, Buffer.alloc(0)));
   await settle();
   assert.equal(view.keyframes, 1);
+  await v.stream.finish();
+  await v.served;
+});
+
+test("a still screen's picture goes again sharper as the rate goes up, a key frame each STILL_MS, until it is at the source's own", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new StillView();
+  hub.add(source);
+  const time = testClock();
+  const v = await open(hub, member, undefined, undefined, time.clock);
+  const first = await until(v.frames, KIND.video);
+  assert.equal(first[0], 1);
+  const view = source.views[0] as StillView;
+  // Each acknowledged at once: the rate goes up a step; still for STILL_MS, the picture again as a key frame at it.
+  let ts = 1000;
+  const steps: number[] = [];
+  for (;;) {
+    await v.stream.write(frame(KIND.ack, ts8(ts)));
+    await settle();
+    await time.adjust(STILL_MS);
+    await settle();
+    if (view.keyframes === steps.length) break;
+    steps.push(view.rates.at(-1)!);
+    const again = await until(v.frames, KIND.video);
+    assert.equal(again[0], 1, "the picture again is a key frame");
+    ts = Number(again.readBigUInt64BE(1));
+  }
+  // Up from START_RATE by the pace's steps to the source's own (1920×1080's), and then no more.
+  assert.deepEqual(steps, [2_250_000, 3_375_000, 5_062_500, ownRate(1920, 1080)]);
+  await time.adjust(5 * STILL_MS);
+  await settle();
+  assert.equal(view.keyframes, steps.length);
   await v.stream.finish();
   await v.served;
 });

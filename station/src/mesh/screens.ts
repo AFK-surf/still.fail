@@ -10,7 +10,7 @@
 // A read-only member views, their input is dropped. The view ends when the client finishes its side (`ended:
 // "finished"`), the source goes (`"gone"`, also when it has no more frames), the station stops (`"stopping"`), or the
 // stream or its connection breaks (nothing more is written then); its source's capture stops with it.
-import type { Clock } from "effect";
+import { type Clock, Duration, Effect } from "effect";
 import { langOfCore } from "../api/request.ts";
 import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
@@ -19,7 +19,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { FrameLatency, Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
+import { FrameLatency, Pacer, STILL_MS, START_RATE, Sharpener, Sizer, ownRate } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -209,7 +209,8 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
   const pacer = new Pacer(now, START_RATE);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer }).run();
+  const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer, now, sleep }).run();
 }
 
 /// One view while it lasts.
@@ -229,6 +230,11 @@ class ViewSession {
   #title: string;
   /// The bit rate the source was last asked for.
   #rate: number | null = null;
+  /// A still screen's picture sent again sharper (screen-pace.ts Sharpener), on the view's clock.
+  readonly #sharpen = new Sharpener();
+  #stillWait = false;
+  readonly #now: () => number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
   readonly hub: ScreenHub;
   readonly id: string;
@@ -249,7 +255,7 @@ class ViewSession {
   /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
   #size: { width: number; height: number } | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -262,7 +268,27 @@ class ViewSession {
     this.access = o.access;
     this.pacer = o.pacer;
     this.sizer = o.sizer;
+    this.#now = o.now;
+    this.#sleep = o.sleep;
     this.#title = o.source.title();
+  }
+
+  /// A frame went: once the screen has been still for STILL_MS (no frame after it), if the rate has gone up since, the
+  /// source sends its picture again as a key frame at the rate it is asked now (a source with a rate of its own: a
+  /// video's, not JPEG's). One wait at a time, gone on from the last frame.
+  #still() {
+    this.#sharpen.sent(this.#now(), this.view.rate ? (this.#rate ?? START_RATE) : null);
+    if (this.#stillWait) return;
+    this.#stillWait = true;
+    const wait = (ms: number) =>
+      void this.#sleep(ms).then(() => {
+        if (this.#closed) return;
+        const left = this.#sharpen.left(this.#now());
+        if (left > 0) return wait(left);
+        this.#stillWait = false;
+        if (this.#sharpen.due(this.#now(), this.#rate)) this.view.keyframe();
+      });
+    wait(STILL_MS);
   }
 
   #send(kind: number, payload: Buffer): Promise<void> {
@@ -382,6 +408,7 @@ class ViewSession {
       this.pacer.sent(next.ts, next.data.length);
       this.latency.sent(next.ts);
       await this.#send(KIND.video, videoPayload(next));
+      this.#still();
     }
   }
 
