@@ -672,8 +672,9 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   t.draw()
   assert_true(t.find("最长授权") is Some(_))
   assert_true(t.find("跟随默认 · 直到对话归档") is Some(_))
-  // its editor, agents let ask for it: 跟随默认 first, what it means under it; each of its own offered from it (its
-  // four not side by side in the editor's width: the chosen one alone, the others in a pick)
+  // its editor, agents let ask for it: 跟随默认 first, what it means under it; each of its own offered from it (Small:
+  // the editor a sheet the window's width, its four side by side; seg_wbtest.mbt has them in a pick where they do not
+  // fit)
   let e = settings_tester("vault-items", shows="settings-vault-editor")
   sheet_rested(e, "sf-present")
   assert_true(e.find("跟随默认") is None)
@@ -681,10 +682,6 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   e.draw()
   assert_true(e.find("跟随默认") is Some(_))
   assert_true(e.find("批准这个密钥的申请时") is Some(_))
-  assert_true(e.find("仅一次") is None)
-  e.tap_text("跟随默认")
-  e.frame()
-  presented_in(e)
   assert_true(e.find("仅一次") is Some(_))
 }
 

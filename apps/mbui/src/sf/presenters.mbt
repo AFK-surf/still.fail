@@ -1,8 +1,9 @@
 // The presenters (docs/architecture.md, Presenters): a menu, a pick (one of a list, searched when long), a small panel,
 // a confirm and a question with a line to write. A page says what it shows and what opened it, once, as it is pressed;
-// the presenter decides how: with a finger short of the Large tier (@sf.layout), a sheet from the window's foot (the
-// phone's: its grabber, dragged down or back to close); otherwise the web's, a small panel beside what opened it (a
-// menu, a pick, a panel) or a dialog in the middle of the window (a confirm, a question). One host draws them all over
+// the presenter decides how, by the screen alone (docs/architecture.md, rule 3: the steps one after another near each
+// other): on Small (@sf.layout) a sheet from the window's foot (the phone's: its grabber, dragged down or back to
+// close); on Medium and Large, with either hand, the web's, a small panel beside what opened it (a menu, a pick, a
+// panel) or a dialog in the middle of the window (a confirm, a question). One host draws them all over
 // the shell (`presented`), after the pages, each frame: it keeps what is open, one over another, the topmost taking
 // back, Escape and a press outside, and the focus going into it as it opens.
 
@@ -737,9 +738,8 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()
-  // a sheet with touch short of the Large tier, the web's otherwise (docs/architecture.md): by the screen, never
-  // the hand
-  let sheet = (native_input() is Finger) && layout(ww) != Large
+  // a sheet on Small, the web's otherwise (docs/architecture.md, rule 3): by the screen, never the hand
+  let sheet = layout(ww) is Small
   let gone : Array[Int] = []
   for i, p in presented_now.copy() {
     let was = p.open
