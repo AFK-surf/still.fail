@@ -618,6 +618,11 @@ let said_paths : Map[String, Array[String]] = {
     "transfers.*.statusText",
     "transfers.*.error",
   ],
+  "filePeek": [
+    "name",
+    "lines.text.*",
+    "entries.*",
+  ],
   "footprint": [
     "chats.*.title",
     "memory.*.label",

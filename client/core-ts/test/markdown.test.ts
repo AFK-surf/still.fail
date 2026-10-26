@@ -19,6 +19,22 @@ test("markdown_reads_blocks_as_html_names_them", () => {
   assert.deepEqual(read("```ts\nconst a = 1;\n```\n\n```\nplain\n```"), [["pre", { code: "const a = 1;", lang: "ts", ink: "h6j2c2fc" }], ["pre", { code: "plain" }]]);
 });
 
+test("markdown_an_inline_code_or_a_link_naming_a_file_says_its_path_its_line_and_a_chips_words", () => {
+  assert.deepEqual(read("见 `src/a.ts:12`，`npm test` 不是，[说明](docs/notes.md#L3)"), [
+    ["p", [
+      "见 ",
+      ["code", { content: "src/a.ts:12", path: "src/a.ts", line: 12 }],
+      "，",
+      ["code", { content: "npm test" }],
+      " 不是，",
+      ["a", ["说明"], { href: "docs/notes.md#L3", path: "docs/notes.md", line: 3 }],
+    ]],
+  ]);
+  // a home directory as ~, a long one cut in its middle
+  const [[, [code]]] = read("`/Users/lin/projects/shop/apps/web/src/components/list/Row.tsx`") as [[string, [[string, Record<string, unknown>]]]];
+  assert.equal(code[1].shown, "~/projects/…/list/Row.tsx");
+});
+
 test("markdown_a_tight_list_holds_its_words_a_loose_one_its_paragraphs", () => {
   assert.deepEqual(read("- 一\n- 二"), [["list", [["li", ["一"]], ["li", ["二"]]]]]);
   assert.deepEqual(read("1. 一\n\n2. 二"), [["list", [["li", [["p", ["一"]]]], ["li", [["p", ["二"]]]]], { ordered: true }]]);
@@ -109,7 +125,7 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "2:69f4de047e713edc", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "3:69f4de047e713edc", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
@@ -151,11 +167,14 @@ test("markdown_words_are_runs_of_the_text_so_they_go_once", () => {
   assert.deepEqual(parse("    indented\n    code"), [["pre", { code: "indented\ncode" }]]);
   // a fence's language that its code starts with is not taken for its code
   assert.deepEqual(parse("```x\nx\n```"), [["pre", { code: [5, 6], lang: "x" }]]);
-  // an agent's words: the tree is a small part of them
+  // an agent's words: the tree carries none of them, only where they are (a file's path too: a run), so it is less
+  // than they are with it, and about as big as they are (each path it marks a few bytes more: where it is)
   const words = Array.from({ length: 12 }, (_, i) => `第 ${i} 段：station 上的任务已经跑完，测试全部通过，结果在 \`out/report-${i}.md\`，见 https://still.fail/c/${i}。`).join("\n\n");
-  const tree = Buffer.byteLength(JSON.stringify(parse(words)));
+  const json = JSON.stringify(parse(words));
+  const tree = Buffer.byteLength(json);
   const read = Buffer.byteLength(JSON.stringify(wordsIn(parse(words), words)));
-  assert.ok(tree < Buffer.byteLength(words) && tree < read, `${tree} bytes beside ${Buffer.byteLength(words)} of words; ${read} with them`);
+  assert.ok(!json.includes("report-") && !json.includes("任务"), json);
+  assert.ok(tree < read && tree < Buffer.byteLength(words) * 1.2, `${tree} bytes beside ${Buffer.byteLength(words)} of words; ${read} with them`);
 });
 
 

@@ -8,8 +8,14 @@ export function wordsIn(md: Md, source: string): unknown[] {
     if (isWords(n)) return wordsOf(n, source);
     const [kind, first, second] = n as [string, unknown, unknown];
     const attrs = (Array.isArray(first) ? second : first) as Record<string, unknown> | undefined;
-    const read = attrs && ("code" in attrs || "content" in attrs)
-      ? { ...attrs, ...("code" in attrs ? { code: wordsOf(attrs.code, source) } : {}), ...("content" in attrs ? { content: wordsOf(attrs.content, source) } : {}) }
+    const read = attrs && ("code" in attrs || "content" in attrs || Array.isArray(attrs.path))
+      ? {
+        ...attrs,
+        ...("code" in attrs ? { code: wordsOf(attrs.code, source) } : {}),
+        ...("content" in attrs ? { content: wordsOf(attrs.content, source) } : {}),
+        // (a file's path, a run as its words are)
+        ...(Array.isArray(attrs.path) ? { path: wordsOf(attrs.path, source) } : {}),
+      }
       : attrs;
     const out: unknown[] = [kind];
     if (Array.isArray(first)) out.push((first as MdNode[]).map(node));

@@ -1599,8 +1599,8 @@ fn with_working(v : Json) -> Json {
 
 ///|
 /// An agent's answer last in the chat with a link of each kind a card shows over (peeks.mbt): a pull request on GitHub,
-/// a page, another chat.
-let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关。"
+/// a page, another chat, a file it names by its path.
+let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关，入口在 `src/list/place.mbt:12`。"
 
 ///|
 /// An agent's answer with links to Studio's screens and its 共享调试 (screen_links.mbt): the desktop's card, a tab's

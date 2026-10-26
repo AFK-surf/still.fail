@@ -51,6 +51,11 @@ export const MEMORY = "agentMemory";
 export const LINK_PREVIEW_KEY = "linkPreview\n";
 export const linkPreviewKey = (url: string) => `${LINK_PREVIEW_KEY}${url}`;
 export const LINK_PREVIEWS_KEPT = 30;
+/// What a file a message names is, as the station answered GET /sessions/:key/peek for it last (the `filePeek` topic),
+/// in the link's memory: the latest few kept (a thumbnail inline in some).
+export const FILE_PEEK_KEY = "filePeek\n";
+export const filePeekKey = (key: string, path: string, line: number | null) => `${FILE_PEEK_KEY}${key}\n${path}\n${line ?? ""}`;
+export const FILE_PEEKS_KEPT = 30;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
@@ -304,7 +309,7 @@ export class Links {
       now: () => core.host.nowMs(),
       later: (ms, run) => void core.runner.fork(Effect.andThen(laterSleep(ms), Effect.sync(run)), scoped),
     };
-    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT], [LINK_PREVIEW_KEY, LINK_PREVIEWS_KEPT]]));
+    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT], [LINK_PREVIEW_KEY, LINK_PREVIEWS_KEPT], [FILE_PEEK_KEY, FILE_PEEKS_KEPT]]));
     this.#links.set(address, link);
     // The last event it told a core before this one, written down with what it told: the first stream asks what came
     // after it, and nothing is read again when the station still has that (the app started again within the hour). Not

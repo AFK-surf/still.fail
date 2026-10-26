@@ -672,6 +672,30 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
 }
 
 ///|
+/// What the made-up station says of a file a message names (GET /sessions/:key/peek): the rich chat's place.mbt, a few
+/// of its lines round the one named; anything else not there.
+fn fixture_file_peek(path : String) -> Json {
+  match path {
+    "src/list/place.mbt" =>
+      {
+        "kind": "text",
+        "path": "/Users/lin/shop/src/list/place.mbt",
+        "name": "place.mbt",
+        "size": 2048,
+        "mtime": 0,
+        "type": "text/plain",
+        "lines": {
+          "start": 9,
+          "text": ["///|", "/// Rows put in before the anchor move it with them.", "fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {", "  if self.anchor >= at {", "    self.anchor = self.anchor + n", "  }", "}"],
+          "at": 12,
+        },
+        "time": { "mtime": { "at": 0, "ago": "5 分钟前", "full": "10/26 11:00", "until": "", "past": true } },
+      }
+    _ => Json::null()
+  }
+}
+
+///|
 /// What the made-up station says of a web link (station/src/links/preview.ts): the rich chat's benchmark page as a
 /// page, a pull request on GitHub as GitHub says it, anything else nothing to show of it.
 fn fixture_link_preview(url : String) -> Json {
@@ -713,6 +737,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "downloads" => Some(fixture_downloads_topic())
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
+    // what a file a message names is, as the station reads it under its agent's working directory (peeks.mbt)
+    "filePeek" => Some(fixture_file_peek(text(Some(Json::object(params)), "path")))
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the

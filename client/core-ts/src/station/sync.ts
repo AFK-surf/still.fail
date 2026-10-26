@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, linkPreviewKey, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
@@ -326,28 +326,37 @@ export class StationsSync {
     });
   }
 
-  /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it: each time
-  /// (a pull request's state moves; the station keeps what it found a while, so it answers at once), what was read last
-  /// (kept in the link's memory, the latest few) shown meanwhile.
+  /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it (cardShown).
   linkPreviewShown(address: string, url: string): void {
-    this.#enqueue(address, `linkPreview/${url}`, Priority.shown, this.#linkPreview(address, url));
+    this.#cardShown(address, { topic: "linkPreview", station: address, url }, `/link-preview?url=${encode(url)}`, linkPreviewKey(url));
   }
 
-  #linkPreview(address: string, url: string): Effect.Effect<void, CoreError> {
-    const key = topicKey({ topic: "linkPreview", station: address, url });
-    return Effect.gen({ self: this }, function* () {
+  /// What a file a message names by its path is (GET /sessions/:key/peek, the `filePeek` topic: a few of its lines, a
+  /// thumbnail, a directory's entries), read under the session `key`'s working directory as its card shows it (cardShown).
+  filePeekShown(address: string, key: string, path: string, line: number | null): void {
+    const topic: Topic = { topic: "filePeek", station: address, key, path, ...(line !== null ? { line } : {}) };
+    const at = `/sessions/${encode(key)}/peek?path=${encode(path)}${line !== null ? `&line=${line}` : ""}`;
+    this.#cardShown(address, topic, at, filePeekKey(key, path, line));
+  }
+
+  /// What a link in a message is, for its card (`topic`, the station's `path`), read each time the card shows it (a pull
+  /// request's state moves, a file is written; the station keeps what it found a while, so it answers at once), what was
+  /// read last kept in the link's memory (`kept`, the latest few of its kind) and shown meanwhile.
+  #cardShown(address: string, topic: Topic, path: string, kept: string): void {
+    const key = topicKey(topic);
+    this.#enqueue(address, key, Priority.shown, Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/link-preview?url=${encode(url)}`, null, { quiet: true }));
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", path, null, { quiet: true }));
       if (answer._tag === "Success") {
         link.errors.delete(key);
-        link.memory.set(linkPreviewKey(url), answer.success);
+        link.memory.set(kept, answer.success);
         this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(linkPreviewKey(url))) {
+      } else if (answer.failure.status !== undefined && !link.memory.has(kept)) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }
-    });
+    }));
   }
 
   /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows

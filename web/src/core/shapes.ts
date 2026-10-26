@@ -3228,6 +3228,47 @@ export interface DriveTransfersView {
 	transfers: DriveTransferShown[];
 }
 
+/** A few of a text file's lines: around the one a message points at, else its first. */
+export interface FilePeekLines {
+	/** The first line's number. */
+	start: number;
+	text: string[];
+	/** The line the message points at. */
+	at?: number;
+}
+
+/** An image file's picture (its thumbnail where it is big). */
+export interface FilePeekImage {
+	type: string;
+	/** Base64. */
+	data: string;
+}
+
+/**
+ * What a file a message names by its path is, for its card (the `filePeek` topic, GET /sessions/:key/peek): its
+ * path, size and when it changed, and a glimpse of it.
+ */
+export interface FilePeek {
+	/** text | image | binary | dir. */
+	kind: string;
+	/** Where it is on the station's machine, whole. */
+	path: string;
+	name: string;
+	size: number;
+	/** When it was last written (ms). */
+	mtime: number;
+	/** Its content type. */
+	type: string;
+	lines?: FilePeekLines;
+	image?: FilePeekImage;
+	/** A directory's first entries, a directory's ending in /. */
+	entries?: string[];
+	/** How many entries a directory has. */
+	count?: number;
+	/** Its times in words, by field (`mtime`). */
+	time?: Record<string, Stamp>;
+}
+
 /** A side of a tab of the files' page: a folder of a station. */
 export interface FilesPane {
 	station: string;
