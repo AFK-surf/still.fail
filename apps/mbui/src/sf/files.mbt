@@ -266,13 +266,13 @@ pub fn file_card(
     download.map(fn(d) { d.0 })
   }
   let ground = if named && composer {
-    card_named.then(card_waiting).then(card_composer_corner)
+    card_named.then(card_waiting).then(card_composer_corner())
   } else if named {
     card_named
   } else if composer && open {
-    card_composer.then(composer_card()).then(card_open)
+    card_composer().then(composer_card()).then(card_open)
   } else if composer {
-    card_composer.then(composer_card())
+    card_composer().then(composer_card())
   } else {
     card_box
   }
@@ -445,11 +445,6 @@ pub let message_file_corner : Double = 13.0
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 
 ///|
-/// The composer's box's corner: a card's of the ladder's (its buttons round in its corners its padding in, what waits
-/// in it a block of the ladder's there: composer_inner).
-pub let composer_corner : @ui.Radius = rounded(card_corner)
-
-///|
 /// A file's card at its widest (fileCard: 236).
 pub let file_card_w : Double = 236.0
 
@@ -511,13 +506,15 @@ let composer_card_narrow : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, 
 let card_waiting : @ui.Style = @ui.css("h=S14")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let card_composer : @ui.Style = card_box.then(card_waiting).then(card_composer_corner)
+fn card_composer() -> @ui.Style {
+  card_box.then(card_waiting).then(card_composer_corner())
+}
 
 ///|
 /// Round as what waits in the composer is (composer_inner): the first in its corner concentric with it, all alike.
-// kept across runs: a value (no field of it changes)
-let card_composer_corner : @ui.Style = @ui.style(radius=composer_inner_radius)
+fn card_composer_corner() -> @ui.Style {
+  @ui.style(radius=composer_inner_radius())
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -621,7 +618,7 @@ pub fn quote_card(
   let hung = composer && remove
   let node = Ref::new(-1)
   let card = fn() {
-    node.val = c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
+    node.val = c.box(style=if composer { quote_box_composer().then(composer_card()) } else { quote_box }, fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => if hung { quote_source_hung } else { quote_source_composer }
@@ -675,7 +672,7 @@ pub fn quote_card(
   })
   }
   let removed = if hung {
-    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner, card)
+    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner(), card)
   } else {
     card()
     remove && c.clicked(x)
@@ -727,16 +724,28 @@ let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=O
 let quote_corner : Double = row_corner
 
 ///|
-// kept across runs: a value (no field of it changes)
-let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=composer_inner_radius))
+fn quote_box_composer() -> @ui.Style {
+  quote_box.then(@ui.style(radius=composer_inner_radius()))
+}
 
 ///|
-/// What sits in the composer's corners is rounded concentric with it, the ladder's next step in: what waits in it (a
-/// quote, a file's card, a picture), every one alike.
-pub let composer_inner : Double = row_corner
+/// What sits in the composer's corners is rounded concentric with it, its padding in (composer_corner: alone a card's,
+/// so the ladder's next step, a row's; at the tape's foot 24.8, so 16.8): what waits in it (a quote, a file's card, a
+/// picture), every one alike.
+pub fn composer_inner() -> Double {
+  @ui.concentric(composer_corner(), composer_pad)
+}
 
 ///|
-pub let composer_inner_radius : @ui.Radius = rounded(composer_inner)
+/// The composer's box's corner as a style's (composer_corner).
+pub fn composer_radius() -> @ui.Radius {
+  rounded(composer_corner())
+}
+
+///|
+pub fn composer_inner_radius() -> @ui.Radius {
+  rounded(composer_inner())
+}
 
 ///|
 /// The composer's padding: the ladder's inset, so what stands in its corners has the ladder's next corner (a quote's,
@@ -745,10 +754,12 @@ pub let composer_pad : Double = corner_inset
 
 ///|
 /// How much short of the box's padding the files over a composer's words end their lines: the rest of its top corner
-/// past the padding (card_corner less composer_pad). What wraps there ends where it lands, so the last of the first
+/// past the padding (composer_corner less composer_pad). What wraps there ends where it lands, so the last of the first
 /// line would otherwise stand in that corner at some widths, neither concentric with it nor out of it (the corner
 /// rule); kept out of it, it is out at every width.
-pub let composer_files_end : Double = card_corner - composer_pad
+pub fn composer_files_end() -> Double {
+  composer_corner() - composer_pad
+}
 
 ///|
 /// quoteCardSource: 7 by 11 over the words (in the composer 9 over, 16 at its start, 34 at its end for its ✕).
