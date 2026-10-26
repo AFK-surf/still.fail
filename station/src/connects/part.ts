@@ -2,15 +2,17 @@
 // Feishu's (feishu/module.ts) are: connected while the station is in their workspace, once the sessions are taken up
 // (a socket's event goes to one connection of an app; two processes' would split them), and disconnected as it leaves;
 // their chats the hub takes and posts to; the names the pages show of their people and chats, looked up as they are
-// heard of (who wrote, and where) and, as a connect connects, of the threads people read lately; the overview and the
-// sidebar told as they change. Stopped before the agents hand their sessions over (its scope closes before theirs): the
-// platform's events go to the next process from then on.
+// heard of (who wrote, and where) and, as a connect connects, of the threads people read lately; how its kind of connect
+// shows, is edited and is connected again (the agents' `connectKind`); the overview and the sidebar told as they
+// change. Stopped before the agents hand their sessions over (its scope closes before theirs): the platform's events go
+// to the next process from then on.
 import { Effect } from "effect";
+import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
 import type { ChatSurface } from "../sessions/chat.ts";
 import { INTERNAL_CONNECT } from "../sessions/internal.ts";
 import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.ts";
-import type { ConnectState, Connection } from "./connections.ts";
+import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
 
 /// What the part needs of a platform's connects (connects.ts makeConnects').
@@ -22,12 +24,26 @@ type Connects = {
   stopAll(): Promise<void>;
   state(id: string): ConnectState | null;
   onChange(listener: () => void): () => void;
+  refreshIdentity(id: string): Promise<void>;
   close(): Promise<void>;
 };
 
-/// The connects `make` makes, kept for the part's scope and wired in as above; `taken`: what the platform does once they
-/// are in line with the config as the station takes its sessions up.
-export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions) => P, taken?: (connects: P) => void) =>
+type Json = any;
+
+/// What a platform's part says of its kind of connect.
+export type KindOf<P> = {
+  /// config.json's `kind` of its connects.
+  kind: string;
+  /// What a connect is known by in the overview, and its kind's own fields (ConnectKind `shown`).
+  shown(connects: P, connect: Json): Record<string, unknown>;
+  /// Its part of a connect's config entry, as the pages edit it.
+  entry: EntryEdit;
+  /// What it does once its connects are in line with the config as the station takes its sessions up.
+  taken?(connects: P): void;
+};
+
+/// The connects `make` makes, kept for the part's scope and wired in as above.
+export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions) => P, own: KindOf<P>) =>
   Effect.gen(function* () {
     const { data } = yield* Paths;
     const store = yield* Store;
@@ -46,10 +62,19 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
       (c) => Effect.promise(() => c.close()),
     );
     agents.surfaces((id) => connects.chats(id));
+    agents.connectKind(own.kind, {
+      connection: (c) => connects.state(String(c?.id ?? "")),
+      shown: (c) => own.shown(connects, c),
+      entry: own.entry,
+      reconnect: async (id) => {
+        await connects.reconcile();
+        await connects.refreshIdentity(id).catch((e) => log.warn(own.kind, "who the bot is not read again", { connect: id, error: (e as Error).message }));
+      },
+    });
     agents.along({
       taken: async () => {
         await connects.reconcile();
-        taken?.(connects);
+        own.taken?.(connects);
       },
       joined: () => connects.reconcile(),
       // Those of a workspace left disconnect, those of one back connect.

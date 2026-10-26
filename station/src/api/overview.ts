@@ -4,7 +4,6 @@
 import { statfsSync } from "node:fs";
 import { homedir } from "node:os";
 import type { Accounts } from "../accounts/index.ts";
-import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type Viewer, managesStation, readOnly } from "../mesh/credential.ts";
 import { platform } from "../platform/index.ts";
@@ -17,21 +16,7 @@ import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
 import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
-
-
-/// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
-export type SlackView = {
-  connection(connect: any): unknown;
-  teams(viewer: Viewer): unknown[];
-  apps(viewer: Viewer): unknown[];
-};
-
-/// How a connect of another kind than Slack shows (src/feishu): its connection, and what it is known by (`name`,
-/// `team`, `botImage`, and its kind's own fields, its secrets masked).
-export type ConnectView = {
-  connection(connect: any): unknown;
-  shown(connect: any): Record<string, unknown>;
-};
+import type { ConnectKind } from "../connects/connections.ts";
 
 export type OverviewDeps = {
   store: Store;
@@ -40,9 +25,8 @@ export type OverviewDeps = {
   config: () => any;
   accounts?: Accounts;
   updates?: Updates;
-  slack?: SlackView;
-  /// The other kinds' connects, by kind.
-  connectViews?: Map<string, ConnectView>;
+  /// How each kind's connects show (connects/part.ts), by kind; a kind not there shows as just its config.
+  connectKinds?: Map<string, ConnectKind>;
   /// What macOS lets still.fail Helper do here, as the viewer is told it (routes/permissions.ts); none where there is no
   /// helper (not a Mac), or before the first look.
   permissions?: (viewer: Viewer) => unknown;
@@ -112,30 +96,29 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   const memory = await keptMemory(d, processes.map((p) => p.pgid));
   const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
     const mode = c.mode ?? "multi-session";
-    const slack = c.slack ?? {};
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
+    const kind = typeof c.kind === "string" && c.kind !== "" ? c.kind : "slack";
     const shown = {
-      // What it is known by: its bot's name in its Slack workspace, and that workspace.
       id: c.id,
-      name: nonEmpty(slack.botName) ?? c.id,
-      team: slack.team?.id ? (slack.team.name ?? "") : null,
-      botImage: nonEmpty(slack.botImage),
+      // What it is known by (its bot's name on its platform, and its workspace there), as its kind says: its id till then.
+      name: c.id,
+      team: null,
+      botImage: null,
       enabled: c.enabled ?? true,
-      kind: c.kind ?? "slack",
+      kind,
       mode,
       requireMention: mode === "multi-session" ? true : (c.requireMention ?? true),
       bind: { runtime, model: nonEmpty(c.bind?.model), effort: nonEmpty(c.bind?.effort), profile: nonEmpty(c.bind?.profile) },
-      slack: { appToken: mask(slack.appToken ?? ""), botToken: mask(slack.botToken ?? "") },
-      connection: d.slack?.connection(c) ?? (c.enabled === false ? { state: "disabled" } : !slack.appToken || !slack.botToken ? { state: "no_tokens" } : { state: "starting" }),
+      // Every connect has Slack's tokens for the pages (masked: connects/part.ts; none for another kind's).
+      slack: { appToken: "", botToken: "" },
+      connection: c.enabled === false ? { state: "disabled" } : { state: "starting" },
       createdBy: c.createdBy?.id ? c.createdBy : null,
       sessions: sessionsOf(c.id),
       session: mode === "single-session" ? d.store.binding(c.id) : null,
     };
-    // Another kind's: its own connection and names (a station without that part says it is starting).
-    const other = typeof c.kind === "string" && c.kind !== "slack" ? d.connectViews?.get(c.kind) : undefined;
-    if (other !== undefined) return { ...shown, ...other.shown(c), connection: other.connection(c) ?? (c.enabled === false ? { state: "disabled" } : { state: "starting" }) };
-    return shown;
+    const own = d.connectKinds?.get(kind);
+    return own === undefined ? shown : { ...shown, ...own.shown(c), connection: own.connection(c) ?? shown.connection };
   });
   return {
     automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
@@ -151,8 +134,6 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     }),
     counts: { sessions: sessionsOf(null), running: states.filter((s) => s === "running").length, warm: states.filter((s) => s === "warm").length },
     slackUsers: d.store.slackIdentities(viewer.email),
-    // The Slack workspaces the station can make and edit apps in itself (an app configuration token each).
-    slackTeams: d.slack?.teams(viewer) ?? [],
     disk: diskRoom(d.hub.config().dataDir),
     logins: d.accounts?.loginsView(viewer) ?? [],
     apiProviders: d.accounts?.apiProviders() ?? [],
@@ -162,7 +143,6 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // It shares profiles and skills with its workspace's other stations (share/index.ts).
     sharing: d.accounts !== undefined,
     updates: d.updates?.get(lang) ?? [],
-    slackApps: d.slack?.apps(viewer) ?? [],
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
     // browses every folder from the home (`anywhere`).
     // Those of a joined workspace browse only its pinned folders, never the whole machine.

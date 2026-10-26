@@ -50,7 +50,8 @@ import { remoteTools } from "../tools/remote.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
-import { type ConnectView, type SlackView, overview } from "../api/overview.ts";
+import { overview } from "../api/overview.ts";
+import type { ConnectKind } from "../connects/connections.ts";
 import { agentsRoutes } from "../api/admin.ts";
 import type { ChatSurface } from "./chat.ts";
 import { rootViewThrough } from "../drive/drive.ts";
@@ -101,11 +102,10 @@ export type AgentsParts = {
   /// The connects' chats the hub takes and posts to (Slack's, slack/module.ts; Feishu's, feishu/module.ts): each part
   /// says those of its connects, and a connect's chat is whichever part has it.
   surfaces(chats: (connect: string) => ChatSurface | undefined): void;
-  /// The connects' connections and the viewer's Slack workspaces and apps, for the overview.
-  slackView(view: SlackView): void;
-  /// How the overview shows the connects of another kind than Slack (`kind` in config.json): their connection, what
-  /// they are known by.
-  connectView(kind: string, view: ConnectView): void;
+  /// How a kind of connect (config.json's `kind`) shows, is edited and is connected again, as its part says
+  /// (connects/part.ts); and those said.
+  connectKind(kind: string, view: ConnectKind): void;
+  connectKinds: Map<string, ConnectKind>;
   /// What a part does as the station takes its sessions up and as its workspaces change (`Along`).
   along(a: Along): void;
   /// Whether the sessions are taken up (the process before is gone), and whether the station is in its workspace.
@@ -195,8 +195,7 @@ export const AgentsLive = (control: Control) =>
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
       // as the station takes its sessions up and as its workspaces change, in the order the agents need.
       const surfaceChats: ((connect: string) => ChatSurface | undefined)[] = [];
-      const connectViews = new Map<string, ConnectView>();
-      let slackView: SlackView | undefined;
+      const connectKinds = new Map<string, ConnectKind>();
       const along: Along[] = [];
       const cold = new ColdRooms(() => hub);
       const hub = new Hub({
@@ -446,7 +445,7 @@ export const AgentsLive = (control: Control) =>
       });
       sharing.start();
       xshare.start();
-      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, connectViews, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
@@ -740,7 +739,7 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      const self = Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), slackView: (view) => void (slackView = view), connectView: (kind, view) => void connectViews.set(kind, view), along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
       // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
       (yield* AgentsSide).current = self;
       // And what the mesh asks of it (services.ts MeshSide).

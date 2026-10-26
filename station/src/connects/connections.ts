@@ -25,6 +25,24 @@ export const shownIdentity = (i: BotIdentity) => ({ team: i.team, teamId: i.team
 /// Whether the platform's socket is up, and the last connection error.
 export type SocketStatus = { connected: boolean; lastError: string | null };
 
+type Json = any;
+
+/// A kind's part of a connect's config entry (`slack`, `feishu`), from what the page gave of it (`given`) and what it had
+/// (`had`): null for none.
+export type EntryEdit = (given: unknown, had: Json | null) => Json | null;
+
+/// A kind of connect (config.json's `kind`: Slack's, Feishu's) as its part tells the agents' side (connects/part.ts):
+/// how one shows in the overview, how the pages edit its part of its config entry, how it is connected again.
+export type ConnectKind = {
+  /// Its link to its platform now (null: not known as one of this kind's).
+  connection(connect: Json): unknown;
+  /// What it is known by (`name`, `team`, `botImage`) and its kind's own fields, its secrets masked.
+  shown(connect: Json): Record<string, unknown>;
+  entry: EntryEdit;
+  /// Connected again, and who its bot is read again (its name changed on the platform shows now).
+  reconnect(id: string): Promise<void>;
+};
+
 /// A connect's link to its platform, as the pages show it.
 export type ConnectState =
   | { state: "disabled" }

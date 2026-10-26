@@ -23,6 +23,7 @@ import { routes as sandboxRoutes } from "./routes/sandbox.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
+import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
 import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
@@ -298,10 +299,21 @@ export class Admin {
 }
 
 /// The agents' side's routes (sessions/agents.ts says them as a part of the station): the station's and runtimes'
-/// updates, the variables its agents run with, chats shared with other workspaces, the profiles and accounts, and the
-/// overview as the settings pages show it.
+/// updates, the variables its agents run with, chats shared with other workspaces, the profiles and accounts, every
+/// connect's edits (each kind's part says its own: connects/part.ts), and the overview as the settings pages show it.
 export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?: Events }): Route[] {
   return [
+    ...(agents.config
+      ? connectRoutes({
+          config: agents.config,
+          data: agents.hub.config().dataDir,
+          hub: () => agents.hub,
+          overview: (viewer, lang) => agents.overview(viewer, lang),
+          place: () => agents.place(),
+          entry: (kind) => agents.connectKinds?.get(kind)?.entry,
+          reconnect: async (kind, id) => void (await agents.connectKinds?.get(kind)?.reconnect(id)),
+        })
+      : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),

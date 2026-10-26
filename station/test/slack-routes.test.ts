@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { Route } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
-import { routes } from "../src/api/routes/slack.ts";
+import { connectRoutes } from "../src/api/routes/connects.ts";
+import { routes, slackEntry } from "../src/api/routes/slack.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { hubConfig } from "../src/sessions/config.ts";
@@ -106,7 +107,11 @@ async function rig(o: Setup = {}) {
     };
   };
   const place = o.cloud ? () => ({ origin: o.cloud!, workspace: "ws", station: "st" }) : undefined;
-  const table: Route[] = routes({ slack, config, data, store, hub: () => hub, overview, place });
+  // Slack's routes, and every connect's (sessions/agents.ts gives those the kinds its parts say).
+  const table: Route[] = [
+    ...routes({ slack, config, data, store, hub: () => hub, overview, place }),
+    ...connectRoutes({ config, data, hub: () => hub, overview, place, entry: (kind) => (kind === "slack" ? slackEntry : undefined), reconnect: async (_, id) => (await slack.reconcile(), await slack.refreshIdentity(id)) }),
+  ];
   const ask = async (method: string, route: string, body?: unknown, who: Viewer = owner): Promise<[number, Json]> => {
     const [path, search] = route.split("?");
     const query: [string, string][] = search ? [...new URLSearchParams(search)] : [];
