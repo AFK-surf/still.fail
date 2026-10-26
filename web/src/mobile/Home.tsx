@@ -6,7 +6,7 @@ import { StationMark } from "../StationMark.tsx";
 import { Activity, memo, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, motionMs, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
-import { stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import { archiveSaid, stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage, SearchItem } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
@@ -633,12 +633,12 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
 
 /**
  * Archives a row's chat (a chat keeping watch once asked, the core's words): `leave` first takes the row away, `stay`
- * puts it back when it was not archived after all. The row says it is under way, the toast how it ended.
+ * puts it back when it was not archived after all. Said at once by its title, why not if it was not.
  */
 function useRowArchive(item: ChatItem) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
-  const go = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
+  const go = () => archiveSaid(api, item, item.title, app.toast);
   return (leave: () => Promise<void>, stay: () => void) => {
     if (item.watch) {
       stay();
@@ -674,8 +674,8 @@ function useRowMenu(item: ChatItem, busy: boolean) {
     { label: t("web-main.chat.copyLink"), icon: <Copy size={16} />, action: () => copyLink(item) },
     // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
     { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
-      const archive = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
-      // Asked first when it keeps watch; either way the row says it is under way and the toast how it ended.
+      const archive = () => archiveSaid(api, item, item.title, app.toast);
+      // Asked first when it keeps watch; either way said at once by its title, why not if it was not.
       if (item.watch) confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: archive });
       else archive().catch(failed("web-mobile.home.archiveFailed"));
     } },

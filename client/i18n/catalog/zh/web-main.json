@@ -145,6 +145,7 @@
   "web-main.chat.transcriptNone": "还没有 session 文件：agent 开始干活后才会写",
   "web-main.chat.archiveNamed": "归档「{title}」",
   "web-main.chat.archived": "已归档",
+  "web-main.chat.archivedNamed": "已归档「{title}」",
   "web-main.chat.archivedPlaceholder": "还原对话后才能发送",
   "web-main.chat.deleteFailed": "无法删除：{error}",
   "web-main.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",

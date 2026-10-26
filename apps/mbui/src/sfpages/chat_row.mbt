@@ -733,8 +733,8 @@ let listed : Ref[Array[ChatItem]] = Ref([])
 ///|
 /// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
 /// one keeping watch only once asked, in the core's words (its watch runs on in the archive). Its chat in view goes to
-/// the chat after it in the list (else before it; else the list alone) at once. Said once done; why not, when not
-/// (`failed` told then).
+/// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
+/// list has it gone); why not, when not (`failed` told then).
 fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
@@ -754,9 +754,10 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
       "",
       "chat.archive",
       Json::object(params),
-      done=@sf.t("web-main.chat.archived"),
+      done=@sf.t("web-main.chat.archivedNamed", args=[("title", item.title)]),
       done_action=@sf.t("android-chat.archived.undo"),
       done_run=@sfbase.archive_undo(src, params),
+      at_once=true,
       failed~,
     )
   }

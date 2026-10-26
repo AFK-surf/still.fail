@@ -22,7 +22,6 @@ android-chat.annotate.you
 android-chat.archive
 android-chat.archive.ask
 android-chat.archive.verb
-android-chat.archived
 android-chat.archived.undo
 android-chat.asks.dismiss
 android-chat.asks.go
@@ -751,7 +750,7 @@ web-main.chat.agentCard.cost
 web-main.chat.archive
 web-main.chat.archiveFailed
 web-main.chat.archiveNamed
-web-main.chat.archived
+web-main.chat.archivedNamed
 web-main.chat.archivedPlaceholder
 web-main.chat.asks.dismiss
 web-main.chat.asks.go
@@ -1234,7 +1233,6 @@ web-pages.changelog.empty
 web-pages.chat.archive
 web-pages.chat.archiveConfirm
 web-pages.chat.archiveFailed
-web-pages.chat.archived
 web-pages.chat.clear
 web-pages.chat.clearBody
 web-pages.chat.clearConfirm

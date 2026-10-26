@@ -10,7 +10,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type React
 import { useLocation, useNavigate, useParams } from "react-router";
 import { topicNow, useCall, useReady, useTopicSelect } from "../core/react.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { stationApi, useApi, useChat, useChatJobs, useListedChat, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
+import { archiveSaid, stationApi, useApi, useChat, useChatJobs, useListedChat, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -1037,14 +1037,14 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   const call = useStationCall(here.station);
   const api = useMemo(() => stationApi(call), [call]);
   const of = { thread: thread.id, session: view.agents[0]?.session.key ?? here.key };
-  // At once: the list's row says it is under way (Home.tsx), the toast how it ended.
+  // At once: said by its title (the core has it out of the list), why not if it was not.
   const archive = () => {
     app.sheet(null);
     app.pop();
-    api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived")), (error) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
+    archiveSaid(api, of, view.title, app.toast).catch((error: unknown) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
   };
   // Asked first, then as at once.
-  const asked = () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); };
+  const asked = () => { app.pop(); return archiveSaid(api, of, view.title, app.toast); };
   // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
   return <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>;
 }
@@ -1067,11 +1067,11 @@ function useArchiveChat(station: string, session: string) {
     const of = { thread: view.thread?.id ?? null, session: view.agents[0]?.session.key ?? session };
     if (view.watch) {
       confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed",
-        run: () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); } });
+        run: () => { app.pop(); return archiveSaid(api, of, view.title, app.toast); } });
       return;
     }
     app.pop();
-    api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived")), (error) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
+    archiveSaid(api, of, view.title, app.toast).catch((error: unknown) => app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) })));
   };
 }
 

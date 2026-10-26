@@ -1,5 +1,5 @@
 // 72-bar-archive (e2e/traces/bar-archive.trace): the chat's bar's 归档 (Chat.kt ChatBar, shown while nothing is left in
-// the chat): Home at once, 已归档 said (with its 撤销), the chat gone from the list (chat.archive).
+// the chat): Home at once, 已归档 said by its title (with its 撤销), the chat gone from the list (chat.archive).
 
 ///|
 test "72-bar-archive" {
@@ -14,8 +14,8 @@ test "72-bar-archive" {
     f.run_for(@ui.nav_push_ms)
     f.see("icon:archive")
     f.tap("icon:archive")
-    // Home at once, 已归档 said with its 撤销: its time on screen, the chat popped meanwhile
-    f.see("=已归档")
+    // Home at once, 已归档 said by its title with its 撤销: its time on screen, the chat popped meanwhile
+    f.see("=已归档「从栏上归档 085454」")
     f.see("=撤销")
     f.run_for(@sfapp.toast_action_ms)
     f.gone("从栏上归档 085454")
@@ -40,7 +40,7 @@ test "run_to_rest: only what was said" {
   f.run_for(@ui.nav_push_ms)
   f.see("icon:archive")
   f.tap("icon:archive")
-  f.see("=已归档")
+  f.see("=已归档「从栏上归档 085454」")
   f.run_for(@sfapp.toast_action_ms)
   f.gone("从栏上归档 085454")
   f.t.draw()
