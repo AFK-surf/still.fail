@@ -145,6 +145,8 @@ function demoValueOf(topic: Topic): unknown {
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "memory": return station.op("memory.get");
+    // (the demo reaches no page: nothing to show of a link but where it goes)
+    case "linkPreview": return { kind: "none" };
     case "drivePlace": return null;
     case "driveBrowse": return browsing.view(topic);
     case "filesTabs": return browsing.tabsView(topic.workspace);

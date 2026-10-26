@@ -22,3 +22,17 @@ test "a focused field's caret blinks till caret_blinks_for_ms after it last move
   assert_true(g().wake_at > 0.0)
   assert_eq(field.text(), "hi!")
 }
+
+///|
+test "a frame on a blink's start a hair short of it by the division is in that blink: the next wake is after it, never at it" {
+  // (1546.67 − 1016.67 comes out 529.999…: a wake asked at the moment already drawn wakes nothing, and hides every
+  // later one, a hover card's opening among them)
+  let now = 1546.6666666666665
+  let from = 1016.6666666666666
+  assert_true(now - from < caret_blink_ms)
+  let (n, next) = periods_at(now, from, caret_blink_ms)
+  assert_eq(n, 1)
+  assert_true(next > now)
+  // between two starts, as ever
+  assert_eq(periods_at(1300.0, 1000.0, 530.0), (0, 1530.0))
+}

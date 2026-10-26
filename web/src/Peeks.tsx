@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 import { HoverCard } from "radix-ui";
 import { stationApi, useStationCall } from "./api.ts";
-import { core } from "./core/react.ts";
+import { core, prime, useTopic } from "./core/react.ts";
 import type { Attachment } from "./core/shapes.ts";
 import { FilePreview, fileSize, type LocalFile } from "./FilePreview.tsx";
 import { Check, Copy, File as FileIcon, Folder, Web } from "@stillfail/ui/icons.tsx";
@@ -139,17 +139,19 @@ function useRead<T>(key: string, read: () => Promise<T>): Read<T> {
 // ---- web links ----
 
 type Person = { login: string; avatar?: string };
+/** When a pull request or an issue last changed, in words, as the core says it (the `linkPreview` topic). */
+type Changed = { updatedAt?: { ago: string } };
 type LinkPreview =
   | { kind: "none" }
   | { kind: "page"; url: string; title: string; description?: string; site?: string; icon?: string; image?: string }
   | {
       kind: "github_pull_request"; url: string; repository: string; number: number; title: string; state: "open" | "closed" | "merged" | "draft";
-      author: Person | null; additions: number | null; deletions: number | null; changedFiles: number | null; updatedAt: number | null;
+      author: Person | null; additions: number | null; deletions: number | null; changedFiles: number | null; updatedAt: number | null; time?: Changed;
       checks?: { passed: number; failed: number; pending: number };
     }
   | {
       kind: "github_issue"; url: string; repository: string; number: number; title: string; state: "open" | "completed" | "not_planned" | "closed";
-      author: Person | null; comments: number | null; labels: string[]; updatedAt: number | null;
+      author: Person | null; comments: number | null; labels: string[]; updatedAt: number | null; time?: Changed;
     };
 
 /** Where a link goes, as a card says it: its host and path. */
@@ -165,23 +167,20 @@ function destination(href: string): string {
 /** Links whose cards are rich (read before shown, bars meanwhile); any other shows its tile at once. */
 const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[/?#]|$)/;
 
-/** A web link in a message, and its card. */
+/** A web link in a message, and its card: what the core reads of it (the `linkPreview` topic, kept), asked for as the
+ *  pointer comes onto the link. */
 export function LinkHover({ href, label, children }: { href: string; label: string; children: ReactElement }) {
   const station = useStation();
-  const api = stationApi(useStationCall(station.address));
-  const read = () => api.linkPreview<LinkPreview>(href);
-  return <Hover tile={!RICH.test(href)} warm={() => warm(linkKey(station.address, href), read)} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
+  return <Hover tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
 
-const linkKey = (station: string, href: string) => `link ${station} ${href}`;
 const peekKey = (station: string, session: string, path: string, line: number | null) => `peek ${station} ${session} ${path} ${line ?? ""}`;
 
 function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
-  const api = stationApi(useStationCall(station.address));
-  const read = useRead<LinkPreview>(linkKey(station.address, href), () => api.linkPreview<LinkPreview>(href));
-  if (read.state === "loading" && RICH.test(href)) return <CardSkeleton />;
-  const preview = read.state === "ready" ? read.value : null;
+  const read = useTopic<LinkPreview | null>({ topic: "linkPreview", station: station.address, url: href });
+  if (read.value === undefined && read.error === null && RICH.test(href)) return <CardSkeleton />;
+  const preview = read.value ?? null;
   if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} />;
   if (preview?.kind === "github_issue") return <IssueCard preview={preview} />;
   const page = preview?.kind === "page" ? preview : null;
@@ -222,7 +221,7 @@ function PullRequestCard({ preview: p }: { preview: Extract<LinkPreview, { kind:
       <div className={css.meta}>
         <span className={css.state} data-state={p.state}><StateGlyph d={PR_GLYPH[p.state]} />{t(PR_STATE[p.state])}</span>
         <span className={css.ref}>{p.repository} #{p.number}</span>
-        <span className={css.time}>{ago(p.updatedAt)}</span>
+        <span className={css.time}>{p.time?.updatedAt?.ago ?? null}</span>
       </div>
       <span className={css.title} title={p.title}>{p.title}</span>
       <div className={css.facts}>
@@ -245,7 +244,7 @@ function IssueCard({ preview: p }: { preview: Extract<LinkPreview, { kind: "gith
       <div className={css.meta}>
         <span className={css.state} data-state={p.state}><StateGlyph d={ISSUE_GLYPH[p.state]} />{t(ISSUE_STATE[p.state])}</span>
         <span className={css.ref}>{p.repository} #{p.number}</span>
-        <span className={css.time}>{ago(p.updatedAt)}</span>
+        <span className={css.time}>{p.time?.updatedAt?.ago ?? null}</span>
       </div>
       <span className={css.title} title={p.title}>{p.title}</span>
       <div className={css.facts}>

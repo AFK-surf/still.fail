@@ -33,6 +33,8 @@ export type Topic =
   | { topic: "footprint"; station: string }
   // The agents' memory on a station, read as a page shows it (what was read last shows meanwhile).
   | { topic: "memory"; station: string }
+  // What a web link in a message is, read as its card shows (what was read last shows meanwhile).
+  | { topic: "linkPreview"; station: string; url: string }
   | { topic: "threads"; station: string }
   | { topic: "slackApp"; station: string; connect: string }
   // A station's background jobs still up, each with the chat it is in.

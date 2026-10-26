@@ -46,6 +46,11 @@ export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines
 export const LOGS_KEPT = 40;
 /// The agents' memory on the station as it answered GET /memory last (the `memory` topic), in the link's memory.
 export const MEMORY = "agentMemory";
+/// What a web link in a message is, as the station answered GET /link-preview for it last (the `linkPreview` topic), in
+/// the link's memory: the latest few kept (each may carry its page's icon and picture inline).
+export const LINK_PREVIEW_KEY = "linkPreview\n";
+export const linkPreviewKey = (url: string) => `${LINK_PREVIEW_KEY}${url}`;
+export const LINK_PREVIEWS_KEPT = 30;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
@@ -299,7 +304,7 @@ export class Links {
       now: () => core.host.nowMs(),
       later: (ms, run) => void core.runner.fork(Effect.andThen(laterSleep(ms), Effect.sync(run)), scoped),
     };
-    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT]]));
+    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT], [LINK_PREVIEW_KEY, LINK_PREVIEWS_KEPT]]));
     this.#links.set(address, link);
     // The last event it told a core before this one, written down with what it told: the first stream asks what came
     // after it, and nothing is read again when the station still has that (the app started again within the hour). Not

@@ -44,6 +44,8 @@ priv struct Md {
   on_link : (String) -> Unit
   /// a link held: its menu (ui/Links.kt linkHold)
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
+  /// each link with its words and its id as it is drawn: what is shown over it while it is pointed at (a card: Peeks.tsx)
+  on_link_shown : ((String, String, Int) -> Unit)?
   /// a scope for ids: the n-th paragraph of the message
   mut n : Int
   /// a placed file, by the file's name
@@ -369,7 +371,8 @@ fn web() -> Palette {
 ///|
 /// `text` as Markdown, in a column as wide as it is given. `size`: the
 /// words' (0: the theme's body); `on_link` is told where a tapped link
-/// leads; `files` and `screens` as the file's head says; `document`: its headings a document's (Md's `document`);
+/// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
+/// the file's head says; `document`: its headings a document's (Md's `document`);
 /// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
 pub fn markdown(
   c : @ui.Ctx,
@@ -380,6 +383,7 @@ pub fn markdown(
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  on_link_shown? : ((String, String, Int) -> Unit)? = None,
   files? : (String) -> Placed? = fn(_) { None },
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
@@ -394,6 +398,7 @@ pub fn markdown(
     ink: if ink != 0L { ink } else { t.p.text },
     on_link,
     on_link_hold,
+    on_link_shown,
     n: 0,
     files,
     found,
@@ -473,6 +478,7 @@ pub fn markdown_part(
     ink: if ink != 0L { ink } else { t.p.text },
     on_link,
     on_link_hold: None,
+    on_link_shown: None,
     n: 0,
     files: fn(_) { None },
     found,
@@ -923,6 +929,7 @@ fn Md::words(
     code_scale=0.9,
     on_link=self.on_link,
     on_link_hold=self.on_link_hold,
+    on_link_shown=self.on_link_shown,
     // what people and agents wrote: in the face chosen for it (Markdown.kt's TextFont)
     words=true,
   )

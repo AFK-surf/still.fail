@@ -672,6 +672,33 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
 }
 
 ///|
+/// What the made-up station says of a web link (station/src/links/preview.ts): the rich chat's benchmark page as a
+/// page, a pull request on GitHub as GitHub says it, anything else nothing to show of it.
+fn fixture_link_preview(url : String) -> Json {
+  match url {
+    "https://example.com/bench/list" =>
+      { "kind": "page", "url": url, "title": "列表滚动的性能数据", "site": "Example", "description": "每一帧的耗时" }
+    "https://github.com/acme/shop/pull/128" =>
+      {
+        "kind": "github_pull_request",
+        "url": url,
+        "repository": "acme/shop",
+        "number": 128,
+        "title": "首页列表按天分组",
+        "state": "merged",
+        "author": { "login": "lin" },
+        "additions": 120,
+        "deletions": 8,
+        "changedFiles": 4,
+        "checks": { "passed": 9, "failed": 0, "pending": 0 },
+        "updatedAt": 0,
+        "time": { "updatedAt": { "at": 0, "ago": "3 小时前", "full": "10/26 09:00", "until": "", "past": true } },
+      }
+    _ => { "kind": "none" }
+  }
+}
+
+///|
 /// What a made-up topic says (fixture_topic: as the screens' fixtures have it, before the core's shapes are made of it).
 fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
@@ -684,6 +711,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
+    // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
+    "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the

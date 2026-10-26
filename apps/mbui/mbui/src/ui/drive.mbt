@@ -360,7 +360,7 @@ fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
   }
   if c.nodes[i].rich is Some(r) {
     for k, run in r.runs {
-      if run.link != "" && link_id(r.base, k) == top {
+      if run.link != "" && link_id(r.base, r.runs, k) == top {
         return false
       }
     }

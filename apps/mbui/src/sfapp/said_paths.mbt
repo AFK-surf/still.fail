@@ -663,6 +663,13 @@ let said_paths : Map[String, Array[String]] = {
     "items.*.workspaceName",
     "items.*.line",
   ],
+  "linkPreview": [
+    "title",
+    "description",
+    "site",
+    "author.login",
+    "labels.*",
+  ],
   "live": [
     "activity.now.text",
   ],

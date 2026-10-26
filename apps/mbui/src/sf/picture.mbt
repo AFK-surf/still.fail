@@ -160,6 +160,25 @@ pub fn glyph_color(name : String, dark : Bool) -> Int64? {
 pub let picture_of : Ref[(String, Int) -> String] = Ref(fn(url, _) { url })
 
 ///|
+/// A picture given inline (a data URL: a station's icon put up, a web page's icon and picture in a link's card), as an
+/// image of the app's own to draw by its key, made once; "" for what is no data URL (an address, drawn as it is).
+pub fn data_image(url : String) -> String {
+  guard url.has_prefix("data:image/") else { return "" }
+  match url.find("base64,") {
+    Some(i) => {
+      // (named as the stations' were before: what is drawn is said by its key)
+      let key = "mem:sf/station/\{url.length()}/\{@ui.stable_hash(url)}"
+      if !made.contains(key) {
+        made[key] = true
+        @ui.add_image(key, @codec.from_base64(url.view(start_offset=i + 7).to_owned()))
+      }
+      key
+    }
+    None => ""
+  }
+}
+
+///|
 /// Whether a station has anything to be shown by (`station_mark` draws
 /// nothing for it otherwise).
 pub fn has_station_mark(emoji : String, icon : String) -> Bool {
@@ -235,18 +254,11 @@ pub fn station_mark(
       return
     }
   }
-  if icon.has_prefix("data:image/") {
-    match icon.find("base64,") {
-      Some(i) => {
-        let key = "mem:sf/station/\{icon.length()}/\{@ui.stable_hash(icon)}"
-        if !made.contains(key) {
-          made[key] = true
-          @ui.add_image(key, @codec.from_base64(icon.view(start_offset=i + 7).to_owned()))
-        }
-        c.image(key, w=Px(size), h=Px(size), radius=size * 0.24, bg=0L, still~) |> ignore
-        return
-      }
-      None => ()
+  match data_image(icon) {
+    "" => ()
+    key => {
+      c.image(key, w=Px(size), h=Px(size), radius=size * 0.24, bg=0L, still~) |> ignore
+      return
     }
   }
   if emoji != "" {

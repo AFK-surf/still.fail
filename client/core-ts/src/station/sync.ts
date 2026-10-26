@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, linkPreviewKey, logKey } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
@@ -320,6 +320,30 @@ export class StationsSync {
         link.memory.set(MEMORY, answer.success);
         this.onChange(address, "log", key);
       } else if (answer.failure.status !== undefined && !link.memory.has(MEMORY)) {
+        link.errors.set(key, answer.failure);
+        this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it: each time
+  /// (a pull request's state moves; the station keeps what it found a while, so it answers at once), what was read last
+  /// (kept in the link's memory, the latest few) shown meanwhile.
+  linkPreviewShown(address: string, url: string): void {
+    this.#enqueue(address, `linkPreview/${url}`, Priority.shown, this.#linkPreview(address, url));
+  }
+
+  #linkPreview(address: string, url: string): Effect.Effect<void, CoreError> {
+    const key = topicKey({ topic: "linkPreview", station: address, url });
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/link-preview?url=${encode(url)}`, null, { quiet: true }));
+      if (answer._tag === "Success") {
+        link.errors.delete(key);
+        link.memory.set(linkPreviewKey(url), answer.success);
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status !== undefined && !link.memory.has(linkPreviewKey(url))) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }

@@ -100,6 +100,7 @@ let kept_answers : String =
   #|["markdown","收到：「发布前再看一眼签名」。我先看一下，有结果再告诉你。",[["p",[[0,29]]]]]
   #|["markdown","收到：「测试一下」。我先看一下，有结果再告诉你。",[["p",[[0,24]]]]]
   #|["markdown","收到：「看一下列表」。我先看一下，有结果再告诉你。",[["p",[[0,25]]]]]
+  #|["markdown","改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关。",[["p",[[0,4],["a",[[4,41]],{"href":"https://github.com/acme/shop/pull/128"}],[41,47],["a",[[47,77]],{"href":"https://example.com/bench/list"}],[77,81],["a",[[82,93]],{"href":"https://app.still.fail/w/ws1/s/st1/chats/s-c2"}],[141,145]]]]]
   #|["markdown","改好后的样子：\n\n![首页](home-after.png)\n\n对比图和构建日志附在下面。",[["p",[[0,7]]],["p",[["img",{"src":"home-after.png","alt":"首页"}]]],["p",[[32,45]]]]]
   #|["markdown","文档目录看过了 083209",[["p",[[0,14]]]]]
   #|["markdown","断网时发出的消息 082947",[["p",[[0,15]]]]]

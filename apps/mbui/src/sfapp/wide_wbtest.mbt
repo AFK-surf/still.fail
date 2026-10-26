@@ -1928,6 +1928,69 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
 }
 
 ///|
+/// The middle of the words `s` in the chat's last message (chat-peeks: a link of each kind).
+fn peek_words_at(t : @ui.Tester, s : String) -> (Double, Double) raise {
+  let (x, y, w, h) = words_rect(t, s)
+  (x + w / 2.0, y + h / 2.0)
+}
+
+///|
+test "wide: a web link in a message has its page's card while the pointer rests on it, read by the core (LinkHover)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let (x, y) = peek_words_at(t, "https://example.com/bench/list")
+  assert_eq(word("列表滚动的性能数据").length(), 0)
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // its card: the page's title over its site and where it goes
+  assert_eq(word("列表滚动的性能数据").length(), 1, msg="its title")
+  assert_eq(word("Example · example.com/bench/list").length(), 1, msg="where it goes")
+  // gone once the pointer has left it
+  t.move(900.0, 100.0)
+  t.run_for(@sfpages.hover_close_ms * 2.0)
+  assert_eq(word("列表滚动的性能数据").length(), 0)
+}
+
+///|
+test "wide: a pull request's link in a message has its card as GitHub says it: its state, where it is, its size and checks (PullRequestCard)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let (x, y) = peek_words_at(t, "https://github.com/acme/shop/pull/128")
+  let said = ["已合并", "acme/shop #128", "3 小时前", "首页列表按天分组", "lin", "+120", "4 个文件", "检查通过 9"]
+  // (some said elsewhere too: a message's time)
+  let before = said.map(fn(w) { word(w).length() })
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  for k, w in said {
+    assert_eq(word(w).length(), before[k] + 1, msg=w)
+  }
+}
+
+///|
+test "wide: a reference to a chat in a message has the chat's card while the pointer rests on it, as the list has it (RefPreview)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let said = "奏 · 分组的标题用相对日期还是具体日期？"
+  // (its @ and its title one link: from either, the same card)
+  let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
+  assert_eq(word(said).length(), 0)
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // read by the core as the pointer came onto it, the chat found in the workspace's list: where it stands
+  assert_true(calls.filter(fn(m) { m.name == "link.parse" }).length() >= 1)
+  assert_eq(word(said).length(), 1, msg="where it stands")
+  t.move(900.0, 100.0)
+  t.run_for(@sfpages.hover_close_ms * 2.0)
+  assert_eq(word(said).length(), 0)
+}
+
+///|
 test "wide: an agent's card says over each of its allowance's chips what is left of it (QuotaBars' tip)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-agent-card")

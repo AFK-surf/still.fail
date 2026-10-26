@@ -97,6 +97,51 @@ test "a link is tapped, held it shows pressed, and it says where it leads" {
 }
 
 ///|
+test "a link in runs one after another (a reference's @ and its title) is one link: pressed whole, tapped once, told once" {
+  let went = []
+  let told = []
+  let rect : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(200.0), fn() {
+        c.rich(
+          [
+            @ui.plain("see "),
+            @ui.span("@", link="x://c", color=0xFF0000FFL),
+            @ui.span("Title", link="x://c"),
+            @ui.plain(" end"),
+          ],
+          size=10.0,
+          on_link=fn(href) { went.push(href) },
+          on_link_shown=Some(fn(href, words, id) {
+            told.push((href, words))
+            rect.val = c.rect_of(id)
+          }),
+          pressed_bg=0x11223344L,
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  assert_true(told.length() >= 1 && told.iter().all(fn(l) { l == ("x://c", "@Title") }), msg="\{told}")
+  // where it is: round both, from its @ (what hangs by it lines up there)
+  t.frame()
+  let (ax, _, _, _) = t.run_rects("@")[0]
+  let (x, y, w, h) = t.run_rects("Title")[0]
+  guard rect.val is Some((rx, _, rw, _)) else { fail("no rect") }
+  assert_true((rx - ax).abs() < 0.5 && (rx + rw - (x + w)).abs() < 0.5, msg="\{rect.val} @ at \{ax}, title to \{x + w}")
+  t.press_at(x + w / 2.0, y + h / 2.0)
+  // its @ on the same ground as its title
+  assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x11223344L }).length(), 2)
+  t.release(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(went, ["x://c"])
+}
+
+///|
 test "a link that wraps is one target on each of its lines" {
   let went = []
   let t = rich_view(
