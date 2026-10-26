@@ -11,7 +11,9 @@
 // executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as the page does (no
 // way in there yet). Windows: the system's toasts (win_notify.cpp) when the program is an app (its identity: an id the
 // system shows them under), else kept and said on the log as a bare Mac executable's; no asking (Windows asks no app),
-// no pushes. iOS: UNUserNotificationCenter (ios_app.m), no pushes. A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
+// no pushes. Linux: the desktop's, through the app's GApplication (GNotification: linux_life.h) when the program is an
+// app (MBUI_APP_ID), else kept as a bare Mac executable's; no asking, no pushes. iOS: UNUserNotificationCenter
+// (ios_app.m), no pushes. A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
 // `notice`), as on Android.
 
 ///|
@@ -65,7 +67,8 @@ pub fn notice_answer() -> Bool? {
 
 ///|
 /// Opens the system's settings of the app's notifications (Android's page of the app's notifications, iOS's, macOS's
-/// Notifications, Windows'), where they are allowed again once refused: false where this host has none to open.
+/// Notifications, Windows', a Linux desktop's), where they are allowed again once refused: false where this host has
+/// none to open.
 pub fn notice_settings() -> Bool {
   nt_state(3) == 1
 }

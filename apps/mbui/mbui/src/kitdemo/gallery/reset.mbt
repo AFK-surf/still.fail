@@ -18,6 +18,8 @@ fn reset() -> Unit {
   update_check_asked.val = false
   update_check_said.val = ""
   link_check_ready.val = false
+  notice_check_shown.val = false
+  notice_check_opened.val = ""
   cb.val = On
   size.val = "m"
   bold.val = true

@@ -29,6 +29,9 @@
 #        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
+#   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
+#        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
+#        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
@@ -513,6 +516,22 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port"
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  notices)
+    # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
+    # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
+    # and ends.
+    [ "$H" = linux ] || { echo "notices contract: Linux only"; exit 1; }
+    U=$PWD/$O/notices
+    rm -rf "$U"
+    mkdir -p "$U"
+    DRV=$(printf 'notice 通知检查\n' | base64 | tr -d '\n\r')
+    MBUI_APP_ID=dev.mbui.kitdemo.notices MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_NOTICECHECK=1 MBUI_DRIVE_B64=$DRV \
+      timeout 60 ./out/linux/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$U/notices.log" 2>&1 || true
+    grep -a "NOTICE\|^linux: " "$U/notices.log" || true
+    if ! grep -aqF "NOTICECHECK opened noticecheck://opened" "$U/notices.log"; then
+      echo "notices contract (linux): the notification shown and clicked, the app was not given what it opens"; exit 1
+    fi
+    echo "notices contract (linux): shown, kept, clicked: the app was given what it opens" ;;
   links)
     if [ "$H" = linux ]; then
       # (Linux) the app as its desktop entry runs it, an identity (MBUI_APP_ID) and schemes of its own (MBUI_SCHEMES),
@@ -585,5 +604,5 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port"
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices; ios: free, done)" >&2; exit 1 ;;
 esac
