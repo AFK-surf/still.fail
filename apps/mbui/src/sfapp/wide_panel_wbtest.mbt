@@ -66,6 +66,59 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
 }
 
 ///|
+test "wide: a quota running out beside an agent's history's control is whole however narrow its head: the control's parts leave first, its figure never cut" {
+  reset()
+  let base = fixture("chat")
+  // (its agent's account's weekly window running out, as the core says it beside the control)
+  let note : Json = {
+    "kind": "quota",
+    "text": "每周额度剩 23%",
+    "quota": { "left": 23, "mark": "W", "level": "amber" },
+  }
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("chat", Some(Object(chat)) as v) => {
+          let agents = items(v, "agents").map(fn(a) {
+            match a {
+              Object(o) => {
+                let o = o.copy()
+                o["attention"] = [note]
+                Json::object(o)
+              }
+              other => other
+            }
+          })
+          let chat = chat.copy()
+          chat["agents"] = Json::array(agents)
+          { ..got, value: Some(Json::object(chat)) }
+        }
+        _ => got
+      }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1600.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="打开侧栏")
+  t.run_for(@sfdesk.side_in_ms)
+  let figure = fn() { t.words().filter(fn(w) { w.0 == "23%" && w.5 > 0.5 }) }
+  let wide = figure()
+  assert_true(wide.length() == 1, msg="\{wide}")
+  let whole = wide[0].3
+  // the panel from as narrow as it is beside the chat (360) to wider: its figure as wide as it is everywhere
+  for w = 1100.0; w <= 1600.0; w = w + 20.0 {
+    t.resize(w, 800.0)
+    t.frame()
+    let now = figure()
+    assert_true(now.length() == 1 && now[0].3 >= whole - 0.5, msg="\{w}: \{now} (whole: \{whole})")
+  }
+}
+
+///|
 test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: chat.tabs.open); a row's 添加到消息 into its message" {
   reset()
   let calls : Array[Made] = []
