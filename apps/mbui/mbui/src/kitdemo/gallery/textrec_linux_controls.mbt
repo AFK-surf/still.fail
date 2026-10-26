@@ -1,5 +1,7 @@
 // Kept from a real host's run (linux_controls: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=controls MBUI_WIN=960x720, platform 5),
 // made by scripts/chk textrec: not edited by hand.
+// Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to
+// what mbui draws, not to the host's.
 
 ///|
 let run_linux_controls : String =
@@ -158,16 +160,16 @@ let run_linux_controls : String =
   #|INPUT {"k":"app","t":97268.402652,"a":[1]}
   #|INPUT {"k":"app","t":97270.033857,"a":[3]}
   #|ENV {"motion":0,"glass":0,"dark":0,"inset":0,"h264":0,"feed":0,"ime":0,"copy":0}
-  #|DRAWHASH 1 97270.512 960 720 1 -4275715287083366805 1
+  #|DRAWHASH 1 97270.512 960 720 1 -4776968887078650326 1
   #|INPUT {"k":"pointer","t":98406.446043,"a":[0,231.20947265625,289,0,0]}
   #|INPUT {"k":"pointer","t":98406.464538,"a":[2,231.20947265625,289,0,0]}
-  #|DRAWHASH 2 98503.87 960 720 1 7400603266797010524 1
+  #|DRAWHASH 2 98503.87 960 720 1 -4548207547912519041 1
   #|INPUT {"k":"pointer","t":98507.494631,"a":[0,93.044921875,158,0,0]}
   #|INPUT {"k":"pointer","t":98507.507505,"a":[2,93.044921875,158,0,0]}
-  #|DRAWHASH 3 98520.537 960 720 1 -4036796415097447188 1
+  #|DRAWHASH 3 98520.537 960 720 1 -5166049867890055933 1
   #|INPUT {"k":"pointer","t":98522.048222,"a":[0,68.0537109375,219,0,0]}
   #|INPUT {"k":"pointer","t":98522.063962,"a":[2,68.0537109375,219,0,0]}
-  #|DRAWHASH 4 98537.204 960 720 1 3208402793826968016 1
+  #|DRAWHASH 4 98537.204 960 720 1 1324683083840877131 1
   #|INPUT {"k":"pointer","t":98539.058931,"a":[0,110.23779296875,289,0,0]}
   #|INPUT {"k":"pointer","t":98539.08521,"a":[2,110.23779296875,289,0,0]}
-  #|DRAWHASH 5 98553.871 960 720 1 7372614999742617924 1
+  #|DRAWHASH 5 98553.871 960 720 1 6841925504051871967 1

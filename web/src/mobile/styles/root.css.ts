@@ -25,6 +25,9 @@ const darkVars = {
   "--m-chip": "#313237",
   "--m-bubble": "rgb(236 236 237 / .106)",
   "--m-thumb": "#3A3B40",
+  // A segmented choice's thumb over its track (the ink at 6%): the ink at 12%, a step lighter than the track on any
+  // ground (an opaque grey is darker than a track on a card); white in light, a shadow lifting it.
+  "--m-lifted": "rgb(236 236 237 / .12)",
 };
 
 /**
@@ -74,6 +77,7 @@ export const m = style({
     // A step darker than the page (the wide screen's grey sat as light as this warm page, and its bubbles barely showed).
     "--m-bubble": "rgb(50 45 36 / .075)",
     "--m-thumb": "#FFFFFF",
+    "--m-lifted": "#FFFFFF",
     "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
     "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
     "--m-top": "var(--safe-top)",
