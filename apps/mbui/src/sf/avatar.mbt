@@ -58,7 +58,8 @@ pub fn avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : 
   let decoded = picture != "" && c.image_ready(picture, size * c.scale)
   let half = size / 2.0
   let disc = avatar_disc.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(avatar_color(id))))
-  c.box(style=disc, fn() {
+  // (in a page's bones, one disc: its colour and its letter someone's)
+  let b = c.box(style=disc, fn() {
     if decoded {
       c.image(picture, w=Px(size), h=Px(size), radius=half, bg=0L, fade=false) |> ignore
     } else {
@@ -66,5 +67,5 @@ pub fn avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : 
       c.text(initial(name), style=avatar_letter, size=half, line=half) |> ignore
     }
   })
-  |> ignore
+  c.bone_whole(b)
 }

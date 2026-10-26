@@ -44,7 +44,7 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
       desk_page(c, core, "files-home", @sf.t("web-pages.drive.title"), [
         fn() {
           if known is None {
-            @sf.waiting(c, count=4, text=@sf.t("common.readingStations"))
+            @sf.waiting(c, fn() { roots_sample(c) }, text=@sf.t("common.readingStations"))
           } else {
             @sf.empty(c, fn() {
               c.text(@sf.t("web-main.rail.filesNone"), style=fs_empty_words) |> ignore

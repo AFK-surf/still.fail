@@ -67,12 +67,12 @@ let tabletop_recent : @ui.Style = @ui.style(w=Full, h=@sf.grow, clip=true)
 fn recent_list(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
   let (view, error) = chats_of(src, w.id, "all")
   match view {
-    None => waiting(c, recent_waiting, None, error)
+    None => recent_waiting(c, None, error)
     // no rows: what the list says in their place (the core's `note`), as Home does: its rows to come while read, or
     // what could not be; else that there are none
     Some(v) if v.days.is_empty() =>
       match v.note {
-        Some(note) if note.reading || note.failing.length() > 0 => waiting(c, recent_waiting, Some(note), None)
+        Some(note) if note.reading || note.failing.length() > 0 => recent_waiting(c, Some(note), None)
         _ => c.text(tr("android-misc.wide.empty"), style=recent_empty) |> ignore
       }
     Some(v) => {
@@ -84,34 +84,60 @@ fn recent_list(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
           }
         }
       }
-      c.box(style=recent_rows, fn() {
-        for item in items {
-          let here = match top {
-            Chat(r) => r.station == item.station && r.session == item.session
-            _ => false
-          }
-          c.box(style=if here { recent_row_here } else { recent_row }, fn() {
-            @sfpages.chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
-              if !here {
-                open_in_place(Chat(r))
-              }
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+      recent_rows_of(c, src, items, v.leading, Some(top))
     }
   }
 }
 
 ///|
-/// How many of the list's chats it has, and how many rows breathe while they are read.
+/// The latest chats' rows (`items`, whose pictures `lead`), the one open (`top`) marked; one picked takes the place of
+/// the page open.
+fn recent_rows_of(c : @ui.Ctx, src : Source, items : Array[ChatItem], lead : String, top : Page?) -> Unit {
+  c.box(style=recent_rows, fn() {
+    for item in items {
+      let here = match top {
+        Some(Chat(r)) => r.station == item.station && r.session == item.session
+        _ => false
+      }
+      c.box(style=if here { recent_row_here } else { recent_row }, fn() {
+        @sfpages.chat_row(c, src, item, lead, found=true, opened=fn(r) {
+          if !here {
+            open_in_place(Chat(r))
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The latest chats read the first time (the library's Waiting): their rows to come in their bones, what is wrong over
+/// them in red (the bones then still); what it waits on said only to a screen reader while it reads.
+fn recent_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
+  @sf.waiting(
+    c,
+    fn() {
+      let items = Array::makei(recent_sample, @sfpages.sample_chat)
+      recent_rows_of(c, @sfbase.sample_source, items, "agents", None)
+    },
+    text=tr("common.reading"),
+    error=error.unwrap_or(""),
+    note?=match note {
+      Some(nt) => Some({ reading: nt.reading, text: nt.text.unwrap_or(""), failing: nt.failing })
+      None => None
+    },
+  )
+}
+
+///|
+/// How many of the list's chats it has, and how many rows are shown in their bones while they are read.
 let recent_chats_most : Int = 6
 
 ///|
-let recent_waiting : Int = 4
+let recent_sample : Int = 4
 
 ///|
 // kept across runs: a value (no field of it changes)

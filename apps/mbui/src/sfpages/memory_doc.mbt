@@ -19,16 +19,21 @@ fn memory_doc_reset() -> Unit {
 /// The page (MemoryDoc): `skill` "" the global memory, `at` the part first shown.
 pub fn memory_doc_page(c : @ui.Ctx, core : Core, frame : PageFrame, address : String, skill : String, at : Int) -> Unit {
   let read = memory_of(core, address)
-  let key = "memory-doc/" + address + "/" + skill
   let title = if skill == "" { @sf.t("web-main.memory.global") } else { skill }
   let m = read.value
   guard m is Some(_) else {
-    @sf.page(c, on_back=core.pop, frame~, key, title, [
-      fn() {
-        @sf.waiting(c, count=4, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
-      },
-    ])
+    // (read the first time: the page of a made-up memory, in its bones)
+    let error = if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) }
+    @sf.page_waiting(c, title, error~, fn() { doc_page(c, core.quiet(), frame, "sample", skill, at, Some(doc_sample(skill))) })
   }
+  doc_page(c, core, frame, address, skill, at, m)
+}
+
+///|
+/// A memory's page (`m`, as the core reads it): `skill` "" the global memory, `at` the part first shown.
+fn doc_page(c : @ui.Ctx, core : Core, frame : PageFrame, address : String, skill : String, at : Int, m : Json?) -> Unit {
+  let key = "memory-doc/" + address + "/" + skill
+  let title = if skill == "" { @sf.t("web-main.memory.global") } else { skill }
   let kv = if skill == "" {
     None
   } else {
@@ -220,3 +225,25 @@ let md_under_head : @ui.Style = @ui.css("w=Full mb=S4")
 /// Its text with its pills over it: one layer.
 // kept across runs: a value (no field of it changes)
 let md_doc : @ui.Style = @ui.css("w=Full")
+
+///|
+/// A memory made up, for what its page shows while it is read (doc_page in its bones): the global memory's parts, or
+/// skill `skill`'s pages, each of a few paragraphs.
+fn doc_sample(skill : String) -> Json {
+  let words = [24, 40, 16, 32].map(@sf.sample_words).join("\n\n")
+  let parts = Json::array(
+    [4, 6, 5].map(fn(n) {
+      Json::object({
+        "title": Json::string(@sf.sample_words(n)),
+        "label": Json::string(@sf.sample_words(n)),
+        "note": Json::string(@sf.sample_words(3)),
+        "size": Json::string(@sf.sample_words(3)),
+        "text": Json::string(words),
+      })
+    }),
+  )
+  {
+    "global": { "size": Json::string(@sf.sample_words(3)), "sections": parts },
+    "skills": [{ "name": Json::string(skill), "kindText": Json::string(@sf.sample_words(4)), "whenText": Json::string(@sf.sample_words(16)), "pages": parts }],
+  }
+}

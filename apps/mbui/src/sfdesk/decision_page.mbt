@@ -71,7 +71,11 @@ fn decision_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           } else if view is None && topic.error is Some(e) {
             c.box(style=zp_empty, fn() { c.text(text(Some(e), "message"), style=zp_empty_words) |> ignore }) |> ignore
           } else {
-            c.box(style=zp_waiting, fn() { @sf.waiting(c, shape=Cards, count=2) }) |> ignore
+            // (read the first time: a made-up decision's card, in its bones)
+            c.box(style=zp_card, fn() {
+              @sf.waiting(c, fill=true, fn() { zou_card(c, @sfbase.sample_source, w, core.quiet(), @sfbase.sample_decision(), false) })
+            })
+            |> ignore
           }
         }
       }
@@ -752,10 +756,6 @@ let zp_empty : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter"
 ///|
 // kept across runs: a value (no field of it changes)
 let zp_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
-
-///|
-// kept across runs: a value (no field of it changes)
-let zp_waiting : @ui.Style = @ui.css("w=Full h=Full px=S8 pt=S6")
 
 ///|
 /// How the next comes in (arriving: from 12 under at 98%, 240 ms) and how the one before goes (flyOff: up 360 ms to 88%

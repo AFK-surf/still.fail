@@ -184,6 +184,14 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     guard d is Some(Object(_)) else {
       waiting_cards(
         c,
+        fn() {
+          for g in [(4, 3), (5, 5)] {
+            let providers = Array::makei(g.1, fn(i) {
+              Json::object({ "id": Json::string("sample" + i.to_string()), "name": Json::string(@sf.sample_words(4 + i % 3)) })
+            })
+            pick_group(c, Some({ "title": Json::string(@sf.sample_words(g.0)), "providers": Json::array(providers) }), fn(_) {  })
+          }
+        },
         error=match topic.error {
           Some(e) => error_text(e)
           None => ""
@@ -205,38 +213,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         blocks.push(b)
       }
       for g in items(d, "groups") {
-        blocks.push(fn() {
-          pad(fn() {
-            c.box(w=Fill(1.0), pl=6.0, pt=6.0, fn() {
-              c.text(text(Some(g), "title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-            })
-            |> ignore
-            group_box(fn() {
-              for p in items(Some(g), "providers") {
-                let pv = Some(p)
-                if list_row(c, key="provider/" + text(pv, "id"), fn() {
-                    @sf.provider_logo(
-                      c,
-                      match text(pv, "runtime") {
-                        "" => "claude"
-                        r => r
-                      },
-                      match text(pv, "kind") {
-                        "" => "api-provider"
-                        k => k
-                      },
-                      18.0,
-                      text(pv, "mark"),
-                    )
-                    row_title(c, text(pv, "name"))
-                    chevron(c)
-                  }) {
-                  edit([("provider", str(text(pv, "id")))])
-                }
-              }
-            })
-          })
-        })
+        blocks.push(fn() { pick_group(c, Some(g), fn(id) { edit([("provider", str(id))]) }) })
       }
     } else if step == "method" {
       blocks.push(fn() {
@@ -429,6 +406,48 @@ fn connect_form(
 }
 
 ///|
+/// A group of providers under its title, a row each; pressed, `pick` with its id.
+fn pick_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
+  let t = @sf.theme()
+  c.box(style=pick_group_room, fn() {
+    c.box(w=Fill(1.0), pl=6.0, pt=6.0, fn() {
+      c.text(text(g, "title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+    })
+    |> ignore
+    rows_card(c, fn() {
+      for p in items(g, "providers") {
+        let pv = Some(p)
+        if list_row(c, key="provider/" + text(pv, "id"), fn() {
+            @sf.provider_logo(
+              c,
+              match text(pv, "runtime") {
+                "" => "claude"
+                r => r
+              },
+              match text(pv, "kind") {
+                "" => "api-provider"
+                k => k
+              },
+              18.0,
+              text(pv, "mark"),
+            )
+            row_title(c, text(pv, "name"))
+            chevron(c)
+          }) {
+          pick(text(pv, "id"))
+        }
+      }
+    })
+  })
+  |> ignore
+}
+
+///|
+/// A group in the page's room (the pick step's pad: 18 in, 8 under what is over it, its parts 12 apart).
+// kept across runs: a value (no field of it changes)
+let pick_group_room : @ui.Style = @ui.css("w=Full px=S4_5 pt=S2 gap=S3")
+
+///|
 /// An account on several stations (ProfileAccountScreen): what they have in common, then each station's part, each
 /// leading to its page there.
 fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> Unit {
@@ -444,6 +463,12 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
         } else {
           waiting_cards(
             c,
+            fn() {
+              let ev = Some(account_sample())
+              for b in account_blocks(c, core.quiet(), ev) {
+                b()
+              }
+            },
             error=match topic.error {
               Some(x) => error_text(x)
               None => ""
@@ -454,7 +479,6 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
       Some(ev) => {
         let ev = Some(ev)
         let p = field(ev, "profile")
-        let station = text(ev, "station")
         nav_bar(c, core, "Profile", text(p, "name"), sub=fn() {
           c.text(
             join(
@@ -471,85 +495,114 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
           )
           |> ignore
         })
-        let blocks : Array[() -> Unit] = [
-          fn() { gap(c, 16.0) },
-          fn() {
-            list_card(c, fn() {
-              list_row(c, fn() {
-                c.box(w=Fill(1.0), fn() {
-                  c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-                    presence_dot(c, tone_dot(text(p, "checkTone")))
-                    c.text(text(p, "checkText"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
-                  })
-                  |> ignore
-                  c.text(
-                    match opt_text(field(p, "check"), "detail") {
-                      Some(x) => x
-                      None => tr("android-settings.profile.notChecked")
-                    },
-                    size=t.t.meta,
-                    color=t.p.muted,
-                    w=Fill(1.0),
-                    line=18.0,
-                  )
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            })
-          },
-        ]
-        blocks.append(quota_section(c, core, station, p))
-        blocks.push(fn() { section_header(c, tr("web-pages.profiles.account.each"), start=S6) })
-        blocks.push(fn() {
-          list_card(c, fn() {
-            // the stations it is signed in on: one borrowing it has nothing of its own to set
-            for m in items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }) {
-              let mv = Some(m)
-              if list_row(c, key="account-member/" + text(mv, "station"), fn() {
-                  c.box(w=Fill(1.0), fn() {
-                    c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-                      presence_dot(
-                        c,
-                        if !flag(mv, "online") {
-                          "offline"
-                        } else if !flag(mv, "usable") {
-                          "error"
-                        } else {
-                          tone_dot(text(mv, "checkTone"))
-                        },
-                      )
-                      c.text(text(mv, "stationName"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
-                    })
-                    |> ignore
-                    c.text(
-                      if flag(mv, "online") {
-                        text(mv, "about")
-                      } else {
-                        tr("android-settings.profiles.stationOffline")
-                      },
-                      size=t.t.meta,
-                      color=t.p.muted,
-                      w=Fill(1.0),
-                      line=18.0,
-                    )
-                    |> ignore
-                  })
-                  |> ignore
-                  chevron(c)
-                }) {
-                (core.push)(Profile(text(mv, "station"), text(mv, "profileId")))
-              }
-            }
-          })
-        })
+        let blocks = account_blocks(c, core, ev)
         blocks.push(fn() { gap(c, 30.0) })
         scroll_page(c, "profile-account/" + key, blocks)
       }
     }
   })
   |> ignore
+}
+
+///|
+/// What an account on several stations (`ev`, its entry) holds: how it is, its allowance, each station's part.
+fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
+  let t = @sf.theme()
+  let p = field(ev, "profile")
+  let station = text(ev, "station")
+  let blocks : Array[() -> Unit] = [
+    fn() { gap(c, 16.0) },
+    fn() {
+      list_card(c, fn() {
+        list_row(c, fn() {
+          c.box(w=Fill(1.0), fn() {
+            c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+              presence_dot(c, tone_dot(text(p, "checkTone")))
+              c.text(text(p, "checkText"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
+            })
+            |> ignore
+            c.text(
+              match opt_text(field(p, "check"), "detail") {
+                Some(x) => x
+                None => tr("android-settings.profile.notChecked")
+              },
+              size=t.t.meta,
+              color=t.p.muted,
+              w=Fill(1.0),
+              line=18.0,
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    },
+  ]
+  blocks.append(quota_section(c, core, station, p))
+  blocks.push(fn() { section_header(c, tr("web-pages.profiles.account.each"), start=S6) })
+  blocks.push(fn() {
+    list_card(c, fn() {
+      // the stations it is signed in on: one borrowing it has nothing of its own to set
+      for m in items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }) {
+        let mv = Some(m)
+        if list_row(c, key="account-member/" + text(mv, "station"), fn() {
+            c.box(w=Fill(1.0), fn() {
+              c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+                presence_dot(
+                  c,
+                  if !flag(mv, "online") {
+                    "offline"
+                  } else if !flag(mv, "usable") {
+                    "error"
+                  } else {
+                    tone_dot(text(mv, "checkTone"))
+                  },
+                )
+                c.text(text(mv, "stationName"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
+              })
+              |> ignore
+              c.text(
+                if flag(mv, "online") {
+                  text(mv, "about")
+                } else {
+                  tr("android-settings.profiles.stationOffline")
+                },
+                size=t.t.meta,
+                color=t.p.muted,
+                w=Fill(1.0),
+                line=18.0,
+              )
+              |> ignore
+            })
+            |> ignore
+            chevron(c)
+          }) {
+          (core.push)(Profile(text(mv, "station"), text(mv, "profileId")))
+        }
+      }
+    })
+  })
+  blocks
+}
+
+///|
+/// An account made up, for what its page shows while it is read (account_blocks in its bones): on two stations.
+fn account_sample() -> Json {
+  let member = fn(i : Int) -> Json {
+    {
+      "station": Json::string("sample/" + i.to_string()),
+      "stationName": Json::string(@sf.sample_words(4 + i)),
+      "about": Json::string(@sf.sample_words(12)),
+      "online": true,
+      "usable": true,
+    }
+  }
+  {
+    "station": "sample/0",
+    "profile": { "checkText": Json::string(@sf.sample_words(4)), "check": { "detail": Json::string(@sf.sample_words(14)) } },
+    "members": [member(0), member(1)],
+  }
 }
 
 ///|

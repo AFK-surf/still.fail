@@ -198,6 +198,10 @@ struct Node {
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
   mut in_sideways : Bool
+  // built in a page's bones (Ctx::bones): drawn as them in this colour (0: as itself); and drawn whole, one piece of
+  // its own box with nothing in it (Ctx::bone_whole)
+  mut bones : Int64
+  mut bone_whole : Bool
   // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
   // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
   mut shrinks : Bool
@@ -379,6 +383,8 @@ fn Node::new() -> Node {
     stops_wheel: false,
     sideways: false,
     in_sideways: false,
+    bones: 0L,
+    bone_whole: false,
     shrinks: false,
     keep: false,
     drop: 0,
@@ -468,6 +474,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.stops_wheel = false
   self.sideways = false
   self.in_sideways = false
+  self.bones = 0L
+  self.bone_whole = false
   self.shrinks = false
   self.keep = false
   self.drop = 0

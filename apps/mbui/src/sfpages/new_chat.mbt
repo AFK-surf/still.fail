@@ -299,18 +299,37 @@ fn new_choosers(
   state : NewState,
 ) -> Unit {
   let going = state is Going(_, _)
-  c.box(style=new_choosers_row, fn() {
-    match state {
-      Held(error) => {
-        @sf.bar(c, Px(held_station_w), held_chooser_h, breathing=error == "")
-        @sf.bar(c, Px(held_model_w), held_chooser_h, breathing=error == "")
-        return
-      }
-      _ => ()
-    }
-    new_controls(c, src, w, v, station, true, going)
-  })
-  |> ignore
+  match state {
+    // (while its stations are read: a made-up station's and model's, in their bones)
+    Held(error) =>
+      @sf.bones(c, still=error != "", fn() {
+        c.box(style=new_choosers_row, fn() {
+          new_controls(c, @sfbase.sample_source, w, Some(new_sample_view()), Some(new_sample_station()), true, false)
+        })
+        |> ignore
+      })
+    _ => c.box(style=new_choosers_row, fn() { new_controls(c, src, w, v, station, true, going) }) |> ignore
+  }
+}
+
+///|
+/// Where a new chat starts and what it runs on, made up, for what shows while they are read (in their bones).
+fn new_sample_station() -> Json {
+  { "station": "sample", "name": Json::string(@sf.sample_words(4)) }
+}
+
+///|
+fn new_sample_view() -> Json {
+  {
+    "runtime": "claude",
+    "model": "sample",
+    "pick": {
+      "value": { "runtime": "claude", "model": "sample" },
+      "options": [{ "model": "sample" }],
+      "valueOption": { "name": Json::string(@sf.sample_words(6)) },
+      "efforts": ["low"],
+    },
+  }
 }
 
 ///|
@@ -333,7 +352,10 @@ fn new_controls(
   }
   let p = field(v, "pick")
   if flag(v, "waiting") {
-    @sf.bar(c, Px(held_model_w), held_chooser_h, breathing=true)
+    // (its profiles read: a made-up model's, in its bones)
+    @sf.bones(c, fn() {
+      model_triple(c, @sfbase.sample_source, "sample", "new", up=true, page=field(Some(new_sample_view()), "pick"), small=true, floating~)
+    })
   } else if p is None ||
     items(p, "options").length() == 0 ||
     text(v, "runtime") == "" ||
@@ -346,7 +368,8 @@ fn new_controls(
       open_page(Place("profiles"))
     }
   } else {
-    if take_asked("model") {
+    // (asked from elsewhere, opened here: not by what is drawn in a page's bones)
+    if !c.in_bones() && take_asked("model") {
       open_triple(address, "new")
     }
     model_triple(c, src, address, "new", up=true, page=p, small=true, floating~)
@@ -382,7 +405,7 @@ fn new_station_control(
       },
     ) &&
     !going) ||
-    take_asked("station") {
+    (!c.in_bones() && take_asked("station")) {
     @sf.panel(
       @sf.t("android-chat.new.station.pick"),
       fn(c, close) { station_rows(c, src, w, v, close) },
@@ -699,10 +722,12 @@ fn new_head(c : @ui.Ctx, station : Json?, state : NewState, art_w : Double, part
   part(c.box(style=new_heading_box, fn() { c.text(@sf.t("android-chat.new.heading"), style=new_title) |> ignore }))
   part(
     match state {
+      // (while its stations are read: where it starts said of a made-up one, in its bones)
       Held(error) =>
-        c.box(style=new_held_lines, fn() {
-          new_held_line(c, new_held_line_long, error == "")
-          new_held_line(c, new_held_line_short, error == "")
+        c.box(style=new_sub_box, fn() {
+          @sf.bones(c, still=error != "", fn() {
+            c.text(@sf.t("android-chat.new.sub", args=[("station", @sf.sample_words(4))]), style=new_sub) |> ignore
+          })
         })
       _ =>
         c.box(style=new_sub_box, fn() {
@@ -720,13 +745,6 @@ fn new_scene_art() -> String {
   } else {
     "illus_new_chat"
   }
-}
-
-///|
-/// A line of words to come, breathing (`breathing` false: still, what it waits on failed), `w` wide in the middle of a
-/// line of the page's words.
-fn new_held_line(c : @ui.Ctx, w : Double, breathing : Bool) -> Unit {
-  c.box(style=new_held_line_box, fn() { @sf.bar(c, Px(w), held_bar_h, breathing~) }) |> ignore
 }
 
 ///|
@@ -972,26 +990,6 @@ let new_chevron : Double = 12.0
 let new_scene_guess : Double = 600.0
 
 ///|
-/// While the stations are read, the widths of where it runs and what it runs on breathing in their places, as high as
-/// the choices; the two lines of what it does breathing.
-let held_station_w : Double = 96.0
-
-///|
-let held_model_w : Double = 150.0
-
-///|
-let held_chooser_h : Double = 30.0
-
-///|
-let new_held_line_long : Double = 250.0
-
-///|
-let new_held_line_short : Double = 170.0
-
-///|
-let held_bar_h : Double = 12.0
-
-///|
 /// A glass choice's corner (a capsule 30 high), a station's mark in the station's pick.
 let glass_chooser_corner : Double = 15.0
 
@@ -1032,14 +1030,6 @@ let new_scene_narrow : @ui.Style = @ui.css("w=Full px=S8 pt=S8 pb=S2_5 gap=S1_5 
 /// The heading narrow (h2: 6 over it).
 // kept across runs: a value (no field of it changes)
 let new_heading_box : @ui.Style = @ui.css("w=Full pt=S1_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let new_held_lines : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let new_held_line_box : @ui.Style = @ui.css("w=Full h=S5 align=ACenter justify=JCenter")
 
 ///|
 /// What keeps it from starting narrow (mNewProblem: 6 over it).

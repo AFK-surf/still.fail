@@ -66,7 +66,14 @@ pub fn completion_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame)
         match topic.error {
           Some(e) => @sf.page_note(c, error_text(e), bad=true)
           // (read the first time: rows' shapes where the stations' will be, AutomaticDecisions.tsx's Waiting, 2)
-          None => @sf.group_waiting(c, count=2, text=@sf.t("common.readingStations"))
+          None =>
+            @sf.waiting(c, text=@sf.t("common.readingStations"), fn() {
+              for st in [4, 6] {
+                @sf.section(c, @sf.sample_words(st), fn() {
+                  form_rows(c, core.quiet(), "sample", "sample", Some(form_view_sample()), Some({ "enabled": true }))
+                })
+              }
+            })
         }
       })
   }
@@ -114,6 +121,24 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
     return
   }
   let form = decision_form(c, core, station)
+  let topic = (core.topic)("decisionForm", { "station": str(station), "form": str(form) })
+  let d = topic.value
+  guard d is Some(Object(_)) else {
+    match topic.error {
+      Some(e) => @sf.page_note(c, error_text(e), bad=true)
+      None =>
+        @sf.waiting(c, text=@sf.t("web-pages.automaticDecisions.readingConfig"), fn() {
+          form_rows(c, core.quiet(), station, form, view, Some({ "enabled": true }))
+        })
+    }
+  }
+  form_rows(c, core, station, form, view, d)
+}
+
+///|
+/// A station's rule as its draft (`d`, the core's `decisionForm`) says it, a group of its rows; 保存修改 under them
+/// once changed, what went wrong under that.
+fn form_rows(c : @ui.Ctx, core : Core, station : String, form : String, view : Json?, d : Json?) -> Unit {
   let call = fn(action : String, input : Array[(String, Json)]) {
     @settings.act(
       core,
@@ -122,14 +147,6 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]),
       done=if action == "save" { @sf.t("web-pages.automaticDecisions.saved") } else { "" },
     )
-  }
-  let topic = (core.topic)("decisionForm", { "station": str(station), "form": str(form) })
-  let d = topic.value
-  guard d is Some(Object(_)) else {
-    match topic.error {
-      Some(e) => @sf.page_note(c, error_text(e), bad=true)
-      None => @sf.group_waiting(c, count=3, text=@sf.t("web-pages.automaticDecisions.readingConfig"))
-    }
   }
   let saving = is_doing(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)])
   let reviewing = is_doing(core, ["automaticDecisions.review"], [("station", station)])
@@ -210,6 +227,13 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
     Some(why) => @sf.page_note(c, why, bad=true)
     None => ()
   }
+}
+
+///|
+/// What a station says of its rule, made up, for what is shown while it is read (form_rows in its bones): it may be
+/// set, an archive policy of a few options.
+fn form_view_sample() -> Json {
+  { "canEdit": true, "policy": { "summaryText": Json::string(@sf.sample_words(10)), "options": [1, 2, 3] } }
 }
 
 ///|

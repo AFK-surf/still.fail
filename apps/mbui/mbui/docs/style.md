@@ -247,8 +247,8 @@ colours): an app counts how many each kind has across its screens, which should 
 
 ## Seen
 
-What is drawn to be seen with nothing in it (a gauge's empty cell, a track, a line, a placeholder's block, a sheet's
-grip: a box holding no words, picture or icon, nor under any drawn after it) stands at least `contrast_mark_least`
+What is drawn to be seen with nothing in it (a gauge's empty cell, a track, a line, each bar and shape of a page's
+bones (`Ctx::bones`), a sheet's grip: a box holding no words, picture or icon, nor under any drawn after it) stands at least `contrast_mark_least`
 (1.25, WCAG 2's ratio) off what it lies on, by its ground or by its edge: `Tester::contrast_faults` says where it does
 not, measured on the frame as drawn (the colour under it worked out from what was drawn before it there; loops at their
 start). A ground under words carries none of this: its words carry it. So that one colour is seen on whatever it lies

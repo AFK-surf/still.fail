@@ -61,7 +61,7 @@ pub fn fill_chip(
   // (its fill a plain rectangle its layer cuts along the chip's corners, its end square where it stops; the chip
   // itself cuts nothing: a box that cuts what it holds gives way to its row, which would cut its figure to an ellipsis
   // beside anything wider: @ui's docs/style.md, Short of room)
-  c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, id~, taps=false, points=true, fn() {
+  let b = c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, id~, taps=false, points=true, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(style=chip_fill_row, fn() {
@@ -82,7 +82,8 @@ pub fn fill_chip(
     })
     |> ignore
   })
-  |> ignore
+  // (in a page's bones, one piece: how full it is not known yet)
+  c.bone_whole(b)
   tip(c, "fill-chip/" + key, id, said)
 }
 

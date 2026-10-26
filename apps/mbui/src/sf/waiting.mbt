@@ -1,7 +1,8 @@
 // What waits, drawn one way everywhere (web/ui waiting.tsx, waiting.css.ts, styles/spinner.css.ts; docs/ui-panels.md
 // 「等待」; Android's ui/Waiting.kt the same), the phone's pages and the desktop's alike. Three kinds:
-// - a page or a list read for the first time: `waiting`, placeholders shaped as what will come (`wait_shapes`: rows,
-//   messages, cards), breathing, no words; what could not be read said over them in red;
+// - a page or a list read for the first time: `waiting`, what will come drawn as it will be, of made-up words, in its
+//   bones (`bones`: its words bars, its pictures and icons shapes, its outline its own), breathing, no words; what
+//   could not be read said over them in red;
 // - a row or a button at work: `spinner` in its place, in one of two sizes (14, 12 in a line of small text);
 // - what has a size on its way: `progress`; in a spinner's place (a line saying how far, a picture going up),
 //   `progress_spinner`.
@@ -212,109 +213,42 @@ pub(all) struct WaitNote {
 }
 
 ///|
-/// The shapes of what will come (WaitShape): a list's rows (a title and a line, a picture at the end), a chat's
-/// messages, a settings page's cards.
-pub(all) enum WaitShape {
-  Rows
-  Messages
-  Cards
-} derive(Eq)
-
-///|
-/// The placeholders' widths (waiting.tsx TITLES, LINES, MESSAGES, CARDS): a row's title and line, a message (mine or
-/// not, its width, its height), a card's height.
-// kept across runs: a table, never written
-let wait_titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
-
-///|
-// kept across runs: a table, never written
-let wait_lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
-
-///|
-// kept across runs: a table, never written
-let wait_messages : Array[(Bool, Double, Double)] = [
-  (false, 220.0, 40.0),
-  (false, 160.0, 58.0),
-  (true, 180.0, 40.0),
-  (false, 240.0, 76.0),
-  (true, 120.0, 40.0),
-  (false, 200.0, 40.0),
-]
-
-///|
-// kept across runs: a table, never written
-let wait_cards : Array[Double] = [120.0, 88.0, 152.0, 104.0]
-
-///|
-/// The shapes of what will come (WaitShapes, waiting.css.ts): `Rows` (7 by default) 66 high, 22 in at their start and
-/// 16 at their end, a title 13 and a line 10 high 10 apart, a picture 22 round at the end (`dense`: 40 high, 10 in,
-/// the bars 0.6 as long and lower, no picture); `Messages`: 14 apart, 8 under the top, 16 in, a face 28 before each not
-/// mine, its bubble 18 round, 70% of the width at most; `Cards` (3) 16 apart, a card's corner. Breathing (`still`: still,
-/// whole, as what they wait on failed).
-pub fn wait_shapes(
-  c : @ui.Ctx,
-  shape? : WaitShape = Rows,
-  count? : Int,
-  dense? : Bool = false,
-  still? : Bool = false,
-) -> Unit {
-  let t = theme()
-  let seen = breath(c, failed=still)
-  match shape {
-    Messages => {
-      let most = c.width * wait_bubble_share
-      c.box(style=wait_messages_box, opacity=seen, fn() {
-        for m in wait_messages {
-          let (mine, w, h) = m
-          c.box(style=if mine { wait_message_mine } else { wait_message }, fn() {
-            if !mine {
-              c.box(style=wait_face, bg=t.p.line, fn() {  }) |> ignore
-            }
-            c.box(w=Px(dmin(w, most)), h=Px(h), radius=wait_bubble_r, bg=t.p.line, fn() {  }) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    }
-    Cards =>
-      c.box(style=wait_cards_box, opacity=seen, fn() {
-        for i in 0..<count.unwrap_or(3) {
-          c.box(style=wait_card, h=Px(wait_cards[i % wait_cards.length()]), bg=t.p.line, fn() {  }) |> ignore
-        }
-      })
-      |> ignore
-    Rows =>
-      c.box(style=wait_rows_box, opacity=seen, fn() {
-        let k = if dense { wait_dense_share } else { 1.0 }
-        for i in 0..<count.unwrap_or(7) {
-          c.box(style=if dense { wait_row_dense } else { wait_row }, pl=if dense { wait_dense_in } else { wait_row_in }, fn() {
-            c.box(style=if dense { wait_row_lines_dense } else { wait_row_lines }, gap=if dense { wait_dense_gap } else { wait_row_gap }, fn() {
-              bar(c, Px(k * wait_titles[i % wait_titles.length()]), if dense { wait_title_dense } else { wait_title_h })
-              bar(c, Px(k * wait_lines[i % wait_lines.length()]), if dense { wait_line_dense } else { wait_line_h })
-            })
-            |> ignore
-            if !dense {
-              bar(c, Px(wait_picture), wait_picture)
-            }
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+/// Made-up words `n` letters long, for what a page's bones are drawn of (`waiting`'s `sample`): only how long they are
+/// is seen, as a bar.
+pub fn sample_words(n : Int) -> String {
+  let out = StringBuilder::new()
+  for _ in 0..<n {
+    out.write_char('字')
   }
+  out.to_string()
 }
 
 ///|
-/// A page's or a list's content while it is read the first time (Waiting): its shapes breathing, what it waits on
-/// (`note`'s words, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
-/// (`error`, `note`'s failing), each in a pill, the shapes then still. `fill`: it takes the room left (a page's body);
-/// otherwise as tall as its shapes. What `body` holds goes between the pills and the shapes.
+/// What will come, in its bones (@ui's Ctx::bones: its words bars, its pictures and icons shapes, on its own grounds,
+/// in the line's grey), breathing; still and whole (`still`) as what they wait on failed. As wide as what it holds
+/// where that stands in a row, as wide as its column in one; `fill`: the room left (a page's body).
+pub fn bones(c : @ui.Ctx, sample : () -> Unit, still? : Bool = false, fill? : Bool = false) -> Unit {
+  // (in bones already, as they are: one breath)
+  if c.in_bones() {
+    sample()
+    return
+  }
+  c.box(style=if fill { wait_fill } else { bones_box }, opacity=breath(c, failed=still), fn() {
+    c.bones(theme().p.line, sample)
+  })
+  |> ignore
+}
+
+///|
+/// A page's or a list's content while it is read the first time (Waiting): what will come in its bones (`sample`: what
+/// it will show, made of made-up words by the parts that draw it when it comes, its rows, its cards, its messages:
+/// their outline its own), breathing; what it waits on (`note`'s words, else `text`, else 正在读取) said only to a
+/// screen reader; over them in red what could not be read (`error`, `note`'s failing), each in a pill, the bones then
+/// still. `fill`: it takes the room left (a page's body); otherwise as tall as its bones. What `body` holds goes
+/// between the pills and the bones.
 pub fn waiting(
   c : @ui.Ctx,
-  shape? : WaitShape = Rows,
-  count? : Int,
-  dense? : Bool = false,
+  sample : () -> Unit,
   text? : String = "",
   error? : String = "",
   note? : WaitNote,
@@ -348,7 +282,7 @@ pub fn waiting(
       Some(f) => f()
       None => ()
     }
-    wait_shapes(c, shape~, count?, dense~, still=!reading)
+    bones(c, sample, still=!reading, fill~)
   })
   if reading && said != "" {
     c.semantics(w, Status, label=said)
@@ -357,12 +291,13 @@ pub fn waiting(
 
 ///|
 /// A list with rows already, still waiting on some of it (WaitMore: a station not read yet, one that could not be):
-/// under its rows a row's shape for what is still read, and each failure in red. Nothing once it waits on nothing.
-pub fn wait_more(c : @ui.Ctx, note : WaitNote?, dense? : Bool = false) -> Unit {
+/// under its rows one more of them in its bones (`sample`) for what is still read, and each failure in red. Nothing
+/// once it waits on nothing.
+pub fn wait_more(c : @ui.Ctx, note : WaitNote?, sample : () -> Unit) -> Unit {
   match note {
     Some(n) => {
       if n.reading {
-        wait_shapes(c, count=1, dense~)
+        bones(c, sample)
       }
       for f in n.failing {
         wait_line(c, f, error=true)
@@ -381,50 +316,10 @@ let wait_box : @ui.Style = @ui.css("w=Full")
 let wait_fill : @ui.Style = @ui.css("w=Full h=Grow(1.0)")
 
 ///|
-/// The pills over the shapes: 14 under the top, 20 in, 4 over the shapes, 8 apart, in the middle.
+// kept across runs: a value (no field of it changes)
+let bones_box : @ui.Style = @ui.css("")
+
+///|
+/// The pills over the bones: 14 under the top, 20 in, 4 over the bones, 8 apart, in the middle.
 // kept across runs: a value (no field of it changes)
 let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_rows_box : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_row : @ui.Style = @ui.style(row=true, w=Full, h=Fixed(wait_row_h), pr=S4, gap=S3, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_row_dense : @ui.Style = @ui.css("row w=Full h=S10 pr=S2_5 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_row_lines : @ui.Style = @ui.css("w=Grow(1.0) align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_row_lines_dense : @ui.Style = @ui.css("w=Grow(1.0) align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_messages_box : @ui.Style = @ui.css("w=Full pt=S2 gap=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_message : @ui.Style = @ui.css("row w=Full px=S4 gap=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_message_mine : @ui.Style = wait_message.then(@ui.css("justify=JEnd"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_face : @ui.Style = @ui.css("w=S7 h=S7 radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_cards_box : @ui.Style = @ui.css("w=Full gap=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_card : @ui.Style = @ui.css("w=Full radius=Xl3")

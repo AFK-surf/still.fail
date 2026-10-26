@@ -33,7 +33,16 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   let key = "vault-item/" + vault + "/" + item
   let back = @sf.t("web-pages.vault.title")
   guard view is Some(_) && list is Some(_) else {
-    @sf.page(c, on_back=core.pop, frame~, key, back, [fn() { waiting_cards(c, count=2) }])
+    @sf.page(c, on_back=core.pop, frame~, key, back, [
+      fn() {
+        block_waiting(c, fn() {
+          let sample = item_blocks(c, core.quiet(), look, ws, key, "sample", None, Some(item_sample()), Some({ "uses": Json::array(uses_sample()) }), false, None, false, fn(_) {  })
+          for b in sample {
+            b()
+          }
+        })
+      },
+    ])
   }
   let v = items(view, "vaults").search_by(fn(x) { text(Some(x), "id") == vault })
   let row = items(list, "items").search_by(fn(x) { text(Some(x), "id") == item })
@@ -61,6 +70,57 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
     }
   }
   let editing_busy = opening && vi_reveal.get(item) is None
+  let blocks = item_blocks(c, core, look, ws, key, item, vv, rv, uses, plain, opened, opening, open)
+  let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
+  match look {
+    Wide =>
+      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, small=@sf.t("web-pages.vault.title"), head=fn() {
+        c.box(style=pf_head, fn() {
+          c.box(style=pf_mark, fn() {
+            @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
+          })
+          |> ignore
+          c.box(style=pf_identity, fn() {
+            c.text(text(rv, "name"), style=pf_name) |> ignore
+            c.text(sub, style=pf_sub) |> ignore
+          })
+          |> ignore
+          if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy) {
+            edit_pressed()
+          }
+        })
+        |> ignore
+      })
+    // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
+    Narrow =>
+      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
+        if editing_busy {
+          @sf.spinner(c, size=pf_spin) |> ignore
+        } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {
+          edit_pressed()
+        }
+      })
+  }
+}
+
+///|
+/// What an item's page holds (its item `rv`, in vault `vv`): a library not locked said so, its content (each field's
+/// eye where its value is), how agents may use it, when they used it (`uses`).
+fn item_blocks(
+  c : @ui.Ctx,
+  core : Core,
+  look : Look,
+  ws : String,
+  key : String,
+  item : String,
+  vv : Json?,
+  rv : Json?,
+  uses : Json?,
+  plain : Bool,
+  opened : Json?,
+  opening : Bool,
+  open : ((Json) -> Unit) -> Unit,
+) -> Array[() -> Unit] {
   let section = fn(title : String, body : () -> Unit) {
     @sf.section(c, title, heads=true, fn() {
       match look {
@@ -157,84 +217,84 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   blocks.push(fn() {
     section(@sf.t("web-pages.vault.uses.title"), fn() {
       match uses {
-        None => @sf.waiting(c, count=2, dense=true)
+        None => @sf.waiting(c, fn() { item_uses(c, core.quiet(), ws, key, uses_sample()) })
         Some(_) if items(uses, "uses").length() == 0 => c.text(@sf.t("web-pages.vault.uses.none"), style=desk_muted) |> ignore
-        Some(_) =>
-          c.box(style=vi_uses, fn() {
-            for i, u in items(uses, "uses") {
-              let uv = Some(u)
-              c.box(style=vi_use, fn() {
-                c.box(style=vi_use_text, fn() {
-                  c.box(style=pf_name_line, fn() {
-                    let chat = match opt_text(uv, "chatTitle") {
-                      Some(x) if x != "" => x
-                      _ => text(uv, "session")
-                    }
-                    let station = text(uv, "station")
-                    if station != "" {
-                      let id = c.id(key + "/use/" + i.to_string())
-                      if c.clicked(id) {
-                        (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
-                      }
-                      // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
-                      c.box(id~, fn() {
-                        c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat) |> ignore
-                      })
-                      |> ignore
-                    } else {
-                      c.text(chat, style=vi_chat) |> ignore
-                    }
-                    if flag(uv, "denied") {
-                      @sf.pill(c, @sf.t("web-pages.vault.uses.denied"), tone=Red)
-                    }
-                  })
-                  |> ignore
-                  if opt_text(uv, "command") is Some(_) {
-                    c.rich([@ui.span(text(uv, "howText"), mono=true)], style=desk_note) |> ignore
-                  } else {
-                    c.text(text(uv, "howText"), style=desk_note) |> ignore
-                  }
-                })
-                |> ignore
-                c.text(match text(field(uv, "at"), "full") { "" => text(field(uv, "at"), "ago"); x => x }, style=vi_use_time) |> ignore
-              })
-              |> ignore
-            }
-          })
-          |> ignore
+        Some(_) => item_uses(c, core, ws, key, items(uses, "uses"))
       }
     })
   })
-  let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
-  match look {
-    Wide =>
-      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, small=@sf.t("web-pages.vault.title"), head=fn() {
-        c.box(style=pf_head, fn() {
-          c.box(style=pf_mark, fn() {
-            @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
+  blocks
+}
+
+///|
+/// When agents used an item (`uses`), each: its chat (opening it), how, when.
+fn item_uses(c : @ui.Ctx, core : Core, ws : String, key : String, uses : Array[Json]) -> Unit {
+  c.box(style=vi_uses, fn() {
+    for i, u in uses {
+      let uv = Some(u)
+      c.box(style=vi_use, fn() {
+        c.box(style=vi_use_text, fn() {
+          c.box(style=pf_name_line, fn() {
+            let chat = match opt_text(uv, "chatTitle") {
+              Some(x) if x != "" => x
+              _ => text(uv, "session")
+            }
+            let station = text(uv, "station")
+            if station != "" {
+              let id = c.id(key + "/use/" + i.to_string())
+              if c.clicked(id) {
+                (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
+              }
+              // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
+              c.box(id~, fn() {
+                c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat) |> ignore
+              })
+              |> ignore
+            } else {
+              c.text(chat, style=vi_chat) |> ignore
+            }
+            if flag(uv, "denied") {
+              @sf.pill(c, @sf.t("web-pages.vault.uses.denied"), tone=Red)
+            }
           })
           |> ignore
-          c.box(style=pf_identity, fn() {
-            c.text(text(rv, "name"), style=pf_name) |> ignore
-            c.text(sub, style=pf_sub) |> ignore
-          })
-          |> ignore
-          if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy) {
-            edit_pressed()
+          if opt_text(uv, "command") is Some(_) {
+            c.rich([@ui.span(text(uv, "howText"), mono=true)], style=desk_note) |> ignore
+          } else {
+            c.text(text(uv, "howText"), style=desk_note) |> ignore
           }
         })
         |> ignore
+        c.text(match text(field(uv, "at"), "full") { "" => text(field(uv, "at"), "ago"); x => x }, style=vi_use_time) |> ignore
       })
-    // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
-    Narrow =>
-      @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
-        if editing_busy {
-          @sf.spinner(c, size=pf_spin) |> ignore
-        } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {
-          edit_pressed()
-        }
-      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// An item made up, for what its page shows while it is read (item_blocks in its bones): two fields, how agents use
+/// it, two uses.
+fn item_sample() -> Json {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  {
+    "listed": true,
+    "howText": w(8),
+    "lastsText": w(6),
+    "shut": [{ "key": "a", "label": w(3), "value": w(12) }, { "key": "b", "label": w(4), "value": w(16) }],
   }
+}
+
+///|
+fn uses_sample() -> Array[Json] {
+  [10, 7].map(fn(n) {
+    Json::object({
+      "chatTitle": Json::string(@sf.sample_words(n)),
+      "howText": Json::string(@sf.sample_words(14)),
+      "at": { "full": Json::string(@sf.sample_words(5)) },
+    })
+  })
 }
 
 ///|

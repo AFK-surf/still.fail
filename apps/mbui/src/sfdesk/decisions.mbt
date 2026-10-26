@@ -61,7 +61,7 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           Aside => c.box(style=zou_group, fn() { c.text(@sf.t("web-main.decisions.defer"), style=zou_group_words) |> ignore }) |> ignore
           Row(k, d) => zou_row(c, src, w, d, here && k == front, i + 1 < lines.length() && lines[i + 1] is Row(_, _))
           Empty => c.box(style=zou_empty, fn() { c.text(@sf.t("web-main.decisions.empty"), style=zou_empty_words) |> ignore }) |> ignore
-          Reading => @sf.waiting(c, dense=true, count=6)
+          Reading => @sf.waiting(c, fn() { zou_rows_sample(c, w) })
           Foot => side_space(c, @sf.list_foot_in(Side))
         }
       })
@@ -133,6 +133,29 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
   })
   |> ignore
 }
+
+///|
+/// The decisions to come while the list is read the first time (the library's Waiting, in its bones): rows as zou_row
+/// draws them, of made-up words (a question, its chat, its station and when).
+fn zou_rows_sample(c : @ui.Ctx, w : Workspace) -> Unit {
+  for i in 0..<zou_sample.length() {
+    let (question, title) = zou_sample[i]
+    let d : Json = {
+      "station": Json::string("sample"),
+      "seq": Json::number(i.to_double()),
+      "question": Json::string(@sf.sample_words(question)),
+      "title": Json::string(@sf.sample_words(title)),
+      "stationName": Json::string(@sf.sample_words(4)),
+      "message": { "time": { "createdAt": { "ago": Json::string(@sf.sample_words(3)), "full": "" } } },
+    }
+    zou_row(c, @sfbase.sample_source, w, d, false, i + 1 < zou_sample.length())
+  }
+}
+
+///|
+/// How long the made-up decisions' questions and their chats' titles are (letters).
+// kept across runs: a table, never written
+let zou_sample : Array[(Int, Int)] = [(16, 7), (11, 9), (22, 6), (14, 10), (9, 8), (18, 7)]
 
 ///|
 /// The 奏 page at the stack's root, as the rail's 奏 goes to it.

@@ -15,8 +15,9 @@ pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
   let body : Array[() -> Unit] = [
     fn() {
       if topic.value is None {
-        waiting_cards(
+        block_waiting(
           c,
+          fn() { memories_list(c, core.quiet(), sample_stations()) },
           error=match topic.error {
             Some(e) => error_text(e)
             None => ""
@@ -24,18 +25,7 @@ pub fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
         )
         return
       }
-      @sf.group(c, fn() {
-        for s in stations {
-          let sv = Some(s)
-          if flag(sv, "online") {
-            if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
-              (core.push)(Memory(text(sv, "station")))
-            }
-          } else {
-            @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
-          }
-        }
-      })
+      memories_list(c, core, stations)
     },
   ]
   @sf.page(c, on_back=core.pop, frame~, "memories", @sf.t("web-pages.settings.memory.title"), body, lead=@sf.t("android-misc.memory.note"))
@@ -61,6 +51,23 @@ pub fn memory_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, add
 }
 
 ///|
+/// A row to each station's memory; one offline says so.
+fn memories_list(c : @ui.Ctx, core : Core, stations : Array[Json]) -> Unit {
+  @sf.group(c, fn() {
+    for s in stations {
+      let sv = Some(s)
+      if flag(sv, "online") {
+        if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
+          (core.push)(Memory(text(sv, "station")))
+        }
+      } else {
+        @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
+      }
+    }
+  })
+}
+
+///|
 /// The stations' names by their ids (whose a shared skill is).
 fn station_names(stations : Array[Json]) -> Map[String, String] {
   let names : Map[String, String] = {}
@@ -74,11 +81,20 @@ fn station_names(stations : Array[Json]) -> Map[String, String] {
 /// A station's memory as a list (MemoryView): its sections, each a row that opens its page; a wait while it is read.
 fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : Map[String, String]) -> Unit {
   let read = memory_of(core, address)
-  // (read the first time: its sections' cards' shapes, on every width as what comes is the same there)
+  // (read the first time: what it will show in its bones, made up)
   guard read.value is Some(_) else {
-    waiting_cards(c, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
+    block_waiting(c, fn() { memory_body(c, core.quiet(), look, "sample", names, Some(memory_sample())) }, error=if read.error == "" {
+      ""
+    } else {
+      @sf.t("web-main.memory.failed", args=[("error", read.error)])
+    })
   }
-  let m = read.value
+  memory_body(c, core, look, address, names, read.value)
+}
+
+///|
+/// A station's memory (`m`, as the core reads it) as a list: its sections, each a row that opens its page.
+fn memory_body(c : @ui.Ctx, core : Core, look : Look, address : String, names : Map[String, String], m : Json?) -> Unit {
   let sections = sections_of(m)
   let skills = items(m, "skills")
   let part = fn(group : String) { skills.filter(fn(k) { text(Some(k), "group") == group }) }
@@ -236,3 +252,26 @@ let mem_tag_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// (memoryRowSub: the meta's size, muted, on one line cut short)
 // kept across runs: a value (no field of it changes)
 let mem_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
+
+///|
+/// A station's memory made up, for what is shown while it is read (memory_body in its bones): a few parts of the
+/// global memory, a project's skill and two others.
+fn memory_sample() -> Json {
+  let row = fn(name : Int, line : Int, group : String) -> Json {
+    {
+      "name": Json::string(@sf.sample_words(name)),
+      "line": Json::string(@sf.sample_words(line)),
+      "size": Json::string(@sf.sample_words(3)),
+      "group": Json::string(group),
+    }
+  }
+  {
+    "global": {
+      "size": Json::string(@sf.sample_words(3)),
+      "sections": Json::array(
+        [4, 6, 5].map(fn(n) { Json::object({ "title": Json::string(@sf.sample_words(n)), "note": Json::string(@sf.sample_words(3)) }) }),
+      ),
+    },
+    "skills": [row(6, 18, "project"), row(5, 14, "skill"), row(8, 20, "skill")],
+  }
+}

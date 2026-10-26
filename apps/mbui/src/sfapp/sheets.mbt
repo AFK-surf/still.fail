@@ -1125,7 +1125,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
   let view = match topic.value {
     Some(Object(_)) as v => v
     _ => {
-      waiting_rows(c, 3, topic.error)
+      waiting_rows(c, topic.error, fn() { jobs_sample(c, r) })
       return
     }
   }
@@ -1231,28 +1231,14 @@ fn sheet_link(c : @ui.Ctx, key : String, body : () -> Unit) -> Bool {
 }
 
 ///|
-/// What is being read breathing (Waiting.kt Waiting): `n` rows of shapes, what went wrong over them in red.
-fn waiting_rows(c : @ui.Ctx, n : Int, error : Json?) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), padx=18.0, gap=12.0, fn() {
-    match error {
-      Some(e) =>
-        c.text(error_words(e), size=t.t.meta, color=t.p.red, line=18.0) |> ignore
-      None => ()
-    }
-    let breath = @sf.breath(c, failed=error is Some(_))
-    for i in 0..<n {
-      c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, opacity=breath, fn() {
-        c.box(w=Px(36.0), h=Px(36.0), radius=11.0, bg=t.p.line, fn() {  }) |> ignore
-        c.box(w=Fill(1.0), gap=6.0, fn() {
-          c.box(w=Px(if i % 2 == 0 { 160.0 } else { 120.0 }), h=Px(12.0), radius=6.0, bg=t.p.line, fn() {  })
-          |> ignore
-          c.box(w=Px(220.0), h=Px(10.0), radius=5.0, bg=t.p.line, fn() {  }) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+/// What is being read the first time (the library's Waiting): `sample`, its rows of made-up words, in their bones;
+/// what went wrong over them in red.
+fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
+  c.box(w=Fill(1.0), padx=18.0, fn() {
+    @sf.waiting(c, sample, error=match error {
+      Some(e) => error_words(e)
+      None => ""
+    })
   })
   |> ignore
 }
@@ -1679,6 +1665,48 @@ let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 
 
 ///|
+/// A chat it wrote with (`ch`, by `key`): its title, how many and when, the last letter in brief under them; pressed,
+/// opened.
+fn letter_row(c : @ui.Ctx, key : String, ch : Json?) -> Unit {
+  let id = c.id("letters/row/" + key)
+  if c.clicked(id) {
+    dui.letters_open = key
+  }
+  c.box(style=letters_row.then(@sf.panel_row_reach()), id~, fn() {
+    c.box(style=letters_row_head, fn() {
+      c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+      let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
+      let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
+      c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
+    })
+    |> ignore
+    c.text(text(ch, "last"), style=letters_last) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The chats written with to come while they are read (in their bones): letter_row's of made-up ones.
+fn letters_sample_rows(c : @ui.Ctx) -> Unit {
+  for i, n in [(8, 18), (6, 22), (10, 14)] {
+    letter_row(c, "sample" + i.to_string(), Some({
+      "title": Json::string(@sf.sample_words(n.0)),
+      "last": Json::string(@sf.sample_words(n.1)),
+      "time": { "lastActiveAt": { "ago": Json::string(@sf.sample_words(3)) } },
+    }))
+  }
+}
+
+///|
+/// The chat's services and jobs to come while they are read (in their bones): job_groups of made-up ones.
+fn jobs_sample(c : @ui.Ctx, r : ChatRef) -> Unit {
+  let job = fn(i : Int, service : Bool, n : Int) -> Json {
+    { "id": Json::string("sample" + i.to_string()), "service": Json::boolean(service), "name": Json::string(@sf.sample_words(n)), "tone": "up" }
+  }
+  job_groups(c, @sfbase.sample_source, r, None, [job(0, true, 6), job(1, true, 8), job(2, false, 7)], fn() {  })
+}
+
+///|
 /// What the letters' sheet holds below its head, and the wide frame's agent 往来 tab (wide_panel.mbt): the list of the
 /// chats written with, or the one opened.
 fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
@@ -1687,7 +1715,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   let view = match topic.value {
     Some(Object(_)) as v => v
     _ => {
-      waiting_rows(c, 3, topic.error)
+      waiting_rows(c, topic.error, fn() { letters_sample_rows(c) })
       return
     }
   }
@@ -1695,7 +1723,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   let whole = flag(view, "whole")
   // not here yet: its rows to come
   if chats.length() == 0 && !whole {
-    waiting_rows(c, 3, topic.error)
+    waiting_rows(c, topic.error, fn() { letters_sample_rows(c) })
     return
   }
   let rows : Array[() -> Unit] = []
@@ -1749,24 +1777,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       for ch in chats {
         let ch = Some(ch)
         let key = text(ch, "key")
-        rows.push(fn() {
-          // a chat it wrote with: its title, how many and when, the last letter in brief under them
-          let id = c.id("letters/row/" + key)
-          if c.clicked(id) {
-            dui.letters_open = key
-          }
-          c.box(style=letters_row.then(@sf.panel_row_reach()), id~, fn() {
-            c.box(style=letters_row_head, fn() {
-              c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
-              let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
-              let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
-              c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
-            })
-            |> ignore
-            c.text(text(ch, "last"), style=letters_last) |> ignore
-          })
-          |> ignore
-        })
+        rows.push(fn() { letter_row(c, key, ch) })
       }
   }
   // not all of the chat is here yet: older ones may come

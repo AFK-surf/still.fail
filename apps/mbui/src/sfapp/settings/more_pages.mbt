@@ -214,6 +214,21 @@ fn size_row(
 }
 
 ///|
+/// What this device keeps while it is read (the library's Waiting, in its bones): made-up rows of sizes on their card,
+/// as size_row draws them (`chats`: by chat under their heading; else a chat's messages, then its files).
+fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
+  if !chats {
+    list_card(c, fn() { size_row(c, "", @sf.sample_words(4), @sf.sample_words(14), 1.0) |> ignore })
+  }
+  section_header(c, @sf.sample_words(4), start=S6)
+  let rows = [(8, 16), (6, 12), (10, 18), (7, 14)]
+  for i, n in rows {
+    size_row(c, "", @sf.sample_words(n.0), @sf.sample_words(n.1), 1.0, more=chats, piece=(i == 0, i == rows.length() - 1))
+    |> ignore
+  }
+}
+
+///|
 /// What this device keeps (KeptFilesScreen): by chat, what the core keeps of each (its messages, its transcripts, the
 /// files opened in it), each to look into; then what is of no chat: files of no chat known, the drives' files opened
 /// (`drive.kept.clear`); or everything. (The Android app also lists its web pages' cache, update packages, temporary
@@ -227,7 +242,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { page_note(c, tr("android-settings.files.note")) },
   ]
   match kept.chats {
-    None => blocks.push(fn() { waiting_rows(c) })
+    None => blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, true) }) })
     Some(chats) => {
       let loose = kept.loose
       let total = chats.fold(init=kept.drive + files_bytes(loose), fn(s, x) { s + chat_bytes(x) })
@@ -407,7 +422,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     }
   }
   if kept.chats is None {
-    blocks.push(fn() { waiting_rows(c) })
+    blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, false) }) })
   } else {
     let messages = number(chat, "bytes")
     if chat is Some(_) {

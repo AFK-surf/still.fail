@@ -405,14 +405,15 @@ test "settings: the account's page has the accounts on this device on its one ca
 }
 
 ///|
-/// The card drawn under the box at `rect` (the smallest of the card's ground holding it), as (x, y, w, h).
+/// The card drawn under the box at `rect` (the smallest of the card's ground holding it, however faded: in its bones
+/// as well), as (x, y, w, h).
 fn card_under(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
   let (x, y, w, h) = rect
   let card = @sf.ui_theme().card
   let mut best : (Double, Double, Double, Double)? = None
   for r in t.drawn_rects() {
     let (rx, ry, rw, rh, color) = r
-    if color == card && rx <= x && ry <= y && rx + rw >= x + w && ry + rh >= y + h {
+    if color >> 8 == card >> 8 && rx <= x && ry <= y && rx + rw >= x + w && ry + rh >= y + h {
       match best {
         Some((_, _, bw, bh)) if bw * bh <= rw * rh => ()
         _ => best = Some((rx, ry, rw, rh))
@@ -423,25 +424,23 @@ fn card_under(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> (Doubl
 }
 
 ///|
-test "settings: where the account is signed in, read the first time, is rows' shapes where its card's rows will be, no words" {
+test "settings: where the account is signed in, read the first time, is its card in its bones where the card will be, no words" {
   // (2026-10-26, 「这个 loading 很怪」: a wait's line stood in its place, at the card's edge, 注销账号's card right
-  // under it)
+  // under it; then 「骨架对不上实际内容的轮廓」: the card itself, in its bones)
   let read = settings_tester("me")
   let (_, read_delete, _, _) = read.rect_of("注销账号").unwrap()
   let (read_x, read_y, read_w, read_h) = card_under(read, read.rect_of("Pixel 9 · still.fail").unwrap()).unwrap()
   let t = settings_tester("me", mode="settings-me-reading")
   t.run_for(@sf.later_ms)
   assert_true(t.find("正在读取") is None)
-  let shapes = t.get(Status, label="正在读取").rect
-  let (x, y, w, h) = shapes
-  // in from where the card's edges will be as far as its rows are, on no card's ground (with nothing in it, too faint
-  // on the page)
-  let pad = @sf.list_pad
-  assert_eq((x - pad, y - pad, w + 2.0 * pad), (read_x, read_y, read_w))
-  assert_true(card_under(t, shapes) is None)
-  // 注销账号's card as far under them as under the card once read
+  let (x, y, w, _) = t.get(Status, label="正在读取").rect
+  // its card where the card will be, no glyph in it
+  let (card_x, card_y, card_w, card_h) = card_under(t, (x, y, w, 1.0)).unwrap()
+  assert_eq((card_x, card_y, card_w), (read_x, read_y, read_w))
+  assert_true(t.drawn_glyphs().iter().all(fn(g) { g.1 < card_y || g.1 > card_y + card_h }))
+  // 注销账号's card as far under it as under the card once read
   let (_, delete, _, _) = t.rect_of("注销账号").unwrap()
-  assert_eq(delete - (y + h + pad), read_delete - (read_y + read_h))
+  assert_eq(delete - (card_y + card_h), read_delete - (read_y + read_h))
 }
 
 ///|
@@ -501,29 +500,34 @@ fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
 }
 
 ///|
-test "settings: a station's network not open yet (stationNet's null) waits as grey bars, no arrows over nothing" {
+test "settings: a station's network not open yet (stationNet's null) waits as its line's bones, no arrows over nothing" {
   let t = stations_unread_net()
   assert_true(t.find("Studio") is Some(_))
-  // (the line it would be is there, unseen, keeping its room)
+  // (the line it would be is there, unseen, keeping its room; its bones over it draw no words)
   let shown = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }).length() > 0 }
   assert_false(shown("↑"))
   assert_false(shown("↓"))
 }
 
 ///|
-test "settings: a station's network not open yet waits where its line goes (StationBody): its bars centred across the line's room, 10 under the load's boxes" {
+test "settings: a station's network not open yet waits where its line goes (StationBody): its bones over the line's room, 10 under the load's boxes" {
   let t = stations_unread_net()
   // Studio's: its low box (20 high round its words), the line's room 10 under it, two lines of 18 2 apart
   let (_, box_mid) = t.find("剩 11.5 G").unwrap()
   let room = unseen_lines(t)[0]
   assert_true((room - (box_mid + 10.0 + 10.0)).abs() < 0.5, msg="the line's room from \{room}, the box's middle \{box_mid}")
-  // its four bars (34 and 96, 132 and 132), two rows 9 apart, as much room over them as under
-  let bars = t.drawn_rects().filter(fn(r) { r.3 == 10.0 && r.1 > box_mid && r.1 < room + 38.0 })
-  assert_eq(bars.length(), 4)
-  let top = bars.fold(init=1.0e9, fn(m, r) { if r.1 < m { r.1 } else { m } })
-  let bottom = bars.fold(init=-1.0e9, fn(m, r) { if r.1 + r.3 > m { r.1 + r.3 } else { m } })
-  assert_true((top - room - 4.5).abs() < 0.5, msg="the bars from \{top}, the line's room from \{room}")
-  assert_true((room + 38.0 - bottom - 4.5).abs() < 0.5, msg="the bars to \{bottom}, the line's room to \{room + 38.0}")
+  // its bones the line it keeps the room of (the same made-up one, unseen): a bar where each of its words starts, in
+  // that word's line
+  let unseen = t.words().filter(fn(w) { w.5 == 0.0 && w.2 >= room - 0.5 && w.2 < room + 38.0 && w.0 != " " })
+  let line = @sf.theme().p.line >> 8
+  let bars = t.drawn_rects().filter(fn(r) { r.4 >> 8 == line && r.1 > box_mid && r.1 < room + 38.0 })
+  assert_eq(bars.length(), unseen.length())
+  for r in bars {
+    assert_true(
+      unseen.iter().any(fn(w) { (r.0 - w.1).abs() < 0.5 && r.1 > w.2 && r.1 + r.3 < w.2 + w.4 }),
+      msg="a bar at \{r.0}, \{r.1}",
+    )
+  }
 }
 
 ///|

@@ -133,6 +133,10 @@ pub fn button(
       |> ignore
     },
   )
+  // (in a page's bones, one piece where it has a ground; one of words alone, its words)
+  if tone != Ghost && tone != GhostDanger {
+    c.bone_whole(b)
+  }
   // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
   // faded words are asked no contrast)
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
@@ -265,6 +269,7 @@ pub fn chip(
       }
     },
   )
+  c.bone_whole(b)
   if said != "" {
     c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
     if !disabled {
@@ -1336,10 +1341,11 @@ pub fn switch(
   }
   // its own height wherever it is (in a row, in its middle: switchSmall's alignSelf), not stretched
   let mut now = on
-  c.box(style=switch_at, fn() {
+  let b = c.box(style=switch_at, fn() {
     now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=switch_look_for(small)).value
   })
-  |> ignore
+  // (in a page's bones, one piece: on or off is not known yet)
+  c.bone_whole(b)
   now
 }
 
@@ -1572,7 +1578,7 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
     Red => (p.red_bg, p.red)
     Accented => (p.accent_bg, p.accent_text)
   }
-  c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
+  let b = c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
     if icon != "" {
       draw_icon(c, icon, pill_icon, ink)
     }
@@ -1580,7 +1586,7 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
       c.text(words, style=pill_words, color=ink) |> ignore
     }
   })
-  |> ignore
+  c.bone_whole(b)
 }
 
 ///|

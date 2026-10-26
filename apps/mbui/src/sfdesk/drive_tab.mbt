@@ -412,10 +412,10 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
               }
             })
             |> ignore
-          (None, None) => @sf.waiting(c, count=5)
+          (None, None) => @sf.waiting(c, fn() { rows_sample(c, at, shown, 5, compact=true) })
           _ =>
             match b.arranged(at.path, held(at.path)) {
-              None => @sf.waiting(c, count=5)
+              None => @sf.waiting(c, fn() { rows_sample(c, at, shown, 5, compact=true) })
               Some([]) => c.text(@sf.t("web-pages.drive.emptyFolder"), style=ftab_note) |> ignore
               Some(_) =>
                 rows_view(c, src, "files-tab/rows/" + at.station + "/" + root + "/" + at.path, at, shown, false, compact=true, head=fn() {

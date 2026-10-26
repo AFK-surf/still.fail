@@ -90,7 +90,15 @@ fn link_card(c : @ui.Ctx, src : Source, station : String, href : String, words :
     "github_issue" => change_card(c, v, false)
     _ =>
       if v is None && read.error is None && rich_link(href) {
-        card_bars(c)
+        // (while it is read: a made-up one's, in its bones)
+        @sf.bones(c, fn() {
+          change_card(c, Some({
+            "repository": Json::string(@sf.sample_words(8)),
+            "number": 1,
+            "title": Json::string(@sf.sample_words(18)),
+            "time": { "updatedAt": { "ago": Json::string(@sf.sample_words(3)) } },
+          }), href.contains("/pull/"))
+        })
       } else {
         page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None })
       }
@@ -363,21 +371,6 @@ fn github_mark(c : @ui.Ctx, w : Double, ink : Int64) -> Unit {
 ///|
 let github_path : String = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
 
-///|
-/// Bars where a rich card's lines will be while it is read (CardSkeleton): its meta's, its title's, a fact's, breathing
-/// as every wait's shapes.
-fn card_bars(c : @ui.Ctx) -> Unit {
-  c.box(style=peek_bars, fn() {
-    for b in [(peek_bar_meta, peek_bar_h), (peek_bar_title, peek_bar_title_h), (peek_bar_detail, peek_bar_h)] {
-      c.box(style=peek_bar_row, fn() {
-        c.box(style=b.0, fn() { @sf.bar(c, Fill(1.0), b.1, breathing=true) }) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
 // ── a file's (Peeks.tsx FileRef, FileCard) ─────────────────────────────
 
 ///|
@@ -426,7 +419,17 @@ fn file_card(c : @ui.Ctx, src : Source, params : Map[String, Json], path : Strin
   }
   guard v is Some(_) else {
     match read.error {
-      None => card_bars(c)
+      // (while it is read: a made-up file's, in its bones)
+      None =>
+        @sf.bones(c, fn() {
+          file_shown(c, Some({
+            "kind": "text",
+            "name": Json::string(base_of(path)),
+            "path": Json::string(path),
+            "size": 1,
+            "lines": { "start": 1, "text": Json::array([24, 32, 18, 28, 12].map(fn(n) { Json::string(@sf.sample_words(n)) })) },
+          }))
+        })
       Some(e) =>
         c.box(style=peek_rich, fn() {
           let name = base_of(path)
@@ -438,6 +441,12 @@ fn file_card(c : @ui.Ctx, src : Source, params : Map[String, Json], path : Strin
     }
     return
   }
+  file_shown(c, v)
+}
+
+///|
+/// A file as the core read it (`v`): its head, a few of its lines, its picture or its first entries, its foot.
+fn file_shown(c : @ui.Ctx, v : Json?) -> Unit {
   let kind = text(v, "kind")
   let dir = kind == "dir"
   let lines = field(v, "lines")
@@ -719,7 +728,7 @@ fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String, linked : L
   let (station, key, history) = match chat_named(src, here, href) {
     Chat(station, key, history) => (station, key, history)
     Asking => {
-      card_bars(c)
+      chat_card_sample(c)
       return
     }
     NoChat => {
@@ -728,7 +737,7 @@ fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String, linked : L
     }
   }
   guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(view) else {
-    card_bars(c)
+    chat_card_sample(c)
     return
   }
   let mut found : ChatItem? = None
@@ -743,7 +752,13 @@ fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String, linked : L
     c.text(@sf.t("web-main.chatRef.previewGone"), style=peek_note) |> ignore
     return
   }
-  let elsewhere = item.station != here
+  chat_card_of(c, item, item.station != here, history)
+}
+
+///|
+/// The card of a chat found (`item`): `elsewhere` where it is another station, `history` where the link is its agent's
+/// execution history.
+fn chat_card_of(c : @ui.Ctx, item : ChatItem, elsewhere : Bool, history : Bool) -> Unit {
   c.box(style=peek_rich, fn() {
     c.box(style=peek_chat_title, fn() {
       chat_mark(c, @sfbase.row_tone(item)) |> ignore
@@ -780,6 +795,14 @@ fn chat_card(c : @ui.Ctx, src : Source, here : String, href : String, linked : L
     }
   })
   |> ignore
+}
+
+///|
+/// The card while the chat is read (in its bones): a made-up chat's.
+fn chat_card_sample(c : @ui.Ctx) -> Unit {
+  @sf.bones(c, fn() {
+    chat_card_of(c, sample_chat(0), false, false)
+  })
 }
 
 // ── its look (Hover.css.ts) ──────────────────────────────────────────────
@@ -1026,43 +1049,3 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 ///|
 let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - @sf.text_in
 
-///|
-/// The bars while it is read: a line each, their shares of the card (meta 45%, title 85%, detail 60%); the first and
-/// the last in the card's corners as far from both their edges as makes them concentric with it.
-// kept across runs: a value (no field of it changes)
-let peek_bars : @ui.Style = @ui.css("w=Full gap=S2").then(@ui.style(p=@sf.room_of(peek_bars_in)))
-
-///|
-let peek_bars_in : Double = @sf.capsule_in(@sf.r_menu, peek_bar_h) - @sf.panel_pad - @sf.text_in
-
-///|
-/// A bar's line.
-// kept across runs: a value (no field of it changes)
-let peek_bar_row : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let peek_bar_meta : @ui.Style = @ui.style(w=Pct(peek_bar_meta_share))
-
-///|
-let peek_bar_meta_share : Double = 45.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let peek_bar_title : @ui.Style = @ui.style(w=Pct(peek_bar_title_share))
-
-///|
-let peek_bar_title_share : Double = 85.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let peek_bar_detail : @ui.Style = @ui.style(w=Pct(peek_bar_detail_share))
-
-///|
-let peek_bar_detail_share : Double = 60.0
-
-///|
-let peek_bar_h : Double = 10.0
-
-///|
-let peek_bar_title_h : Double = 12.0

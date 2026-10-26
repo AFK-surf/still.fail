@@ -244,7 +244,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // (its 4 under it, as the web's margins: in a heading's 14 over it, not on top of it)
         Search => archive_search_side(c, i + 1 < lines.length() && lines[i + 1] is (Waiting | Row(_)))
         Failing(words) => side_said(c, words, true)
-        Waiting => @sf.waiting(c, dense=true, count=6)
+        Waiting => @sf.waiting(c, fn() { archive_sample(c) })
         Said(words) => side_said(c, words, false)
         Day(label) => @sf.list_heading(c, label, Side)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
@@ -374,6 +374,23 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// The archive's rows to come while it is read (the library's Waiting, in its bones): made-up chats' rows, as
+/// archive_side_row draws them.
+fn archive_sample(c : @ui.Ctx) -> Unit {
+  let rows = [(7, 13), (10, 9), (6, 15), (12, 11), (8, 14), (9, 10)]
+  for i, n in rows {
+    let it : Json = {
+      "station": "sample",
+      "session": Json::string("sample" + i.to_string()),
+      "title": Json::string(@sf.sample_words(n.0)),
+      "last": Json::string(@sf.sample_words(n.1)),
+      "clock": Json::string(@sf.sample_words(3)),
+    }
+    archive_side_row(c, @sfbase.sample_source, it, i + 1 < rows.length())
+  }
 }
 
 ///|

@@ -45,6 +45,16 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         blocks.push(fn() {
           waiting_cards(
             c,
+            fn() {
+              for i, n in [5, 3, 7] {
+                station_card(c, core.quiet(), {
+                  "station": Json::string("sample/" + i.to_string()),
+                  "name": Json::string(@sf.sample_words(n)),
+                  "online": true,
+                  "summary": Json::string(@sf.sample_words(12)),
+                })
+              }
+            },
             error=match topic.error {
               Some(e) => error_text(e)
               None => ""
@@ -171,15 +181,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         })
         |> ignore
         if online && host is None {
-          c.layer(fn() {
-            c.box(style=peek_meters_unread, fn() {
-              for w in unread_meters {
-                @sf.bar(c, Px(w), unread_meter_h, radius=unread_meter_r, breathing=true)
-              }
-            })
-            |> ignore
-          })
-          |> ignore
+          c.layer(fn() { sample_meters(c, "station-body/" + text(s, "station")) }) |> ignore
         }
       })
       |> ignore
@@ -188,7 +190,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         c.box(style=@sf.full_width, fn() {
           c.box(style=seen(@sf.full_width, net is Some(_), faded), fn() { net_line(c, net) }) |> ignore
           if online && net is None {
-            c.layer(fn() { net_bars(c) }) |> ignore
+            c.layer(fn() { @sf.bones(c, fn() { net_line(c, None) }) }) |> ignore
           }
         })
         |> ignore
@@ -303,10 +305,18 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       _ => t.p.text
     }
   }
-  // as tall as a real one, unseen, while there is none (its words in Chinese)
+  // (none: a made-up one, to be drawn in its bones while it is read, its words in Chinese)
   let n = match net {
     Some(_) => net
-    None => Some(obj([("path", str("直连")), ("rtt", obj([("text", str("0 ms")), ("level", str("ok"))])), ("down", str(" ")), ("up", str(" "))]))
+    None =>
+      Some(
+        obj([
+          ("path", str("直连")),
+          ("rtt", obj([("text", str("0 ms")), ("level", str("ok"))])),
+          ("down", str("0.0 KB/s")),
+          ("up", str("0.0 KB/s")),
+        ]),
+      )
   }
   c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
     c.box(w=Fill(1.0), gap=2.0, fn() {

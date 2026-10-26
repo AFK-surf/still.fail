@@ -1,6 +1,7 @@
 // still.fail filmed offscreen (mbui's film, mbui/src/film): sffix's made-up chats (MBUI_FIXTURE: its modes, MBUI_DARK=1
 // the dark theme) in a Tester of this Mac's text and pictures, a scripted run over them (MBUI_FILM_DRIVE: one of
 // scripts/motion's), each frame drawn offscreen and written into MBUI_FILM, an MP4. No window: scripts/film.sh.
+// MBUI_HOLD=<topic>,…: those topics of the made-up core never come (their pages as they are read the first time).
 // MBUI_CORE_MS: the made-up core answers each call and gives each topic's first value that many ms late, as a phone's
 // core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_SAID=1: what people, agents
 // and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID). MBUI_UPDATE=<version>:
@@ -32,6 +33,9 @@ fn main {
           @sffixture.fixture_update(@film.arg("MBUI_UPDATE"))
         }
         let s = if late > 0.0 { @sffixture.round_trip(s, late) } else { s }
+        // MBUI_HOLD=<topic>,…: those topics never come (what shows while they are read the first time)
+        let held = @film.arg("MBUI_HOLD")
+        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_string() }).collect()) } else { s }
         // MBUI_SAID=1: what people, agents and stations wrote at its longest (sfapp's fixture_said.mbt)
         let s = if @film.arg("MBUI_SAID") == "1" { @sffixture.said_longest_source(s) } else { s }
         if dark {

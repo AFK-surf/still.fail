@@ -492,13 +492,13 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
           (None, Some(_)) => @sf.rows_room(c, head)
           (None, None) => {
             @sf.rows_room(c, head)
-            @sf.waiting(c, count=8)
+            @sf.waiting(c, fn() { rows_sample(c, at, shown, 8) })
           }
           (Some(_), _) =>
             match b.arranged(at.path, entries) {
               None => {
                 @sf.rows_room(c, head)
-                @sf.waiting(c, count=8)
+                @sf.waiting(c, fn() { rows_sample(c, at, shown, 8) })
               }
               Some(list) =>
                 rows_view(

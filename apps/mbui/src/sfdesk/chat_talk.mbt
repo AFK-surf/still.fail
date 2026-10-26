@@ -19,8 +19,10 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
       // (under the bar, as the list's first row is)
       if error is Some(_) || !@sfbase.new_chat_made(c, r) {
+        // (its messages to come in their bones, the first where the list's first row will be)
+        let under = @sf.under_bar_room().px()
         c.box(style=@ui.style(w=Full, pt=@sf.under_bar_room()), fn() {
-          @sf.waiting(c, shape=Messages, error=match error {
+          @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, chat_bar_room() + list_head_gap - under) }, error=match error {
             Some(e) => @sf.t("android-chat.chat.unreadable", args=[("error", text(Some(e), "message"))])
             None => ""
           })

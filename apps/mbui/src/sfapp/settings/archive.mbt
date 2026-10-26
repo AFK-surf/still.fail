@@ -103,7 +103,23 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         Room(h) => gap(c, h)
         Search => archive_search(c)
         Wait(note, error) =>
-          waiting_rows(c, count=7, error~, failing=failing_of(note))
+          waiting_rows(
+            c,
+            fn() {
+              section_header(c, @sf.sample_words(2))
+              for i, n in [(7, 4), (10, 5), (6, 4), (12, 6), (8, 4), (9, 5), (5, 4)] {
+                archive_row(c, core.quiet(), {
+                  "station": "sample",
+                  "session": Json::string("sample" + i.to_string()),
+                  "title": Json::string(@sf.sample_words(n.0)),
+                  "place": Json::string(@sf.sample_words(n.1)),
+                  "clock": Json::string(@sf.sample_words(3)),
+                })
+              }
+            },
+            error~,
+            failing=failing_of(note),
+          )
         Error(e) => {
           let t = @sf.theme()
           c.box(w=Fill(1.0), padx=20.0, pady=8.0, fn() {

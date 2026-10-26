@@ -20,7 +20,7 @@ fn add_profile_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> 
   let back = "Profile"
   guard @settings.stations_of(core, here).value is Some(Array(list)) else {
     desk_page(c, core, "add-profile", @sf.t("android-settings.profile.add"), back~, [
-      fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] }) },
+      fn() { @sf.waiting(c, fn() { providers_sample(c) }, text=@sf.t("common.readingStations")) },
     ])
   }
   let online = list.filter(fn(s) { flag(Some(s), "online") })
@@ -77,7 +77,7 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
   }
   let key = "add-profile/" + form
   guard d is Some(Object(_)) else {
-    desk_page(c, core, key, @sf.t("android-settings.profile.add"), back="Profile", [fn() { @sf.waiting(c, shape=Cards) }])
+    desk_page(c, core, key, @sf.t("android-settings.profile.add"), back="Profile", [fn() { @sf.waiting(c, fn() { providers_sample(c) }) }])
   }
   let step = text(d, "step")
   // what a plan signs in to (the core's, at its connect step); a runtime to install first (`install`), the sign-in after
@@ -216,6 +216,18 @@ fn add_profile_stations(c : @ui.Ctx, station : String, online : Array[Json]) -> 
     })
   })
   |> ignore
+}
+
+///|
+/// The providers to pick from while they are read (the library's Waiting, in its bones): two groups of made-up ones,
+/// as provider_group draws them.
+fn providers_sample(c : @ui.Ctx) -> Unit {
+  for g in [(4, 3), (5, 5)] {
+    let providers = Array::makei(g.1, fn(i) {
+      Json::object({ "id": Json::string("sample" + i.to_string()), "name": Json::string(@sf.sample_words(4 + i % 3)) })
+    })
+    provider_group(c, Some({ "title": Json::string(@sf.sample_words(g.0)), "providers": Json::array(providers) }), fn(_) {  })
+  }
 }
 
 ///|

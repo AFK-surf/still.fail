@@ -779,6 +779,7 @@ test "a list's running sums are its rows' heights added up" {
     pending: 0.0,
     row: fn(_i) {  },
     seed: 0,
+    bones: 0L,
     vis_first: -1,
     vis_last: -1,
     owner: 0,

@@ -657,6 +657,14 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     return
   }
+  // built in a page's bones and drawn whole: one piece of its own box, nothing in it (bones.mbt)
+  if n.bones != 0L && n.bone_whole {
+    // (in its own corners; with none, round at its ends: a control's)
+    let r = if n.radius > 0.0 { n.radius } else { dmin(n.fw, n.fh) / 2.0 }
+    self.emit_bone(n.x, n.y, n.fw, n.fh, r, n.bones, alpha)
+    self.corners_last(n)
+    return
+  }
   // its own ground drawn in another box (a shape on its way: draw_ground), what it holds where it is laid out
   let laid = (n.x, n.y, n.fw, n.fh, n.radius, n.radii)
   let ground = self.ground_of(i)
@@ -709,6 +717,9 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       _ => n.bg
     }
   }
+  // (in a page's bones, a ground or an edge that says something by its colour in theirs: bones.mbt)
+  let bg = if n.bones != 0L { self.bone_ground(bg, n.bones) } else { bg }
+  let border_c = if n.bones != 0L { self.bone_ground(n.border_c, n.bones) } else { n.border_c }
   if (bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
     self.emit_rect(
       n.x,
@@ -718,13 +729,13 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.radius,
       bg,
       if border_over || n.dashed { 0.0 } else { n.border_w },
-      n.border_c,
+      border_c,
       alpha,
     )
     self.notch_last(n)
     self.corners_last(n)
     if n.dashed && n.border_w > 0.0 && !border_over {
-      self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+      self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
     }
   }
   if ground is Some(_) {
@@ -735,7 +746,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.radius = laid.4
     n.radii = laid.5
   }
-  if (n.hit || n.points) && n.id != 0 {
+  // (nothing in a page's bones is pressed or pointed at: it is not there yet)
+  if (n.hit || n.points) && n.id != 0 && n.bones == 0L {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
     if n.points {
       // (and of a part kept, a list's row kept being painted: said again as they are drawn again)
@@ -744,18 +756,29 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what
   // scrolls in it (laid in it, later) still taking it first
-  if (n.blocks || n.stops_wheel) && n.id != 0 {
+  if (n.blocks || n.stops_wheel) && n.id != 0 && n.bones == 0L {
     self.next_scroll_ids.push(n.id)
     self.next_scroll_rects.push(dmax(n.x, cx0))
     self.next_scroll_rects.push(dmax(n.y, cy0))
     self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
     self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
   }
-  if n.shapes.length() > 0 {
-    self.paint_shapes(n, alpha)
+  if n.bones != 0L && (n.shapes.length() > 0 || n.lines.length() > 0) {
+    // an icon, a drawing, in a page's bones: its shape
+    self.paint_bone_shape(n, alpha)
+  } else {
+    if n.shapes.length() > 0 {
+      self.paint_shapes(n, alpha)
+    }
+    if n.lines.length() > 0 {
+      self.paint_lines(n, alpha)
+    }
   }
-  if n.lines.length() > 0 {
-    self.paint_lines(n, alpha)
+  if n.bones != 0L {
+    self.paint_bones_of(i, n, alpha)
+    if n.kind != kind_box && n.kind != kind_scroll && n.kind != kind_list {
+      return
+    }
   }
   if n.kind == kind_text {
     match n.tl {
@@ -888,19 +911,19 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if border_over && n.dashed {
     match ground {
       Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
-        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, n.border_c, alpha)
-      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, border_c, alpha)
+      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
     }
   } else if border_over {
     match ground {
       // (round its ground drawn in another box: that box's corners, each its own)
       Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
-        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, n.border_c, alpha)
+        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, border_c, alpha)
         self.notch_last(n)
         self.corners_last_each(r0, r1, r2, r3)
       }
       None => {
-        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
+        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, border_c, alpha)
         self.notch_last(n)
         self.corners_last(n)
       }

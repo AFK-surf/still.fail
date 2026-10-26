@@ -36,6 +36,46 @@ pub(all) struct Shown {
 }
 
 ///|
+/// A folder's rows to come while it is read the first time (the library's Waiting, in its bones): `count` rows as
+/// rows_view draws them (drive_row, each a row of the group's card) as `s` shows them at `at`, of made-up names, a
+/// couple of folders first.
+pub fn rows_sample(c : @ui.Ctx, at : DriveAt, s : Shown, count : Int, compact? : Bool = false) -> Unit {
+  @sf.rows_room(c, fn() {
+    for i in 0..<count {
+      let (dir, name) = rows_sample_names[i % rows_sample_names.length()]
+      let e = @sfbase.dv_entry({
+        "name": Json::string(@sf.sample_words(name) + (if dir { "" } else { ".md" })),
+        "dir": Json::boolean(dir),
+        "sizeText": Json::string(if dir { "" } else { @sf.sample_words(3) }),
+        "timeText": Json::string(@sf.sample_words(4)),
+      })
+      @sf.group_row(c, i == 0, i == count - 1, fn() {
+        drive_row(c, @sfbase.sample_source, at, e, rows_sample_props, s, compact~)
+      })
+    }
+  })
+}
+
+///|
+/// What a made-up row does: nothing.
+// kept across runs: a value (nothing in it changes)
+let rows_sample_props : RowProps = {
+  items: fn() { [] },
+  open: fn() {  },
+  press: fn() {  },
+  menu: fn() {  },
+  chosen: false,
+  renaming: false,
+  rename: fn(_) {  },
+  drop: None,
+}
+
+///|
+/// Whether each made-up row is a folder, and how long its name is (letters).
+// kept across runs: a table, never written
+let rows_sample_names : Array[(Bool, Int)] = [(true, 4), (true, 6), (false, 9), (false, 5), (false, 12), (false, 7), (false, 8), (false, 6)]
+
+///|
 /// A row pressed: what it would carry (drag.mbt), as the web's draggedOf has it.
 fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
   let root = at.root.unwrap_or("")

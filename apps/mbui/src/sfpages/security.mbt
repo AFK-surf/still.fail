@@ -15,9 +15,15 @@ pub fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
   let blocks : Array[() -> Unit] = []
   match lock {
     None =>
+      // (read the first time: the page as it is while the lock is off, the commonest, in its bones)
       blocks.push(fn() {
-        waiting_cards(
+        block_waiting(
           c,
+          fn() {
+            for b in lock_off(c, core.quiet(), look, Some({ "available": true })) {
+              b()
+            }
+          },
           error=match topic.error {
             Some(e) => error_text(e)
             None => ""
@@ -462,8 +468,13 @@ pub fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
   let blocks : Array[() -> Unit] = []
   if draft is None || flag(draft, "loading") {
     blocks.push(fn() {
-      waiting_cards(
+      block_waiting(
         c,
+        fn() {
+          for b in open_blocks(c, core.quiet(), look, ws, Some(open_sample())) {
+            b()
+          }
+        },
         error=match topic.error {
           Some(e) => error_text(e)
           None => ""
@@ -471,93 +482,124 @@ pub fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFra
       )
     })
   } else {
-    let toggle = fn(id : String) {
-      @settings.act(core, @sf.t("web-pages.security.turnOn"), "lock.toggle", obj([("workspace", str(ws)), ("id", str(id))]))
-    }
-    let members = items(draft, "members")
-    blocks.push(fn() {
-      @sf.section(c, @sf.t("web-pages.security.members"),
-        heads=true,
-        note=@sf.t("web-pages.security.peopleCount", args=[("n", members.length().to_string())]),
-        fn() {
-          sec_group(c, look, fn() {
-            for m in members {
-              let mv = Some(m)
-              sec_line(c, look, text(mv, "nameText"), note=text(mv, "email"), end=fn() { sec_end_words(c, look, text(mv, "roleText")) })
-            }
-          })
-        },
-      )
-    })
-    blocks.push(fn() {
-      @sf.section(c, @sf.t("web-pages.security.devices"), heads=true, note=@sf.t("web-pages.security.devicesWhich"), fn() {
-        sec_group(c, look, fn() {
-          for d in items(draft, "devices") {
-            let dv = Some(d)
-            sec_check_line(c, look, "draft-device/" + text(dv, "id"), text(dv, "nameText"), text(dv, "howText"), dv, fn() {
-              toggle(text(dv, "id"))
-            })
-          }
-        })
-      })
-    })
-    blocks.push(fn() {
-      @sf.section(c, "Station", heads=true, fn() {
-        sec_group(c, look, fn() {
-          for st in items(draft, "stations") {
-            let sv = Some(st)
-            let note = match (text(sv, "stateText"), text(sv, "version")) {
-              ("", v) => v
-              (why, "") => why
-              (why, v) => why + " · " + v
-            }
-            sec_check_line(c, look, "draft-station/" + text(sv, "id"), text(sv, "name"), note, sv, fn() { toggle(text(sv, "id")) })
-          }
-        })
-        @sf.page_note(c, @sf.t("web-pages.security.unprotectedNote"))
-      })
-    })
-    // what signing it means for a web page, cancel, 签名并开启 (foot)
-    blocks.push(fn() {
-      c.box(style=if look == Wide { sec_open_foot } else { sec_open_foot_narrow }, flow=true, fn() {
-        c.text(
-          @sf.t(if flag(draft, "canSign") { "web-pages.security.webExpiry" } else { "web-pages.security.webCannotSign" }),
-          style=sec_open_foot_note,
-        )
-        |> ignore
-        c.box(style=sec_actions, fn() {
-          if @sf.button(c, @sf.t("common.cancel"), key="lock-open-cancel", tone=Ghost) {
-            (core.pop)()
-          }
-          let opening = is_doing(core, ["lock.open"], [("workspace", ws)])
-          if @sf.button(
-              c,
-              @sf.t("web-pages.security.signAndTurnOn"),
-              key="lock-open",
-              tone=Primary,
-              busy=opening,
-              disabled=!(flag(draft, "ready") && flag(draft, "owner") && flag(draft, "canSign")),
-            ) {
-            @settings.act(
-              core,
-              @sf.t("web-pages.security.turnOn"),
-              "lock.open",
-              obj([("workspace", str(ws))]),
-              done=@sf.t("web-pages.security.turnedOn"),
-              then=fn(_) { (core.pop)() },
-            )
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    })
+    blocks.append(open_blocks(c, core, look, ws, draft))
   }
   @sf.page(c, on_back=core.pop, frame~, "security-open",
     @sf.t("web-pages.security.openTitle"),
     blocks,
     lead=@sf.t("web-pages.security.openLead"),
   )
+}
+
+
+///|
+/// What turning the lock on would sign (`draft`, the core's `lockDraft`): its members, the devices and stations (each
+/// ticked in or out), and 签名并开启 at its foot.
+fn open_blocks(c : @ui.Ctx, core : Core, look : Look, ws : String, draft : Json?) -> Array[() -> Unit] {
+  let blocks : Array[() -> Unit] = []
+  let toggle = fn(id : String) {
+    @settings.act(core, @sf.t("web-pages.security.turnOn"), "lock.toggle", obj([("workspace", str(ws)), ("id", str(id))]))
+  }
+  let members = items(draft, "members")
+  blocks.push(fn() {
+    @sf.section(c, @sf.t("web-pages.security.members"),
+      heads=true,
+      note=@sf.t("web-pages.security.peopleCount", args=[("n", members.length().to_string())]),
+      fn() {
+        sec_group(c, look, fn() {
+          for m in members {
+            let mv = Some(m)
+            sec_line(c, look, text(mv, "nameText"), note=text(mv, "email"), end=fn() { sec_end_words(c, look, text(mv, "roleText")) })
+          }
+        })
+      },
+    )
+  })
+  blocks.push(fn() {
+    @sf.section(c, @sf.t("web-pages.security.devices"), heads=true, note=@sf.t("web-pages.security.devicesWhich"), fn() {
+      sec_group(c, look, fn() {
+        for d in items(draft, "devices") {
+          let dv = Some(d)
+          sec_check_line(c, look, "draft-device/" + text(dv, "id"), text(dv, "nameText"), text(dv, "howText"), dv, fn() {
+            toggle(text(dv, "id"))
+          })
+        }
+      })
+    })
+  })
+  blocks.push(fn() {
+    @sf.section(c, "Station", heads=true, fn() {
+      sec_group(c, look, fn() {
+        for st in items(draft, "stations") {
+          let sv = Some(st)
+          let note = match (text(sv, "stateText"), text(sv, "version")) {
+            ("", v) => v
+            (why, "") => why
+            (why, v) => why + " · " + v
+          }
+          sec_check_line(c, look, "draft-station/" + text(sv, "id"), text(sv, "name"), note, sv, fn() { toggle(text(sv, "id")) })
+        }
+      })
+      @sf.page_note(c, @sf.t("web-pages.security.unprotectedNote"))
+    })
+  })
+  // what signing it means for a web page, cancel, 签名并开启 (foot)
+  blocks.push(fn() {
+    c.box(style=if look == Wide { sec_open_foot } else { sec_open_foot_narrow }, flow=true, fn() {
+      c.text(
+        @sf.t(if flag(draft, "canSign") { "web-pages.security.webExpiry" } else { "web-pages.security.webCannotSign" }),
+        style=sec_open_foot_note,
+      )
+      |> ignore
+      c.box(style=sec_actions, fn() {
+        if @sf.button(c, @sf.t("common.cancel"), key="lock-open-cancel", tone=Ghost) {
+          (core.pop)()
+        }
+        let opening = is_doing(core, ["lock.open"], [("workspace", ws)])
+        if @sf.button(
+            c,
+            @sf.t("web-pages.security.signAndTurnOn"),
+            key="lock-open",
+            tone=Primary,
+            busy=opening,
+            disabled=!(flag(draft, "ready") && flag(draft, "owner") && flag(draft, "canSign")),
+          ) {
+          @settings.act(
+            core,
+            @sf.t("web-pages.security.turnOn"),
+            "lock.open",
+            obj([("workspace", str(ws))]),
+            done=@sf.t("web-pages.security.turnedOn"),
+            then=fn(_) { (core.pop)() },
+          )
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  blocks
+}
+
+///|
+/// What turning the lock on would sign, made up, for what its page shows while it is read (open_blocks in its bones):
+/// three people, two devices, two stations.
+fn open_sample() -> Json {
+  let line = fn(i : Int, name : Int, note : Int) -> Json {
+    {
+      "id": Json::string("sample" + i.to_string()),
+      "nameText": Json::string(@sf.sample_words(name)),
+      "name": Json::string(@sf.sample_words(name)),
+      "email": Json::string(@sf.sample_words(note)),
+      "howText": Json::string(@sf.sample_words(note)),
+      "roleText": Json::string(@sf.sample_words(2)),
+    }
+  }
+  {
+    "members": [line(0, 3, 12), line(1, 4, 14), line(2, 3, 10)],
+    "devices": [line(3, 6, 9), line(4, 5, 11)],
+    "stations": [line(5, 4, 0), line(6, 5, 0)],
+  }
 }
 
 ///|

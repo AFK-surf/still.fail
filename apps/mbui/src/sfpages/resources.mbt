@@ -75,7 +75,7 @@ fn station_processes(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[
         c.text(@sf.t("web-pages.stations.processesLead"), style=st_memory) |> ignore
         match resources_of(core, here, address) {
           Some(Object(_)) as v => resources_body(c, core, address, v)
-          _ => @sf.waiting(c, shape=Cards)
+          _ => @sf.waiting(c, fn() { c.box(style=rs_page, fn() { rs_sample(c, core) }) |> ignore })
         }
       })
       |> ignore
@@ -92,56 +92,94 @@ fn resources_body(c : @ui.Ctx, core : Core, address : String, v : Json?) -> Unit
     if flag(v, "empty") {
       let wait = field(v, "wait")
       if flag(wait, "reading") || items(wait, "failing").length() > 0 {
-        @sf.waiting(c, shape=Cards, count=2)
+        @sf.waiting(c, fn() { rs_sample(c, core) })
       } else {
         c.text(@sf.t("web-main.resources.none"), style=rs_empty) |> ignore
       }
       rs_foot(c, v, false)
       return
     }
-    // (four in a row, or two over two where four have not the room: in pairs that go on in lines, never three and one,
-    // as the usage page's)
-    let tiles = items(v, "tiles")
-    c.box(style=rs_tiles, flow=true, fn() {
-      for k in 0..<((tiles.length() + 1) / 2) {
-        c.box(style=rs_tile_pair, keep=true, fn() {
-          for i in (k * 2)..<@cmp.minimum(k * 2 + 2, tiles.length()) {
-            rs_tile(c, address, Some(tiles[i]))
-          }
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-    // whose and how, on a line, apart at its ends
-    c.box(style=rs_bar, flow=true, fn() {
-      let kinds = items(v, "kinds")
-      let keys = ["all"] + kinds.map(fn(k) { text(Some(k), "key") })
-      let labels = [@sf.t("web-main.resources.all")] + kinds.map(fn(k) { text(Some(k), "label") })
-      let at = keys.search(shown.kind).unwrap_or(0)
-      let picked = @sf.segmented(c, "resources-kind/" + address, labels, at)
-      if picked != at {
-        shown.kind = keys[picked]
-      }
-      let how = @sf.segmented(
-        c,
-        "resources-flat/" + address,
-        [@sf.t("web-main.resources.grouped"), @sf.t("web-main.resources.flat")],
-        if shown.flat { 1 } else { 0 },
-      )
-      shown.flat = how == 1
-    })
-    |> ignore
-    let groups = items(v, "groups").filter(fn(g) { shown.kind == "all" || text(Some(g), "kind") == shown.kind })
-    let columns = rs_columns_of(v)
-    if shown.flat {
-      rs_flat(c, core, address, groups, columns, shown)
-    } else {
-      rs_grouped(c, core, address, groups, columns, shown)
-    }
+    rs_figures_of(c, core, address, v, shown)
     rs_foot(c, v, true)
   })
   |> ignore
+}
+
+///|
+/// What is seen of the machine (`v`): its totals, the choice of whose and of how, the table.
+fn rs_figures_of(c : @ui.Ctx, core : Core, address : String, v : Json?, shown : RsShown) -> Unit {
+  // (four in a row, or two over two where four have not the room: in pairs that go on in lines, never three and one,
+  // as the usage page's)
+  let tiles = items(v, "tiles")
+  c.box(style=rs_tiles, flow=true, fn() {
+    for k in 0..<((tiles.length() + 1) / 2) {
+      c.box(style=rs_tile_pair, keep=true, fn() {
+        for i in (k * 2)..<@cmp.minimum(k * 2 + 2, tiles.length()) {
+          rs_tile(c, address, Some(tiles[i]))
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+  // whose and how, on a line, apart at its ends
+  c.box(style=rs_bar, flow=true, fn() {
+    let kinds = items(v, "kinds")
+    let keys = ["all"] + kinds.map(fn(k) { text(Some(k), "key") })
+    let labels = [@sf.t("web-main.resources.all")] + kinds.map(fn(k) { text(Some(k), "label") })
+    let at = keys.search(shown.kind).unwrap_or(0)
+    let picked = @sf.segmented(c, "resources-kind/" + address, labels, at)
+    if picked != at {
+      shown.kind = keys[picked]
+    }
+    let how = @sf.segmented(
+      c,
+      "resources-flat/" + address,
+      [@sf.t("web-main.resources.grouped"), @sf.t("web-main.resources.flat")],
+      if shown.flat { 1 } else { 0 },
+    )
+    shown.flat = how == 1
+  })
+  |> ignore
+  let groups = items(v, "groups").filter(fn(g) { shown.kind == "all" || text(Some(g), "kind") == shown.kind })
+  let columns = rs_columns_of(v)
+  if shown.flat {
+    rs_flat(c, core, address, groups, columns, shown)
+  } else {
+    rs_grouped(c, core, address, groups, columns, shown)
+  }
+}
+
+///|
+/// What is seen of the machine while it is read (the library's Waiting, in its bones): the totals and a table of
+/// made-up processes, as rs_figures_of draws them.
+fn rs_sample(c : @ui.Ctx, core : Core) -> Unit {
+  let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
+  let use = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
+  let group = fn(i : Int, n : Int, k : Double, processes : Array[Int]) -> Json {
+    {
+      "key": Json::string("sample" + i.to_string()),
+      "title": w(n),
+      "kindText": w(2),
+      "use": use(k),
+      "processes": Json::array(
+        processes.mapi(fn(j, m) {
+          Json::object({
+            "key": Json::string("sample" + i.to_string() + "/" + j.to_string()),
+            "name": w(m),
+            "pid": Json::number((j + 1).to_double()),
+            "use": use(k / 2.0),
+          })
+        }),
+      ),
+    }
+  }
+  let v : Json = {
+    "tiles": Json::array(["cpu", "memory", "net", "disk"].map(fn(k) { Json::object({ "key": Json::string(k), "label": w(2), "sub": w(4), "value": w(4) }) })),
+    "kinds": [{ "key": "a", "label": w(2) }, { "key": "b", "label": w(2) }],
+    "groups": [group(0, 8, 30.0, [6, 9, 5]), group(1, 6, 20.0, [7]), group(2, 10, 10.0, [8])],
+  }
+  rs_figures_of(c, core.quiet(), "sample", Some(v), rs_shown_of("sample"))
 }
 
 ///|

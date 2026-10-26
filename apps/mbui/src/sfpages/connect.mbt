@@ -23,19 +23,29 @@ pub fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame :
       Some(e) => error_text(e)
       None => ""
     }
-    @sf.page(c, on_back=core.pop, frame~, key, back, [
-      fn() {
-        if error != "" {
-          @sf.page_note(c, error, bad=true)
-        } else {
-          @sf.waiting(c, shape=Cards, text=@sf.t("web-pages.connect.loading"), note={
-            reading: flag(wait, "reading"),
-            text: "",
-            failing: failing_of(wait),
-          })
-        }
-      },
-    ])
+    if error != "" {
+      @sf.page(c, on_back=core.pop, frame~, key, back, [fn() { @sf.page_note(c, error, bad=true) }])
+    } else {
+      // (read the first time: a connect's page of made-up words, in its bones)
+      @sf.page_waiting(
+        c,
+        back,
+        text=@sf.t("web-pages.connect.loading"),
+        note={ reading: flag(wait, "reading"), text: "", failing: failing_of(wait) },
+        fn() {
+          connect_detail(c, @sfbase.sample_source, core.quiet(), here, frame, Some({
+            "station": "sample",
+            "stationName": Json::string(@sf.sample_words(4)),
+            "connect": {
+              "id": "sample",
+              "name": Json::string(@sf.sample_words(8)),
+              "kind": "slack",
+              "connection": { "state": "connected" },
+            },
+          }))
+        },
+      )
+    }
     return
   }
   match found {

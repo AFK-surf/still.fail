@@ -94,7 +94,7 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
   let h = (src.topic)("history", params).value
   if !(h is Some(Object(_))) || (flag(h, "empty") && !flag(h, "loaded")) {
     c.box(style=steps_waiting, fn() {
-      @sf.waiting(c, count=6, text=match text(h, "edge") {
+      @sf.waiting(c, fn() { steps_sample(c, station, key) }, text=match text(h, "edge") {
         "" => @sf.t("web-main.history.reading")
         e => e
       })
@@ -289,6 +289,28 @@ fn history_row(
     steps_main(c, rail, fn() { item_view(c, src, station, key, ik, item, rail) })
   })
   |> ignore
+}
+
+///|
+/// The history's rows to come while it is read the first time (the library's Waiting, in its bones): a turn's items
+/// of made-up words, as its list draws them.
+fn steps_sample(c : @ui.Ctx, station : String, key : String) -> Unit {
+  let lines = [16, 24, 12, 20, 9, 18]
+  for i, n in lines {
+    let item : Map[String, Json] = {
+      "key": Json::string("sample" + i.to_string()),
+      "body": { "kind": "text", "content": { "text": Json::string(@sf.sample_words(n)) } },
+    }
+    // (the turn's head over its first)
+    if i == 0 {
+      item["turn"] = { "time": Json::string(@sf.sample_words(4)), "text": Json::string(@sf.sample_words(8)) }
+    }
+    let item = Json::object(item)
+    c.box(style=if i == 0 { steps_row_first } else { steps_row }, fn() {
+      history_row(c, @sfbase.sample_source, station, key, Some(item), i + 1 < lines.length())
+    })
+    |> ignore
+  }
 }
 
 ///|

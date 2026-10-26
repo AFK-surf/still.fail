@@ -143,6 +143,7 @@ pub fn page(
   small? : String = "",
 ) -> Unit {
   let l = look_for(c.width)
+  let (title, content, head, actions, lead) = page_parts(c, title, content, head, actions, lead)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
   let content = content.map(fn(b) { fn() { with_look(l, b) } })
   let head = match head {
@@ -159,6 +160,95 @@ pub fn page(
       }
     })
   })
+}
+
+///|
+/// A page's title, blocks, head, what it does and what it is for, as it draws them: as they are, or (while what it
+/// shows is read the first time: page_waiting) its frame's title and the rest in its bones.
+fn page_parts(
+  c : @ui.Ctx,
+  title : String,
+  content : Array[() -> Unit],
+  head : (() -> Unit)?,
+  actions : (() -> Unit)?,
+  lead : String,
+) -> (String, Array[() -> Unit], (() -> Unit)?, (() -> Unit)?, Lead) {
+  match page_bones.val {
+    Some(pb) => {
+      page_bones.val = None
+      let bones_of = fn(f : () -> Unit) { fn() { bones(c, f) } }
+      (
+        pb.title,
+        content.mapi(fn(i, b) {
+          if i == 0 {
+            fn() { waiting(c, b, error=pb.error, note?=pb.note, text=pb.text) }
+          } else {
+            bones_of(b)
+          }
+        }),
+        head.map(bones_of),
+        actions.map(bones_of),
+        Lead::Bones(lead),
+      )
+    }
+    None => (title, content, head, actions, Lead::Words(lead))
+  }
+}
+
+///|
+/// What a page is for, under its title: its words, or (while it is read the first time: page_waiting) their bones.
+priv enum Lead {
+  Words(String)
+  Bones(String)
+}
+
+///|
+fn Lead::is_empty(self : Lead) -> Bool {
+  match self {
+    Words(w) | Bones(w) => w == ""
+  }
+}
+
+///|
+/// Its words in `style`, or their bones.
+fn Lead::draw(self : Lead, c : @ui.Ctx, style : @ui.TextStyle) -> Unit {
+  match self {
+    Words(w) => c.text(w, style~) |> ignore
+    Bones(w) => bones(c, fn() { c.text(w, style~) |> ignore })
+  }
+}
+
+///|
+/// What the page drawn next by `view` says while what it shows is read the first time (page_waiting).
+priv struct PageBones {
+  title : String
+  text : String
+  error : String
+  note : WaitNote?
+}
+
+///|
+// kept across runs: set only while page_waiting draws its view, taken by the page it draws (page_parts)
+let page_bones : Ref[PageBones?] = Ref(None)
+
+///|
+/// A page while what it shows is read the first time (docs/ui-panels.md 等待): the page `view` draws, given made-up
+/// data (what it will show, made of made-up words, through a core that answers nothing), drawn with its frame as it
+/// is (its back; `title` the frame's, as the page's own is not known yet) and all it shows in its bones (its head, what
+/// it is for, what it does, its blocks), breathing; what it waits on (`text`, `note`) said to a screen reader; over it
+/// in red what could not be read (`error`, `note`'s failing).
+pub fn page_waiting(
+  c : @ui.Ctx,
+  title : String,
+  view : () -> Unit,
+  text? : String = "",
+  error? : String = "",
+  note? : WaitNote,
+) -> Unit {
+  ignore(c)
+  page_bones.val = Some({ title, text, error, note })
+  view()
+  page_bones.val = None
 }
 
 ///|
@@ -180,7 +270,7 @@ fn barred_page(
   l : Look,
   content : Array[() -> Unit],
   foot : Double,
-  lead : String,
+  lead : Lead,
   head : (() -> Unit)?,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
@@ -188,10 +278,10 @@ fn barred_page(
     Some(h) => blocks.push(fn() { c.box(style=if l == Narrow { pg_barred_head } else { desk_first }, h) |> ignore })
     None => ()
   }
-  if lead != "" {
+  if !lead.is_empty() {
     blocks.push(fn() {
       c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead }, fn() {
-        c.text(lead, style=if l == Narrow { pg_lead } else { desk_muted }) |> ignore
+        lead.draw(c, if l == Narrow { pg_lead } else { desk_muted })
       })
       |> ignore
     })
@@ -228,6 +318,7 @@ pub fn page_wide(
   actions? : () -> Unit,
   head? : () -> Unit,
 ) -> Unit {
+  let (title, content, head, actions, lead) = page_parts(c, title, content, head, actions, lead)
   let content = content.map(fn(b) { fn() { with_look(Wide, b) } })
   let head = match head {
     Some(h) => Some(fn() { with_look(Wide, h) })
@@ -252,7 +343,7 @@ fn narrow_page(
   content : Array[() -> Unit],
   on_back : () -> Unit,
   frame : PageFrame,
-  lead : String,
+  lead : Lead,
   actions : (() -> Unit)?,
   head : (() -> Unit)?,
   small : String,
@@ -312,8 +403,8 @@ fn narrow_page(
     Some(h) if !named => blocks.push(fn() { c.box(style=pg_card_room, h) |> ignore })
     _ => ()
   }
-  if lead != "" {
-    blocks.push(fn() { c.box(style=pg_lead_box, fn() { c.text(lead, style=pg_lead) |> ignore }) |> ignore })
+  if !lead.is_empty() {
+    blocks.push(fn() { c.box(style=pg_lead_box, fn() { lead.draw(c, pg_lead) }) |> ignore })
   }
   for b in content {
     blocks.push(b)
@@ -354,7 +445,7 @@ fn wide_page(
   back : String?,
   top : Double,
   foot : Double,
-  lead : String,
+  lead : Lead,
   about_words : String,
   actions : (() -> Unit)?,
   head : (() -> Unit)?,
@@ -400,8 +491,8 @@ fn wide_page(
           })
           |> ignore
           // what the page is for, said under its title (pageHead's p: 6 under it, the ui's 13 muted)
-          if lead != "" {
-            c.box(style=desk_head_lead_box, fn() { c.text(lead, style=desk_muted) |> ignore }) |> ignore
+          if !lead.is_empty() {
+            c.box(style=desk_head_lead_box, fn() { lead.draw(c, desk_muted) }) |> ignore
           }
         })
         |> ignore
@@ -549,22 +640,12 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 
 ///|
 /// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
-/// well): `count` rows' shapes breathing (`waiting`'s Rows, `dense` a dense list's) where its card's rows will be, in
-/// its card's room and in from its edges as far, `text` what it waits on said to a screen reader. A wait's line in its
-/// place stood at the card's edge, against the next card (2026-10-26, 账号's devices: 「这个 loading 很怪」). Not on
-/// the card's ground: a card with nothing in it is a placeholder itself, too faint on the page (对比度).
-pub fn group_waiting(c : @ui.Ctx, count? : Int = 3, dense? : Bool = false, text? : String = "") -> Unit {
-  let shapes = fn() { c.box(style=group_bare, fn() { waiting(c, shape=Rows, count~, dense~, text~) }) |> ignore }
-  match look() {
-    Narrow => c.box(style=pg_card_room, shapes) |> ignore
-    Wide => wide_alone(c, shapes)
-  }
+/// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
+/// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:
+/// not a wait's line at the card's edge (2026-10-26, 账号's devices: 「这个 loading 很怪」).
+pub fn group_waiting(c : @ui.Ctx, rows : () -> Unit, text? : String = "") -> Unit {
+  waiting(c, text~, fn() { group(c, rows) })
 }
-
-///|
-/// A group's card's box with no ground (group_waiting): as wide, as far in from its edges (pg_card, desk_list).
-// kept across runs: a value (no field of it changes)
-let group_bare : @ui.Style = @ui.style(w=Full, p=list_room)
 
 ///|
 /// A page's long list (its rows laid out as they come into view: `Ctx::list`), its rows drawn in the arrangement of

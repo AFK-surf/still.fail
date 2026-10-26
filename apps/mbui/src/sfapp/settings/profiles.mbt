@@ -57,6 +57,16 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
           blocks.push(fn() {
             waiting_rows(
               c,
+              fn() {
+                for g in group_by(profiles_sample().map(fn(e) { field(Some(e), "profile").unwrap() })) {
+                  section_header(c, g.1, mark=Some(fn() { group_mark(c, g.0) }), start=S6)
+                  list_card(c, fn() {
+                    for p in g.2 {
+                      profile_row(c, core.quiet(), "sample", p)
+                    }
+                  })
+                }
+              },
               error=match topic.error {
                 Some(e) => error_text(e)
                 None => ""
@@ -157,6 +167,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
         fn() {
           waiting_rows(
             c,
+            fn() { profile_list_sample(c, core) },
             error=match topic.error {
               Some(e) => error_text(e)
               None => ""
@@ -165,7 +176,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
         },
       ]
     Some(_) if list.length() == 0 && note_waits(wait) =>
-      return [fn() { waiting_rows(c, failing=failing_of(wait)) }]
+      return [fn() { waiting_rows(c, fn() { profile_list_sample(c, core) }, failing=failing_of(wait)) }]
     _ => ()
   }
   let blocks : Array[() -> Unit] = []
@@ -177,6 +188,31 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
       place_empty(c, tr("android-settings.profiles.note"))
     })
   }
+  blocks.append(profile_list_blocks(c, core, list))
+  if flag(wait, "reading") {
+    blocks.push(fn() {
+      list_card(c, fn() {
+        list_row(c, fn() {
+          wait_line(
+            c,
+            match text(wait, "text") {
+              "" => tr("common.reading")
+              w => w
+            },
+          )
+        })
+        |> ignore
+      })
+    })
+  }
+  blocks
+}
+
+///|
+/// The workspace's profiles (`list`, the core's entries), a section a kind of account with its card of rows.
+fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[() -> Unit] {
+  let t = @sf.theme()
+  let blocks : Array[() -> Unit] = []
   for g in profile_groups(list) {
     blocks.append([
       fn() { section_header(c, g.0, mark=Some(fn() { group_mark(c, text(g.1.get(0), "group")) }), start=S6) },
@@ -232,23 +268,37 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
       },
     ])
   }
-  if flag(wait, "reading") {
-    blocks.push(fn() {
-      list_card(c, fn() {
-        list_row(c, fn() {
-          wait_line(
-            c,
-            match text(wait, "text") {
-              "" => tr("common.reading")
-              w => w
-            },
-          )
-        })
-        |> ignore
-      })
-    })
-  }
   blocks
+}
+
+///|
+/// The workspace's profiles made up, for what is shown while they are read (in their bones): an account's kind with
+/// three of them.
+fn profiles_sample() -> Array[Json] {
+  [(8, 14), (6, 18), (9, 12)].mapi(fn(i, n) {
+    Json::object({
+      "key": Json::string("sample" + i.to_string()),
+      "usable": true,
+      "group": "",
+      "groupTitle": Json::string(@sf.sample_words(4)),
+      "where": Json::string(@sf.sample_words(n.1)),
+      "profile": {
+        "id": Json::string("sample" + i.to_string()),
+        "name": Json::string(@sf.sample_words(n.0)),
+        "group": "",
+        "groupTitle": Json::string(@sf.sample_words(4)),
+        "kindText": Json::string(@sf.sample_words(n.1)),
+      },
+    })
+  })
+}
+
+///|
+/// The workspace's profiles to come (profile_list_blocks of made-up ones), drawn in turn.
+fn profile_list_sample(c : @ui.Ctx, core : Core) -> Unit {
+  for b in profile_list_blocks(c, core.quiet(), profiles_sample()) {
+    b()
+  }
 }
 
 ///|

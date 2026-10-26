@@ -230,6 +230,24 @@ pub fn model_triple(
 }
 
 ///|
+/// What a model is picked from, made up, for what the panel shows while it is read (triple_body in its bones): a few
+/// models of two series, two runtimes, how hard it thinks.
+fn triple_sample() -> Json {
+  let model = fn(i : Int, family : Int, n : Int) -> Json {
+    {
+      "model": Json::string("sample" + i.to_string()),
+      "name": Json::string(@sf.sample_words(n)),
+      "family": Json::string(@sf.sample_words(family)),
+    }
+  }
+  {
+    "options": [model(0, 3, 6), model(1, 3, 8), model(2, 3, 5), model(3, 4, 7), model(4, 4, 6)],
+    "runtimes": ["claude", "codex"],
+    "efforts": ["low", "medium", "high"],
+  }
+}
+
+///|
 /// The panel: the filter across its top (more than 8 models), the models by series, and beside them the runtimes, how
 /// hard it thinks and how fast as columns where all their words fit, else under them as selects side by side: the
 /// models scrolling by themselves, what goes with them in view. What borrowing would do under them. Beside what opened it the models scroll past 360 (the web's); in a sheet the
@@ -237,9 +255,16 @@ pub fn model_triple(
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
   if v is None {
-    @sf.waiting(c)
+    // (read the first time: the panel of made-up models, in its bones)
+    @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, Some(triple_sample())) })
     return
   }
+  triple_body(c, src, station, of, v)
+}
+
+///|
+/// The panel's models, runtimes, how hard it thinks and how fast, as the core's `pick` (`v`) offers them.
+fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let options = items(v, "options")
   let draft = field(v, "draft")
   let words = triple.query.trim(chars=" ").to_string().to_lower()

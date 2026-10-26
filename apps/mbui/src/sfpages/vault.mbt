@@ -18,7 +18,7 @@ pub fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
   let look = look_of(c)
   let ws = here.workspace
   let v = (core.topic)("vaults", { "workspace": str(ws) }).value
-  let body = match vault_first(c, core, ws) {
+  let body = match vault_first(c, core, ws, fn(core, v) { vault_library(c, core, look, ws, v) }) {
     Some(first) => first
     None => vault_library(c, core, look, ws, v)
   }
@@ -31,7 +31,7 @@ pub fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame
   let look = look_of(c)
   let ws = here.workspace
   let v = (core.topic)("vaults", { "workspace": str(ws) }).value
-  let (body, usable) = match vault_first(c, core, ws) {
+  let (body, usable) = match vault_first(c, core, ws, fn(core, v) { vault_all(c, core, ws, v) }) {
     Some(first) => (first, false)
     None => (vault_all(c, core, ws, v), true)
   }
@@ -53,8 +53,14 @@ pub fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame
 ///|
 /// What 密钥 and 全部密钥 show before the library, as the core's `vaults` says where the viewer stands: the recovery
 /// words to write down; waiting for the core; a web page's names; what has to come first. None where the library is
-/// there to be used (in plain text on the station, or locked, signed and set up here).
-fn vault_first(c : @ui.Ctx, core : Core, ws : String) -> Array[() -> Unit]? {
+/// there to be used (in plain text on the station, or locked, signed and set up here). While the core is waited for,
+/// what the page holds (`shown`: its body for a library's view) of a made-up library, in its bones.
+fn vault_first(
+  c : @ui.Ctx,
+  core : Core,
+  ws : String,
+  shown : (Core, Json?) -> Array[() -> Unit],
+) -> Array[() -> Unit]? {
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value
   match v {
@@ -62,8 +68,13 @@ fn vault_first(c : @ui.Ctx, core : Core, ws : String) -> Array[() -> Unit]? {
     None =>
       Some([
         fn() {
-          waiting_cards(
+          block_waiting(
             c,
+            fn() {
+              for b in shown(core.quiet(), Some(vaults_sample())) {
+                b()
+              }
+            },
             error=match topic.error {
               Some(e) => error_text(e)
               None => ""
@@ -330,15 +341,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
       if !has(iv, "name") || !shows([text(iv, "name"), text(iv, "kindText"), text(iv, "lineText"), text(iv, "howText")]) {
         continue
       }
-      rows.push(fn() {
-        let mark = fn() { @sf.icon(c, @settings.kind_icon(text(iv, "kind")), size=vt_glyph, color=th.p.text) |> ignore }
-        // (its kind, its vault where there are more than one; the core's: how an agent gets it, when and where it was
-        // last used)
-        let line = said([text(iv, "kindText"), if many { text(rv, "name") } else { "" }, if keyed { text(iv, "lineText") } else { text(iv, "agentText") }])
-        if @sf.link_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), note=line, lead=mark, goes=keyed) {
-          (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
-        }
-      })
+      rows.push(fn() { vault_item_row(c, core, rv, iv, many, keyed) })
     }
     let hidden = list.filter(fn(x) { !has(Some(x), "name") })
     if hidden.length() > 0 {
@@ -402,7 +405,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
   }
   if reading {
     // (a vault's secrets still read: rows' shapes under what is shown, Vault.tsx's Waiting, 3 dense)
-    out.push(fn() { @sf.group_waiting(c, dense=true, text=@sf.t("common.reading")) })
+    out.push(fn() { @sf.group_waiting(c, fn() { vault_items_sample(c, core) }, text=@sf.t("common.reading")) })
   } else if rows.length() + accounts.length() == 0 && find != "" {
     out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.noMatch", args=[("q", vault_find.text().trim(chars=" ").to_owned())])) })
   } else if rows.length() + unnamed.length() + kept_accounts == 0 {
@@ -621,27 +624,76 @@ fn vault_named(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Unit {
           match topic.error {
             Some(e) => @sf.page_note(c, error_text(e), bad=true)
             // (read the first time: rows' shapes where its card's rows will be, Vault.tsx's Waiting, 4)
-            None => @sf.group_waiting(c, count=4, text=@sf.t("common.reading"))
+            None =>
+              @sf.group_waiting(c, fn() { named_rows(c, vault_sample_items().map(Json::object)) }, text=@sf.t("common.reading"))
           }
         Some(_) => @sf.page_note(c, @sf.t("android-settings.vault.empty"))
       }
     } else {
-      @sf.group(c, fn() {
-        for it in list {
-          let iv = Some(it)
-          @sf.link_row(
-            c,
-            "",
-            opt_text(iv, "name").unwrap_or(@sf.t("android-settings.vault.lockedItem")),
-            note=text(iv, "agentText"),
-            goes=false,
-            tail?=if flag(iv, "listed") { Some(fn() { c.box(style=vt_listed, fn() {  }) |> ignore }) } else { None },
-          )
-          |> ignore
-        }
-      })
+      @sf.group(c, fn() { named_rows(c, list) })
     }
   })
+}
+
+///|
+/// A vault's items known by their names only: each item's name (locked, that it is), how agents may ask for it under
+/// it, a green dot at its end where agents are told of it.
+fn named_rows(c : @ui.Ctx, list : Array[Json]) -> Unit {
+  for it in list {
+    let iv = Some(it)
+    @sf.link_row(
+      c,
+      "",
+      opt_text(iv, "name").unwrap_or(@sf.t("android-settings.vault.lockedItem")),
+      note=text(iv, "agentText"),
+      goes=false,
+      tail?=if flag(iv, "listed") { Some(fn() { c.box(style=vt_listed, fn() {  }) |> ignore }) } else { None },
+    )
+    |> ignore
+  }
+}
+
+///|
+/// A vault's item (`iv`, of vault `rv`): its kind's mark, its name, its kind, its vault where there are more than one
+/// (`many`), how an agent gets it, when and where it was last used (the core's); pressed, its page (`keyed`: where it
+/// can be opened here).
+fn vault_item_row(c : @ui.Ctx, core : Core, rv : Json?, iv : Json?, many : Bool, keyed : Bool) -> Unit {
+  let th = @sf.theme()
+  let mark = fn() { @sf.icon(c, @settings.kind_icon(text(iv, "kind")), size=vt_glyph, color=th.p.text) |> ignore }
+  let line = [text(iv, "kindText"), if many { text(rv, "name") } else { "" }, if keyed { text(iv, "lineText") } else { text(iv, "agentText") }]
+    .filter(fn(w) { w != "" })
+    .join(" · ")
+  if @sf.link_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), note=line, lead=mark, goes=keyed) {
+    (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
+  }
+}
+
+///|
+/// A library made up (the core's `vaults`), for what its pages show while it is read: one vault, its items to read.
+fn vaults_sample() -> Json {
+  { "plain": true, "available": true, "vaults": [{ "id": "sample", "name": Json::string(@sf.sample_words(4)), "keyed": true }] }
+}
+
+///|
+/// A vault's items made up, for what is shown while they are read: their names, kinds and lines as long as theirs.
+fn vault_sample_items() -> Array[Map[String, Json]] {
+  [(6, 14), (9, 11), (5, 16)].mapi(fn(i, n) {
+    {
+      "id": Json::string("sample" + i.to_string()),
+      "name": Json::string(@sf.sample_words(n.0)),
+      "kindText": Json::string(@sf.sample_words(2)),
+      "lineText": Json::string(@sf.sample_words(n.1)),
+      "agentText": Json::string(@sf.sample_words(n.1)),
+    }
+  })
+}
+
+///|
+/// The items to come while they are read (the library's Waiting, in its bones): vault_item_row's of made-up ones.
+fn vault_items_sample(c : @ui.Ctx, core : Core) -> Unit {
+  for x in vault_sample_items() {
+    vault_item_row(c, core.quiet(), None, Some(Json::object(x)), false, true)
+  }
 }
 
 ///|
