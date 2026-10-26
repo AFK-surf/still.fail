@@ -1646,41 +1646,18 @@ export class Views implements Owner {
       if (!isObject(page.thread)) return undefined;
       thread = structuredClone(page.thread);
     }
-    const agents = members(thread).flatMap((key) => {
-      const a = this.agent(station, key);
-      return a === null ? [] : [a];
-    });
+    const agents = this.#agentsOf(station, thread);
     // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
     const keys = new Set(members(thread));
     const all: J[] = merge(arr(page.entries));
-    let messages: J[] = all.filter((m) => !isLetter(m, keys));
-    const letters = Math.max(u64(get(thread, "letters")) ?? 0, all.length - messages.length);
-    const scope = ofAddress(station);
-    const viewer = this.me(scope);
-    const slackUsers = arr(get(this.ok({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string");
-    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
-    const bots = agents.flatMap((a) => {
-      const b = a.connect !== undefined ? present.botOf(a.connect) : null;
-      return b === null ? [] : [b];
-    }).concat(this.#core.data.slackNames(station));
+    const said = all.filter((m) => !isLetter(m, keys));
+    const letters = Math.max(u64(get(thread, "letters")) ?? 0, all.length - said.length);
+    const { scope, viewer, members_, bots } = this.#peopleOf(station, agents);
     const waiting = agents.reduce((max, a) => Math.max(max, u64(get(a.session, "pending")) ?? 0), 0);
-    const peopleSeqs = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
+    const peopleSeqs = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
-    const written = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
-    // Notices that a runtime is not installed: installing it, as the station's updates have it now.
-    const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
-    const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
-    const manages = role === "owner" || role === "admin";
-    // A failure notice may be sent to the still.fail team where the station takes bug reports.
-    const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
-    for (let i = 0; i < messages.length; i++) {
-      const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
-      messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
-      const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
-      if (install !== null) messages[i].install = install;
-      else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) messages[i].reportable = true;
-    }
-    messages = blockedUnder(messages);
+    const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
+    let messages = this.#shown(station, thread, agents, said, waits);
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
     const newest = u64(page.last);
@@ -1803,6 +1780,61 @@ export class Views implements Owner {
     });
     if (ccTo.length > 0) view.cc = ccTo;
     return { ok: view };
+  }
+
+  /// A chat's agents: those its thread names that are known.
+  #agentsOf(station: string, thread: J): J[] {
+    return members(thread).flatMap((key) => {
+      const a = this.agent(station, key);
+      return a === null ? [] : [a];
+    });
+  }
+
+  /// Who a chat's messages are told apart by: the viewer, its workspace's members, the Slack names a mention may be.
+  #peopleOf(station: string, agents: J[]): { scope: string; viewer: J; slackUsers: string[]; members_: J[]; bots: [string, string][] } {
+    const scope = ofAddress(station);
+    const viewer = this.me(scope);
+    const slackUsers = arr(get(this.ok({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string");
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const bots = agents.flatMap((a) => {
+      const b = a.connect !== undefined ? present.botOf(a.connect) : null;
+      return b === null ? [] : [b];
+    }).concat(this.#core.data.slackNames(station));
+    return { scope, viewer, slackUsers, members_, bots };
+  }
+
+  /// A chat's messages (`said`: its entries merged, letters left out) as its page shows each (shownMessage): the
+  /// viewer's those with seqs in `waits` still waiting for its agents; a notice that a runtime is not installed with
+  /// installing it, as the station's updates have it now (or under the viewer's message that waits for it); a failure
+  /// notice one to report where the station takes bug reports.
+  #shown(station: string, thread: J, agents: J[], said: J[], waits: number[]): J[] {
+    const { scope, viewer, slackUsers, members_, bots } = this.#peopleOf(station, agents);
+    const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
+    const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
+    const manages = role === "owner" || role === "admin";
+    const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
+    const messages = said.map((raw) => {
+      const m = shownMessage(raw, agents, viewer, slackUsers, members_, bots, thread.creator);
+      const out: J = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
+      const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
+      if (install !== null) out.install = install;
+      else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) out.reportable = true;
+      return out;
+    });
+    return blockedUnder(messages);
+  }
+
+  /// Chat `id`'s messages as its page draws them (`ChatView.messages`), from `entries` as its station reads them (GET
+  /// /threads/:id/entries): a picture of the chat draws them as its list does (publish.ts). Nothing of the page's own
+  /// is in them: none waits, nothing is on its way, nothing is asked.
+  listed(station: string, id: number, entries: unknown[]): J[] {
+    const thread = this.#core.data.listedThread(station, id) ?? get(this.ok({ topic: "thread", station, thread: id }), "thread") ?? {};
+    const agents = this.#agentsOf(station, thread);
+    const keys = new Set(members(thread));
+    const messages = decisions.inMessages(this.#shown(station, thread, agents, merge(entries).filter((m) => !isLetter(m, keys)), []), null);
+    const out = drawn({ ok: { agents, messages } }, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, `t:${id}`));
+    const ws = ofAddress(station);
+    return arr(get(out.ok, "messages")).map((m) => (isObject(m) && vaultAskOf(get(m, "card")) !== null ? { ...m, card: this.#vaultCard(m.card, ws) } : m));
   }
 
   /// Whether what is sent to a chat from here is copied to its Slack or Feishu thread `to` (`chat.cc`): off until ticked,

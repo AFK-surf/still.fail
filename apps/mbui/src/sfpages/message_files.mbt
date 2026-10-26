@@ -179,6 +179,16 @@ fn thumb_ratio(hash : String) -> Double? {
 ///|
 /// One of a message's files (FileItem), `w` wide.
 fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
+  match picturing.val {
+    // (in a picture of the chat being shared: to tick, publish.mbt)
+    Some((seq, taking)) => publish_file(c, src, here, seq, taking, a, w, by~)
+    None => file_drawn(c, src, here, a, w, by~)
+  }
+}
+
+///|
+/// A message's file as the chat draws it, by its kind.
+fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
   match file_kind(a.name) {
     "image" => image_item(c, src, here, a, w, by~)
     "video" => video_item(c, src, here, a, w)

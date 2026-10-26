@@ -921,18 +921,18 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
           <WaitLine text={t("web-pages.chat.publish.reading")} />
         ) : "error" in preview ? (
           <p className={partsCss.mError}>{preview.error}</p>
-        ) : p!.messages.length === 0 ? (
+        ) : p!.list.length === 0 ? (
           <p className={partsCss.mMuted}>{t("web-pages.chat.publish.empty")}</p>
         ) : (
           <>
-            <PublishPicture preview={p!} ticking={ticking} paper={paper} />
+            <PublishPicture preview={p!} ticking={ticking} paper={paper} inline />
             {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
           </>
         )}
       </div>
       <div className={sheetsCss.mSheetFoot}>
         <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-        <Button primary label={t("web-pages.chat.shareImage.save")} enabled={!!p && p.messages.length > 0} busy={taking} onClick={() => void save()} />
+        <Button primary label={t("web-pages.chat.shareImage.save")} enabled={!!p && p.list.length > 0} busy={taking} onClick={() => void save()} />
       </div>
     </>
   );

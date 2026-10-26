@@ -5415,8 +5415,20 @@ export interface PublishPreview {
 	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
 	upto: number;
 	title: string;
+	/**
+	 * Its messages as the chat's page draws them (`ChatView.messages`, made of its entries as the station read
+	 * them, what looks like a secret hidden in all they say): a picture of the chat draws them as its list does.
+	 */
+	list: ChatMessage[];
+	/**
+	 * Each as a snapshot would hold it, and how many things in it were hidden (by its `n`, a `list` message's
+	 * `seq`).
+	 */
 	messages: PublishMessage[];
-	/** Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`). */
+	/**
+	 * Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`; a `list` message's by its `n`
+	 * and `file.path`).
+	 */
 	files: PublishFile[];
 	/** How many things in all were hidden as looking secret. */
 	hidden: number;

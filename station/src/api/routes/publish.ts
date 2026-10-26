@@ -36,7 +36,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
   return [
     {
       // What publishing it would show: the snapshot, what was hidden in which message, the attachments to tick (where each
-      // is, and the session that keeps it: the members' pages show them as the chat does).
+      // is, and the session that keeps it: the members' pages show them as the chat does), and the chat's entries as its
+      // page reads them, hidden alike (`views`: a picture of it is drawn from them as its list draws them).
       method: "POST",
       pattern: /^\/*threads\/+([^/]+)\/+publish\/+preview\/*$/,
       handle: async (r, [raw]) => {
@@ -52,6 +53,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           entries: d.entries,
           redacted: d.redacted,
           files: d.files,
+          views: d.views,
         }));
       },
     },

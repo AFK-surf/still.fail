@@ -2440,9 +2440,14 @@ pub let diff_line_in : @ui.Space = room(22.0)
 pub let diff_mark_in : @ui.Space = room(9.0)
 
 ///|
-/// A message's picture out in the margin before its words (align.ts columns.avatar: 29), 3 down (Chat.css.ts msgRow >
+/// How far a message's picture stands out in the margin before its words (align.ts columns.avatar: 29): what holds the
+/// message keeps that much room before them (the chat's list its sides, a picture of the chat its own).
+pub let message_avatar_reach : Double = 29.0
+
+///|
+/// A message's picture out in the margin before its words (message_avatar_reach), 3 down (Chat.css.ts msgRow >
 /// msgAvatar).
-pub let message_avatar_out : @ui.Space = room(-29.0)
+pub let message_avatar_out : @ui.Space = room(-message_avatar_reach)
 
 ///|
 pub let message_avatar_down : @ui.Space = room(3.0)

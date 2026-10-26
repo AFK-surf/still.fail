@@ -157,6 +157,13 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.deepEqual(p.files.map((f: any) => [f.k, f.name, f.type]), [["f0", "shot.png", "image/png"], ["f1", "notes.txt", "text/plain; charset=utf-8"]]);
     // Members' pages show them as the chat does: where each is, through the session that keeps it.
     assert.deepEqual(p.files.map((f: any) => [f.path, f.owner]), [[join(workspace, "uploads/shot.png"), made.key], [join(workspace, "uploads/notes.txt"), made.key]]);
+    // And the chat as its page reads it (`views`: a picture of it is drawn as its list draws it), hidden alike.
+    assert.deepEqual(p.views.entries.map((e: any) => [e.kind, e.authorKind, e.author, e.text]), [
+      ["message", "person", "alice@acme.dev", "deploy with token: [hidden]"],
+      ["message", "agent", made.key, "done ![](shot.png)"],
+      ["message", "person", "carol@elsewhere.org", "looks good"],
+    ]);
+    assert.deepEqual(p.views.hidden, [{ n: p.entries[0].n, count: 1 }]);
     const upto: number = p.upto;
 
     // Said after the preview: not in what is published.
@@ -226,6 +233,13 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.equal(whole.status, 200, JSON.stringify(whole.body));
     assert.ok(whole.body.published.size > 11 * 1024 * 1024);
     assert.equal((await ask(alice, "DELETE", `/published/${whole.body.published.id}`)).status, 200);
+    // A card's words hidden too, counted with its message's.
+    const [asked] = store.insertMessage({ ...newMessage(thread, "1.6", "agent", made.key, "may I use the Axiom token?"), card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", command: "curl -H 'Authorization: Bearer abcdefghijklmnop.qrstuvwxyz'" } } });
+    const carded = (await ask(alice, "POST", `/threads/${thread}/publish/preview`, {})).body.views;
+    const card = carded.entries.find((e: any) => e.n === asked).card;
+    assert.equal(card.vault.command, "curl -H 'Authorization: Bearer [hidden]'");
+    assert.equal(card.vault.name, "Axiom");
+    assert.deepEqual(carded.hidden.find((h: any) => h.n === asked), { n: asked, count: 1 });
     const empty = (await ask(alice, "POST", "/sessions", { runtime: "claude" })).body;
     assert.deepEqual(await ask(alice, "POST", `/threads/${empty.thread.id}/publish/preview`, {}), { status: 400, body: { error: tr("en", "station.publish.empty") } });
     assert.equal((await ask(alice, "POST", "/threads/99999/publish/preview", {})).status, 404);

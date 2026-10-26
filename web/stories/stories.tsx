@@ -46,6 +46,7 @@ import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
+import { shareImageDemo } from "./publish.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
 import { ccDemo, relayDemo, TWO_BOTS } from "./relay.ts";
@@ -809,6 +810,10 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
+  // A chat shared as a picture: its messages as the chat's list draws them (the visitor's in their bubble, a vault
+  // request as its card), its files to tick.
+  { id: "app-chat-share-image", group: "应用", title: "对话 · 分享图片", app: true, demo: shareImageDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=分享图片" }] },
+  { id: "phone-chat-share-image", group: "手机", title: "对话 · 分享图片", app: true, phone: true, demo: shareImageDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=分享图片" }] },
   { id: "app-chat-letters-entry", group: "应用", title: "对话 · agent 往来的入口（对话信息里）", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "app-chat-letters", group: "应用", title: "对话 · agent 往来", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
   { id: "app-chat-letters-open", group: "应用", title: "对话 · agent 往来 · 打开一个对话的", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },

@@ -510,7 +510,8 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       paths=m.by.agent != "",
       files=fn(name) {
         match placed.get(name) {
-          Some(a) if is_viz(a.name) =>
+          // (a page drawn live is not in a picture of the chat: its card is, to tick)
+          Some(a) if is_viz(a.name) && picturing.val is None =>
             Some({
               draw: fn() {
                 viz_file_of(

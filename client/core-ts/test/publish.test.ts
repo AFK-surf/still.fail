@@ -191,6 +191,54 @@ test("a_preview_is_asked_with_the_workspaces_names_and_a_station_from_before_say
   core.close();
 });
 
+test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_viewers_own_included", async () => {
+  const { host, core } = await setUp();
+  let views = true;
+  stationReplies(host, (req) => {
+    if (!(req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish/preview`)) return undefined;
+    const entries = [
+      { kind: "message", n: 3, at: 3, ts: "t3", thread: 7, authorKind: "person", author: "a@x.com", authorName: "安", text: "key: [已隐藏]", attachments: [], quotes: [] },
+      { kind: "message", n: 4, at: 4, ts: "t4", thread: 7, authorKind: "agent", author: "s-1", authorModel: "claude-opus-4-1", authorRuntime: "claude", text: "申请使用「Axiom」", attachments: [], quotes: [],
+        card: { type: "options", options: [], vault: { request: "r1", name: "Axiom", mode: "proxy", hosts: ["api.axiom.co"], command: "curl -H \"Authorization: Bearer [已隐藏]\"" } } },
+      { kind: "message", n: 5, at: 5, ts: "t5", thread: 7, authorKind: "agent", author: "s-1", text: "**好了**", attachments: [], quotes: [] },
+      // An edit of the agent's words since: as the chat shows it.
+      { kind: "edit", n: 6, target: 5, at: 6, thread: 7, authorKind: "agent", author: "s-1", text: "**都好了**", attachments: [], quotes: [] },
+    ];
+    return {
+      upto: 5, title: "部署",
+      entries: [{ n: 3, at: 3, authorKind: "person", author: "安", text: "key: [已隐藏]", files: [], person: "a@x.com" }],
+      redacted: [{ n: 3, count: 1 }],
+      files: [],
+      ...(views ? { views: { entries, hidden: [{ n: 3, count: 1 }, { n: 4, count: 1 }] } } : {}),
+    };
+  });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  call(core, ui, 2, "chat.publishPreview", { station: "ws/st", thread: 7 });
+  await host.settle();
+  const answered = answerOf(host, values, 2).ok;
+  const list = answered.list;
+  // The viewer's own (theirs by their address), an agent's request about a vault item as its card, an agent's words as
+  // edited since, read as Markdown; what was hidden counted where the card has it too.
+  assert.deepEqual(list.map((m: J) => [m.seq, m.mine, m.authorKind, m.card?.vaultAsk?.name ?? null, m.text]), [
+    [3, true, "person", null, "key: [已隐藏]"],
+    [4, false, "agent", "Axiom", "申请使用「Axiom」"],
+    [5, false, "agent", null, "**都好了**"],
+  ]);
+  assert.ok(list[2].md, "read as Markdown");
+  assert.ok(list[0].time.createdAt.ago, "its time in words");
+  assert.equal(answered.hidden, 2);
+
+  // A station from before it gave them: drawn of the snapshot's words, the viewer's own told by their address.
+  views = false;
+  call(core, ui, 3, "chat.publishPreview", { station: "ws/st", thread: 7 });
+  await host.settle();
+  assert.deepEqual(answerOf(host, values, 3).ok.list.map((m: J) => [m.seq, m.mine, m.text]), [[3, true, "key: [已隐藏]"]]);
+  core.close();
+});
+
 test("a_chat_published_shows_its_link_at_once_and_a_revoked_one_goes_at_once", async () => {
   const thread = { ...threadView(7, 3), published: [published("p1", 1_000, "a@x.com", "安")] };
   const { host, core } = await setUp("member", thread);

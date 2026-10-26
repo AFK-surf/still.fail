@@ -592,9 +592,37 @@ fn fix_preview() -> Json {
     file("f2", "build-cache.tar", 12582912, "12 MB", "application/x-tar"),
   ]
   let ago = fn(words : String) -> Json { { "createdAt": { "ago": Json::string(words), "full": "10月15日 10:00" } } }
+  let claude = by_agent("anthropic", "claude", "s-c1")
   {
     "upto": 9,
     "title": "部署登录页",
+    // as the chat's page draws them: the viewer's own, an agent's words and its request about a vault item (a card),
+    // someone else's with its files (where the preview's `files` have them)
+    "list": [
+      msg(4, "person", by_person("林"), "帮我把登录页部署到预发，token 是 [已隐藏]", "", {
+        "mine": true,
+        "author": "lin@example.com",
+        "time": ago("12 分钟前"),
+      }),
+      msg(6, "agent", claude, "部署好了：**登录后跳回原页面**，`npm run deploy:staging` 跑了 42 秒。", "", { "time": ago("10 分钟前") }),
+      msg(7, "agent", claude, "申请使用「Axiom 查询 token」：查登录页的错误日志", "", {
+        "card": {
+          "type": "options",
+          "vault": "r-axiom",
+          "vaultAsk": {
+            "name": "Axiom 查询 token",
+            "mode": "proxy",
+            "hosts": ["api.axiom.co"],
+            "command": "curl -s https://api.axiom.co/v1/datasets/_apl -H \"Authorization: Bearer $AXIOM_TOKEN\"",
+          },
+        },
+        "time": ago("9 分钟前"),
+      }),
+      msg(9, "person", by_person("Ana"), "截图、日志和构建缓存都附上了", "", {
+        "attachments": Json::array(files.map(fn(f) { field(Some(f), "file").unwrap_or(Json::null()) })),
+        "time": ago("8 分钟前"),
+      }),
+    ],
     "messages": [
       {
         "n": 4,
@@ -616,6 +644,16 @@ fn fix_preview() -> Json {
         "hidden": 0,
         "createdAt": 0,
         "time": ago("10 分钟前"),
+      },
+      {
+        "n": 7,
+        "author": "Opus 5.5",
+        "agent": true,
+        "text": "申请使用「Axiom 查询 token」：查登录页的错误日志",
+        "files": [],
+        "hidden": 0,
+        "createdAt": 0,
+        "time": ago("9 分钟前"),
       },
       {
         "n": 9,
