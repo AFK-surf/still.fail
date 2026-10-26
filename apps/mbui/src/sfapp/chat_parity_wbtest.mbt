@@ -1,7 +1,8 @@
 // What a chat offers as Android's does, over the fixture's chat with its views edited for each case: its station's tag
 // opens the station's card (PageParts.kt ChatStationChip), a notice's word installs a runtime or reports a failure,
-// one about a profile leads to it (Chat.kt SystemNotice), a waiting message's line installs (BlockedLine), a Slack
-// user's name in a history offers 这是我 (History.kt SlackName), and the chat's sheet opens it in Slack or Feishu.
+// one about a profile leads to it, one saying a chat was opened links to it (Chat.kt SystemNotice), a waiting message's
+// line installs (BlockedLine), a Slack user's name in a history offers 这是我 (History.kt SlackName), and the chat's
+// sheet opens it in Slack or Feishu.
 
 ///|
 /// `v` with `more` said over its fields (an object; anything else as it is).
@@ -195,6 +196,50 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
   t.tap(x + w - 20.0, y + h / 2.0)
   t.run_for(@ui.nav_push_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Profile("ws1/st1", "p1")))
+}
+
+///|
+test "a notice that a chat was opened: its line is its Markdown drawn, the chat's chip in it, and tapped it opens that chat" {
+  let calls : Array[Made] = []
+  let link = "https://app.still.fail/o/ws1/st1/s-c2"
+  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words)
+  let words = "已创建对话：[共享调试：配对后连不上](\{link})"
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        with_chat_message(v, 9.0, [
+          ("text", Json::string(words)),
+          (
+            "notice",
+            {
+              "failed": false,
+              "words": Json::string(words),
+              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link) }]]]],
+            },
+          ),
+        ])
+      } else {
+        v
+      }
+    },
+    answer=fn(name) { if name == "link.parse" { fixture_link_parse(link) } else { Json::object({}) } },
+  )
+  for _ in 0..<6 {
+    if t.find("共享调试：配对后连不上") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  assert_true(t.find("已创建对话：@共享调试：配对后连不上") is Some(_), msg="the chat's chip in its line")
+  assert_true(t.find("](") is None, msg="none of its Markdown")
+  t.tap_run("共享调试：配对后连不上")
+  assert_eq(named(calls, "link.parse").length(), 1)
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.session, "s-c2")
+    _ => fail("not a chat")
+  }
 }
 
 ///|

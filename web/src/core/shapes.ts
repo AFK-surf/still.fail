@@ -1880,6 +1880,11 @@ export interface NoticeShown {
 	 * profile's page. Absent otherwise.
 	 */
 	linkAt?: number;
+	/**
+	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
+	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
+	 */
+	md?: unknown;
 }
 
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
@@ -1974,8 +1979,8 @@ export interface ChatMessage {
 	authorRuntime?: string;
 	text: string;
 	/**
-	 * An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients
-	 * draw. Absent for a person's, drawn as they wrote it.
+	 * An agent's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. Absent for a
+	 * person's, drawn as they wrote it, and for still.fail's notice (its `notice` has its words').
 	 */
 	md?: unknown;
 	attachments: Attachment[];

@@ -194,7 +194,7 @@ export const SHAPES: Record<string, Shape> = {
     ["authorModel", opt("String"), { doc: "An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the\nruntime's default model and from a station that does not say." }],
     ["authorRuntime", opt("String"), { doc: "An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a\nstation that does not say." }],
     ["text", "String"],
-    ["md", opt("Value"), { doc: "An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients\ndraw. Absent for a person's, drawn as they wrote it." }],
+    ["md", opt("Value"), { doc: "An agent's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. Absent for a\nperson's, drawn as they wrote it, and for still.fail's notice (its `notice` has its words')." }],
     ["attachments", vec("Attachment")],
     ["quotes", vec("Quote")],
     ["declared", opt("String"), { doc: "An agent's post that ended its turn: final, block (the words from before; `ending` has today's)." }],
@@ -241,6 +241,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool", { doc: "It says something failed (the station began it with ⚠️): drawn in red." }],
     ["words", "String", { said: true, doc: "What it says, ⚠️ and a closing 。 left out." }],
     ["linkAt", opt("i64"), { client: opt("I54"), doc: "One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that\nprofile's page. Absent otherwise." }],
+    ["md", opt("Value"), { doc: "`words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is\na link to it). Absent where a view reads none of its messages' words (a decision's)." }],
   ], { doc: "still.fail's notice as a chat shows it (core views.ts noticeOf)." }),
   RuntimeInstall: struct([
     ["runtime", "String", { doc: "claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime})." }],

@@ -1196,7 +1196,7 @@ function SystemNotice({ notice, profile, install, report, time, ts, enter, caugh
           <div className={conversationCss.markdown}>
             {profile && linkAt !== undefined
               ? <p>{said.slice(0, linkAt)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(linkAt)}</Link></p>
-              : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+              : install ? <p>{said}<InstallAction install={install} /></p> : <Prose md={notice.md as Md | undefined}>{said}</Prose>}
           </div>
           {report && <ReportAction thread={report.thread} seq={report.seq} />}
         </div>
