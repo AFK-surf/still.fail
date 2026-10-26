@@ -13,7 +13,7 @@ import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, Readers, ScreenRegistry, Store } from "../services.ts";
-import { act, endedNotice, loginTools, promptNotice, type Where } from "../tools/login.ts";
+import { act, endedNotice, loginTools, promptNotice, type Where } from "./tool.ts";
 import { Logins, type Starter } from "./index.ts";
 import { LoginPages } from "./pages.ts";
 

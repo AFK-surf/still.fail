@@ -1,9 +1,9 @@
 // The agents' search (docs/search.md): what a few words find in the workspace, on every station of it at once: chats,
 // messages, execution history, services and tasks, skills and memory, profiles, looked through as they are then. Each
 // station answers for its own (`search.query`, asked over the mesh as session.read is), with the links of its chats.
-import type { Asker, Group, Hit } from "../search/match.ts";
-import type { Search } from "../search/search.ts";
-import type { Tool } from "./mcp.ts";
+import type { Asker, Group, Hit } from "./match.ts";
+import type { Search } from "./search.ts";
+import type { Tool } from "../tools/mcp.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// What another station is asked.

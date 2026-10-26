@@ -2,7 +2,7 @@
 // agents' tool for it, each session's way to it on the agents' door (proxy.ts), and its tabs closed with their chat.
 import { Effect, Layer } from "effect";
 import { Parts } from "../services.ts";
-import { browserTools } from "../tools/browser.ts";
+import { browserTools } from "./tool.ts";
 import { browserDoor } from "./proxy.ts";
 import { Browser } from "./service.ts";
 

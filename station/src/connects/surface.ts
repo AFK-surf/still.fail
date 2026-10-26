@@ -125,6 +125,10 @@ export abstract class ConnectedSurface implements Connection {
     this.changed();
   }
 
+  platform(): string {
+    return this.kind;
+  }
+
   botUserId(): string {
     return this.me?.botUserId ?? "";
   }

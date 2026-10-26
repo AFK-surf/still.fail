@@ -143,6 +143,11 @@ export class FeishuSurface extends ConnectedSurface {
     return (await this.client.endpoint()).url;
   }
 
+  /// Lark is Feishu on larksuite.com.
+  platform(): string {
+    return this.domain === "lark" ? "lark" : "feishu";
+  }
+
   mention(user: string): string {
     return `<at id=${user}></at>`;
   }

@@ -11,7 +11,7 @@ import { wall } from "../ops/fibers.ts";
 import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Store } from "../services.ts";
-import { vaultTools } from "../tools/vault.ts";
+import { vaultTools } from "./tool.ts";
 import { plainStore } from "./plain.ts";
 import { Secrets } from "./secrets.ts";
 import { vaultStore } from "./store.ts";

@@ -1,5 +1,6 @@
 // What the station needs from a chat platform (the Rust station's chat/mod.rs): Slack is one, the station's own chat
 // (./internal.ts) another. The hub routes what a surface says to sessions, and posts what agents write through it.
+import type { BotIdentity } from "../connects/connections.ts";
 import type { Attachment } from "../store/store.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 
@@ -47,6 +48,10 @@ export interface ChatSurface {
   botUserId(): string;
   /// The bot's name on the platform (what people there call the agent), once started; empty where it has none.
   botName?(): string;
+  /// Who its bot is and where (connects/connections.ts), once started: absent where it has none (the station's chats).
+  identity?(): BotIdentity | null;
+  /// Its platform as people know it: "slack", "feishu", or "lark" (Feishu on larksuite.com).
+  platform?(): string;
   /// How someone is mentioned there; absent: Slack's `<@ID>`.
   mention?(user: string): string;
   /// The platform workspace (Slack team id) once started; threads are named by it.

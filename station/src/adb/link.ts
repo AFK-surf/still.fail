@@ -2,7 +2,7 @@
 // member link, and the station reaches it at `127.0.0.1:<port>`, a listener of its own whose every TCP connection is a
 // stream it opens on the phone's connection (the phone's core takes it on to adbd). `adb connect` as the offer comes,
 // `adb disconnect` as it goes; `adb pair` through the phone's pairing port when its person types the code. The agents
-// read who lent what with the `adb_devices` tool (`Shares.list`, given to tools/adb.ts `adbTools`).
+// read who lent what with the `adb_devices` tool (`Shares.list`, given to adb/tool.ts `adbTools`).
 //
 // Wire (unchanged from the Rust station; the phone's core is released): a request stream whose head line has an
 // `"adb"` object. `op: "share"` is an offer, answered `{status: 200, headers: {content-type: application/x-ndjson}}`

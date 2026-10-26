@@ -21,7 +21,7 @@ import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
-import { adbTools } from "../src/tools/adb.ts";
+import { adbTools } from "../src/adb/tool.ts";
 import { archiveTools } from "../src/tools/archive.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { feedbackTools } from "../src/tools/feedback.ts";

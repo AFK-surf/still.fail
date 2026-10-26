@@ -3,10 +3,10 @@
 // see and drive its tabs from their app (the `screen` tool gives the link), which is how an agent asks for a sign-in
 // or a captcha. Each session is given its own address of it (browser/proxy.ts), so the tabs it opens are known as its
 // chat's: people see which chat opened a tab, and they close with it.
-import type { BrowserStatus, StationBrowser } from "../browser/browser.ts";
-import { sessionPath } from "../browser/proxy.ts";
-import type { TabInfo } from "../browser/tabs.ts";
-import type { Tool } from "./mcp.ts";
+import type { BrowserStatus, StationBrowser } from "./browser.ts";
+import { sessionPath } from "./proxy.ts";
+import type { TabInfo } from "./tabs.ts";
+import type { Tool } from "../tools/mcp.ts";
 
 export const BROWSER = {
   name: "browser",

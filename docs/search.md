@@ -57,7 +57,7 @@ Later: the cloud's own (feedback), Slack channels' history.
   file only; `building` always false), as the asker may see: their
   workspace's documents (`ws`; null the home workspace's, `*` every member's), and what only a member who may write
   reaches (`scope: write`) only for them. Those whose title has the first word come first, then the newest.
-- Agents: `search` (tools/search.ts) asks every station of the session's workspace (`search.query` over the mesh, as
+- Agents: `search` (search/tool.ts) asks every station of the session's workspace (`search.query` over the mesh, as
   `session.read` is), each answering for its own with its chats' links; every kind, the execution history too, when
   none is named.
 

@@ -3,9 +3,9 @@
 // with it, through the proxy, an ssh-agent or its environment, and the agent sees what the command said, with the value
 // hidden; one to keep is sealed to its owner's devices, or printed by a command whose output the agent never sees.
 import { joinPath } from "../ops/paths.ts";
-import { placeholder } from "../vault/proxy.ts";
-import type { Secrets } from "../vault/secrets.ts";
-import type { Tool } from "./mcp.ts";
+import { placeholder } from "./proxy.ts";
+import type { Secrets } from "./secrets.ts";
+import type { Tool } from "../tools/mcp.ts";
 
 const text = (args: Record<string, unknown>, key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
 const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : undefined);

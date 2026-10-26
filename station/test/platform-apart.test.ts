@@ -16,11 +16,20 @@ test("the platform imports nothing of the agents' side but its types", () => {
   assert.deepEqual(wrong, []);
 });
 
-test("the platform imports none of the parts but their types", () => {
-  // A part is a directory with a module.ts (its layer); the drive's is its transfers, the drive itself the platform's.
-  const parts = readdirSync(src, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== "drive" && readdirSync(join(src, e.name)).includes("module.ts")).map((e) => e.name);
-  const platform = [...files("mesh"), ...files("modules"), "services.ts", "api/admin.ts"];
+/// The parts: a directory with a module.ts (its layer); the drive's is its transfers, the drive itself the platform's.
+const parts = readdirSync(src, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== "drive" && readdirSync(join(src, e.name)).includes("module.ts")).map((e) => e.name);
+/// Those of `files` that import a part but for its types.
+const importingParts = (files: string[]) => {
   const named = new RegExp(`^import (?!type )[^;]*from "[./]*/?(${parts.join("|")})/`, "m");
-  const wrong = platform.filter((f) => named.test(readFileSync(join(src, f), "utf8")));
-  assert.deepEqual(wrong, []);
+  return files.filter((f) => named.test(readFileSync(join(src, f), "utf8")));
+};
+
+test("the platform imports none of the parts but their types", () => {
+  assert.deepEqual(importingParts([...files("mesh"), ...files("modules"), "services.ts", "api/admin.ts"]), []);
+});
+
+test("the agents' side and what the parts share import none of the parts but their types", () => {
+  // The readers (read/) are a worker's, its reads a table of its own: a part's are there, with what of the part they read.
+  const shared = ["sessions", "agents", "jobs", "accounts", "updates", "tools", "cloud", "store", "ops", "screens", "helper", "platform", "share", "xshare", "device", "connects"];
+  assert.deepEqual(importingParts(shared.flatMap(files)), []);
 });
