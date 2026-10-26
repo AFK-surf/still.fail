@@ -33,10 +33,12 @@ export function elsewhere() {
   return { id: `ed25519:${hex(ed25519.getPublicKey(seed))}`, signBytes: (b: Uint8Array) => hex(ed25519.sign(b, seed)) };
 }
 
-/// A cloud keeping each workspace's chain and its waiting devices, as /v1/workspaces/:ws/lock… answers.
+/// A cloud keeping each workspace's chain and its waiting devices, as /v1/workspaces/:ws/lock… answers; and, where
+/// `devices` has the workspace's, the devices that asked it for credentials (/v1/workspaces/:ws/devices).
 export function lockCloud() {
   const chains = new Map<string, Entry[]>();
   const requests = new Map<string, Record<string, unknown>[]>();
+  const devices = new Map<string, Record<string, unknown>[]>();
   const posted: { ws: string; kind: string; id?: string }[] = [];
   const asked: string[] = [];
   const head = (ws: string) => {
@@ -44,6 +46,11 @@ export function lockCloud() {
     return c.length === 0 ? null : { seq: c.length - 1, hash: entryHash(c.at(-1)!), genesis: entryHash(c[0]!) };
   };
   const reply = (req: HttpRequest): unknown => {
+    const d = /\/v1\/workspaces\/([^/]+)\/devices$/.exec(req.url);
+    if (d && req.method === "GET") {
+      const list = devices.get(decodeURIComponent(d[1]!));
+      return list ? { devices: list } : undefined;
+    }
     const m = /\/v1\/workspaces\/([^/]+)\/lock(\/requests(?:\/([^/?]+))?)?(\?.*)?$/.exec(req.url);
     if (!m) return undefined;
     const ws = decodeURIComponent(m[1]!);
@@ -69,7 +76,7 @@ export function lockCloud() {
     }
     return { ok: true };
   };
-  return { chains, requests, posted, asked, head, reply };
+  return { chains, requests, devices, posted, asked, head, reply };
 }
 
 /// A core on an app's host reaching `ws` (W) and `w2` (日常), each with its lock in the cloud; `before` changes the host.

@@ -39,13 +39,17 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 final class CoreHost {
     // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
-    // app tells it: maker and model), and its language (the locale's tag: the core's `lang` when none is chosen, the
-    // app's words' until the core says: @sf.lang; a scripted run's own kept, e2e/android-flow.sh), in the environment
-    // before the first core starts.
+    // app tells it: maker and model; and the phone's name as its settings say, 关于手机's: OPPO Find N5, which of the
+    // person's devices it is), and its language (the locale's tag: the core's `lang` when none is chosen, the app's
+    // words' until the core says: @sf.lang; a scripted run's own kept, e2e/android-flow.sh), in the environment before
+    // the first core starts.
     static {
         try {
             Os.setenv("MBUI_DEVICE_MODEL", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL, true);
             Os.setenv("MBUI_LOCALE", java.util.Locale.getDefault().toLanguageTag(), false);
+            String name = StillfailApp.app == null ? null
+                : android.provider.Settings.Global.getString(StillfailApp.app.getContentResolver(), android.provider.Settings.Global.DEVICE_NAME);
+            if (name != null && !name.isBlank()) Os.setenv("MBUI_DEVICE_NAME", name.trim(), false);
         } catch (Exception e) {
             Host.log("device model: " + e);
         }

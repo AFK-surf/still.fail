@@ -598,13 +598,14 @@ export class Directory extends DurableObject<Env> {
     );
   }
 
-  /** The devices that asked for credentials in the workspace in the last 31 days (its owners and admins). */
+  /** The devices that asked for credentials in the workspace in the last 31 days: its owners and admins see everyone's
+   * (what turning the lock on lists, when each was last used), a member their own. */
   devices(sub: string, workspace: string): { devices: DeviceView[] } {
-    this.#role(sub, workspace, MANAGERS);
+    const manages = MANAGERS.includes(this.#role(sub, workspace));
     const devices = this.#rows(
       `SELECT d.sub, COALESCE(u.email, '') AS email, d.device, d.base, d.kind, d.label, d.first_seen, d.last_seen FROM devices d LEFT JOIN users u ON u.sub = d.sub
-        WHERE d.workspace = ? AND d.last_seen >= ? AND d.sub IN (SELECT sub FROM members WHERE workspace = ?) ORDER BY d.sub, d.last_seen DESC`,
-      workspace, nowSeconds() - 31 * 86400, workspace,
+        WHERE d.workspace = ? AND d.last_seen >= ? AND d.sub IN (SELECT sub FROM members WHERE workspace = ?) AND (? OR d.sub = ?) ORDER BY d.sub, d.last_seen DESC`,
+      workspace, nowSeconds() - 31 * 86400, workspace, manages ? 1 : 0, sub,
     ) as unknown as DeviceView[];
     return { devices };
   }

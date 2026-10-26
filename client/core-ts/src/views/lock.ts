@@ -66,8 +66,10 @@ const RECENT_SECS = 7 * 86400;
 
 /// What the cloud keeps of a workspace's lock, as held here (the `lock` record of the workspace); `declined`, this
 /// device's base key once its request went without it being let in (turned down, dropped by the cloud): it does not
-/// ask by itself again, when the lock moves on or after a restart, only by hand.
-type Held = { head: Head | null; entries: Entry[]; requests: J[]; declined?: string };
+/// ask by itself again, when the lock moves on or after a restart, only by hand. `seen`: the devices that asked the
+/// cloud for credentials in the last 31 days, as far as the viewer may see them (owners and admins all, others their
+/// own; none from a cloud that would not say): when each was last used and what it calls itself now.
+type Held = { head: Head | null; entries: Entry[]; requests: J[]; declined?: string; seen?: J[] | null };
 
 /// What this device keeps of a workspace's lock this run.
 type Part = {
@@ -233,6 +235,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const requests = head === null ? [] : yield* Effect.orElseSucceed(Effect.map(cloud("/lock/requests"), (r) => arr(get(r, "requests"))), () => was?.requests ?? []);
+    const seen = head === null ? null : yield* Effect.orElseSucceed(Effect.map(cloud("/devices"), (r) => arr(get(r, "devices"))), () => was?.seen ?? null);
     const asking = head !== null && inner.provider.kind === "stillfail";
     const base = asking ? yield* Effect.orElseSucceed(new Lock(inner, ws, sub, null).base(), () => null) : null;
     const f = fold(head === null ? [] : entries);
@@ -241,7 +244,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let declined = was?.declined;
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) declined = undefined;
     else if (base !== null && (was?.requests ?? []).some((r) => r.base === base)) declined = base;
-    inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests, ...(declined ? { declined } : {}) });
+    inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests, ...(declined ? { declined } : {}), ...(seen ? { seen } : {}) });
     // In the lock, or its request at the cloud: what kept it from asking is past.
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) part(inner, ws).failed = null;
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
@@ -368,11 +371,30 @@ export function askPerson(inner: Inner, reason: string, code = "lock_refused"): 
     e.message === "no_device_lock" ? Effect.void : Effect.fail(CoreError.refused(e, code)));
 }
 
-/// A device's name as people know it: its label, or what kind of client it is (an older client's, said so).
+/// A device's name as people know it, in a line of its own: which machine it is, then which app (左子健的 MacBook Air ·
+/// still.fail 桌面版); a name of its own as it is; else what kind of client it is (an older client's, said so).
 export function deviceText(d: { kind: string; label: string; older?: boolean }): string {
+  const { app } = prefs.deviceParts(d.label);
+  return app === null ? machineText(d) : `${machineText(d)} · ${app}`;
+}
+
+/// Which machine a device is, where its app is said beside it (a member's devices, grouped by app): the machine its
+/// name says, else its name, else what kind of client it is.
+function machineText(d: { kind: string; label: string; older?: boolean }): string {
+  const { app, machine } = prefs.deviceParts(d.label);
+  if (app !== null) return machine || t("web-pages.security.unnamed");
   if (d.older) return d.label || t("web-pages.security.olderClient");
   return d.label || (d.kind === "web" ? t("web-pages.security.webDevice") : t("web-pages.security.appDevice"));
 }
+
+/// When a device was last used, `secs` ago, as near as its credentials tell (a day).
+function usedText(secs: number): string {
+  const days = Math.floor(secs / 86400);
+  return days <= 0 ? t("web-pages.security.usedLately") : t("web-pages.security.usedDaysAgo", { n: days });
+}
+
+/// A line's first letter capital (a line of the device's said parts, any may lead it: "This device · trusted").
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /// A member's role as the security pages name it.
 export function roleText(role: string): string {
@@ -396,28 +418,70 @@ export function lockView(inner: Inner, ws: string): J {
   const mine = base ? f.devices.get(base) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
+  const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
+  // What each device last told the cloud of itself (the latest of its endpoints'): by its base key, or an older
+  // client's by the endpoints it used.
+  const seen = h?.seen ?? null;
+  const told = (d: J): J | undefined => {
+    let latest: J | undefined;
+    for (const r of seen ?? []) {
+      if (r.base !== d.id && !(Array.isArray(d.endpoints) && d.endpoints.includes(r.device))) continue;
+      if (latest === undefined || (r.last_seen ?? 0) > (latest.last_seen ?? 0)) latest = r;
+    }
+    return latest;
+  };
   const device = (d: J) => {
     const kind = d.kind === "web" ? "web" : "app";
     const older = Array.isArray(d.endpoints);
-    const signs = typeof d.sign_key === "string";
+    const trusted = typeof d.sign_key === "string";
     const mine = d.id === base;
     const left = typeof d.exp === "number" ? daysLeft(d.exp - at) : null;
     // A device of the viewer's own added lately, shown on their other devices.
     const recent = d.sub === sub && d.id !== base && at - (f.added.get(d.id) ?? 0) < RECENT_SECS;
+    // Which one it is, as people tell their devices apart: what it calls itself now (the machine, in its language
+    // now; else as when it was approved), and when it was last used: it asks the cloud for a credential at most once a
+    // day, on its way to a station; one the cloud would say of and has not in 31 days, not since.
+    const said = told(d);
+    const lastSeen = typeof said?.last_seen === "number" ? said.last_seen : null;
+    const label = str(said?.label) || d.label || "";
+    const used = mine ? t("web-pages.security.thisDevice")
+      : lastSeen !== null ? usedText(at - lastSeen)
+      : seen !== null && (manages || d.sub === sub) ? t("web-pages.security.unused")
+      : null;
     return {
-      id: d.id, kind, label: d.label || "", signs, older, mine, daysLeft: left,
+      id: d.id, kind, label, signs: trusted, older, mine, daysLeft: left,
       renewSoon: typeof d.exp === "number" && d.exp - at < RENEW_SECS,
-      recent,
-      nameText: deviceText({ kind, label: d.label || "", older }),
-      // what it is in a line: a web page or an app, whether it signs, this device, the days a web page has left, new
-      metaText: [
-        t(kind === "web" ? "web-pages.security.web" : "web-pages.security.app"),
-        signs ? t("web-pages.security.signs") : null,
-        mine ? t("web-pages.security.thisDevice") : null,
+      recent, lastSeen,
+      // taken out of the lock by this device, where it signs and may (owners and admins any but this one, members
+      // their own others)
+      removable: signs && !mine && (manages || d.sub === sub),
+      // which machine (its group says the app), and both in a line (asked about it)
+      nameText: machineText({ kind, label, older }),
+      fullText: deviceText({ kind, label, older }),
+      // the rest in a line: this device or when it was last used, whether it signs, the days a web page has left, new
+      // (whether it is a web page or an app its mark says, and its name)
+      metaText: upperFirst([
+        used,
+        trusted ? t("web-pages.security.signs") : null,
         left !== null ? t("web-pages.security.daysLeft", { n: left }) : null,
         recent ? t("web-pages.security.recent") : null,
-      ].filter((x) => x !== null).join(" · "),
+      ].filter((x) => x !== null).join(" · ")),
     };
+  };
+  // this device first, then the most lately used
+  const byUse = (a: J, b: J) => Number(b.mine) - Number(a.mine) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1);
+  // A member's devices by the app each is (still.fail 桌面版, still.fail 网页版, those whose name says none together),
+  // the group with this device first, then the one used most lately; in each the same.
+  const byApp = (devices: J[]) => {
+    const groups = new Map<string, { appText: string; devices: J[] }>();
+    for (const d of devices.sort(byUse)) {
+      const { group, app } = prefs.deviceParts(d.label);
+      const key = group ?? "";
+      const g = groups.get(key) ?? { appText: app ?? t("web-pages.security.otherApps"), devices: [] };
+      g.devices.push(d);
+      groups.set(key, g);
+    }
+    return [...groups.values()];
   };
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id),
@@ -425,7 +489,7 @@ export function lockView(inner: Inner, ws: string): J {
   const members = [...f.members].map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
     nameText: str(get(people.get(s), "name")) || m.email, roleText: roleText(m.role),
-    devices: [...f.devices.values()].filter((d) => d.sub === s).map(device),
+    groups: byApp([...f.devices.values()].filter((d) => d.sub === s).map(device)),
   }));
   const requests = (h?.requests ?? [])
     .map((r) => ({
@@ -434,9 +498,8 @@ export function lockView(inner: Inner, ws: string): J {
       whoText: str(get(people.get(r.sub), "name")) || r.email, deviceText: deviceText({ kind: r.kind === "app" ? "app" : "web", label: r.label || "" }),
     }))
     .filter((r) => r.device !== base && (manages || r.yours));
-  const renew = members.flatMap((m) => (m.you ? m.devices.filter((d) => d.renewSoon) : []));
+  const renew = members.flatMap((m) => (m.you ? m.groups.flatMap((g) => g.devices).filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
-  const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
   // An app in the lock that does not sign with its key (let in before it kept one, as the devices there when the lock
   // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;

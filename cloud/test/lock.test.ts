@@ -118,12 +118,17 @@ test("devices that asked for credentials, for the owner to check; devices waitin
     const proof = await base.sign(`stillfail-lock-endpoint/1\0${ws}\0${endpoint.id}`);
     assert.equal((await bob("POST", `/v1/workspaces/${ws}/credential`, { device: endpoint.id, base: base.id, proof: await old.sign("x"), kind: "app" })).status, 400, "a proof by another key");
     assert.equal((await bob("POST", `/v1/workspaces/${ws}/credential`, { device: endpoint.id, base: base.id, proof, kind: "app", label: "bob's Mac" })).status, 200);
-    assert.equal((await bob("GET", `/v1/workspaces/${ws}/devices`)).status, 403, "owners and admins");
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/credential`, { device: (await key()).id })).status, 200);
     const devices = ((await (await alice("GET", `/v1/workspaces/${ws}/devices`)).json()) as any).devices;
-    assert.deepEqual(devices.map((d: any) => [d.email, d.device, d.base, d.kind, d.label]).sort(), [
+    assert.deepEqual(devices.filter((d: any) => d.email === "bob@example.test").map((d: any) => [d.email, d.device, d.base, d.kind, d.label]).sort(), [
       ["bob@example.test", endpoint.id, base.id, "app", "bob's Mac"],
       ["bob@example.test", old.id, null, null, null],
     ].sort());
+    assert.ok(devices.every((d: any) => typeof d.last_seen === "number"));
+    // A member sees only their own (when each of theirs was last used, on the security page); owners and admins everyone's.
+    assert.deepEqual(devices.map((d: any) => d.email).sort(), ["alice@example.test", "bob@example.test", "bob@example.test"]);
+    const bobs = ((await (await bob("GET", `/v1/workspaces/${ws}/devices`)).json()) as any).devices;
+    assert.deepEqual(bobs.map((d: any) => d.device).sort(), [endpoint.id, old.id].sort());
 
     // A device asks to be confirmed: its code, as both sides work it out; seen by owners and the member, gone once answered.
     const waiting = await key();

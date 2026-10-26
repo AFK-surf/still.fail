@@ -23,7 +23,10 @@ export const rowText = style({ flex: "1", minWidth: "0", display: "flex", alignI
 export const rowName = style({ fontWeight: "500", color: vars.text });
 export const rowMeta = style({ color: vars.muted, fontSize: vars.textMeta });
 export const rows = style({ display: "grid", gap: "12px" });
-export const devices = style({ display: "grid", gap: "8px", paddingLeft: "42px" });
+export const devices = style({ display: "grid", gap: "14px", paddingLeft: "42px" });
+/** A member's devices of one app, under its name. */
+export const deviceGroup = style({ display: "grid", gap: "8px" });
+export const deviceApp = style({ color: vars.muted, fontSize: vars.textMeta, fontWeight: "500" });
 export const deviceIcon = style({ color: vars.muted, flex: "none" });
 export const warn = style({ color: vars.amber, fontSize: vars.textMeta });
 /** A short code, as the device shows it. */

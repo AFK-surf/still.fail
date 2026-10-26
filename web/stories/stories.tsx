@@ -1057,6 +1057,7 @@ export const stories: Story[] = [
   { id: "settings-security-on", group: "设置", title: "安全 · 已开启", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "settings-security-turn-off", group: "设置", title: "安全 · 关闭安全模式", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }] },
   { id: "settings-security-turn-off-typed", group: "设置", title: "安全 · 关闭安全模式 · 已输入名称", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }, { key: "A" }, { key: "c" }, { key: "m" }, { key: "e" }] },
+  { id: "settings-security-remove", group: "设置", title: "安全 · 移除设备", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("移除")' }] },
   { id: "settings-security-no-stations", group: "设置", title: "安全 · 暂无 station", app: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "security-waiting", group: "设置", title: "安全 · 等待批准此设备", app: true, demo: lockDemo("waiting") },
   { id: "security-waiting-finding", group: "设置", title: "安全 · 正在联系受信任设备", app: true, demo: lockDemo("finding") },
@@ -1072,6 +1073,8 @@ export const stories: Story[] = [
   { id: "phone-security-waiting-code", group: "设置", title: "手机 · 安全 · 输入受信任设备上的安全码", app: true, phone: true, demo: lockDemo("code") },
   { id: "phone-security-waiting-code-typed", group: "设置", title: "手机 · 安全 · 安全码输入到一半", app: true, phone: true, demo: lockDemo("code"), steps: [{ click: '[aria-label="输入你的受信任设备上显示的安全码"]' }, { key: "4" }, { key: "8" }, { key: "2" }, { key: "9" }] },
   { id: "phone-security-waiting-wrong", group: "设置", title: "手机 · 安全 · 安全码不对", app: true, phone: true, demo: lockDemo("wrong") },
+  { id: "phone-settings-security-on", group: "设置", title: "手机 · 安全 · 已开启", app: true, phone: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "phone-settings-security-remove", group: "设置", title: "手机 · 安全 · 移除设备", app: true, phone: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("移除")' }] },
   { id: "phone-settings-security-no-stations", group: "设置", title: "手机 · 安全 · 暂无 station", app: true, phone: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
 
   // ── the vault (docs/vault.md) ──

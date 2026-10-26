@@ -19,6 +19,29 @@ const PAIR: Partial<Record<LockStory, LockPair>> = {
   none: { state: "none", devices: 0 },
 };
 
+type Device = LockView["members"][number]["groups"][number]["devices"][number];
+
+/** The person's devices as the core lists them, by app (this one's first, then the one used most lately; in each this
+ *  one first, then the most lately used): which machine each is, when it was last used, one not used in a month and
+ *  one approved before it said its name. */
+const GROUPS: { appText: string; devices: Omit<Device, "mine" | "removable">[] }[] = [
+  { appText: "still.fail 桌面版", devices: [
+    { id: "d_demo", kind: "app", label: "still.fail 桌面版 · MacBook Pro", signs: true, older: false, renewSoon: false, recent: false, lastSeen: 1_760_000_000, nameText: "MacBook Pro", fullText: "MacBook Pro · still.fail 桌面版", metaText: "此设备 · 受信任" },
+    { id: "d_studio", kind: "app", label: "still.fail 桌面版 · Mac Studio", signs: true, older: false, renewSoon: false, recent: false, lastSeen: 1_759_950_000, nameText: "Mac Studio", fullText: "Mac Studio · still.fail 桌面版", metaText: "一天内使用过 · 受信任" },
+  ] },
+  { appText: "still.fail Android", devices: [
+    { id: "d_pixel", kind: "app", label: "still.fail Android · Pixel 9", signs: true, older: false, renewSoon: false, recent: true, lastSeen: 1_759_990_000, nameText: "Pixel 9", fullText: "Pixel 9 · still.fail Android", metaText: "一天内使用过 · 受信任 · 新增" },
+    { id: "d_old", kind: "app", label: "still.fail Android · Pixel 7", signs: true, older: false, renewSoon: false, recent: false, nameText: "Pixel 7", fullText: "Pixel 7 · still.fail Android", metaText: "超过一个月未使用 · 受信任" },
+  ] },
+  { appText: "still.fail 网页版", devices: [
+    { id: "d_chrome", kind: "web", label: "still.fail 网页版 · Chrome · macOS", signs: false, older: false, daysLeft: 4, renewSoon: true, recent: false, lastSeen: 1_759_800_000, nameText: "Chrome · macOS", fullText: "Chrome · macOS · still.fail 网页版", metaText: "2 天前使用过 · 剩余 4 天" },
+    { id: "d_safari", kind: "web", label: "still.fail 网页版 · Safari · iOS", signs: false, older: false, daysLeft: 21, renewSoon: false, recent: false, lastSeen: 1_759_000_000, nameText: "Safari · iOS", fullText: "Safari · iOS · still.fail 网页版", metaText: "11 天前使用过 · 剩余 21 天" },
+  ] },
+  { appText: "其他", devices: [
+    { id: "d_unnamed", kind: "app", label: "", signs: true, older: false, renewSoon: false, recent: false, nameText: "客户端", fullText: "客户端", metaText: "超过一个月未使用 · 受信任" },
+  ] },
+];
+
 function view(story: LockStory): LockView {
   const stations = story === "noStations" ? [] : STATIONS;
   const waits = story !== "on" && story !== "noStations" && story !== "prompt";
@@ -29,10 +52,10 @@ function view(story: LockStory): LockView {
       ...(story === "failed" ? { failed: "无法在系统钥匙串中保存此设备的密钥：secure.set is not supported on this host" } : {}),
       ...(PAIR[story] ? { pair: PAIR[story] } : {}),
     },
-    signers: 1,
+    signers: waits ? 1 : GROUPS.flatMap((g) => g.devices).filter((d) => d.signs).length,
     members: [{
       sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true, nameText: "你", roleText: "Owner",
-      devices: [{ id: "d_demo", kind: "app", label: "MacBook Pro", signs: true, older: false, mine: true, renewSoon: false, recent: false, nameText: "MacBook Pro", metaText: "客户端 · 受信任 · 此设备" }],
+      groups: GROUPS.map((g) => ({ ...g, devices: g.devices.map((d) => ({ ...d, mine: d.id === "d_demo", removable: !waits && d.id !== "d_demo" })) })),
     }],
     stations, protected: stations.filter((s) => s.protected).length, requests: [], renew: [], attention: 0,
   };

@@ -17,6 +17,10 @@ export const mFailed = style({ color: "var(--m-red)", fontSize: vars.textMeta, l
 export const mPlaces = style({ display: "flex", alignItems: "center", gap: "6px 14px", flexWrap: "wrap" });
 export const mPlace = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textBody, fontWeight: "600", color: "var(--m-ink)" });
 export const mDevice = style({ paddingLeft: "14px" });
+/** The app a member's devices under it are, at their words' start (the row's 16, and their 14 in). */
+export const mDeviceApp = style({ padding: "6px 16px 0 30px", fontSize: vars.textMeta, fontWeight: "500", color: "var(--m-subtle)" });
+/** What a device's row does (续期, 移除), a line of its own under its words. */
+export const mDeviceActs = style({ display: "flex", gap: "20px", paddingTop: "6px" });
 export const mCode = style({ fontFamily: vars.fontMono, fontWeight: "600", letterSpacing: "1px", fontSize: vars.textUi, color: "var(--m-ink)" });
 export const mBigCode = style({ fontFamily: vars.fontMono, fontSize: vars.textDisplay, lineHeight: "1.3", letterSpacing: "5px", fontWeight: "600", textAlign: "center", color: "var(--m-ink)" });
 export const mLead = style({ margin: "0", padding: "4px 24px 0", fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: "var(--m-subtle)" });

@@ -9,7 +9,7 @@ import { stamp } from "../api.ts";
 import { useDoing } from "../doing.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
-import { Button, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
+import { Button, Confirm, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
@@ -87,6 +87,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const [checking, setChecking] = useState<LockRequest | null>(null);
   const [off, setOff] = useState(false);
   const [joining, setJoining] = useState<LockStation | null>(null);
+  const [removing, setRemoving] = useState<LockDevice | null>(null);
   const turningOff = useDoing("lock.disable", { workspace: entry.id });
   return (
     <>
@@ -125,8 +126,13 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
           {lock.members.map((m) => (
             <div key={m.sub} className={css.rows}>
               <div className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.nameText}</span><span className={css.rowMeta}>{m.roleText}</span></div></div>
-              {m.devices.length > 0 && <div className={css.devices}>
-                {m.devices.map((d) => <DeviceRow key={d.id} entry={entry} d={d} canRenew={lock.signs} />)}
+              {m.groups.length > 0 && <div className={css.devices}>
+                {m.groups.map((g) => (
+                  <div key={g.appText} className={css.deviceGroup}>
+                    <span className={css.deviceApp}>{g.appText}</span>
+                    {g.devices.map((d) => <DeviceRow key={d.id} entry={entry} d={d} canRenew={lock.signs} onRemove={() => setRemoving(d)} />)}
+                  </div>
+                ))}
               </div>}
             </div>
           ))}
@@ -145,6 +151,9 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         footer={joining && <><Button variant="ghost" onClick={() => setJoining(null)}>{t("common.cancel")}</Button><Button variant="primary" onClick={() => { const s = joining; setJoining(null); act(call("lock.joinStation", { workspace: entry.id, station: s.id }), t("web-pages.security.join"), t("web-pages.security.joined", { name: s.name })); }}>{t("web-pages.security.join")}</Button></>}>
         <span />
       </Dialog>
+      <Confirm open={removing !== null} onClose={() => setRemoving(null)} title={removing ? t("web-pages.security.removeTitle", { name: removing.fullText }) : ""}
+        description={t("web-pages.security.removeBody")} action={t("web-pages.security.remove")}
+        onConfirm={() => { const d = removing; setRemoving(null); if (d) act(call("lock.removeDevice", { workspace: entry.id, device: d.id }), t("web-pages.security.remove"), t("web-pages.security.removed")); }} />
       <ConfirmDevice entry={entry} request={checking} onClose={() => setChecking(null)} />
       {off && <TurnOff entry={entry} onClose={() => setOff(false)} />}
     </>
@@ -197,15 +206,19 @@ function StationRow({ entry, s, canJoin, onJoin }: { entry: WorkspaceEntry; s: L
   );
 }
 
-function DeviceRow({ entry, d, canRenew }: { entry: WorkspaceEntry; d: LockDevice; canRenew: boolean }) {
+/** A device in the lock: which machine it is (its group says the app), when it was last used; 续期 a web page's, 移除
+ *  (asked first) where this one may. */
+function DeviceRow({ entry, d, canRenew, onRemove }: { entry: WorkspaceEntry; d: LockDevice; canRenew: boolean; onRemove(): void }) {
   const call = useCall();
   const act = useAct();
   const renewing = useDoing("lock.renew", { workspace: entry.id, device: d.id });
+  const removing = useDoing("lock.removeDevice", { workspace: entry.id, device: d.id });
   return (
     <div className={css.row}>
       <DeviceIcon d={d} />
       <div className={css.rowText}><span>{d.nameText}</span><span className={d.renewSoon ? css.warn : css.rowMeta}>{d.metaText}</span></div>
       {d.daysLeft != null && canRenew && <Button variant="ghost" busy={renewing} onClick={() => act(call("lock.renew", { workspace: entry.id, device: d.id }), t("web-pages.security.renew"), t("web-pages.security.renewed"))}>{t("web-pages.security.renew")}</Button>}
+      {d.removable && <Button variant="ghost" busy={removing} onClick={onRemove}>{t("web-pages.security.remove")}</Button>}
     </div>
   );
 }

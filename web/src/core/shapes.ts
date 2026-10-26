@@ -4160,7 +4160,7 @@ export interface Live {
 	offline?: boolean;
 }
 
-/** A device in the workspace's lock. */
+/** A device in the workspace's lock: this one first, then the most lately used. */
 export interface LockDevice {
 	id: string;
 	/** `app` (desktop, Android: it may sign) or `web` (a page: 30 days at a time). */
@@ -4176,9 +4176,24 @@ export interface LockDevice {
 	renewSoon: boolean;
 	/** One of the viewer's own, added lately (shown on their other devices). */
 	recent: boolean;
-	/** Its name as people know it: its label, or what kind of client it is. */
+	/**
+	 * When it last asked the cloud for a credential (s; at most a day before it was last used): none where the viewer
+	 * may not know, or it has not in 31 days.
+	 */
+	lastSeen?: number;
+	/**
+	 * This device may take it out of the lock (`lock.removeDevice`): it signs, the device is another, and the
+	 * viewer's own or the viewer manages the workspace.
+	 */
+	removable: boolean;
+	/**
+	 * Which machine it is (its group says the app): what it calls itself now, else its label, else what kind
+	 * of client it is.
+	 */
 	nameText: string;
-	/** What it is in a line: a web page or an app, whether it signs, this device, days left, new. */
+	/** Its machine and its app in a line (asked about it: 移除「…」？). */
+	fullText: string;
+	/** The rest in a line: this device or when it was last used, whether it signs, days left, new. */
 	metaText: string;
 }
 
@@ -4235,6 +4250,16 @@ export interface LockDraftView {
 	members: LockDraftMember[];
 	devices: LockDraftDevice[];
 	stations: LockDraftStation[];
+}
+
+/** A member's devices of one app: the group with this device first, then the one used most lately. */
+export interface LockGroup {
+	/**
+	 * The app its devices are, its brand's (still.fail 桌面版, still.fail 网页版), or 其他: those whose
+	 * name says none.
+	 */
+	appText: string;
+	devices: LockDevice[];
 }
 
 /** This device's try to be approved face to face (views/pair.ts). */
@@ -4294,7 +4319,7 @@ export interface LockPairing {
 	label: string;
 	/** The code to type on the new device: shown here only, never sent. */
 	code: string;
-	/** Its name as people know it (LockDevice `nameText`). */
+	/** Its name as people know it (LockDevice `fullText`). */
 	deviceText: string;
 	/** Where it asks to be let in and this device approves it. */
 	workspaces: LockPromptWorkspace[];
@@ -4304,7 +4329,7 @@ export interface LockPairing {
 	time?: Record<string, Stamp>;
 }
 
-/** A member in the workspace's lock, with their devices. */
+/** A member in the workspace's lock, with their devices by app. */
 export interface LockPerson {
 	sub: string;
 	email: string;
@@ -4315,7 +4340,7 @@ export interface LockPerson {
 	nameText: string;
 	/** Their role as the security pages name it. */
 	roleText: string;
-	devices: LockDevice[];
+	groups: LockGroup[];
 }
 
 /** What waits on this device to approve new ones face to face (the `lockPrompts` topic; views/pair.ts). */
@@ -4338,7 +4363,7 @@ export interface LockRequest {
 	yours: boolean;
 	/** Whose it is: their name, or their email. */
 	whoText: string;
-	/** Its name as people know it (LockDevice `nameText`). */
+	/** Its name as people know it (LockDevice `fullText`). */
 	deviceText: string;
 	/** Its times in words (`created_at`). */
 	time?: Record<string, Stamp>;
