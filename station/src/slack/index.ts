@@ -2,6 +2,7 @@
 // platform's are kept (connects/connects.ts: connected as config.json and the station's workspace say, the names Slack
 // gives people and channels in <data>/slack-names.json), and the app API with the configuration tokens in config.json.
 import type { Clock } from "effect";
+import { maskValue as mask } from "../ops/agent-env.ts";
 import type { Connection } from "../connects/connections.ts";
 import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
 import { NAMES_FILE } from "../connects/keys.ts";
@@ -32,6 +33,18 @@ export type SlackConnect = {
 export const connectName = (c: SlackConnect) => c.botName ?? c.id;
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+
+/// What a Slack connect is known by in the overview (its config.json entry `raw`): its bot's name in its Slack workspace
+/// and that workspace, as last seen; its tokens masked.
+export function slackShown(raw: Json): Record<string, unknown> {
+  const slack = raw?.slack ?? {};
+  return {
+    name: nonEmpty(slack.botName) ?? raw?.id,
+    team: slack.team?.id ? (slack.team.name ?? "") : null,
+    botImage: nonEmpty(slack.botImage),
+    slack: { appToken: mask(slack.appToken ?? ""), botToken: mask(slack.botToken ?? "") },
+  };
+}
 
 /// config.json's Slack connects (those of no other kind), as their connections read them.
 export function slackConnects(raw: Json): SlackConnect[] {

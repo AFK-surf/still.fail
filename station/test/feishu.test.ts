@@ -376,8 +376,9 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     assert.deepEqual([kept.kind, kept.feishu.appId, kept.feishu.appSecret, kept.feishu.botOpenId, kept.feishu.tenant, kept.bind], ["feishu", "cli_test", "s", "ou_bot", { key: "tk1", name: "Acme" }, { runtime: "claude" }]);
     await fake.until("connected", () => feishu.state("codex")?.state === "connected");
     // Its app stays through an edit of what every connect has.
-    const { connectEdits } = await import("../src/api/routes/slack.ts");
-    await connectEdits({ config, data, hub: () => undefined, overview: () => ({}) }).putConnect({ method: "PUT", path: "", query: [], headers: {}, body: Buffer.from(""), viewer, lang: "zh" }, "codex", { enabled: false });
+    const { connectEdits } = await import("../src/api/routes/connects.ts");
+    const { feishuEntry } = await import("../src/api/routes/feishu.ts");
+    await connectEdits({ config, data, hub: () => undefined, overview: () => ({}), entry: (kind) => (kind === "feishu" ? feishuEntry : undefined) }).putConnect({ method: "PUT", path: "", query: [], headers: {}, body: Buffer.from(""), viewer, lang: "zh" }, "codex", { enabled: false });
     assert.deepEqual([config.raw().connects[0].enabled, config.raw().connects[0].feishu.appId], [false, "cli_test"]);
     const [secret] = await ask("PUT", "/feishu/connects/codex/secret", { appSecret: "s2" });
     assert.equal(secret, 200);

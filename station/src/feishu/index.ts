@@ -102,7 +102,6 @@ export function makeFeishu(options: FeishuOptions) {
         name: nonEmpty(f.botName) ?? live?.botName ?? raw?.id,
         team: nonEmpty(f.tenant?.name) ?? (live && live.team !== "" ? live.team : null),
         botImage: nonEmpty(f.botImage),
-        slack: { appToken: "", botToken: "" },
         feishu: { appId: typeof f.appId === "string" ? f.appId : "", appSecret: maskSecret(typeof f.appSecret === "string" ? f.appSecret : ""), domain: domainOf(f.domain) },
       };
     },
