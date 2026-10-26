@@ -304,6 +304,22 @@ let out_b : Ref[Double] = { val: 0.0 }
 let reusing : Ref[Bool] = { val: false }
 
 ///|
+/// Device pixels a point the current compute() places nodes on (its `grid`), 0: anywhere; the last one's, before.
+let placing_grid : Ref[Double] = { val: 0.0 }
+
+///|
+/// `v` (a node's place from its parent) on the current compute()'s grid: the nearest whole pixel, half up (Compose's
+/// roundToInt).
+fn on_grid(v : Double) -> Double {
+  let g = placing_grid.val
+  if g > 0.0 {
+    (v * g + 0.5).floor() / g
+  } else {
+    v
+  }
+}
+
+///|
 /// Whether a container laid out in the current compute() has an absolutely
 /// positioned child: without one, layout_static_absolute has nothing to
 /// place.
@@ -343,15 +359,23 @@ fn Box::pbh(self : Box) -> Double {
 /// above one; a node moved under another parent dirties both parents.
 /// Nothing may be aligned by baseline (finding one lays items out while
 /// only measuring their container): reuse aborts on it.
+///
+/// With `grid` (device pixels a point), each node is placed on whole device
+/// pixels from its parent, as Compose places a child (its alignment's and
+/// arrangement's offsets rounded to whole pixels, half up): a tree whose
+/// lengths are whole pixels comes out on them however far its root is moved
+/// by whole pixels. What was kept from a compute on another grid is not.
 pub fn compute(
   root : Node,
   width? : Double = undef,
   height? : Double = undef,
   round? : Bool = true,
   reuse? : Bool = false,
+  grid? : Double = 0.0,
 ) -> Unit {
   generation.val = generation.val + 1
-  reusing.val = reuse && !round
+  reusing.val = reuse && !round && grid == placing_grid.val
+  placing_grid.val = grid
   absolute_seen.val = false
   let b = box_of(root.style, width, height)
   let w = or_else(b.w, if root.style.position == Absolute { undef } else { width })
@@ -378,8 +402,8 @@ pub fn compute(
   } else {
     0.0
   }
-  root.left = b.mar_l + dx
-  root.top = b.mar_t + dy
+  root.left = on_grid(b.mar_l + dx)
+  root.top = on_grid(b.mar_t + dy)
   if absolute_seen.val && !(kept(root) && s.position != Static) {
     layout_static_absolute(root, root, 0.0, 0.0)
   }
@@ -1653,8 +1677,8 @@ fn layout_flex(
       } else {
         0.0
       }
-      n.left = ox + x + dx
-      n.top = oy + y + dy
+      n.left = on_grid(ox + x + dx)
+      n.top = on_grid(oy + y + dy)
     }
     for c in node.children {
       if c.style.display == DisplayNone {
@@ -2280,20 +2304,24 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
     } else {
       static_offset(ps.justify, free_h, is_reverse(ps.direction))
     })
-  c.left = if known(l) {
-    cbb.bor_l + l + b.mar_l - ox
-  } else if known(r) {
-    cb.width - cbb.bor_r - r - rw - b.mar_r - ox
-  } else {
-    static_x
-  }
-  c.top = if known(t) {
-    cbb.bor_t + t + b.mar_t - oy
-  } else if known(bt) {
-    cb.height - cbb.bor_b - bt - rh - b.mar_b - oy
-  } else {
-    static_y
-  }
+  c.left = on_grid(
+    if known(l) {
+      cbb.bor_l + l + b.mar_l - ox
+    } else if known(r) {
+      cb.width - cbb.bor_r - r - rw - b.mar_r - ox
+    } else {
+      static_x
+    },
+  )
+  c.top = on_grid(
+    if known(t) {
+      cbb.bor_t + t + b.mar_t - oy
+    } else if known(bt) {
+      cb.height - cbb.bor_b - bt - rh - b.mar_b - oy
+    } else {
+      static_y
+    },
+  )
 }
 
 ///|
