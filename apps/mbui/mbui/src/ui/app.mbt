@@ -321,6 +321,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   let t2 = h_now()
   c.ninst = 0
+  cycle_looks_begin()
   dr.tops.clear()
   c.segs.clear()
   text_runs.runs.clear()
@@ -343,6 +344,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint_raised()
   c.paint_overlays()
   c.raise_tops()
+  // what is drawn by the clock, as its cycle is now (cycle_look.mbt)
+  c.cycle_looks()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()

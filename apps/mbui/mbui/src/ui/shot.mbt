@@ -145,6 +145,7 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
     self.paint_overlays()
     pop_clip()
     self.raise_tops()
+    self.cycle_looks()
     self.emit_segs()
     self.scale = window_scale
     words_zoom.val = 1.0

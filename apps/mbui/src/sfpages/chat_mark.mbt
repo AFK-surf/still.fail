@@ -192,15 +192,15 @@ fn lead_icon(c : @ui.Ctx, lead : String, ink : Int64) -> Unit {
         @sf.icon_parts(c, name, [0], size=state_icon, color=ink) |> ignore
         for k, d in wait_delays {
           let part = c.layer(fn() { @sf.icon_parts(c, name, [k + 1], size=state_icon, color=ink) |> ignore })
-          c.look(part, @ui.look(alpha=lead_breathe(lead_phase(c, d))))
+          lead_look(c, part, d, fn(f) { @ui.look(alpha=lead_breathe(f)) })
         }
       }
       "watch" => {
         let dot = c.layer(fn() { @sf.icon_parts(c, name, [0], size=state_icon, color=ink) |> ignore })
-        c.look(dot, @ui.look(scale=lead_beat(lead_phase(c, 0.0))))
+        lead_look(c, dot, 0.0, fn(f) { @ui.look(scale=lead_beat(f)) })
         for k, d in watch_delays {
           let arcs = c.layer(fn() { @sf.icon_parts(c, name, [2 * k + 1, 2 * k + 2], size=state_icon, color=ink) |> ignore })
-          c.look(arcs, @ui.look(alpha=lead_lit(lead_phase(c, d))))
+          lead_look(c, arcs, d, fn(f) { @ui.look(alpha=lead_lit(f)) })
         }
       }
       _ => @sf.icon(c, name, size=state_icon, color=ink) |> ignore
@@ -230,14 +230,24 @@ let wait_delays : Array[Double] = [0.0, 300.0, 600.0]
 let watch_delays : Array[Double] = [180.0, 420.0]
 
 ///|
-/// Where a part `delay` late is in its loop now (0 to 1), on the one clock's steps (resident: up for as long as the
-/// agent waits or watches); with motion reduced, at its rest (0: what each is between beats).
-fn lead_phase(c : @ui.Ctx, delay : Double) -> Double {
-  if @ui.reduced_motion() {
-    return 0.0
-  }
-  let f = c.cycle(lead_loop_ms, resident=true) - delay / lead_loop_ms
-  f - f.floor()
+/// Part `node` drawn with what `look` gives where it is in its loop (0 to 1), `delay` late, on the one clock's steps
+/// (resident: up for as long as the agent waits or watches), worked out as each frame is drawn, not as the row is built
+/// (Ctx::cycle_look); with motion reduced, at its rest (0: what each is between beats).
+fn lead_look(c : @ui.Ctx, node : Int, delay : Double, look : (Double) -> @ui.Look) -> Unit {
+  c.cycle_look(
+    node,
+    lead_loop_ms,
+    fn(f) {
+      if @ui.reduced_motion() {
+        look(0.0)
+      } else {
+        let g = f - delay / lead_loop_ms
+        look(g - g.floor())
+      }
+    },
+    resident=true,
+    held=true,
+  )
 }
 
 ///|
