@@ -5,7 +5,7 @@
 // PNG. Says the frame rate and bitrate it measured. Real time and real processes: a side test.
 //
 // Two of them: made-up 1080p pictures (the helper's `synthetic`: the encoder and the link, whether or not the helper
-// may capture the screen), moving and still; and the display itself, which macOS lets the helper capture once it was
+// may capture the screen), moving and still (sent again sharper as the rate goes up); and the display itself, which macOS lets the helper capture once it was
 // granted Screen Recording (its window asks for it on this Mac; this skips, saying so, until it was).
 // SCREEN_OUT: where the streams and PNGs are kept (default: a temporary directory).
 import assert from "node:assert/strict";
@@ -18,6 +18,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { loadMesh } from "../src/mesh/native.ts";
+import { STILL_MS } from "../src/mesh/screen-pace.ts";
 import { FrameIn, KIND, answerScreen, frame } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HelperApp } from "../src/helper/app.ts";
@@ -68,7 +69,8 @@ function nals(avcc: Buffer): Buffer[] {
   return out;
 }
 
-type Measured = { frames: number; keys: number; fps: number; mbps: number; width: number; height: number; via: string | null; file: string };
+/// `sizes`: each video frame's bytes, in the order they came.
+type Measured = { frames: number; keys: number; sizes: number[]; fps: number; mbps: number; width: number; height: number; via: string | null; file: string };
 
 /// A view for SECONDS: each frame acknowledged as it comes; `move` posts input every 16 ms (the pointer, to make the
 /// screen change). The stream kept as `<label>.h264`.
@@ -81,6 +83,7 @@ async function view(link: Awaited<ReturnType<typeof linked>>, label: string, mov
   const frames = new FrameIn(stream, heard.carry, 64 << 20);
   const kept: Buffer[] = [];
   let count = 0, keys = 0, bytes = 0, width = 0, height = 0;
+  const sizes: number[] = [];
   const started = performance.now();
   let n = 0;
   // Once finished, nothing more is written (the station's last frames are still read).
@@ -104,6 +107,7 @@ async function view(link: Awaited<ReturnType<typeof linked>>, label: string, mov
       count++;
       keys += f.payload[0]! & 1;
       bytes += f.payload.length - 9;
+      sizes.push(f.payload.length - 9);
       kept.push(...nals(f.payload.subarray(9)));
       if (!finished) await stream.write(frame(KIND.ack, f.payload.subarray(1, 9)));
     }
@@ -112,7 +116,7 @@ async function view(link: Awaited<ReturnType<typeof linked>>, label: string, mov
   const seconds = (performance.now() - started) / 1000;
   const file = join(OUT, `${label}.h264`);
   writeFileSync(file, Buffer.concat(kept));
-  const measured = { frames: count, keys, fps: count / seconds, mbps: (bytes * 8) / seconds / 1e6, width, height, via: link.via(), file };
+  const measured = { frames: count, keys, sizes, fps: count / seconds, mbps: (bytes * 8) / seconds / 1e6, width, height, via: link.via(), file };
   console.log(`screen: ${label} ${width}×${height} over ${measured.via}: ${count} frames in ${seconds.toFixed(1)} s, ${measured.fps.toFixed(1)} fps, ${measured.mbps.toFixed(2)} Mbit/s, ${keys} key`);
   return measured;
 }
@@ -132,7 +136,7 @@ function decodes(m: Measured, label: string) {
   console.log(`screen: ${label}: all ${decoded} frames decode; the first is ${png}`);
 }
 
-test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a still screen sends one frame", { skip: !MAC }, async () => {
+test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a still screen's picture sent again sharper", { skip: !MAC }, async () => {
   mkdirSync(OUT, { recursive: true });
   for (const mode of ["moving", "still"] as const) {
     const hub = new ScreenHub();
@@ -142,8 +146,14 @@ test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a sti
     try {
       const m = await view(link, `synthetic-${mode}`);
       assert.ok(m.width > 0 && m.height > 0 && m.width <= 1920 && m.height <= 1080);
-      if (mode === "still") assert.equal(m.frames, 1, "a screen that does not change sends its first frame only");
-      else assert.ok(m.frames > SECONDS, "a moving screen keeps sending");
+      if (mode === "still") {
+        // Its first frame, then the same picture again as a key frame each time the rate has gone up (screens.ts
+        // #still, docs/remote-screens.md "Still"): at most one a STILL_MS, each larger than the last (encoded at a
+        // higher rate: sharper), until it is at the source's own.
+        assert.equal(m.keys, m.frames, `a still screen sends key frames only: ${m.sizes.join(", ")} bytes`);
+        assert.ok(m.frames <= (SECONDS * 1000) / STILL_MS + 1, `at most one a STILL_MS: ${m.frames} frames`);
+        assert.ok(m.sizes.every((n, i) => i === 0 || n > m.sizes[i - 1]!), `each picture again sharper than the last: ${m.sizes.join(", ")} bytes`);
+      } else assert.ok(m.frames > SECONDS, "a moving screen keeps sending");
       assert.ok(m.keys >= 1);
       decodes(m, `synthetic-${mode}`);
     } finally {
