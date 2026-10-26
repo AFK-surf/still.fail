@@ -545,27 +545,6 @@ let empty_link : @ui.TextStyle = @ui.text_style(size=Ui, color=Link)
 let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
-/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
-/// changes.
-pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
-  let t = @sf.theme()
-  let lit = lit.unwrap_or(t.p.selected)
-  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
-  if h <= 0.0 && o <= 0.0 {
-    0L
-  } else {
-    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
-  }
-}
-
-///|
-/// What a state's ground changes over (vars.dur: 140 ms, ease out).
-// kept across runs: a value (no field of it changes)
-pub let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
-
-///|
 /// The filter's menu last opened (its presenter).
 // kept across runs: put back by sidebar_reset (reset)
 let filter_menu_serial : Ref[Int] = Ref(-1)

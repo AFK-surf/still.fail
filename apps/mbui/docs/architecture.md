@@ -268,7 +268,8 @@ shown before and after, a batch at a time.
        (`@sf.named_actions`) and, in a panel of its own on the tape, its title, back and actions to the shell's bar
        there (`@sf.pane_bar`); what back says is sfbase's `back_label`. The pieces of one arrangement those pages still
        draw (`narrow_*`, `desk_*`) wait in `settings_page.mbt` for the settings' merge (step 3).
-     - The sidebars' rows (`nav_row`, `band_row`) into the library, one with `@sf.list_row` where they are the same.
+     - Done: the sidebars' rows into the library (`side_rows.mbt`: `nav_row`, `nav_item` over `list_row`, the band's
+       action, the list under the band, a row's ground); the sidebar's top row stays the shell's.
      - The files' way and tabs (`way.mbt`, `tabs.mbt`) and the chat's side panel (`panel.mbt`) into `sfpages`.
      - What pages read of the shell: `nav_foot`, `status_top` from `@ui.system_bars()`; `toast` the library's
        (`sf/toast.mbt`); `settings_core` into sfbase; `show_page`, `rail_go` through `open_page`, `go_place`.

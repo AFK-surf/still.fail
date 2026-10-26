@@ -265,10 +265,31 @@ fn dmax(a : Double, b : Double) -> Double {
 
 
 ///|
-using @sfpages {
-  chat_mark,
+/// A sidebar's rows, the library's (src/sf side_rows.mbt).
+using @sf {
   nav_fade,
   nav_ground,
+  nav_row,
+  nav_apart,
+  nav_item,
+  nav_title,
+  nav_meta,
+  nav_words,
+  nav_mark_side,
+  nav_action,
+  nav_new,
+  band_row,
+  band_mark,
+  band_words,
+  band_row_h,
+  side_list,
+  side_scroll,
+  side_breathing,
+}
+
+///|
+using @sfpages {
+  chat_mark,
   type ContextEntry,
   type FindList,
   type MessageHere,

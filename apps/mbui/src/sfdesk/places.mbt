@@ -202,7 +202,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), nav_mark_side) |> ignore },
             fn() { nav_title(c, text(p, "name"), away=!usable) },
             lines=fn() {
-              nav_line(c, fn() {
+              @sf.list_row_line(c, fn() {
                 if trouble != "" {
                   c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
                 }
@@ -251,7 +251,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },
               fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
               lines=fn() {
-                nav_line(c, fn() {
+                @sf.list_row_line(c, fn() {
                   c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta()) |> ignore }) |> ignore
                   c.text(@sf.t("android-settings.machine.use"), style=nav_meta().then(place_use)) |> ignore
                 })
