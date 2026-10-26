@@ -203,8 +203,11 @@ static void run_script_step(int step);
   // for, it was late by as much (a frame that took longer than the display's frame to build)
   frame_late = last_target >= 0 ? MAX(0, l.timestamp * 1000.0 - last_target) : 0;
   // the frame's time is the display's: when this frame will be on screen (the display link's target, on
-  // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built
+  // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built;
+  // in one Core Animation transaction, the native views' moves and the drawable that shows their holes (mac_app.m's)
+  [CATransaction begin];
   mb_cb.frame(s.width, h, scale, l.targetTimestamp * 1000.0);
+  [CATransaction commit];
   last_target = l.targetTimestamp * 1000.0;
   if (frames_drawn == 0)
     say([NSString stringWithFormat:@"ios: first frame %.0fx%.0f @%.0fx in %.0f ms", s.width, s.height, scale, mb_now_ms() - t0]);

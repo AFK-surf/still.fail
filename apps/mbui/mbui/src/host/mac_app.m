@@ -274,7 +274,11 @@ static double record_t0 = -1;
   }
   if (settle) app_wants = NO;
   in_app_frame = YES;
+  // one Core Animation transaction: the native views' moves (apple_views.m) and the drawable that shows their holes,
+  // presented in it where a view moved (apple_render.m), committed together as the frame ends
+  [CATransaction begin];
   mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : mb_now_ms());
+  [CATransaction commit];
   in_app_frame = NO;
 }
 

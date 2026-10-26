@@ -728,7 +728,14 @@ void mb_render_trim(void) {
 }
 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
+  // a frame that put a native view elsewhere (apple_views.m: a page in a message, as the list scrolls) presented in
+  // the transaction that puts it there (the frame's: mac_app.m drawFrame, ios_app.m tick), so the view and the hole it
+  // shows through change on the same refresh. Presented by itself the drawable is shown once the GPU has drawn it,
+  // apart from the view's move, which the frame's transaction takes to the screen: a refresh or two apart, the page
+  // out of step with its hole as the list moved
+  int with_views = mb_views_take_moved() && !mlayer.presentsWithTransaction;
   if (same_as_shown(inst, count, r, g, b)) return;
+  if (with_views) mlayer.presentsWithTransaction = YES;
   dispatch_semaphore_wait(inflight, DISPATCH_TIME_FOREVER);
   id<MTLBuffer> buf = upload(inst, count, r, g, b);
   id<CAMetalDrawable> drawable = [mlayer nextDrawable];
@@ -749,15 +756,16 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     for (int32_t i = 0; i < count && !shown_streams; i++) shown_streams = f[i * MB_INST + 20] > (float)MB_STREAM_TEX;
   }
   // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
-  // drawWithWindow; once its commands are scheduled, as Core Animation asks)
+  // drawWithWindow, or the views' moves; once its commands are scheduled, as Core Animation asks)
   if (drawable && mlayer.presentsWithTransaction) {
     [cb commit];
     [cb waitUntilScheduled];
     [drawable present];
-    return;
+  } else {
+    if (drawable) [cb presentDrawable:drawable];
+    [cb commit];
   }
-  if (drawable) [cb presentDrawable:drawable];
-  [cb commit];
+  if (with_views) mlayer.presentsWithTransaction = NO;
 }
 
 // MBUI_SAFE's bands (mac_app.m), in points, and their ground
