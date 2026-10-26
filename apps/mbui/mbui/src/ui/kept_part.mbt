@@ -814,6 +814,6 @@ fn Ctx::part_targets_again(self : Ctx, st : KeptPart) -> Unit {
   self.next_scroll_ids.append(st.scroll_ids)
   self.next_scroll_rects.append(st.scroll_rects)
   for t in st.sels {
-    selectable_painted(t.base, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
+    selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy, t.x0, t.y0, t.x1, t.y1)
   }
 }

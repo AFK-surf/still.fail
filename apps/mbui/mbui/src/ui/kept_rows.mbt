@@ -693,7 +693,7 @@ fn Ctx::row_paint_again(self : Ctx, i : Int, kp : KeptPart) -> Unit {
       self.next_scroll_rects.push(kp.scroll_rects[v + 3] + dy)
     }
     for t in kp.sels {
-      selectable_painted(t.base, t.lay, t.text, t.ox, t.oy + dy, t.x0, t.y0 + dy, t.x1, t.y1 + dy)
+      selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy + dy, t.x0, t.y0 + dy, t.x1, t.y1 + dy)
     }
     for b in rk.bars {
       self.next_bars.push({ ..b, y0: b.y0 + dy, y1: b.y1 + dy, ty: b.ty + dy })
