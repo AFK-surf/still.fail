@@ -246,6 +246,10 @@ pub struct Ctx {
   // none), for what holds the one under the pointer to be pointed at too (Ctx::hovered)
   mut hit_ends : Array[Int]
   mut next_hit_ends : Array[Int]
+  // the hit targets of the last frame (and of this one, collected) that are pointed at and never pressed (Ctx::box's
+  // `points`): a press, or a finger reaching round it, goes past them to what holds them
+  mut points : Map[Int, Bool]
+  mut next_points : Map[Int, Bool]
   mut scroll_ids : Array[Int]
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
@@ -542,6 +546,8 @@ fn Ctx::new() -> Ctx {
     next_hit_clips: [],
     hit_ends: [],
     next_hit_ends: [],
+    points: {},
+    next_points: {},
     scroll_ids: [],
     scroll_rects: [],
     next_scroll_ids: [],
@@ -808,7 +814,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// (Ctx::set_theme). What is said here besides (`pad=`, `bg=`…) wins over the style's same property; what neither
 /// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1). With an
 /// `id` it takes the presses on its room (the innermost box with an id under the finger does); `taps` false: the id
-/// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there.
+/// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there; and
+/// with `points`, it is pointed at all the same (Ctx::hovered, Ctx::rect_of: what says something over it while the
+/// pointer rests there, a tip, a card), its presses still what holds it's, the pointer's shape too where it says none.
 ///
 /// What CSS says of a box and the flex engine lays out anyway: margins (`m`, `mx`, `my`, `ml`, `mr`, `mt`, `mb`, below
 /// 0 too, the finer over the coarser as the padding), a size as a share of the parent's (`Pct`), and `left`, `top`,
@@ -878,6 +886,7 @@ pub fn Ctx::box(
   name? : String = "",
   id? : Int = 0,
   taps? : Bool = true,
+  points? : Bool = false,
   body : () -> Unit,
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
@@ -1065,6 +1074,7 @@ pub fn Ctx::box(
     // (`taps` false: an id only to be measured or moved by (laid_size, a look): what is pressed in it is what holds
     // it, not it, which would take every press on its room that nothing in it takes)
     n.hit = taps
+    n.points = points && !taps
   }
   // moved by a move_state (move_state.mbt): what it is shown as while the move lasts, where it was to where it is built
   if moves != "" {
@@ -1655,11 +1665,21 @@ pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
 
 ///|
 /// Which of the hit targets `rects` (in paint order, cut by `clips`) is topmost at (x, y): its index, -1 none.
-fn hit_at(ids : Array[Int], rects : Array[Double], clips : Array[Double], x : Double, y : Double) -> Int {
+/// `pressed`: the one a press there goes to, past those only pointed at (Ctx::box's `points`).
+fn hit_at(
+  ids : Array[Int],
+  rects : Array[Double],
+  clips : Array[Double],
+  x : Double,
+  y : Double,
+  pressed? : Bool = false,
+) -> Int {
+  let points = g().points
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
-    if x >= rects[r] &&
+    if !(pressed && points.contains(ids[k])) &&
+      x >= rects[r] &&
       x < rects[r + 2] &&
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
@@ -1675,7 +1695,8 @@ fn hit_at(ids : Array[Int], rects : Array[Double], clips : Array[Double], x : Do
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
   let targets = physical_equal(rects, g().hit_rects)
   let clips = if targets { g().hit_clips } else { [] }
-  let k = hit_at(ids, rects, clips, x, y)
+  // (a press: past what is only pointed at)
+  let k = hit_at(ids, rects, clips, x, y, pressed=targets)
   // a finger: what is smaller than a fingertip is reached from round it (Pointing)
   if targets && pointing() is Finger {
     match finger_reach(ids, rects, clips, k, x, y) {
@@ -1715,13 +1736,15 @@ fn finger_reach(
   y : Double,
 ) -> Int? {
   let least = finger_target()
+  let points = g().points
   let mut best : Int? = None
   let mut best_d = 1.0e9
   for k in (top + 1)..<ids.length() {
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     let (w, h) = (x1 - x0, y1 - y0)
-    if w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+    // (what is only pointed at is never reached for)
+    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
       continue
     }
     let gx = dmax(0.0, (least - w) / 2.0)

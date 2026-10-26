@@ -38,7 +38,8 @@ pub(all) enum Tone {
 /// A button (Button): a 36 pill on the wide screen, the phone's 38 one on a
 /// narrow; an icon before its words if given, a spinner in its place while
 /// `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
-/// (foot_across). True on the frame after it was pressed.
+/// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip). True
+/// on the frame after it was pressed.
 pub fn button(
   c : @ui.Ctx,
   label : String,
@@ -49,6 +50,7 @@ pub fn button(
   disabled? : Bool = false,
   w? : @ui.Size = Auto,
   reach? : @ui.Style,
+  hint? : String = "",
 ) -> Bool {
   let t = theme()
   let p = t.p
@@ -126,6 +128,9 @@ pub fn button(
   // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
   // faded words are asked no contrast)
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
+  if live {
+    tip(c, "sf-btn/" + key + label + "/tip", id, hint)
+  }
   live && c.clicked(id)
 }
 
@@ -206,7 +211,8 @@ pub fn icon_button(
 
 ///|
 /// A chip (the reader's bars, Reader.css.ts chip): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
-/// concentric with it), on a 7% tint of the ink, 12% under the pointer; its words small.
+/// concentric with it), on a 7% tint of the ink, 12% under the pointer; its words small. One with an icon alone named
+/// `said` (its aria-label), and in its tip.
 pub fn chip(
   c : @ui.Ctx,
   label : String,
@@ -215,12 +221,13 @@ pub fn chip(
   ink? : Int64,
   disabled? : Bool = false,
   inner? : Bool = false,
+  said? : String = "",
 ) -> Bool {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
   let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
-  c.box(
+  let b = c.box(
     dir=Row,
     h=Px(30.0),
     min_w=30.0,
@@ -242,7 +249,12 @@ pub fn chip(
       }
     },
   )
-  |> ignore
+  if said != "" {
+    c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
+    if !disabled {
+      tip(c, "sf-chip/" + key + "/tip", id, said)
+    }
+  }
   !disabled && c.clicked(id)
 }
 

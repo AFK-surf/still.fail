@@ -968,7 +968,7 @@ fn desk_reader_chrome(
   }
   let ink = paper_viewer_ink(p)
   c.layer(fn() {
-    if viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden && r.panel == NoPanel, ink, fn() {
+    if viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden && r.panel == NoPanel, ink, title=file.title, fn() {
         if viewer_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), ink, on=r.panel == Contents) {
           desk_toggle_panel(c, r, Contents)
         }
@@ -1053,13 +1053,13 @@ fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
       style=desk_found_words.then(@ui.text_style(color=Data(p.ink))),
     )
     |> ignore
-    if chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit <= 0) {
+    if chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit <= 0, said=t("android-misc.drive.reader.prevHit")) {
       step(-1)
     }
-    if chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit >= r.matches.length() - 1) {
+    if chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit >= r.matches.length() - 1, said=t("android-misc.drive.reader.nextHit")) {
       step(1)
     }
-    if chip(c, "", key="reader/found-close", icon="close", ink=p.ink) {
+    if chip(c, "", key="reader/found-close", icon="close", ink=p.ink, said=t("common.close")) {
       r.hit = -1
     }
   })
@@ -1107,7 +1107,7 @@ fn desk_panel(
               |> ignore
             _ => ()
           }
-          if chip(c, "", key="reader/panel-close", icon="close", ink=p.ink) {
+          if chip(c, "", key="reader/panel-close", icon="close", ink=p.ink, said=t("common.close")) {
             reader_close_panel(c, r)
           }
         })

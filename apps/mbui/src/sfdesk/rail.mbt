@@ -241,7 +241,6 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       lit == "settings",
       fn(color) { @sf.icon(c, "settings", size=rail_icon_size, color~) |> ignore },
       label=@sf.t("web-pages.settings.title"),
-      tipped=false,
     )
   })
   |> ignore
@@ -347,8 +346,7 @@ fn rail_ground(
     rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
-  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right; not the
-  // settings')
+  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
   if label != "" {
     c.semantics(b, Button, id~, label~)
     if tipped {

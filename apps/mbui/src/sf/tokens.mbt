@@ -1882,12 +1882,15 @@ pub fn tape_bar_over_room() -> @ui.Space {
 let hairline_h : Double = 1.0
 
 ///|
-/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least), and an
-/// agent's in it (AgentCard.css.ts: 288).
+/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least, 420 at most),
+/// and an agent's in it (AgentCard.css.ts: 288).
 pub let hover_card_w : @ui.Len = Fixed(320.0)
 
 ///|
 pub let hover_tile_least : @ui.Len = Fixed(220.0)
+
+///|
+pub let hover_tile_most : @ui.Len = Fixed(420.0)
 
 ///|
 pub let agent_card_w : @ui.Len = Fixed(288.0)

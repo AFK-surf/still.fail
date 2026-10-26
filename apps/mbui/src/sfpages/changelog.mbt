@@ -137,6 +137,8 @@ pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
             @motion.ripple(c, close, 16.0)
           })
           |> ignore
+          // (said on hover too: Changelog.tsx's Tip, over it)
+          @sf.tip(c, "changelog-news/close-tip", close, @sf.t("android-settings.changelog.dismiss"), side=Top)
         })
         |> ignore
       })

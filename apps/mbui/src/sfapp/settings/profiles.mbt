@@ -216,7 +216,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
-                    c.box(style=quota_line, fn() { @sf.quota_chips(c, field(p, "quota")) })
+                    c.box(style=quota_line, fn() { @sf.quota_chips(c, field(p, "quota"), key="ws-profile/" + text(ev, "key")) })
                     |> ignore
                   }
                 })

@@ -486,7 +486,7 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
       },
       // (its allowance under what it is, a line of its own: as the profiles' page lists it)
       below?=if text(field(p, "quota"), "state") == "ok" {
-        Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true) })
+        Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, key="station-profile/" + address + "/" + text(p, "id")) })
       } else {
         None
       },

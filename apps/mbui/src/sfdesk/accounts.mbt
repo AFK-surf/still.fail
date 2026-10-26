@@ -890,11 +890,14 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
             } else {
               c.box(style=pf_chips, fn() {
                 for m in on {
-                  c.box(style=pf_chip, fn() {
+                  // (its id over it while it is pointed at: Accounts.tsx's tip)
+                  let chip = c.id("profile-model-chip/" + key + "/" + m)
+                  c.box(style=pf_chip, id=chip, taps=false, points=true, fn() {
                     @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
                     c.text(name(m), style=pf_chip_words) |> ignore
                   })
                   |> ignore
+                  @sf.tip(c, "profile-model-chip/" + key + "/" + m + "/tip", chip, m)
                 }
               })
               |> ignore
@@ -1564,7 +1567,9 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
         c.box(style=pf_pool_list, fn() {
           for m in list {
             let on = enabled.contains(m)
-            c.box(style=pf_pool_item, fn() {
+            // (its id over it while it is pointed at: Accounts.tsx's tip)
+            let item = c.id("profile-model-item/" + key + "/" + m)
+            c.box(style=pf_pool_item, id=item, taps=false, points=true, fn() {
               let now = @kit.checkbox(c, "profile-model/" + key + "/" + m, if on { On } else { Off }, label=name(m), disabled=busy).value
               if (now == On) != on {
                 commit(if on { enabled.filter(fn(x) { x != m }) } else { enabled.copy()..push(m) })
@@ -1580,6 +1585,7 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
               }
             })
             |> ignore
+            @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m)
           }
         })
         |> ignore

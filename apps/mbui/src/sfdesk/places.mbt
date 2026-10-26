@@ -211,7 +211,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 let quota = field(p, "quota")
                 let ok = text(quota, "state") == "ok"
                 if ok && items(quota, "windows").length() > 0 {
-                  @sf.quota_chips(c, quota, small=true, gap=4.0)
+                  @sf.quota_chips(c, quota, small=true, gap=4.0, key="profiles/" + text(e, "key"))
                 } else if ok && text(quota, "creditsText") != "" {
                   c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
                 } else {

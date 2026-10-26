@@ -281,7 +281,9 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
         c.box(style=sw_switches, fn() {
           if beta && has(v, "channel") {
             let busy_ch = is_doing(core, ["software.channel"], [("station", station)])
-            c.box(style=sw_switch_line, fn() {
+            // (what it means over it while it is pointed at: Versions.tsx's tips)
+            let line = c.id("software-beta-line/" + station)
+            c.box(style=sw_switch_line, id=line, taps=false, points=true, fn() {
               c.text(@sf.t("web-main.versions.beta"), style=sw_switch_word) |> ignore
               let on = text(v, "channel") == "beta"
               let now = @sf.switch(c, "software-beta/" + station, on, label=@sf.t("web-main.versions.betaStation"), small=true, busy=busy_ch, disabled=busy)
@@ -290,10 +292,12 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
               }
             })
             |> ignore
+            @sf.tip(c, "software-beta-tip/" + station, line, @sf.t("web-main.versions.betaNote"))
           }
           if has(v, "auto") {
             let busy_auto = is_doing(core, ["software.auto"], [("station", station)])
-            c.box(style=sw_switch_line, fn() {
+            let line = c.id("software-auto-line/" + station)
+            c.box(style=sw_switch_line, id=line, taps=false, points=true, fn() {
               c.text(@sf.t("web-main.versions.auto"), style=sw_switch_word) |> ignore
               let on = flag(v, "auto")
               let now = @sf.switch(c, "software-auto/" + station, on, label=@sf.t("web-main.versions.auto"), small=true, busy=busy_auto, disabled=busy)
@@ -302,6 +306,11 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
               }
             })
             |> ignore
+            @sf.tip(c, "software-auto-tip/" + station, line, @sf.t(if flag(v, "idleOnly") {
+              "web-main.versions.autoIdleTip"
+            } else {
+              "web-main.versions.autoTip"
+            }))
           }
         })
         |> ignore

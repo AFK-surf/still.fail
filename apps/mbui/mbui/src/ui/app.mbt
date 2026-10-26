@@ -310,6 +310,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
   c.next_hit_ends.clear()
+  c.next_points.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
   c.next_bars.clear()
@@ -353,6 +354,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let he = c.hit_ends
   c.hit_ends = c.next_hit_ends
   c.next_hit_ends = he
+  let ps = c.points
+  c.points = c.next_points
+  c.next_points = ps
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   let si = c.scroll_ids

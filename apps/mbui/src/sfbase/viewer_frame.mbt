@@ -170,6 +170,8 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
       }
       vf_tools(v, c, ink, v.download(src))
     },
+    // (where it is: FilePreview.tsx's file.path; not a draft's, kept on this device alone)
+    title=if v.file.path.has_prefix("draft:") { "" } else { v.file.path },
   )
   // (the floating bar, once open, only grows)
   if wide > v.head_w {

@@ -370,6 +370,8 @@ pub fn open_machine_sessions(core : Core, station : String, name : String, from?
               @motion.ripple(c, id, 0.0)
             })
             |> ignore
+            // its first words whole while it is pointed at (MachineSessions.tsx's tip: its title cut short is often them)
+            @sf.tip(c, "machine-session/" + text(sv, "id") + "/tip", id, text(sv, "first"))
           }
           gap(c, 24.0)
         },
@@ -813,7 +815,7 @@ fn account_list(
               picked == id,
               text(av, "name"),
               lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
-              tag=fn() { @sf.quota_chips(c, field(av, "quota")) },
+              tag=fn() { @sf.quota_chips(c, field(av, "quota"), key=key + "/" + id) },
             ) {
             pick(Some(id))
           }

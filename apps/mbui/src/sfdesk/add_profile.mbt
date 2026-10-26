@@ -506,14 +506,14 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
           }
         })
         |> ignore
-        @sf.quota_chips(c, quota, small=true)
+        @sf.quota_chips(c, quota, small=true, key="add-profile-machine/" + rt)
         })
         |> ignore
         if !blocked {
           let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
           let reach = @sf.foot_across(@sf.button_height())
           if flag(lv, "usable") {
-            if @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~, w=Fill(1.0), reach~) {
+            if @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.useMachineTip")) {
               (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
                 match r {
                   Ok(v) => {
@@ -524,7 +524,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
                 }
               })
             }
-          } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~) {
+          } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.keychainTip", args=[("name", "still.fail")])) {
             sign_in(rt)
           }
         }

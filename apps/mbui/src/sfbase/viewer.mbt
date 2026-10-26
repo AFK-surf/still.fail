@@ -2512,7 +2512,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     mtime: 0.0,
     mime: v.mime,
     kind: if v.shown_kind() == Some(KAudio) { "audio" } else { "video" },
-    title: "",
+    title: if v.file.path.has_prefix("draft:") { "" } else { v.file.path },
     key: "",
     bytes: None,
     read: fn(_, _, done) { done(Err("")) },
@@ -2590,8 +2590,11 @@ pub fn picture_button(
       }
     },
   )
-  // named `said` (PictureButton's contentDescription), pressed while `held`
+  // named `said` (PictureButton's contentDescription), pressed while `held`; said on hover too (ImageMarks.tsx's Tips)
   c.semantics(b, Button, id~, label=said, disabled=!enabled, pressed=held)
+  if live {
+    @sf.tip(c, key + "/tip", id, said)
+  }
   live && c.clicked(id)
 }
 

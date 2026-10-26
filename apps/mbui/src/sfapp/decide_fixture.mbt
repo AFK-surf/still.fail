@@ -51,8 +51,9 @@ fn fix_agent() -> Json {
       "quota": {
         "state": "ok",
         "windows": [
-          { "mark": "5H", "left": 62, "level": "ok" },
-          { "mark": "W", "left": 18, "level": "amber" },
+          // (named and when they refill as the core says them: present.ts quota)
+          { "label": "5 小时", "mark": "5H", "left": 62, "level": "ok", "refills": "3 小时后刷新" },
+          { "label": "每周", "mark": "W", "left": 18, "level": "amber", "refills": "2 天 4 小时后刷新" },
         ],
       },
     },

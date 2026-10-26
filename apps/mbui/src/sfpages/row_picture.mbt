@@ -68,9 +68,12 @@ pub fn row_aside(
   }
   // (its sizes the screen's: the theme's chats' list)
   let l = @sf.theme().chat_list
+  // (who they are over them while they are pointed at: RowAside's tips)
+  let key = "row-aside/" + item.station + "/" + item.id
   let agents = fn() {
-    let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" })
-    c.box(style=aside_agents, label=said.join(@sf.t("web-main.list.separator")), fn() {
+    let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" }).join(@sf.t("web-main.list.separator"))
+    let id = c.id(key + "/agents")
+    c.box(style=aside_agents, label=said, id~, taps=false, points=true, fn() {
       for k, g in groups {
         if k < aside_most {
           c.box(style=aside_agent, fn() {
@@ -84,12 +87,14 @@ pub fn row_aside(
       }
     })
     |> ignore
+    @sf.tip(c, key + "/agents-tip", id, said)
   }
   let (face, after, round, ring, d) = (l.face, l.face_after, l.face_ground, l.face_ring, l.face_d)
   let round = round.then(@ui.style(bg=Data(ground)))
   let faces = fn() {
     let shown = if people.length() > aside_most { people[:aside_most].to_array() } else { people }
-    c.box(style=aside_faces, label=item.people_text, fn() {
+    let id = c.id(key + "/faces")
+    c.box(style=aside_faces, label=item.people_text, id~, taps=false, points=true, fn() {
       for i, p in shown {
         let starter = people.length() > 1 && p.id == item.creator
         let slot = c.box(style=if i == 0 { face } else { after }, fn() {
@@ -115,6 +120,7 @@ pub fn row_aside(
       }
     })
     |> ignore
+    @sf.tip(c, key + "/faces-tip", id, item.people_text)
   }
   c.box(style=aside_row, fn() {
     if lead == "people" {

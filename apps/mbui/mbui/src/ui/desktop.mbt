@@ -376,6 +376,21 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
     return
   }
   let target = if area { self.drag_scroll } else { self.hover }
+  // (over what is only pointed at: what holds it, as a press there is its)
+  let target = if self.points.contains(target) {
+    let mut held = 0
+    let mut k = self.hover_in.length() - 1
+    while k >= 0 {
+      if !self.points.contains(self.hover_in[k]) {
+        held = self.hover_in[k]
+        break
+      }
+      k = k - 1
+    }
+    held
+  } else {
+    target
+  }
   let said = desk.cursors.get(target)
   let kind = match said {
     Some(k) if k != Cursor::Arrow.code() => k
@@ -573,7 +588,7 @@ pub fn Ctx::field_focused(self : Ctx) -> Bool {
 /// list's image under the composer floating over it), as a press is not.
 fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
   let under : Array[Int] = []
-  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
   if k >= 0 {
     self.holders(k, under)
     under.push(self.hit_ids[k])

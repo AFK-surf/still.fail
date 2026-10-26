@@ -384,14 +384,14 @@ fn disk_bar(c : @ui.Ctx, s : DvStation) -> Unit {
   }
   let used = 1.0 - s.disk_free / s.disk_total
   let part = (if used >= disk_full { disk_warn } else { disk_used }).then(@ui.style(w=Fixed(disk_w * used)))
-  let bar = c.box(style=disk_track, fn() { c.box(style=part, fn() {  }) |> ignore })
+  // (what is left of it in words, over it while it is pointed at: FilesNav.tsx DiskBar's tip)
+  let id = c.id("files-disk/" + s.station)
+  let bar = c.box(style=disk_track, id~, taps=false, points=true, fn() { c.box(style=part, fn() {  }) |> ignore })
   let gb = s.disk_free / 1.0e9
   let left = if s.disk_free >= 1.0e11 { gb.round().to_int().to_string() } else { @sf.to_fixed(gb, 1) }
-  c.semantics(
-    bar,
-    Image,
-    label=@sf.t("web-pages.files.diskLeft", args=[("free", left + " GB"), ("percent", (used * 100.0).round().to_int().to_string())]),
-  )
+  let said = @sf.t("web-pages.files.diskLeft", args=[("free", left + " GB"), ("percent", (used * 100.0).round().to_int().to_string())])
+  c.semantics(bar, Image, label=said)
+  @sf.tip(c, "files-disk/" + s.station + "/tip", id, said)
 }
 
 ///|

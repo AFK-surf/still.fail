@@ -160,6 +160,10 @@ pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on 
     c.rich([@ui.span(words, weight=media_strong, mono=true, color=ink.text)], style=media_rate_words) |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled=!on)
+  // (named on hover, as the keys beside it: SpeedMenu's Tip)
+  if on {
+    tip(c, key + "/tip", id, label)
+  }
   on && c.clicked(id)
 }
 

@@ -282,7 +282,7 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
           |> ignore
           c.box(style=cn_facts, drop=cn_drop_facts, fn() {
             cn_station_tag(c, station_name, s)
-            cn_owner(c, core, field(cv, "createdBy"))
+            cn_owner(c, core, station + "/" + id, field(cv, "createdBy"))
           })
           |> ignore
           c.text(text(cv, "statusText"), style=cn_meta) |> ignore
@@ -347,20 +347,24 @@ fn cn_station_tag(c : @ui.Ctx, name : String, s : Json?) -> Unit {
 
 ///|
 /// Who added it (components.tsx OwnerLabel): their picture 16 and name (theirs said as the viewer's), 6 apart, the
-/// meta's 12; none said, so in the subtle ink.
-fn cn_owner(c : @ui.Ctx, core : Core, by : Json?) -> Unit {
+/// meta's 12, who they are by their id over it while it is pointed at (but this machine's own); none said, so in the
+/// subtle ink. `key`: the connect's.
+fn cn_owner(c : @ui.Ctx, core : Core, key : String, by : Json?) -> Unit {
   let shown = field(by, "shown")
   if !(shown is Some(Object(_))) {
     c.text(@sf.t("web-main.owner.none"), style=cn_owner_none) |> ignore
     return
   }
   let name = text(shown, "name")
-  c.box(style=cn_owner_box, fn() {
-    avatar(c, core, text(by, "id"), name, cn_owner_size, picture=text(shown, "picture"))
+  let owner = text(by, "id")
+  let id = c.id("connect-owner/" + key)
+  c.box(style=cn_owner_box, id~, taps=false, points=true, fn() {
+    avatar(c, core, owner, name, cn_owner_size, picture=text(shown, "picture"))
     c.text(if flag(shown, "mine") { @sf.t("web-main.owner.you", args=[("name", name)]) } else { name }, style=cn_owner_words)
     |> ignore
   })
   |> ignore
+  @sf.tip(c, "connect-owner/" + key + "/tip", id, if owner == "local" { "" } else { owner })
 }
 
 ///|

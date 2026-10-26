@@ -74,6 +74,8 @@ struct Node {
   mut kind : Int
   mut id : Int
   mut hit : Bool
+  // (with `hit` false: pointed at, never pressed: Ctx::box's `points`)
+  mut points : Bool
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -295,6 +297,7 @@ fn Node::new() -> Node {
     kind: 0,
     id: 0,
     hit: false,
+    points: false,
     parent: -1,
     first: -1,
     last: -1,
@@ -435,6 +438,7 @@ fn Node::new() -> Node {
 fn Node::reset_rest(self : Node) -> Unit {
   self.id = 0
   self.hit = false
+  self.points = false
   self.first = -1
   self.last = -1
   self.next = -1

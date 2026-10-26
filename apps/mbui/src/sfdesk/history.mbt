@@ -112,26 +112,9 @@ fn wh_summary(c : @ui.Ctx, a : Json?) -> Unit {
       let nv = Some(n)
       match field(nv, "quota") {
         Some(Object(_)) as q => {
-          let id = c.id("history/attention/" + i.to_string())
-          c.box(id~, taps=false, fn() {
-            @sf.quota_chips(
-              c,
-              Some({
-                "state": "ok",
-                "windows": [
-                  {
-                    "mark": Json::string(text(q, "mark")),
-                    "left": Json::number(number(q, "left")),
-                    "level": Json::string(text(q, "level")),
-                  },
-                ],
-              }),
-              small=true,
-            )
-          })
-          |> ignore
+          // (what the core says of it, and more, over it while it is pointed at: HistorySummary's tip)
           let more = text(nv, "more")
-          @sf.tip(c, "history/attention/" + i.to_string(), id, text(nv, "text") + (if more != "" {
+          @sf.quota_chip(c, q, small=true, key="history/attention/" + i.to_string(), said=text(nv, "text") + (if more != "" {
             "\n" + more
           } else {
             ""
@@ -308,7 +291,7 @@ fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me :
         c,
         fn() { @sf.icon(c, "file", size=wh_mark_side, color=t.p.muted) |> ignore },
         fn() {
-          c.box(style=wh_line_words, id=words, taps=false, fn() {
+          c.box(style=wh_line_words, id=words, taps=false, points=true, fn() {
             c.text(@sf.t("web-pages.chat.transcript") + " · ", style=wh_words) |> ignore
             c.text(name, style=wh_file) |> ignore
           })

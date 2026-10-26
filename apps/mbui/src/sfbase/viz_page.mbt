@@ -267,15 +267,16 @@ pub fn viz_chat_left(station : String, session : String) -> Unit {
 }
 
 ///|
-/// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey.
+/// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey; named
+/// `label`, said over it while it is pointed at (Viz.tsx's Tip).
 pub fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String, subtle : Int64) -> Unit {
-  ignore(label)
-  c.box(style=viz_way, id~, fn() {
+  let b = c.box(style=viz_way, id~, fn() {
     @sf.icon(c, icon, size=14.0, color=subtle) |> ignore
     // VizFiles.kt: clip(Smooth(6)).clickable
     @motion.ripple(c, id, 6.0)
   })
-  |> ignore
+  c.semantics(b, Button, id~, label~)
+  @sf.tip(c, "viz-way/" + id.to_string(), id, label)
 }
 
 // ── in a message (VizFiles.kt VizFile) ─────────────────────────────────

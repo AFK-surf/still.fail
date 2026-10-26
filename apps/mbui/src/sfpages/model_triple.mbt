@@ -383,7 +383,9 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
               for o in speeds {
                 let (f, words) = o
                 let on = speed_now == f
-                if triple_option(c, "triple/fast/" + f, words, on, fn() {
+                // (Fast says what it costs on hover: ModelTriple.tsx's fastNote)
+                let tip = if f == "fast" { @sf.t("web-main.model.fastNote") } else { "" }
+                if triple_option(c, "triple/fast/" + f, words, on, tip~, fn() {
                     c.text(words, style=if on { triple_picked } else { triple_words }) |> ignore
                   }) {
                   pick_speed(f)
@@ -534,7 +536,9 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
     Some(String(r)) => r
     _ => text(field(v, "value"), "runtime")
   }
-  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, body_grows=true, fn() {
+  // (its ids, a line each, over it while it is pointed at: ModelTriple.tsx's tip)
+  let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
+  if triple_option(c, "triple/model/" + model, text(o, "name"), picked, body_grows=true, tip=ids, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
       c.box(style=triple_name_column, fn() {
         // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
@@ -549,7 +553,11 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
       match field(o, "fromStation") {
         Some(Object(_)) as fs =>
           if text(fs, "icon") != "" || text(fs, "emoji") != "" {
-            @sf.station_mark(c, text(fs, "emoji"), text(fs, "icon"), 14.0, t.p.muted)
+            // (where it comes from, or where it is, said over its mark on hover: runOptionFrom's title)
+            let from = c.id("triple/from/" + model)
+            c.box(id=from, taps=false, points=true, fn() { @sf.station_mark(c, text(fs, "emoji"), text(fs, "icon"), 14.0, t.p.muted) })
+            |> ignore
+            @sf.tip(c, "triple/from-tip/" + model, from, text(o, "fromText"))
           } else {
             c.text(text(fs, "name"), style=triple_note_cut) |> ignore
           }
@@ -589,7 +597,7 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
 /// `trail` (a button of its own) at its end, a check after it while picked (its room kept while not, as the web's
 /// hidden check); `body_grows`: what `body` lays out takes the room left (a model's name, on two lines where it needs
-/// them). True on the frame after a press.
+/// them); `tip` over it while it is pointed at. True on the frame after a press.
 fn triple_option(
   c : @ui.Ctx,
   key : String,
@@ -598,6 +606,7 @@ fn triple_option(
   body : () -> Unit,
   trail? : () -> Unit,
   body_grows? : Bool = false,
+  tip? : String = "",
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -621,6 +630,7 @@ fn triple_option(
     |> ignore
   })
   c.semantics(b, Button, id~, label~)
+  @sf.tip(c, key + "/tip", id, tip)
   c.clicked(id)
 }
 

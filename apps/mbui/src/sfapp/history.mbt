@@ -171,8 +171,8 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
 }
 
 ///|
-/// The head's short line (History.kt Summary): only what is worth a look now: a quota running out (its chip), the disk
-/// filling up (amber), an account that cannot run (red).
+/// The head's short line (History.kt Summary): only what is worth a look now: a quota running out (its chip, what it
+/// says and more in its tip), the disk filling up (amber), an account that cannot run (red).
 fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
   let t = @sf.theme()
   let notes = items(a, "attention")
@@ -181,26 +181,18 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
     return
   }
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=6.0, pb=8.0, gap=10.0, align=ACenter, fn() {
-    for n in notes {
+    for i, n in notes {
       let nv = Some(n)
       match field(nv, "quota") {
-        Some(Object(_)) as q =>
-          @sf.quota_chips(
-            c,
-            Some(
-              Json::object({
-                "state": "ok",
-                "windows": Json::array([
-                  Json::object({
-                    "mark": Json::string(text(q, "mark")),
-                    "left": Json::number(number(q, "left")),
-                    "level": Json::string(text(q, "level")),
-                  }),
-                ]),
-              }),
-            ),
-            small=true,
-          )
+        Some(Object(_)) as q => {
+          // (what the core says of it, and more, over it while it is pointed at, held by a finger: HistorySummary's tip)
+          let more = text(nv, "more")
+          @sf.quota_chip(c, q, small=true, key="history/attention/" + i.to_string(), said=text(nv, "text") + (if more != "" {
+            "\n" + more
+          } else {
+            ""
+          }))
+        }
         _ =>
           c.text(
             text(nv, "text"),
