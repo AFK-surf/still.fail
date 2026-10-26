@@ -4,7 +4,8 @@
 //
 // - Which stations a share is for (docs/multi-workspace.md): a profile, those of every workspace this station is in
 //   that it serves (all but those it is withheld from); a skill, those of the home workspace, whose agents' skills it
-//   is. Its `allow` narrows that. A copy of a skill is linked into the skills of the workspace it was had in.
+//   is. Its `allow` narrows that. A copy of a profile serves only the workspaces its host shares it in (it says which,
+//   `share.workspaces`); a copy of a skill is linked into the skills of the workspace it was had in.
 //
 // - The station that has a profile or a skill (its host) keeps who may use it (`allow`, null: every station) and who
 //   has a copy or borrows it (state.json `hosted[id].told`: each station and the version it was told of). It tells
@@ -247,6 +248,16 @@ export class Sharing {
     return share.kind === "profile" ? allowedIn(share.profile, ws, home) : ws === home;
   }
 
+  /// The workspaces of this station's a profile is shared in (what its copies may serve, sessions/config.ts `allowedIn`).
+  private sharedIn(profile: Json): string[] {
+    return this.deps.cloud.memberships().flatMap((m) => (this.servesIn({ kind: "profile", profile }, m.workspace) ? [m.workspace] : []));
+  }
+
+  /// What a shared profile is, hashed: where it is shared too (its copies serve those workspaces only).
+  private profileHash(p: Json): string {
+    return hashOf({ ...portable(p), workspaces: this.sharedIn(p) });
+  }
+
   /// The workspace a share reaches `station` in (`rosters`: as they are now): the first both are in that it is for;
   /// null when there is none.
   private reach(share: { kind: ShareKind; profile?: Json }, station: string, rosters = this.rosters()): string | null {
@@ -325,7 +336,7 @@ export class Sharing {
     const out = new Map<string, { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string }>();
     for (const p of this.profiles()) {
       if (!isObject(p.share) || p.share.borrowed === true || typeof p.share.id !== "string") continue;
-      out.set(p.share.id, { kind: "profile", name: String(p.name ?? p.id), allow: Array.isArray(p.share.allow) ? p.share.allow : null, hash: hashOf(portable(p)), profile: p });
+      out.set(p.share.id, { kind: "profile", name: String(p.name ?? p.id), allow: Array.isArray(p.share.allow) ? p.share.allow : null, hash: this.profileHash(p), profile: p });
     }
     for (const [name, { id, allow }] of Object.entries(this.sharedSkills())) {
       const dir = join(this.skillsDir(), name);
@@ -521,6 +532,8 @@ export class Sharing {
       const home = at >= 0 && typeof list[at].home === "string" ? list[at].home : `homes/${id}`;
       const made: Json = { ...portable(given), id: local, home, share: { id, borrowed: true, host: had.host } };
       if (typeof got.email === "string") made.share.email = got.email;
+      // The workspaces it may serve here (none said: a host of before, as before).
+      if (Array.isArray(got.workspaces)) made.share.workspaces = got.workspaces.filter((w: unknown) => typeof w === "string");
       if (!isObject(made.env)) made.env = {};
       if (at >= 0) list[at] = made;
       else list.push(made);
@@ -663,7 +676,7 @@ export class Sharing {
       if (method === "share.get") {
         // It has a copy now: it is told when this one changes.
         this.told(id, peer, version);
-        return { version, profile: portable(p), email: p.access?.kind === "subscription" ? this.emailOf(p) : null, allow: own.allow };
+        return { version, profile: portable(p), email: p.access?.kind === "subscription" ? this.emailOf(p) : null, allow: own.allow, workspaces: this.sharedIn(p) };
       }
       if (method === "share.lend") {
         if (this.moving.has(id)) throw new Error("the login is being moved to another station");
@@ -999,7 +1012,8 @@ export class Sharing {
     });
     const after = this.readState();
     delete after.hosted[id];
-    after.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id), host: to, allow };
+    // Fetched from the new host at once: the workspaces it shares it in are its to say now.
+    after.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id), host: to, allow, stale: true };
     after.moved[id] = { to, tell: Object.keys(was?.told ?? {}) };
     this.writeState(after);
     this.moving.delete(id);
@@ -1045,7 +1059,7 @@ export class Sharing {
     // The station that handed it over keeps a copy, at this version.
     const version = Number(request.version ?? 1);
     const p = this.profiles().find((x) => x.id === localId);
-    after.hosted[id] = { version, hash: p ? hashOf(portable(p)) : "", kind: "profile", name: String(given.name ?? localId), allow, told: { [peer]: version } };
+    after.hosted[id] = { version, hash: p ? this.profileHash(p) : "", kind: "profile", name: String(given.name ?? localId), allow, told: { [peer]: version } };
     this.writeState(after);
     log.info("share", "a shared profile handed over to this station", { id, from: peer });
     void this.reconcile();

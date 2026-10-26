@@ -156,12 +156,17 @@ function profilesRunning(overview: J, runtime: string, m: string | null, current
     });
 }
 
-/// The overview as the chats of `workspace`, one the station joined, run on it (docs/multi-workspace.md): with the
-/// profiles whose `workspaces` name it only.
-export function servingIn(overview: J, workspace: string): J {
+/// The overview as the chats of `workspace` run on it (docs/multi-workspace.md): with the profiles the station says
+/// they may (`serves`), else (a station of before it) those whose `workspaces` name it in one it joined (`joined`), every
+/// one in its home.
+export function servingIn(overview: J, workspace: string, joined: boolean): J {
   const profiles = get(overview, "profiles");
   if (!Array.isArray(profiles)) return overview;
-  return { ...overview, profiles: profiles.filter((p) => arr(get(p, "workspaces")).includes(workspace)) };
+  const serves = (p: J) => {
+    const said = get(p, "serves");
+    return typeof said === "boolean" ? said : !joined || arr(get(p, "workspaces")).includes(workspace);
+  };
+  return { ...overview, profiles: profiles.filter(serves) };
 }
 
 /// The models the station can run, each with the runtimes it runs on.

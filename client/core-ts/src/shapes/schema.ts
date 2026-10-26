@@ -615,6 +615,7 @@ export const SHAPES: Record<string, Shape> = {
     ["decisionText", opt("String"), { said: true, doc: "Where the decision probe is, in words (what it found, or why it found none)." }],
     ["share", opt("ProfileShare"), { doc: "Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing)." }],
     ["workspaces", vec("String"), { default: true, doc: "The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's\nonly), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one." }],
+    ["serves", opt("bool"), { doc: "The chats of the viewer's workspace may run on it (absent: a station of before it, which says so in `workspaces`\nof joined ones only): a copy of another station's serves only the workspaces that station shares it in." }],
     ["kindText", "String", { default: true, doc: "What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account." }],
     ["signInProvider", "String", { default: true, doc: "Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT." }],
     ["checkLine", "String", { said: true, default: true, doc: "Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet." }],

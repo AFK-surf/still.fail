@@ -33,7 +33,7 @@ import { maskValue, startEnv } from "../ops/agent-env.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { hubConfig, type Profile } from "../sessions/config.ts";
+import { allowedIn, hubConfig, type Profile } from "../sessions/config.ts";
 import { type Capability, discover as discoverDecisions, fingerprint, resolvedModel } from "../sessions/decision.ts";
 import { type ProfileHealth, serves, usable } from "../sessions/pool.ts";
 import type { Store } from "../store/store.ts";
@@ -1230,6 +1230,7 @@ export class Accounts {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data);
     const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
+    const home = this.deps.workspaces?.()[0] ?? null;
     const others = this.joined();
     this.readHomesSoon(config.profiles);
     const views = config.profiles.map((p) => {
@@ -1271,8 +1272,9 @@ export class Accounts {
         quota: this.quotas.get(p.id) ?? null,
         // Shared with the workspace's other stations, or another station's (absent: neither; old clients ignore it).
         share: this.deps.shared?.view(p) ?? null,
-        // The joined workspaces whose sessions may run on it.
-        workspaces: others.filter((w) => !(p.withheld ?? []).includes(w)),
+        // The joined workspaces whose sessions may run on it, and whether the viewer's may.
+        workspaces: others.filter((w) => allowedIn(p, w, home)),
+        serves: allowedIn(p, joined, home),
       };
     });
     if (joined === null) return views;

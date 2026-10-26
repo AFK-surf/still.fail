@@ -217,6 +217,28 @@ test("only_the_managers_of_a_workspace_a_station_is_in_see_its_workspaces", asyn
   core.close();
 });
 
+test("a_new_chat_runs_on_the_profiles_the_station_says_serve_this_workspace_on_its_home_station_too", async () => {
+  // st is at home in W; its one profile a copy of another station's, which shares it in other workspaces only.
+  const copy = {
+    id: "cc", name: "a@x.com", runtime: "claude", runtimes: ["claude"], access: { kind: "subscription", key: "" }, home: "/h", homeExists: true, model: null,
+    models: ["claude-opus-5-5"], env: [], usedBy: [], loginCommand: "", check: { state: "ok", detail: "", checkedAt: 1 }, quota: null, workspaces: [],
+  };
+  const blocked = async (profile: object) => {
+    const { host, core } = await setUp({ answers: { ...base(), "GET /overview": { ...overview, profiles: [profile] } } });
+    const ui = core.connect();
+    const values = new Map<number, unknown>();
+    subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    apply(host, values);
+    core.close();
+    return v(values, 1).blocked ?? null;
+  };
+  assert.equal(await blocked({ ...copy, serves: false }), "profile");
+  assert.equal(await blocked({ ...copy, serves: true }), null);
+  // A station of before it says nothing: every profile of its own serves its home.
+  assert.equal(await blocked(copy), null);
+});
+
 test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_where_to_turn_one_on", async () => {
   // st's home is 甲; W joined it, and none of its profiles is open to W (each serves other workspaces only).
   const profile = {

@@ -1580,9 +1580,9 @@ export class Views implements Owner {
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),
-        // What this workspace's chats run on: on a station it joined, the profiles open to it.
-        runtimes: runtimes(s.joined && overview !== undefined ? servingIn(overview, scope) : overview),
-        models: models(s.joined && overview !== undefined ? servingIn(overview, scope) : overview, c.now),
+        // What this workspace's chats run on: the profiles open to it.
+        runtimes: runtimes(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview),
+        models: models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
         overview: shown,
         host,
         way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),

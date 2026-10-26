@@ -268,7 +268,7 @@ export class Choose implements Owner {
     // none open, one is turned on rather than added.
     const joined = station.joined === true;
     const all = overview !== null ? arr(overview.profiles) : [];
-    const profiles = overview !== null && joined ? arr(servingIn(overview, scope).profiles) : all;
+    const profiles = overview !== null ? arr(servingIn(overview, scope, joined).profiles) : all;
     view.waiting = overview === null;
     // No profile of its own, but another station of the workspace has models it could borrow: its model control
     // offers them (borrowed before the chat is made) rather than only adding a profile.
