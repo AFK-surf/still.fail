@@ -254,6 +254,8 @@ fn pages_left(src : Source) -> Unit {
       PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
       History(r, key, _) => history_left(src, r, key)
       Screen(at) => @sfpages.screen_left(src, at.station, at.screen)
+      // what it was looked at as let go (sfpages' archive.mbt)
+      Archived => @sfpages.archive_reset()
       _ => ()
     }
   }

@@ -163,29 +163,8 @@ pub let wide : Wide = {
 }
 
 ///|
-/// The archive's list as it is looked at: the words looked for, how many asked for, the last read (shown while
-/// another is asked for); whether the newest was opened beside it since the archive was opened.
-pub(all) struct ArchiveSide {
-  mut q : String
-  mut limit : Int
-  mut last : Json?
-  mut landed : Bool
-}
-
-///|
-pub let archive_side : ArchiveSide = { q: "", limit: archive_side_page, last: None, landed: false }
-
-///|
-/// How many the archive's list shows at first, and how many more each time it is scrolled near its end (Archive.tsx
-/// ARCHIVE_PAGE).
-pub let archive_side_page : Int = 60
-
-///|
 fn wide_reset() -> Unit {
-  archive_side.q = ""
-  archive_side.limit = archive_side_page
-  archive_side.last = None
-  archive_side.landed = false
+  @sfpages.archive_reset()
   wide.side_w = side_own
   wide.folded = false
   wide.edge_held = false

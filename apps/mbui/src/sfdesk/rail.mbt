@@ -642,7 +642,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
           break
         }
       }
-      archive_side.landed = false
+      @sfpages.archive_kept.landed = false
       app.nav.push(Archived)
     }
     p => @sfbase.go_place(p) |> ignore

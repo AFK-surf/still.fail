@@ -222,26 +222,6 @@ test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tap
 }
 
 ///|
-test "the archive: its chats by day; one restored leaves it" {
-  let t = settings_tester("archive")
-  assert_true(t.find("已归档") is Some(_))
-  assert_true(t.find("整理上个月的发票") is Some(_))
-  assert_true(t.find("周会纪要") is Some(_))
-  assert_true(t.find("昨天") is Some(_))
-  // 还原 at the row's end (its first round button, before 删除), said with the chat's title
-  assert_true(t.query(Button, label="删除「整理上个月的发票」") is Some(_))
-  let (x, y, w, h) = t.query(Button, label="恢复「整理上个月的发票」").unwrap().rect
-  t.tap(x + w / 2.0, y + h / 2.0)
-  assert_true(t.find("整理上个月的发票") is None)
-  assert_true(t.find("周会纪要") is Some(_))
-  // the bottom bar going out of the way, on its own springs and glides, to where it rests
-  t.run_for(bar.rest() - t.time())
-  // the last tap's ripple shown whole, its way in and out
-  t.run_for(@motion.ripple_tap_ms)
-  t.assert_idle()
-}
-
-///|
 test "the workspace: its people, those added, the invitations out" {
   let t = settings_tester("workspace")
   assert_true(t.find("星火工作室") is Some(_))

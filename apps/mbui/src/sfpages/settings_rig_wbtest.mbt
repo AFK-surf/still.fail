@@ -81,6 +81,7 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     VaultItems => vault_items_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
+    Archive => archive_page(c, src, rig_workspace, frame, core.pop)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)

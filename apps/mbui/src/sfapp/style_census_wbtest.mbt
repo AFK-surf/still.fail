@@ -11,6 +11,8 @@ let census_modes : Array[String] = [
 ]
 
 ///|
+/// The settings' pages looked at, each come to as a person comes to it (open_setting: 已归档 from the chats' filter, its
+/// newest chat beside it on a wide screen).
 let census_pages : Array[String] = [
   "home", "appearance", "me", "workspace", "security", "vault", "stations", "station:ws1/st1", "profiles",
   "profile:ws1/st1#cc", "connects", "memory:ws1/st1", "usage", "archive",
@@ -72,9 +74,9 @@ test "styles: how many values of each kind the app's screens use" {
     counts.write_string(k.0 + " " + values.length().to_string() + "\n")
   }
   inspect(counts.to_string(), content=(
-    #|text 34
+    #|text 37
     #|weight 4
-    #|space 23
+    #|space 24
     #|radius 23
     #|color 95
     #|

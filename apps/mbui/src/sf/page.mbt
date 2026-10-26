@@ -128,7 +128,8 @@ pub let named_actions : Ref[(() -> Unit)?] = Ref(None)
 /// account's); `small`: what the page is of, over its large title (narrow: LargeTitle's small line). In a panel of its
 /// own (`in_pane`), under the frame's bar there (`pane_bar`), which holds its title, back and what it does: what it
 /// shows (a head of its own, what it is for, what it holds) right under that, nothing of those drawn here nor room
-/// kept for them.
+/// kept for them. `listed`: what it holds is a list's lines (an archive's chats), each across the page as it stands,
+/// none of a block's room round it; the list it is drawn in is `page_list(key)`.
 pub fn page(
   c : @ui.Ctx,
   key : String,
@@ -141,6 +142,7 @@ pub fn page(
   actions? : () -> Unit,
   head? : () -> Unit,
   small? : String = "",
+  listed? : Bool = false,
 ) -> Unit {
   let l = look_for(c.width)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
@@ -150,15 +152,22 @@ pub fn page(
     None => None
   }
   let bar = { back: frame.back.map(fn(w) { (w, on_back) }), title, about, small, own_head: head is Some(_), actions }
-  under_pane_bar(c, bar, fn() { with_look(l, fn() { barred_page(c, key, l, content, frame.foot, lead, head) }) }, fn() {
+  under_pane_bar(c, bar, fn() { with_look(l, fn() { barred_page(c, key, l, content, frame.foot, lead, head, listed) }) }, fn() {
     with_look(l, fn() {
       match l {
         Wide =>
-          wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head)
-        Narrow => narrow_page(c, key, title, content, on_back, frame, lead, actions, head, small)
+          wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head, listed)
+        Narrow => narrow_page(c, key, title, content, on_back, frame, lead, actions, head, small, listed)
       }
     })
   })
+}
+
+///|
+/// The list a page keyed `key` is drawn in (its lines: Ctx::list_info, a `listed` page's next ones asked for near its
+/// end).
+pub fn page_list(key : String) -> String {
+  "settings/" + key
 }
 
 ///|
@@ -182,6 +191,7 @@ fn barred_page(
   foot : Double,
   lead : String,
   head : (() -> Unit)?,
+  listed : Bool,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
   match head {
@@ -198,15 +208,16 @@ fn barred_page(
   }
   match l {
     Narrow => {
+      let chrome = if listed { blocks.length() + content.length() } else { 0 }
       for b in content {
         blocks.push(b)
       }
-      narrow_list(c, key, blocks, foot)
+      narrow_list(c, key, blocks, foot, chrome~)
     }
     Wide => {
-      // (what it holds as under a head: its first 16 under it, the head's own 12 over that)
+      // (what it holds as under a head: its first 16 under it, the head's own 12 over that; a list's lines as they are)
       for i, b in content {
-        blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
+        blocks.push(if listed { b } else { fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore } })
       }
       desk_lanes(c, key, blocks, foot~)
     }
@@ -236,8 +247,8 @@ pub fn page_wide(
   let back = frame.back.map(fn(w) { (w, on_back) })
   let bar = { back, title, about, small: "", own_head: head is Some(_), actions }
   with_look(Wide, fn() {
-    under_pane_bar(c, bar, fn() { barred_page(c, key, Wide, content, frame.foot, lead, head) }, fn() {
-      wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head)
+    under_pane_bar(c, bar, fn() { barred_page(c, key, Wide, content, frame.foot, lead, head, false) }, fn() {
+      wide_page(c, key, title, content, on_back, frame.back, frame.top, frame.foot, lead, about, actions, head, false)
     })
   })
 }
@@ -256,6 +267,7 @@ fn narrow_page(
   actions : (() -> Unit)?,
   head : (() -> Unit)?,
   small : String,
+  listed : Bool,
 ) -> Unit {
   let { back, top, foot, named } = frame
   let blocks : Array[() -> Unit] = []
@@ -320,7 +332,7 @@ fn narrow_page(
   }
   // (each drawn as its list lays it out, after this returns: its back, its title's line and what it does there in the
   // page's arrangement, as what it holds is)
-  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~)
+  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome=if listed { blocks.length() } else { chrome })
 }
 
 ///|
@@ -358,6 +370,7 @@ fn wide_page(
   about_words : String,
   actions : (() -> Unit)?,
   head : (() -> Unit)?,
+  listed : Bool,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
   // the room the frame keeps over it (a status bar's)
@@ -408,7 +421,7 @@ fn wide_page(
       })
   }
   for i, b in content {
-    blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
+    blocks.push(if listed { b } else { fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore } })
   }
   desk_lanes(c, key, blocks, foot~)
 }

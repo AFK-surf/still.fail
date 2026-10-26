@@ -490,7 +490,6 @@ let left_core : Ref[Core?] = Ref(None)
 /// A page of the settings left the stack: what it kept goes (its words looked for, a sheet of its own).
 pub fn left(route : Route) -> Unit {
   match route {
-    Archive => archive_reset()
     Connects(_) => connects_mine.val = false
     Station(a) => station_parts.remove(a)
     NewProfile(a) =>
@@ -522,7 +521,6 @@ pub fn left(route : Route) -> Unit {
 ///|
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
-  archive_reset()
   vault_ask_reset()
   keymap_reset()
   login_marked.val = None

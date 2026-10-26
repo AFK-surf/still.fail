@@ -291,7 +291,7 @@ let whole_row_slot : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 /// How far in a list's heading is: in a side column the theme's (heading_in, from the list's line); across the whole
-/// screen the phone's section header's (20).
+/// screen as far as its rows' words (22: whole_row_in), its words over theirs.
 pub fn list_heading_in(at : ListAt) -> @ui.Style {
   match at {
     Side => @ui.style(px=room(theme().chat_list.heading_in))
@@ -300,8 +300,9 @@ pub fn list_heading_in(at : ListAt) -> @ui.Style {
 }
 
 ///|
+// (at the left as far in as the rows' words, whole_row_in's: one value, a day's heading over its chats' titles)
 // kept across runs: a value (no field of it changes)
-let whole_heading_in : @ui.Style = @ui.css("px=S5")
+let whole_heading_in : @ui.Style = @ui.style(pl=phone_row_in, pr=S5)
 
 ///|
 /// How far in a found line is and its corner, where its list stands: in a side column or a panel (⌘K's, the tape's
@@ -342,7 +343,7 @@ let found_whole_in : @ui.Style = @ui.style(px=found_start)
 
 ///|
 /// How far in a found kind's heading is: in a side column or a panel as its lines' words (12), across the whole
-/// screen the phone's section header's (20).
+/// screen as its lines' words (22).
 pub fn found_head_in(at : ListAt) -> @ui.Style {
   match at {
     Side => found_side_in

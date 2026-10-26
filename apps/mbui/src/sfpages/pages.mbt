@@ -13,6 +13,7 @@ fn init {
 ///|
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
+  archive_reset()
   screen_fix_mode.val = ""
   screens_open.clear()
   screen_uis.clear()

@@ -130,6 +130,8 @@ pub fn new_nav() -> @ui.Nav[Page] {
 pub fn open_setting(name : String) -> Unit {
   match @settings.route_of(name) {
     Some(@settings.Route::Home) => open_page(Settings)
+    // the archive is the chats', from the filter's menu over their list: not under settings
+    Some(@settings.Route::Archive) => open_page(Archived)
     Some(r) => {
       open_page(Settings)
       for w in setting_way(r) {
