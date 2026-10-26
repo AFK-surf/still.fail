@@ -1084,7 +1084,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         )
       }
       if id != 0 {
-        self.push_hit(id, dmax(x0, cx0), dmax(top, cy0), dmin(x1, cx1), dmin(top + lay.line_h[l], cy1))
+        self.push_hit(id, dmax(x0, cx0), dmax(top, cy0), dmin(x1, cx1), dmin(top + lay.line_h[l], cy1)) |> ignore
       }
     }
   }

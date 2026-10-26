@@ -308,8 +308,10 @@ pub(all) struct Peek {
   mut got : Int
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
-  /// its card's target (0: none): a card its list's row drew again, not built, still says it (Ctx::rect_of)
+  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle); the part or list's row kept
+  /// its card was built in (@ui.kept_building): drawn again, it holds the card as built
   mut target : Int
+  mut held_by : (Int, Int)
 }
 
 ///|
@@ -317,8 +319,25 @@ pub(all) struct Peek {
 pub let peeks : Map[String, Peek] = {}
 
 ///|
-/// The cards with a preview built in this pass of the frame (on the screen).
+/// The cards with a preview built in this pass of the frame, or held by a part or a row drawn again as it was built
+/// (peeks_drawn_again).
 pub let peeks_built : Map[String, Bool] = {}
+
+///|
+/// Whether peeks_drawn_again is told of what is drawn again (@ui.on_drawn_again).
+// kept across runs: mbui's hooks are
+let peeks_hooked : Ref[Bool] = Ref(false)
+
+///|
+/// A part or a list's row drawn again as it was built (@ui.on_drawn_again): the cards it holds held, as built.
+fn peeks_drawn_again(c : @ui.Ctx, which : (Int, Int), dy : Double, rel : Double) -> Unit {
+  ignore((c, dy, rel))
+  for key, p in peeks {
+    if p.held_by == which {
+      peeks_built[key] = true
+    }
+  }
+}
 
 ///|
 /// Previews asked for so far: each view's name its own.
@@ -347,6 +366,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
+        held_by: (0, 0),
       }
       peeks[key] = p
       p
@@ -369,6 +389,7 @@ pub fn screen_peek(
 ) -> Unit {
   let p = peek_for(key, station, screen)
   p.target = target
+  p.held_by = @ui.kept_building()
   peeks_built[key] = true
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
   let ratio = if listed > 0.0 {
@@ -503,6 +524,10 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 /// each frame waiting is acknowledged peek_ms after the one before (the first at once); the previews started and
 /// stopped once the frame's builds are over (peeks_settle).
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
+  if !peeks_hooked.val {
+    peeks_hooked.val = true
+    @ui.on_drawn_again(peeks_drawn_again)
+  }
   peeks_built.clear()
   for key, p in peeks {
     if p.run != PeekOn {
@@ -529,17 +554,19 @@ pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 /// Once the frame's builds are over: a preview asked for where its card is on the screen and the app shown, stopped
-/// where it is not (and its card let go of, as Android's list lets go of a row out of view); the pictures under the
-/// one shown let go of (their bytes, emptied: nothing draws them again). A card is on the screen where it was built in
-/// this frame, or drawn in the last: a message's row kept (mbui's kept_rows.mbt) is drawn again as it was, not built,
-/// and its card's target said again; were that taken for gone from view, every frame that draws it again (the pointer
-/// moved, something else moving) would stop its preview and the next built would ask for it anew, its picture gone
-/// meanwhile: the card flashing.
+/// where it is not; a card no longer held let go of (as Android's list lets go of a row out of view), with its
+/// pictures; the pictures under the one shown let go of (their bytes, emptied: nothing draws them again). A card is
+/// held where it was built in this frame or its part or row was drawn again as it was built (mbui's kept_part.mbt,
+/// kept_rows.mbt: what it draws is its last build's, its picture too); on the screen where it is held and any of its
+/// target showed in the last frame (Ctx::rect_of: a frame says a target only where it shows), one with no target
+/// where it is held. A card past its list's edge in a row that shows is held, its preview stopped, its picture kept
+/// for the row drawn again.
 pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
-    let on = peeks_built.contains(key) || (p.target != 0 && c.rect_of(p.target) is Some(_))
+    let held = peeks_built.contains(key)
+    let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
     let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }
@@ -552,7 +579,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
         newest = i
       }
     }
-    if !on {
+    if !held {
       newest = p.pictures.length()
       if p.run == PeekOff {
         gone.push(key)

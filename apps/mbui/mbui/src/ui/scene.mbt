@@ -748,9 +748,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   // (nothing in a page's bones is pressed or pointed at: it is not there yet)
   if (n.hit || n.points) && n.id != 0 && n.bones == 0L {
-    self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
-    if n.points {
-      // (and of a part kept, a list's row kept being painted: said again as they are drawn again)
+    if self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1)) &&
+      n.points {
       self.point_said(n.id)
     }
   }

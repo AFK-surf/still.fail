@@ -258,6 +258,8 @@ pub struct Ctx {
   // `points`): a press, or a finger reaching round it, goes past them to what holds them
   mut points : Map[Int, Bool]
   mut next_points : Map[Int, Bool]
+  /// of this frame's, the places of their targets among next_hit_ids, in order (said.mbt's HitsSaid)
+  next_point_hits : Array[Int]
   mut scroll_ids : Array[Int]
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
@@ -565,6 +567,7 @@ fn Ctx::new() -> Ctx {
     next_hit_ends: [],
     points: {},
     next_points: {},
+    next_point_hits: [],
     scroll_ids: [],
     scroll_rects: [],
     next_scroll_ids: [],
@@ -1837,7 +1840,9 @@ fn in_round_rect(clips : Array[Double], b : Int, x : Double, y : Double) -> Bool
 }
 
 ///|
-/// A hit target drawn now: `id` where (x0 y0 x1 y1) shows (cut already to the clip's rect), and the clip itself.
+/// A hit target drawn now: `id` where (x0 y0 x1 y1) shows (cut already to the clip's rect), and the clip itself; none
+/// where nothing of it shows (cut to nothing: a link's line outside its words' clip), as what is drawn outside what
+/// cuts it is not painted. Whether it was said.
 fn Ctx::push_hit(
   self : Ctx,
   id : Int,
@@ -1845,7 +1850,10 @@ fn Ctx::push_hit(
   y0 : Double,
   x1 : Double,
   y1 : Double,
-) -> Unit {
+) -> Bool {
+  if x0 > x1 || y0 > y1 {
+    return false
+  }
   self.next_hit_ids.push(id)
   // (holding none till what is drawn in it is: Ctx::paint)
   self.next_hit_ends.push(self.next_hit_ids.length())
@@ -1857,6 +1865,7 @@ fn Ctx::push_hit(
   for j in 0..<clip_n {
     self.next_hit_clips.push(clip_stack[k + j])
   }
+  true
 }
 
 ///|

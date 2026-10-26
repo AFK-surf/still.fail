@@ -210,8 +210,8 @@ pub fn on_after_layout(f : (Ctx) -> Unit) -> Unit {
 ///|
 /// `f` told of each part and list's row kept that a frame draws again, its build not run (kept_part.mbt,
 /// kept_rows.mbt): which (Ctx::kept_building's), how far down the window from where its build laid it out it is drawn,
-/// and how far down its list's rows (what came above it grown or shrunk). What a package keeps of the nodes a build
-/// laid out keeps them for it so, as it would were it built.
+/// and how far down its list's rows (what came above it grown or shrunk); a part's, the rows its drawing holds too. What
+/// a package keeps of the nodes a build laid out keeps them for it so, as it would were it built.
 pub fn on_drawn_again(f : (Ctx, (Int, Int), Double, Double) -> Unit) -> Unit {
   drawn_again_hooks.push(f)
 }
@@ -543,9 +543,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     Some(e) => e
     None => return false
   }
-  // a part kept, drawn again as its build drew it, its targets where its build's paint said them (kept_part.mbt): only
-  // them where only targets are taken, only its drawing where it is only drawn; a list's row, where it is now
-  // (kept_rows.mbt)
+  // a part kept, drawn again as its build drew it, what its build's paint said of the frame said again where it said
+  // it (kept_part.mbt, said.mbt), as its build's paint says it here: its drawing not where only targets are taken; a
+  // list's row, where it is now (kept_rows.mbt)
   match e.again {
     Some({ row: Some(_), .. } as st) => {
       self.row_paint_again(i, st)
@@ -555,9 +555,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       if dr.mode != mode_hits {
         self.part_paint_again(st)
       }
-      if dr.mode != mode_draw {
-        self.part_targets_again(st)
-      }
+      self.paint_again(st.said, unmoved)
       return true
     }
     None => ()
@@ -669,10 +667,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   if dr.mode == mode_draw || !look.is_still() || e.z == 2 || e.only || cutting {
     // tapped as laid out, not here (drawn only, not at all)
-    self.next_hit_ids.truncate(h0)
-    self.next_hit_ends.truncate(h0)
-    self.next_hit_rects.truncate(h0 * 4)
-    self.next_hit_clips.truncate(h0 * clip_n)
+    self.hits_cut(h0)
     self.next_scroll_ids.truncate(s0)
     self.next_scroll_rects.truncate(s0 * 4)
     self.next_bars.truncate(b0)

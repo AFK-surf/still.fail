@@ -453,6 +453,7 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
       dmin(b.tx + b.tw + g, cx1),
       dmin(b.ty + b.th + g, cy1),
     )
+    |> ignore
   }
 }
 

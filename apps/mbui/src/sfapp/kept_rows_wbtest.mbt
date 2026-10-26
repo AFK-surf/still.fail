@@ -26,22 +26,30 @@ fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false
   t.keep_parts(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
+  t.said() |> ignore
   let out = []
   let mut kept = 0
   let x = w * 0.7
   t.drag(x, h * 0.25, x, h * 0.75, steps=8)
   for _ in 0..<6 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y))
+    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
     kept = kept + t.rows_kept()
   }
   t.drag(x, h * 0.7, x, h * 0.4, steps=12)
   for _ in 0..<4 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y))
+    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
     kept = kept + t.rows_kept()
   }
   (out, kept)
+}
+
+///|
+/// What the last frame's paint said of it besides its drawing (its targets, what scrolls, the words that can be picked,
+/// the scroll bars, the lines of words: Tester::said), a line each.
+fn kept_rows_said(t : @ui.Tester) -> Array[String] {
+  t.said().split("\n").filter(fn(l) { l.length() > 0 }).map(fn(l) { "said " + l.to_string() }).collect()
 }
 
 ///|
