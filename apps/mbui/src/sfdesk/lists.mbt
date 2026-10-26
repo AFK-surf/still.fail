@@ -347,7 +347,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
           // (where it was, on hover: Archive.tsx's tip)
           let kind = c.id("side/archived-kind/" + key)
           c.box(style=@sfpages.kind_slot, id=kind, taps=false, points=true, fn() {
-            @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.muted)
+            @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark_of(text(v, "stationIcon")), t.p.muted)
           })
           |> ignore
           @sf.tip(c, "side/archived-kind-tip/" + key, kind, text(v, "place"))

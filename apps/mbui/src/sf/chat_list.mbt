@@ -93,13 +93,22 @@ pub(all) struct ChatList {
 // kept across runs: a value (no field of it changes)
 pub let mouse_chat_list : ChatList = {
   row_h: 54.0,
-  row: @ui.style(row=true, w=Full, h=side_row_h, py=row_in, gap=S2, align=AStart),
+  // (its title's line's middle where 归档's is: row_top_in_y)
+  row: @ui.style(
+    row=true,
+    w=Full,
+    h=side_row_h,
+    pt=room(row_top_in_y),
+    pb=room(row_foot_in_y),
+    gap=S2,
+    align=AStart,
+  ),
   // (SidebarList.css.ts item: 7 over and under, as a chat's row)
   item: @ui.style(row=true, w=Full, min_h=S8, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
   // (pointed at, room at its end for 归档: 24)
-  head_h: 20.0,
+  head_h: mouse_head_h,
   meta: @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter"),
   title: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
@@ -370,6 +379,10 @@ let mouse_face_d : Double = 16.0
 
 ///|
 let mouse_row_in : Double = 7.0
+
+///|
+/// Keyboard and mouse's chat row's title's line's height (head: S5).
+let mouse_head_h : Double = 20.0
 
 ///|
 let mouse_meta_h : Double = 18.0

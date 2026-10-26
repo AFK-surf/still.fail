@@ -334,8 +334,6 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
-          {/* The station it runs on, by its icon (the core gives one only with several stations). */}
-          {(item.stationEmoji || item.stationIcon) && !editing && <Tip label={item.stationName}><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span></Tip>}
           {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} inline label={t("common.saving")} /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
@@ -343,6 +341,8 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
           {item.offline || item.reconnecting
             ? <Tip label={item.offline ?? item.reconnecting}><span className={nav.sessionKind} aria-label={item.offline ?? item.reconnecting}><Unplug size={12} /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"}><span className={nav.sessionKind}><ConnectKindIcon kind={item.originKind ?? "slack"} size={12} /></span></Tip>}
+          {/* The station it runs on, by its icon (the core gives one only with several stations): last, so it stands in the same column at every row's end whatever marks come before it. */}
+          {(item.stationEmoji || item.stationIcon) && !editing && <Tip label={item.stationName}><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span></Tip>}
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
