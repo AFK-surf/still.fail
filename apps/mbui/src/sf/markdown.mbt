@@ -71,6 +71,8 @@ priv struct Md {
   /// how far past its column either side a table of it scrolls (Md::table): the page's margin where it has one, none
   /// in a list or a quote
   mut bleed : Double
+  /// its tables offer to be copied (table_copy.mbt): not in a picture of them
+  copy : Bool
 }
 
 ///|
@@ -455,7 +457,8 @@ fn web() -> Palette {
 /// words' (0: the theme's body); `on_link` is told where a tapped link
 /// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
 /// the file's head says; `document`: its headings a document's (Md's `document`);
-/// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
+/// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin); `copy`
+/// false: its tables offer no copying (a picture of the words).
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
 /// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
@@ -479,6 +482,7 @@ pub fn markdown(
   chat_title? : (String) -> String? = fn(_) { None },
   document? : Bool = false,
   bleed? : Double = 0.0,
+  copy? : Bool = true,
   paths? : Bool = false,
 ) -> Int {
   let t = theme()
@@ -506,6 +510,7 @@ pub fn markdown(
     serif: false,
     document,
     bleed,
+    copy,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -624,6 +629,7 @@ pub fn markdown_part(
     serif,
     document,
     bleed: 0.0,
+    copy: true,
   }
   let blocks = match parts.get(key) {
     Some(b) => b
@@ -1170,15 +1176,15 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   let t = theme()
   let w = web()
   let id = c.id("sf-code/" + code)
-  let copied_key = "sf-copied/\{id}"
+  let copy_key = "sf-copied/\{id}"
   if c.clicked(id) {
     c.copy_text(code)
     // pressed again while it says so: its time starts again
-    @kit.after(c, copied_key, false, copied_ms) |> ignore
+    @kit.after(c, copy_key, false, copied_ms) |> ignore
     copied_at[id] = true
   }
   let copied = copied_at.contains(id) &&
-    (if @kit.after(c, copied_key, true, copied_ms) {
+    (if @kit.after(c, copy_key, true, copied_ms) {
       copied_at.remove(id)
       false
     } else {
@@ -1211,7 +1217,36 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           |> ignore
         })
         |> ignore
-        copy_key(c, id, copied)
+        c.box(
+          dir=Row,
+          h=Px(code_key_h),
+          padx=7.0,
+          gap=4.0,
+          align=ACenter,
+          radius=code_key_h / 2.0,
+          bg=alpha(t.p.canvas, 0.8),
+          id~,
+          fn() {
+            icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
+            |> ignore
+            c.text(
+              // (common.copied, common.copy: the catalog's words, Markdown.kt's)
+              if language() == "en" {
+                if copied { "Copied" } else { "Copy" }
+              } else if copied {
+                "已复制"
+              } else {
+                "复制"
+              },
+              size=theme().t.caption,
+              color=w.muted,
+              wrap=false,
+            )
+            |> ignore
+            @motion.ripple(c, id, code_key_h / 2.0)
+          },
+        )
+        |> ignore
       },
     )
   }
@@ -1240,43 +1275,6 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       c.layer(fn() { bar() |> ignore }) |> ignore
     }
   })
-  |> ignore
-}
-
-///|
-/// A block's copy key (a code block's, a table's: table_copy.mbt): a capsule code_key_h high on the canvas at 80%, its
-/// copy icon and 复制 in the muted ink, a check and 已复制 while `copied`; `label` what it is called besides its words.
-fn copy_key(c : @ui.Ctx, id : Int, copied : Bool, label? : String = "") -> Unit {
-  let w = web()
-  c.box(
-    dir=Row,
-    h=Px(code_key_h),
-    padx=7.0,
-    gap=4.0,
-    align=ACenter,
-    radius=code_key_h / 2.0,
-    bg=alpha(theme().p.canvas, 0.8),
-    id~,
-    label~,
-    fn() {
-      icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted) |> ignore
-      c.text(
-        // (common.copied, common.copy: the catalog's words, Markdown.kt's)
-        if language() == "en" {
-          if copied { "Copied" } else { "Copy" }
-        } else if copied {
-          "已复制"
-        } else {
-          "复制"
-        },
-        size=theme().t.caption,
-        color=w.muted,
-        wrap=false,
-      )
-      |> ignore
-      @motion.ripple(c, id, code_key_h / 2.0)
-    },
-  )
   |> ignore
 }
 
@@ -1340,7 +1338,8 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 /// words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
 /// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
 /// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
-/// its end its right edge in line with theirs.
+/// its end its key's room in line with theirs. Its copy key hangs past its right edge, in what scrolls (table_copy.mbt):
+/// beside it where the message has room, else past its end, scrolled to.
 fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let c = self.c
   let cols = t.head.length()
@@ -1405,15 +1404,20 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   for x in widths {
     total = total + x
   }
-  // its copy key on a row of its own over it, at the end of what shows of it (all of it, or the message's width where it
-  // scrolls), whatever the input: over its corner it would lie over its head's words (table_copy.mbt)
-  let shown = dmin(total + 2.0, room)
-  c.box(style=table_keys_row.then(@ui.style(w=Fixed(shown))), fn() { self.table_key(key, t) }) |> ignore
   // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
   // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
-  // columns, `bleed` in from its ends
+  // columns, `bleed` in from its ends, its copy key past it
   c.box(mx=-bleed, id~, taps=false, fn() {
-    c.sideways(key, padx=bleed, fn() { self.table_frame(rows, widths, total, key + "/head") }) |> ignore
+    c.sideways(key, padx=bleed, fn() {
+      c.box(style=table_beside, fn() {
+        self.table_frame(rows, widths, total, key + "/head")
+        if self.copy {
+          self.table_key(key, t)
+        }
+      })
+      |> ignore
+    })
+    |> ignore
   })
   |> ignore
   // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its

@@ -86,7 +86,7 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
 }
 
 ///|
-test "a table too wide for the message: its columns 14em, not squeezed; scrolled out over the page's margin to its end in line with the words" {
+test "a table too wide for the message: its columns 14em, not squeezed; scrolled out over the page's margin to its end, its key's in line with the words" {
   let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
   let t = @ui.Tester::new(
     fn(c) {
@@ -111,14 +111,15 @@ test "a table too wide for the message: its columns 14em, not squeezed; scrolled
   assert_eq(x1, 16.0 + 1.0 + 12.0)
   assert_eq(x2 - x1, column)
   assert_eq(x3 - x2, column)
-  // dragged to its end: the frame's right edge in line with the words' (16 in from the right)
+  // dragged to its end: its key's room in line with the words' right edge (16 in from the right)
   for _ in 0..<4 {
     t.drag(370.0, y + 5.0, 20.0, y + 5.0)
     t.draw()
   }
   t.frame()
   let (x3_end, _) = t.drawn_of("three a long").unwrap()
-  assert_eq(x3_end - 12.0 + column + 1.0, 390.0 - 16.0)
+  // (its copy key past it: 6, 32, 6)
+  assert_eq(x3_end - 12.0 + column + 1.0, 390.0 - 16.0 - 44.0)
   // what went left shows out to the screen's edge, not cut at the words' margin
   let (shown, _, _, _) = t.shown_of("two a long").unwrap()
   assert_eq(shown, 0.0)

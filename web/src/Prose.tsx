@@ -25,7 +25,7 @@ import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
-import { Menu, type MenuItem } from "@stillfail/ui/parts.tsx";
+import { IconButton, Menu, type MenuItem } from "@stillfail/ui/parts.tsx";
 import { longPicture } from "./longPicture.ts";
 
 // Only a math-containing view loads the shared alphabet. This chunk draws the core's layout; it has no TeX parser.
@@ -77,10 +77,10 @@ const TABLE_SHOT = { least: 2, most: 3, margin: 16 };
 
 /**
  * A table as markdown shows one: wider than the message, it scrolls sideways within it, its cells keeping their words
- * whole; its frame is the table's, scrolling with it. Its copy key (a code block's) on a row of its own over it, at its
- * end (Prose.css.ts tableKeys); its menu copies it as Markdown or as CSV, as the core wrote them (`md`, `csv`:
- * markdown.ts tableMarkdown, tableCsv; none from a core before them), or as a picture of it whole on the page's
- * ground (longPicture).
+ * whole; its frame is the table's, scrolling with it. Its copy key past its right edge, in what scrolls (Prose.css.ts
+ * tableKey): beside it where the message has room, else past its end, scrolled to; its menu copies it as Markdown or
+ * as CSV, as the core wrote them (`md`, `csv`: markdown.ts tableMarkdown, tableCsv; none from a core before them), or
+ * as a picture of it whole on the page's ground (longPicture).
  */
 function Table({ md, csv, children }: { md: string | undefined; csv: string | undefined; children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -109,15 +109,12 @@ function Table({ md, csv, children }: { md: string | undefined; csv: string | un
     { label: t("desktop.contextMenu.copyImage"), onSelect: picture },
   ];
   return (
-    <div className={css.tableBox}>
-      <div className={css.tableKeys}>
-        <Menu label={t("web-main.prose.copyTable")} items={items} trigger={
-          <button type="button" className={css.tableCopy} aria-label={t("web-main.prose.copyTable")}>
-            {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
-          </button>
-        } />
+    <div className={css.tableScroll}>
+      <div ref={frame} className={css.tableFrame}>{children}</div>
+      {/* (left out of a picture of the chat: Publish.tsx takePicture) */}
+      <div className={css.tableKey} data-shot-off="">
+        <Menu items={items} trigger={<IconButton label={copied ? t("common.copied") : t("web-main.prose.copyTable")} icon={copied ? Check : Copy} />} />
       </div>
-      <div className={css.tableScroll}><div ref={frame} className={css.tableFrame}>{children}</div></div>
     </div>
   );
 }
