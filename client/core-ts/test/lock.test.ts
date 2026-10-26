@@ -1,7 +1,7 @@
 // The workspace lock on the device (src/lock.ts): the hash the stations and the cloud compute (the same values in
 // their tests), the device's claim for an endpoint, an app's signing key, which a web page never has.
 import assert from "node:assert/strict";
-import { createPrivateKey, createPublicKey, verify } from "node:crypto";
+import { createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { HostError } from "../src/error.ts";
@@ -26,6 +26,23 @@ test("a device's claim: its base key (its iroh id) vouches for one endpoint in o
   assert.equal(claim.device, id);
   assert.ok(verify(null, Buffer.from(endpointBytes("ws1", "ef".repeat(32))), publicOf(id), Buffer.from(claim.proof, "hex")));
   assert.ok(!verify(null, Buffer.from(endpointBytes("ws2", "ef".repeat(32))), publicOf(id), Buffer.from(claim.proof, "hex")));
+});
+
+test("a device's claim is signed by the host where it signs (a native app's shell), the same claim", () => {
+  const seed = new Uint8Array(32).fill(7);
+  const asked: string[] = [];
+  const signs = {
+    ed25519Sign(s: Uint8Array, message: Uint8Array) {
+      asked.push(Buffer.from(message).toString("utf8"));
+      const key = createPrivateKey({ key: Buffer.concat([PKCS8_ED25519, s]), format: "der", type: "pkcs8" });
+      const publicKey = new Uint8Array(Buffer.from(createPublicKey(key).export({ format: "jwk" }).x as string, "base64url"));
+      return { publicKey, signature: new Uint8Array(sign(null, message, key)) };
+    },
+  };
+  assert.deepEqual(lockClaim(seed, "ws1", "ef".repeat(32), signs), lockClaim(seed, "ws1", "ef".repeat(32)));
+  assert.equal(asked.length, 1);
+  // (a host that cannot: the core signs it)
+  assert.deepEqual(lockClaim(seed, "ws1", "ef".repeat(32), { ed25519Sign: () => null }), lockClaim(seed, "ws1", "ef".repeat(32)));
 });
 
 test("an app keeps a signing key and signs entries with it; a web page has none", async () => {
