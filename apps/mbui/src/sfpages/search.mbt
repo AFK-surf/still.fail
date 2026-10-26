@@ -197,24 +197,32 @@ let search_over_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap=S3 align=ACenter")
 
 ///|
-/// Where the field rests at the top: the room 取消 leaves it.
+/// Where the field rests at the top: the room 取消 leaves it (as high as the field: search_page).
 // kept across runs: a value (no field of it changes)
-let search_slot : @ui.Style = @ui.style(w=@sf.grow, h=@sf.search_field_h)
+let search_slot : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// The field's ground (Search.kt SearchField, SearchPage's): a capsule of the ink at 6%.
 // kept across runs: a value (no field of it changes)
-let search_field_ground : @ui.Style = @ui.style(w=Full, h=@sf.search_field_h, radius=Full, bg=@sf.search_ground)
+let search_field_ground : @ui.Style = @ui.style(w=Full, radius=Full, bg=@sf.search_ground)
 
 ///|
 /// What it holds: its icon 8 before the words.
 // kept across runs: a value (no field of it changes)
-let search_field_in : @ui.Style = @ui.style(row=true, w=Full, h=@sf.search_field_h, px=S3, gap=S2, align=ACenter)
+let search_field_in : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
 
 ///|
-/// The field, its ground and what it holds; at the list's top as high and as far in as the theme's band (38, 12).
+/// The field, its ground and what it holds.
 // kept across runs: a value (no field of it changes)
 let search_field_box : @ui.Style = search_field_ground.then(search_field_in)
+
+///|
+/// One field, in the list and come up from it alike (search_field, search_page): what it holds as high as the theme's
+/// band (what stands over a sidebar's list: 38 with touch) and its words as far in from its ends (12), its mark and
+/// its words the band's too.
+fn search_field_room(band : @sf.ChatList) -> @ui.Style {
+  @ui.style(h=Fixed(band.band_h), px=@sf.room_of(band.band_pad))
+}
 
 ///|
 /// The field at the list's top: 6 under it (how far in: search_field).
@@ -271,7 +279,7 @@ fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
     Whole => search_field_line.then(@ui.style(px=@sf.room_of(band.band_in)))
   }
   c.box(style=line, fn() {
-    let f = c.box(style=search_field_box.then(@ui.style(h=Fixed(band.band_h), px=@sf.room_of(band.band_pad))), id~, fn() {
+    let f = c.box(style=search_field_box.then(search_field_room(band)), id~, fn() {
       @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
       c.text(
         @sf.t("android-chat.search.field"),
@@ -318,6 +326,10 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
   // a row opened from over another page: the search goes as its page comes (as ⌘K's panel does)
   let close = fn() { if search.over { search_gone() } }
   let t = @sf.theme()
+  // (the list's field come up: as high, its mark and its words as big, not changing as it goes up or comes back)
+  let band = t.chat_list
+  let tall = @ui.style(h=Fixed(band.band_h))
+  let (size, line) = c.style_size(band.band_words)
   c.layer(fn() {
     c.box(style=if search.over { search_over_box } else { search_page_box }, id=c.id("search/page"), fn() {
       // under what is over the lists' box (a phone's status bar: Search.kt windowInsetsPadding(statusBars); the
@@ -334,24 +346,25 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
           None => (search.wide, search.from)
         }
         let dy = (search.from - rest_y) * (1.0 - u)
-        c.box(style=search_slot, id=slot, fn() {
+        c.box(style=search_slot.then(tall), id=slot, fn() {
           c.layer(fn() {
             let now = dmax(if search.wide > 0.0 { search.wide + (room - search.wide) * u } else { room }, 0.0)
-            let ground = c.box(style=search_field_ground.then(@ui.style(w=Fixed(now))), fn() {  })
+            let ground = c.box(style=search_field_ground.then(@ui.style(w=Fixed(now), h=Fixed(band.band_h))), fn() {  })
             c.look(ground, { ..@ui.still_look, dy })
           })
           |> ignore
           // what it holds laid out where it rests from the first, over its ground on its way there: its words said
           // the way that fits there (search_field_shorter) all the way up, not changed on the way
           c.layer(fn() {
-            let f = c.box(style=search_field_in, fn() {
-              @sf.icon(c, "search", size=17.0, color=t.p.muted) |> ignore
+            let f = c.box(style=search_field_in.then(search_field_room(band)), fn() {
+              @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
               c.box(style=search_grow, fn() {
                 let res = c.editor(
                   "search-field",
                   placeholder=@sf.t("android-chat.search.field"),
                   shorter=search_field_shorter(),
-                  font_size=16.0,
+                  font_size=size,
+                  line~,
                   max_lines=1,
                   // the keyboard's search key (Search.kt: ImeAction.Search), giving the words up as a keyboard's
                   // Enter does: the line chosen opened where one is shown chosen (finder_enter)
