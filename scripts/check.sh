@@ -298,7 +298,9 @@ if part ts; then
   if touches "$ts_root" || touches "$ts_web" || [ $core_tests = 1 ]; then wasm_pkg; fi
   # The stable channel's release notes (docs/changelog.md): each one read as CI will.
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
-  if touches "$ts_root"; then step "typecheck: scripts and tests" after root pnpm exec tsgo -p tsconfig.json; fi
+  # Root tests also import the core's Markdown reader. Wait for its packages on a cold checkout, as the web does.
+  if touches "$ts_root" || [ $core_tests = 1 ]; then prep core deps client/core-ts; fi
+  if touches "$ts_root"; then step "typecheck: scripts and tests" after root after core pnpm exec tsgo -p tsconfig.json; fi
   if touches "$ts_web"; then
     # The web reads the core's own files (its Markdown, client/core-ts/src/markdown.ts), which read the core's packages.
     prep core deps client/core-ts
@@ -350,7 +352,7 @@ if [ $full = 1 ]; then
   # and a station's screen driven by a mouse, keys and fingers (test/browser/screen-input.mjs, there too):
   # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
   # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|drive-drop|drive-columns-wheel|side-panel-width|chat-pagination|screen-input)\.mjs$'; }; then
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|drive-drop|drive-columns-wheel|side-panel-width|chat-pagination|screen-input|share-markdown)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep root deps .
       wasm_pkg
@@ -363,13 +365,19 @@ if [ $full = 1 ]; then
         motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs; }; }" ;;
         *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs" ;;
       esac
+      case "${STILLFAIL_BROWSER:-}" in
+        ""|motion*)
+          if [ "${share%/*}" = "${share#*/}" ]; then
+            step "web: share Markdown and file previews" after root after core sh -c "$chrome; node test/browser/share-markdown.mjs"
+          fi ;;
+      esac
     else
       later "web: stories measured, the message list's motion watched (no Chrome here)"
     fi
   fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
-    if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi
+    if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
   fi
   # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
