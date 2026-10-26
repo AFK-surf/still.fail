@@ -41,7 +41,7 @@ pub fn nav_row(
   let look = l.side_row.then(@ui.style(align~))
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
-    c.box(style=look.then(finger_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+    c.box(style=look.then(row_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
   })
   c.clicked(id)
 }

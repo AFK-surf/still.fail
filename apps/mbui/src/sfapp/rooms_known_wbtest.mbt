@@ -18,8 +18,9 @@
 /// meet each the part nearer it. A room overlapping another's is no fault of its own any more, only what is left
 /// of each once they are parted: the 7248 apart, two targets each, counted as room where what is left is under
 /// 44 (rows 32 high one after another, 32 keys 4 apart, a message's name, time and words), 9098 room; apart now
-/// what is drawn over each other, none.)
-let rooms_known : Map[String, Int] = { "room": 9098, "apart": 0, "hover": 28 }
+/// what is drawn over each other, none. Then every row one least height, 44 with keyboard and mouse and 48 with touch,
+/// a sidebar's rows no more 32 high one after another: 3443 room fewer.)
+let rooms_known : Map[String, Int] = { "room": 5655, "apart": 0, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

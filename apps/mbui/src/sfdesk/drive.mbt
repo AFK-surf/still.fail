@@ -956,7 +956,7 @@ pub fn drive_row(
   }
   c.box(style=entry_room, fn() {
     let box = c.box(style=if busy { ground.then(entry_busy_look) } else { ground }, id~, fn() {
-      c.box(style=inner.then(@sf.finger_least_h()), fn() {
+      c.box(style=inner.then(@sf.row_least_h()), fn() {
         if tree {
           // (in by its depth: 18 a step, past the 6 every tree row is in by)
           c.box(style=@ui.style(w=Fixed(indent)), fn() {  }) |> ignore
@@ -1029,7 +1029,7 @@ pub fn drive_row(
         if held_more {
           return
         }
-        let row_h = dmax(@sf.finger_row_h(), if compact { items.least - compact_less } else { items.least })
+        let row_h = dmax(@sf.row_least(), if compact { items.least - compact_less } else { items.least })
         c.box(style=more_place_at(row_h, if compact { more_compact } else { more_size }), fn() {
           let shown = over || open
           if busy && !stacked {

@@ -1003,37 +1003,19 @@ let wide_control_h : Double = 36.0
 let narrow_control_h : Double = 44.0
 
 ///|
-/// What a row takes at least, by the screen: on a touch device 44 high, what it shows in its middle (a row is as wide as
-/// its list, its height the one a finger aims at); with keyboard and mouse nothing more. A button is drawn its own size
-/// on either: a finger reaches one smaller than its tip from round it (mbui's press_reach, 44), what
-/// shows and what a finger takes not the same (the user, 2026-10-26: 视觉跟触控区域可以不一样).
-pub fn finger_least_h() -> @ui.Style {
-  if theme().touch {
-    finger_high
-  } else {
-    finger_none
-  }
+/// What a row takes at least: one least row height for the native input (the theme's `items.least`: 44 with keyboard
+/// and mouse, 48 with touch), narrow rows and wide, a sidebar's and a list's alike, what it shows in its middle (rule 2:
+/// what always shows is pressed in 44×44 at least; a row's room is its own height, its neighbours right over and under
+/// it). A button is drawn its own size: a press reaches one drawn smaller from round it (mbui's press_reach).
+pub fn row_least_h() -> @ui.Style {
+  @ui.style(min_h=Fixed(theme().items.least))
 }
 
 ///|
-/// The height finger_least_h holds a row to at least (44 on a touch device; none with keyboard and mouse).
-pub fn finger_row_h() -> Double {
-  if theme().touch {
-    narrow_control_h
-  } else {
-    0.0
-  }
+/// The height row_least_h holds a row to at least.
+pub fn row_least() -> Double {
+  theme().items.least
 }
-
-
-
-///|
-// kept across runs: a value (no field of it changes)
-let finger_high : @ui.Style = @ui.style(min_h=Fixed(narrow_control_h))
-
-///|
-// kept across runs: a value (no field of it changes)
-let finger_none : @ui.Style = @ui.css("")
 
 ///|
 /// The phone's: a size up, as Android's.

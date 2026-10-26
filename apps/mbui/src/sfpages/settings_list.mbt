@@ -334,7 +334,7 @@ pub fn settings_side_rows(
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
-        let look = t.chat_list.side_row.then(settings_side_across).then(@sf.finger_least_h())
+        let look = t.chat_list.side_row.then(settings_side_across).then(@sf.row_least_h())
         c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
           settings_lead(c, core, here, row, true)
           c.box(style=settings_side_words, keep=true, fn() {
