@@ -895,7 +895,9 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// it, up while that is open), or an arrow out where it goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
 /// where not `goes` (a value said); `below` under its note (its allowance's chips). Its note, what is wrong and what is
 /// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
-/// its title (row_top). True on the frame it is pressed.
+/// its title (row_top). One that `acts` (does something at once where it is: 检查未决策的 chat) says so at either width:
+/// its title in the link's ink, no chevron; one that `adds` one more to the list it ends (添加: an option, a station) is
+/// one that acts, a ＋ before its title. True on the frame it is pressed.
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -916,8 +918,19 @@ pub fn link_row(
   tail? : () -> Unit,
   below? : () -> Unit,
   goes? : Bool = true,
+  acts? : Bool = false,
+  adds? : Bool = false,
 ) -> Bool {
   let th = theme()
+  // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
+  let acts = acts || adds
+  let ink = if acts { Some(link_ink()) } else { None }
+  let lead = if adds {
+    Some(fn() { icon(c, "plus", size=if look() == Narrow { pg_chevron } else { desk_chevron }, color=link_ink()) |> ignore })
+  } else {
+    lead
+  }
+  let chevron = chevron && !acts
   // (what is wrong in red, a line of its own under its note)
   let narrow_note = fn() {
     if note != "" {
@@ -985,7 +998,7 @@ pub fn link_row(
           }
         }
         if !under {
-          c.text(title, style=titled) |> ignore
+          c.text(title, style=titled, color?=ink) |> ignore
           if value != "" {
             said()
           }
@@ -994,7 +1007,7 @@ pub fn link_row(
           c.box(style=pg_row_words, fn() {
             c.box(style=row_first_line, fn() {
               if value == "" {
-                c.text(title, style=titled) |> ignore
+                c.text(title, style=titled, color?=ink) |> ignore
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
                 // room)
@@ -1035,7 +1048,7 @@ pub fn link_row(
             (_, true) => desk_list_title.then(bad)
             (true, false) => desk_list_title.then(row_strong)
             (false, false) => desk_list_title
-          })
+          }, color?=ink)
           |> ignore
         }
         // what it says, what follows it, its chevron
@@ -2363,9 +2376,13 @@ let head_mark_narrow_side : Double = 40.0
 
 ///|
 /// What stands in a wide list that is not one of its rows: as far in as its rows' words (list_words_room in its
-/// card's list_pad), 10 over and under.
+/// card's list_pad), 10 over and under: a row of it as its rows are, as high as one at least (desk_row_least), what it
+/// holds in its middle, its corner the card's less the ladder's step (what stands in it, a switch at its end, is in
+/// its corners, not the card's).
 // kept across runs: a value (no field of it changes)
-let wide_in_list : @ui.Style = @ui.css("w=Full py=S2_5").then(@ui.style(px=list_words_room))
+let wide_in_list : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(
+  @ui.style(px=list_words_room, min_h=Fixed(desk_row_least), radius=InnerOr(Xl2)),
+)
 
 ///|
 /// What stands on the page as a section of its own without a title (a fold's row): wide, as far from what follows as a

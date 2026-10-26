@@ -188,6 +188,9 @@ pub fn dmin(a : Double, b : Double) -> Double {
 ///|
 using @settings {
   binding_of,
+  decision_form,
+  policy_forms,
+  profile_forms,
   connects_mine,
   first_text,
   type VaultEditing,
