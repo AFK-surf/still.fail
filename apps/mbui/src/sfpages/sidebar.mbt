@@ -567,7 +567,7 @@ pub fn filter_menu_open() -> Bool {
 /// The filter's menu (components.tsx MineFilter's DropdownMenu, mobile/Home.tsx FilterButton), opened by `from`: 全部会话,
 /// 我参与的, 监控中, 奏, then 已归档, a menu of choices, the list `shown` (all, mine, watching, decisions, archive) checked. Chosen, `go` is
 /// given which: where it goes is the frame's (a filter its list, 奏 and 已归档 their pages or lists).
-pub fn filter_menu(from : @sf.Anchor, shown : String, go : (String) -> Unit) -> Unit {
+pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> Unit {
   let item = fn(key : String, words : String) -> @sf.MenuItem? {
     Some(@sf.menu_item_of(@sf.t(words), chosen=shown == key, fn() { go(key) }))
   }

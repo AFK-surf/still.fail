@@ -28,8 +28,8 @@ fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json]
 
 ///|
 /// Where something is added: one of the stations online picked (openPickStation), the library's pick opened `from`
-/// what was pressed (a sheet with touch short of Large, else beside it), what it is for its title.
-fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.Anchor) -> Unit {
+/// what was pressed (a sheet on Small, else beside it), what it is for its title.
+fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.Beside) -> Unit {
   // (each by its mark, as the sidebar and a chat's bar have it)
   let choices = stations.map(fn(s) {
     let sv = Some(s)

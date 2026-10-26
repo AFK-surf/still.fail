@@ -36,15 +36,14 @@ pub fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame
     None => (vault_all(c, core, ws, v), true)
   }
   let add = fn() {
-    match look {
-      Wide =>
-        if @sf.button(c, @sf.t("web-pages.vault.add"), key="vault-add", tone=Ghost, icon="plus") {
-          vault_add_dialog(core, here)
-        }
-      Narrow =>
-        if @sf.icon_button(c, "plus", key="vault-add", round=true, label=@sf.t("web-pages.vault.add")) {
-          vault_add_dialog(core, here)
-        }
+    let pressed = match look {
+      Wide => @sf.button(c, @sf.t("web-pages.vault.add"), key="vault-add", tone=Ghost, icon="plus")
+      Narrow => @sf.icon_button(c, "plus", key="vault-add", round=true, label=@sf.t("web-pages.vault.add"))
+    }
+    // (or a fixture's mode's, from it all the same)
+    if pressed || fx_vault_add_up.val {
+      fx_vault_add_up.val = false
+      vault_add(core, here, from=Of(c.id("vault-add")))
     }
   }
   @sf.page(c, on_back=core.pop, frame~, "vault-items", @sf.t("web-pages.vault.all"), actions?=if usable { Some(add) } else { None }, body)

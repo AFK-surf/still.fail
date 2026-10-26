@@ -1070,7 +1070,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     Some("connects") => {
       let core = settings_core(src, ws)
       match @sfpages.connects_add(src, core, @settings.here_of(core, ws.id, ws.name)) {
-        Some(run) => Some(fn(_) { run() })
+        Some(run) => Some(run)
         None => None
       }
     }

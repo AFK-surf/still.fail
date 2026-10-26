@@ -332,7 +332,7 @@ fn place_page(
   body : () -> Unit,
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
-  primary? : (String, (@sf.Anchor) -> Unit),
+  primary? : (String, (@sf.Beside) -> Unit),
   about? : String = "",
 ) -> Unit {
   c.box(style=page_fill, fn() {

@@ -1,55 +1,43 @@
 // The desktop's 密钥's dialogs (web/src/VaultAdd.tsx AddKinds, cloud/Vault.tsx Editor and Recover), the library's
-// (open_dialog): what 添加 offers, an item written (a new one, or one opened, changed or deleted), the recovery words
+// (open_dialog; 添加's a pick): what 添加 offers, an item written (a new one, or one opened, changed or deleted), the recovery words
 // typed in.
 
 ///|
-/// 添加 (AddKinds): a subscription or a model's key (a profile: the Profile list), or a secret of a kind (its editor,
-/// the kind fixed); not locked, that such a secret is kept in the clear.
-pub fn vault_add_dialog(core : Core, here : Here) -> Unit {
+/// 添加 (AddKinds): which kind is added, picked beside what opened it (`from`: the page's 添加; a sheet on Small): a
+/// subscription or a model's key (a profile: the Profile list), or a secret of a kind (its editor, the kind fixed, which
+/// says it is kept in the clear where the library is not locked); each its mark, its name and what it is.
+pub fn vault_add(core : Core, here : Here, from~ : @sf.Beside) -> Unit {
   let ws = here.workspace
-  open_dialog(@sf.t("web-pages.vault.addKind.title"), fn(c, shut) {
-    let t = @sf.theme()
-    let v = (core.topic)("vaults", { "workspace": str(ws) }).value
-    let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
-    let plain = flag(v, "plain")
-    let kinds = ["profile"]
-    if mine is Some(_) {
-      kinds.append(vault_kinds)
-    }
-    c.box(style=vd_kinds, fn() {
-      for k in kinds {
-        let id = c.id("vault-add/" + k)
-        if hit(c, id) {
-          shut()
-          if k == "profile" {
-            (core.push)(Profiles(""))
-          } else {
-            match mine {
-              Some(m) => vault_editor_dialog(core, ws, text(Some(m), "id"), None, kind=k, plain~, kinds=false)
-              None => ()
-            }
-          }
-        }
-        c.box(style=vd_kind_row, id~, fn() {
-          c.box(style=vt_row_icon, fn() {
-            @sf.icon(c, if k == "profile" { "quota" } else { @settings.kind_icon(k) }, size=vt_glyph, color=t.p.muted) |> ignore
-          })
-          |> ignore
-          c.box(style=desk_list_text, fn() {
-            c.text(@sf.t("web-pages.vault.addKind." + k), style=desk_list_title) |> ignore
-            c.text(@sf.t("web-pages.vault.addKind." + k + "Detail"), style=desk_note) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
+  let plain = flag(v, "plain")
+  let kinds = ["profile"]
+  if mine is Some(_) {
+    kinds.append(vault_kinds)
+  }
+  let choices = kinds.map(fn(k) {
+    @sf.choice(
+      k,
+      @sf.t("web-pages.vault.addKind." + k),
+      note=@sf.t("web-pages.vault.addKind." + k + "Detail"),
+      icon=if k == "profile" { "quota" } else { @settings.kind_icon(k) },
+    )
+  })
+  @sf.pick("", choices, "", fn(k) {
+    if k == "profile" {
+      (core.push)(Profiles(""))
+    } else {
+      match mine {
+        Some(m) => vault_editor_dialog(core, ws, text(Some(m), "id"), None, kind=k, plain~, kinds=false)
+        None => ()
       }
-    })
-    |> ignore
-    if plain && mine is Some(_) {
-      c.text(@sf.t("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
     }
-  }, fn(_, _) {  })
+  }, from~, along=End)
 }
+
+///|
+/// A fixture's mode's 添加 put up from the page's own (MBUI_FIXTURE=settings-vault-add), as it is drawn.
+pub let fx_vault_add_up : Ref[Bool] = Ref(false)
 
 ///|
 /// An item written (Editor): a new one (`editing` None; its kind picked unless `kinds` is false and `kind` says it), or
@@ -315,14 +303,6 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   )
 }
 
-///|
-/// (AddKinds: a card of rows, each its mark, its name and what it is)
-// kept across runs: a value (no field of it changes)
-let vd_kinds : @ui.Style = @sf.desk_list
-
-///|
-// kept across runs: a value (no field of it changes)
-let vd_kind_row : @ui.Style = desk_list_link
 
 ///|
 /// (agentBox: the switch and what it opens, 10 apart, 4 over them)
