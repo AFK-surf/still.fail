@@ -6,8 +6,8 @@
 # app's links (started with one, and handed one by itself started again: once for its person, on a session bus of the
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
-# the app; and a stream's JPEG frames, each shown to its end (streamdemo). On GitHub's own Ubuntu (a public
-# repository's: free). When the Linux host changes.
+# the app; a stream's JPEG frames, each shown to its end (streamdemo); and a PDF's pages read and drawn (poppler's). On
+# GitHub's own Ubuntu (a public repository's: free). When the Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -16,6 +16,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
       - "apps/mbui/mbui/src/streamdemo/**"
+      - "apps/mbui/mbui/src/kitdemo/gallery/pdfcheck.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
@@ -53,14 +54,15 @@ jobs:
       - uses: actions/checkout@v4
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
       # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
-      # session bus of the links' run; WebKitGTK 6.0, which the host loads for its web views
+      # session bus of the links' run; WebKitGTK 6.0 and poppler's GLib face, which the host loads for its web views and
+      # its PDFs
       - uses: ./.github/actions/apt
         with:
           name: mbui-host-linux
           packages: >-
             libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
             libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
-            fonts-dejavu-core dbus-daemon libwebkitgtk-6.0-4
+            fonts-dejavu-core dbus-daemon libwebkitgtk-6.0-4 libpoppler-glib8t64
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -87,6 +89,9 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, takes an event stream as it is sent"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux site
+      - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         if: success() || failure()
         run: |

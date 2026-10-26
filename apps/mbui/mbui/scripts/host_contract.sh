@@ -34,6 +34,9 @@
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
+#   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
+#        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
+#        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
 #        schemes, said to it; started again with one while it runs, handed over to the one running (once for its
 #        person: src/host/linux_life.h), which says it
@@ -580,6 +583,15 @@ INSTALL
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  pdf)
+    # (each page at most 400 pixels on its longer side: red on the side its left half went to, blue on the other's)
+    run "MBUI_PDFCHECK=$(base64 < test/host/pdfcheck.pdf | tr -d '\n\r')" $O/pdf.log || true
+    want="PDFCHECK pages 2 200x100 100x200|PDFCHECK page 0 400x200 ff0000 0000ff|PDFCHECK page 1 200x400 ff0000 0000ff"
+    have=$(grep -a "PDFCHECK" $O/pdf.log | sed 's/.*PDFCHECK/PDFCHECK/' | tr -d '\r' | paste -sd'|' -)
+    if [ "$have" != "$want" ]; then
+      echo "pdf contract ($H): the host said \"$have\", not \"$want\""; tail -20 $O/pdf.log; exit 1
+    fi
+    echo "pdf contract ($H): $have" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
@@ -668,5 +680,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf; ios: free, done)" >&2; exit 1 ;;
 esac

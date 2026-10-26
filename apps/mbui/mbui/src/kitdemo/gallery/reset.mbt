@@ -20,6 +20,9 @@ fn reset() -> Unit {
   link_check_ready.val = false
   notice_check_shown.val = false
   notice_check_opened.val = ""
+  pdf_check_doc.val = 0
+  pdf_check_images.val = []
+  pdf_check_said.val = 0
   cb.val = On
   size.val = "m"
   bold.val = true

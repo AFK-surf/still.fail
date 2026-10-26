@@ -1191,25 +1191,6 @@ int32_t mb_host_pick_photo(moonbit_string_t src) {
   return 0;
 }
 
-// PDFs (host_native.mbt): not on Linux yet; no PDF is drawn (pages -1), the app says it cannot show it.
-int32_t mb_host_pdf_open(moonbit_bytes_t data) {
-  (void)data;
-  return 0;
-}
-int32_t mb_host_pdf_pages(int32_t doc) {
-  (void)doc;
-  return -1;
-}
-void mb_host_pdf_page_size(int32_t doc, int32_t page, double *out) {
-  (void)doc, (void)page;
-  out[0] = out[1] = 0;
-}
-int32_t mb_host_pdf_page_load(int32_t doc, int32_t page, int32_t max_px) {
-  (void)doc, (void)page, (void)max_px;
-  return 0;
-}
-void mb_host_pdf_close(int32_t doc) { (void)doc; }
-
 // Marks drawn onto an image (marks.mbt): none on this host yet.
 int32_t mb_host_marks_start(moonbit_bytes_t image, moonbit_string_t marks) {
   (void)image, (void)marks;
