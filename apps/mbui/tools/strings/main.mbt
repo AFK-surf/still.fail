@@ -1,19 +1,17 @@
-// The app's words in English, for mbui's still.fail: every key of a package's tables of words (its `let …: Map[String,
-// String] = {…}`, in Chinese: strings.mbt and the others) with what client/i18n/catalog/en says for it, written as
-// that package's strings_en.mbt, which its `tr` reads when the language is English (@sf.language). A count's words
-// (`{"one": …, "other": …}`) are the key's (other) and the key's `.one`, as Android's I18n.kt chooses them by `n`.
+// The app's words, for mbui's still.fail: the keys a package says (its words.txt, one a line) with what
+// client/i18n/catalog says for each, in Chinese and in English, written as that package's strings_zh.mbt and
+// strings_en.mbt, which its `tr` reads (in English when @sf.language is "en"). The words are the catalog's, written
+// once there: a package keeps only which of them it says. A count's words (`{"one": …, "other": …}`) are the key's
+// (other) and the key's `.one`, as Android's I18n.kt chooses them by `n`.
 //
-//   scripts/strings <repository>          writes src/sfapp/strings_en.mbt and src/sfapp/settings/strings_en.mbt
+//   scripts/strings <repository>          writes src/sfbase/strings_{zh,en}.mbt and src/sfapp/settings/strings_{zh,en}.mbt
 //
-// A key the English catalog lacks fails it, named: its words go in the catalog (both languages), not here.
+// A key a catalog lacks fails it, named: its words go in the catalog (both languages), not here.
 
 ///|
-/// The packages with tables of words, from the repository, and where else what each says is: sfbase's words (a service's
-/// page, a visualization's: its tables named `…_zh`) are said through the app's `fill`, so sfapp's English has them.
-let packages : Array[(String, Array[String])] = [
-  ("apps/mbui/src/sfapp", ["apps/mbui/src/sfbase"]),
-  ("apps/mbui/src/sfapp/settings", []),
-]
+/// The packages that say words, from the repository: the app's (sfbase's, said through its `fill`) and the settings'
+/// own.
+let packages : Array[String] = ["apps/mbui/src/sfbase", "apps/mbui/src/sfapp/settings"]
 
 ///|
 fn fail(why : String) -> Unit {
@@ -22,46 +20,20 @@ fn fail(why : String) -> Unit {
 }
 
 ///|
-/// The keys of the tables of words in `dir`'s files (not its tests, not the English it writes), in the order they come.
-fn table_keys(dir : String, zh_only? : Bool = false) -> Array[String] {
-  let names = @sys.list_dir(dir).filter(fn(n) {
-    n.has_suffix(".mbt") && !n.has_suffix("_test.mbt") && !n.has_suffix("_wbtest.mbt") && n != "strings_en.mbt"
-  })
-  names.sort()
+/// The keys `dir` says (its words.txt: one a line, blank lines and `#` lines not keys), in their order.
+fn said_keys(dir : String) -> Array[String] {
   let keys : Array[String] = []
   let seen : Map[String, Bool] = {}
-  for name in names {
-    let text = @sys.read_text(@sys.join(dir, name)).unwrap_or("")
-    let mut table = false
-    for raw in text.split("\n") {
-      let line = raw.to_string()
-      if !table {
-        table = (line.has_prefix("let ") || line.has_prefix("pub let ")) &&
-          line.contains(": Map[String, String] = {") &&
-          (!zh_only || line.contains("_zh :"))
-        continue
+  match @sys.read_text(@sys.join(dir, "words.txt")) {
+    Some(text) =>
+      for raw in text.split("\n") {
+        let key = raw.trim(chars=" \t\r").to_string()
+        if key != "" && !key.has_prefix("#") && !seen.contains(key) {
+          seen[key] = true
+          keys.push(key)
+        }
       }
-      if line.has_prefix("}") {
-        table = false
-        continue
-      }
-      let t = line.trim(chars=" ").to_string()
-      if !t.has_prefix("\"") {
-        continue
-      }
-      // the key: up to its closing quote (keys have no escapes)
-      let cs = t.to_array()
-      let mut i = 1
-      while i < cs.length() && cs[i] != '"' {
-        i += 1
-      }
-      let key = String::from_array(cs[1:i].to_array())
-      // (a key is a catalog's: part.name…; the others are not words)
-      if key.contains(".") && !seen.contains(key) {
-        seen[key] = true
-        keys.push(key)
-      }
-    }
+    None => fail("\{dir}/words.txt not there")
   }
   keys
 }
@@ -94,6 +66,75 @@ fn text_of(j : Json?) -> String? {
 }
 
 ///|
+/// A language's catalog (client/i18n/catalog/<lang>), its parts as one.
+fn catalog_of(repo : String, lang : String) -> Map[String, Json] {
+  let dir = @sys.join(repo, "client/i18n/catalog/" + lang)
+  let parts = @sys.list_dir(dir).filter(fn(n) { n.has_suffix(".json") })
+  parts.sort()
+  if parts.is_empty() {
+    fail("no catalog in \{dir}")
+  }
+  let all : Map[String, Json] = {}
+  for part in parts {
+    let text = @sys.read_text(@sys.join(dir, part)).unwrap_or("")
+    match (try Some(@json.parse(text)) catch { _ => None }) {
+      Some(Object(m)) => for k, v in m { all[k] = v }
+      _ => fail("\{lang}/\{part} is not a JSON object")
+    }
+  }
+  all
+}
+
+///|
+/// The words of `keys` in a catalog: each key's, a count's other and its `.one`; the keys it lacks into `missing`.
+fn words_of(cat : Map[String, Json], keys : Array[String], missing : Array[String]) -> Array[(String, String)] {
+  let words : Array[(String, String)] = []
+  let put : Map[String, Bool] = {}
+  let add = fn(k : String, v : String) {
+    if !put.contains(k) {
+      put[k] = true
+      words.push((k, v))
+    }
+  }
+  for key in keys {
+    match cat.get(key) {
+      Some(String(s)) => add(key, s)
+      Some(Object(o)) =>
+        match (text_of(o.get("other")), text_of(o.get("one"))) {
+          (Some(other), one) => {
+            add(key, other)
+            if one is Some(s) {
+              add(key + ".one", s)
+            }
+          }
+          _ => missing.push(key)
+        }
+      _ => missing.push(key)
+    }
+  }
+  words
+}
+
+///|
+/// The table of `words` in `lang`, a package's strings_<lang>.mbt.
+fn table_file(lang : String, words : Array[(String, String)]) -> String {
+  let out = StringBuilder::new()
+  out.write_string(
+    "// Generated by scripts/strings from client/i18n/catalog/\{lang} (tools/strings: the words of this package's\n",
+  )
+  out.write_string("// words.txt): do not edit.\n\n///|\n")
+  let which = if lang == "en" { "English" } else { "Chinese" }
+  out.write_string("/// This package's words in \{which} (`.one`: a count's when it is one), as `tr` says them.\n")
+  out.write_string("// kept across runs: a table, never written\n")
+  out.write_string("let \{lang} : Map[String, String] = {\n")
+  for w in words {
+    out.write_string("  " + quoted(w.0) + ": " + quoted(w.1) + ",\n")
+  }
+  out.write_string("}\n")
+  out.to_string()
+}
+
+///|
 fn main {
   let argv = @env.args()
   if argv.length() < 2 {
@@ -102,89 +143,24 @@ fn main {
     return
   }
   let repo = argv[1]
-  let catalog = @sys.join(repo, "client/i18n/catalog/en")
-  let parts = @sys.list_dir(catalog).filter(fn(n) { n.has_suffix(".json") })
-  parts.sort()
-  if parts.is_empty() {
-    fail("no catalog in \{catalog}")
-    return
-  }
-  let en : Map[String, Json] = {}
-  for part in parts {
-    let text = @sys.read_text(@sys.join(catalog, part)).unwrap_or("")
-    match (try Some(@json.parse(text)) catch { _ => None }) {
-      Some(Object(m)) => for k, v in m { en[k] = v }
-      _ => fail("\{part} is not a JSON object")
-    }
-  }
+  let langs = [("zh", catalog_of(repo, "zh")), ("en", catalog_of(repo, "en"))]
   let missing : Array[String] = []
-  for p in packages {
-    let (pkg, also) = p
+  for pkg in packages {
     let dir = @sys.join(repo, pkg)
-    let words : Array[(String, String)] = []
-    let put : Map[String, Bool] = {}
-    let add = fn(k : String, v : String) {
-      if !put.contains(k) {
-        put[k] = true
-        words.push((k, v))
+    let keys = said_keys(dir)
+    for l in langs {
+      let (lang, cat) = l
+      let lacking : Array[String] = []
+      let words = words_of(cat, keys, lacking)
+      for k in lacking {
+        missing.push("\{lang}: \{pkg}: \{k}")
       }
-    }
-    let keys = table_keys(dir)
-    for more in also {
-      keys.append(table_keys(@sys.join(repo, more), zh_only=true))
-    }
-    for key in keys {
-      match en.get(key) {
-        Some(String(s)) => add(key, s)
-        Some(Object(o)) =>
-          match (text_of(o.get("other")), text_of(o.get("one"))) {
-            (Some(other), one) => {
-              add(key, other)
-              if one is Some(s) {
-                add(key + ".one", s)
-              }
-            }
-            _ => missing.push(pkg + ": " + key)
-          }
-        _ => {
-          // a count's one or other by its own key (drive's trashed.one)
-          let (base, form) = if key.has_suffix(".one") {
-            (key.view(end_offset=key.length() - 4).to_string(), "one")
-          } else if key.has_suffix(".other") {
-            (key.view(end_offset=key.length() - 6).to_string(), "other")
-          } else {
-            ("", "")
-          }
-          let said = match en.get(base) {
-            Some(Object(o)) => text_of(o.get(form))
-            _ => None
-          }
-          match said {
-            Some(s) => add(key, s)
-            None => missing.push(pkg + ": " + key)
-          }
-        }
+      if !@sys.write_text(@sys.join(dir, "strings_\{lang}.mbt"), table_file(lang, words)) {
+        fail("\{pkg}/strings_\{lang}.mbt not written")
       }
-    }
-    let out = StringBuilder::new()
-    out.write_string(
-      "// Generated by scripts/strings from client/i18n/catalog/en (tools/strings: the words of this package's tables, in\n",
-    )
-    out.write_string("// English): do not edit.\n\n///|\n")
-    out.write_string(
-      "/// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is \"en\".\n",
-    )
-    out.write_string("// kept across runs: a table, never written\n")
-    out.write_string("let en : Map[String, String] = {\n")
-    for w in words {
-      out.write_string("  " + quoted(w.0) + ": " + quoted(w.1) + ",\n")
-    }
-    out.write_string("}\n")
-    if !@sys.write_text(@sys.join(dir, "strings_en.mbt"), out.to_string()) {
-      fail("\{pkg}/strings_en.mbt not written")
     }
   }
   if !missing.is_empty() {
-    fail("the English catalog (client/i18n/catalog/en) has no words for:\n  " + missing.join("\n  "))
+    fail("the catalog (client/i18n/catalog) has no words for:\n  " + missing.join("\n  "))
   }
 }

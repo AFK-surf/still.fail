@@ -16,85 +16,10 @@
 // what the app draws (a picture, a document); over a native view (a video, a page) a solid tint, as it cannot be
 // blurred.
 
-///|
-/// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
-// kept across runs: a table, never written
-pub let pv_zh : Map[String, String] = {
-  // what a marking's buttons say to a screen reader (ImageMarks.kt)
-  "android-chat.marks.downloadMarked": "下载标注后的图片",
-  "android-chat.marks.undo": "撤销",
-  "android-chat.marks.redo": "重做",
-  "android-chat.marks.color": "颜色",
-  "android-chat.marks.pin": "标注 {n}",
-  "android-chat.marks.tool.select": "选择",
-  "android-chat.marks.tool.rect": "框",
-  "android-chat.marks.tool.arrow": "箭头",
-  "android-chat.marks.tool.pen": "画笔",
-  "android-chat.marks.tool.text": "文字",
-  // a note on a mark (Notes.kt NoteBox, Card)
-  "android-chat.annotate.write": "添加批注（可选）",
-  "android-chat.annotate.quoteOnly": "只引用",
-  "android-chat.annotate.remove": "删除批注",
-  "android-chat.annotate.done": "完成",
-  "android-chat.file.cantPreview": "此文件类型不支持预览",
-  "android-chat.file.cut": "文件较大，仅显示前 {size}，完整内容请下载",
-  "android-chat.file.cut.rows": "仅显示前 {n} 行，完整内容请下载",
-  "android-chat.file.download": "下载",
-  "android-chat.file.install": "安装",
-  "android-chat.file.installFailed": "无法安装：{error}",
-  "android-chat.file.allowInstall": "允许 {app} 安装应用后，再次点击安装",
-  "android-chat.file.image.failed": "此图片无法在此显示",
-  "android-chat.file.loadFailed": "无法读取：{error}",
-  "android-chat.file.loading.size": "正在读取 {size}",
-  "android-chat.file.pdf.failed": "无法打开此 PDF：{error}",
-  "android-chat.file.saveFailed": "下载失败",
-  "android-chat.file.saved": "已保存到「下载」",
-  "android-chat.file.tab.preview": "预览",
-  "android-chat.file.tab.source": "源码",
-  "android-chat.file.tooBigToShow": "文件过大，无法在此显示，下载后可打开",
-  "android-chat.file.zoomIn": "放大",
-  "android-chat.file.zoomOut": "缩小",
-  "android-chat.video.failed": "无法播放此视频",
-  "android-chat.video.frames": "{at} / {n} 帧",
-  "android-chat.video.next": "下一帧",
-  "android-chat.video.pause": "暂停",
-  "android-chat.video.play": "播放",
-  "android-chat.video.prev": "上一帧",
-  "android-chat.file.mark": "标注图片",
-  "android-chat.file.marked.name": "{name}-标注-{stamp}.png",
-  "android-chat.file.drawFailed": "无法生成图片",
-  "android-chat.marks.arrow.where": "箭头 · 从 ({ax}, {ay}) 指向 ({bx}, {by})",
-  "android-chat.marks.box.where": "框 · 左上角 ({x}, {y})，{w}×{h}",
-  "android-chat.marks.making": "正在生成",
-  "android-chat.marks.note.arrow": "箭头",
-  "android-chat.marks.note.box": "框",
-  "android-chat.marks.quote.on": "在图片 {made}（{width}×{height}，原图 {original}）上，编号 {n}",
-  "android-chat.marks.quote.title": "图片 {original} 标注 {n}",
-  "android-chat.marks.write": "输入文字",
-  "android-chat.preview.put": "添加到对话",
-  "android-chat.preview.put.done": "已添加到对话，返回对话发送",
-  "common.cancel": "取消",
-  "common.delete": "删除",
-  "common.done": "完成",
-  "android-chat.video.reading": "正在读取帧",
-  "android-chat.video.saveFrame": "保存此帧",
-  "android-chat.video.saveFrame.failed": "无法保存此帧",
-  "android-chat.video.landscape": "横屏",
-  "android-chat.video.landscape.exit": "退出横屏",
-  "android-chat.video.playFailed": "播放失败",
-  "common.close": "关闭",
-  "common.reading": "正在读取",
-  "common.opening": "正在打开",
-}
 
 ///|
 pub fn pv(key : String) -> String {
-  // (the app's words first, as its tables have them; else the viewer's own)
-  let w = @sf.t(key)
-  if w != key {
-    return w
-  }
-  pv_zh.get(key).unwrap_or(key)
+  tr(key)
 }
 
 ///|

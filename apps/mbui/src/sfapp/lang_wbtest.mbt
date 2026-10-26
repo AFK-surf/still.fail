@@ -50,30 +50,3 @@ test "English: chosen in the core's prefs (its `lang`), over a phone in Chinese;
   let t = lang_tester("home", "en-US", lang="zh")
   assert_true(t.find("搜索全部内容") is Some(_))
 }
-
-///|
-test "a count's words: one, and more than one" {
-  @sf.set_language(Some("en"))
-  assert_eq(fill("web-pages.drive.trashed", [("n", "1")]), "Moved to the station's Trash")
-  assert_eq(fill("web-pages.drive.trashed", [("n", "3")]), "3 items moved to the station's Trash")
-  @sf.set_language(None)
-}
-
-///|
-/// The keys of the tables of words that are the catalog's (part.name…): the others (viz.mbt's colours) are not words.
-fn catalog_keys(table : Map[String, String]) -> Array[String] {
-  table.keys().filter(fn(k) { k.contains(".") }).collect()
-}
-
-///|
-test "every word of this package's tables has its English (scripts/strings)" {
-  let lacking = []
-  for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, svc_zh, share_zh, up_zh, viz_zh, menu_zh] {
-    for k in catalog_keys(table) {
-      if !en.contains(k) {
-        lacking.push(k)
-      }
-    }
-  }
-  assert_eq(lacking, [])
-}

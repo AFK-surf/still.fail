@@ -84,3 +84,42 @@ pub fn use_core_markdown(src : Source) -> Unit {
     })
   })
 }
+
+///|
+/// A core made up for a page's own test (sfpages' tests, a page drawn alone in a Tester): what each topic says
+/// (`topic`, none by default) and how each call is answered (`call`, an error saying so by default); a stream answered
+/// the same way, once. Nothing else: no pictures, no files, no sign-in, the clock at 0.
+pub fn made_source(
+  topic? : (String, Map[String, Json]) -> Json? = fn(_, _) { None },
+  call? : (String, Json, (Result[Json, Json]) -> Unit) -> Unit = fn(name, _, done) {
+    done(Err({ "code": "unknown_call", "message": Json::string("no " + name + " made up") }))
+  },
+) -> Source {
+  {
+    topic: fn(name, params) {
+      match topic(name, params) {
+        Some(v) => { value: Some(v), error: None, version: 1 }
+        None => { value: None, error: None, version: 0 }
+      }
+    },
+    call,
+    call_bytes: fn(name, params, _, done) { call(name, params, done) },
+    read_bytes: fn(name, _, done) { done(Err({ "code": "unknown_call", "message": Json::string("no " + name) })) },
+    read_going: fn(name, _, _, done) { done(Err({ "code": "unknown_call", "message": Json::string("no " + name) })) },
+    stream: fn(name, params, _, _, done) {
+      call(name, params, done)
+      0
+    },
+    cancel: fn(_) {  },
+    sign_in: fn() {  },
+    signing_in: fn() { false },
+    picture: fn(_, _) { "" },
+    fatal: fn() { None },
+    file: fn(_, _, _) { "" },
+    poster: fn(_, _, _) { "" },
+    images: ChatImages::new(),
+    now: fn() { 0.0 },
+    leave: fn(_, _) {  },
+    read_only: false,
+  }
+}

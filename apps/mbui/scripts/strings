@@ -1,6 +1,7 @@
 #!/bin/bash
-# The app's words in English (tools/strings, in MoonBit: its main.mbt says what), into src/sfapp/strings_en.mbt and
-# src/sfapp/settings/strings_en.mbt:  scripts/strings <repository>
+# The app's words in Chinese and English from client/i18n/catalog (tools/strings, in MoonBit: its main.mbt says what),
+# for the keys each package says (words.txt), into src/sfbase/strings_{zh,en}.mbt and
+# src/sfapp/settings/strings_{zh,en}.mbt:  scripts/strings <repository>
 # Built here only when there is none built from these very sources (by content).
 D=$(cd "$(dirname "$0")" && pwd)
 A=$(cd "$D/.." && pwd)
