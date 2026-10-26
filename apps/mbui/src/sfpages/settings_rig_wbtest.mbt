@@ -83,6 +83,7 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Archive => archive_page(c, src, rig_workspace, frame, core.pop)
     Stations => stations_page(c, src, core, here, rig_workspace, frame)
+    Profiles(only) => profiles_page(c, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)

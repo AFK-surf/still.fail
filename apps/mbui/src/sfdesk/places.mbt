@@ -132,111 +132,21 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The profiles' sidebar (ProfilesNav): 添加 Profile, a section each kind of account, a row an account; then each
 /// station's own logins not made profiles yet.
 fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "profiles")
-  let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
     side_scroll(c, "profiles-nav/" + w.id, fn() {
-      let mut group = ""
-      for i, e in list {
-        let e = Some(e)
-        // (another row under it: the next of its group)
-        let more = i + 1 < list.length() && text(Some(list[i + 1]), "group") == text(e, "group")
-        if text(e, "group") != group {
-          group = text(e, "group")
-          @sf.list_heading(c, text(e, "groupTitle"), Side)
-        }
-        let p = field(e, "profile")
-        let route = profile_route(e)
-        let usable = flag(e, "usable")
-        // how it is where that is not simply fine, as the core says it, in its tone (ProfilesNav.tsx ProfileRow): what
-        // needs a look in colour
-        let trouble = text(field(e, "state"), "text")
-        let tone = text(field(e, "state"), "tone")
-        // where it is and who uses it
-        let used = items(p, "usedBy").length()
-        let facts = [
-          text(e, "where"),
-          if used > 0 {
-            @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())])
-          } else {
-            ""
-          },
-        ].filter(fn(x) { x != "" })
-        let facts = facts.join(" · ")
-        if nav_item(
-            c,
-            "profiles/" + text(e, "key"),
-            picked == Some(route),
-            fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), nav_mark_side) |> ignore },
-            fn() { nav_title(c, text(p, "name"), away=!usable) },
-            lines=fn() {
-              @sf.list_row_line(c, fn() {
-                if trouble != "" {
-                  c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
-                }
-                // what is left of its allowance has the line to itself (a key's balance where its provider says
-                // one); else where it is and who uses it, cut where the row runs out
-                let quota = field(p, "quota")
-                let ok = text(quota, "state") == "ok"
-                if ok && items(quota, "windows").length() > 0 {
-                  @sf.quota_chips(c, quota, small=true, gap=4.0, key="profiles/" + text(e, "key"))
-                } else if ok && text(quota, "creditsText") != "" {
-                  c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
-                } else {
-                  if trouble != "" && facts != "" {
-                    c.text("·", style=nav_meta()) |> ignore
-                  }
-                  c.text(facts, style=nav_meta().then(place_fill)) |> ignore
-                }
-              })
-            },
-            more~,
-          ) {
-          place_pick["profiles"] = route
-          @sfbase.show_chosen()
-        }
-      }
-      // each station's own logins, not profiles yet
-      for s in stations_listed(src, w) {
-        let s = Some(s)
-        if !flag(s, "online") {
-          continue
-        }
-        let station = text(s, "station")
-        let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) {
-          flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked"
-        })
-        if offers.length() == 0 {
-          continue
-        }
-        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
-        for j, l in offers {
-          let l = Some(l)
-          if nav_item(
-              c,
-              "profiles/machine/" + station + "/" + text(l, "runtime"),
-              false,
-              fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },
-              fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
-              lines=fn() {
-                @sf.list_row_line(c, fn() {
-                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta()) |> ignore }) |> ignore
-                  c.text(@sf.t("android-settings.machine.use"), style=nav_meta().then(place_use)) |> ignore
-                })
-              },
-              more=j + 1 < offers.length(),
-            ) {
-            app.nav.push(Setting(Route::NewProfile(station)))
-            @sfbase.show_chosen()
-          }
-        }
-      }
-      ignore(t)
+      // (sfpages' profiles.mbt: the list standing in the side column, the one picked its page beside it)
+      @sfpages.profiles_rows(c, src, w, picked, fn(route) {
+        place_pick["profiles"] = route
+        @sfbase.show_chosen()
+      }, fn(station) {
+        app.nav.push(Setting(Route::NewProfile(station)))
+        @sfbase.show_chosen()
+      })
     })
   })
   |> ignore
@@ -249,42 +159,6 @@ let place_pane : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 ///|
 // kept across runs: a value (no field of it changes)
 let place_side : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
-
-///|
-/// What is wrong, in its tone (ProfilesNav.css.ts trouble): amber, red, or muted (neutral).
-fn trouble_ink(tone : String) -> @ui.TextStyle {
-  match tone {
-    "red" => place_trouble_red
-    "neutral" => place_trouble_neutral
-    _ => place_trouble_amber
-  }
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_trouble_red : @ui.TextStyle = @ui.text_style(color=Danger)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=WarnInk)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_trouble_neutral : @ui.TextStyle = @ui.text_style(color=Muted)
-
-///|
-/// The words that give way first (SidebarList.css.ts fill).
-// kept across runs: a value (no field of it changes)
-let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
-
-///|
-/// 使用此账号 (ProfilesNav MachineLoginRow): the accent's words.
-// kept across runs: a value (no field of it changes)
-let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
 /// Not one profile yet (RuntimeSettings' first): what a profile is, then each station in a row, where one is added (an

@@ -14,8 +14,10 @@ fn quota_trouble(q : Json?) -> String {
 }
 
 ///|
-/// The profiles (ProfilesScreen): the workspace's, or a station's (`only`) and back to it.
-fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
+/// The profiles across a whole page (ProfilesScreen; sfpages' profiles.mbt, the page they are on): the workspace's, a
+/// section a kind of account, or a station's (`only`); then the machine's own logins not used yet, each offered as a
+/// profile.
+pub fn profiles_blocks(c : @ui.Ctx, core : Core, here : Here, only : String) -> Array[() -> Unit] {
   let topic = stations_of(core, here)
   let all = match topic.value {
     Some(Array(a)) => Some(a)
@@ -25,91 +27,80 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
     Some(a) if only != "" => a.iter().find_first(fn(x) { text(Some(x), "station") == only })
     _ => None
   }
-  let back = match one {
-    Some(o) => text(Some(o), "name")
-    None => tr("android-settings.title")
-  }
-  let add = match place_action(core, here, "profiles") {
-    Some(run) => Some(("add-profile", run))
-    None => None
-  }
-  place_page(c, core, tr("android-misc.bar.place.profiles"), back~, primary?=add, fn() {
-    let blocks : Array[() -> Unit] = []
-    let offers = fn(sv : Json?) {
-      if flag(sv, "online") {
-        let station = text(sv, "station")
-        blocks.append(machine_login_offers(c, core, station, field(sv, "overview"), fn(_) { (core.push)(NewProfile(station)) }))
-      }
+  let blocks : Array[() -> Unit] = []
+  let offers = fn(sv : Json?) {
+    if flag(sv, "online") {
+      let station = text(sv, "station")
+      blocks.append(machine_login_offers(c, core, station, field(sv, "overview"), fn(_) { (core.push)(NewProfile(station)) }))
     }
-    if only == "" {
-      blocks.append(workspace_profiles(c, core, here))
-      // the machine's own logins not used yet, each offered as a profile
-      match all {
-        Some(a) =>
-          for s in a {
-            offers(Some(s))
-          }
-        None => ()
-      }
-    } else {
-      match one {
-        None =>
+  }
+  if only == "" {
+    blocks.append(workspace_profiles(c, core, here))
+    // the machine's own logins not used yet, each offered as a profile
+    match all {
+      Some(a) =>
+        for s in a {
+          offers(Some(s))
+        }
+      None => ()
+    }
+  } else {
+    match one {
+      None =>
+        blocks.push(fn() {
+          waiting_rows(
+            c,
+            error=match topic.error {
+              Some(e) => error_text(e)
+              None => ""
+            },
+          )
+        })
+      Some(s) => {
+        let sv = Some(s)
+        let overview = field(sv, "overview")
+        let list = items(overview, "profiles")
+        if list.length() == 0 {
           blocks.push(fn() {
-            waiting_rows(
-              c,
-              error=match topic.error {
-                Some(e) => error_text(e)
-                None => ""
-              },
-            )
+            list_card(c, fn() {
+              list_row(c, fn() {
+                if overview is None && flag(sv, "online") {
+                  wait_line(c, tr("common.reading"))
+                } else {
+                  row_title(
+                    c,
+                    if overview is None {
+                      tr("android-settings.profiles.stationOffline")
+                    } else {
+                      tr("android-settings.profiles.empty")
+                    },
+                    color=@sf.theme().p.muted,
+                  )
+                }
+              })
+              |> ignore
+            })
           })
-        Some(s) => {
-          let sv = Some(s)
-          let overview = field(sv, "overview")
-          let list = items(overview, "profiles")
-          if list.length() == 0 {
-            blocks.push(fn() {
-              list_card(c, fn() {
-                list_row(c, fn() {
-                  if overview is None && flag(sv, "online") {
-                    wait_line(c, tr("common.reading"))
-                  } else {
-                    row_title(
-                      c,
-                      if overview is None {
-                        tr("android-settings.profiles.stationOffline")
-                      } else {
-                        tr("android-settings.profiles.empty")
-                      },
-                      color=@sf.theme().p.muted,
-                    )
+        } else {
+          ignore(0)
+          for g in group_by(list) {
+            blocks.append([
+              fn() { section_header(c, g.1, mark=Some(fn() { group_mark(c, g.0) }), start=S6) },
+              fn() {
+                list_card(c, fn() {
+                  for p in g.2 {
+                    profile_row(c, core, only, p)
                   }
                 })
-                |> ignore
-              })
-            })
-          } else {
-            ignore(0)
-            for g in group_by(list) {
-              blocks.append([
-                fn() { section_header(c, g.1, mark=Some(fn() { group_mark(c, g.0) }), start=S6) },
-                fn() {
-                  list_card(c, fn() {
-                    for p in g.2 {
-                      profile_row(c, core, only, p)
-                    }
-                  })
-                },
-              ])
-            }
+              },
+            ])
           }
-          offers(sv)
         }
+        offers(sv)
       }
     }
-    blocks.push(fn() { gap(c, 30.0) })
-    scroll_page(c, "profiles/" + only, blocks)
-  })
+  }
+  blocks
 }
 
 ///|
