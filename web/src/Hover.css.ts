@@ -78,7 +78,7 @@ export const state = style({
   background: vars.hover, color: vars.muted, fontWeight: "500", whiteSpace: "nowrap",
   selectors: {
     '&[data-state="open"], &[data-state="passed"]': { background: vars.greenBg, color: vars.green },
-    '&[data-state="merged"], &[data-state="completed"]': { background: "color-mix(in srgb, #8250df 14%, transparent)", color: "#8250df" },
+    '&[data-state="merged"], &[data-state="completed"]': { background: vars.purpleBg, color: vars.purple },
     '&[data-state="closed"], &[data-state="failed"]': { background: vars.redBg, color: vars.red },
     '&[data-state="draft"], &[data-state="not_planned"]': { background: vars.hover, color: vars.muted },
     '&[data-state="pending"]': { background: vars.amberBg, color: vars.amber },
@@ -91,7 +91,7 @@ export const excerpt = style({
 });
 export const facts = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flexWrap: "wrap", fontSize: vars.textMeta, color: vars.muted });
 export const person = style({ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: "0", color: vars.text });
-export const avatar = style({ width: "18px", height: "18px", borderRadius: "50%", background: vars.hover, flex: "0 0 auto" });
+export const avatar = style({ width: "18px", height: "18px", borderRadius: "50%", background: vars.line, flex: "0 0 auto" });
 export const chip = style({ display: "inline-flex", gap: "6px", padding: "1px 7px", borderRadius: "999px", background: vars.hover, whiteSpace: "nowrap" });
 export const add = style({ color: vars.green });
 export const del = style({ color: vars.red });

@@ -12,7 +12,7 @@ const names = [
   "font-body", "font-text", "font-mono",
   "canvas", "raised", "sidebar", "list", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper",
   "accent", "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg",
-  "red", "red-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
+  "red", "red-bg", "purple", "purple-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
   "field-focus", "online",
   "r-field", "r-card", "r-dialog", "r-nav", "r-menu", "r-option",
   // Type sizes, by what the text is (global.css.ts gives them their values; the phone's are its own, mobile/styles/root.css.ts).

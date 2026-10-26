@@ -39,7 +39,8 @@ pub(all) struct Palette {
   red : Int64
   red_bg : Int64
   /// the grounds of a pill in a tone (parts.css.ts pill: --green-bg, --blue-bg, --amber-bg; the amber's ink is
-  /// warn_ink)
+  /// warn_ink), as red_bg and accent_bg: the tone's ink at an opacity (tone_light, tone_dark), so each stands a step
+  /// off whatever it lies on, the page, a card, a menu, a selected row, as neutral_bg does
   green_bg : Int64
   blue_bg : Int64
   amber_bg : Int64
@@ -792,6 +793,23 @@ pub let large_from : Double = 840.0
 // ---------------------------------------------------------------------------
 
 ///|
+/// How opaque a tone's ink is as its ground (a pill's, a mention's, an error's card: green_bg, red_bg…), in the light
+/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, docs/ui-panels.md 对比度),
+/// and its ink on it still read (4.5 to 1). Grounds fitted to the page alone, opaque, were 1.0 to 1.1 to 1 off a card
+/// in the dark (a pull request's 开启, 2026-10-27): its words seen, not its pill.
+let tone_light : Double = 0.18
+
+///|
+let tone_dark : Double = 0.16
+
+///|
+/// A ground in a tone the palette has none for (a merged pull request's purple): its ink at the theme's opacity, as
+/// green_bg is green_ink's.
+pub fn tone_ground(ink : Int64) -> Int64 {
+  alpha(ink, if current.val.dark { tone_dark } else { tone_light })
+}
+
+///|
 let wide_light : Palette = {
   bg: 0xFFFFFFFFL,
   canvas: 0xFFFFFFFFL,
@@ -807,16 +825,16 @@ let wide_light : Palette = {
   selected: 0xEBE7E1FFL,
   paper: 0xF6F2EAFFL,
   accent: 0xDC5929FFL,
-  accent_text: 0xA23203FFL,
-  accent_bg: 0xFFEFE6FFL,
+  accent_text: 0x982E01FFL,
+  accent_bg: alpha(0x982E01FFL, tone_light),
   green: 0x006A3FFFL,
-  green_ink: 0x006A3FFFL,
-  warn_ink: 0x7F5306FFL,
-  red: 0xA12F35FFL,
-  red_bg: 0xFFF0EFFFL,
-  green_bg: 0xE7F6EDFFL,
-  blue_bg: 0xEAF2FFFFL,
-  amber_bg: 0xFEF4E0FFL,
+  green_ink: 0x026039FFL,
+  warn_ink: 0x6E4802FFL,
+  red: 0x9A2830FFL,
+  red_bg: alpha(0x9A2830FFL, tone_light),
+  green_bg: alpha(0x026039FFL, tone_light),
+  blue_bg: alpha(0x0047AEFFL, tone_light),
+  amber_bg: alpha(0x6E4802FFL, tone_light),
   online: 0x45B164FFL,
   neutral_bg: 0x24272B13L,
   overlay: 0x13161B33L,
@@ -828,7 +846,7 @@ let wide_light : Palette = {
   card: 0xF6F6F7FFL,
   card2: 0xFBFAF7FFL,
   chip: 0xEFECE6FFL,
-  blue: 0x1559C4FFL,
+  blue: 0x0047AEFFL,
   code_ink: 0x7C3FA0FFL,
   code_ground: 0xF5F5F5FFL,
 }
@@ -849,16 +867,16 @@ let wide_dark : Palette = {
   selected: 0x323338FFL,
   paper: 0x26272BFFL,
   accent: 0xE97342FFL,
-  accent_text: 0xFC9B6FFFL,
-  accent_bg: 0x43251AFFL,
+  accent_text: 0xFF9E71FFL,
+  accent_bg: alpha(0xFF9E71FFL, tone_dark),
   green: 0x68C894FFL,
-  green_ink: 0x68C894FFL,
+  green_ink: 0x6ACA96FFL,
   warn_ink: 0xE6B55DFFL,
-  red: 0xFB8987FFL,
-  red_bg: 0x442322FFL,
-  green_bg: 0x1B3426FFL,
-  blue_bg: 0x1F2E47FFL,
-  amber_bg: 0x403012FFL,
+  red: 0xFF9A97FFL,
+  red_bg: alpha(0xFF9A97FFL, tone_dark),
+  green_bg: alpha(0x6ACA96FFL, tone_dark),
+  blue_bg: alpha(0x8EB8FEFFL, tone_dark),
+  amber_bg: alpha(0xE6B55DFFL, tone_dark),
   online: 0x45B164FFL,
   neutral_bg: 0xE9E9EA0EL,
   overlay: 0x00000080L,
@@ -869,7 +887,7 @@ let wide_dark : Palette = {
   card: 0x28292CFFL,
   card2: 0x2C2D31FFL,
   chip: 0x313237FFL,
-  blue: 0x81AEFAFFL,
+  blue: 0x8EB8FEFFL,
   code_ink: 0xC9A2E6FFL,
   code_ground: 0x26272AFFL,
 }
@@ -884,16 +902,17 @@ let narrow_light : Palette = {
   raised: 0xFFFFFFFFL,
   text: 0x24272BFFL,
   // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
-  muted: 0x585A5FFFL,
-  subtle: 0x585A5FFFL,
+  muted: 0x535559FFL,
+  subtle: 0x535559FFL,
   line: 0x322D2424L,
   accent: 0xCC5A34FFL,
-  accent_text: 0xAC3B10FFL,
-  accent_bg: 0xFBE6DCFFL,
+  accent_text: 0x8F2B01FFL,
+  accent_bg: alpha(0x8F2B01FFL, tone_light),
   green: 0x2F8F5BFFL,
-  green_ink: 0x196E42FFL,
-  warn_ink: 0x855700FFL,
-  red: 0xB1301FFFL,
+  green_ink: 0x045B33FFL,
+  red: 0x991302FFL,
+  red_bg: alpha(0x991302FFL, tone_light),
+  green_bg: alpha(0x045B33FFL, tone_light),
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0x322D2413L,
   card: 0xFFFFFFFFL,
@@ -920,11 +939,15 @@ let narrow_dark : Palette = {
   line: 0xECECED1FL,
   accent: 0xE8734FFFL,
   accent_text: 0xF6A383FFL,
-  accent_bg: 0x4A2F25FFL,
+  accent_bg: alpha(0xF6A383FFL, tone_dark),
   green: 0x5CC08AFFL,
-  green_ink: 0x5CC08AFFL,
-  warn_ink: 0xDC992FFFL,
-  red: 0xFF816CFFL,
+  green_ink: 0x66CA93FFL,
+  warn_ink: 0xEEAA44FFL,
+  red: 0xFE9D8CFFL,
+  red_bg: alpha(0xFE9D8CFFL, tone_dark),
+  green_bg: alpha(0x66CA93FFL, tone_dark),
+  blue_bg: alpha(0x8EB8FEFFL, tone_dark),
+  amber_bg: alpha(0xEEAA44FFL, tone_dark),
   neutral_bg: 0xECECED1BL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
@@ -1467,7 +1490,14 @@ pub fn ui_theme() -> @ui.Theme {
     text: text_roles(t.t),
     leading: leading_scale,
     radii,
-    link: base.accent_text,
+    link: t.p.accent_text,
+    // a tone's ink and ground the palette's (a ground the ink at an opacity: tone_light), what a style's AccentText,
+    // AccentBg, Danger, DangerBg and WarnInk say, not mbui's own still.fail theme's opaque grounds
+    accent_text: t.p.accent_text,
+    accent_bg: t.p.accent_bg,
+    danger: t.p.red,
+    danger_bg: t.p.red_bg,
+    warn_ink: t.p.warn_ink,
     // on a phone the greys Android's (Theme.kt C.muted, C.subtle: the narrow palette's), not mbui's own narrow theme's
     // lighter ones: what a style's Muted and Subtle say there
     muted: if t.narrow { t.p.muted } else { base.muted },
