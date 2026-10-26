@@ -90,7 +90,9 @@ case $H in
   ios) PLATFORM=1
     export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf} APP=kitdemo
     # the simulator's lock, shared with still.fail's iOS smoke (its scripts/ios-smoke.sh take_lock)
-    IOS_LOCK=${MBUI_IOS_LOCK:-$HOME/.mbui-ios-sim.lock} ;;
+    IOS_LOCK=${MBUI_IOS_LOCK:-$HOME/.mbui-ios-sim.lock}
+    # the app these runs put on it (scripts/ios.sh's kitdemo)
+    IOS_APP=${MBUI_IOS_ID:-dev.mbui.demo} ;;
   *) echo "host_contract.sh: no host $H (android, windows, linux, web, mac, ios)" >&2; exit 1 ;;
 esac
 DRIVE=$(base64 < test/host/controls.drive | tr -d '\n\r')
@@ -268,6 +270,16 @@ case $CMD in
     read -r ID STATE <<< "$(ios_device)"
     if [ "$STATE" = Booted ]; then
       apps=$(ios_apps "$ID")
+      # these runs' own app left running by a run that ended without its `done` (cancelled while it ran: the lock is
+      # let go with its process, the app is not): no one's now, the lock being this run's; the simulator shut down with
+      # it (an app a run was stopped in may not end when told: `simctl terminate` waited on it past the job's time) and
+      # booted again by these runs. Another app is still not run over
+      if [ -n "$apps" ] && [ -z "$(printf '%s\n' "$apps" | grep -v "^UIKitApplication:$IOS_APP\[")" ]; then
+        echo "host_contract: $MBUI_IOS_DEVICE ($ID): $IOS_APP left running by a run that ended, no one's now: shut down"
+        xcrun simctl shutdown "$ID" 2>/dev/null || true
+        read -r ID STATE <<< "$(ios_device)"
+        apps=""
+      fi
       if [ -n "$apps" ]; then
         rm -rf "$IOS_LOCK" $O/lock-owner
         echo "host_contract: $MBUI_IOS_DEVICE ($ID) is booted with an app running (another's run, scripts/ios.sh): $apps"
@@ -275,12 +287,20 @@ case $CMD in
         exit 1
       fi
       echo "$MBUI_IOS_DEVICE ($ID): booted, no app running"
-    else
+    fi
+    if [ "$STATE" != Booted ]; then
       echo "$MBUI_IOS_DEVICE (${ID:-made by scripts/ios.sh}): ${STATE:-none}, booted by these runs"
       touch $O/booted-here
     fi ;;
   done)
     read -r ID STATE <<< "$(ios_device)"
+    # these runs' app left running (a run stopped while it ran: the next run's `free` found it) whoever booted the
+    # simulator, the simulator still this run's: shut down with it (`free`'s why)
+    if [ "$STATE" = Booted ] && [ -f $O/lock-owner ] && cmp -s "$IOS_LOCK/owner" $O/lock-owner &&
+      [ -n "$(ios_apps "$ID" | grep "^UIKitApplication:$IOS_APP\[")" ]; then
+      xcrun simctl shutdown "$ID" 2>/dev/null || true
+      echo "$MBUI_IOS_DEVICE ($ID): $IOS_APP left running: shut down"
+    fi
     if [ -f $O/booted-here ] && [ -n "$ID" ]; then
       xcrun simctl shutdown "$ID" 2>/dev/null || true
       echo "$MBUI_IOS_DEVICE ($ID): shut down"
