@@ -2,6 +2,14 @@
 // what it does read from the input, never the tier; what it opens asked of the shell.
 
 ///|
+/// What the pages give sfbase as the app starts: a station's login card and the card to share, for the settings'
+/// core (@sfbase.settings_core). Said once (reset runs only as a Tester starts).
+fn init {
+  @sfbase.login_card_of.val = fn(c, core, station, id, marked) { login_card(c, core, station, id, marked~) }
+  @sfbase.share_card_of.val = share_card_open
+}
+
+///|
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   hover_reset()

@@ -9,7 +9,7 @@ test "a way short of room: the first and the last whole, those between leaving f
     fn(c) {
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
-        c.box(style=way_test_room, fn() { way_line(c, "way", steps, narrow_way(), fn(i) { went.push(i) }) }) |> ignore
+        c.box(style=way_test_room, fn() { @sf.way_line(c, "way", steps, narrow_way(), fn(i) { went.push(i) }) }) |> ignore
         @sf.presented(c)
       })
     },
@@ -35,13 +35,13 @@ test "a way short of room: the first and the last whole, those between leaving f
     assert_true(!shown[i] || shown[i + 1], msg="\{shown}")
   }
   // in a line, in their order, all in the room (16 in either side)
-  let (mx, _, mw, _) = t.rect_of(way_more).unwrap()
+  let (mx, _, mw, _) = t.rect_of(@sf.way_more).unwrap()
   let (hx, _, hw, _) = t.rect_of("Home").unwrap()
   let (lx, _, lw, _) = t.rect_of("Final notes").unwrap()
   assert_true(hx >= 16.0 && hx + hw <= mx && mx + mw <= lx && lx + lw <= 264.5, msg="\{hx} \{mx} \{lx} \{lw}")
   assert_eq(t.squeeze_faults(), [])
   // the …: those that left, in their order; one picked, gone to
-  t.tap_text(way_more)
+  t.tap_text(@sf.way_more)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let left = [1, 2, 3, 4].filter(fn(i) { !shown[i] })
   let ys = left.map(fn(i) { t.find_last(steps[i]).unwrap().1 })
@@ -60,7 +60,7 @@ test "a way with no room even for its first and last: all but the last left for 
     fn(c) {
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
-        c.box(style=way_test_room, fn() { way_line(c, "way", steps, narrow_way(), fn(_) {  }) }) |> ignore
+        c.box(style=way_test_room, fn() { @sf.way_line(c, "way", steps, narrow_way(), fn(_) {  }) }) |> ignore
       })
     },
     w=220.0,
@@ -73,7 +73,7 @@ test "a way with no room even for its first and last: all but the last left for 
   let last = t.lines_of("A folder")
   assert_eq(last.length(), 1)
   assert_true(last[0].has_suffix("…"), msg="\{last}")
-  let (mx, _, mw, _) = t.rect_of(way_more).unwrap()
+  let (mx, _, mw, _) = t.rect_of(@sf.way_more).unwrap()
   let (lx, _, lw, _) = t.rect_of("A folder").unwrap()
   assert_true(mx + mw <= lx && lx + lw <= 184.5, msg="\{mx} \{lx} \{lw}")
   assert_eq(t.squeeze_faults(), [])

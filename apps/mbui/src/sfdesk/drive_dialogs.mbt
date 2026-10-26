@@ -281,7 +281,7 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
     None => []
   }
   c.box(style=if narrow { picker_path_narrow } else { picker_path }, fn() {
-    way_line(c, "drive/picker/way", way.map(fn(w) { w.0 }), picker_way(), fn(i) {
+    @sf.way_line(c, "drive/picker/way", way.map(fn(w) { w.0 }), picker_way(), fn(i) {
       picker_go(c, src, station, Some(way[i].1))
     })
     if !dialogs.denied && dialogs.error == "" {
@@ -460,7 +460,7 @@ let picker_path : @ui.Style = @ui.css("row w=Full min_h=S9 pb=S2_5 gap=S3 align=
 ///|
 /// Its trail (pickerCrumbs): 1 apart, a crumb 4 by 2 in, the way's muted, where it is bold in the words' colour, the
 /// chevrons muted (way_line: those between in its … where the line is short).
-fn picker_way() -> WayLook {
+fn picker_way() -> @sf.WayLook {
   {
     line: picker_trail,
     step: crumb_box,

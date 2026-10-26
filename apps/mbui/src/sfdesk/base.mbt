@@ -250,8 +250,14 @@ using @sfbase {
   type SearchView,
   type Source,
   type Workspace,
-  settings_core_of,
+  settings_core,
   nav_home,
+  // the files' tabs as the core keeps them (files_tabs.mbt)
+  type FilesTab,
+  type FilesTabs,
+  files_tabs,
+  files_tabs_act,
+  same_pane,
 }
 
 ///|

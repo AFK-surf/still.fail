@@ -152,6 +152,11 @@ fn pages_shell() -> Shell {
     open: open_where,
     detail: detail_where,
     back: back_where,
+    show: fn() {
+      if @sfdesk.is_wide(@ui.current()) {
+        @sfdesk.show_page()
+      }
+    },
   }
 }
 
@@ -725,19 +730,6 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 /// The waiting page and Home's top bar over it, the screen's whole.
 // kept across runs: a value (no field of it changes)
 let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-/// What the settings' pages read and call, and how they move, as the phone has them: the core as the app has it, its
-/// stack, its own way home (its sheets put down) and a station's login as its card.
-fn settings_core(src : Source, w : Workspace) -> @settings.Core {
-  settings_core_of(
-    src,
-    w,
-    home~,
-    login_card=fn(c, station, id, marked) { @sfpages.login_card(c, settings_core(src, w), station, id, marked~) },
-    share_card=fn() { @sfpages.share_card_open(src, w) },
-  )
-}
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.

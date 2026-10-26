@@ -125,7 +125,7 @@ fn station_pick_way(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
-  way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), narrow_way(), fn(i) { spick.at = steps[i].1 })
+  @sf.way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), narrow_way(), fn(i) { spick.at = steps[i].1 })
 }
 
 ///|

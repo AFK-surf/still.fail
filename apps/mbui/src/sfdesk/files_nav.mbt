@@ -59,7 +59,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     // (a folder chosen there in the page, on the tape brought over to show it)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
       files_go(at)
-      show_page()
+      @sfbase.show_chosen()
     })
   })
   |> ignore

@@ -20,6 +20,9 @@ pub(all) struct Shell {
   /// what back does where the layout has it (docs/architecture.md, the tiers' table), none where back is the
   /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
   back : () -> (() -> Unit)?
+  /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the
+  /// page brought over (show_chosen)
+  show : () -> Unit
 }
 
 ///|
@@ -34,6 +37,7 @@ pub fn bare_shell() -> Shell {
     open: stack_open,
     detail: fn(_, _, _) {  },
     back: stack_back,
+    show: fn() {  },
   }
 }
 
@@ -45,6 +49,13 @@ fn stack_back() -> (() -> Unit)? {
   } else {
     None
   }
+}
+
+///|
+/// What was chosen in a list shown where the layout has the page (Shell's `show`): what a list's row calls once what it
+/// chose is the page's (on the tape the page comes over to show it; beside the list or pushed, nothing more).
+pub fn show_chosen() -> Unit {
+  (shell.val.show)()
 }
 
 ///|

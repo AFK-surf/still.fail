@@ -1,12 +1,36 @@
-// What the settings' pages (src/sfapp/settings) read and call, and how they move, as both frames give it them
-// (@settings.Core): the core's topics and calls, the stack, toasts, the system's pickers and browser, notifications,
-// updates, this Mac's station, the faces, the bars; what differs by frame given by it.
+// What the settings' pages (src/sfapp/settings) read and call, and how they move (@settings.Core): the core's topics
+// and calls, the stack, toasts, the system's pickers and browser, notifications, updates, this Mac's station, the
+// faces, the bars; one for every frame (settings_core), what the shell does asked of the shell.
 
 ///|
-/// What the settings' pages read and call, and how they move, for both frames: the core as the app has it (Source),
-/// the app's stack; the frame's own way home (`home`: the phone's sheets put down too), a station's login as the
-/// frame's card (by station and id, marked) and the card to share of the workspace's agents at work (`share_card`).
-pub fn settings_core_of(
+/// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack,
+/// the shell's way home (what is over the pages put down too), a station's login as the pages' card (`login_card_of`)
+/// and the pages' card to share of the workspace's agents at work (`share_card_of`). One for every frame.
+pub fn settings_core(src : Source, w : Workspace) -> @settings.Core {
+  settings_core_of(
+    src,
+    w,
+    home=fn() { (shell.val.home)() },
+    login_card=fn(c, station, id, marked) { (login_card_of.val)(c, settings_core(src, w), station, id, marked) },
+    share_card=fn() { (share_card_of.val)(src, w) },
+  )
+}
+
+///|
+/// A station's login as the pages draw its card (sfpages' login_card), given as the app starts.
+// kept across runs: what the app says once as it starts
+pub let login_card_of : Ref[(@ui.Ctx, @settings.Core, String, String, Bool) -> Unit] = Ref(fn(_, _, _, _, _) {  })
+
+///|
+/// The card to share of the workspace's agents at work, as the pages open it (sfpages' share_card_open), given as the
+/// app starts.
+// kept across runs: what the app says once as it starts
+pub let share_card_of : Ref[(Source, Workspace) -> Unit] = Ref(fn(_, _) {  })
+
+///|
+/// settings_core's, its way home (`home`), a station's login card (by station and id, marked) and the card to share
+/// (`share_card`) given.
+fn settings_core_of(
   src : Source,
   w : Workspace,
   home~ : () -> Unit,

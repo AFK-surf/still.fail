@@ -53,7 +53,7 @@ fn narrow_bar_button(c : @ui.Ctx, key : String, icon : String, label : String, s
 ///|
 /// The crumbs (mCrumbs): 20 in, a crumb 4 round, the way's muted, where it is in the words' colour, the chevrons
 /// subtle.
-fn narrow_way() -> WayLook {
+fn narrow_way() -> @sf.WayLook {
   {
     line: narrow_crumbs_row,
     step: narrow_crumb,

@@ -4,7 +4,7 @@
 ///|
 /// How a way looks: its line, each step's box, a step's words and the last's (where it is), the chevrons between and
 /// their ink.
-priv struct WayLook {
+pub(all) struct WayLook {
   line : @ui.Style
   step : @ui.Style
   words : @ui.TextStyle
@@ -20,19 +20,19 @@ priv struct WayLook {
 /// first; a … where they were offers them instead (a menu of them, in their order). Only where the last alone has not
 /// the room are its words cut short. Nothing scrolled, nothing wrapped (the user, 2026-10-25: a control short of room
 /// neither scrolls nor wraps, and words cut short past knowing are no use).
-fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook, go : (Int) -> Unit) -> Unit {
+pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook, go : (Int) -> Unit) -> Unit {
   let n = steps.length()
   // (each step but the last, and the …: -1)
   let slot = fn(i : Int) { c.id(key + "/slot/\{i}") }
   // those the line left out as last laid out (read back: the frame is built again where that changes)
-  let gone : Array[@sf.MenuItem?] = []
+  let gone : Array[MenuItem?] = []
   for i in 0..<(n - 1) {
     if c.left_out(slot(i)) {
-      gone.push(Some(@sf.menu_item_of(steps[i], fn() { go(i) }, icon="folder")))
+      gone.push(Some(menu_item_of(steps[i], fn() { go(i) }, icon="folder")))
     }
   }
   let first_out = n > 1 && c.left_out(slot(0))
-  let chevron = fn() { @sf.icon(c, "chevron-right", size=look.chevron, color=look.chevron_ink) |> ignore }
+  let chevron = fn() { icon(c, "chevron-right", size=look.chevron, color=look.chevron_ink) |> ignore }
   c.box(style=look.line, fn() {
     for i, name in steps {
       let last = i == n - 1
@@ -67,10 +67,10 @@ fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook, go
           }
           let more = c.id(key + "/more")
           if c.clicked(more) {
-            @sf.menu(gone, from=Of(more))
+            menu(gone, from=Of(more))
           }
           let b = c.box(style=look.step, id=more, fn() { c.text(way_more, style=look.words) |> ignore })
-          c.semantics(b, Button, id=more, label=@sf.t("common.more"))
+          c.semantics(b, Button, id=more, label=t("common.more"))
         })
         |> ignore
       }
@@ -91,4 +91,4 @@ let way_last : @ui.TextStyle = @ui.text_style(w=Cut)
 
 ///|
 /// What stands for those that left the line.
-let way_more : String = "…"
+pub let way_more : String = "…"
