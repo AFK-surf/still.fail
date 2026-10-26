@@ -1664,7 +1664,8 @@ pub let a11y_channel : String = "a11y"
 
 ///|
 /// How much bigger the system's setting for the size of words makes them (Android's fontScale: 1 as it is, 1.3 the
-/// largest of most phones' steps): words are drawn that much bigger, as Compose's sp are; lengths are not.
+/// largest of most phones' steps; Windows' Text size, up to 2.25; Linux's text scaling): words are drawn that much
+/// bigger, as Compose's sp are; lengths are not.
 pub fn font_scale() -> Double {
   current.val.font_scale()
 }

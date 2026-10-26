@@ -34,6 +34,8 @@ fn main {
   let secret = @ui.env("MBUI_SECRETCHECK")
   // MBUI_A11YCHECK=1: a button and a checkbox for the system's accessibility to read and press (a11ycheck.mbt)
   let a11y = @ui.env("MBUI_A11YCHECK") == "1"
+  // MBUI_FONTSCALECHECK=1: the system's size of words as the host gives it, on the log (fontscalecheck.mbt)
+  let font_scaled = @ui.env("MBUI_FONTSCALECHECK") == "1"
   if linked {
     @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
   }
@@ -56,6 +58,8 @@ fn main {
       @gallery.secret_check_run(c, secret)
     } else if a11y {
       @gallery.a11y_check_run(c)
+    } else if font_scaled {
+      @gallery.font_scale_check_run(c)
     } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {

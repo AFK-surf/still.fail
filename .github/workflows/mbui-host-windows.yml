@@ -12,6 +12,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/secretcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/a11ycheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/fontscalecheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/mini_json.h"
@@ -64,6 +65,9 @@ jobs:
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
+      - name: "The system's Text size given the app (150%: its words 1.5 times as big)"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows fontscale
       - name: "The widgets read out by UI Automation's client (as a reader: Narrator, NVDA), a button pressed through it"
         if: success() || failure()
         run: scripts/host_contract.sh windows a11y
