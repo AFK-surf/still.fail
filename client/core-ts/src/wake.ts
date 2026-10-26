@@ -184,6 +184,11 @@ export class WakingHost implements Host {
     if (inner.unzstd) this.unzstd = () => inner.unzstd!();
   }
 
+  /// Names in the order people read them: the system's, at once (the files page's: drive-browse.ts).
+  collate(names: readonly string[]): number[] | null {
+    return this.inner.collate?.(names) ?? null;
+  }
+
   /// Where a value is kept as a file: the device's, at once.
   storagePath(key: string): string | null {
     return this.inner.storagePath?.(key) ?? null;
