@@ -69,6 +69,23 @@ test "shown waits for the host's word that the app is shown again after it was n
 }
 
 ///|
+test "a run keeps the app shown and in front till `hosted`, then it is as the host says (put away, going on)" {
+  let seen : Array[(Bool, Bool, Bool)] = []
+  let log = outside_run("timeout 3000\nhosted\nexit", fn(n) {
+    // (put away before the step, as the host says it: kept shown and in front)
+    if n == 0 {
+      on_app_state(4)
+      seen.push((app_visible(), app_focused(), app_awake()))
+    }
+  })
+  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok hosted") }), msg=log.join("\n"))
+  assert_eq(seen, [(true, true, true)])
+  // the step taken: as the host said, not shown, not in front, going on
+  assert_eq((app_visible(), app_focused(), app_awake()), (false, false, true))
+  app_state_taken(3)
+}
+
+///|
 test "decoded takes a source by its end or by its beginning (a gallery's content://)" {
   let what = "image 4 content://media/external/images/media/31"
   assert_true(outside_named("decoded", "content://media/", what))

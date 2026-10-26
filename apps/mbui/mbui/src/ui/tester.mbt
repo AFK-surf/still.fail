@@ -1591,9 +1591,10 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 }
 
 ///|
-/// The host says the app is shown or not, in front or not (as a window's or an activity's changes are told).
-pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit {
-  on_app_state((if visible { 1 } else { 0 }) | (if focused { 2 } else { 0 }))
+/// The host says the app is shown or not, in front or not (as a window's or an activity's changes are told); `awake`:
+/// it goes on while not shown (a desktop's app put away: @ui.app_awake).
+pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool, awake? : Bool = false) -> Unit {
+  on_app_state((if visible { 1 } else { 0 }) | (if focused { 2 } else { 0 }) | (if awake { 4 } else { 0 }))
   self.draw()
 }
 

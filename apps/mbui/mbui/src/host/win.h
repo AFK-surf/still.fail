@@ -65,6 +65,13 @@ void mb_images_tell(mb_outside_fn f);
 
 // app (win_app.c): asks for a frame from any thread
 void mb_app_wake(void);
+// the app's identity and its name ("" none: win_life.h), and the window's message that a notification was tapped
+// (win_notify.cpp: the window brought back)
+const wchar_t *mb_win_app_id(void);
+const wchar_t *mb_win_app_name(void);
+#define WM_MB_TAPPED (0x8000 + 4)  /* WM_APP + 4 */
+// notifications (win_notify.cpp): a scripted run's tap (1) or look (0) at the one whose words hold `text`: 1 found
+int32_t mb_notice_drive(int32_t tap, const wchar_t *text);
 // the window (HWND) and its scale (pixels per point)
 void *mb_app_hwnd(void);
 double mb_app_scale(void);
