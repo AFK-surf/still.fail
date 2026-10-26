@@ -35,6 +35,22 @@ MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>
 [ -s $O/shapes.dl ] || { echo "render_check: no shapes draw list"; exit 1; }
 MBUI_DL=$PWD/$O/shapes.dl MBUI_DL_PNG=$PWD/$O/shapes.png ./_build/native/release/build/render/render.exe
 "$D/chk" shapes $O/shapes.png
+# partial redraw (docs/partial-redraw.md): a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
+# partial_shown), the second drawn only where it differs from the first, the same picture as the second drawn whole,
+# to the byte
+for k in partial-a partial-b; do
+  MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl
+  [ -s $O/$k.dl ] || { echo "render_check: no $k draw list"; exit 1; }
+done
+MBUI_DL_FROM=$PWD/$O/partial-a.dl MBUI_DL=$PWD/$O/partial-b.dl MBUI_DL_PNG=$PWD/$O/partial.png \
+  ./_build/native/release/build/render/render.exe
+if cmp -s $O/partial.png $O/partial.whole.png; then
+  echo "render_check: a frame drawn only where it differs is the frame drawn whole, to the byte"
+else
+  echo "render_check: a frame drawn only where it differs is not the frame drawn whole ($O/partial.png, partial.whole.png)"
+  exit 1
+fi
 for k in clip-cut clip-box; do
   MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl

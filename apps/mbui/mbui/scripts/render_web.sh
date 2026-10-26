@@ -33,6 +33,8 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     node scripts/render_web.mjs $S $O/shapes.dl $O/shapes.png >/dev/null
     "$D/chk" shapes $O/shapes.png
+    node scripts/render_web.mjs $S $O/partial-b.dl $O/partial.png $O/partial-a.dl
+    render_partial web
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_web: the two runs' pictures differ"

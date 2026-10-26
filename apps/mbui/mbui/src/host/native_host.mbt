@@ -766,6 +766,11 @@ impl @hostapi.Host for Native with nt_cancel(_, tag) {
 }
 
 ///|
+impl @hostapi.Host for Native with rn_dirty(_, x, y, w, h) {
+  rn_dirty(x, y, w, h)
+}
+
+///|
 impl @hostapi.Host for Native with nt_state(_, what) {
   nt_state(what)
 }

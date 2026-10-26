@@ -13,6 +13,7 @@ on:
       - "apps/mbui/mbui/src/host/win_image.cpp"
       - "apps/mbui/mbui/scripts/win.sh"
       - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/damage/**"
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
       - "apps/mbui/mbui/src/ui/scene.mbt"
       - "apps/mbui/mbui/src/ui/line.mbt"

@@ -30,6 +30,8 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     MBUI_DL="$PWD/$O/shapes.dl" MBUI_DL_PNG="$PWD/$O/shapes.png" ./$EXE
     "$D/chk" shapes $O/shapes.png
+    MBUI_DL_FROM="$PWD/$O/partial-a.dl" MBUI_DL="$PWD/$O/partial-b.dl" MBUI_DL_PNG="$PWD/$O/partial.png" ./$EXE
+    render_partial linux
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_linux: the two runs' pictures differ"

@@ -14,6 +14,7 @@ on:
       - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/scripts/linux.sh"
       - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/damage/**"
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
       - "apps/mbui/mbui/src/ui/scene.mbt"
       - "apps/mbui/mbui/src/ui/line.mbt"

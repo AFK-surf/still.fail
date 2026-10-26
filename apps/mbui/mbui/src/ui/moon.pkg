@@ -8,6 +8,7 @@ import {
   "mbui/signals",
   "moonbitlang/core/math",
   "mbui/dmath",
+  "mbui/damage",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }

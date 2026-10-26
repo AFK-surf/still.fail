@@ -2,6 +2,16 @@
 // window, no clock: the picture of a screen a Tester drew, as this host draws it.
 //
 //   MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
+//   MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
+//   MBUI_DL_BENCH=<n> MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
+//
+// With MBUI_DL_FROM, partial redraw (docs/partial-redraw.md): the list before drawn whole, then this one only where it
+// differs from it (@damage, @hostapi.render_dirty), as a window's frames are drawn, then this one again (nothing of it
+// differing); the picture is what the target holds then (<out.png>), and this list drawn whole again into it
+// (<out>.whole.png): the two the same to the byte.
+//
+// With MBUI_DL_BENCH too, the two lists drawn one after the other n times each, whole and then only where they differ,
+// and the GPU's time of a frame said (the median: where the host measures it, Metal's), nothing written.
 //
 // Each glyph is made again by what the list says it is (its words shaped in its font, the cluster it is), each image
 // decoded again from its source (or, handed over as bytes, from <list.dl>.img<N> beside it), and their instances given
@@ -128,24 +138,142 @@ fn main {
     return
   }
   let dl = parse(read_text(path))
+  if !drawable(dl, path) {
+    return
+  }
+  let from_path = arg("MBUI_DL_FROM")
+  let from = if from_path == "" { None } else { Some(parse(read_text(from_path))) }
+  match from {
+    Some(a) if !drawable(a, from_path) => return
+    Some(a) if a.w != dl.w || a.h != dl.h || a.scale != dl.scale => {
+      say("mbui-render: \{from_path}: another window than \{path}'s")
+      return
+    }
+    _ => ()
+  }
+  init_offscreen(dl.w, dl.h, dl.scale)
+  let atlas = @hostapi.Atlas::new(@hostapi.atlas_size(false))
+  let colour_atlas = @hostapi.Atlas::new(@hostapi.atlas_size(true))
+  let (r, gg, b) = dl.clear
+  match from {
+    None => {
+      let (inst, n, made) = instances(dl, path, atlas, colour_atlas)
+      draw(inst, n, r, gg, b)
+      if !snapshot(out) {
+        say("mbui-render: \{out}: not written")
+        return
+      }
+      // (said once the picture is written: what a driver waits for before it takes it, render_android.sh)
+      say("mbui-render: \{out}: \{made}")
+    }
+    Some(a) => {
+      // as a window's frames: the one before whole, then this one where it differs
+      let (ia, na, made_a) = instances(a, from_path, atlas, colour_atlas)
+      let (inst, n, made) = instances(dl, path, atlas, colour_atlas)
+      say("mbui-render: \{from_path}: \{made_a}")
+      say("mbui-render: \{path}: \{made}")
+      let damage = @damage.Damage::new()
+      let (ar, ag, ab) = a.clear
+      tell_parts(damage.next(ia, na, a.w, a.h, a.scale, ar, ag, ab))
+      draw(ia, na, ar, ag, ab)
+      let parts = damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b)
+      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{parts}")
+      let bench = arg("MBUI_DL_BENCH")
+      if bench != "" {
+        let times = num(bench).to_int()
+        let time = fn(partial : Bool) -> Double {
+          let d = @damage.Damage::new()
+          let gpus = []
+          for k in 0..<(2 * times) {
+            let (fi, fn_) = if k % 2 == 0 { (ia, na) } else { (inst, n) }
+            let ps = d.next(fi, fn_, dl.w, dl.h, dl.scale, r, gg, b)
+            if partial {
+              tell_parts(ps)
+            } else {
+              @hostapi.render_dirty(0.0, 0.0, -1.0, -1.0)
+            }
+            let ms = draw_gpu(fi, fn_, r, gg, b)
+            if k >= 4 {
+              gpus.push(ms)
+            }
+          }
+          gpus.sort()
+          gpus[gpus.length() / 2]
+        }
+        let whole_ms = time(false)
+        let part_ms = time(true)
+        say("BENCH \{path}: GPU a frame, median: whole \{whole_ms} ms, in parts \{part_ms} ms")
+        return
+      }
+      tell_parts(parts)
+      draw(inst, n, r, gg, b)
+      // and again, nothing of it differing: what a frame that draws nothing new shows (its target's, as it was)
+      tell_parts(damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b))
+      draw(inst, n, r, gg, b)
+      let whole = (if out.has_suffix(".png") { out.view(end_offset=out.length() - 4).to_owned() } else { out }) +
+        ".whole.png"
+      if !snapshot_drawn(out) {
+        say("mbui-render: \{out}: not written")
+        return
+      }
+      @hostapi.render_dirty(0.0, 0.0, -1.0, -1.0)
+      draw(inst, n, r, gg, b)
+      if !snapshot_drawn(whole) {
+        say("mbui-render: \{whole}: not written")
+        return
+      }
+      say("mbui-render: \{out}: drawn in parts, and whole beside it")
+    }
+  }
+}
+
+///|
+/// The glyphs placed, by their keys (instances).
+let placed : Map[Int, (Double, Double, Double, Double)] = {}
+
+///|
+/// The parts of the next frame drawn again told to the renderer (as a host's frame tells them: src/ui/hostcall.mbt).
+fn tell_parts(parts : Array[(Double, Double, Double, Double)]) -> Unit {
+  for p in parts {
+    let (x, y, w, h) = p
+    @hostapi.render_dirty(x, y, w, h)
+  }
+  if parts.is_empty() {
+    @hostapi.render_dirty(0.0, 0.0, 0.0, 0.0)
+  }
+}
+
+///|
+/// Whether a list can be drawn here, said where not.
+fn drawable(dl : Dl, path : String) -> Bool {
   if dl.version < 3 || dl.version > 7 {
     say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 to 7 (scene.mbt's instances, \{inst_size} numbers each)")
-    return
+    return false
   }
   if dl.w <= 0.0 || dl.inst.is_empty() {
     say("mbui-render: \{path}: no window or nothing drawn")
-    return
+    return false
   }
-  init_offscreen(dl.w, dl.h, dl.scale)
+  true
+}
+
+///|
+/// The list's instances with this renderer's atlas places (in `atlas`, `colour_atlas`) and image ids, how many, and
+/// what was made of it to say (what it found unknown).
+fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hostapi.Atlas) -> (FixedArray[Double], Int, String) {
   // each glyph made again: its atlas place here (placed as an app places it: @hostapi.Atlas), by the list's
   let shaped = FixedArray::make(4096, 0.0)
   let g = FixedArray::make(8, 0.0)
-  let atlas = @hostapi.Atlas::new(@hostapi.atlas_size(false))
-  let colour_atlas = @hostapi.Atlas::new(@hostapi.atlas_size(true))
   let places : Map[Int, (Double, Double, Double, Double)] = {}
   let mut unknown = 0
   dl.glyphs.each(fn(no, gl) {
     let (size, weight, style, cluster, text) = gl
+    // (a glyph of nothing: a list a Tester drew without the host's text, none to make; not asked of the host, which
+    // may not take a size of 0: Windows' fell over)
+    if size <= 0.0 || text == "" {
+      unknown = unknown + 1
+      return
+    }
     let key = if cluster < 0 {
       @hostapi.text_key(text, size, weight, style)
     } else {
@@ -168,12 +296,18 @@ fn main {
       } else {
         (atlas, 0)
       }
-      match a.place(key, gw.round().to_int(), gh.round().to_int(), fn(_) {  }) {
-        Some((_, x, y)) => {
-          @hostapi.glyph_put(key, x + across, y)
-          places[no] = ((x + across).to_double(), y.to_double(), gw, gh)
-        }
-        None => if gw > 0.0 && gh > 0.0 { unknown = unknown + 1 }
+      // (one place for each glyph, whichever list draws it: MBUI_DL_FROM's two the same where they are)
+      match placed.get(key) {
+        Some(p) => places[no] = p
+        None =>
+          match a.place(key, gw.round().to_int(), gh.round().to_int(), fn(_) {  }) {
+            Some((_, x, y)) => {
+              @hostapi.glyph_put(key, x + across, y)
+              places[no] = ((x + across).to_double(), y.to_double(), gw, gh)
+              placed[key] = places[no]
+            }
+            None => if gw > 0.0 && gh > 0.0 { unknown = unknown + 1 }
+          }
       }
     }
   })
@@ -234,13 +368,9 @@ fn main {
       }
     }
   }
-  let (r, gg, b) = dl.clear
-  draw(inst, n, r, gg, b)
-  if !snapshot(out) {
-    say("mbui-render: \{out}: not written")
-    return
-  }
-  say(
-    "mbui-render: \{out}: \{n} instances, \{dl.glyphs.length()} glyphs (\{unknown} not known here, \{resized} another size here), \{dl.images.length()} images",
+  (
+    inst,
+    n,
+    "\{n} instances, \{dl.glyphs.length()} glyphs (\{unknown} not known here, \{resized} another size here), \{dl.images.length()} images",
   )
 }

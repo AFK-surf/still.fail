@@ -108,6 +108,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
+  slow_probe(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
   c.motion_left = c.motion_owed()
@@ -215,6 +216,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
   // order it came, before anything reads it (messages.mbt)
   take_messages()
+  // (the probe's: how long the messages took, slow_probe)
+  probe_msgs_ms.val = h_now() - t0
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
@@ -1463,5 +1466,132 @@ pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
     }
   } else {
     f()
+  }
+}
+
+///|
+/// The probe of frames slower than the display's (MBUI_PROBE=1, or always on a device build that sets it): a line on
+/// the log for each frame whose work took longer than `probe_slow_ms`, or that came later than that after the one
+/// before (the main thread held between them), with where its time went.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_msgs_ms : Ref[Double] = { val: 0.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_last_t : Ref[Double] = { val: -1.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_on : Ref[Int] = { val: -1 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_frames : Ref[Int] = { val: 0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_work : Ref[Double] = { val: 0.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_phase : FixedArray[Double] = FixedArray::make(5, 0.0)
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_since : Ref[Double] = { val: -1.0 }
+
+///|
+/// The probe's frames drawn whole, in part and not at all; the share of the window they drew; the GPU's times summed.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_parts : FixedArray[Int] = FixedArray::make(3, 0)
+
+///|
+/// Why the frames drawn whole were (@damage.Damage::why), each its count.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_why : FixedArray[Int] = FixedArray::make(6, 0)
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_share : Ref[Double] = { val: 0.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_damage : Ref[Double] = { val: 0.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_gpu : Ref[Double] = { val: 0.0 }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_gpu_n : Ref[Int] = { val: 0 }
+
+///|
+let probe_slow_ms : Double = 24.0
+
+///|
+fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
+  if probe_on.val < 0 {
+    probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
+    presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
+  }
+  if probe_on.val == 0 {
+    return
+  }
+  let gap = if probe_last_t.val < 0.0 { 0.0 } else { t - probe_last_t.val }
+  probe_last_t.val = t
+  // (how many frames a second, said every 2 s it draws)
+  probe_frames.val = probe_frames.val + 1
+  probe_work.val = probe_work.val + work + present
+  probe_phase[0] = probe_phase[0] + probe_msgs_ms.val
+  probe_phase[1] = probe_phase[1] + c.t_build - probe_msgs_ms.val
+  probe_phase[2] = probe_phase[2] + c.t_layout
+  probe_phase[3] = probe_phase[3] + c.t_paint
+  probe_phase[4] = probe_phase[4] + present
+  // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
+  let share = presented_share.val
+  probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
+  probe_why[presented.why()] += 1
+  probe_share.val = probe_share.val + share
+  probe_damage.val = probe_damage.val + presented_ms.val
+  let gms = h_gpu_ms()
+  if gms >= 0.0 {
+    probe_gpu.val = probe_gpu.val + gms
+    probe_gpu_n.val = probe_gpu_n.val + 1
+  }
+  if probe_since.val < 0.0 {
+    probe_since.val = t
+  } else if t - probe_since.val >= 2000.0 {
+    let span = t - probe_since.val
+    h_log(
+      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
+      "work_avg=\{(probe_work.val / probe_frames.val.to_double() * 10.0).round() / 10.0}ms " +
+      "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / probe_frames.val.to_double() * 10.0).round() / 10.0 })} nodes=\{c.count} " +
+      "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / probe_frames.val.to_double() * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / probe_frames.val.to_double()).round()}% " +
+      "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms",
+    )
+    for i in 0..<3 {
+      probe_parts[i] = 0
+    }
+    for i in 0..<6 {
+      probe_why[i] = 0
+    }
+    probe_share.val = 0.0
+    probe_damage.val = 0.0
+    probe_gpu.val = 0.0
+    probe_gpu_n.val = 0
+    for i in 0..<5 {
+      probe_phase[i] = 0.0
+    }
+    probe_frames.val = 0
+    probe_work.val = 0.0
+    probe_since.val = t
+  }
+  if work > probe_slow_ms || gap > 3.0 * probe_slow_ms {
+    h_log(
+      "PROBE slow frame: work=\{work.round()}ms (messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
+      "layout=\{c.t_layout.round()} paint=\{c.t_paint.round()} present=\{present.round()}) since_last=\{gap.round()}ms " +
+      "handed=\{messages_handed.val} nodes=\{c.count}",
+    )
   }
 }

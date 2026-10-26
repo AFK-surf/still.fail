@@ -74,3 +74,15 @@ extern "js" fn js_snapshot(path : String) -> Bool =
 fn snapshot(path : String) -> Bool {
   js_snapshot(path)
 }
+
+///|
+/// The canvas as the frames drawn into it left it (the page reads what the last present drew: the same).
+fn snapshot_drawn(path : String) -> Bool {
+  js_snapshot(path)
+}
+
+///|
+fn draw_gpu(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Double {
+  js_draw(inst, count, r, g, b)
+  -1.0
+}

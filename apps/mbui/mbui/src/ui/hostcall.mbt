@@ -696,11 +696,51 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   match fake.val {
     Some(f) => f.instances = count
     None => {
-      let (r, gg, b) = g().clear
+      let c = g()
+      let (r, gg, b) = c.clear
+      // what of it differs from the frame presented before, the part a host that keeps its picture draws again
+      // (docs/partial-redraw.md)
+      let t0 = h_now()
+      let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
+      presented_ms.val = h_now() - t0
+      if presented.telling() && presented.why() == 5 {
+        h_log("DAMAGE whole, the part more than half: \{presented.told()}")
+      }
+      let mut area = 0.0
+      for p in parts {
+        let (x, y, w, h) = p
+        @hostapi.render_dirty(x, y, w, h)
+        area = if w < 0.0 || area < 0.0 { -1.0 } else { area + w * h }
+      }
+      if parts.is_empty() {
+        @hostapi.render_dirty(0.0, 0.0, 0.0, 0.0)
+      }
+      presented_share.val = if area < 0.0 {
+        1.0
+      } else if c.window_w > 0.0 && c.window_h > 0.0 {
+        area / (c.window_w * c.window_h)
+      } else {
+        0.0
+      }
       @hostapi.present(buf, count, r, gg, b)
     }
   }
 }
+
+///|
+/// The frames presented, the next compared with the last (h_present).
+// kept across runs: a host's, whose picture is the last frame it was given
+let presented : @damage.Damage = @damage.Damage::new()
+
+///|
+/// How much of the window the frame presented last drew again (1 all of it, 0 none), for the probe (app.mbt).
+// kept across runs: the probe's (MBUI_PROBE), set by each frame presented before it is read
+let presented_share : Ref[Double] = { val: 1.0 }
+
+///|
+/// How long working out the part took, for the probe.
+// kept across runs: the probe's (MBUI_PROBE), set by each frame presented before it is read
+let presented_ms : Ref[Double] = { val: 0.0 }
 
 ///|
 fn h_reduce_transparency() -> Bool {

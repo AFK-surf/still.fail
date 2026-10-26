@@ -560,6 +560,8 @@
   function setupGL() {
     // with alpha: native views (below) show through the holes the app paints (kind 9); every frame is opaque elsewhere
     gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true });
+    cv = null;
+    cvOk = false;
     prog = gl.createProgram();
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
@@ -639,7 +641,54 @@
     gl.uniform4f(PU.u_b, (sw - 0.5) / src.w, (sh - 0.5) / src.h, dx, dy);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
-  // what the run [start, end) of glass sees; false when none of it shows
+  // ---- partial redraw (docs/partial-redraw.md) ----
+  // A frame is drawn into a canvas of its own (cv, a framebuffer), kept across frames, and copied onto the page's
+  // canvas (whose drawing buffer is gone once shown); where the app says only some parts differ from the frame before
+  // (H.renderDirty, @hostapi.render_dirty), only those parts of it are drawn again, each cut to it (the scissor, `cut`:
+  // x, y from the foot, w, h; while cutOn), the frame's ground over it first (the instance after the frame's), then
+  // every instance. `target`: the framebuffer drawn into now.
+  let cv = null, cvOk = false, target = null;
+  let dirty = [], dirtyWhole = false, dirtyTold = false, missing = false, drewMissing = false, cutOn = false;
+  const cut = [0, 0, 0, 0];
+  H.renderDirty = (x, y, w, h) => {
+    dirtyTold = true;
+    if (w < 0 || h < 0) dirtyWhole = true;
+    else if (w > 0 && h > 0) dirty.push([x, y, w, h]);
+  };
+  // the parts of the frame the next one draws, from what was said of them (taken: a frame nothing was said for is
+  // drawn whole), each as `cut` is; null: all of it. `kept`: cv holds the frame before
+  function takeParts(kept) {
+    const told = dirtyTold, whole = dirtyWhole, said = dirty;
+    dirtyTold = false;
+    dirtyWhole = false;
+    dirty = [];
+    if (!told || whole || !kept || missing) return null;
+    const W = canvas.width, Hh = canvas.height, out = [];
+    for (const [x, y, w, h] of said) {
+      // (whole pixels round it, and one more)
+      const x0 = Math.max(0, Math.floor(x * dpr) - 1), y0 = Math.max(0, Math.floor(y * dpr) - 1);
+      const x1 = Math.min(W, Math.ceil((x + w) * dpr) + 1), y1 = Math.min(Hh, Math.ceil((y + h) * dpr) + 1);
+      if (x1 > x0 && y1 > y0) out.push([x0, Hh - y1, x1 - x0, y1 - y0]);
+    }
+    return out;
+  }
+  // cv the canvas's size: made again at another, what it held lost
+  function ensureCanvas() {
+    const W = canvas.width, Hh = canvas.height;
+    if (cv && cv.w === W && cv.h === Hh) return;
+    if (cv) { gl.deleteTexture(cv.t); gl.deleteFramebuffer(cv.fb); }
+    cv = null;
+    cvOk = false;
+    if (W <= 0 || Hh <= 0) return;
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, W, Hh);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    cv = { t, fb, w: W, h: Hh };
+  }
+
   // what the run [start, end) of glass sees, frosted glass of the same capture further on (glass.mbt
   // shares_capture) too; false when none of it shows
   function capture(start, end, count) {
@@ -675,10 +724,14 @@
     const px0 = Math.max(0, Math.floor((x0 - margin) * sc)), px1 = Math.min(W, Math.ceil((x1 + margin) * sc));
     const pb0 = Math.max(0, Hh - Math.ceil((y1 + margin) * sc)), pb1 = Math.min(Hh, Hh - Math.floor((y0 - margin) * sc));
     if (px1 <= px0 || pb1 <= pb0 || x1 <= x0 || y1 <= y0) return false;
+    // (a capture outside the part drawn: neither copied nor drawn. One that meets it is in it whole: @damage)
+    if (cutOn && (px1 <= cut[0] || cut[0] + cut[2] <= px0 || pb1 <= cut[1] || cut[1] + cut[3] <= pb0)) return false;
     const w = px1 - px0, h = pb1 - pb0;
     ensureLevels(W, Hh);
     gl.disable(gl.BLEND);
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    // (the copy and the passes whole, not cut to the part: a blit is cut by the scissor too)
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, target);
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, lv[0].fb);
     gl.blitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
     gl.useProgram(post);
@@ -708,8 +761,14 @@
   }
   // the main program's state, after the passes
   function mainState() {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
     gl.viewport(0, 0, canvas.width, canvas.height);
+    if (cutOn) {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(cut[0], cut[1], cut[2], cut[3]);
+    } else {
+      gl.disable(gl.SCISSOR_TEST);
+    }
     gl.enable(gl.BLEND);
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
@@ -763,22 +822,75 @@
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, gl.RGBA, gl.FLOAT, data);
   }
 
+  // A frame presented: into cv, only the parts that differ where it holds the frame before, then onto the canvas.
   H.present = (buf, n, r, g, b) => {
     const len = n * INST;
-    if (f32.length < len) f32 = new Float32Array(len * 2);
+    // (and the frame's ground after it: a rect over all the window, opaque, a part drawn again first)
+    if (f32.length < len + INST) f32 = new Float32Array(len * 2 + INST);
     for (let i = 0; i < len; i++) f32[i] = buf[i];
+    f32.fill(0, len, len + INST);
+    f32[len] = -16; f32[len + 1] = -16; f32[len + 2] = cssW + 32; f32[len + 3] = cssH + 32;
+    f32[len + 8] = r; f32[len + 9] = g; f32[len + 10] = b; f32[len + 11] = 1;
+    f32[len + 16] = -1e9; f32[len + 17] = -1e9; f32[len + 18] = 1e9; f32[len + 19] = 1e9;
+    ensureCanvas();
+    if (!cv) dirtyTold = false;
+    const parts = takeParts(cvOk);
+    target = cv ? cv.fb : null;
+    if (!parts) {
+      drawFrame(n, r, g, b, false);
+      missing = drewMissing;
+    } else if (parts.length) {
+      let any = false;
+      for (const p of parts) {
+        for (let i = 0; i < 4; i++) cut[i] = p[i];
+        drawFrame(n, r, g, b, true);
+        any = any || drewMissing;
+      }
+      missing = any;
+    }
+    cvOk = !!cv;
+    target = null;
+    if (cv) {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, cv.fb);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      // (cleared first: a drawing buffer shown is cleared as it is next drawn to, and Chromium does not count a blit
+      // as that: a frame that drew nothing new, only the blit, read back as cleared)
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.blitFramebuffer(0, 0, cv.w, cv.h, 0, 0, cv.w, cv.h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+  };
+
+  // The frame's `n` instances (in f32, its ground after them) drawn into `target`: `part`, only into `cut` over what
+  // it holds, else all of it, cleared to the ground.
+  function drawFrame(n, r, g, b, part) {
+    const len = n * INST;
+    drewMissing = false;
+    cutOn = part;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(r, g, b, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    if (n === 0) return;
+    if (!part) {
+      gl.disable(gl.SCISSOR_TEST);
+      gl.clearColor(r, g, b, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (n === 0) return;
+    }
     bdTex = null;
     gmap.fill(0); guvc.fill(0); ggb.fill(0); gn = 0;
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, len), gl.STREAM_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, len + INST), gl.STREAM_DRAW);
     segsUpload(n);
     mainState();
+    if (part) {
+      for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, len * 4 + i * 16);
+      gl.disable(gl.BLEND);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 1);
+      gl.enable(gl.BLEND);
+    }
     // one draw per run of instances showing the same image (slot 20), or sharing one capture of glass (negative);
     // WebGL has no base instance, so the attributes start at the run instead
     // (and per run of holes, kind 9: written transparent with no blending, where a native view shows)
@@ -810,6 +922,7 @@
         start = end;
         continue;
       }
+      if (!h && tid > 0 && tid <= STREAM_TEX && !(im && im.tex)) drewMissing = true;
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
       for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
@@ -818,7 +931,9 @@
       if (h) gl.enable(gl.BLEND);
       start = end;
     }
-  };
+    if (part) gl.disable(gl.SCISSOR_TEST);
+    cutOn = false;
+  }
 
   // ---- native views over the canvas (src/ui/native.mbt) ----
   // DOM elements in a layer under the canvas, shown through its holes: a <video> whose bytes come through the app
