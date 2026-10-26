@@ -10,10 +10,18 @@
 // system knows that id's name and icon: HKCU\Software\Classes\AppUserModelId\<id> (DisplayName, IconUri), written as
 // the first is shown, the icon the program's own (its resource 1's largest picture, a PNG: written beside its data).
 // What the system allows: its settings for the app (the notifier's Setting), nothing to ask (Windows asks no app).
+//
+// The number on the app's taskbar button (@hostapi.set_badge, what waits for the person: a Mac's Dock tile's badge):
+// Windows draws none of an app's own, so it is an overlay icon over the button (ITaskbarList3::SetOverlayIcon), drawn
+// here as the Dock draws one, white on red, round, 99+ past 99; none at 0. Put on again each time the taskbar makes
+// the button anew (the window shown again from its tray: TaskbarButtonCreated, win_app.c).
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <shobjidl.h>
+#include <objidl.h>
+#include <gdiplus.h>
 #include <roapi.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -25,6 +33,8 @@
 #include "win.h"
 
 #pragma comment(lib, "runtimeobject.lib")
+#pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "uuid.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
@@ -283,6 +293,75 @@ int32_t mb_notice_drive(int32_t tap, const wchar_t *text) {
     return 1;
   }
   return 0;
+}
+
+}  // extern "C"
+
+// ---- the number on the taskbar button ----
+
+namespace {
+
+int badge_now;
+ComPtr<ITaskbarList3> taskbar;
+ULONG_PTR gdiplus_token;
+
+// the number drawn `px` square: round, red, its figures white and bold, as large as they fit
+HICON badge_icon(int n, int px) {
+  if (!gdiplus_token) {
+    Gdiplus::GdiplusStartupInput in;
+    if (Gdiplus::GdiplusStartup(&gdiplus_token, &in, NULL) != Gdiplus::Ok) return NULL;
+  }
+  HICON icon = NULL;
+  {
+    Gdiplus::Bitmap bmp(px, px, PixelFormat32bppARGB);
+    Gdiplus::Graphics g(&bmp);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+    g.Clear(Gdiplus::Color(0, 0, 0, 0));
+    Gdiplus::SolidBrush red(Gdiplus::Color(255, 0xE5, 0x48, 0x4D));
+    g.FillEllipse(&red, 0.0f, 0.0f, (Gdiplus::REAL)px, (Gdiplus::REAL)px);
+    std::wstring figures = n > 99 ? L"99+" : std::to_wstring(n);
+    Gdiplus::REAL size = px * (figures.size() == 1 ? 0.66f : figures.size() == 2 ? 0.52f : 0.4f);
+    Gdiplus::FontFamily face(L"Segoe UI");
+    Gdiplus::Font font(&face, size, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+    Gdiplus::StringFormat at;
+    at.SetAlignment(Gdiplus::StringAlignmentCenter);
+    at.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
+    g.DrawString(figures.c_str(), -1, &font, Gdiplus::RectF(0.0f, 0.0f, (Gdiplus::REAL)px, (Gdiplus::REAL)px), &at, &white);
+    bmp.GetHICON(&icon);
+  }
+  return icon;
+}
+
+}  // namespace
+
+extern "C" {
+
+void mb_win_badge(void *hwnd, int n) {
+  badge_now = n > 0 ? n : 0;
+  if (!hwnd) return;
+  if (!taskbar) {
+    if (FAILED(CoCreateInstance(CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&taskbar))) ||
+        FAILED(taskbar->HrInit())) {
+      taskbar.Reset();
+      return;
+    }
+  }
+  if (!badge_now) {
+    taskbar->SetOverlayIcon((HWND)hwnd, NULL, NULL);
+    return;
+  }
+  UINT dpi = GetDpiForWindow((HWND)hwnd);
+  HICON icon = badge_icon(badge_now, GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96));
+  wchar_t said[16];
+  swprintf(said, 16, L"%d", badge_now);
+  taskbar->SetOverlayIcon((HWND)hwnd, icon, said);
+  if (icon) DestroyIcon(icon);
+}
+
+void mb_win_badge_again(void *hwnd) {
+  if (badge_now) mb_win_badge(hwnd, badge_now);
 }
 
 }  // extern "C"
