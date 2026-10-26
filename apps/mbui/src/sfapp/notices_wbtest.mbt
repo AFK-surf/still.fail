@@ -155,6 +155,28 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
 }
 
 ///|
+test "put away where the app goes on (a desktop's tray, minimized), its notices still come; behind for good, left" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let show : Array[Json] = []
+  let t = notify_core(calls, sys, show~)
+  assert_eq(notice_state.following, "ws1")
+  // put away, the host still running it (Windows' notification area): followed, a notice come meanwhile shown
+  t.app_state(false, false, awake=true)
+  assert_true(@ui.app_awake())
+  assert_eq(notice_state.following, "ws1")
+  show.push(a_notice)
+  t.frame()
+  assert_eq(named(calls, "notice.claim").length(), 1)
+  assert_eq(sys.shown.length(), 1)
+  assert_eq(sys.shown[0].0, "ws1/st1/s-c2")
+  // behind for good (a phone's app behind another: its frames stop): no longer followed
+  t.app_state(false, false)
+  assert_true(!@ui.app_awake())
+  assert_eq(notice_state.following, "")
+}
+
+///|
 test "a message gone to flashes, in and out as the Android app's, nothing of it after" {
   let calls : Array[Made] = []
   let sys = fake_system()

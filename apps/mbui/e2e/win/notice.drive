@@ -1,0 +1,20 @@
+# A notification while the app is put away (mbui's src/host/win_notify.cpp, win_app.c's frames while away): its window
+# closed (to the notification area: the runner, e2e/win.sh notice_do), the test agent answers in the test chat (alice's
+# other device asks it to: e2e/peer.ts send), the core says to show that turn's notice, the app shows it as the
+# system's; tapped (as the system's tap is), the app comes back with the chat open at its answer.
+timeout 60000
+answered {"topic":"accounts"}
+# (from here the app is as the host says: put away is not shown, going on)
+hosted
+#station log do: away
+#station done away
+#station timeout 120000
+#station log do: say
+#station done say
+# (the turn's notice: the chat's title, what the agent did under it)
+#station noticed 端到端测试
+#station notice 端到端测试
+#station shown
+#station until 窗口收起时的回答
+#station shot 6-noticed
+exit

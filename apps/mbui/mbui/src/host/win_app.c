@@ -85,16 +85,35 @@ static mb_outside_fn outside_cb;  // who is told as what the host does for the a
 static void device_tell(mb_outside_fn tell);  // win_device.h: the clipboard's reads done
 static void pick_tell(mb_outside_fn tell);    // win_files.h: the picks read
 
+// While the window is not shown (minimized, put away to the notification area: win_life.h), the app goes on as what
+// comes from outside asks (a message posted: the core's words, the system's say; an outside wait done: mb_app_wake),
+// its frame built at the window's last size and nothing presented: what to show then is the app's (a notification of
+// what the core said); what it asks for itself (a motion's frames, its timers) waits till it is shown again, when
+// what is owed is drawn at once.
+static int outside_asked;  // a frame asked for from outside since the last one
+static int presenting = 1;  // the frame under way is put on the screen
+
 static void draw_frame(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
+  int outside = outside_asked;
+  outside_asked = 0;
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
   device_tell(outside_cb);
   pick_tell(outside_cb);
-  // minimized, or put away (win_life.h): WM_SIZE, or the window back, asks again
-  if (rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd)) return;
+  int away = rc.right <= 0 || rc.bottom <= 0 || !IsWindowVisible(hwnd) || IsIconic(hwnd);
+  if (away) {
+    // (none drawn yet: nothing to build at)
+    if (!outside || frame_w <= 0) return;
+    presenting = 0;
+    mb_cb.frame(frame_w, frame_h, scale, mb_now_ms());
+    presenting = 1;
+    frames_drawn++;
+    if (script) run_script_step(frames_drawn);
+    return;
+  }
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
   if (scale != was) {
@@ -338,7 +357,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return 0;
     }
     case WM_ERASEBKGND: return 1;
-    case WM_APP: want_frame = 1; return 0;  // mb_app_wake
+    case WM_APP: want_frame = 1; outside_asked = 1; return 0;  // mb_app_wake
     case WM_SIZE:
       want_frame = 1;
       if (sizing) draw_frame();
@@ -646,6 +665,8 @@ void mb_host_wake_after(double ms) {
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  // (a frame built while the window is not shown: nothing of it on the screen)
+  if (!presenting) return;
   mb_render_present(buf, count, r, g, b);
 }
 
@@ -889,32 +910,11 @@ moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0);
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 
-// Notifications (notify.mbt): none shown here yet (the toast notifications and WNS are a later slice's): nothing kept, nothing tapped, no push; what the
-// system allows unknown.
-void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
-                         moonbit_string_t opens) {
-  (void)channel;
-  (void)tag;
-  (void)title;
-  (void)body;
-  (void)opens;
-}
+// Notifications (notify.mbt): the system's toasts, win_notify.cpp.
 
-void mb_host_notice_cancel(moonbit_string_t tag) { (void)tag; }
-
-int32_t mb_host_notice_state(int32_t what) {
-  // 3: Settings' Notifications opened (1); 4: the app's number on its icon shown: not yet (the taskbar's overlay)
-  if (what == 3) return (INT_PTR)ShellExecuteW(NULL, L"open", L"ms-settings:notifications", NULL, NULL, SW_SHOWNORMAL) > 32 ? 1 : 0;
-  return what == 2 ? -1 : 0;
-}
-
-moonbit_string_t mb_host_notice_text(int32_t what) {
-  (void)what;
-  return moonbit_make_string_raw(0);
-}
-
-// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), the window resized to
-// "<w>x<h>" points (8), the runner's directory watched (9); the rest is sent to the app itself.
+// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), a notification tapped (6)
+// or looked for (7) by its words (win_notify.cpp), the window resized to "<w>x<h>" points (8), the runner's directory
+// watched (9); the rest is sent to the app itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   // the directory the run's runner says what it has done in, watched (done_watch.h)
   if (kind == 9) return mb_done_watch(text);
@@ -923,6 +923,7 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   if (n > 1023) n = 1023;
   memcpy(w, text, (size_t)n * sizeof(wchar_t));
   w[n] = 0;
+  if (kind == 6 || kind == 7) return mb_notice_drive(kind == 6, w);
   if (kind == 4) {
     int ok = mb_render_snapshot(w);
     char u[2048];

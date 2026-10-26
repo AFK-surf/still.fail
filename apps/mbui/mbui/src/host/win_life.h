@@ -17,7 +17,7 @@
 // Said to the app on the system's channel (src/hostapi/system.mbt): `shown` with how long it was away as its window
 // comes back after it was put away and as the PC wakes from sleep, `link`, `network` as its default route goes
 // another way (another interface, another address). Told by @hostapi.set_app_state: shown (visible, not minimized),
-// and in front (the foreground window). The system's light or dark (its apps' setting, Settings > Personalization >
+// in front (the foreground window), and that it goes on while not shown (its frames for what comes from outside). The system's light or dark (its apps' setting, Settings > Personalization >
 // Colors) read as it changes, the title bar drawn dark or light as the app is (set_dark).
 #include <shellapi.h>
 #include <shobjidl.h>
@@ -107,6 +107,8 @@ static const WCHAR *app_name(const WCHAR *title) {
   const WCHAR *v = app_env(L"MBUI_APP_NAME");
   return v && *v ? v : title;
 }
+const wchar_t *mb_win_app_id(void) { return app_id(); }
+const wchar_t *mb_win_app_name(void) { return app_name(L""); }
 
 // the window's class, by which the app started again finds the one running
 static void window_class(WCHAR *out, size_t cap) {
@@ -205,7 +207,8 @@ static void tell_state(void) {
   if (!state_cb || !hwnd) return;
   int shown = IsWindowVisible(hwnd) && !IsIconic(hwnd);
   int front = shown && GetForegroundWindow() == hwnd;
-  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  // (| 4: the app goes on with its window not shown, as what comes from outside asks: win_app.c draw_frame)
+  int s = (shown ? 1 : 0) | (front ? 2 : 0) | 4;
   if (s == state_told) return;
   state_told = s;
   state_cb(s);
@@ -783,6 +786,11 @@ static int life_message(UINT msg, WPARAM wp, LPARAM lp, LRESULT *r) {
       return 0;
     case WM_MB_STATE:
       tell_state();
+      *r = 0;
+      return 1;
+    // a notification tapped (win_notify.cpp): the window back, what it opens the app's next frame's
+    case WM_MB_TAPPED:
+      bring_back();
       *r = 0;
       return 1;
     case WM_SETTINGCHANGE:

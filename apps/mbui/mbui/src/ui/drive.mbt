@@ -69,6 +69,9 @@
 //                               downloading") with NAME in it done since the last step that acted (what it set off),
 //                               and a frame drawn after it, within the timeout; NAME naming more than one done, the
 //                               run fails. Never a motion: no step waits for one to end
+//   hosted                      from here on the app is as the host says it is (shown or not, in front or not), as
+//                               out of a run; till then a run keeps it shown and in front, whatever the host says
+//                               (a locked screen's window is covered): a run about the app put away (e2e/win's)
 //   shown                       the host's word that the app is shown again (after it was not: another app's page
 //                               over it gone) since the last step that acted, and a frame drawn after it
 //   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
@@ -123,6 +126,8 @@ priv struct Driver {
   // last
   mut shown : Int
   mut said_state : Int
+  // what the host says of the app's state taken from `hosted` on (till then the run keeps it shown and in front)
+  mut takes_state : Bool
   // the answers come of each call since the run began (`answered CALL`), by its name, counted up to the ended wait
   // `counted` (each frame, and before a step that acts takes its mark: Runtime::outside_ended lets go of what came
   // before), and how many of them the run's `answered` lines have taken
@@ -252,6 +257,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     shown_mark: 0,
     shown: 0,
     said_state: 3,
+    takes_state: false,
     answers: {},
     counted: runtime().outside_ended(),
     answers_taken: {},
@@ -1175,6 +1181,13 @@ fn drive_steps(c : Ctx) -> Unit {
         } else {
           return
         }
+      // the app's state as the host says it from here on (what it said last at once): a run about the app put away
+      "hosted" => {
+        d.takes_state = true
+        h_log("DRIVE ok hosted: the host's word on the app taken (\{d.said_state})")
+        app_state_taken(d.said_state)
+        next()
+      }
       "log" => {
         h_log("DRIVE LOG " + arg)
         next()

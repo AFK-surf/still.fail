@@ -1543,7 +1543,9 @@ pub fn env(name : String) -> String {
 
 ///|
 /// Who to tell when the app comes to the front or leaves it: `f` gets 1 while its window is shown, | 2 while it is
-/// also in front (the key window of the active app; Android: the activity resumed with the window's focus). Told on
+/// also in front (the key window of the active app; Android: the activity resumed with the window's focus), | 4 where
+/// the app goes on with its window not shown (a desktop's app put away to the notification area or minimized: what
+/// comes from outside, the core's words, still runs its frames, though nothing of them is shown: Windows'). Told on
 /// each change, on the app's thread (Android: before the GL thread pauses). Hosts that never tell leave the app as
 /// shown and in front.
 pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {

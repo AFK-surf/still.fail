@@ -88,7 +88,7 @@ pub fn attend(src : Source, workspace : String) -> Unit {
         }
         None => ()
       }
-      notices_app_change(@ui.app_visible())
+      notices_app_change(@ui.app_visible(), @ui.app_awake())
     })
   }
   attention.src = Some(src)

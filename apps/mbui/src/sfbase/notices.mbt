@@ -2,10 +2,12 @@
 // MainActivity.kt; docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), a tap
 // opening the chat at the message it is about with Back going to its chat list.
 //
-// - While the app is shown: the notices the core's `notify {workspace}` says to show now (not while off, not for the
-//   chat looked at, only of the workspace in view: client/core-ts attend.ts decides), each shown once it is taken
-//   (`notice.claim`). Hidden, the topic is left (the core then holds none back for a page: Notices.kt's flow ends
-//   with the activity's onStop).
+// - While the app goes on (shown, or put away where its host still runs it: a desktop's app in the notification area
+//   or minimized, @ui.app_awake, as still.fail's desktop app showed its notices with no window open): the notices the
+//   core's `notify {workspace}` says to show now (not while off, not for the chat looked at, only of the workspace in
+//   view: client/core-ts attend.ts decides), each shown once it is taken (`notice.claim`). Behind for good (a phone's
+//   app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
+//   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again
 //   (`notify.permission`); the system asked once, the first time signed in with notifications on (`notify.set
 //   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them).
@@ -195,8 +197,8 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
     }
     None => ()
   }
-  // the notices to show while the app is shown (Notices.kt showNotices)
-  if shown {
+  // the notices to show while the app goes on (Notices.kt showNotices)
+  if @ui.app_awake() {
     follow_notices(src, w.id)
   } else {
     leave_notices(src)
@@ -221,15 +223,16 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The system said the app was hidden or shown again, between frames (Android's activity stopping: no frame comes
-/// after it): hidden, the notices are not followed any more, and what the system allows is told again once shown.
-fn notices_app_change(shown : Bool) -> Unit {
+/// after it): hidden, what the system allows is told again once shown; behind for good (not going on: `awake`), the
+/// notices are not followed any more.
+fn notices_app_change(shown : Bool, awake : Bool) -> Unit {
   if shown {
     return
   }
   notice_state.told = false
   match notice_state.src {
-    Some(src) => leave_notices(src)
-    None => ()
+    Some(src) if !awake => leave_notices(src)
+    _ => ()
   }
 }
 

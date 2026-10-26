@@ -1344,14 +1344,24 @@ fn on_app_state(s : Int) -> Unit {
   // a scripted run stands for someone looking at the app: what the host says meanwhile (a locked screen's window
   // is covered, a task's app not active) is let be
   if driver.val is Some(d) {
-    h_log("DRIVE the host says the app is \{s} (1 shown, 2 in front): kept in front for the run")
+    if !d.takes_state {
+      h_log("DRIVE the host says the app is \{s} (1 shown, 2 in front): kept in front for the run")
+    }
     // (shown again after it was not: what a run's `shown` waits for)
     if (s & 1) != 0 && (d.said_state & 1) == 0 {
       d.shown += 1
     }
     d.said_state = s
-    return
+    if !d.takes_state {
+      return
+    }
   }
+  app_state_taken(s)
+}
+
+///|
+/// The app's state as `s` says it (1 shown, 2 in front, 4 going on not shown): who is told of it told, a frame asked.
+fn app_state_taken(s : Int) -> Unit {
   if s == app_state.val {
     return
   }
@@ -1373,6 +1383,14 @@ pub fn app_visible() -> Bool {
 /// Whether it is also in front (the key window of the active app; Android: with the window's focus).
 pub fn app_focused() -> Bool {
   (app_state.val & 2) != 0
+}
+
+///|
+/// Whether the app goes on: shown, or not shown where its host still runs it for what comes from outside (a
+/// desktop's app put away to the notification area or minimized: Windows'). Not an Android app behind another, whose
+/// frames stop.
+pub fn app_awake() -> Bool {
+  (app_state.val & (1 | 4)) != 0
 }
 
 ///|

@@ -12,7 +12,8 @@
 # DPAPI, Home lists the chat the station has, both runs' scripts pass. Then the app as an app (its identity in its
 # resources: mbui's src/host/win_life.h): a window's program; started again with a link of its schemes, it hands the
 # link to the one that runs and ends; its window closed, it goes on, put away; started again, it comes back. Then
-# files from outside into the composer: Explorer's copied file and a bitmap pasted, two picked through the dialog.
+# files from outside into the composer: Explorer's copied file and a bitmap pasted, two picked through the dialog. Then
+# a notification while put away, shown, tapped: the app back at the chat.
 #   apps/mbui/e2e/win.sh        (E2E_PORT: the cloud's ports from it, 18787 by default; the relay's E2E_PORT - 47)
 #   E2E_APP=FILE: the app is waited for, the still.fail it runs against made meanwhile: FILE is what its build writes
 #   once the app is whole (`ok`; anything else: it failed). mbui.yml starts this before the app's build ends: the
@@ -238,10 +239,35 @@ driven files 1100x760 files_do "MBUI_PICK_FILES=$(w "$FILES/e2e-photo.jpg")|$(w 
 check "files from outside: a copied file and a bitmap pasted, two picked through the dialog, all put up to the station" \
   '[ $station_ok = 1 ] && grep -q "^DRIVE PASS" "$OUT/files.log"'
 
+# a notification while put away (notice.drive): the window closed by the runner, the agent asked to answer by alice's
+# other device, the run waiting for its notice to be shown (the app goes on put away: what the core says runs its
+# frames), then tapping it
+peer() {
+  (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
+     E2E_EMBER="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
+   timeout 120 node "$D/peer.ts" "$@")
+}
+notice_do() {
+  local how
+  case $1 in
+    away)
+      how=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(w "$D/win/away.ps1")" -Class "mbui fail.still.mbui" 2>&1 | tr -d '\r')
+      case $how in hidden | minimized) echo ok ;; *) echo "not put away: $how" ;; esac ;;
+    # (what comes of it, the notice, the run waits for itself: `noticed`)
+    say)
+      peer send "say:窗口收起时的回答" > "$OUT/notice-peer.log" 2>&1 && echo ok ||
+        echo "the peer said nothing: $(tail -2 "$OUT/notice-peer.log" | tr '\r\n' '  ')" ;;
+    *) echo "nothing called $1 to do" ;;
+  esac
+}
+driven notice 1100x760 notice_do
+check "put away, a notice shown (by the system: $(grep -c '^NOTICE shown by the system' "$OUT/notice.log" 2>/dev/null)), tapped, the app back at the chat" \
+  '[ $station_ok = 1 ] && grep -q "^DRIVE PASS" "$OUT/notice.log" && grep -q "^NOTICE TAP " "$OUT/notice.log"'
+
 for p in ${station:-} $cloud $relay; do
   taskkill //F //T //PID "$(cat /proc/$p/winpid 2>/dev/null || echo 0)" > /dev/null 2>&1 || kill $p 2>/dev/null || true
 done
 echo "e2e: $fails failed" | tee -a "$OUT/result.txt"
-for f in signin again life files; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
+for f in signin again life files notice; do echo "== $f.log (the end)"; grep -v "^\[core trace\]" "$OUT/$f.log" | tail -25; done
 [ $station_ok = 1 ] || for f in enroll station peer; do echo "== $f.log (the end)"; tail -20 "$OUT/$f.log" 2>/dev/null; done
 [ $fails = 0 ]
