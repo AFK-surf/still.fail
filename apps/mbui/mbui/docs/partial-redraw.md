@@ -37,9 +37,12 @@ where:
 Otherwise the frames' instances are matched: as many, each against the one at its place; another number (a caret
 shown or hidden, a row's actions under the pointer, a word typed), those the same from the start and from the end
 each against its own, and those between in order where their numbers are equal, the fewest left over (Myers's diff
-of their numbers, up to 512 edits: past that, all between counts). Matched in order, what is drawn over what is the
-same, so a pixel no unmatched or changed instance reaches is as it was. Each instance that differs in any of its 52
-numbers, or has no match, counts where it was and where it is now, each as far as any pixel of it reaches:
+of their numbers, up to 512 edits: past that, all between counts; more than 512 of either with no equal one in the
+other, in any order, as every instance of a list being scrolled, is past that before it is looked for). Once the
+parts counted are more than half the window, nothing more is compared: the frame is drawn whole. Matched in order,
+what is drawn over what is the same, so a pixel no unmatched or changed instance reaches is as it was. Each instance
+that differs in any of its 52 numbers, or has no match, counts where it was and where it is now, each as far as any
+pixel of it reaches:
 
 - its rect, and 2 points round it for the edge's antialiasing and a pixel's rounding at any scale;
 - a shadow (kind 2): 3σ + 2 more, as the renderers' vertex grows it;

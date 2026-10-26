@@ -292,6 +292,31 @@ fn inst_hash(a : FixedArray[Double], k : Int) -> Int64 {
 let most_edits = 512
 
 ///|
+/// How many of the hashes `ha` and `hb` (instances, inst_hash) have no equal one in the other, each equal pair taken
+/// once: the fewest edits between the two runs, whatever their order.
+fn unmatched(ha : FixedArray[Int64], hb : FixedArray[Int64]) -> Int {
+  let sa = ha.copy()
+  let sb = hb.copy()
+  sa.sort()
+  sb.sort()
+  let mut i = 0
+  let mut j = 0
+  let mut same = 0
+  while i < sa.length() && j < sb.length() {
+    if sa[i] == sb[j] {
+      same = same + 1
+      i = i + 1
+      j = j + 1
+    } else if sa[i] < sb[j] {
+      i = i + 1
+    } else {
+      j = j + 1
+    }
+  }
+  sa.length() + sb.length() - 2 * same
+}
+
+///|
 /// Instances `a0` to `a1` of `a` against `b0` to `b1` of `b`, matched in order where their numbers are equal, the
 /// fewest left over (Myers's O(ND) diff): each pair (k in a, k in b), one of them -1 where the other has no match.
 /// None past `most_edits`.
@@ -307,6 +332,11 @@ fn match_between(
   let m = b1 - b0
   let ha = FixedArray::makei(n, fn(i) { inst_hash(a, a0 + i) })
   let hb = FixedArray::makei(m, fn(i) { inst_hash(b, b0 + i) })
+  // (as many edits at least as instances of either that the other has none the same of, in any order: past
+  // `most_edits`, there is no diff to look for; a list scrolled moves every instance of it, each one another)
+  if unmatched(ha, hb) > most_edits {
+    return None
+  }
   let most = if n + m < most_edits { n + m } else { most_edits }
   let off = most + 1
   let v = FixedArray::make(2 * off + 1, 0)
@@ -487,6 +517,9 @@ fn Damage::changed(
   let seg_old = pieces_from(prev, n_old)
   let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
   let parts : Array[Rect] = []
+  // (the parts past whole_share of the window: the frame drawn whole, nothing more of it compared)
+  let most_area = whole_share * w * h
+  let mut whole = false
   // instance `k_old` of the last frame against `k` of this one: the same, a band's pieces too, a stream's picture
   // not (it changes under the same numbers)
   let same = fn(k_old : Int, k : Int) -> Bool {
@@ -516,10 +549,16 @@ fn Damage::changed(
       reach(inst, k, now)
       add_part(parts, now, window)
     }
+    if parts_area(parts) > most_area {
+      whole = true
+    }
   }
   if seg == seg_old {
     // as many: each against the one where it was
     for k in 0..<seg {
+      if whole {
+        break
+      }
       if !same(k, k) {
         changed(k, k)
       }
@@ -542,6 +581,9 @@ fn Damage::changed(
     match pairs {
       Some(ps) =>
         for p in ps {
+          if whole {
+            break
+          }
           let (ko, kn) = p
           if ko < 0 || kn < 0 || !same(ko, kn) {
             changed(ko, kn)
@@ -549,13 +591,23 @@ fn Damage::changed(
         }
       None => {
         for k in head..<(seg_old - tail) {
+          if whole {
+            break
+          }
           changed(k, -1)
         }
         for k in head..<(seg - tail) {
+          if whole {
+            break
+          }
           changed(-1, k)
         }
       }
     }
+  }
+  if whole {
+    self.why = 5
+    return [(0.0, 0.0, -1.0, -1.0)]
   }
   if parts.is_empty() {
     return []
@@ -582,15 +634,21 @@ fn Damage::changed(
       }
     }
   }
-  let mut area = 0.0
-  for p in parts {
-    area = area + (p.x1 - p.x0) * (p.y1 - p.y0)
-  }
-  if area > whole_share * w * h {
+  if parts_area(parts) > most_area {
     self.why = 5
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) })
+}
+
+///|
+/// How much of the window `parts` cover, together (apart, as settle leaves them).
+fn parts_area(parts : Array[Rect]) -> Double {
+  let mut area = 0.0
+  for p in parts {
+    area = area + (p.x1 - p.x0) * (p.y1 - p.y0)
+  }
+  area
 }
 
 ///|
