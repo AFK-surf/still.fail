@@ -598,6 +598,28 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 }
 
 ///|
+/// A setting kept on a page of its own (字体: the faces chosen): its `title`, what it is for (`note`) and what it is
+/// now (`value`), pressed to open its page. Wide: a row of its list card (`group`), a link's (link_row): its title
+/// with its note under it at its start, what it is now and the chevron at its end; narrow: as a `setting`, its title
+/// over the control (a row of a card of its own saying what it is now, the chevron at its end), what it is for under
+/// it. True on the frame it is pressed.
+pub fn setting_link(c : @ui.Ctx, key : String, title : String, value : String, note? : String = "") -> Bool {
+  match look() {
+    Wide => link_row(c, key, title, value~, note~)
+    Narrow => {
+      let mut pressed = false
+      section(c, title, heads=true, fn() {
+        group(c, fn() { pressed = link_row(c, key, value) })
+        if note != "" {
+          page_note(c, note)
+        }
+      })
+      pressed
+    }
+  }
+}
+
+///|
 /// A page's settings (each drawing a `setting`) as the page's blocks: wide, the rows of one list card; narrow, a block
 /// each, its title over its control.
 pub fn settings(c : @ui.Ctx, each : Array[() -> Unit]) -> Array[() -> Unit] {

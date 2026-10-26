@@ -1,8 +1,9 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
 // device shows still.fail, its settings (@sf.settings: wide, rows of one list card, each choice at its row's end;
-// narrow, a block each): 主题, 动画, 语言; with keyboard and mouse the files dragged into a chat too, and laid out wide
-// the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs (`prefs.set`), shown at once.
-// 字体 a section after them: the faces chosen, a row opening its page (FontRow; font_setting.mbt), on every screen. When a done chat is offered to archive is 归档's (archiving.mbt), as the web's.
+// narrow, a block each): 主题, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 语言; with
+// keyboard and mouse the files dragged into a chat too, and laid out wide the rail changed in place (as the web's,
+// `wideOnly`). Each choice is the core's prefs (`prefs.set`), shown at once. When a done chat is offered to archive is
+// 归档's (archiving.mbt), as the web's.
 
 ///|
 /// The page (AppearancePage, AppearanceScreen), in the frame it is given.
@@ -26,6 +27,18 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           @settings.appearance(prefs),
         )
       })
+    },
+    // the faces chosen, opening their page (a chat as they set it and their list are a page's own, on every screen)
+    fn() {
+      if @sf.setting_link(
+          c,
+          "appearance/fonts",
+          @sf.t("web-pages.appearance.fonts.title"),
+          fonts_said(prefs),
+          note=@sf.t("web-pages.appearance.fonts.description"),
+        ) {
+        (core.push)(Fonts)
+      }
     },
     fn() {
       @sf.setting(c, @sf.t("web-pages.appearance.motion.title"), note=@sf.t("web-pages.appearance.motion.description"), fn() {
@@ -61,19 +74,7 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   }
-  let blocks = @sf.settings(c, settings)
-  // the faces, a section of their own: what they are for over the faces chosen, a row opening their page (a chat as
-  // they set it and their list are a page's own, on every screen)
-  blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.appearance.fonts.title"), heads=true, note=@sf.t("web-pages.appearance.fonts.description"), fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(c, "appearance/fonts", fonts_said(prefs)) {
-          (core.push)(Fonts)
-        }
-      })
-    })
-  })
-  @sf.page(c, on_back=core.pop, frame~, "appearance", @sf.t("web-pages.appearance.title"), blocks)
+  @sf.page(c, on_back=core.pop, frame~, "appearance", @sf.t("web-pages.appearance.title"), @sf.settings(c, settings))
 }
 
 ///|

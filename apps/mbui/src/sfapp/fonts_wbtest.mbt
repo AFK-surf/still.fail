@@ -5,10 +5,8 @@
 test "外观's 字体 row: the faces at a glance, opening the page: the places, a chat as they set it, the faces with their sizes" {
   let t = settings_tester("appearance")
   assert_true(t.find("字体") is Some(_))
-  // none chosen: the app's own, the section's row (after the settings: the page scrolled to its end)
+  // none chosen: the app's own, its setting's row (after 主题)
   assert_true(t.find("默认") is Some(_))
-  t.wheel(200.0, 450.0, 3000.0)
-  t.run_for(@ui.nav_push_ms)
   // (its words whole: 拖入 chat 的文件's note says 默认 too)
   let said = t.words().filter(fn(w) { w.0 == "默认" && w.5 > 0.5 })
   assert_eq(said.length(), 1)

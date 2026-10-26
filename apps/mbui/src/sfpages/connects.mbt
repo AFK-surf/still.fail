@@ -296,12 +296,17 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
   }
   let how = text(cv, "modeText") + " · " + text(cv, "runtimeText") + model
   let on = [("station", station), ("id", id)]
-  // its Slack workspace after its name (short of room, its name kept: its team leaves its line first)
+  // its Slack workspace after its name (short of room, its name kept: its team leaves its line first), what it
+  // connects to before it where its own picture leads the row (a platform's mark is said once on a row: where the row
+  // leads with it, not again)
+  let pictured = opt_text(cv, "botImage") is Some(_)
   let team = match opt_text(cv, "team") {
     Some(team) =>
       Some(fn() {
         c.box(style=cn_team, drop=cn_drop_team, fn() {
-          cn_kind(c, text(cv, "kind"), cn_team_icon)
+          if pictured {
+            cn_kind(c, text(cv, "kind"), cn_team_icon)
+          }
           c.text(team, style=cn_meta) |> ignore
         })
         |> ignore
@@ -316,7 +321,8 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
       note_cut=true,
       chevron=false,
       lead=fn() { cn_avatar(c, core, cv) },
-      face=true,
+      // (its own picture a face across the row's middle; what it connects to a mark by its first line)
+      face=pictured,
       title_after?=team,
       tail=fn() {
         // (wide: where it runs and who made it, dropped before its name where the line has not the room)
@@ -431,11 +437,11 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
       },
     )
   }
+  // its Slack workspace after its name, no mark again (the row leads with Slack's: a platform's mark said once on a row)
   let team = match opt_text(av, "team") {
     Some(team) =>
       Some(fn() {
         c.box(style=cn_team, drop=cn_drop_team, fn() {
-          @sf.slack_mark(c, cn_team_icon) |> ignore
           c.text(team, style=cn_meta) |> ignore
         })
         |> ignore
