@@ -200,15 +200,17 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         }
         // only a view's picture changed (pictureFrame): the last frame drawn again with it, the app not asked; a frame
         // the app or the system asked for is the app's
+        long[] at = vsyncAt;
         if (pictured && !app) {
             Native.redraw();
+            showAt(at[1]);
             NativeViews.framed(false);
             askedAtEnd = false;
             return;
         }
         long began = System.nanoTime();
         // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
-        long v = vsyncNanos;
+        long v = at[0];
         double now = v != 0 ? v / 1e6 : began / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
@@ -227,6 +229,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
         boolean later = takeBacks(v != 0 ? v : began);
         boolean more = Native.frame(w, h, density, now, late);
+        showAt(at[1]);
         askedAtEnd = more || later;
         drawn++;
         if (more || later || following) sayRate(true);
@@ -262,7 +265,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         hints = null;
         hintTid = tid;
         android.os.PerformanceHintManager pm = getContext().getSystemService(android.os.PerformanceHintManager.class);
-        long target = framePeriod;
+        long target = framePeriod * 7 / 10;
         try {
             hints = pm == null ? null : pm.createHintSession(new int[] {tid}, target);
         } catch (RuntimeException e) {
@@ -275,7 +278,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private android.os.PerformanceHintManager.Session hints;
     private int hintTid;
     private long hintTarget;
-    /** The display's frame (ns), read as the view is shown and as the display changes its rate (main thread). */
+    /**
+     * The display's frame (ns), read as the view is shown and as the display changes its rate, and since Android 13 from
+     * each vsync's timelines (main thread).
+     */
     private volatile long framePeriod = 16_666_667L;
 
     private final android.hardware.display.DisplayManager.DisplayListener displays =
@@ -360,10 +366,15 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         super.onDetachedFromWindow();
     }
 
-    /** A frame's work done (GL thread): how long it took, against the display's frame as it is now. */
+    /**
+     * A frame's work done (GL thread): how long it took, against 70% of the display's frame as it is now. The system
+     * clocks the CPUs so that a frame takes about as long as its target, one a little over as often as one a little
+     * under; one over the display's frame misses the next vsync, so the target leaves room under it, as HWUI's does
+     * (its frames' targets are 70% of their time).
+     */
     private void frameWorked(long nanos) {
         if (hints == null) return;
-        long target = framePeriod;
+        long target = framePeriod * 7 / 10;
         if (target != hintTarget) {
             hintTarget = target;
             hints.updateTargetWorkDuration(target);
@@ -407,14 +418,65 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     // ---- vsync ----
 
-    private volatile long vsyncNanos;
+    /**
+     * The vsync the next frame is drawn for and when the system is to show it (ns, System.nanoTime's clock; 0: not said):
+     * since Android 13, the expected presentation of the vsync's preferred frame timeline (Choreographer.FrameData), the
+     * refresh a frame of the system's own drawn for that vsync is shown at.
+     */
+    private volatile long[] vsyncAt = {0, 0};
     private final AtomicBoolean wanted = new AtomicBoolean();
     private final Choreographer.FrameCallback vsync = t -> {
-        vsyncNanos = t;
+        vsyncAt = new long[] {t, 0};
         wanted.set(false);
         requestRender();
     };
-    private final Runnable postVsync = () -> Choreographer.getInstance().postFrameCallback(vsync);
+    /** The vsync told with its frame's timelines (Timelines: Android 13's), made as first asked for. */
+    private Object vsyncTimed;
+    private final Runnable postVsync = () -> {
+        if (android.os.Build.VERSION.SDK_INT >= 33) Timelines.post(this);
+        else Choreographer.getInstance().postFrameCallback(vsync);
+    };
+
+    /** Android 13's vsync with its frame's timelines: a class of its own, loaded only there (older have no VsyncCallback). */
+    private static final class Timelines {
+        static void post(MBView v) {
+            if (v.vsyncTimed == null) {
+                v.vsyncTimed = (Choreographer.VsyncCallback) d -> {
+                    long shows = d.getPreferredFrameTimeline().getExpectedPresentationTimeNanos();
+                    v.vsyncAt = new long[] {d.getFrameTimeNanos(), shows};
+                    // the display's frame now, as far apart as its timelines are: the rate the app's frames are shown
+                    // at (since Android 16 the display's listener is told no change of rate unless it asks, so the
+                    // frame read as the view was shown, at 60 Hz, stayed while the display went to 120 as the app
+                    // moved); taken as the rate changes, not as the compositor's guess of it moves by a little
+                    Choreographer.FrameTimeline[] tl = d.getFrameTimelines();
+                    long period = tl.length > 1
+                            ? tl[1].getExpectedPresentationTimeNanos() - tl[0].getExpectedPresentationTimeNanos() : 0;
+                    if (period > 0 && Math.abs(period - v.framePeriod) * 16 > v.framePeriod) v.framePeriod = period;
+                    v.wanted.set(false);
+                    v.requestRender();
+                };
+            }
+            Choreographer.getInstance().postVsyncCallback((Choreographer.VsyncCallback) v.vsyncTimed);
+        }
+    }
+
+    /**
+     * The frame being drawn (GL thread, before GLSurfaceView swaps it) shown at the refresh its vsync's timeline says
+     * ({@code shows}, vsyncAt's), not sooner; at once where none is said (0: before Android 13, the keyboard's frames).
+     * A frame of the system's own carries its vsync's timeline, and the compositor holds it until that refresh however
+     * soon it is ready. One drawn here carried nothing and was shown at the first refresh after it was ready: at 120 Hz,
+     * a frame drawn in a little less than a refresh was shown a refresh sooner after its vsync than one drawn in a little
+     * more, so what moved went by uneven steps and the words shook. Held so, every frame is shown as long after its
+     * vsync as the others. (Said half a refresh before it, as the compositor takes a frame at the first refresh after
+     * the time it is given and its moments and the timeline's may be apart by a little; said on every frame, as the
+     * surface keeps the last time given.)
+     */
+    private void showAt(long shows) {
+        if (android.os.Build.VERSION.SDK_INT < 33) return;
+        long at = shows != 0 ? shows - framePeriod / 2 : System.nanoTime();
+        android.opengl.EGLExt.eglPresentationTimeANDROID(android.opengl.EGL14.eglGetCurrentDisplay(),
+                android.opengl.EGL14.eglGetCurrentSurface(android.opengl.EGL14.EGL_DRAW), at);
+    }
 
     /**
      * A frame now, at the vsync being drawn (main thread, within a Choreographer frame: the keyboard's motion said by
@@ -423,8 +485,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     void frameNow() {
         if (shotTaken) return;
-        // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn)
-        vsyncNanos = System.nanoTime();
+        // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn; shown as soon as
+        // it is drawn, as the keyboard moves)
+        vsyncAt = new long[] {System.nanoTime(), 0};
         wanted.set(false);
         requestRender();
     }
