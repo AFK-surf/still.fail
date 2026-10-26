@@ -154,7 +154,8 @@ pub fn button_height() -> Double {
 /// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`corner`: the
 /// ladder's step where it stands, a card's text inset in its corner the small block's 10; `round`: a circle, where it
 /// stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons' at the
-/// window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
+/// window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at (`lit`: so as what points at it is told
+/// from outside, the host's: the window's maximize button the app draws, window_keys); `on` held down
 /// (aria-pressed); named for a screen reader and said in its tip with its keys (`shortcut`, an action's).
 /// `ink` and `quiet` for one over a ground of its own (the reader's paper).
 pub fn icon_button(
@@ -164,6 +165,7 @@ pub fn icon_button(
   size? : Double = 32.0,
   icon_size? : Double = 16.0,
   on? : Bool = false,
+  lit? : Bool = false,
   round? : Bool = false,
   corner? : Double = r_field,
   linked? : @ui.CornerOf,
@@ -178,7 +180,7 @@ pub fn icon_button(
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (c.lit(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (lit || c.lit(id) || c.pressed(id)))
   let ground = if on {
     alpha(ink, 0.08)
   } else {

@@ -59,6 +59,19 @@ static const wchar_t *shot_dir;
 // pointer's leaving is asked to be told (TrackMouseEvent), whether the right button is down
 static double setup_w, setup_h, setup_min_w, setup_min_h;
 static int cursor_kind, tracking_leave, right_down;
+// An inset window (@hostapi.window_setup's inset): no title bar of the system's, the app's top row its title bar, the
+// window's buttons the app's to draw (@ui's window_keys_own): its maximize button where the app says (window_snap, in
+// the client's pixels) hit as the title bar's own, so Windows 11's Snap Layouts open from it; how the pointer stands on
+// it (0 off, 1 on, 2 pressing it, its press held: snap_held), the non-client area's leaving asked to be told
+static int setup_inset;
+static RECT snap_px;
+static int snap_state, snap_held, tracking_nc_leave;
+// the last press that asked to drag the window (mb_host_window_drag): when and where, for the second of a double click;
+// the move itself begun once the app's handling of the press is over (WM_MB_DRAG: Windows' move is a loop of its own,
+// which draws frames as it goes)
+static DWORD drag_time;
+static POINT drag_at;
+enum { WM_MB_DRAG = WM_APP + 6 };  // (win_life.h has 1 to 5, win.h 4)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
@@ -78,6 +91,28 @@ static void send_text(int kind, const WCHAR *s, int n, int a, int b) {
 
 static void run_script_step(int step);
 static void ime_place(void);
+
+// The window's size for a client area of `r` (pixels, at `dpi`): the system's frame around it; an inset window's
+// without its title bar and its top border, which its client area takes (WM_NCCALCSIZE)
+static void window_for_client(RECT *r, UINT dpi) {
+  LONG top = r->top;
+  AdjustWindowRectExForDpi(r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi ? dpi : 96);
+  if (setup_inset) r->top = top;
+}
+
+// How thick the system's frame is at the window's top (its resize border with its padding), in pixels: what a
+// maximized window has past the screen's edge, and the band an inset window is resized by at its top
+static int frame_top(HWND h) {
+  UINT dpi = GetDpiForWindow(h);
+  return GetSystemMetricsForDpi(SM_CYFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+}
+
+// How the pointer stands on the app's maximize button (snap_state), told the app at once as it changes
+static void snap_set(int state) {
+  if (state == snap_state) return;
+  snap_state = state;
+  want_frame = 1;
+}
 double mb_host_mem_bytes(void);
 
 
@@ -347,6 +382,20 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+  // the app's maximize button pressed (snap_held): the mouse the host's till it is let go, there or elsewhere
+  if (snap_held && (msg == WM_MOUSEMOVE || msg == WM_LBUTTONUP)) {
+    POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+    int on = PtInRect(&snap_px, p);
+    if (msg == WM_LBUTTONUP) {
+      snap_held = 0;
+      ReleaseCapture();
+      snap_set(on ? 1 : 0);
+      if (on) ShowWindow(h, IsZoomed(h) ? SW_RESTORE : SW_MAXIMIZE);
+    } else {
+      snap_set(on ? 2 : 0);
+    }
+    return 0;
+  }
   // the mouse over a web view (win_views.cpp) is its page's
   if (((msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) || msg == WM_MOUSELEAVE) && mb_views_input(msg, wp, lp)) {
     if (msg == WM_MOUSEMOVE && !tracking_leave) {
@@ -358,6 +407,72 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
   LRESULT taken = 0;
   if (life_message(msg, wp, lp, &taken)) return taken;
   switch (msg) {
+    // An inset window: its client area the whole window but the system's frame at its sides and foot (resized there,
+    // its shadow, Windows 11's corners), its title bar and top border the app's top row; maximized, without what of it
+    // is past the screen's top edge, as the title bar it has not would have been
+    case WM_NCCALCSIZE:
+      if (setup_inset && wp) {
+        NCCALCSIZE_PARAMS *nc = (NCCALCSIZE_PARAMS *)lp;
+        LONG top = nc->rgrc[0].top;
+        LRESULT r = DefWindowProcW(h, msg, wp, lp);
+        if (r != 0) return r;
+        nc->rgrc[0].top = top + (IsZoomed(h) ? frame_top(h) : 0);
+        return 0;
+      }
+      break;
+    // where an inset window's top row is resized (its frame's thickness at its top, not maximized) and its maximize
+    // button (the app's, window_snap: the system's Snap Layouts over it as the pointer rests there); the rest of the
+    // top row the app's (it drags the window where it says: mb_host_window_drag)
+    case WM_NCHITTEST:
+      if (setup_inset) {
+        LRESULT hit = DefWindowProcW(h, msg, wp, lp);
+        if (hit != HTCLIENT) return hit;
+        POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        ScreenToClient(h, &p);
+        int band = frame_top(h);
+        if (!IsZoomed(h) && p.y < band) {
+          RECT c;
+          GetClientRect(h, &c);
+          return p.x < band ? HTTOPLEFT : p.x >= c.right - band ? HTTOPRIGHT : HTTOP;
+        }
+        if (snap_px.right > snap_px.left && PtInRect(&snap_px, p)) return HTMAXBUTTON;
+        return HTCLIENT;
+      }
+      break;
+    // the pointer on the app's maximize button, which is the system's for it (HTMAXBUTTON): its Snap Layouts opened by
+    // the system's own handling of its hover; its press and its letting go the host's (not the system's, which would
+    // draw a button of its own there)
+    case WM_NCMOUSEMOVE:
+      if (setup_inset) {
+        if (!tracking_nc_leave) {
+          TRACKMOUSEEVENT t = {sizeof t, TME_LEAVE | TME_NONCLIENT, h, 0};
+          tracking_nc_leave = TrackMouseEvent(&t) ? 1 : 0;
+        }
+        if (!snap_held) snap_set(wp == HTMAXBUTTON ? 1 : 0);
+      }
+      break;
+    case WM_NCMOUSELEAVE:
+      tracking_nc_leave = 0;
+      if (!snap_held) snap_set(0);
+      break;
+    case WM_NCLBUTTONDOWN:
+    case WM_NCLBUTTONDBLCLK:
+      if (setup_inset && wp == HTMAXBUTTON) {
+        snap_held = 1;
+        SetCapture(h);
+        snap_set(2);
+        return 0;
+      }
+      break;
+    case WM_NCLBUTTONUP:
+      if (setup_inset && wp == HTMAXBUTTON) return 0;
+      break;
+    case WM_CAPTURECHANGED:
+      if (snap_held && (HWND)lp != h) {
+        snap_held = 0;
+        snap_set(0);
+      }
+      break;
     case WM_PAINT: {
       PAINTSTRUCT ps;
       BeginPaint(h, &ps);
@@ -367,6 +482,12 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_ERASEBKGND: return 1;
     case WM_APP: want_frame = 1; outside_asked = 1; return 0;  // mb_app_wake
+    case WM_MB_DRAG:
+      if (GetKeyState(VK_LBUTTON) < 0) {
+        ReleaseCapture();
+        SendMessageW(h, WM_NCLBUTTONDOWN, HTCAPTION, MAKELPARAM(drag_at.x, drag_at.y));
+      }
+      return 0;
     case WM_SIZE:
       want_frame = 1;
       if (sizing) draw_frame();
@@ -421,7 +542,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         UINT dpi = GetDpiForWindow(h);
         double k = (dpi ? dpi : 96) / 96.0;
         RECT r = {0, 0, (LONG)lround(setup_min_w * k), (LONG)lround(setup_min_h * k)};
-        AdjustWindowRectExForDpi(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi ? dpi : 96);
+        window_for_client(&r, dpi);
         MINMAXINFO *mm = (MINMAXINFO *)lp;
         mm->ptMinTrackSize.x = r.right - r.left;
         mm->ptMinTrackSize.y = r.bottom - r.top;
@@ -599,8 +720,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   UINT dpi = GetDpiForWindow(hwnd);
   scale = dpi / 96.0;
   RECT r = {0, 0, (LONG)lround(ww * scale), (LONG)lround(wh * scale)};
-  AdjustWindowRectExForDpi(&r, style, FALSE, 0, dpi);
-  SetWindowPos(hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
+  window_for_client(&r, dpi);
+  // (SWP_FRAMECHANGED: its frame asked for again, an inset window's without the title bar: WM_NCCALCSIZE)
+  SetWindowPos(hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
   ImmAssociateContextEx(hwnd, NULL, 0);  // no input method until an editor has focus
   if (!mb_render_init(hwnd)) exit(1);
   ShowWindow(hwnd, SW_SHOW);
@@ -940,7 +1062,7 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
     if (swscanf(w, L"%lfx%lf", &cw, &ch) != 2 || cw <= 0 || ch <= 0) return 0;
     UINT dpi = GetDpiForWindow(hwnd);
     RECT r = {0, 0, (LONG)lround(cw * scale), (LONG)lround(ch * scale)};
-    AdjustWindowRectExForDpi(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi);
+    window_for_client(&r, dpi);
     SetWindowPos(hwnd, NULL, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER);
     fprintf(stdout, "RESIZED %.0fx%.0f\n", cw, ch);
     fflush(stdout);
@@ -950,17 +1072,19 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return 0;
 }
 
-// The window as the app wants it, asked before `run` (@hostapi.window_setup). Windows keeps its own title bar here.
+// The window as the app wants it, asked before `run` (@hostapi.window_setup): with `inset`, no title bar of the
+// system's (WM_NCCALCSIZE), the app's top row is it, its buttons the app's.
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
-  (void)inset;
+  setup_inset = inset != 0;
   setup_min_w = min_w;
   setup_min_h = min_h;
   setup_w = w;
   setup_h = h;
 }
 
-// The system's title bar holds the window's buttons: none in the app's top row.
-int32_t mb_host_window_inset(void) { return 0; }
+// Whether the app's top row is the window's title bar (an inset window, maximized too: Windows has no full screen of
+// a window's own here), the window's buttons in it the app's.
+int32_t mb_host_window_inset(void) { return setup_inset; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
@@ -981,11 +1105,54 @@ double mb_host_window_corner(void) {
   return 8;
 }
 
-// The press under way moves the window (the app's top row), as the title bar's would.
+// The press under way moves the window (the app's top row), as the title bar's would (Windows' own move, its snapping
+// at the screen's edges among it); the second press of a double click there, the first one the window's too, what the
+// title bar's double click does: maximized, or back as it was.
 void mb_host_window_drag(void) {
-  ReleaseCapture();
-  SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+  DWORD now = GetTickCount();
+  POINT at;
+  GetCursorPos(&at);
+  if (drag_time && now - drag_time <= GetDoubleClickTime() &&
+      abs(at.x - drag_at.x) <= GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+      abs(at.y - drag_at.y) <= GetSystemMetrics(SM_CYDOUBLECLK) / 2) {
+    drag_time = 0;
+    ReleaseCapture();
+    ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+    return;
+  }
+  drag_time = now;
+  drag_at = at;
+  PostMessageW(hwnd, WM_MB_DRAG, 0, 0);
 }
+
+// The window's own buttons, the app's in an inset window (@hostapi.window_act): minimized, maximized or back as it was,
+// closed as its close button closes it (put away to the notification area: win_life.h).
+void mb_host_window_act(int32_t what) {
+  if (!hwnd) return;
+  if (what == 1) ShowWindow(hwnd, SW_MINIMIZE);
+  else if (what == 2) ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+  else if (what == 3) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+}
+
+// Whether the window is maximized now (@hostapi.window_zoomed).
+int32_t mb_host_window_zoomed(void) { return hwnd && IsZoomed(hwnd) ? 1 : 0; }
+
+// Where the app draws the window's maximize button this frame, in points (@hostapi.window_snap): hit there as the
+// title bar's own (WM_NCHITTEST); w 0, none.
+void mb_host_window_snap(double x, double y, double w, double h) {
+  if (w <= 0 || h <= 0) {
+    SetRectEmpty(&snap_px);
+    if (!snap_held) snap_set(0);
+    return;
+  }
+  snap_px.left = (LONG)lround(x * scale);
+  snap_px.top = (LONG)lround(y * scale);
+  snap_px.right = (LONG)lround((x + w) * scale);
+  snap_px.bottom = (LONG)lround((y + h) * scale);
+}
+
+// How the pointer stands on it, which the host has (@hostapi.window_snap_state).
+int32_t mb_host_window_snap_state(void) { return snap_state; }
 
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
 // The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).

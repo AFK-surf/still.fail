@@ -1807,9 +1807,24 @@ pub let bar_key_side : Double = 32.0
 /// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32:
 /// line_end_in; a capsule's of words, its own).
 pub fn tape_bar_end(alone : Double, side? : Double = bar_key_side) -> Double {
+  // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
+  // app's: its bar's last before them, alone: window_keys)
+  if pane_at_window_right() && @ui.window_keys_own() {
+    return window_keys_room_tape() - window_in + alone
+  }
   match pane_top_right() {
     Some(k) => line_end_in(k, alone, side~)
     None => alone
+  }
+}
+
+///|
+/// Whether the panel of its own the view is built in stands at the window's right edge (its top right corner the
+/// window's, tape_corners' `right`).
+pub fn pane_at_window_right() -> Bool {
+  match pane_round.val {
+    Some(k) => k[1] == tape_edge
+    None => false
   }
 }
 
@@ -1839,6 +1854,10 @@ pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_sid
 /// the bar's buttons follow the window's corner (bar_keys_link: a Mac's 16), as far as from the bar's top, so concentric
 /// with it; else `alone`, as in a square window.
 pub fn window_end_in(alone : Double) -> Double {
+  // (the window's own buttons there where the app draws them: the bar's last before them, alone: window_keys)
+  if @ui.window_keys_own() {
+    return window_keys_room() + alone
+  }
   match bar_keys_link() {
     Some(link) if link.follows() => bar_keys_top()
     _ => alone
@@ -1849,6 +1868,9 @@ pub fn window_end_in(alone : Double) -> Double {
 /// How far in from the window's side what ends a bar stands at the window's top corner where it is a capsule (⌘F's
 /// field): clear of a corner too square for it to follow, as far in as it is round; else `alone`.
 pub fn window_clear_in(alone : Double) -> Double {
+  if @ui.window_keys_own() {
+    return window_keys_room() + alone
+  }
   let window : @ui.CornerOf = Window
   dmax(alone, window.radius())
 }
@@ -1861,10 +1883,18 @@ pub fn window_clear_in(alone : Double) -> Double {
 /// 8). Not a circle beside an arc it could never follow (the user, 2026-10-25: as the settings' ground is). None in a
 /// panel of its own on the tape, where the bar's buttons are round on the tape's line, concentric with its corner.
 pub fn bar_keys_link() -> @ui.CornerOf? {
-  if in_pane() {
+  // (not in the window's corner where its own buttons are there, the app's: window_keys)
+  if in_pane() || @ui.window_keys_own() {
     return None
   }
-  Some(Follow(Window, bar_keys_top(), bar_key_side / 2.0))
+  Some(window_corner_key())
+}
+
+///|
+/// The corner of a bar's key standing at the window's top corner (bar_keys_link, the window's own buttons' last):
+/// the window's followed from as far in as it stands from the top (bar_keys_top), round where it cannot be.
+pub fn window_corner_key() -> @ui.CornerOf {
+  Follow(Window, bar_keys_top(), bar_key_side / 2.0)
 }
 
 ///|

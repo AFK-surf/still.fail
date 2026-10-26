@@ -240,6 +240,18 @@ extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
 extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
 
 ///|
+extern "C" fn ffi_window_act(what : Int) -> Unit = "mb_host_window_act"
+
+///|
+extern "C" fn ffi_window_zoomed() -> Int = "mb_host_window_zoomed"
+
+///|
+extern "C" fn ffi_window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit = "mb_host_window_snap"
+
+///|
+extern "C" fn ffi_window_snap_state() -> Int = "mb_host_window_snap_state"
+
+///|
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
 
 ///|
@@ -288,6 +300,30 @@ fn window_corner() -> Double {
 /// here, as its title bar's would be.
 fn window_drag() -> Unit {
   ffi_window_drag()
+}
+
+///|
+/// What the window's own buttons do, the app's to draw (@hostapi.window_act).
+fn window_act(what : Int) -> Unit {
+  ffi_window_act(what)
+}
+
+///|
+/// Whether the window is maximized now (@hostapi.window_zoomed).
+fn window_zoomed() -> Bool {
+  ffi_window_zoomed() != 0
+}
+
+///|
+/// Where the app draws the window's maximize button, the host's there (@hostapi.window_snap).
+fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  ffi_window_snap(x, y, w, h)
+}
+
+///|
+/// How the pointer stands on it (@hostapi.window_snap_state).
+fn window_snap_state() -> Int {
+  ffi_window_snap_state()
 }
 
 ///|

@@ -1585,6 +1585,13 @@ void mb_host_set_full_screen(int32_t on) { (void)on; }
 // more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
 double mb_host_window_corner(void) { return 0; }
 void mb_host_window_drag(void) {}
+
+// The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,
+// window_snap, window_snap_state): Windows' alone; none here.
+void mb_host_window_act(int32_t what) { (void)what; }
+int32_t mb_host_window_zoomed(void) { return 0; }
+void mb_host_window_snap(double x, double y, double w, double h) { (void)x, (void)y, (void)w, (void)h; }
+int32_t mb_host_window_snap_state(void) { return 0; }
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 // The number on the app's icon on the home screen (@hostapi.set_badge): what waits for the person; 0 none. (Shown once
 // the person let the app's notifications show badges: asked with them.)

@@ -383,6 +383,10 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     c.look(ground, { ..@ui.still_look, alpha: 0.0 })
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
   }
+  // the window's own buttons where they are the app's (Windows'), over all of it as a title bar's are
+  if @ui.window_keys_own() {
+    c.layer(fn() { @sf.window_keys(c) }) |> ignore
+  }
 }
 
 ///|
@@ -628,7 +632,7 @@ fn page_view(
         c.layer(fn() {
           let id = c.id("window-band")
           c.window_drag(id)
-          c.box(style=@ui.style(w=Full, h=Fixed(window_band)), id~, fn() {  }) |> ignore
+          c.box(style=@ui.style(w=Full, h=Fixed(window_band())), id~, fn() {  }) |> ignore
         })
         |> ignore
       }

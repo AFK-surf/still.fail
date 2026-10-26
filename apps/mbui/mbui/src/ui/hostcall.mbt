@@ -73,6 +73,13 @@ struct FakeHost {
   /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
   mut cursor : Int
   mut window_drags : Int
+  /// what the app asked of the window's own buttons (@hostapi.window_act: 1 minimize, 2 maximize or back, 3 close),
+  /// oldest first; whether the window is maximized (Tester::set_window_zoomed); where the app last said its maximize
+  /// button is (window_snap, (x, y, w, h)) and how the pointer stands on it as the host would say (Tester::set_window_snap)
+  window_acts : Array[Int]
+  mut zoomed : Bool
+  mut snap : (Double, Double, Double, Double)
+  mut snap_state : Int
   /// the number on the app's icon as last told (@ui.set_badge)
   mut badge : Int
   /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
@@ -1934,5 +1941,21 @@ fn h_window_drag() -> Unit {
   match fake.val {
     Some(f) => f.window_drags = f.window_drags + 1
     None => @hostapi.window_drag()
+  }
+}
+
+///|
+fn h_window_act(what : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.window_acts.push(what)
+    None => @hostapi.window_act(what)
+  }
+}
+
+///|
+fn h_window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  match fake.val {
+    Some(f) => f.snap = (x, y, w, h)
+    None => @hostapi.window_snap(x, y, w, h)
   }
 }

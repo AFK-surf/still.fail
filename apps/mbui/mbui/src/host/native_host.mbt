@@ -41,6 +41,26 @@ impl @hostapi.Host for Native with window_drag(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_act(_, what) {
+  window_act(what)
+}
+
+///|
+impl @hostapi.Host for Native with window_zoomed(_) {
+  window_zoomed()
+}
+
+///|
+impl @hostapi.Host for Native with window_snap(_, x, y, w, h) {
+  window_snap(x, y, w, h)
+}
+
+///|
+impl @hostapi.Host for Native with window_snap_state(_) {
+  window_snap_state()
+}
+
+///|
 impl @hostapi.Host for Native with set_cursor(_, kind) {
   set_cursor(kind)
 }

@@ -59,8 +59,8 @@ pub fn viewer_bar(
       c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
     }
     c.box(style=viewer_bar_row, fn() {
-      // clear of the window's buttons (ViewerBar.css.ts: 84 in, not in full screen)
-      if @ui.window_inset() {
+      // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
+      if @ui.window_keys_left() {
         c.box(style=viewer_bar_buttons, fn() {  }) |> ignore
       }
       c.box(style=viewer_bar_start, fn() {
@@ -99,6 +99,11 @@ pub fn viewer_bar(
         tools_across.val = false
       })
       |> ignore
+      // and of those at its right where they are the app's (Windows': window_keys), past its own 12 in
+      let keys = window_keys_room_at(c.width) - viewer_bar_in
+      if keys > 0.0 {
+        c.box(style=@ui.style(w=Fixed(keys), h=Full), fn() {  }) |> ignore
+      }
     })
     |> ignore
   })
@@ -263,6 +268,10 @@ let viewer_bar_row : @ui.Style = @ui.css("row w=Full px=S3 gap=S4 align=ACenter"
 ///|
 // kept across runs: a value (no field of it changes)
 let viewer_bar_buttons : @ui.Style = @ui.style(w=Fixed(viewer_buttons_w), h=Full)
+
+///|
+/// (its row's px)
+let viewer_bar_in : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)

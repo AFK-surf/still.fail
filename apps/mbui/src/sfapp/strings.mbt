@@ -260,7 +260,8 @@ pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
 fn zh_words() -> Map[String, String] {
   if zh_all.is_empty() {
     // (the preview's own words, pv_zh: the library's player says some of them)
-    for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, up_zh] {
+    // (the menu bar's words last: the window's own buttons say some of them, @sf.window_keys)
+    for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, up_zh, menu_zh] {
       for k, v in table {
         if !zh_all.contains(k) {
           zh_all[k] = v
