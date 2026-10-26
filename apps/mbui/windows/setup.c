@@ -18,7 +18,8 @@
 // this one put in its place (else, the old one's files in use, written over); the old one's files (Electron's) gone; the
 // uninstall entry the desktop app's installer made taken over (found by where it points), else one made; the start
 // menu's shortcut made where there is none (the app's AppUserModelID on it, as the desktop app's installer set it); the
-// desktop's too on a first install; then the app opened. What it says goes on stdout and in %TEMP%\<DIR>-setup.log.
+// desktop's too on a first install; then the app opened, as from the start menu (the person's own environment). What it
+// says goes on stdout and in %TEMP%\<DIR>-setup.log.
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
 #endif
@@ -32,6 +33,7 @@
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <tlhelp32.h>
+#include <userenv.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -46,6 +48,7 @@
 #pragma comment(lib, "propsys.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "userenv.lib")
 #pragma comment(lib, "uuid.lib")
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup")
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -519,7 +522,18 @@ static int install(int silent, int run_after, const wchar_t *dir_given) {
     PROCESS_INFORMATION pi;
     wchar_t command[MAX_PATH * 2 + 4];
     _snwprintf(command, MAX_PATH * 2 + 4, L"\"%ls\"", exe);
-    if (CreateProcessW(exe, command, NULL, NULL, FALSE, 0, NULL, install_dir, &si, &pi)) {
+    // opened as the person opens it (the desktop app's installer opened it through the shell, ExecShellAsUser): with
+    // their own environment, not the one of what ran this installer (the app updating itself, the desktop app, a
+    // scripted run), which is that program's
+    void *env = NULL;
+    HANDLE token = NULL;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &token)) {
+      if (!CreateEnvironmentBlock(&env, token, FALSE)) env = NULL;
+      CloseHandle(token);
+    }
+    BOOL opened = CreateProcessW(exe, command, NULL, NULL, FALSE, env ? CREATE_UNICODE_ENVIRONMENT : 0, env, install_dir, &si, &pi);
+    if (env) DestroyEnvironmentBlock(env);
+    if (opened) {
       CloseHandle(pi.hThread);
       CloseHandle(pi.hProcess);
       say(L"%ls opened", exe);

@@ -2,6 +2,7 @@
 // app is out, a picture (fetched once and kept on the device), the buddies a Slack app can wear, a dev cloud's sign-in.
 import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
+import { RELEASE_KEYS } from "../../../station/src/updates/keys.ts";
 import { winReleaseUnverified } from "./app-release.ts";
 import { encodeComponent } from "./accounts.ts";
 import type { AccountSessions } from "./account-provider.ts";
@@ -66,7 +67,7 @@ export class Asks {
         return Effect.succeed(linkTarget(ask.url, this.#host.cloudOrigin()));
       case "appUpdate":
         // (youdid.wtf's builds are its platform's beta feed; an app of its own on the test channel names its feed whole)
-        return this.update(ask.platform, ask.version, ask.now, brand.testApp());
+        return this.update(ask.platform, ask.version, ask.now, brand.testApp(), ask.keys);
       case "picture":
         return Effect.map(this.picture(ask.url), ([kind, bytes]) => new Beside({ type: kind }, bytes));
       case "buddies":
@@ -87,14 +88,14 @@ export class Asks {
 
   /// The newest build of `platform`'s feed (its beta feed, `<platform>/beta`, where `beta`) when newer than `version`,
   /// with what it brings this app (`news`: the changelog's lines for it after `version`; the app's home offers a build
-  /// only with some).
-  update(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
-    return Effect.flatMap(this.#newest(platform, version, now, beta), (release) =>
+  /// only with some). A Windows build signed by one of `keys` is taken too (app-release.ts).
+  update(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[] = []): Effect.Effect<J, CoreError> {
+    return Effect.flatMap(this.#newest(platform, version, now, beta, keys), (release) =>
       release === null ? Effect.succeed(null) : Effect.map(this.#brings(version, release.versionCode), (news) => ({ ...release, news })),
     );
   }
 
-  #newest(platform: string, version: number, now: boolean, beta: boolean): Effect.Effect<J, CoreError> {
+  #newest(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[]): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const feed = beta ? `${platform}/beta` : platform;
       const newer = (release: J) => (release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? release : null);
@@ -112,7 +113,7 @@ export class Asks {
       const shaped = raw !== undefined ? conform("AppRelease", raw) : null;
       let release = shaped !== null && "ok" in shaped ? shaped.ok : null;
       // the Windows app's installer taken only as its signed words say it (app-release.ts): else none is offered
-      const unverified = release !== null && platform.split("/")[0] === "win" ? winReleaseUnverified(raw) : "";
+      const unverified = release !== null && platform.split("/")[0] === "win" ? winReleaseUnverified(raw, [...RELEASE_KEYS, ...keys]) : "";
       if (unverified !== "") {
         console.warn(`app.update: ${feed}: ${unverified}`);
         if (now) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_unsigned")));

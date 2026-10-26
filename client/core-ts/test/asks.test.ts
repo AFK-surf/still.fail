@@ -1,15 +1,17 @@
 // The Rust core's asks.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { Accounts } from "../src/accounts.ts";
+import { keyIdOf } from "../src/app-release.ts";
 import { Asks, PICTURE_RETRY_MS, PICTURES_KEPT, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
 import { setOwnApp, setTestChannel } from "../src/brand.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { toJsonBytes } from "../src/util.ts";
+import { base64, toJsonBytes, utf8 } from "../src/util.ts";
 import { run } from "./run.ts";
 
 holdLanguage();
@@ -185,6 +187,27 @@ test("a_windows_build_is_offered_only_as_its_signed_words_say_it", async () => {
   assert.equal(await run(asks.update("android", 1100, true, false).pipe(Effect.orElseSucceed(() => null))), null);
 });
 
+test("a_windows_build_signed_by_a_key_the_app_adds_is_offered_and_parsed_from_the_ask", async () => {
+  // (the app's environment's STILLFAIL_RELEASE_KEYS, as the station's and the desktop app's: a test's own releases)
+  const secret = ed25519.utils.randomSecretKey();
+  const key = base64(ed25519.getPublicKey(secret));
+  const sha = "a".repeat(64);
+  const words = utf8(JSON.stringify({ kind: "stillfail-desktop-win", version: "0.1.1200", build: 1200, file: "stillfail-0.1.1200-x64-win.exe", sha256: sha, size: 9 }));
+  const signed = { release: base64(words), signature: base64(ed25519.sign(words, secret)), key: keyIdOf(ed25519.getPublicKey(secret)) };
+  const host = new FakeHost();
+  host.onFetch((req) =>
+    req.url === "https://stillfail.test/releases/win/latest.json"
+      ? jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "desktop/stillfail-0.1.1200-x64-win.exe", sha256: sha, size: 9, signed })
+      : jsonResponse(404, {}),
+  );
+  await assert.rejects(run(new Asks(host, nothing).update("win", 1100, true, false)), /签名校验/);
+  const ask = parseAsk("app.update", { platform: "win", versionCode: 1100, now: true, keys: [key, 3, ""] });
+  assert.deepEqual(ask, { kind: "appUpdate", platform: "win", version: 1100, now: true, keys: [key] });
+  const accounts = await run(Accounts.load(host));
+  assert.equal(((await run(new Asks(host, nothing).run(ask!, accounts))) as J).versionCode, 1200);
+  assert.deepEqual(parseAsk("app.update", { platform: "win", versionCode: 1100 }), { kind: "appUpdate", platform: "win", version: 1100, now: false, keys: [] });
+});
+
 test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   const release = (code: number) => ({ versionCode: code, versionName: `0.1.${code}`, file: `android/stillfail-${code}.apk`, sha256: "ab", size: 9 });
   const feeds = (req: { url: string }) =>
@@ -197,7 +220,7 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   host.onFetch(feeds);
   let asks = new Asks(host, nothing);
   let accounts = await run(Accounts.load(host));
-  assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J).versionCode, 1200);
+  assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false, keys: [] }, accounts))) as J).versionCode, 1200);
   assert.ok(host.requests.every((r) => !r.url.includes("/beta/")));
   // (youdid.wtf: still.fail's own app on the test channel, as the core says it from its host at the start)
   setTestChannel(true);
@@ -206,9 +229,9 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   host.onFetch(feeds);
   asks = new Asks(host, nothing);
   accounts = await run(Accounts.load(host));
-  const newer = (await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J;
+  const newer = (await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false, keys: [] }, accounts))) as J;
   assert.deepEqual([newer.versionCode, newer.file], [1250, "android/stillfail-1250.apk"]);
-  assert.equal(await run(asks.run({ kind: "appUpdate", platform: "android", version: 1250, now: true }, accounts)), null);
+  assert.equal(await run(asks.run({ kind: "appUpdate", platform: "android", version: 1250, now: true, keys: [] }, accounts)), null);
   assert.ok(host.requests.every((r) => r.url.endsWith("/android/beta/latest.json")));
   assert.equal(host.requests.length, 2);
   // An app of its own on the test channel (still.fail mbui): its feed as it names it.
@@ -218,7 +241,7 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   host.onFetch((req) => (req.url === "https://stillfail.test/releases/android/mbui/latest.json" ? jsonResponse(200, { ...release(1260), file: "android/mbui/stillfail-1260.apk" }) : jsonResponse(404, {})));
   asks = new Asks(host, nothing);
   accounts = await run(Accounts.load(host));
-  assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android/mbui", version: 1100, now: false }, accounts))) as J).versionCode, 1260);
+  assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android/mbui", version: 1100, now: false, keys: [] }, accounts))) as J).versionCode, 1260);
   assert.ok(host.requests.every((r) => r.url.endsWith("/android/mbui/latest.json")));
   setOwnApp(true);
   setTestChannel(false);
@@ -226,7 +249,7 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
 
 test("the_calls_are_known_by_name", () => {
   assert.deepEqual(parseAsk("link.parse", { url: "https://x" }), { kind: "linkParse", url: "https://x" });
-  assert.deepEqual(parseAsk("app.update", { platform: "android", versionCode: 3 }), { kind: "appUpdate", platform: "android", version: 3, now: false });
+  assert.deepEqual(parseAsk("app.update", { platform: "android", versionCode: 3 }), { kind: "appUpdate", platform: "android", version: 3, now: false, keys: [] });
   assert.throws(() => parseAsk("app.update", { platform: "android" }));
   assert.deepEqual(parseAsk("buddies", {}), { kind: "buddies" });
   assert.equal(parseAsk("session.stop", {}), null);
