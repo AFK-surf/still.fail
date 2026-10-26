@@ -96,6 +96,7 @@ export const TOPICS: Record<string, Spec> = {
   archive: { scope: S },
   search: { scope: S, query: ["string", "def"], kind: ["string", "skip"], limit: ["u32", "skip"] },
   stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"] },
+  linkPreview: { station: S, url: S },
   newChat: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
@@ -196,7 +197,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "linkPreview"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

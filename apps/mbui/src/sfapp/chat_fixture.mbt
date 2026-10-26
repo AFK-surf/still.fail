@@ -411,6 +411,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_table_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
+          } else if f.mode == "chat-peeks" {
+            with_message(rich_chat(f.older), peeks_answer)
           } else if f.mode == "chat-need" {
             with_need(rich_chat(f.older))
           } else if f.mode == "chat-working" {
@@ -1594,6 +1596,11 @@ fn with_working(v : Json) -> Json {
 }
 
 // ── links to a station's screens and its 共享调试 (MBUI_FIXTURE=chat-screens) ──
+
+///|
+/// An agent's answer last in the chat with a link of each kind a card shows over (peeks.mbt): a pull request on GitHub,
+/// a page, another chat.
+let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关。"
 
 ///|
 /// An agent's answer with links to Studio's screens and its 共享调试 (screen_links.mbt): the desktop's card, a tab's

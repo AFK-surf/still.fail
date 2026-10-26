@@ -122,7 +122,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       if m.author_kind == "person" {
         if m.text != "" {
           picking(here, c, m.ts, m.by.name, "person", m.text, fn() {
-            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here))
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)))
@@ -152,7 +152,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if m.text != "" {
       picking(here, c, m.ts, @sf.t("web-main.chat.you"), "person", m.text, fn() {
-        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here))
       }, fill=false)
     }
     if !m.followed {
@@ -374,8 +374,14 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 
 ///|
 /// What a person wrote (PersonWords): plain, as they wrote it (set as it was typed: the theme's `words`), references to
-/// chats as their chips and web addresses as links.
-pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String] = []) -> Unit {
+/// chats as their chips and web addresses as links, a link's card over it where `peek` (link_peeks).
+pub fn person_words(
+  c : @ui.Ctx,
+  words : String,
+  key : String,
+  found? : Array[String] = [],
+  peek? : ((String, String, Int) -> Unit)? = None,
+) -> Unit {
   let p = @sf.theme().p
   c.rich(
     @sf.found_weight(message_runs(words, p.accent), found),
@@ -384,9 +390,17 @@ pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[St
     link_color=p.blue,
     on_link=fn(h) { open_link(h) },
     on_link_hold=Some(fn(href, _) { link_held(c, href) }),
+    on_link_shown=peek,
     words=true,
   )
   |> ignore
+}
+
+///|
+/// What a message's links show while they are pointed at, the chat's station reading them (peeks.mbt): a web link's
+/// card.
+fn link_peeks(c : @ui.Ctx, src : Source, here : MessageHere) -> ((String, String, Int) -> Unit)? {
+  Some(fn(href, words, id) { link_peek(c, src, here.station, href, words, id) })
 }
 
 ///|
@@ -401,7 +415,14 @@ fn mine_most(c : @ui.Ctx) -> Double {
 ///|
 /// The viewer's words in their bubble (MineBubble: 78% of the column and 560 at most, 8 by 14 in, 18 round, on the
 /// neutral ground).
-fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, found? : Array[String] = []) -> Unit {
+fn mine_bubble(
+  c : @ui.Ctx,
+  here : MessageHere,
+  words : String,
+  key : String,
+  found? : Array[String] = [],
+  peek? : ((String, String, Int) -> Unit)? = None,
+) -> Unit {
   // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
   let flight = flight_here(here)
   let ground = match flight {
@@ -426,11 +447,11 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~) })
+          let w = c.box(fn() { person_words(c, words, key, found~, peek~) })
           flight_landing_words(c, f, w)
           flight_pieces_in(c, f, bubble_node)
         }
-        None => person_words(c, words, key, found~)
+        None => person_words(c, words, key, found~, peek~)
       }
     },
   )
@@ -481,6 +502,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
       },
       on_link_hold=Some(fn(href, _) { link_held(c, href) }),
+      on_link_shown=link_peeks(c, src, here),
       files=fn(name) {
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>

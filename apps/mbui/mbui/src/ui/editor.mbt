@@ -1016,15 +1016,11 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // caret
   if focused {
     let since = self.now - st.blink0
-    let blink = caret_blink()
-    let phase = (since / blink).to_int()
+    let (phase, next) = periods_at(self.now, st.blink0, caret_blink())
     // blinking till caret_blinks_for_ms, then shown at rest
     let resting = since >= caret_blinks_for_ms
     if !resting {
-      self.wake_at_time(
-        dmin(st.blink0 + (phase + 1).to_double() * blink, st.blink0 + caret_blinks_for_ms),
-        later=true,
-      )
+      self.wake_at_time(dmin(next, st.blink0 + caret_blinks_for_ms), later=true)
     }
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if resting || phase % 2 == 0 {

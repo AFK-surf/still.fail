@@ -162,9 +162,21 @@ struct Rich {
 }
 
 ///|
-/// The id of run `k`'s link in a paragraph.
-fn link_id(base : Int, k : Int) -> Int {
-  mix(base, k + 1)
+/// The id of the link run `k` is in, in a paragraph (`runs`): one for the runs one after another that lead to the
+/// same place (a reference's `@` and its title, a link's words in two weights, a word found in it), pressed, held and
+/// pointed at as one link.
+fn link_id(base : Int, runs : Array[Run], k : Int) -> Int {
+  let mut h = k
+  while h > 0 && runs[h - 1].link == runs[k].link {
+    h = h - 1
+  }
+  mix(base, h + 1)
+}
+
+///|
+/// Whether run `k` starts a link (the first of the runs that lead to the same place one after another: link_id).
+fn link_starts(runs : Array[Run], k : Int) -> Bool {
+  runs[k].link != "" && (k == 0 || runs[k - 1].link != runs[k].link)
 }
 
 ///|
@@ -694,7 +706,9 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// relative to it) with lines `line` high (0: the font's own). Links are
 /// drawn in `link_color` (unless a run has its own), with `pressed_bg`
 /// behind them while held; tapped, `on_link` is told where they lead; held a long press's time, or right clicked,
-/// `on_link_hold` (with the piece of line under the finger or the pointer). Code
+/// `on_link_hold` (with the piece of line under the finger or the pointer); `on_link_shown`, each link's way, its
+/// words and its id as the paragraph is built (what shows over it while it is pointed at: a card by that id,
+/// Peeks.tsx Hover). Code
 /// runs: the code face at `code_scale`, in `code_color` (0: the
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
@@ -728,6 +742,7 @@ pub fn Ctx::rich(
   max_lines? : Int,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  on_link_shown? : ((String, String, Int) -> Unit)? = None,
   words? : Bool = false,
   face? : Int = 0,
   tabular? : Bool,
@@ -763,7 +778,7 @@ pub fn Ctx::rich(
   let text = sb.to_string()
   let base = self.id(if key == "" { "\u{1}rich\u{1}" + text } else { key })
   for k, r in runs {
-    if r.link != "" && self.clicked(link_id(base, k)) {
+    if link_starts(runs, k) && self.clicked(link_id(base, runs, k)) {
       on_link(r.link)
     }
   }
@@ -771,7 +786,7 @@ pub fn Ctx::rich(
   match on_link_hold {
     Some(f) =>
       for k, r in runs {
-        let id = link_id(base, k)
+        let id = link_id(base, runs, k)
         match (r.link, self.right_clicked(id)) {
           ("", _) | (_, None) => ()
           (link, Some((x, y))) => {
@@ -788,7 +803,7 @@ pub fn Ctx::rich(
   match on_link_hold {
     Some(f) if self.down && self.held_told != self.press_at && pointing() is Finger =>
       for k, r in runs {
-        let id = link_id(base, k)
+        let id = link_id(base, runs, k)
         if r.link == "" || !self.pressed(id) {
           continue
         }
@@ -848,6 +863,22 @@ pub fn Ctx::rich(
     ),
     shaped_in: words_shaped_in.val,
   })
+  // each link told with its words and its id, once the paragraph is there
+  match on_link_shown {
+    Some(f) =>
+      for k, r in runs {
+        if link_starts(runs, k) {
+          let words = StringBuilder()
+          let mut j = k
+          while j < runs.length() && runs[j].link == r.link {
+            words.write_string(runs[j].text)
+            j = j + 1
+          }
+          f(r.link, words.to_string(), link_id(base, runs, k))
+        }
+      }
+    None => ()
+  }
   i
 }
 
@@ -983,7 +1014,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   // grounds (code, a pressed link), then the words, then the lines through
   // or under them; links' pieces are hit targets
   for k, run in r.runs {
-    let id = if run.link != "" { link_id(r.base, k) } else { 0 }
+    let id = if run.link != "" { link_id(r.base, r.runs, k) } else { 0 }
     let pressed = id != 0 && self.pressed(id)
     let bg = if pressed { r.pressed_bg } else { r.run_bg(run) }
     if bg == 0L && id == 0 {

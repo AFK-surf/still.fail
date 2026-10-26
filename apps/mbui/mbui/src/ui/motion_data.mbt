@@ -140,15 +140,19 @@ pub fn Ctx::every(
     self.wake_at_time(self.now - gone, later=true)
     return 0
   }
-  let n = (gone / period).floor()
   // the next period's start: a wake the test's idle does not wait for (it comes for as long as it is shown); counted
   // from `from`, that start itself (from + its periods), else as far on as the count is from its next
-  let next = match elapsed {
-    Some(_) => self.now + period - (gone - period * n)
-    None => from + (n + 1.0) * period
+  let (n, next) = match elapsed {
+    Some(_) => {
+      let n = (gone / period).floor()
+      // (on a period's start, the division a hair short of it: that period begun, as periods_at counts)
+      let n = if self.now + period - (gone - period * n) <= self.now { n + 1.0 } else { n }
+      (n.to_int(), self.now + period - (gone - period * n))
+    }
+    None => periods_at(self.now, from, period)
   }
   self.wake_at_time(next, later=true)
-  n.to_int()
+  n
 }
 
 ///|

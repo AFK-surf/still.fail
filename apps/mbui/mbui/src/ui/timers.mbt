@@ -21,6 +21,17 @@ let helds : Map[Int, Held] = {}
 let held_slack_ms : Double = 0.001
 
 ///|
+/// How many whole `period`s have gone from `from` to `now`, and when the next one starts: after `now`, always. A frame
+/// on a period's start is in that period, though `now - from` may come out a hair short of it (1546.67 − 1016.67 is
+/// 529.999…): counted from the division alone, the next start would be now itself, a wake at the moment already
+/// drawn, which wakes nothing and hides every later one (Ctx::wake_at keeps the earliest).
+fn periods_at(now : Double, from : Double, period : Double) -> (Int, Double) {
+  let n = ((now - from) / period).floor()
+  let n = if from + (n + 1.0) * period <= now { n + 1.0 } else { n }
+  (n.to_int(), from + (n + 1.0) * period)
+}
+
+///|
 /// When each thing marked happened (Ctx::mark), by its id.
 let marks_at : Map[Int, Double] = {}
 

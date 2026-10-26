@@ -1058,6 +1058,10 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "slackApp":
       if (isObject(v)) value = { ...v, sections: slackSections() };
       break;
+    // A web link's card: when a pull request or an issue last changed, in words (3 小时前).
+    case "linkPreview":
+      if (isObject(v) && typeof v.updatedAt === "number" && v.updatedAt > 0) value = { ...v, time: { updatedAt: stamp(v.updatedAt, c) } };
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);

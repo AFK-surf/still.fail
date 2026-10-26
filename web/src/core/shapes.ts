@@ -3934,6 +3934,52 @@ export interface KeymapView {
 	workspace: string[];
 }
 
+/** A pull request's checks, by how they stand. */
+export interface LinkChecks {
+	passed: number;
+	failed: number;
+	pending: number;
+}
+
+/** Who opened a pull request or an issue. */
+export interface LinkPerson {
+	login: string;
+	/** Inline (a data: URL). */
+	avatar?: string;
+}
+
+/**
+ * What a web link in a message is, for its card (the `linkPreview` topic, GET /link-preview): a page by its title,
+ * site, icon and picture; a GitHub pull request or issue as GitHub says it.
+ */
+export interface LinkPreview {
+	/** page | github_pull_request | github_issue | none (nothing to show of it). */
+	kind: string;
+	url?: string;
+	title?: string;
+	description?: string;
+	site?: string;
+	/** The page's icon, inline (a data: URL). */
+	icon?: string;
+	/** The page's picture (og:image), inline, as its thumbnail where it is big. */
+	image?: string;
+	/** A pull request's or issue's: owner/name. */
+	repository?: string;
+	number?: number;
+	/** A pull request's: open | closed | merged | draft; an issue's: open | completed | not_planned | closed. */
+	state?: string;
+	author?: LinkPerson;
+	additions?: number;
+	deletions?: number;
+	changedFiles?: number;
+	comments?: number;
+	labels?: string[];
+	checks?: LinkChecks;
+	updatedAt?: number;
+	/** Its times in words, by field (`updatedAt`). */
+	time?: Record<string, Stamp>;
+}
+
 /**
  * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
  * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution

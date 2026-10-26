@@ -1890,24 +1890,29 @@ fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
 /// Where the thing with `id` was drawn last frame (x, y, w, h), as far as it
 /// showed: for parts that follow the pointer across them (a slider). The hit area the last frame drew, cut to its
 /// clips: for following a finger and hitting, not for sizing what is built (that is Ctx::laid_rect, this frame's
-/// layout, read back).
+/// layout, read back). A link in words, drawn in pieces one after another (its runs, its lines), is the box round
+/// them all, as a page's inline element is (what hangs by it lines up with its start).
 pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
   let mut k = self.hit_ids.length() - 1
-  while k >= 0 {
-    if self.hit_ids[k] == id {
-      let r = k * 4
-      return Some(
-        (
-          self.hit_rects[r],
-          self.hit_rects[r + 1],
-          self.hit_rects[r + 2] - self.hit_rects[r],
-          self.hit_rects[r + 3] - self.hit_rects[r + 1],
-        ),
-      )
-    }
+  while k >= 0 && self.hit_ids[k] != id {
     k = k - 1
   }
-  None
+  if k < 0 {
+    return None
+  }
+  let mut x0 = self.hit_rects[k * 4]
+  let mut y0 = self.hit_rects[k * 4 + 1]
+  let mut x1 = self.hit_rects[k * 4 + 2]
+  let mut y1 = self.hit_rects[k * 4 + 3]
+  let mut j = k - 1
+  while j >= 0 && self.hit_ids[j] == id {
+    x0 = dmin(x0, self.hit_rects[j * 4])
+    y0 = dmin(y0, self.hit_rects[j * 4 + 1])
+    x1 = dmax(x1, self.hit_rects[j * 4 + 2])
+    y1 = dmax(y1, self.hit_rects[j * 4 + 3])
+    j = j - 1
+  }
+  Some((x0, y0, x1 - x0, y1 - y0))
 }
 
 ///|
