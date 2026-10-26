@@ -1170,15 +1170,15 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   let t = theme()
   let w = web()
   let id = c.id("sf-code/" + code)
-  let copy_key = "sf-copied/\{id}"
+  let copied_key = "sf-copied/\{id}"
   if c.clicked(id) {
     c.copy_text(code)
     // pressed again while it says so: its time starts again
-    @kit.after(c, copy_key, false, copied_ms) |> ignore
+    @kit.after(c, copied_key, false, copied_ms) |> ignore
     copied_at[id] = true
   }
   let copied = copied_at.contains(id) &&
-    (if @kit.after(c, copy_key, true, copied_ms) {
+    (if @kit.after(c, copied_key, true, copied_ms) {
       copied_at.remove(id)
       false
     } else {
@@ -1211,36 +1211,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           |> ignore
         })
         |> ignore
-        c.box(
-          dir=Row,
-          h=Px(code_key_h),
-          padx=7.0,
-          gap=4.0,
-          align=ACenter,
-          radius=code_key_h / 2.0,
-          bg=alpha(t.p.canvas, 0.8),
-          id~,
-          fn() {
-            icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
-            |> ignore
-            c.text(
-              // (common.copied, common.copy: the catalog's words, Markdown.kt's)
-              if language() == "en" {
-                if copied { "Copied" } else { "Copy" }
-              } else if copied {
-                "已复制"
-              } else {
-                "复制"
-              },
-              size=theme().t.caption,
-              color=w.muted,
-              wrap=false,
-            )
-            |> ignore
-            @motion.ripple(c, id, code_key_h / 2.0)
-          },
-        )
-        |> ignore
+        copy_key(c, id, copied)
       },
     )
   }
@@ -1269,6 +1240,43 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       c.layer(fn() { bar() |> ignore }) |> ignore
     }
   })
+  |> ignore
+}
+
+///|
+/// A block's copy key (a code block's, a table's: table_copy.mbt): a capsule code_key_h high on the canvas at 80%, its
+/// copy icon and 复制 in the muted ink, a check and 已复制 while `copied`; `label` what it is called besides its words.
+fn copy_key(c : @ui.Ctx, id : Int, copied : Bool, label? : String = "") -> Unit {
+  let w = web()
+  c.box(
+    dir=Row,
+    h=Px(code_key_h),
+    padx=7.0,
+    gap=4.0,
+    align=ACenter,
+    radius=code_key_h / 2.0,
+    bg=alpha(theme().p.canvas, 0.8),
+    id~,
+    label~,
+    fn() {
+      icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted) |> ignore
+      c.text(
+        // (common.copied, common.copy: the catalog's words, Markdown.kt's)
+        if language() == "en" {
+          if copied { "Copied" } else { "Copy" }
+        } else if copied {
+          "已复制"
+        } else {
+          "复制"
+        },
+        size=theme().t.caption,
+        color=w.muted,
+        wrap=false,
+      )
+      |> ignore
+      @motion.ripple(c, id, code_key_h / 2.0)
+    },
+  )
   |> ignore
 }
 
@@ -1341,7 +1349,6 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   }
   let rows = [t.head]
   rows.append(t.rows)
-  let w = web()
   self.n = self.n + 1
   let key = "sf-md/table\{self.n}"
   let id = c.id(key)
@@ -1398,77 +1405,101 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   for x in widths {
     total = total + x
   }
+  // its copy key on a row of its own over it, at the end of what shows of it (all of it, or the message's width where it
+  // scrolls), whatever the input: over its corner it would lie over its head's words (table_copy.mbt)
+  let shown = dmin(total + 2.0, room)
+  c.box(style=table_keys_row.then(@ui.style(w=Fixed(shown))), fn() { self.table_key(key, t) }) |> ignore
   // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
   // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
   // columns, `bleed` in from its ends
   c.box(mx=-bleed, id~, taps=false, fn() {
-    c.sideways(key, padx=bleed, fn() {
-      c.box(
-        w=Px(total + 2.0),
-        radius=row_corner,
-        border=1.0,
-        border_color=w.line,
-        bg=table_ground(),
-        pad=1.0,
-        clip=true,
-        fn() {
-          // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
-          // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
-          // tint is a round box taller than the head, cut at the head's foot.
-          match @motion.measured(c, key + "/head") {
-            Some(hh) if hh > 0.0 =>
-              c.layer(pad=1.0, fn() {
-                c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
-                  c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
-                  |> ignore
-                })
-                |> ignore
-              })
+    c.sideways(key, padx=bleed, fn() { self.table_frame(rows, widths, total, key + "/head") }) |> ignore
+  })
+  |> ignore
+  // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its
+  // words' ids its own: the next block's as they were)
+  let n = self.n
+  c.shot(table_shot(key), total + 2.0 + 2.0 * table_shot_in, fn() {
+    c.box(style=table_shot_paper, fn() { self.table_frame(rows, widths, total, key + "/picture-head") }) |> ignore
+  })
+  self.n = n
+}
+
+///|
+/// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card's frame (a
+/// line round it, a faint ground), the head's row tinted (its height measured as `head_at`), rows ruled between them.
+fn Md::table_frame(
+  self : Md,
+  rows : Array[Array[Array[MdInline]]],
+  widths : Array[Double],
+  total : Double,
+  head_at : String,
+) -> Unit {
+  let c = self.c
+  let w = web()
+  let cols = widths.length()
+  c.box(
+    w=Px(total + 2.0),
+    radius=row_corner,
+    border=1.0,
+    border_color=w.line,
+    bg=table_ground(),
+    pad=1.0,
+    clip=true,
+    fn() {
+      // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
+      // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
+      // tint is a round box taller than the head, cut at the head's foot.
+      match @motion.measured(c, head_at) {
+        Some(hh) if hh > 0.0 =>
+          c.layer(pad=1.0, fn() {
+            c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
+              c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
               |> ignore
-            _ => ()
-          }
-          for r, row in rows {
-            let head = r == 0
-            let row_box = c.box(dir=Row, align=AStretch, fn() {
-              for k in 0..<cols {
-                c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
-                  match self.cell_images(row[k]) {
-                    Some(images) => {
-                      // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
-                      c.box(style=cell_image_row, fn() {
-                        for im in images {
-                          let (r, draw) = im
-                          draw(cell_image_width(r))
-                        }
-                      })
-                      |> ignore
-                      return
+            })
+            |> ignore
+          })
+          |> ignore
+        _ => ()
+      }
+      for r, row in rows {
+        let head = r == 0
+        let row_box = c.box(dir=Row, align=AStretch, fn() {
+          for k in 0..<cols {
+            c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+              match self.cell_images(row[k]) {
+                Some(images) => {
+                  // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
+                  c.box(style=cell_image_row, fn() {
+                    for im in images {
+                      let (r, draw) = im
+                      draw(cell_image_width(r))
                     }
-                    None => ()
-                  }
-                  if head {
-                    self.words(row[k], 12.0, 500, w.muted, None)
-                  } else {
-                    self.words(row[k], 13.0, 0, self.ink, None)
-                  }
-                })
-                |> ignore
+                  })
+                  |> ignore
+                  return
+                }
+                None => ()
+              }
+              if head {
+                self.words(row[k], 12.0, 500, w.muted, None)
+              } else {
+                self.words(row[k], 13.0, 0, self.ink, None)
               }
             })
-            if head {
-              @motion.measure(c, row_box, key + "/head")
-            }
-            // a rule under every row but the last
-            if r < rows.length() - 1 {
-              c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
-            }
+            |> ignore
           }
-        },
-      )
-      |> ignore
-    })
-    |> ignore
-  })
+        })
+        if head {
+          @motion.measure(c, row_box, head_at)
+        }
+        // a rule under every row but the last
+        if r < rows.length() - 1 {
+          c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
+        }
+      }
+    },
+  )
   |> ignore
 }
 

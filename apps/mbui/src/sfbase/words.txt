@@ -1044,6 +1044,9 @@ web-main.preview.zoomOutKey
 web-main.profile.blocked
 web-main.profile.machineSignedIn
 web-main.profile.signedIn
+web-main.prose.copyCsv
+web-main.prose.copyMarkdown
+web-main.prose.copyTable
 web-main.quota.left
 web-main.quota.leftAlone
 web-main.quota.unchecked

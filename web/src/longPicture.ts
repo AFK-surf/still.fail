@@ -1,4 +1,5 @@
-// A long picture of what an element shows, however long it is (a chat shared as a picture: Publish.tsx). The element
+// A long picture of what an element shows, however long it is (a chat shared as a picture: Publish.tsx; a table:
+// Prose.tsx), on its ground, as far round it as said. The element
 // is copied once as modern-screenshot copies it (an SVG's foreignObject, its styles, fonts and pictures put in it), then
 // drawn a band at a time into a canvas no taller than a band, and each band's rows written into a PNG as they come
 // (each row less the one above it, deflated by the browser's CompressionStream). So no canvas of it all is ever made:
@@ -13,6 +14,8 @@ export type LongPicture = {
   scale: number;
   /** What it is drawn on (the page's ground). */
   background: string;
+  /** How far round the element the ground reaches, in CSS pixels (none: its edges are the picture's). */
+  margin?: number;
   /** Whether a node of the element is in it (one left out, all it holds too). */
   keep?: (node: Node) => boolean;
   /** Each node of the copy as it is made, changed for the picture where it says (a time said as a date). */
@@ -23,8 +26,10 @@ export type LongPicture = {
 export async function longPicture(el: HTMLElement, o: LongPicture): Promise<Blob> {
   const width = Math.ceil(el.offsetWidth);
   const height = Math.ceil(el.offsetHeight);
+  const m = o.margin ?? 0;
+  // (its ground the canvas's, filled under each band: the element keeps its own, a table's frame its tint)
   const svg = await domToForeignObjectSvg(el, {
-    width, height, backgroundColor: o.background, timeout: 15000,
+    width, height, timeout: 15000,
     ...(o.keep ? { filter: o.keep } : {}),
     ...(o.copied ? { onCloneEachNode: o.copied } : {}),
   });
@@ -32,8 +37,10 @@ export async function longPicture(el: HTMLElement, o: LongPicture): Promise<Blob
   const held = svg.querySelector("foreignObject");
   held?.setAttribute("width", String(width));
   held?.setAttribute("height", String(height));
-  const pw = Math.round(width * o.scale);
-  const ph = Math.round(height * o.scale);
+  held?.setAttribute("x", String(m));
+  held?.setAttribute("y", String(m));
+  const pw = Math.round((width + 2 * m) * o.scale);
+  const ph = Math.round((height + 2 * m) * o.scale);
   const png = pngRows(pw, ph);
   const canvas = document.createElement("canvas");
   canvas.width = pw;
@@ -42,8 +49,8 @@ export async function longPicture(el: HTMLElement, o: LongPicture): Promise<Blob
   for (let top = 0; top < ph; top += BAND) {
     const rows = Math.min(BAND, ph - top);
     canvas.height = rows;
-    svg.setAttribute("viewBox", `0 ${top / o.scale} ${width} ${rows / o.scale}`);
-    svg.setAttribute("width", String(width));
+    svg.setAttribute("viewBox", `0 ${top / o.scale} ${width + 2 * m} ${rows / o.scale}`);
+    svg.setAttribute("width", String(width + 2 * m));
     svg.setAttribute("height", String(rows / o.scale));
     const image = await loaded(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`);
     // (twice: Safari draws the pictures in a foreignObject once it has decoded them, as modern-screenshot does)

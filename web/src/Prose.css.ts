@@ -72,6 +72,16 @@ export const tableFrame = style({
   cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.text} 2%, ${vars.canvas})`,
 });
 globalStyle(`${tableFrame} > table`, { margin: "0" });
+/** A table with its copy key (Prose.tsx Table): as wide as the table, the message's width at most; apart from what
+ * follows as a table is. */
+export const tableBox = style({ width: "fit-content", maxWidth: "100%", margin: "0 0 8px" });
+globalStyle(`${tableBox}:last-child`, { marginBottom: "0" });
+globalStyle(`${tableBox} > ${tableScroll}`, { margin: "0" });
+/** Its copy key (a code block's look, codeCopy) on a row of its own over the table, at its end, whatever the pointer:
+ * over the table's corner it would lie over the head's words. */
+export const tableKeys = style({ display: "flex", justifyContent: "flex-end", margin: "0 0 4px" });
+/** The key on the page's ground, standing alone: a pill. */
+export const tableCopy = style([codeCopy, { borderRadius: "999px" }]);
 /** A code block's code: square in its block's frame, on its ground, wherever the words around it frame their own `pre`
  * (the reader's page). */
 export const codePre = style({});
