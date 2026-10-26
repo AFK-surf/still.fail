@@ -58,6 +58,11 @@ static GdkDevice *press_device;
 static double press_x, press_y;  // in the surface's coordinates
 static guint32 press_time;
 static int press_button;
+// an inset window (@hostapi.window_setup's inset): no title bar of the system's, the app's top row is it
+static int setup_inset;
+// the last press that moved the window: when and where, for the second of a double click there
+static guint32 drag_time;
+static double drag_x, drag_y;
 
 double mb_now_ms(void) {
   struct timespec t;
@@ -349,6 +354,12 @@ static void on_realize(GtkWidget *w, gpointer data) {
     exit(1);
   }
   mb_render_setup();
+  schedule();
+}
+
+// maximized or back, full screen or back: the app's top row and its buttons as it now is
+static void on_window_state(GObject *o, GParamSpec *p, gpointer data) {
+  (void)o, (void)p, (void)data;
   schedule();
 }
 
@@ -824,6 +835,15 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   win = gtk_window_new();
   char *t = utf8(title);
   gtk_window_set_title(GTK_WINDOW(win), t);
+  // an inset window: its decorations GTK's own (its shadow and the edges it is resized by), a title bar of nothing,
+  // the app's top row its title bar and its buttons the app's (@ui.window_keys_own), as Windows' is
+  if (setup_inset) {
+    GtkWidget *none = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_visible(none, FALSE);
+    gtk_window_set_titlebar(GTK_WINDOW(win), none);
+  }
+  g_signal_connect(win, "notify::maximized", G_CALLBACK(on_window_state), NULL);
+  g_signal_connect(win, "notify::fullscreened", G_CALLBACK(on_window_state), NULL);
   // MBUI_WIN=<w>x<h>: the area's size in points (a phone's, for the narrow layouts); else the app's own
   // (@hostapi.window_setup); 900 x 720 by default
   double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
@@ -1161,21 +1181,22 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return done;
 }
 
-// The window as the app wants it, asked before `run` (@hostapi.window_setup). It keeps the system's title bar here.
 // The window held till the app shows it (@hostapi.window_hold): the system shows the app's own here, as it opens.
 void mb_host_window_hold(void) {}
 void mb_host_window_show(void) {}
 
+// The window as the app wants it, asked before `run` (@hostapi.window_setup): with `inset`, no title bar of the
+// system's, the app's top row is it, its buttons the app's.
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
-  (void)inset;
+  setup_inset = inset != 0;
   setup_min_w = min_w;
   setup_min_h = min_h;
   setup_w = w;
   setup_h = h;
 }
 
-// The system's title bar holds the window's buttons: none in the app's top row.
-int32_t mb_host_window_inset(void) { return 0; }
+// Whether the window's buttons are in the app's top row now: an inset window, not full screen.
+int32_t mb_host_window_inset(void) { return setup_inset && !(win && gtk_window_is_fullscreen(GTK_WINDOW(win))); }
 
 // A window filling the screen (@hostapi.full_screen).
 int32_t mb_host_full_screen(void) { return win && gtk_window_is_fullscreen(GTK_WINDOW(win)) ? 1 : 0; }
@@ -1190,18 +1211,38 @@ void mb_host_set_full_screen(int32_t on) {
 double mb_host_window_corner(void) { return 0; }
 double mb_host_window_corner_at(int k) { (void)k; return 0; }
 
-// The press under way moves the window (the app's top row), as the title bar's would.
+void mb_host_window_act(int32_t what);
+
+// The press under way moves the window (the app's top row), as the title bar's would; the second press of a double
+// click there (the desktop's own time and distance for one), what the title bar's double click does: maximized, or
+// back as it was.
 void mb_host_window_drag(void) {
   GdkSurface *s = win ? gtk_native_get_surface(GTK_NATIVE(win)) : NULL;
   if (!s || !GDK_IS_TOPLEVEL(s) || !press_device) return;
   left_down = 0;
+  int dt = 400, dd = 5;
+  GtkSettings *gs = gtk_settings_get_default();
+  if (gs) g_object_get(gs, "gtk-double-click-time", &dt, "gtk-double-click-distance", &dd, NULL);
+  if (drag_time && press_time - drag_time <= (guint32)dt && fabs(press_x - drag_x) <= dd && fabs(press_y - drag_y) <= dd) {
+    drag_time = 0;
+    mb_host_window_act(2);
+    return;
+  }
+  drag_time = press_time, drag_x = press_x, drag_y = press_y;
   gdk_toplevel_begin_move(GDK_TOPLEVEL(s), press_device, press_button, press_x, press_y, press_time);
 }
 
-// The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,
-// window_snap, window_snap_state): Windows' alone; the system's here.
-void mb_host_window_act(int32_t what) { (void)what; }
-int32_t mb_host_window_zoomed(void) { return 0; }
+// The window's own buttons, the app's in an inset window (@hostapi.window_act, window_zoomed): minimized, maximized or
+// back as it was, closed as the system's close button closes it (put away to its icon among the desktop's:
+// linux_life.h); no Snap Layouts here (window_snap, window_snap_state: Windows').
+void mb_host_window_act(int32_t what) {
+  if (!win) return;
+  if (what == 1) gtk_window_minimize(GTK_WINDOW(win));
+  else if (what == 2 && gtk_window_is_maximized(GTK_WINDOW(win))) gtk_window_unmaximize(GTK_WINDOW(win));
+  else if (what == 2) gtk_window_maximize(GTK_WINDOW(win));
+  else if (what == 3) gtk_window_close(GTK_WINDOW(win));
+}
+int32_t mb_host_window_zoomed(void) { return win && gtk_window_is_maximized(GTK_WINDOW(win)) ? 1 : 0; }
 void mb_host_window_snap(double x, double y, double w, double h) { (void)x, (void)y, (void)w, (void)h; }
 int32_t mb_host_window_snap_state(void) { return 0; }
 

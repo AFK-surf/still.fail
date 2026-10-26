@@ -225,15 +225,15 @@ pub fn window_inset() -> Bool {
 /// Whether the window's buttons in the app's top row are the system's, at its left (macOS: the app leaves them their
 /// room there).
 pub fn window_keys_left() -> Bool {
-  window_inset() && platform() != 3
+  window_inset() && platform() != 3 && platform() != 5
 }
 
 ///|
-/// Whether the window's buttons in the app's top row are the app's to draw, at its right (Windows: its system draws
-/// none in a window with no title bar of its own): minimize, maximize or back, close (@hostapi.window_act), the
-/// maximize one the host's too (window_snap, window_snap_state).
+/// Whether the window's buttons in the app's top row are the app's to draw, at its right (Windows and Linux: their
+/// systems draw none in a window with no title bar of its own): minimize, maximize or back, close
+/// (@hostapi.window_act), the maximize one the host's too (window_snap, window_snap_state: Windows').
 pub fn window_keys_own() -> Bool {
-  window_inset() && platform() == 3
+  window_inset() && (platform() == 3 || platform() == 5)
 }
 
 ///|
