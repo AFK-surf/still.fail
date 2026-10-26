@@ -62,6 +62,65 @@ test "a station's page opened again begins at its overview" {
 }
 
 ///|
+/// MBA (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
+/// (`local`: the host's words for it), its page open with a mouse at `w`.
+fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
+  let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
+    @sfbase.machine_here.val = Some("ws1/st2")
+  })
+  t.set_local_station(local)
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "this machine's station not running here: its page says it stopped and offers 启动, not 重试; pressed, made a service" {
+  for w in [390.0, 1100.0] {
+    let t = this_mba_tester(
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+      ,
+      w~,
+    )
+    let at = "\{w}"
+    assert_true(t.find("已停止") is Some(_), msg=at)
+    assert_true(t.query(Button, label="重试") is None, msg=at)
+    t.click(Button, label="启动")
+    t.frame()
+    let acts = t.local_acts()
+    assert_eq(acts.length(), 1, msg=at)
+    assert_true(acts[0].has_prefix("update {"), msg="\{at}: \{acts[0]}")
+  }
+}
+
+///|
+test "this machine's station being installed: its page says so, its 启动 busy; one running here, or another machine's, tried again" {
+  let t = this_mba_tester(
+    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    ,
+  )
+  assert_true(t.find("正在更新") is Some(_))
+  assert_true(t.query(Button, label="重试") is None)
+  // running here (the app not reaching it yet): tried again, as any
+  let t = this_mba_tester(
+    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    ,
+  )
+  assert_true(t.query(Button, label="重试") is Some(_))
+  assert_true(t.query(Button, label="启动") is None)
+  // another machine's: tried again
+  let t = setting_tester(Station("ws1/st2"), 390.0, platform=0, h=2400.0, ready=fn() {
+    @sfbase.machine_here.val = Some("ws1/st1")
+  })
+  t.set_local_station(
+    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Studio","removed":false}}
+    ,
+  )
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label="重试") is Some(_))
+  assert_true(t.query(Button, label="启动") is None)
+}
+
+///|
 test "a station's 进程: what still.fail uses of it, whose by whose, the overview's line opening it" {
   let t = station_tester("ws1/st1")
   // the overview's line: what still.fail uses, opening its 进程
