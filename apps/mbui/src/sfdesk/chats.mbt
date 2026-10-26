@@ -199,7 +199,6 @@ fn filter_button(
 ) -> Unit {
   let t = @sf.theme()
   let id = c.id("side/filter")
-  c.cursor(id, Hand)
   // its menu (sfpages' filter_menu): a filter its list, 奏 its place, 已归档 the archive's list (rail_go)
   if c.clicked(id) {
     @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {

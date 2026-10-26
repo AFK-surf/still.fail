@@ -199,7 +199,6 @@ fn archiving_row(c : @ui.Ctx, core : Core, look : Look, s : Json?) -> Unit {
   let opens = view is Some(Object(_))
   let id = if opens { c.id("archiving/" + station) } else { 0 }
   if opens {
-    c.cursor(id, Hand)
     if hit(c, id) {
       (core.push)(StationArchiving(station))
     }

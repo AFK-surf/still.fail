@@ -29,7 +29,6 @@ pub fn stations_now(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     |> ignore
     if count(glyph, "running") > 0 {
       let id = c.id("stations-now/share")
-      c.cursor(id, Hand)
       if c.clicked(id) {
         share_card_open(src, w)
       }

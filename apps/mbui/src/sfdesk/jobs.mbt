@@ -101,9 +101,6 @@ fn job_row(
 ) -> Bool {
   let off = text(job, "tone") == "off"
   let id = c.id(key)
-  if press {
-    c.cursor(id, Hand)
-  }
   let style = match (press, inset) {
     (true, false) => job_row_style
     (true, true) => job_row_inset
@@ -224,10 +221,7 @@ fn jobs_clear(c : @ui.Ctx, src : Source, station : String, view : Json?, inset? 
   let on = [("station", station)]
   let clearing = core_doing(src, ["job.clearEnded"], on)
   let id = c.id("jobs/clear")
-  if !clearing {
-    c.cursor(id, Hand)
-  }
-  if c.clicked(id) && !clearing {
+  if !clearing && c.clicked(id) {
     for session in items(view, "clear") {
       match session {
         String(s) =>
@@ -354,7 +348,6 @@ pub fn jobs_popover(
   }
   c.box(style=jobs_foot, fn() {
     let all = c.id("jobs-pop/all")
-    c.cursor(all, Hand)
     if c.clicked(all) {
       tab("")
     }
@@ -376,9 +369,6 @@ pub fn jobs_popover(
 /// True on the frame after a press (none while `on` is false).
 fn job_action(c : @ui.Ctx, key : String, mark : () -> Unit, words : String, on : Bool) -> Bool {
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=job_action_style, id~, fn() {
     mark()
     c.text(words, style=if on && c.lit(id) { job_action_hot } else { job_action_words }) |> ignore
@@ -485,10 +475,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       if running {
         let (stopping, failed) = job_stopping(src, station, job)
         let sid = c.id("jobs-tab/stop")
-        if !stopping {
-          c.cursor(sid, Hand)
-        }
-        if c.clicked(sid) && !stopping {
+        if !stopping && c.clicked(sid) {
           job_stop(src, station, job)
         }
         let b = c.box(style=job_detail_stop, id=sid, fn() {

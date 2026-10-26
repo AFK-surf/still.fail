@@ -259,6 +259,14 @@ fn lint_mbt(
     if c.kind == "pkg" && c.qual == "@settings" && cfg.old_parts.contains(c.name) && !in_t && under(f.rel, cfg.pages) {
       add("page-old-part", c.at, f.line_text(c.at))
     }
+    // the pointer's hand said: it is what takes presses that shows it (its click read), by itself
+    if c.name == "cursor" &&
+      c.kind == "method" &&
+      !in_t &&
+      c.args.length() == 2 &&
+      c.args[1].1.iter().any(fn(i) { toks[i].kind == "ident" && toks[i].text == "Hand" }) {
+      add("cursor-hand", c.at, f.line_text(c.at))
+    }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
     // laid out at changed (the app's docs/motion.md)
     match follow_target(f, c, returns) {

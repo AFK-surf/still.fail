@@ -413,8 +413,7 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent-card/stop")
-  c.cursor(id, Hand)
-  if c.clicked(id) && !busy {
+  if !busy && c.clicked(id) {
     act(
       src,
       @sf.t("web-pages.chat.stop"),
@@ -496,8 +495,7 @@ pub fn usage_tiles(c : @ui.Ctx, card : Json?, entry? : ContextEntry) -> Unit {
         match entry {
           Some(e) => {
             let id = context_tile_id(c)
-            c.cursor(id, Hand)
-            if c.clicked(id) && !e.busy {
+            if !e.busy && c.clicked(id) {
               (e.open)()
             }
             let filling = e.compacts && (level == "amber" || level == "red")

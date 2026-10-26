@@ -237,7 +237,6 @@ fn provider_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
             }
             let pv = Some(providers[i])
             let id = c.id("add-profile-provider/" + text(pv, "id"))
-            c.cursor(id, Hand)
             if c.clicked(id) {
               pick(text(pv, "id"))
             }
@@ -279,7 +278,6 @@ fn connect_methods(c : @ui.Ctx, d : Json?, choose : (String) -> Unit) -> Unit {
     for ch in items(d, "choices") {
       let cv = Some(ch)
       let id = c.id("add-profile-method/" + text(cv, "id"))
-      c.cursor(id, Hand)
       if c.clicked(id) {
         choose(text(cv, "id"))
       }

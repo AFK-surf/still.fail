@@ -77,7 +77,6 @@ fn login_cancel(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
       @settings.act(core, what, "machineLogin.cancel", { "station": Json::string(station), "id": Json::string(id) })
     })
   }
-  c.cursor(x, Hand)
   let b = c.box(style=lc_cancel, id=x, fn() {
     if busy {
       @sf.spinner(c, size=lc_spin) |> ignore
@@ -117,7 +116,6 @@ fn login_step(
   let id = if busy { 0 } else { c.id(key) }
   let ink = if solid { p.on_primary } else { p.text }
   let step = fn(style : @ui.Style) {
-    c.cursor(id, Hand)
     c.box(style~, id~, fn() {
       if busy {
         @sf.spinner(c, size=lc_spin, arc=ink) |> ignore
@@ -138,7 +136,6 @@ fn login_step(
       step(if solid { lc_step_solid_in_row } else { lc_step_in_row })
       let mid = c.id(key + "/more")
       let what = @sf.t("common.login.otherWays")
-      c.cursor(mid, Hand)
       let b = c.box(style=lc_more, id=mid, fn() { @sf.icon(c, "more", size=lc_icon, color=p.text) |> ignore })
       c.semantics(b, Button, id=mid, label=what)
       if c.clicked(mid) {
@@ -320,7 +317,6 @@ fn login_code(c : @ui.Ctx, core : Core, code : String) -> Unit {
     c.copy_text(code)
     (core.say)(@sf.t("web-main.logins.codeCopied"))
   }
-  c.cursor(id, Hand)
   c.box(style=lc_code_room, id~, label=@sf.t("web-main.logins.copyCode") + " " + code, fn() {
     c.rich([@ui.span(code, mono=true)], style=lc_code) |> ignore
   })
@@ -406,7 +402,6 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
       if go != 0 && c.clicked(go) {
         send(words)
       }
-      c.cursor(go, Hand)
       c.box(style=lc_done, id=go, fn() {
         // busy: a spinner over its word, as wide as before
         let w = c.text(@sf.t("web-main.logins.finish"), style=lc_done_words)

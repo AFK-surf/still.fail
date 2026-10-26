@@ -168,7 +168,6 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       let first = i > 0 && rows[i - 1].1 == ""
       let last = i == rows.length() - 1 || rows[i + 1].1 == ""
       let id = c.id("station-pick/place/" + s.station + "|" + path)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
       }
@@ -221,7 +220,6 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
   // a row: its mark, its name and what is under it, ✓ when ticked; pressed, `press`
   let row = fn(key : String, first : Bool, last : Bool, icon : String, name : String, sub : String, on : Bool, press : () -> Unit) {
     let id = c.id("station-pick/row/" + key)
-    c.cursor(id, Hand)
     if c.clicked(id) {
       press()
     }

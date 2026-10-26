@@ -476,7 +476,6 @@ fn md_view(c : @ui.Ctx, key : String, words : String, md : Json?, small? : Bool 
 fn one_line(c : @ui.Ctx, key : String, lead : () -> Unit, line : String, tone : String, whole : () -> Unit) -> Unit {
   let id = c.id("history-one/" + key)
   let open = steps_own.opened.contains(key)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     if open {
       steps_own.opened.remove(key)
@@ -525,7 +524,6 @@ fn fold(c : @ui.Ctx, key : String, lines : Int, line : Double, body : () -> Unit
     c.box(style=room, fn() { c.box(style=h_fold_inner, id=inner, body) |> ignore }) |> ignore
     if long {
       let id = c.id("history-fold-toggle/" + key)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         if open {
           steps_own.opened.remove(key)
@@ -598,7 +596,6 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
   let session = text(place, "session")
   let goes = url != "" || session != ""
   if goes {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       if url != "" {
         @ui.open_url(url) |> ignore
@@ -628,7 +625,6 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
   let saying = core_doing(src, ["slack.identity"], on)
   let id = c.id("history-slack/" + key)
   if !saying {
-    c.cursor(id, Hand)
     // its menu, the presenters' (a sheet with a finger short of Large, else at the name)
     if c.clicked(id) {
       let words = if bound { @sf.t("web-main.history.notMe") } else { @sf.t("web-main.history.isMe") }
@@ -752,7 +748,6 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
   let gk = ik + "/group"
   let open = steps_own.opened.contains(gk)
   let id = c.id("history-group/" + gk)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     if open {
       steps_own.opened.remove(gk)
@@ -858,7 +853,6 @@ fn opened(
   ignore(failed)
   let id = c.id("history-step/" + rk)
   let open = steps_own.opened.contains(rk)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     if open {
       steps_own.opened.remove(rk)

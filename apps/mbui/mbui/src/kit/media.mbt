@@ -663,6 +663,8 @@ fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
 /// a second within double_tap_ms a double one: on the left third back nudge_ms, on the right on, in the middle played
 /// or paused, said a moment (MediaFrame's note).
 pub fn Media::stage(self : Media, c : @ui.Ctx, id : Int, w : Double) -> Unit {
+  // (a ground, not a control: Ctx::cursor)
+  c.cursor(id, Arrow)
   if !c.clicked(id) {
     return
   }

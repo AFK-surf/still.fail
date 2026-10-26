@@ -87,9 +87,9 @@ pub fn ripple(
     None => []
   }
   let down = c.pressed(id)
-  let tapped = c.clicked(id)
-  // a finger down on it, or a tap let go before the press showed: a ripple from where it went down
-  if (down || tapped) && !list.iter().any(fn(r) { !r.lifted }) {
+  // a finger down on it, or a tap let go before the press showed: a ripple from where it went down (watched: what
+  // takes the press is what `id` is drawn for)
+  if c.watch_press(id) && !list.iter().any(fn(r) { !r.lifted }) {
     let (px, py, _) = c.pointer()
     // (where it is laid this frame; a list's row, laid as the list is, after its build: where it was laid last)
     let (bx, by) = match c.laid_rect(id) {

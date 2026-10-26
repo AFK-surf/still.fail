@@ -1594,9 +1594,6 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
 /// A quiet word that does something (controls.css.ts textToggle): muted, the words' ink under the pointer.
 fn text_toggle(c : @ui.Ctx, key : String, words : String, disabled : Bool) -> Bool {
   let id = c.id(key)
-  if !disabled {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=pf_toggle, id=if disabled { 0 } else { id }, fn() {
     c.text(words, style=if c.hovered(id) && !disabled { pf_toggle_lit } else { pf_toggle_words }) |> ignore
   })

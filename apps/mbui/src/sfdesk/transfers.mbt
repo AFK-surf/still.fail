@@ -71,7 +71,6 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
   } else {
     @sf.t("web-pages.files.transfers")
   }
-  c.cursor(id, Hand)
   if c.clicked(id) {
     ftransfers.open = !ftransfers.open
   }

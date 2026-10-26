@@ -454,15 +454,16 @@ pub fn context_menu(
 ) -> Menu {
   install()
   let id = c.id(key)
-  let r = c.interact(area, focusable=false)
+  // (its right click and its long press, not its click: what a click on the area does is the area's, and so is the
+  // pointer's shape over it)
   let mut now = kit.val.opens.get(id).unwrap_or(false)
-  match r.right_clicked {
+  match c.right_clicked(area) {
     Some(at) => {
       now = true
       kit.val.at[id] = at
     }
     None =>
-      if r.long_pressed {
+      if c.held_long(area) {
         let (x, y, _) = c.pointer()
         now = true
         kit.val.at[id] = (x, y)

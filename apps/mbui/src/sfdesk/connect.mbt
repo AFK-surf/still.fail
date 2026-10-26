@@ -470,9 +470,6 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
 /// was pressed.
 fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false) -> Bool {
   let id = c.id(key)
-  if !disabled {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=cd_text_button_box, id=if disabled { 0 } else { id }, disabled~, fn() {
     c.rich([@ui.span(label, underline=true)], style=if c.hovered(id) { cd_text_button_lit } else { cd_text_button_words })
     |> ignore
@@ -485,7 +482,6 @@ fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = 
 /// A link in its words (chat.css.ts inlineLink: the accent's ink, underlined); whether it was pressed.
 fn cd_link(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = c.box(style=cd_link_box, id~, fn() { c.rich([@ui.span(label, underline=true)], style=cd_link_words) |> ignore })
   c.semantics(b, Link, id~, label~)
   hit(c, id)

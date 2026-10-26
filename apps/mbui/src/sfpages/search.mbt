@@ -254,6 +254,8 @@ fn search_field_shorter() -> Array[String] {
 fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
   let t = @sf.theme()
   let id = c.id("home-search")
+  // (a field to look at: the I-beam over it)
+  c.cursor(id, IBeam)
   if c.clicked(id) {
     match c.rect_of(id) {
       Some((_, y, w, _)) => search_open(c, y, w)
@@ -380,7 +382,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
         })
         |> ignore
         let cancel = c.id("search/cancel")
-        if c.clicked(cancel) && !search.leaving {
+        if !search.leaving && c.clicked(cancel) {
           search_close(c)
         }
         let cw = match c.laid_rect(cancel) {

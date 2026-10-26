@@ -137,9 +137,6 @@ pub fn media_key(
 ) -> Bool {
   let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let hot = on && (c.lit(id) || c.pressed(id))
   let ground = if lit { alpha(ink.text, media_lit_share) } else if hot { alpha(ink.text, media_hot_share) } else { no_ground }
   let b = c.box(style=media_key_box.then(@ui.style(bg=Data(ground))), disabled=!on, id=if on { id } else { 0 }, fn() {
@@ -159,9 +156,6 @@ pub fn media_key(
 pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool, ink? : MediaInk) -> Bool {
   let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=media_rate_box.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id=if on { id } else { 0 }, fn() {
     c.rich([@ui.span(words, weight=media_strong, mono=true, color=ink.text)], style=media_rate_words) |> ignore
   })

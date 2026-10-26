@@ -349,7 +349,6 @@ fn wide_page(
 fn desk_back(c : @ui.Ctx, back : String, on_back : () -> Unit) -> Unit {
   let th = theme()
   let id = c.id("settings-back")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     on_back()
   }
@@ -788,9 +787,6 @@ pub fn link_row(
     }
   }
   let id = if goes { c.id(key) } else { 0 }
-  if goes {
-    c.cursor(id, Hand)
-  }
   let mark = match (out, folds) {
     (true, _) => "arrow-up-right"
     (false, Some(true)) => "chevron-up"
@@ -1105,9 +1101,6 @@ pub fn choice_row(
   let th = theme()
   let id = c.id(key)
   let goes = !disabled && !busy
-  if goes {
-    c.cursor(id, Hand)
-  }
   let narrow = look() is Narrow
   let end = fn(size : Double) {
     match trail {
@@ -1611,7 +1604,6 @@ pub fn own_head(
             match rename {
               Some(f) => {
                 let id = c.id("own-head-name")
-                c.cursor(id, Hand)
                 let b = c.box(style=head_name_press, id~, fn() { c.text(name, style=head_name_narrow) |> ignore })
                 c.semantics(b, Button, id~, label=if rename_label == "" { name } else { rename_label })
                 if c.clicked(id) {

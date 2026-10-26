@@ -469,7 +469,6 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
               // Viz.kt: clip(CircleShape).clickable
               @motion.ripple(c, close, viz_full_close_icon)
             })
-            c.cursor(close, Hand)
             c.semantics(b, Button, id=close, label=@sf.t("common.close"))
           })
           |> ignore

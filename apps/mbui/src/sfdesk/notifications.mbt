@@ -255,7 +255,6 @@ let np_narrow_in : Double = 12.0
 fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String = "", busy? : Bool = false) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
   let lit = on && action == ""
   let b = c.box(style=if action != "" { tile_action } else if lit { tile_on } else { tile }, id~, fn() {
     c.box(style=tile_picture, fn() {
@@ -316,7 +315,6 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
   }
   let open = kind_open.val == kind
   let id = c.id("notify-kind/" + kind)
-  c.cursor(id, Hand)
   if hit(c, id) {
     kind_open.val = if open { "" } else { kind }
   }

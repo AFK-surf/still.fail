@@ -305,7 +305,6 @@ fn choice_pick(
       chosen
     }
   }
-  c.cursor(id, Hand)
   if c.clicked(id) {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
     pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id))

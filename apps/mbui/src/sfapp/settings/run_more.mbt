@@ -302,7 +302,6 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     return
   }
   let id = c.id("machine-offer/" + station)
-  c.cursor(id, Hand)
   if hit(c, id) {
     open_machine_sessions(core, station, name, from=Of(id))
   }

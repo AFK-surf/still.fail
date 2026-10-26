@@ -218,7 +218,6 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     })
     // settings
     let gear = c.id("rail/settings")
-    c.cursor(gear, Hand)
     if c.clicked(gear) {
       // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
@@ -486,7 +485,6 @@ fn rail_place(
 ) -> Unit {
   let t = @sf.theme()
   let id = c.id("rail/" + place)
-  c.cursor(id, Hand)
   match c.menu_asked(id) {
     Some((x, y)) => wide.rail_menu = Some((place, x, y))
     None => ()
@@ -771,7 +769,6 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
-  c.cursor(id, Hand)
   let over = c.lit(id)
   // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms); always to a finger, which hovers over
   // nothing
@@ -865,9 +862,8 @@ fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, mov
   }
   let t = @sf.theme()
   let rm = c.id("rail/remove/" + place)
-  c.cursor(rm, Hand)
   let items = rail_items(src, w.id)
-  if c.clicked(rm) && items.length() > 1 {
+  if items.length() > 1 && c.clicked(rm) {
     rail_keep(src, w.id, items.filter(fn(i) { i != place }))
   }
   c.box(ty=moved, fn() {
@@ -1044,7 +1040,10 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
   let id = c.id("sidebar-edge")
   // its width dragged open, and shown a while (the same width as open); folded, only pressed (any way it moves)
   let sized = !wide.folded || wide.peeking
-  c.cursor(id, if wide.folded { Hand } else { ResizeX })
+  // (folded, it is pressed alone: the hand, as what takes presses)
+  if !wide.folded {
+    c.cursor(id, ResizeX)
+  }
   let (least, most) = if sized { (side_min, side_max) } else { (wide.side_w, wide.side_w) }
   let said = @sf.handle_drag(c, id, wide.side_w, min=least, max=most)
   match said {

@@ -77,7 +77,6 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
-          c.cursor(go, Hand)
           if c.clicked(go) {
             rail_go(c, src, w, "stations")
           }
@@ -95,7 +94,6 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       if jobs > 0 {
         let chip = c.id("side/open-jobs")
-        c.cursor(chip, Hand)
         if c.clicked(chip) {
           wide.jobs_open = !wide.jobs_open
         }
@@ -318,7 +316,6 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let id = c.id("side/archived/" + key)
   let back = c.id("side/archived-back/" + key)
   let drop = c.id("side/archived-drop/" + key)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     archive_open(it)
     show_page()
@@ -380,8 +377,7 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   let session = text(v, "session")
   let title = text(v, "title")
   let key = station + "/" + session
-  c.cursor(back, Hand)
-  if c.clicked(back) && !busy {
+  if !busy && c.clicked(back) {
     archive_restore(src, it)
   }
   let b = c.box(style=@sf.row_key_box, id=back, fn() {
@@ -394,8 +390,7 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
   @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
   if flag(v, "deletable") {
-    c.cursor(drop, Hand)
-    if c.clicked(drop) && !busy {
+    if !busy && c.clicked(drop) {
       @sf.confirm(
         @sf.t("web-pages.archive.deleteConfirm", args=[("title", title)]),
         @sf.t("web-pages.archive.deleteText"),

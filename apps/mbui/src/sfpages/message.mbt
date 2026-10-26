@@ -339,7 +339,6 @@ fn message_name(
   let goes = agent != "" || from != ""
   let id = if goes { c.id("msg-name/" + key) } else { 0 }
   if goes {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       if agent != "" {
         open_detail(src, here_ref(here), agent)
@@ -364,7 +363,6 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     None => ()
     Some(s) => {
       let id = c.id("msg-time/" + key)
-      c.cursor(id, Hand)
       if c.clicked(id) {
         absolute_times.val = !absolute_times.val
       }
@@ -542,7 +540,6 @@ fn is_viz(name : String) -> Bool {
 /// reports of, in reporting it.
 fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Unit {
   let id = c.id("notice/" + m.ts)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     notices_open[m.ts] = !notices_open.get(m.ts).unwrap_or(false)
   }
@@ -611,7 +608,6 @@ let notices_open : Map[String, Bool] = {}
 fn notice_action(c : @ui.Ctx, key : String, action : String, ink : @ui.Color, busy : Bool, run : () -> Unit) -> Unit {
   let id = c.id(key)
   if !busy {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       c.tell(key, run)
     }
@@ -691,7 +687,6 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
   let busy = install_busy(src, station, b)
   let id = if b.action != "" { c.id("blocked/" + key) } else { 0 }
   if id != 0 && !busy {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       c.tell("blocked/" + key, fn() { install_runtime(src, station, b) })
     }
@@ -836,7 +831,6 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
   }
   let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
   if place != 0 {
-    c.cursor(place, Hand)
     if c.clicked(place) {
       c.after_build("msg-place/" + key, fn() { @ui.open_url(url) |> ignore })
     }

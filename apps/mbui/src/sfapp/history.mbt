@@ -132,7 +132,7 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
     let dkey = call + "/" + r.station + "/" + key
     let busy = doing(dkey)
     let id = c.id("history/" + call)
-    if c.clicked(id) && !busy {
+    if !busy && c.clicked(id) {
       act(
         src,
         done,

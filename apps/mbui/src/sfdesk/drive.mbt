@@ -468,6 +468,8 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
   let pane_slot = c.id("files/pane-slot/" + f.key)
   c.box(style=with_pane, fn() {
     let lid = c.id("files/list/" + f.key)
+    // (a ground round its rows: a press there chooses none)
+    c.cursor(lid, Arrow)
     let lit = drag_target(c, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
     c.box(style=list_box, id=lid, fn() {
       if view == "columns" {
@@ -877,7 +879,6 @@ pub fn drive_row(
   // (touch: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
   let held_more = @sf.more_held()
   if live {
-    c.cursor(id, Hand)
     if c.pressed(id) {
       drag_press(c, src, at, e)
     }
@@ -1127,7 +1128,6 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
   let t = @sf.theme()
   let head = fn(by : String, words : String, style : @ui.Style) {
     let id = c.id("files/head/" + by)
-    c.cursor(id, Hand)
     if c.clicked(id) {
       on_sort(by)
     }
@@ -1277,7 +1277,6 @@ fn upload_answer(c : @ui.Ctx, key : String, words : String, act : () -> Unit) ->
   if c.clicked(id) {
     act()
   }
-  c.cursor(id, Hand)
   let b = c.box(style=upload_answer_box, id~, fn() { c.text(words, style=@sf.theme().items.meta.then(upload_answer_words)) |> ignore })
   c.semantics(b, Button, id~, label=words)
 }

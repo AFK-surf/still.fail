@@ -106,7 +106,6 @@ fn head_retry(c : @ui.Ctx, words : String, bad : Bool, retry : () -> Unit) -> Un
     if c.clicked(id) {
       retry()
     }
-    c.cursor(id, Hand)
     let b = c.box(style=head_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=note.then(head_link_words)) |> ignore })
     c.semantics(b, Button, id~, label=@sf.t("web-pages.drive.retry"))
   })

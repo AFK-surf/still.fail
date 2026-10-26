@@ -411,7 +411,6 @@ let via_dot_side : Double = 7.0
 /// (Stations.kt openStationPeek).
 fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
   let id = c.id("bar-station")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     @settings.open_station_peek(address, from=Of(id))
   }

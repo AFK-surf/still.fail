@@ -146,7 +146,6 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
     c.box(style=if side_on_tape.val || @sf.in_pane() { side_bar_tape() } else { side_bar() }, fn() {
       c.box(style=side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
-        c.cursor(close, Hand)
         if c.clicked(close) {
           new_files_set(src, w.id, false)
         }

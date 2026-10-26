@@ -471,8 +471,9 @@ pub fn reader_column(
   let mark = alpha(p.accent, if p.dark { reader_mark_dark } else { reader_mark_light })
   let mark_now = alpha(p.accent, if p.dark { reader_mark_now_dark } else { reader_mark_now_light })
   let est = dmax(line, reader_est_chars / dmax(1.0, (c.width - left - right) / size) * line)
-  // a tap on the text: a phone's bars come, or go
+  // a tap on the text: a phone's bars come, or go (a ground: the pointer over it the text's)
   let tap = c.id("reader-tap")
+  c.cursor(tap, Arrow)
   if c.clicked(tap) {
     reader_toggle(c, r)
   }
@@ -573,6 +574,8 @@ fn reader_chunk(
     None
   }
   let id = c.id("chunk/\{k}")
+  // (a ground, as the text's round it: reader_column)
+  c.cursor(id, Arrow)
   if c.clicked(id) {
     reader_toggle(c, r)
   }
@@ -1135,7 +1138,6 @@ fn desk_contents(
   done? : () -> Unit = fn() {  },
 ) -> Unit {
   let find = c.id("reader/contents-find")
-  c.cursor(find, Hand)
   if c.clicked(find) {
     reader_open_panel(c, r, Find)
   }
@@ -1169,7 +1171,6 @@ fn desk_contents(
     c.list(key, b.chapters.length(), desk_row_h, fn(i) {
       let (title, k, o) = b.chapters[i]
       let id = c.id("reader/chapter/\{i}")
-      c.cursor(id, Hand)
       if c.clicked(id) {
         reader_jump(r, k, o)
         done()
@@ -1251,7 +1252,6 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
     c.list("reader/hits/" + r.key, shown, desk_hit_h, fn(i) {
       let m = r.matches[i]
       let id = c.id("reader/hit/\{i}")
-      c.cursor(id, Hand)
       if c.clicked(id) {
         r.hit = i
         reader_jump(r, m.chunk, m.start)
@@ -1379,7 +1379,6 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
 /// its name under it. True on the frame after it was pressed.
 fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double) -> Bool {
   let id = c.id("reader/paper/" + key)
-  c.cursor(id, Hand)
   // (each as it is by day, whatever the app's theme)
   let paper = paper_by_key(key)
   c.box(style=desk_swatch_box.then(@ui.style(w=Fixed(w))), id~, fn() {
@@ -1403,9 +1402,6 @@ fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double
 /// A size's key (Reader.css.ts sizeKey): A− or A+, 32 high, 44 wide at least, quiet where it can go no further.
 fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : ReaderPaper, said~ : String) -> Bool {
   let id = c.id(key)
-  if on {
-    c.cursor(id, Hand)
-  }
   let b = c.box(style=desk_size_key_box, disabled=!on, id=if on { id } else { 0 }, fn() {
     c.text(words, style=desk_size_key_words.then(@ui.text_style(color=Data(p.ink)))) |> ignore
   })

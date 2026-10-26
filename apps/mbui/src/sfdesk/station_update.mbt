@@ -11,7 +11,6 @@ fn station_update(c : @ui.Ctx, src : Source, station : String, notice : Json?) -
   let trouble = text(notice, "tone") == "trouble"
   let open = flag(notice, "open")
   let id = c.id("station-update")
-  c.cursor(id, Hand)
   if c.clicked(id) {
     c.tell("station-update/notice", fn() { update_notice(src, station, notice, if open { "close" } else { "open" }) })
   }

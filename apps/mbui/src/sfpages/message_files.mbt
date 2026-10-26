@@ -213,7 +213,6 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       open_file(here, a)
     }
   }
-  c.cursor(open, Hand)
   let thumb = here.station + "/" + owner + "/" + a.path
   image_menu(c, open, key, quote=by.map(fn(b) {
     let (author, role, ts) = b
@@ -282,7 +281,6 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   if c.clicked(open) {
     open_file(here, a)
   }
-  c.cursor(open, Hand)
   @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw

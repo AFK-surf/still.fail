@@ -43,7 +43,6 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         if shown.length() < list.length() {
           let id = c.id("open-jobs/more/" + key)
-          c.cursor(id, Hand)
           if c.clicked(id) {
             open_jobs_all[key] = true
           }
@@ -73,9 +72,6 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     _ => station
   }
   let leads = chat is Some(Object(_)) && chat_station != ""
-  if leads {
-    c.cursor(row, Hand)
-  }
   if leads && c.clicked(row) {
     let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
     open_chat_ref(r)
@@ -104,10 +100,7 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     if over {
       c.layer(fn() {
         c.box(style=open_job_stop_at, fn() {
-          if !stopping {
-            c.cursor(stop, Hand)
-          }
-          if c.clicked(stop) && !stopping {
+          if !stopping && c.clicked(stop) {
             job_stop(src, station, job)
           }
           let label = @sf.t("web-main.jobs.stopNamed", args=[("name", text(job, "name"))])

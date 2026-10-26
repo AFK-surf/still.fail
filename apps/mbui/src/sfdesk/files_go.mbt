@@ -304,7 +304,6 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       for i, r in rows {
         let (label, _, target) = r
         let id = c.id("files-goto/row/" + label)
-        c.cursor(id, Hand)
         if c.clicked(id) {
           open(target)
         }
@@ -370,7 +369,6 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
       _ => ()
     }
   }
-  c.cursor(chip, Hand)
   if c.clicked(chip) {
     front_it()
     // the stations with a drive (this machine, the one shown, one away said beside each), the one shown chosen: the

@@ -236,9 +236,6 @@ pub fn file_card(
   composer? : Bool = false,
 ) -> FileCardDone {
   let id = c.id(key)
-  if open {
-    c.cursor(id, Hand)
-  }
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   let back = c.id(key + "/restore")
@@ -368,7 +365,6 @@ pub fn with_corner_remove(
             let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
               icon(c, "close", size=card_close_icon, color=theme().p.canvas) |> ignore
             })
-            c.cursor(x, Hand)
             c.semantics(b, Button, id=x, label~)
           })
           |> ignore
@@ -412,7 +408,6 @@ let corner_remove_box : @ui.Style = @ui.style(
 /// ground), its icon in the muted ink (the text's under the pointer); named.
 fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Unit {
   let p = theme().p
-  c.cursor(id, Hand)
   let hot = c.lit(id)
   let b = c.box(style=if hot { card_button_hot } else { card_button_box }, id~, fn() {
     icon(c, icon_name, size=if icon_name == "close" { card_close_icon } else { card_button_icon }, color=if hot {
@@ -612,7 +607,6 @@ pub fn quote_card(
     ""
   }
   if jump {
-    c.cursor(source, Hand)
     tip(c, key + "/jump-tip", source, t("web-main.quote.jump"))
   } else if pin != "" {
     tip(c, key + "/pin-tip", source, words)

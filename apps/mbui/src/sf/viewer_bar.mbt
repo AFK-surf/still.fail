@@ -63,7 +63,6 @@ pub fn viewer_bar(
       }
       c.box(style=viewer_bar_start, fn() {
         let id = c.id(key + "/back")
-        c.cursor(id, Hand)
         if live && c.clicked(id) {
           went = true
         }
@@ -117,9 +116,6 @@ pub fn viewer_tool(
 ) -> Bool {
   let id = c.id(key)
   let live = !disabled
-  if live {
-    c.cursor(id, Hand)
-  }
   let hot = live && (c.lit(id) || c.pressed(id))
   let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore

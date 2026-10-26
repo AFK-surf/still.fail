@@ -450,7 +450,6 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
     }
     let wid = c.id("policy-text")
     if !busy {
-      c.cursor(wid, Hand)
       if hit(c, wid) {
         c.after_build("policy-text", fn() { open("", None) })
       }
@@ -470,7 +469,6 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
           let ov = Some(o)
           let oid = c.id("policy-option/" + text(ov, "id"))
           if !busy {
-            c.cursor(oid, Hand)
             if hit(c, oid) {
               c.after_build("policy-option/" + text(ov, "id"), fn() { open(text(ov, "id"), ov) })
             }
@@ -485,7 +483,6 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
         }
         let aid = c.id("policy-add/" + archive.to_string())
         if !busy {
-          c.cursor(aid, Hand)
           if hit(c, aid) {
             c.after_build("policy-add/" + archive.to_string(), fn() { add(archive) })
           }
@@ -623,7 +620,6 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
           c.text(@sf.t("web-pages.archivePolicy.chats", args=[("days", count(policy, "days").to_string())]), style=pol_group_name) |> ignore
           for ch in items(ov, "chats") {
             let cid = c.id("policy-chat/" + text(Some(ch), "session"))
-            c.cursor(cid, Hand)
             if hit(c, cid) {
               shut()
               edit([("reset", Json::boolean(true))])

@@ -39,7 +39,7 @@ test "desktop: the pointer's shape follows what is under it, and the arrow once 
   let t = @ui.Tester::new(
     fn(c) {
       let link = c.id("link")
-      c.cursor(link, Hand)
+      c.clicked(link) |> ignore
       c.column(w=Fill(1.0), fn() {
         c.box(id=link, w=Px(100.0), h=Px(30.0), fn() {  }) |> ignore
         c.editor("field", placeholder="words") |> ignore
@@ -59,12 +59,93 @@ test "desktop: the pointer's shape follows what is under it, and the arrow once 
 }
 
 ///|
+test "desktop: what takes presses is a hand by itself; not what is off, a ground, what only watches or looks pressed" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      let button = c.id("button")
+      let slider = c.id("slider")
+      let off = c.id("off")
+      let tipped = c.id("tipped")
+      let ground = c.id("ground")
+      let look = c.id("look")
+      c.clicked(button) |> ignore
+      c.takes_presses(slider)
+      c.pressed(slider) |> ignore
+      c.interact(off, disabled=true) |> ignore
+      c.watch_press(tipped) |> ignore
+      c.clicked(ground) |> ignore
+      c.cursor(ground, Arrow)
+      c.pressed(look) |> ignore
+      c.column(w=Fill(1.0), fn() {
+        for id in [button, slider, off, tipped, ground, look] {
+          c.box(id~, w=Px(100.0), h=Px(30.0), fn() {  }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  let seen = [15.0, 45.0, 75.0, 105.0, 135.0, 165.0].map(fn(y) {
+    t.move(10.0, y)
+    t.cursor()
+  })
+  assert_eq(seen, [Hand, Hand, Arrow, Arrow, Arrow, Arrow])
+}
+
+///|
+test "desktop: a link in words picked with the pointer is a hand, the words round it the I-beam" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.column(w=Fill(1.0), fn() {
+        c.selectable(fn() {
+          c.rich([@ui.link("open", "https://example.com"), @ui.plain(" and the words after it")], size=15.0)
+          |> ignore
+        })
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  let (x, y, w, h) = t.rect_of("open and the words after it").unwrap()
+  t.move(x + 3.0, y + h / 2.0)
+  assert_eq(t.cursor(), Hand)
+  t.move(x + w - 3.0, y + h / 2.0)
+  assert_eq(t.cursor(), IBeam)
+}
+
+///|
+test "desktop: a ground that takes presses keeps the I-beam over its words picked with the pointer" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      let ground = c.id("ground")
+      c.clicked(ground) |> ignore
+      c.cursor(ground, Arrow)
+      c.box(id=ground, w=Fill(1.0), pad=40.0, fn() {
+        c.selectable(fn() { c.rich([@ui.plain("words on a ground")], size=15.0) |> ignore })
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  let (x, y, _, h) = t.rect_of("words on a ground").unwrap()
+  t.move(x + 3.0, y + h / 2.0)
+  assert_eq(t.cursor(), IBeam)
+  t.move(10.0, 10.0)
+  assert_eq(t.cursor(), Arrow)
+}
+
+///|
 test "desktop: what moves under a resting pointer is what it hovers" {
   let shift = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       let a = c.id("a")
-      c.cursor(a, Hand)
+      c.clicked(a) |> ignore
       c.box(pt=shift.val, fn() { c.box(id=a, w=Px(50.0), h=Px(20.0), fn() {  }) |> ignore })
       |> ignore
     },
@@ -192,7 +273,7 @@ test "desktop: a script hovers, right clicks, presses keys and resizes the windo
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
-      c.cursor(row, Hand)
+      c.clicked(row) |> ignore
       if c.right_clicked(row) is Some(_) {
         seen.push("menu")
       }

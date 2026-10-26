@@ -187,9 +187,6 @@ fn unsent_button(
 ) -> Bool {
   let p = @sf.theme().p
   let id = c.id(key)
-  if enabled {
-    c.cursor(id, Hand)
-  }
   let hot = enabled && c.hovered(id)
   let b = c.box(style=if !enabled { unsent_button_off } else if hot { unsent_button_hot } else { unsent_button_box }, id~, fn() {
     if busy {
@@ -256,7 +253,6 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       }
   }
   let id = c.id("activity/" + a.key)
-  c.cursor(id, Hand)
   if c.clicked(id) {
     open_detail(src, here_ref(here), a.key)
   }
@@ -301,7 +297,6 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
     // one of several agents: stopped alone from its row, under the pointer
     if here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id)) {
       let stop = c.id("activity-stop/" + a.key)
-      c.cursor(stop, Hand)
       let label = @sf.t("web-main.activity.stop", args=[("who", a.who)])
       @sf.tip(c, "activity-stop/" + a.key, stop, label)
       let b = c.box(style=if c.hovered(stop) { activity_stop_hot } else { activity_stop }, id=stop, fn() {

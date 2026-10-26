@@ -135,7 +135,6 @@ pub fn chat_row(
   let r = row_ref(item)
   let renaming = rows.renaming == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
-  c.cursor(id, Hand)
   // pressed by a finger, the chat is read ahead of its page (Home.kt onPress)
   if finger && pressed && row_held.val.0 != id {
     row_held.val = (id, false)
@@ -339,7 +338,6 @@ pub fn chat_row(
       // 归档, at the row's top right while a mouse points at it (concentric with the row's corner: @sf.row_corner_keys)
       if archive_key {
         @sf.row_corner_keys(c, fn() {
-          c.cursor(archive, Hand)
           if c.clicked(archive) {
             archive_row(src, item)
           }

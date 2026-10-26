@@ -397,7 +397,6 @@ fn new_station_control(
 /// `body`. True on the frame after it was pressed.
 fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit) -> Bool {
   let id = c.id(key)
-  c.cursor(id, Hand)
   let b = if floating {
     c.box(style=glass_chooser_box, glass=@sf.glass_floating(), id~, fn() {
       body()
@@ -430,7 +429,6 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
   for s in items(v, "stations") {
     let st = Some(s)
     let id = c.id("pick-station/" + text(st, "station"))
-    c.cursor(id, Hand)
     if c.clicked(id) {
       @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
       close()
@@ -641,8 +639,7 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
         let v = Some(combo)
         let selected = flag(v, "selected")
         let id = c.id("new/combo/" + text(v, "runtime") + ":" + text(v, "model") + ":" + text(v, "effort"))
-        c.cursor(id, Hand)
-        if c.clicked(id) && !leaving {
+        if !leaving && c.clicked(id) {
           let m : Map[String, Json] = {
             "model": Json::string(text(v, "model")),
             "runtime": Json::string(text(v, "runtime")),

@@ -1360,9 +1360,6 @@ fn wide_switch_row(
 /// it is now.
 pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : String = "", disabled? : Bool = false) -> Bool {
   let id = c.id(key + "/row")
-  if !disabled {
-    c.cursor(id, Hand)
-  }
   let mut now = on
   let mut ticked = false
   let r = theme().rows
@@ -3011,7 +3008,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
     })
   let frame = c.frame_number()
   // (a drag area's in hand from the press on: pressed no more once it is dragged, Ctx::drag_on)
-  if c.pressed(id) || c.clicked(id) || c.drag_of(id) is Some({ down: true, .. }) {
+  if c.watch_press(id) || c.drag_of(id) is Some({ down: true, .. }) {
     edge_tips_away[key] = frame
   } else if !on && !down {
     match edge_tips_away.get(key) {
@@ -3022,7 +3019,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
   }
   // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it. The press itself is told
   // to the tip, so it is shut as it is pressed, not left open to show for a moment as the pointer leaves.)
-  if edge_tips_away.contains(key) && !c.pressed(id) && !c.clicked(id) {
+  if edge_tips_away.contains(key) && !c.watch_press(id) {
     return
   }
   @kit.tooltip(
@@ -3173,14 +3170,11 @@ pub fn options_card(
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
-        if c.clicked(id) && free {
+        if free && c.clicked(id) {
           picked = Some(i)
         }
         // under a mouse's pointer its row's ground, in any layout (Decisions.css.ts choice:hover)
         let mouse = @ui.pointing() is Mouse
-        if mouse && free {
-          c.cursor(id, Hand)
-        }
         let hot = mouse && free && c.lit(id)
         c.box(
           dir=Row,
@@ -3337,7 +3331,7 @@ pub fn way_in(
 ) -> Bool {
   let bare = native_input() is Mouse
   let id = c.id("sign-in")
-  let pressed = c.clicked(id) && !busy
+  let pressed = !busy && c.clicked(id)
   c.box(style=sign_in_box, fn() {
     drawable(c, art, dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)) |> ignore
     if !bare {
@@ -3473,7 +3467,6 @@ pub fn update_key(
 ) -> Bool {
   let t = theme()
   let id = c.id(key)
-  c.cursor(id, Hand)
   let hot = c.lit(id) && !busy
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
@@ -3512,7 +3505,7 @@ pub fn update_key(
   if why != "" {
     tip(c, key + "/tip", id, why, side=Bottom)
   }
-  c.clicked(id) && !busy
+  !busy && c.clicked(id)
 }
 
 ///|

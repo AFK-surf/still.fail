@@ -184,7 +184,6 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
       let checking = is_doing(core, ["software.check"], [("station", station)])
       let cid = c.id("software-check/" + station)
       if !checking {
-        c.cursor(cid, Hand)
         if c.clicked(cid) {
           software_call(core, station, "software.check", [])
         }

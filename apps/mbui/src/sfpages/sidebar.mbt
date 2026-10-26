@@ -494,7 +494,6 @@ fn list_empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
         )
         |> ignore
         let new = c.id("chats/empty-new")
-        c.cursor(new, Hand)
         if c.clicked(new) {
           open_page(NewChat)
         }

@@ -249,7 +249,6 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
     actions?=if manager {
       Some(fn() {
         let id = c.id("ws-add-people")
-        c.cursor(id, Hand)
         if c.clicked(id) {
           open_add_people(core, here, v, from=Of(id))
         }
@@ -328,7 +327,6 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json?, 
   let can = sub != here.sub && manager && (now != "owner" || role == "owner")
   let id = if can { c.id("member/" + sub) } else { 0 }
   if can {
-    c.cursor(id, Hand)
     if c.clicked(id) {
       ws_member_panel(core, here, v, m, name, Of(id))
     }

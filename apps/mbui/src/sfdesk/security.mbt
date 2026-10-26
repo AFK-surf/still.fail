@@ -339,9 +339,6 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           c.box(style=acc_narrow_foot, fn() {
             @sf.group(c, fn() {
               let id = c.id("lock-off")
-              if !off {
-                c.cursor(id, Hand)
-              }
               let b = c.box(style=narrow_row, id=if off { 0 } else { id }, fn() {
                 c.text(@sf.t("web-pages.security.turnOff"), style=acc_delete_words) |> ignore
                 if off {

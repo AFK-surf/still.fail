@@ -1380,10 +1380,27 @@ pub let double_click_ms : Double = 500.0
 pub let double_click_slop : Double = 4.0
 
 ///|
+/// Whether `id` was clicked since the last frame (pressed and let go on it, not dragged; Enter or Space while it has
+/// the focus; the Activate a screen reader asks). Asked, `id` takes presses: the pointer is a hand over it (desktop.mbt
+/// show_cursor). What only watches it pressed (a tip that shuts as its trigger is) asks Ctx::watch_press.
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
+  self.takes_presses(id)
+  self.click_seen(id)
+}
+
+///|
+/// Whether `id` was clicked since the last frame, asked by nothing that takes the click.
+fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
   // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
   // a screen reader asks of it is one: semantics.mbt)
   self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
+}
+
+///|
+/// Whether `id` is pressed or was clicked since the last frame, as what stands beside it sees it (a tip that shuts as
+/// its trigger is pressed, an edge's tip that goes): asked so, `id` is not taken to take presses (Ctx::clicked).
+pub fn Ctx::watch_press(self : Ctx, id : Int) -> Bool {
+  self.pressed(id) || self.click_seen(id)
 }
 
 ///|
