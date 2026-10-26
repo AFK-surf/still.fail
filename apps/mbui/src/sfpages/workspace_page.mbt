@@ -8,7 +8,7 @@
 
 ///|
 /// The workspace's page (WorkspaceSettings, WorkspaceScreen), in the frame it is given.
-fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+pub fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let t = @sf.theme()
   let topic = workspace_view(core, here)
@@ -278,7 +278,7 @@ fn ws_person(
   let narrow = look == Narrow
   let style = match (narrow, id != 0) {
     (true, true) => narrow_row
-    (true, false) => narrow_said_row
+    (true, false) => @sf.pg_said_row
     (false, true) => desk_list_link
     (false, false) => desk_list_row
   }
@@ -288,7 +288,7 @@ fn ws_person(
     // words: docs/ui-panels.md 放不下的时候)
     @sf.row_lines(c, fn() {
       c.box(style=desk_named.then(ws_row_head), fn() {
-        c.text(name, style=if narrow { @sfpages.mem_narrow_title } else { desk_list_title }) |> ignore
+        c.text(name, style=if narrow { mem_narrow_title } else { desk_list_title }) |> ignore
         if badge != "" {
           you(c, badge)
         }
@@ -341,7 +341,7 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json?, 
       let on = [("workspace", ws), ("member", sub)]
       let calls = ["workspace.setRole", "workspace.removeMember"]
       doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
-      c.text(role_label(now), style=if look == Narrow { narrow_value } else { wide_value }) |> ignore
+      c.text(role_label(now), style=if look == Narrow { @sf.pg_value } else { @sf.wide_value }) |> ignore
     },
     badge=if sub == here.sub { @sf.t("android-settings.members.you") } else { "" },
     id~,
@@ -427,9 +427,4 @@ let ws_add_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter just
 let ws_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
-let ws_more_icon : Double = 16.0
-
-///|
-/// The ⋯ menu open, by the person's sub ("" none).
-// kept across runs: said again by each press; settings_reset empties it
-let ws_menu : Ref[String] = Ref("")
+pub let ws_more_icon : Double = 16.0

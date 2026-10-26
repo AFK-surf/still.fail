@@ -1,4 +1,4 @@
-# 账号 (sfdesk account.mbt, one page in every frame): MBUI_FIXTURE=settings-me, a phone's window or a desktop's.
+# 账号 (sfpages account.mbt, one page in every frame): MBUI_FIXTURE=settings-me, a phone's window or a desktop's.
 timeout 20000
 until lin@example.com
 wait 1500

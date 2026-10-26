@@ -1,5 +1,5 @@
 // The settings' pages here (about.mbt, appearance.mbt, automatic_decisions.mbt, bars.mbt, memory.mbt,
-// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt)
+// notifications.mbt, permissions.mbt, shortcuts.mbt, usage.mbt, account.mbt, workspace_page.mbt)
 // drawn alone over the made-up core's settings, in a box of each width, with a finger and with a mouse: what each is
 // for, laid out by its own width. What the shell does around them (the tier, its sidebar, the system's bars) is the
 // whole app's tests' (src/sfapp).
@@ -65,6 +65,8 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     StationArchiving(s) => station_archiving_page(c, core, here, frame, s)
     Notifications => notify_page(c, core, here, frame)
     Shortcuts => shortcuts_page(c, core, frame)
+    Me => me_page(c, core, here, frame)
+    Workspace => workspace_page(c, core, here, frame)
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
@@ -83,4 +85,19 @@ let page_cases : Array[(Double, Int)] = [(390.0, 2), (390.0, 0), (720.0, 0), (11
 /// Whether a page `w` wide is laid out wide.
 fn laid_wide(w : Double) -> Bool {
   @sf.look_for(w) is Wide
+}
+
+///|
+/// The page `w` wide scrolled (the wheel over its middle) until `words` stand in its box, clear of its edges, to be
+/// pressed.
+fn scrolled_to(t : @ui.Tester, w : Double, words : String) -> Unit {
+  let x = w / 2.0
+  t.move(x, 450.0)
+  for _ in 0..<12 {
+    match t.find(words) {
+      Some((_, y)) if y < 40.0 => t.wheel(x, 450.0, -300.0)
+      Some((_, y)) if y < 860.0 => break
+      _ => t.wheel(x, 450.0, 300.0)
+    }
+  }
 }
