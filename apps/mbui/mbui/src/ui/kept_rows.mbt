@@ -15,13 +15,13 @@
 // Its list's rows are laid on the pixels, each as tall as whole pixels (Ctx::row_slot, rows_on_pixels): a row is drawn
 // again only moved by whole device pixels, as its laying out there would set its words and boxes.
 //
-// Drawn again, it says again what its build and its paint said of the frame: what takes the focus, what asks for a
-// menu, the pointer's shape, what tells outside, its words; and what its paint said (said.mbt: its targets, where
-// presses, the wheel and the pointer go, and the rest of the frame's paint lists), taken by its range and said again by
-// one rule. Its instances are recorded in the band (its list's clip as built, row_reach past it) unclipped by its list,
-// and put in its list's clip as it is drawn (row_clip_into), built or drawn again alike, what its paint said too (only
-// what shows there): a row drawn again is drawn as its build would draw it there. A part drawn again holds the rows it
-// drew (kept_part.mbt).
+// Drawn again, it says again what its build and its paint said of the frame, taken by their ranges and said again by
+// one rule (said.mbt): what takes the focus, what asks for a menu, the pointer's shape, what is told outside, its
+// targets (where presses, the wheel and the pointer go) and the rest of the frame's lists; and its words. A list's rows
+// say what their builds said in their order, built or drawn again (Ctx::row_build_said). Its instances are recorded in
+// the band (its list's clip as built, row_reach past it) unclipped by its list, and put in its list's clip as it is
+// drawn (row_clip_into), built or drawn again alike, what its paint said too (only what shows there): a row drawn again
+// is drawn as its build would draw it there. A part drawn again holds the rows it drew (kept_part.mbt).
 
 ///|
 /// How far past its list's clip a row's build draws what is recorded of it (the band): what it may scroll by before
@@ -61,16 +61,6 @@ priv struct RowKept {
   mut rel : Double
   /// where its box was as it was last drawn (x, y, w, h: the pointer over it lights what it points at)
   mut last : (Double, Double, Double, Double)
-  // what its build said of the frame
-  focus : Array[Focusable]
-  cursors : Array[(Int, Int)]
-  takers : Array[Int]
-  drags : Array[Int]
-  keeps : Array[Int]
-  askers : Array[Int]
-  mut mouse_drags : Bool?
-  /// what it said to tell outside: (0 after_build, 1 tell; its id; what)
-  tells : Array[(Int, Int, () -> Unit)]
   /// the words it marked (Ctx::words), as laid out
   words : Array[(String, Words)]
   /// how its list builds a row (Ctx::list's `row`, this build's): its part's build runs it
@@ -107,14 +97,6 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     dy: 0.0,
     rel: 0.0,
     last: (0.0, 0.0, 0.0, 0.0),
-    focus: [],
-    cursors: [],
-    takers: [],
-    drags: [],
-    keeps: [],
-    askers: [],
-    mouse_drags: None,
-    tells: [],
     words: [],
     build: fn(_) {  },
     above: 0.0,
@@ -126,16 +108,9 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
 }
 
 ///|
-/// What its build says of the frame, from none (its build runs again).
+/// What its build says of the frame, from none (its build runs again; what is said of it in the frame's build lists is
+/// its part's: kept_new).
 fn RowKept::build_starts(self : RowKept) -> Unit {
-  self.focus.clear()
-  self.cursors.clear()
-  self.takers.clear()
-  self.drags.clear()
-  self.keeps.clear()
-  self.askers.clear()
-  self.mouse_drags = None
-  self.tells.clear()
   self.words.clear()
   self.sticks.clear()
   self.held = false
@@ -236,7 +211,7 @@ fn row_part(list : Int, k : Int) -> KeptPart {
   match kept_rows.get(id) {
     Some(st) => st
     None => {
-      let st = kept_new(id)
+      let st = kept_new(id, row=true)
       let rk = RowKept::new(list, k)
       st.row = Some(rk)
       // (its build: the row as its list builds it now)
@@ -271,9 +246,15 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   // each built as where none is kept, nothing of its drawing taken)
   if round.moving || (self.down && !(self.dragging && st.held)) {
     kp.built = -1
+    // (what its build says of the frame said where its list's rows say theirs, as of a row built to be kept)
+    self.build_marks(kp.built_marks)
     let r = self.build_row(li, st, k)
+    self.build_take(kp.built_marks, kp.built_said, cut=true)
+    rk.part = st.part
     // (what its list's clip leaves nothing of dropped, as of a row built to be kept)
-    self.drawn_of(r).row = -1
+    let e = self.drawn_of(r)
+    e.row = -1
+    e.said_row = id
     return r
   }
   let moving = round.rows.contains(id)
@@ -356,6 +337,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   self.direction = saved_dir
   self.layer_cur = saved_layer
   let e = self.drawn_of(r)
+  e.said_row = id
   rk.node = r
   if ran {
     kp.built = self.frame_no
@@ -466,7 +448,15 @@ fn Ctx::rows_placed(
     }
     let kp = match self.drawn_entry(r) {
       Some({ again: Some(kp), .. }) => kp
-      _ => continue
+      Some(e) => {
+        // built: what its build said, said in its rows' order
+        match kept_rows.get(e.said_row) {
+          Some(b) => self.row_build_said(b, r)
+          None => ()
+        }
+        continue
+      }
+      None => continue
     }
     let rk = kp.row.unwrap()
     let n = self.nodes[r]
@@ -500,7 +490,7 @@ fn Ctx::rows_placed(
     if whole && !held && n.x == rk.x && top >= rk.band0 + dy && bottom <= rk.band1 + dy && !pointed {
       rk.dy = dy
       rk.rel = st.above(n.item) - rk.above
-      self.row_said_again(rk)
+      self.row_build_said(kp, r)
       self.drawn_again_told((1, kp.id), dy, rk.rel)
       continue
     }
@@ -515,53 +505,24 @@ fn Ctx::rows_placed(
     self.nodes[r2].parent = li
     order[j] = r2
     built = true
+    self.row_build_said(kp, r2)
   }
   built
 }
 
 ///|
-/// What row `rk`'s build said of the frame, said again as it is drawn again (its targets are said as it is painted).
-fn Ctx::row_said_again(self : Ctx, rk : RowKept) -> Unit {
-  for f in rk.focus {
-    self.focusables.push({ ..f, node: rk.node })
-  }
-  for c in rk.cursors {
-    desk.next_cursors[c.0] = c.1
-  }
-  for id in rk.takers {
-    desk.next_takers.add(id)
-  }
-  for id in rk.drags {
-    desk.next_drags.push(id)
-  }
-  for id in rk.keeps {
-    desk.next_keeps.push(id)
-  }
-  for id in rk.askers {
-    desk.next_askers.push(id)
-  }
-  match rk.mouse_drags {
-    Some(on) => desk.next_mouse_drags = on
-    None => ()
-  }
-  for t in rk.tells {
-    let list = if t.0 == 0 { self.tells } else { self.told }
-    match list.search_by(fn(x) { x.0 == t.1 }) {
-      Some(i) => list[i] = (t.1, t.2)
-      None => list.push((t.1, t.2))
-    }
-  }
-}
-
-///|
-/// The row being built now.
-fn row_building() -> RowKept? {
-  if part_now.row == 0 {
-    return None
-  }
-  match kept_rows.get(part_now.row) {
-    Some(st) => st.row
-    None => None
+/// What row `kp`'s build said of the frame (its node `r` now), said where its list's rows say theirs, in their order,
+/// built or drawn again (its targets are said as it is painted); the part its list is in told it said it there, to say
+/// it again there as it is drawn again.
+fn Ctx::row_build_said(self : Ctx, kp : KeptPart, r : Int) -> Unit {
+  self.say_again(kp.built_said, moved_to(r))
+  match kp.row {
+    Some(rk) if rk.part != 0 =>
+      match kept_parts.get(rk.part) {
+        Some(p) => p.rows_said.push(kp.id)
+        None => ()
+      }
+    _ => ()
   }
 }
 
@@ -634,7 +595,7 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   self.take_found(kp)
   self.paint_take(kp.marks, kp.said)
   self.paint_cut(kp.marks)
-  self.paint_again(kp.said, rk.moved(0.0, k))
+  self.say_again(kp.said, rk.moved(0.0, k))
   // (what must be built each frame: drawn over everything, a scroll bar of its rows', a native view's hole, a field, a
   // list of its own)
   rk.keepable = rk.keepable &&
@@ -652,7 +613,7 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
 ///|
 /// Where what row `self`'s paint said is said: `dy` below where it was built, in the clip at `k` (its list's).
 fn RowKept::moved(self : RowKept, dy : Double, k : Int) -> Moved {
-  { dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1 }
+  { dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1, node: -1 }
 }
 
 ///|
@@ -684,7 +645,7 @@ fn Ctx::row_paint_again(self : Ctx, i : Int, kp : KeptPart) -> Unit {
       }
     }
   }
-  self.paint_again(kp.said, rk.moved(dy, k))
+  self.say_again(kp.said, rk.moved(dy, k))
   self.row_clip_into(k, i0, g0, drops=true)
   let n = self.nodes[i]
   rk.last = (n.x, n.y, n.fw, n.fh)

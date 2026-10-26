@@ -260,6 +260,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
       late = late + 1
     }
+    // what the rows of the parts drawn again said, where their boxes were not laid out anew (kept_part.mbt)
+    c.parts_rows_left()
     // what rows left out where they had not the room, drawn nowhere (readback.mbt)
     c.left_out_after_layout()
     // what covers an item, over it as laid out now (cover.mbt)
@@ -293,11 +295,14 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   parts_frame_end(c)
   // words picked with the pointer held: to what is under it as laid out now (desktop.mbt), drawn so
   c.select_after_layout()
-  // what the last build said to tell outside, told now, once (Ctx::after_build)
-  let tells = c.tells.copy()
+  // what the builds said, where a Tester asks (said.mbt)
+  c.said_built_logged()
+  // what the last build said to tell outside, told now, once by its key: the last said of it, where the first was
+  // (Ctx::after_build)
+  let tells = tells_once(c.tells)
   c.tells.clear()
-  for t in tells {
-    (t.1)()
+  for f in tells {
+    f()
   }
   // what any of its builds said to tell, once each (Ctx::tell)
   let told = c.told.copy()
@@ -408,21 +413,32 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
 /// `f`, what the view tells outside of what it builds (a call to its core: the chat shown and its end seen), done once
 /// the frame's builds are over, as the last of them says it: a frame is built again while what the view read changes
 /// (frame_body), and what an earlier build said, from what it read then, is let go. By `key` in the scope it is said
-/// in: said twice in a build, the later. Said outside a frame's build, at once.
+/// in: said twice in a build, the later, where the first was said (said in order: what is kept says it again as it is
+/// drawn again, said.mbt). Said outside a frame's build, at once.
 pub fn Ctx::after_build(self : Ctx, key : String, f : () -> Unit) -> Unit {
   if !building.val {
     f()
     return
   }
-  let id = self.id("\u{2}after-build/" + key)
-  match self.tells.search_by(fn(t) { t.0 == id }) {
-    Some(k) => self.tells[k] = (id, f)
-    None => self.tells.push((id, f))
+  self.tells.push((self.id("\u{2}after-build/" + key), f))
+}
+
+///|
+/// What the frame's builds said to tell (Ctx::after_build, in the order said), once by its id: the last said of it,
+/// where the first was.
+fn tells_once(tells : Array[(Int, () -> Unit)]) -> Array[() -> Unit] {
+  let at : Map[Int, Int] = {}
+  let out : Array[() -> Unit] = []
+  for t in tells {
+    match at.get(t.0) {
+      Some(k) => out[k] = t.1
+      None => {
+        at[t.0] = out.length()
+        out.push(t.1)
+      }
+    }
   }
-  match row_building() {
-    Some(rk) => rk.tells.push((0, id, f))
-    None => ()
-  }
+  out
 }
 
 ///|
@@ -451,6 +467,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.window_corner = window_corner()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
+  parts_build_start()
   drawing_begin()
   desk_build_start()
   c.layers.clear()
@@ -1462,10 +1479,6 @@ pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
     match self.told.search_by(fn(t) { t.0 == id }) {
       Some(k) => self.told[k] = (id, f)
       None => self.told.push((id, f))
-    }
-    match row_building() {
-      Some(rk) => rk.tells.push((1, id, f))
-      None => ()
     }
   } else {
     f()

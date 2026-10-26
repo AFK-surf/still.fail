@@ -184,13 +184,14 @@ priv struct Desk {
   /// keys since the last frame: code, modifiers, whether a field took it
   mutable_keys : Array[(Int, Int, Bool)]
   keys : Array[(Int, Int, Bool)]
-  /// the pointer's shape by target, as this frame's build says, and as the last one's said
-  next_cursors : Map[Int, Int]
-  mut cursors : Map[Int, Int]
+  /// the pointer's shape by target, as this frame's build says (in the order said, the last said of a target its
+  /// own), and as the last one's said
+  next_cursors : Array[(Int, Int)]
+  cursors : Map[Int, Int]
   /// the targets that take presses (their click read, Ctx::clicked; or said, Ctx::takes_presses), as this frame's
-  /// build says, and as the last one's said
-  next_takers : Set[Int]
-  mut takers : Set[Int]
+  /// build says (in the order said), and as the last one's said
+  next_takers : Array[Int]
+  takers : Set[Int]
   /// the shape the host shows
   mut shown : Int
   /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
@@ -204,9 +205,9 @@ priv struct Desk {
   /// app takes them
   mut pasting : (Int, ClipboardRead)?
   pasted : Map[Int, Array[(String, Bytes)]]
-  /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says and
-  /// as the last one's said
-  mut next_mouse_drags : Bool
+  /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says (in
+  /// the order said: the last said holds) and as the last one's said
+  next_mouse_drags : Array[Bool]
   mut mouse_drags : Bool
   /// rich text built now is picked with the pointer (Ctx::selectable), and in what colour picked words are grounded
   mut selecting : Bool
@@ -278,9 +279,9 @@ let desk : Desk = {
   next_askers: [],
   mutable_keys: [],
   keys: [],
-  next_cursors: {},
+  next_cursors: [],
   cursors: {},
-  next_takers: Set::new(),
+  next_takers: [],
   takers: Set::new(),
   shown: 0,
   next_drags: [],
@@ -289,7 +290,7 @@ let desk : Desk = {
   keeps: [],
   pasting: None,
   pasted: {},
-  next_mouse_drags: true,
+  next_mouse_drags: [],
   mouse_drags: true,
   selecting: false,
   sel_color: 0x3B82F64DL,
@@ -316,7 +317,7 @@ fn desk_reset() -> Unit {
   desk.keeps.clear()
   desk.pasting = None
   desk.pasted.clear()
-  desk.next_mouse_drags = true
+  desk.next_mouse_drags.clear()
   desk.mouse_drags = true
   desk.selecting = false
   desk.next_sels.clear()
@@ -353,7 +354,7 @@ fn desk_build_start() -> Unit {
   desk.next_takers.clear()
   desk.next_drags.clear()
   desk.next_keeps.clear()
-  desk.next_mouse_drags = true
+  desk.next_mouse_drags.clear()
   desk.next_sels.clear()
   desk.selecting = false
 }
@@ -362,15 +363,20 @@ fn desk_build_start() -> Unit {
 /// As a frame ends (its targets in place): the shapes and drag areas it said are the ones in force, the pointer's
 /// target found again where it rests (what moved under it), its shape shown.
 fn Ctx::desk_frame_end(self : Ctx) -> Unit {
-  let cs = desk.cursors
-  desk.cursors = desk.next_cursors.copy()
-  cs.clear()
-  let ts = desk.takers
-  desk.takers = desk.next_takers.copy()
-  ts.clear()
+  desk.cursors.clear()
+  for c in desk.next_cursors {
+    desk.cursors[c.0] = c.1
+  }
+  desk.takers.clear()
+  for id in desk.next_takers {
+    desk.takers.add(id)
+  }
   desk.drags = desk.next_drags.copy()
   desk.keeps = desk.next_keeps.copy()
-  desk.mouse_drags = desk.next_mouse_drags
+  desk.mouse_drags = match desk.next_mouse_drags.last() {
+    Some(on) => on
+    None => true
+  }
   desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
     if pointing() is Finger {
@@ -444,11 +450,7 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
   ignore(self)
   if id != 0 {
-    desk.next_cursors[id] = cursor.code()
-    match row_building() {
-      Some(rk) => rk.cursors.push((id, cursor.code()))
-      None => ()
-    }
+    desk.next_cursors.push((id, cursor.code()))
   }
 }
 
@@ -459,11 +461,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   ignore(self)
   if id != 0 {
-    desk.next_takers.add(id)
-    match row_building() {
-      Some(rk) => rk.takers.push(id)
-      None => ()
-    }
+    desk.next_takers.push(id)
   }
 }
 
@@ -489,10 +487,6 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
   if id != 0 {
     desk.next_askers.push(id)
-    match row_building() {
-      Some(rk) => rk.askers.push(id)
-      None => ()
-    }
   }
   let mut at : (Double, Double)? = None
   for m in desk.menus {
@@ -533,10 +527,6 @@ pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
   ignore(self)
   if id != 0 {
     desk.next_drags.push(id)
-    match row_building() {
-      Some(rk) => rk.drags.push(id)
-      None => ()
-    }
   }
 }
 
@@ -546,11 +536,7 @@ pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
 /// that does not say it drags them (a wide window made narrow).
 pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
   ignore(self)
-  desk.next_mouse_drags = on
-  match row_building() {
-    Some(rk) => rk.mouse_drags = Some(on)
-    None => ()
-  }
+  desk.next_mouse_drags.push(on)
 }
 
 ///|
@@ -1040,10 +1026,6 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   ignore(self)
   desk.next_keeps.push(id)
-  match row_building() {
-    Some(rk) => rk.keeps.push(id)
-    None => ()
-  }
 }
 
 ///|
