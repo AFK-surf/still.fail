@@ -102,6 +102,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceChanged(GL10 gl, int w, int h) {
+        // (a new surface, told after it is made, or the same at another size: whatever was said of the rate, nothing said)
+        sayRate(false);
         Native.resize(w, h);
     }
 
@@ -219,11 +221,16 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             long frames = Math.round((double) (v - lastVsync) / framePeriod);
             if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
         }
+        // drawn at the vsync after the frame before's: the hand moving what it holds, a frame each vsync
+        boolean following = v > lastVsync && lastVsync != 0 && v - lastVsync < framePeriod * 3 / 2;
         lastVsync = v;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
         boolean later = takeBacks(v != 0 ? v : began);
         boolean more = Native.frame(w, h, density, now, late);
         askedAtEnd = more || later;
+        drawn++;
+        if (more || later || following) sayRate(true);
+        else if (rateSaid) stillAfter(drawn);
         if (more || later) wantFrame();
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
@@ -285,6 +292,57 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private void readFramePeriod() {
         android.view.Display d = getDisplay();
         if (d != null && d.getRefreshRate() > 1) framePeriod = (long) (1e9 / d.getRefreshRate());
+        if (d == null) return;
+        // the highest rate the display shows at the size it has now (another size is another mode, not a rate)
+        android.view.Display.Mode m = d.getMode();
+        float top = 0;
+        for (android.view.Display.Mode o : d.getSupportedModes()) {
+            if (o.getPhysicalWidth() == m.getPhysicalWidth() && o.getPhysicalHeight() == m.getPhysicalHeight())
+                top = Math.max(top, o.getRefreshRate());
+        }
+        topRate = top;
+    }
+
+    // ---- the display's rate ----
+
+    /**
+     * The rate this surface's frames want of the display (Surface.setFrameRate), said as the system's own views say
+     * theirs (a list flung, a view moved: Android 15's frame rate categories): the display's highest while the app
+     * draws frame after frame (a motion, the hand moving what it holds), nothing once a vsync passes with none drawn.
+     * A surface that says nothing is left at the rate the system picks for it from how often its buffers came: a phone
+     * that does 120 Hz (an OPPO Find N6) kept the display at 60 for the app, every motion with half the frames its
+     * own views' get. Said only while it moves: a rate said keeps the display at it for as long as the surface shows,
+     * still or not.
+     */
+    private volatile float topRate;
+    /** Whether this surface says the display's highest rate now (GL thread; a new surface says nothing). */
+    private boolean rateSaid;
+    /** The app's frames drawn (GL thread): one drawn since a frame that asked for none is told by it. */
+    private int drawn;
+
+    /** The surface says the display's highest rate, or nothing (GL thread). */
+    private void sayRate(boolean on) {
+        if (on == rateSaid || android.os.Build.VERSION.SDK_INT < 30) return;
+        float rate = on ? topRate : 0;
+        if (on && rate <= 0) return;
+        android.view.Surface s = getHolder().getSurface();
+        if (s == null || !s.isValid()) return;
+        try {
+            s.setFrameRate(rate, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
+            rateSaid = on;
+        } catch (RuntimeException e) {
+            Host.log("display rate: " + e);
+        }
+    }
+
+    /**
+     * Frame {@code at} asked for none after it (GL thread): at the next vsync, after the touches it brings (a frame they
+     * ask for is drawn at it), the app still with nothing drawn since and none asked says no rate.
+     */
+    private void stillAfter(int at) {
+        Host.main.post(() -> Choreographer.getInstance().postFrameCallback(t -> queueEvent(() -> {
+            if (drawn == at && !appWanted.get()) sayRate(false);
+        })));
     }
 
     @Override
