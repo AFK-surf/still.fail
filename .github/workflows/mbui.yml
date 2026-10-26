@@ -28,6 +28,7 @@ on:
       - "scripts/release-put.sh"
       - "scripts/release-sign.ts"
       - "scripts/win-feeds.sh"
+      - "scripts/release.sh"
       - "station/src/updates/**"
       - "cloud/src/install.ts"
       - "cloud/test/dev.ts"
@@ -59,6 +60,7 @@ jobs:
       win: ${{ steps.what.outputs.win }}
       linux: ${{ steps.what.outputs.linux }}
       ios: ${{ steps.what.outputs.ios }}
+      handoff: ${{ steps.what.outputs.handoff }}
     steps:
       # (the history's commits and trees, the files' contents only for beta.sh: what changed is told by the trees)
       - uses: actions/checkout@v5
@@ -75,6 +77,20 @@ jobs:
             echo "$p=$v" >> "$GITHUB_OUTPUT"
             echo "$p: $v"
           done
+          # The desktop app (Electron's) moved over to the Windows app by its own updater (the windows job's last step,
+          # e2e/win/handoff.sh): asked for by hand, or for a change to what that goes by (the installer, the app's
+          # identity and its data's place, how it is built as the desktop app, the release's feeds), since main (a
+          # branch) or the push before (main).
+          v=no
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then v=yes
+          else
+            base=${{ github.event.before }}
+            [ -n "$branch" ] && base=$(git merge-base origin/main HEAD)
+            if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
+              grep -qE '^(apps/mbui/windows/|apps/mbui/e2e/win/handoff\.sh$|apps/mbui/scripts/win\.sh$|apps/mbui/src/host/win_core\.c$|apps/mbui/src/host/win_electron_sealed\.h$|apps/mbui/mbui/src/host/win_(life|update)\.h$|scripts/(win-feeds|release)\.sh$|scripts/release-sign\.ts$|station/src/updates/)'; then v=yes; fi
+          fi
+          echo "handoff=$v" >> "$GITHUB_OUTPUT"
+          echo "handoff: $v"
 
   android:
     needs: what
@@ -590,6 +606,12 @@ jobs:
           node apps/mbui/scripts/waitfor.mjs --deadline 600 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
           cat "$E/log"
           [ "$(cat "$E/status")" = 0 ]
+      # The desktop app as released (Electron's beta), installed, moved over to this app built as it by its own updater
+      # (e2e/win/handoff.sh: ~1-2 min), for a change to what that goes by (the what job). Last: it builds the app again
+      # as the desktop app, in the place the e2e flow and the installer's put take it from.
+      - name: The desktop app moved over to this app by its own updater (e2e/win/handoff.sh)
+        if: needs.what.outputs.handoff == 'yes'
+        run: bash apps/mbui/e2e/win/handoff.sh
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -600,4 +622,6 @@ jobs:
             !apps/mbui/out/e2e/windows/core/
             apps/mbui/out/setup/*.log
             apps/mbui/out/setup/result.txt
+            apps/mbui/out/handoff/*.log
+            apps/mbui/out/handoff/*.txt
           if-no-files-found: warn
