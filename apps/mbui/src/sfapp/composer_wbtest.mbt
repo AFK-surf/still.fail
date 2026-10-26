@@ -433,18 +433,20 @@ test "the list keeps clear the room the composer takes in the very frame it grow
     rows[rows.length() - 1].2
   }
   let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  // (what the foot keeps over the composer's room: its 10, and the bell's room, the chat's cards waiting to be decided)
+  let over = foot() - before
   // lines enough that it outgrows the least room the list keeps (composer_room): in the frame that takes each, the
   // list's foot is already the room the composer takes then (not the one it took a frame before)
   for line in ["第二行", "第三行", "第四行", "第五行", "第六行"] {
     t.enter()
     t.type_text(line)
-    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + 10.0)
+    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
   }
   // and each frame of its morph, as the display draws them, to its end
   let end = t.time() + composer_morph_ms
   while t.time() < end {
     t.frame()
-    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + 10.0)
+    assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
   }
   assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") > before)
   t.run_for(draft_keep_ms)

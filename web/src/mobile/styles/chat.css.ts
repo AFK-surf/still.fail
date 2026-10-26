@@ -7,8 +7,9 @@ export const mMessages = style({
   position: "absolute", inset: "0", display: "flex", flexDirection: "column", gap: "var(--list-gap)", overflowY: "auto",
   // Stop at the edge: native rubber-banding otherwise fights the virtual list's clamped scroll position.
   overscrollBehavior: "none", overflowAnchor: "none",
-  // Its end clear of the composer, and of what waits to be decided over it (../../Asks.tsx), while there is something.
-  padding: "calc(var(--m-top) + 68px) var(--list-gutter) calc(var(--m-composer-room) + var(--asks-height, 0px) + 10px)",
+  // Its end clear of the composer, and of the bell to what waits to be decided over it while there is something
+  // (../../Chat.tsx askClear).
+  padding: "calc(var(--m-top) + 68px) var(--list-gutter) calc(var(--m-composer-room) + var(--ask-clear, 0px) + 10px)",
   scrollPaddingTop: "calc(var(--m-top) + 60px)",
   // Its sides the screen's margin, which a message's table scrolls into (../../Chat.css.ts).
   vars: { "--list-gap": "20px", "--list-gutter": "14px" },

@@ -141,7 +141,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
-    <section className={sessionCss.chat} aria-label={t("web-main.chat.label")} data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
+    <section className={sessionCss.chat} aria-label={t("web-main.chat.label")} data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px`, ...askClear(chat, 44) } as CSSProperties}>
       <div className={sessionCss.chatPane}>
       {find.bar}
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
@@ -243,6 +243,21 @@ function ToAsk({ station, thread, asks, above }: { station: string; thread: numb
 
 const NO_ASKS: ChatAsk[] = [];
 
+/** What waits to be decided in a chat (the core's `asks`): none in one archived or not made yet. */
+export function asksOf(chat: ChatView): ChatAsk[] {
+  return chat.archived || !chat.thread ? NO_ASKS : chat.asks ?? NO_ASKS;
+}
+
+/**
+ * While something waits to be decided its bell (ToAsk) may float over the list's end: the end keeps clear of it
+ * (`--ask-clear`, added to the list's padding), its last row as far over the bell as it is over the composer without
+ * it, not under it (the time, 正在发送 under the viewer's own message, at the column's end where the bell is). `over`:
+ * how far the bell's top is over the composer's room.
+ */
+export function askClear(chat: ChatView, over: number): CSSProperties {
+  return asksOf(chat).length > 0 ? ({ "--ask-clear": `${over}px` } as CSSProperties) : {};
+}
+
 /**
  * What waits to be decided in a chat whose post does not show, for the button that leads to it (ToAsk; the phone's,
  * mobile/Chat.tsx), both screens: the chat's `asks` (none in an archived one), and none at all while each one's post
@@ -250,7 +265,7 @@ const NO_ASKS: ChatAsk[] = [];
  * of messages does not.
  */
 export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
-  const asks = chat.archived || !chat.thread ? NO_ASKS : chat.asks ?? NO_ASKS;
+  const asks = asksOf(chat);
   const posts = asks.map((a) => a.seq).join(" ");
   const [shown, setShown] = useState(true);
   useEffect(() => {
