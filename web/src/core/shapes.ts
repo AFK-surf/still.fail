@@ -67,6 +67,8 @@ export interface AdbShareView {
 	tunnels: number;
 	connectPort?: number;
 	pairPort?: number;
+	/** `connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew. */
+	refusedPort?: number;
 }
 
 export interface AgentCardLine {

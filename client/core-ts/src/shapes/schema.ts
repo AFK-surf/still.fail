@@ -1680,6 +1680,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tunnels", "u32"],
     ["connectPort", opt("u32")],
     ["pairPort", opt("u32")],
+    ["refusedPort", opt("u32"), { doc: "`connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew." }],
   ], { doc: "This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).\n`phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;\n`adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,\n`off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it\nis off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops." }),
   AdbCard: struct([
     ["title", "String", { doc: "What the link opens: the station's 共享调试." }],

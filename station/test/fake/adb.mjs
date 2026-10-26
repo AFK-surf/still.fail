@@ -5,7 +5,8 @@
 //   dialed       each line a phone answered over a dialled connection
 //   grant-says   what `shell pm grant …` says (default nothing: granted)
 // `connect <host:port>` dials it, says "CNXN" and waits for a line back, as a real adb's handshake reaches adbd;
-// `pair <host:port> <code>` dials it with "PAIR <code>" and says it paired if a line came back and the code is 123456.
+// `pair <host:port> <code>` dials it with "PAIR <code>", and once a line came back says "PEER" and ends (as a real adb's
+// pairing writes its peer info and exits as soon as it read the phone's); it says it paired if the code is 123456.
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -16,14 +17,15 @@ const file = (name) => path.join(dir, name);
 const read = (name) => (fs.existsSync(file(name)) ? fs.readFileSync(file(name), "utf8").trim() : null);
 fs.appendFileSync(file("calls"), JSON.stringify(args) + "\n");
 
-function dial(target, line) {
+function dial(target, line, last = null) {
   const [host, port] = [target.slice(0, target.lastIndexOf(":")), Number(target.slice(target.lastIndexOf(":") + 1))];
   return new Promise((resolve) => {
     const socket = net.connect({ host, port });
     let got = "";
     // No time limit of its own: it answers once the other end did, or closed (the station's limit is its own).
     const done = (answer) => {
-      socket.destroy();
+      if (answer !== null && last !== null) socket.end(last + "\n");
+      else socket.destroy();
       resolve(answer);
     };
     socket.on("connect", () => socket.write(line + "\n"));
@@ -57,7 +59,7 @@ if (args[0] === "-s" && args[2] === "get-state") {
   fs.rmSync(file("state"), { force: true });
   process.stdout.write(`disconnected ${args[1]}\n`);
 } else if (args[0] === "pair") {
-  const answer = await dial(args[1], `PAIR ${args[2]}`);
+  const answer = await dial(args[1], `PAIR ${args[2]}`, "PEER");
   if (answer !== null) fs.appendFileSync(file("dialed"), answer + "\n");
   if (answer !== null && args[2] === "123456") process.stdout.write(`Successfully paired to ${args[1]} [guid=adb-fake]\n`);
   else process.stdout.write("Failed: Wrong password or connection was dropped.\n");

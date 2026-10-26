@@ -47,6 +47,8 @@ public final class AdbShareService extends Service {
     private boolean lent;
     /** The offer last made (connect and pair ports): made again only as they change. */
     private String offered;
+    /** The connect port the core said nothing listens on, once looked for again for it. */
+    private int refused = -1;
     /** 还剩 N 分钟, as the minutes go. */
     private final Runnable minute = new Runnable() {
         @Override
@@ -152,6 +154,7 @@ public final class AdbShareService extends Service {
         station = to;
         lent = false;
         offered = null;
+        refused = -1;
         // granted before (`adb.grant`): on by itself, as Android allows only on Wi-Fi
         if (!AdbShare.wirelessOn(this) && AdbShare.onWifi(this)) AdbShare.switchOn(this);
         ports = new AdbPorts(this, this::offer);
@@ -174,6 +177,13 @@ public final class AdbShareService extends Service {
             if ("connected".equals(v.optString("adb"))) {
                 note = null;
                 pairNote = null;
+            }
+            // nothing at the connect port offered: adbd's ports looked for again, once for that port
+            int gone = v.optInt("refusedPort", -1);
+            if (gone <= 0) refused = -1;
+            else if (gone != refused && ports != null) {
+                refused = gone;
+                ports.again();
             }
             boolean here = v.optBoolean("sharing") && station.equals(v.optString("station"));
             if (here) lent = true;

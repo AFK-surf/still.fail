@@ -58,6 +58,17 @@ final class AdbPorts {
         listeners.clear();
     }
 
+    /** Looked for afresh: what was announced forgotten and asked anew, `changed` told as each is found again (main
+     * thread). adbd gone from the port found says nothing to DNS-SD (2026-10-26, an OPPO: Wireless debugging off and
+     * on, the old port still announced). */
+    void again() {
+        stop();
+        connect.clear();
+        pairing.clear();
+        queue.clear();
+        start();
+    }
+
     /** adb's ports announced, the latest first (main thread). */
     List<Integer> connects() {
         List<Integer> out = new ArrayList<>(connect.values());

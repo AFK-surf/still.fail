@@ -1202,7 +1202,7 @@ sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s)
   assert.equal(offered.path, "/admin/api/adb");
   assert.equal(offered.adb.phone.length, 64);
   delete offered.adb.phone;
-  assert.deepEqual(offered.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false });
+  assert.deepEqual(offered.adb, { op: "share", device: "Pixel 8", android: "14", package: "fail.still.android", adbd: true, pair: false, connect: 5555 });
   assert.equal(seen.echoed, "hello");
   const value = adb.value();
   assert.deepEqual([value.sharing, value.station, value.phase, value.serial], [true, station, "offered", "127.0.0.1:37001"]);
@@ -1216,6 +1216,52 @@ sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s)
   const after = adb.value();
   assert.deepEqual([after.sharing, after.phase], [false, "off"]);
   assert.deepEqual(adb.card(station), { title: "共享调试", line: "未共享", sharing: false, lendable: true });
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
+/// 2026-10-26, an OPPO: adbd gone from the port the app found (Wireless debugging turned off and on), every tunnel
+/// refused and the station's adb let go until the phone offered again, which it did only as DNS-SD said something new.
+/// The port refused is said (`refusedPort`), so that the app looks again; the station hears the port each offer has.
+sim("a_connect_port_nothing_listens_on_is_said_so_the_app_looks_again", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  const offers: J[] = [];
+  const answers: J[] = [];
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    for (;;) {
+      const offer = await conn.acceptBi();
+      if (offer === null) break;
+      offers.push(JSON.parse((await Station.readLine(offer, { bytes: Buffer.alloc(0) }))!).adb);
+      await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+      await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connecting", message: "" })}\n`));
+      if (offers.length === 1) {
+        const tunnel = await conn.openBi();
+        await tunnel.write(Buffer.from(`${JSON.stringify({ tunnel: "connect" })}\n`));
+        answers.push(JSON.parse((await Station.readLine(tunnel, { bytes: Buffer.alloc(0) }))!));
+      }
+    }
+  })().catch(() => {});
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
+  const station = `ws/${endpoint.id()}`;
+  const offer = { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
+  await s.run(adb.run({ kind: "share", offer }));
+  await s.until(() => answers.length === 1);
+  assert.deepEqual(answers[0], { error: "无法连接手机上的 adb：nothing listens on 5555" });
+  assert.equal(adb.value().refusedPort, 5555);
+  // The app found adbd on another port: offered with it, the refusal is of before.
+  s.host.tcpConnect = echoTcp;
+  await s.run(adb.run({ kind: "share", offer: { ...offer, connect: 5600 } }));
+  await s.until(() => offers.length === 2);
+  assert.deepEqual([offers[0].connect, offers[1].connect], [5555, 5600]);
+  assert.equal(adb.value().refusedPort, null);
+  await s.run(adb.run({ kind: "stop" }));
   await s.run(mesh.close());
   await s.settle(endpoint.close());
 });

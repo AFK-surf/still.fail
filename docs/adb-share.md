@@ -19,7 +19,9 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
   app turns Wireless debugging on itself (`Settings.Global adb_wifi_enabled`).
 - **Its ports** are random: the app finds them by DNS-SD on the device
   (`_adb-tls-connect._tcp`, `_adb-tls-pairing._tcp` while the pairing dialog is
-  open) and gives them to the core (`adb.share`).
+  open) and gives them to the core (`adb.share`). A tunnel that finds nothing at
+  the connect port is said in `adbShare` (`refusedPort`), and the app looks for the
+  ports anew (some phones go on announcing an old one).
 - **Pairing**, once per station: the person opens 使用配对码配对设备 and the
   app reads the six digits off the dialog itself (`AdbCodeReader`, an
   accessibility service the person turns on from 自动填配对码 on the 共享调试
@@ -48,12 +50,14 @@ tunnels (the web has no sockets).
 Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 
 1. **The offer**, a stream the phone opens: the head line
-   `{"method":"POST","path":"/admin/api/adb","headers":{},"adb":{"op":"share","phone":"<its device key, hex>","device":"Pixel 8","android":"14","package":"fail.still.android","adbd":true,"pair":false}}`,
+   `{"method":"POST","path":"/admin/api/adb","headers":{},"adb":{"op":"share","phone":"<its device key, hex>","device":"Pixel 8","android":"14","package":"fail.still.android","adbd":true,"pair":false,"connect":37123}}`,
    its send side finished at once. The station answers
    `{"status":200,"headers":{"content-type":"application/x-ndjson"}}`, then a
    line each time how its adb holds the phone changes:
    `{"serial":"127.0.0.1:37123","adb":"connecting|connected|unpaired|unauthorized|off|missing|failed","message":"…"}`
-   (`off`: the phone said Wireless debugging is off, `"adbd":false`).
+   (`off`: the phone said Wireless debugging is off, `"adbd":false`). `connect` is adbd's
+   port on the phone: as it changes (Wireless debugging turned off and on) the station's adb
+   connects anew.
    The offer lasts while the stream does: the phone stops reading it (dropping it
    sends STOP_SENDING) to stop sharing, and it ends with the connection. A newer
    offer from the same device takes its place (another link, another pairing
@@ -66,7 +70,9 @@ Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 3. **Tunnels**, streams the station opens on the offer's connection, one per TCP
    connection to its port: the head line `{"tunnel":"connect"}` (or `"pair"`, for
    `adb pair`); the phone answers `{"ok":true}` once it reached adbd (or
-   `{"error":"…"}`), then bytes both ways until either side finishes. The phone
+   `{"error":"…"}`), then bytes both ways until either side finishes. A pairing's tunnel is not
+   reset as `adb pair` ends: adb's last bytes (its key) may still be on the way, and the phone
+   keeps the key only once it has them. The phone
    takes tunnels on every link an offer of it went on until that link closes:
    the station hears of the offer on a new link only once it comes, and opens
    its tunnels on the old one meanwhile.
@@ -75,7 +81,8 @@ Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 
 `station/src/adb/link.ts`: a listener on `127.0.0.1` for each phone offered (the
 same port for the same phone when it is free, 37000–37999), `adb connect` to it
-as the offer comes, `adb disconnect` as it goes. adb is the station machine's
+as the offer comes, `adb disconnect` as it goes. Failing to get in, it tries again
+after 2 s, then twice as long each time (up to a minute), while the offer lasts. adb is the station machine's
 (`PATH`, `$ANDROID_HOME`, the SDK's usual places); without it the offer says
 `missing`. Agents see the phones shared with them with the `adb_devices` tool
 (station/src/adb/tool.ts): each one's serial, model, owner and state, and the link
