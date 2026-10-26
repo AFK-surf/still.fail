@@ -7,7 +7,7 @@ let rule_names : Array[String] = [
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
-  "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand",
+  "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell",
 ]
 
 ///|
@@ -35,6 +35,7 @@ let rule_words : Map[String, String] = {
   "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
   "page-hand": "a page reads the current input (@ui.pointing()): what it shows, where and how big is the native input's and the screen's (@sf.native_input(), the tier, its own width); how it answers the hand is the library's primitives' (c.lit, c.menu_asked, the app's own: still.fail's sf/hand.mbt)",
   "page-screen": "a page reads the native input (@sf.native_input(): touch, or keyboard and mouse, as the app was started): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
+  "tier-outside-shell": "a page reads the tier (@sf.layout) or the shell's own state (is_wide, the tape's, the stack's): what is laid out by the tier is the shell's (its files, detlint.json `shell.files`); a page is drawn into the box it is given, laid out by its own width, and what it needs of the frame it is given (PageFrame)",
   "page-look": "a page draws one arrangement's piece itself (narrow_*, desk_*, its own branch on Narrow or Wide): its parts are the library's (a page's parts, src/sf page.mbt), which the page's frame lays out by its width, the same page on every screen",
   "page-old-part": "a page takes a part from an older copy of it (@settings.button, pick_row, provider_mark, wide_head, quota_chips, meter_chip): the library has the one, after the web's (@sf.button, choice_row, provider_logo, page_head, quota_chips, meter_chip)",
   "page-old-sheet": "a page puts a sheet up in an older host of its own (the settings' open_sheet, a chat's): a menu, a pick, a panel, a confirm or a question is the library's presenters' (@sf.menu, @sf.pick, @sf.panel, @sf.confirm, @sf.ask), which show it as the screen and the native input have it (a sheet from the foot with touch short of Large; else beside what opened it, or a dialog)",

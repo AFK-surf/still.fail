@@ -35,6 +35,12 @@ priv struct Config {
   page_frames : Array[String]
   // the parts a page used to take from an older copy (`@settings.button`, …), the library's now (page-old-part)
   old_parts : Array[String]
+  // the shell's files among the pages' roots: what lays the panes out by the tier (`shell.files`), the only ones that
+  // read it or the shell's own state (tier-outside-shell): the calls that do (`shell.reads`: `@sf.layout`, `is_wide`,
+  // …) and the shell's state read by its fields (`shell.state`: `wide.tape`, …); nor are they pages to page-screen
+  shell : Array[String]
+  shell_reads : Array[String]
+  shell_state : Array[String]
   // what puts a sheet up in an older host of its own (the settings' `open_sheet`, a chat's), not the library's
   // presenters (page-old-sheet)
   old_sheets : Array[String]
@@ -83,6 +89,9 @@ fn Config::new(d : @rjson.Value) -> Config {
     page_frames: strs(sect(d, "pages").get("frames"), []),
     old_parts: strs(sect(d, "pages").get("old_parts"), []),
     old_sheets: strs(sect(d, "pages").get("old_sheets"), []),
+    shell: strs(sect(d, "shell").get("files"), []),
+    shell_reads: strs(sect(d, "shell").get("reads"), []),
+    shell_state: strs(sect(d, "shell").get("state"), []),
   }
 }
 
@@ -145,6 +154,19 @@ fn lint_mbt(
     for k, tk in toks {
       if tk.kind == "ident" && cfg.one_look.contains(tk.text) && !f.in_test(k) {
         add("page-look", k, f.line_text(k))
+      }
+    }
+  }
+  // a page reading the shell's own state by its fields (`wide.tape`): the shell's files alone do (not in a page's tests)
+  if under(f.rel, cfg.pages) && !under(f.rel, cfg.shell) && cfg.shell_state.length() > 0 {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        cfg.shell_state.contains(tk.text) &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "." &&
+        !(k > 0 && toks[k - 1].text == ".") &&
+        !f.in_test(k) {
+        add("tier-outside-shell", k, f.line_text(k))
       }
     }
   }
@@ -252,8 +274,22 @@ fn lint_mbt(
       add("page-hand", c.at, f.line_text(c.at))
     }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
-    if c.name == "native_input" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
+    if c.name == "native_input" &&
+      c.kind == "pkg" &&
+      c.qual == "@sf" &&
+      !in_t &&
+      under(f.rel, cfg.pages) &&
+      !under(f.rel, cfg.shell) {
       add("page-screen", c.at, f.line_text(c.at))
+    }
+    // a page reading the tier, or asking what the shell lays out by (`@sf.layout`, `is_wide`): the shell's files alone
+    // do (its tests may say which tier they are)
+    if (c.kind == "pkg" || c.kind == "bare") &&
+      cfg.shell_reads.contains(if c.kind == "pkg" { c.qual + "." + c.name } else { c.name }) &&
+      !in_t &&
+      under(f.rel, cfg.pages) &&
+      !under(f.rel, cfg.shell) {
+      add("tier-outside-shell", c.at, f.line_text(c.at))
     }
     // a page taking a part from the settings' older copy where the library has the one
     if c.kind == "pkg" && c.qual == "@settings" && cfg.old_parts.contains(c.name) && !in_t && under(f.rel, cfg.pages) {

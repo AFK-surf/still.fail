@@ -123,6 +123,44 @@
       "open_sheet"
     ]
   },
+  "shell": {
+    "files": [
+      "src/sfapp/app.mbt",
+      "src/sfapp/bar.mbt",
+      "src/sfapp/bar_timing.mbt",
+      "src/sfapp/bars.mbt",
+      "src/sfapp/sheet.mbt",
+      "src/sfapp/sides.mbt",
+      "src/sfapp/tabletop.mbt",
+      "src/sfdesk/attention.mbt",
+      "src/sfdesk/brand.mbt",
+      "src/sfdesk/chats.mbt",
+      "src/sfdesk/context_menu.mbt",
+      "src/sfdesk/desk.mbt",
+      "src/sfdesk/frame.mbt",
+      "src/sfdesk/keys.mbt",
+      "src/sfdesk/overlays.mbt",
+      "src/sfdesk/pane_page.mbt",
+      "src/sfdesk/rail.mbt",
+      "src/sfdesk/side.mbt",
+      "src/sfdesk/switch.mbt",
+      "src/sfdesk/switcher.mbt"
+    ],
+    "reads": [
+      "@sf.layout",
+      "is_wide",
+      "@sfdesk.is_wide",
+      "status_top",
+      "nav_foot",
+      "side_folded",
+      "@sfdesk.side_folded"
+    ],
+    "state": [
+      "wide",
+      "status_top",
+      "nav_foot"
+    ]
+  },
   "build_effect": {
     "later": [
       "@sf.menu",
@@ -279,9 +317,7 @@
       "src/sfdesk/frame.mbt": 2,
       "src/sfpages/composer.mbt": 1
     },
-    "page-screen": {
-      "src/sfdesk/frame.mbt": 2
-    },
+    "page-screen": {},
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,
       "src/sfapp/settings/parts.mbt": 2,
@@ -321,7 +357,32 @@
     "page-old-part": {},
     "page-old-sheet": {},
     "corners-each": {},
-    "cursor-hand": {}
+    "cursor-hand": {},
+    "tier-outside-shell": {
+      "src/sfapp/chat.mbt": 4,
+      "src/sfapp/decisions.mbt": 2,
+      "src/sfapp/drive.mbt": 5,
+      "src/sfapp/drive_parts.mbt": 2,
+      "src/sfapp/history.mbt": 2,
+      "src/sfapp/home.mbt": 5,
+      "src/sfapp/newchat.mbt": 2,
+      "src/sfapp/pages.mbt": 1,
+      "src/sfapp/service.mbt": 3,
+      "src/sfapp/settings/core.mbt": 3,
+      "src/sfapp/settings/home.mbt": 1,
+      "src/sfapp/settings/parts.mbt": 21,
+      "src/sfapp/viewer_host.mbt": 2,
+      "src/sfbase/bars.mbt": 1,
+      "src/sfbase/viewer_frame.mbt": 1,
+      "src/sfbase/viewer_layout.mbt": 2,
+      "src/sfdesk/appearance.mbt": 1,
+      "src/sfdesk/chat_page.mbt": 1,
+      "src/sfdesk/chat_talk.mbt": 1,
+      "src/sfdesk/lists.mbt": 14,
+      "src/sfdesk/newchat.mbt": 2,
+      "src/sfdesk/settings_frame.mbt": 1,
+      "src/sfdesk/shortcuts.mbt": 2
+    }
   },
   "excused": {
     "frame-request": {},
@@ -375,6 +436,7 @@
       "src/sf/tokens.mbt": 1,
       "src/sfdesk/drive_views.mbt": 1
     },
-    "cursor-hand": {}
+    "cursor-hand": {},
+    "tier-outside-shell": {}
   }
 }

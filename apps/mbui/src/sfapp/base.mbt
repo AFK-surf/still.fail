@@ -555,10 +555,6 @@ pub using @sfbase {
   workspaces_of,
   // what the settings' pages read and call (settings_core.mbt and what it calls)
   settings_core,
-  // how far the system bars reach in over the view (system_bars.mbt)
-  status_top,
-  nav_foot,
-  window_band,
   nav_home,
   bars_in,
   bars_picked,
