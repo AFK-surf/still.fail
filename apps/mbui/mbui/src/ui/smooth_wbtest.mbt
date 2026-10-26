@@ -125,6 +125,19 @@ test "concentric: a curve moved in is drawn as much smaller, a corner drawn a qu
 }
 
 ///|
+test "the middle of a corner as smooth as its box has room for: on the curve, as far in from both edges" {
+  // a square 30 across: a circle, a corner a little too round to be wholly smooth, one wholly smooth
+  for c in [(15.0, 15.0), (13.0, 15.0), (7.0, 15.0)] {
+    let (r, room) = c
+    let m = corner_middle(r, room)
+    assert_true(sd_box(room - m, room - m, room, room, r).abs() < 1.0e-3)
+  }
+  assert_true((corner_middle(15.0, 15.0) - 15.0 * (1.0 - (0.5).sqrt())).abs() < 1.0e-9)
+  // with room enough, smooth_middle's
+  assert_true((corner_middle(20.0, 1.0e6) - smooth_middle(20.0)).abs() < 1.0e-12)
+}
+
+///|
 test "det_pow: the power by + - × ÷ alone, as @dmath.pow's within a few units in the last place" {
   for x in [1.0e-30, 1.0e-6, 0.001, 0.1, 0.25, 0.5, 0.7071, 0.9, 0.999999, 1.0, 1.3, 1.9999, 2.0] {
     for e in [0.353553, 0.5, 1.0, 1.4, 1.8284271247461903, 2.0, 2.8284271247461903] {

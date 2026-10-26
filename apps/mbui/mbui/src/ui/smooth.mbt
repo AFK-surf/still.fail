@@ -51,6 +51,16 @@ pub fn smooth_middle(radius : Double) -> Double {
 }
 
 ///|
+/// The same for a box's corner of `radius` where `room` is half its box's shorter side, as smooth as that has room for
+/// (sd_box): a circle's or a capsule's end, R (1 - 2^(-1/2)); a corner with room enough, smooth_middle's.
+pub fn corner_middle(radius : Double, room : Double) -> Double {
+  let r = dmin(radius, room)
+  let s = smoothness(r, room)
+  let rr = dmin(r * (1.0 + (smooth_scale - 1.0) * s), room)
+  rr * (1.0 - det_pow(0.5, 1.0 / (2.0 + (smooth_exponent - 2.0) * s)))
+}
+
+///|
 /// The signed distance of (`px`, `py`), from a box's middle, from that box: `hx` by `hy` its half sides, its corner of
 /// `r` (at most the shorter half) drawn `s` smooth, |x|^n + |y|^n = R^n about the corner's centre with n from 2 to 2^1.5
 /// and R from r to 1.25 r as `s` goes from 0 to 1. On the curve it is 0 exactly; off it, the curve's own value over how
