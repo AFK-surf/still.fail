@@ -850,8 +850,17 @@ pub fn open_settings() -> Unit {
 }
 
 ///|
-/// Settings at one of its pages (快捷键 from the shortcuts' dialog), the sidebar its list.
+/// Settings at one of its pages, chosen (快捷键 from the shortcuts' dialog, 通知设置 from the bell's, ⌘K's): the sidebar
+/// its list, the page shown (on the tape brought over, show_page), as a row of their list opens one.
 pub fn open_settings_at(route : @settings.Route) -> Unit {
+  settings_beside(route)
+  show_page()
+}
+
+///|
+/// Settings come to with `route`'s page beside their list (the gear's: the list in use on the tape, the page at its
+/// side).
+pub fn settings_beside(route : @settings.Route) -> Unit {
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {

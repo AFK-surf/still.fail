@@ -157,7 +157,7 @@ fn open_where(p : Page) -> Unit {
     Chat(r) => open_chat_beside(r)
     NewChat => new_chat_beside()
     // the settings: their list the sidebar's, the page of its first row beside it
-    Settings => @sfdesk.open_settings_at(@sfdesk.settings_landing)
+    Settings => @sfdesk.settings_beside(@sfdesk.settings_landing)
     // (on the tape from the page in use: over it, as a phone's is, back coming to it again)
     _ => if @sfdesk.goes_over(p) { app.nav.push_over(p) } else { app.nav.push(p) }
   }

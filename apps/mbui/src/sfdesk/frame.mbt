@@ -240,13 +240,12 @@ pub fn is_wide(c : @ui.Ctx) -> Bool {
 ///|
 /// Something chosen to be shown in the page (a row of the sidebar's lists, a search's, ⌘K's, a link's, a
 /// notification's, what the bell's panel or the services' open): on the tape the page comes over to show it, as a
-/// phone's list opens its page: what is chosen is to be used there, where the page is in use. Off the tape nothing:
-/// the page is beside the list. What a place is gone to with (the rail, its list's own page) is not one: its list is
-/// the sidebar's.
+/// phone's list opens its page: what is chosen is to be used there, where the page is in use. Off the tape nothing
+/// comes of it (tape_frame lets the ask go): the page is beside the list. Asked before the frame knows it is on the
+/// tape (a page opened as the app begins, before its first frame) it is taken as the tape comes. What a place is gone
+/// to with (the rail, its list's own page) is not one: its list is the sidebar's.
 pub fn show_page() -> Unit {
-  if wide.tape {
-    wide.tape_ask = Some(Page)
-  }
+  wide.tape_ask = Some(Page)
 }
 
 ///|

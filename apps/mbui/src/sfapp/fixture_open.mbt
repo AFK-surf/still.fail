@@ -203,7 +203,13 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   // a station's screen (screen_fixture.mbt)
   @sfpages.open_screen_fixture(mode)
   if mode.has_prefix("settings") {
-    open_setting(@settings.fixture_page(mode))
+    let page = @settings.fixture_page(mode)
+    open_setting(page)
+    // (a page of theirs come to as a row of their list opens it: on the tape the page in use, show_chosen's; the shell
+    // says its own only as it is first drawn, so asked of the frame itself. Their list alone, the gear's: the list)
+    if page != "home" {
+      @sfdesk.show_page()
+    }
   }
   // 关于 with a newer build offered and still.fail cloud asked again before it downloads, on a device that sends
   // usage statistics and error reports: its rows at their fullest
