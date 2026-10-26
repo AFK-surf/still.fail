@@ -98,8 +98,10 @@ const APP_FILES: [RegExp, string][] = [
   // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
   [/^mac\/mbui\/latest\.json$/, "application/json"],
   [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
-  // and its Windows app (apps/mbui/scripts/beta.sh win: the .exe with its DLLs and core.hbc, zipped)
+  // and its Windows app (apps/mbui/scripts/beta.sh win: its installer, signed; before 2026-10-26 the .exe with its DLLs
+  // and core.hbc, zipped)
   [/^win\/mbui\/latest\.json$/, "application/json"],
+  [/^win\/stillfail-mbui-[0-9]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
   // and its Linux app (apps/mbui/scripts/beta.sh linux: the program with its engine, shell and core.hbc, and its installer)
   [/^linux\/mbui\/latest\.json$/, "application/json"],

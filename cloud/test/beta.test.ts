@@ -183,6 +183,9 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   assert.equal(releaseType("mac/mbui/latest.json"), "application/json");
   assert.equal(releaseType("mac/stillfail-mbui-1300-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("mac/stillfail-mbui-1300.zip"), null);
+  assert.equal(releaseType("win/mbui/latest.json"), "application/json");
+  assert.equal(releaseType("win/stillfail-mbui-1300-x64-win.exe"), "application/vnd.microsoft.portable-executable");
+  assert.equal(releaseType("win/stillfail-mbui-1300-x64-win.exe.sig"), null);
   for (const file of ["beta/ember-station-linux-x64.tar.gz", "beta/station.json", "android/beta/stillfail-1.apk", "desktop/beta/stillfail-mac.yml", "beta/../station.json"]) assert.equal(releaseType(file), null, file);
 
   assert.match(installScript("https://ember.test"), /channel="\$\{STILLFAIL_CHANNEL:-stable\}"/);
@@ -223,6 +226,8 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
     assert.equal(await latest("mac-mbui"), "/releases/mac/stillfail-mbui-3-arm64-mac.zip");
     await bucket.put("win/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "win/stillfail-mbui-3-x64-win.zip" }));
     assert.equal(await latest("win-mbui"), "/releases/win/stillfail-mbui-3-x64-win.zip");
+    await bucket.put("win/mbui/latest.json", JSON.stringify({ versionCode: 4, file: "win/stillfail-mbui-4-x64-win.exe" }));
+    assert.equal(await latest("win-mbui"), "/releases/win/stillfail-mbui-4-x64-win.exe");
     await bucket.put("linux/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "linux/stillfail-mbui-3-x64-linux.tar.gz" }));
     assert.equal(await latest("linux-mbui"), "/releases/linux/stillfail-mbui-3-x64-linux.tar.gz");
     await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1\npath: stillfail-0.1.1-arm64-mac.zip\n");
