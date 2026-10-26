@@ -19,7 +19,7 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { Gallery } from "../FilePreview.tsx";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
-import { ChatRows, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { askClear, ChatRows, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
 import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
@@ -356,7 +356,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
       {askedFile}
       {find.bar}
       <Gallery.Provider value={gallery}>
-      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
+      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} style={askClear(view, 38)} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
         <DraftKey.Provider value={chatKey}>
           <ImageQuote.Provider value={quoting.images}><ChatRows chat={view} rows={rows} to={to} /></ImageQuote.Provider>
         </DraftKey.Provider>

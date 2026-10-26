@@ -23,10 +23,13 @@ export const mAgentStatus = style({
   },
 });
 export const mAgentElapsed = style({ color: "var(--m-muted)", fontVariantNumeric: "tabular-nums" });
-/** Stopping its turn, while it works. */
+/**
+ * Stopping its turn, while it works: the red over a ground of its own, the tint over the sheet's surface, not over
+ * whatever the frosted sheet lets through (a chat's end moved under it, and its words no longer read, 4.45:1).
+ */
 export const mAgentStop = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "6px", height: "32px", padding: "0 14px", border: "0",
-  borderRadius: "16px", background: "color-mix(in srgb, var(--m-red) 14%, transparent)", color: "var(--m-red) !important",
+  borderRadius: "999px", background: "color-mix(in srgb, var(--m-red) 14%, var(--m-surface))", color: "var(--m-red) !important",
   fontSize: `${vars.textMeta} !important`, fontWeight: "500", cursor: "pointer",
   selectors: { "&:disabled": { opacity: ".6", cursor: "default" } },
 });

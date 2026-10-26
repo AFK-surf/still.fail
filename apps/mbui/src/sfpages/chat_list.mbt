@@ -63,6 +63,10 @@ pub fn chat_list(
   // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
   act_rooms(c, rd, key, keys)
   let floor = floor_of(c, rd, key, keys)
+  // while something waits to be decided its bell may float over the list's end (to_ask): the end keeps clear of it,
+  // its last row as far over the bell as it is over the composer's room without it, not under it (the time, 正在发送
+  // under the viewer's own message, at the column's end where the bell is)
+  let ask_clear = if asks_of(v).is_empty() { 0.0 } else { float_lift + float_side }
   let side = if narrow { row_side_narrow } else { row_side(c) }
   // the sides are only margin where the pictures are inline; wider, the margin holds them
   let gutter = if narrow { side } else { 0.0 }
@@ -89,7 +93,7 @@ pub fn chat_list(
         let mk = key + "\u{1}" + keys[i]
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(room + foot + floor)), fn() {  }) |> ignore
+          Foot => c.box(style=@ui.style(h=Fixed(room + foot + floor + ask_clear)), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, the ease out) as it fades in and grows from its picture; its turn
             // over, it stays a moment and fades (Activity)
@@ -364,7 +368,7 @@ fn to_ask(
   room : Double,
 ) -> Bool {
   let p = @sf.theme().p
-  let asks = if v.archived || v.thread is None { [] } else { v.asks }
+  let asks = asks_of(v)
   let shown = asks.length() > 0 && !asks_in_view(ask_rows, info)
   let look = match @motion.presence(c, "chat-ask", shown, enter=float_trans(), exit=float_trans()) {
     Some(l) => l
@@ -393,6 +397,16 @@ fn to_ask(
   })
   |> ignore
   shown
+}
+
+///|
+/// What waits to be decided in the chat (the core's `asks`, their posts' seqs): none in one archived or not made yet.
+fn asks_of(v : ChatView) -> Array[Double] {
+  if v.archived || v.thread is None {
+    []
+  } else {
+    v.asks
+  }
 }
 
 ///|
@@ -556,6 +570,9 @@ let unread_lead : Double = 92.0
 ///|
 /// The round buttons over the list (chatToBottom): 32 across, 6 in from the send button's side, 12 over the composer's
 /// room; the bell 8 over the way to the end when both show; their icon 16; how long they come and go.
+let float_side : Double = 32.0
+
+///|
 let float_in : Double = 6.0
 
 ///|

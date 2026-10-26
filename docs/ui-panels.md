@@ -217,6 +217,10 @@
 - 检查：`Tester::squeeze_faults` 找出叠在一起的、被裁掉一截的、截得一个字不剩的、折成一行一两个字母的、占位字截得一个字不剩的、被同一行别的东西挤得折行或截断的；`apps/mbui/src/sfapp/squeeze_wbtest.mbt` 在每种布局最窄的窗口上（电脑 600 宽的中屏、手指的 600 中屏和 840 大屏、360 的手机），中英文各量一遍每个页面，现在全都是 0，只许保持（`squeeze_known_wbtest.mbt`）；`apps/mbui/scripts/squeeze.sh` 用 Mac 的字给这些页面各出一张图。
 - 外来的字拉到最长再量一遍：假数据写多长页面就只量多长，可人、agent、station 写的字（名字、标题、通知、命令、错误）多长都有可能。core 的 schema 给这些字段标 `said`（`client/core-ts/src/shapes/schema.ts`，标的是会原样显示的字，不标 id 这类别处拿来找东西的、也不标 core 读成 Markdown 的正文），`scripts/shapes.ts` 生成每个 topic 里它们的位置（`apps/mbui/src/sfapp/said_paths.mbt`）；`squeeze_said_wbtest.mbt` 把这些字都接上一大段带换行、不好断开的字，同样的窗口把每个页面再量一遍，也只许是 0。新加的字段只要是外来的字就标 `said`。
 
+## 浮在列表上的按钮
+
+对话列表右下角浮着的圆按钮（回到最新、待决策的铃铛）不能盖住内容。回到最新只在离开末尾时出现，它下面是还没滚到的东西；铃铛在末尾也会出现，所以对话里有待决策的东西时（core 的 `asks`，不看它此刻在不在视野里，滚动时列表不跟着跳），列表末尾多留出铃铛的位置：最后一行离铃铛的上沿和平时离输入框一样远（app 和网页一样，mbui `chat_list` 的 `ask_clear`，网页 `askClear`）。之前铃铛正好压在自己消息下面那行（时间、「正在发送」）上（2026-10-26）。
+
 ## 等待
 
 只有三种等待，各一个组件，PC web、手机 web、安卓画法一样（`web/ui/src/waiting.tsx`，安卓 `ui/Waiting.kt`）：
