@@ -139,3 +139,27 @@ test "an iPhone Duo folded, its outer screen: the bell and the workspaces in the
   assert_true(said.contains("lead/workspaces"))
   assert_false(said.contains("page/"))
 }
+
+///|
+test "an iPhone Duo: a tab left in one workspace and come back to in another shows the other's, not the chat open in the first" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  let tap = fn(id : String) {
+    t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
+    t.run_for(@ui.nav_push_ms)
+  }
+  let first_chat = fn() {
+    app.nav.pages().iter().any(fn(p) { p is Chat(r) && r.station == "ws1/st1" && r.session == "s-c1" })
+  }
+  assert_true(first_chat())
+  tap("place/files")
+  tap("ws/ws2")
+  tap("place/chats")
+  if first_chat() {
+    fail("ws2's chats show ws1's chat")
+  }
+  // (back in the first workspace its chats' tab is as it was left)
+  tap("place/files")
+  tap("ws/ws1")
+  tap("place/chats")
+  assert_true(first_chat())
+}

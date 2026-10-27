@@ -335,8 +335,16 @@ fn tab_of_place(lit : String) -> String {
 }
 
 ///|
-/// What each tab showed as it was left (its stack's pages), by its id; kept while the app runs.
+/// What each tab showed as it was left (its stack's pages), by its workspace and its id (tab_kept_key); kept while the app
+/// runs.
 let tabs_kept : Map[String, Array[Page]] = {}
+
+///|
+/// The key of tab `tab` of workspace `ws` in tabs_kept: each workspace's tabs keep their own (a chat of one never shown
+/// in another's chats).
+fn tab_kept_key(ws : String, tab : String) -> String {
+  ws + " " + tab
+}
 
 ///|
 /// The wide frame's part of this frame where the system has bars of its own (frame.mbt calls it once, as it starts):
@@ -378,7 +386,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // as the system's tab apps have it: the user, 2026-10-26)
     let now = tab_of_place(lit_place())
     if id.has_prefix("place/") && id != now {
-      tabs_kept[now] = app.nav.pages()
+      tabs_kept[tab_kept_key(w.id, now)] = app.nav.pages()
       // (what was open over the tab left closed with it: a chat's ⋯, a menu)
       chat_own.info_open = false
       chat_own.jobs_open = false
@@ -401,7 +409,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       rail_go(c, src, w, id.substring(start=5))
     } else if id.has_prefix("place/") {
       let place = id.substring(start=6)
-      match tabs_kept.get(id) {
+      match tabs_kept.get(tab_kept_key(w.id, id)) {
         // (its stack as it was left: the chat open in it, the list it showed)
         Some(pages) if pages.length() > 0 => {
           @sfbase.go_place(place) |> ignore
