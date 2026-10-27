@@ -216,7 +216,8 @@ fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, core : Core, x : Json, liv
     let laid = (0).until(rows.length() + 1).fold(init=0.0, fn(sum, i) {
       sum + c.list_row_height(lkey, i + 1).unwrap_or(zp_row_est)
     })
-    let short = match c.list_info(lkey) {
+    // (read back by its height alone: not built again as it scrolls)
+    let short = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.height }) }) {
       Some(info) => dmax(0.0, info.height - laid)
       None => 0.0
     }

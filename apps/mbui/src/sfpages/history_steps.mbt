@@ -143,8 +143,9 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     Some(i) => text(Some(i), "key")
     None => ""
   }
-  // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each
-  let near = match c.list_info(lkey) {
+  // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each (read back
+  // by that alone: not built again as it scrolls, its rows with it)
+  let near = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.first >= 0 && i.first <= 2 }) }) {
     Some(info) => info.first >= 0 && info.first <= 2
     None => false
   }
@@ -170,7 +171,7 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     let gk = text(loaded.get(go_to), "key")
     match all.search_by(fn(i) { text(Some(i), "key") == gk }) {
       Some(at) => {
-        let half = match c.list_info(lkey) {
+        let half = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.height }) }) {
           Some(info) => info.height / 2.0
           None => 0.0
         }

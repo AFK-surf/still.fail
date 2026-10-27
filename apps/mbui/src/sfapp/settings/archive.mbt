@@ -87,7 +87,8 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     }
   }
   // a screen or so before its end, the next ones
-  match c.list_info("settings/archive") {
+  // (read back by whether it is near its end alone: not built again as it scrolls)
+  match c.list_info_as("settings/archive", fn(i) { i.map(fn(i) { (i.last >= i.count - 12, i.count) }) }) {
     Some(info) =>
       if flag(view, "more") &&
         info.last >= info.count - 12 &&

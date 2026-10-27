@@ -228,7 +228,8 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   }
   // near its end, the next ones
-  match c.list_info("side/archive/" + w.id) {
+  // (read back by whether it is near its end alone: not built again as it scrolls)
+  match c.list_info_as("side/archive/" + w.id, fn(i) { i.map(fn(i) { (i.last >= i.count - 12, i.count) }) }) {
     Some(info) =>
       if flag(view, "more") && info.last >= info.count - 12 && topic.value is Some(_) && info.count == lines.length() {
         archive_side.limit += archive_side_page
