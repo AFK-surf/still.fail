@@ -189,8 +189,9 @@ let part_size : Int = 4 * 1024 * 1024
 let max_file : Int = 1024 * 1024 * 1024
 
 ///|
-/// A file on its way to the station: going up, up (`done`, the station's Attachment), or failed. `image`: the picture
-/// picked, shown from its bytes (an image's key, "" for any other file); `pasted`: the words it was made of and what
+/// A file on its way to the station: going up, up (`done`, the station's Attachment), or failed. `image`: its picture
+/// here, its tile and its message drawn from it (an image's key from its bytes, or the host's picture of an image or a
+/// video where it is: host_picture; "" for any other file); `pasted`: the words it was made of and what
 /// the core says of them (`paste.info`: their first line, how many characters, the words while they can be put back).
 priv struct Pending {
   id : Int
@@ -669,7 +670,7 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     id,
     name: f.name,
     size: f.size.to_int(),
-    image: f.src,
+    image: @sfbase.host_picture(f.name, f.src),
     width: 0,
     height: 0,
     pasted: None,
@@ -692,6 +693,9 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
   }
   let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
   p.core_id = cid
+  if p.image != "" {
+    sent_pictures["upload\u{1}" + cid] = p.image
+  }
   let one : Map[String, Json] = {
     "id": Json::string(cid),
     "name": Json::string(f.name),
@@ -726,7 +730,8 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
 
 ///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
-/// refused where it shows; on a read-only run it goes nowhere.
+/// refused where it shows; on a read-only run it goes nowhere. `still`: where the host has it (@hostapi.Picked.src),
+/// the picture of a video picked.
 fn add_file(
   src : Source,
   d : Draft,
@@ -734,6 +739,7 @@ fn add_file(
   name : String,
   bytes : Bytes,
   pasted : (String, Json)?,
+  still? : String = "",
 ) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
@@ -745,6 +751,8 @@ fn add_file(
     let key = "mem:draft/\{id}"
     @ui.add_image(key, bytes)
     key
+  } else if pasted is None {
+    @sfbase.host_picture(name, still)
   } else {
     ""
   }
@@ -1191,11 +1199,11 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
 fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
   for f in d.files {
-    // (an image still going up: where its message draws it from its picture here: sent_local)
+    // (an image or a video still going up: where its message draws it from its picture here: sent_local)
     let key = match f.done.get() {
       Some(_) if f.core_id != "" => @sfbase.upload_path(f.core_id)
       Some(a) => text(Some(a), "path")
-      None if f.core_id != "" && f.error.get() is None && kind_of(f.name) == "image" => @sfbase.upload_path(f.core_id)
+      None if f.core_id != "" && f.error.get() is None && f.image != "" => @sfbase.upload_path(f.core_id)
       None => ""
     }
     match @motion.measured_rect(c, "composer/tile/\{f.id}") {
@@ -1415,7 +1423,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
                 if f.held != 0 {
                   add_held_file(src, d, station, f)
                 } else {
-                  add_file(src, d, station, f.name, f.bytes, None)
+                  add_file(src, d, station, f.name, f.bytes, None, still=f.src)
                 }
               }
             })

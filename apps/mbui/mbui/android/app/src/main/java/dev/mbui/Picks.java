@@ -28,7 +28,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * still.fail's Android app's PickedFiles.kt).
  */
 final class Picks {
-    /** An ask: 0 asking, 1 answered, -1 called off or unreadable; what was picked (a file held: its info, else ""). */
+    /**
+     * An ask: 0 asking, 1 answered, -1 called off or unreadable; what was picked (its info: its id held, 0 for one read
+     * whole, its size, its address; "" for a photo taken or a file given by its path).
+     */
     static final class Ask {
         volatile int state;
         final List<String> names = new ArrayList<>();
@@ -210,7 +213,8 @@ final class Picks {
                 synchronized (k) {
                     k.names.add(name);
                     k.bytes.add(out.toByteArray());
-                    k.infos.add("");
+                    // (where it is too: the picture the app's tile draws of it, a video's still: Images.java)
+                    k.infos.add("0\t" + out.size() + "\t" + u);
                 }
             } catch (Exception e) {
                 Host.log("pick: " + name + ": " + e);
