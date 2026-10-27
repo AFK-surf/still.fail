@@ -2537,11 +2537,11 @@ pub let chat_station_in : @ui.Space = room(7.0)
 pub let agent_station_most : @ui.Len = Fixed(140.0)
 
 ///|
-/// Whether a two-part tile (a chat's bar's agent and the station it runs on, each pressed for its own) stands as two
-/// keys a press's room apart, as the bar's others do: with touch, whose press wants more room than the tile's halves
-/// (20 across, meeting) have; with keyboard and mouse one tile (the native input's: what is pressed is as big as the
-/// hand that presses it).
-pub fn tile_split() -> Bool {
+/// Whether a two-part tile (a chat's bar's agent and the station it runs on, each pressed for its own with keyboard
+/// and mouse: its history, its station's card; its card under the pointer) is pressed whole, both in one panel: with
+/// touch, whose press wants more room than either half (20 across, meeting) has, and which has no pointer to rest on it
+/// (the native input's; the user, 2026-10-27: 它们是一体的，在触屏下可能需要改成拼成一个面板).
+pub fn tile_whole() -> Bool {
   native_input() is Finger
 }
 

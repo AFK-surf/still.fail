@@ -504,36 +504,36 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
   let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
   let hot = c.lit(id)
   match station {
-    Some(s) if @sf.tile_split() =>
-      // (with touch, two keys of their own a press's room apart, as the bar's others: its history's, its station's)
-      c.box(style=agent_keys_row(), keep=true, fn() {
-        let b = c.box(style=agent_key(marked), id~, fn() {
+    Some(s) if @sf.tile_whole() => {
+      // (with touch one tile pressed whole: the agent and where it runs, both in one panel)
+      let tile = c.id("bar-agent-tile/" + a.key)
+      let lit = c.lit(tile)
+      let b = c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, id=tile, fn() {
+        c.box(style=if lit { agent_station_agent_hot } else { agent_station_agent }, fn() {
           agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
         })
-        c.semantics(b, Button, id~, label=said)
-        let part = c.id("bar-agent-station/" + a.key)
-        c.box(style=station_key(), id=part, label=s.name, fn() {
-          // (how it is reached, a dot on its mark's corner)
-          c.box(style=station_key_mark, fn() {
-            if @sf.has_station_mark(s.emoji, s.icon) {
-              @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, @sf.theme().p.muted)
-            } else {
-              c.text(s.name, style=chat_station_words) |> ignore
-            }
-            if s.via != "" {
-              c.layer(fn() {
-                c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
-                |> ignore
-              })
-              |> ignore
-            }
-          })
-          |> ignore
+        |> ignore
+        c.box(style=if lit { agent_station_part_hot } else { agent_station_part }, fn() {
+          if @sf.has_station_mark(s.emoji, s.icon) {
+            @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, @sf.theme().p.muted)
+          } else {
+            c.text(s.name, style=chat_station_words) |> ignore
+          }
         })
         |> ignore
-        station_card_on(c, "bar-agent-station/" + a.key, r.station, part)
+        if s.via != "" {
+          c.layer(fn() {
+            c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        }
       })
-      |> ignore
+      c.semantics(b, Button, id=tile, label=a.who + " · " + s.name)
+      if c.clicked(tile) {
+        @sfbase.open_agent(src, r, a.key, Of(tile))
+      }
+    }
     Some(s) =>
       c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, fn() {
         let b = c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, id~, fn() {
@@ -1129,48 +1129,6 @@ let agent_station_part : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_station_part_hot : @ui.Style = agent_station_part.then(@ui.css("bg=Hover"))
-
-///|
-/// With touch (@sf.tile_split): the agent's key and its station's, keys_gap apart as the bar's keys.
-fn agent_keys_row() -> @ui.Style {
-  agent_keys_look.then(@ui.style(gap=@sf.keys_gap(size=@sf.theme().bars.key)))
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let agent_keys_look : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-/// The agent's key: a bar key's size, its mark in its middle, round 6, the hover's grey pressed; marked, the accent's
-/// ring 2 round it.
-fn agent_key(marked : Bool) -> @ui.Style {
-  let k = @sf.theme().bars.key
-  (if marked { agent_key_on } else { agent_key_look }).then(@ui.style(w=Fixed(k), h=Fixed(k)))
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let agent_key_look : @ui.Style = @ui.css("row radius=Md align=ACenter justify=JCenter pressed{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let agent_key_on : @ui.Style = agent_key_look.then(@ui.css("border=B2 border_color=Accent"))
-
-///|
-/// The station's key: a bar key's size at least, its mark (or its name, 140 at most) in its middle, 7 in.
-fn station_key() -> @ui.Style {
-  let k = @sf.theme().bars.key
-  station_key_look.then(@ui.style(min_w=Fixed(k), h=Fixed(k), max_w=@sf.agent_station_most, px=@sf.agent_station_in))
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let station_key_look : @ui.Style = @ui.css("row radius=Md align=ACenter justify=JCenter clip pressed{bg=Hover}")
-
-///|
-/// Its mark (or its name) as big as it is, the dot of how it is reached on its corner.
-// kept across runs: a value (no field of it changes)
-let station_key_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The dot on the tile's bottom right corner, 3 past it.

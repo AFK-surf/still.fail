@@ -446,7 +446,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
               chevron(c)
             }, tile=true) {
             close()
-            open_agent(src, r, key)
+            agent_sheet(src, r, key)
           }
         }
       })
@@ -711,7 +711,8 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           fn() {  },
         ) {
         close()
-        app.nav.push(History(r, key, None))
+        // (where the layout has it: beside the chat on the wide frame, a page of its own on a phone's)
+        open_detail(src, r, key)
       }
       // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
       // none of an agent at rest)
@@ -749,9 +750,9 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
 
 ///|
 /// An agent's card (agent_body): the library's panel, as tall as what it shows, its head its own (its mark, name and
-/// where it stands).
-fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
-  @sf.panel("", from=Unanchored, fn(c, close) { agent_body(c, src, r, key, close) })
+/// where it stands); `from` what was pressed (a tablet's agent tile: beside it).
+fn agent_sheet(src : Source, r : ChatRef, key : String, from? : @sf.Anchor = Unanchored) -> Unit {
+  @sf.panel("", from~, fn(c, close) { agent_body(c, src, r, key, close) })
 }
 
 ///|
