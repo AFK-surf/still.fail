@@ -2,7 +2,7 @@
 // serving files from memory, and the service started on sockets of its own with a client for it.
 import { crc32, deflateRawSync } from "node:zlib";
 import { createServer, request, type IncomingMessage } from "node:http";
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
@@ -631,6 +631,7 @@ export async function started(part = 4096, sips: string | null = null, tools: To
     stop: async () => {
       await service.close();
       await station.close();
+      rmSync(dir, { recursive: true, force: true });
     },
   };
 }
