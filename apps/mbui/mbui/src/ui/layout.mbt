@@ -325,7 +325,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let whole = self.whole_px
   let len = fn(v : Double) { self.on_px(v, whole) }
   let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
-  if !layout_reuse.val {
+  // A slot may have held another kind of leaf: an image also writes lk_text, but does not replace the text's
+  // layout. Its words matching those of the next text must not keep the layout of the text before that image.
+  if !layout_reuse.val || n.lk_kind != n.kind {
     n.full = None
     n.rl = None
   }
