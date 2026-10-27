@@ -54,6 +54,24 @@ fn Rect::none() -> Rect {
 }
 
 ///|
+/// Made empty again (as Rect::none).
+fn Rect::clear(self : Rect) -> Unit {
+  self.x0 = 1.0e18
+  self.y0 = 1.0e18
+  self.x1 = -1.0e18
+  self.y1 = -1.0e18
+}
+
+///|
+/// Only what of it is in `w`.
+fn Rect::cut_to(self : Rect, w : Rect) -> Unit {
+  self.x0 = dmax(self.x0, w.x0)
+  self.y0 = dmax(self.y0, w.y0)
+  self.x1 = dmin(self.x1, w.x1)
+  self.y1 = dmin(self.y1, w.y1)
+}
+
+///|
 fn Rect::empty(self : Rect) -> Bool {
   self.x1 <= self.x0 || self.y1 <= self.y0
 }
@@ -317,23 +335,37 @@ fn unmatched(ha : FixedArray[Int64], hb : FixedArray[Int64]) -> Int {
 }
 
 ///|
-/// Instances `a0` to `a1` of `a` against `b0` to `b1` of `b`, matched in order where their numbers are equal, the
-/// fewest left over (Myers's O(ND) diff): each pair (k in a, k in b), one of them -1 where the other has no match.
-/// None past `most_edits`.
-fn match_between(
-  a : FixedArray[Double],
-  a0 : Int,
-  a1 : Int,
-  b : FixedArray[Double],
-  b0 : Int,
-  b1 : Int,
-) -> Array[(Int, Int)]? {
-  let n = a1 - a0
-  let m = b1 - b0
-  let ha = FixedArray::makei(n, fn(i) { inst_hash(a, a0 + i) })
-  let hb = FixedArray::makei(m, fn(i) { inst_hash(b, b0 + i) })
+/// Which of the hashes `h` (instances, inst_hash) have an equal one in `sorted` (another run's, sorted): their places,
+/// in order.
+fn having(h : FixedArray[Int64], sorted : FixedArray[Int64]) -> Array[Int] {
+  let out = []
+  for i, x in h {
+    let mut lo = 0
+    let mut hi = sorted.length()
+    while lo < hi {
+      let mid = (lo + hi) / 2
+      if sorted[mid] < x {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    if lo < sorted.length() && sorted[lo] == x {
+      out.push(i)
+    }
+  }
+  out
+}
+
+///|
+/// Two runs of instances, by their hashes `ha` and `hb` (inst_hash), matched in order where they are equal, the fewest
+/// left over (Myers's O(ND) diff): each pair (place in `ha`, place in `hb`), one of them -1 where the other has no
+/// match. None past `most_edits`.
+fn match_between(ha : FixedArray[Int64], hb : FixedArray[Int64]) -> Array[(Int, Int)]? {
+  let n = ha.length()
+  let m = hb.length()
   // (as many edits at least as instances of either that the other has none the same of, in any order: past
-  // `most_edits`, there is no diff to look for; a list scrolled moves every instance of it, each one another)
+  // `most_edits`, there is no diff to look for)
   if unmatched(ha, hb) > most_edits {
     return None
   }
@@ -382,15 +414,15 @@ fn match_between(
     let px = if d == 0 { 0 } else { tv[off + pk] }
     let py = if d == 0 { 0 } else { px - pk }
     while x > px && y > py {
-      out.push((a0 + x - 1, b0 + y - 1))
+      out.push((x - 1, y - 1))
       x = x - 1
       y = y - 1
     }
     if d > 0 {
       if x == px {
-        out.push((-1, b0 + py))
+        out.push((-1, py))
       } else {
-        out.push((a0 + px, -1))
+        out.push((px, -1))
       }
     }
     x = px
@@ -534,22 +566,33 @@ fn Damage::changed(
     inst[o + 13] <= 0.0 ||
     same_pieces(prev, seg_old, n_old, inst, seg, count, inst[o + 12].to_int(), inst[o + 13].to_int())
   }
-  // one that changed: where it was and where it is, each a part of its own (one far from the other: two); -1 none
+  // one that changed: where it was and where it is, in the window, each a part (one near the other, moved a little
+  // or the same place: one, as two would be merged; far: two); -1 none. (Worked out in the same two rects for each:
+  // a list scrolled changes every instance in it, and a part is made only where one adds to what the parts cover.)
+  let was = Rect::none()
+  let now = Rect::none()
   let changed = fn(k_old : Int, k : Int) {
     if self.telling && self.seen.length() < 400 && k >= 0 {
       self.seen.push("#\{k} kind \{inst[k * inst_size + 5]} at \{inst[k * inst_size]},\{inst[k * inst_size + 1]}")
     }
+    was.clear()
+    now.clear()
     if k_old >= 0 {
-      let was = Rect::none()
       reach(prev, k_old, was)
-      add_part(parts, was, window)
+      was.cut_to(window)
     }
     if k >= 0 {
-      let now = Rect::none()
       reach(inst, k, now)
-      add_part(parts, now, window)
+      now.cut_to(window)
     }
-    if parts_area(parts) > most_area {
+    let grew = if !was.empty() && !now.empty() && was.near(now) {
+      was.add(now.x0, now.y0, now.x1, now.y1)
+      add_part(parts, was)
+    } else {
+      let a = add_part(parts, was)
+      add_part(parts, now) || a
+    }
+    if grew && parts_area(parts) > most_area {
       whole = true
     }
   }
@@ -575,32 +618,71 @@ fn Damage::changed(
     while tail < least - head && same(seg_old - 1 - tail, seg - 1 - tail) {
       tail = tail + 1
     }
-    // between, matched in order (the fewest drawn again: Myers's diff of their numbers); too far apart to match,
-    // all of it
-    let pairs = match_between(prev, head, seg_old - tail, inst, head, seg - tail)
-    match pairs {
-      Some(ps) =>
-        for p in ps {
-          if whole {
-            break
+    // between: what has nothing equal in the other is drawn again where it was or is, however the rest is matched,
+    // first (it may make the frame whole: a list scrolled moves every instance in it, each one another); the rest
+    // matched in order (the fewest drawn again: Myers's diff of their numbers, over those alone: what has no equal is
+    // in no match, so the same pairs as over all, its cost by how far apart those are), too far apart to match, all
+    // of it
+    let n_a = seg_old - tail - head
+    let n_b = seg - tail - head
+    let ha = FixedArray::makei(n_a, fn(i) { inst_hash(prev, head + i) })
+    let hb = FixedArray::makei(n_b, fn(i) { inst_hash(inst, head + i) })
+    let sa = ha.copy()
+    let sb = hb.copy()
+    sa.sort()
+    sb.sort()
+    let in_a = having(ha, sb)
+    let in_b = having(hb, sa)
+    let mut x = 0
+    for i in 0..<n_a {
+      if whole {
+        break
+      }
+      if x < in_a.length() && in_a[x] == i {
+        x = x + 1
+      } else {
+        changed(head + i, -1)
+      }
+    }
+    let mut y = 0
+    for j in 0..<n_b {
+      if whole {
+        break
+      }
+      if y < in_b.length() && in_b[y] == j {
+        y = y + 1
+      } else {
+        changed(-1, head + j)
+      }
+    }
+    if !whole {
+      let ra = FixedArray::makei(in_a.length(), fn(x) { ha[in_a[x]] })
+      let rb = FixedArray::makei(in_b.length(), fn(y) { hb[in_b[y]] })
+      match match_between(ra, rb) {
+        Some(ps) =>
+          for p in ps {
+            if whole {
+              break
+            }
+            let ko = if p.0 < 0 { -1 } else { head + in_a[p.0] }
+            let kn = if p.1 < 0 { -1 } else { head + in_b[p.1] }
+            if ko < 0 || kn < 0 || !same(ko, kn) {
+              changed(ko, kn)
+            }
           }
-          let (ko, kn) = p
-          if ko < 0 || kn < 0 || !same(ko, kn) {
-            changed(ko, kn)
+        None => {
+          for i in in_a {
+            if whole {
+              break
+            }
+            changed(head + i, -1)
           }
-        }
-      None => {
-        for k in head..<(seg_old - tail) {
-          if whole {
-            break
+          for j in in_b {
+            if whole {
+              break
+            }
+            changed(-1, head + j)
           }
-          changed(k, -1)
-        }
-        for k in head..<(seg - tail) {
-          if whole {
-            break
-          }
-          changed(-1, k)
         }
       }
     }
@@ -660,19 +742,36 @@ let most_parts = 4
 let part_gap = 16.0
 
 ///|
-/// `r` in `window`, a part of `parts` (merged with those it meets or nears: settle).
-fn add_part(parts : Array[Rect], r : Rect, window : Rect) -> Unit {
-  let c = r.within(window)
-  if c.empty() {
-    return
+/// `r` (in the window) a part of `parts`, merged with those it meets or nears (settle): whether the parts grew. One
+/// in a part already is nothing more (settle leaves none near another).
+fn add_part(parts : Array[Rect], r : Rect) -> Bool {
+  if r.empty() {
+    return false
   }
-  parts.push(c)
+  for p in parts {
+    if p.holds(r) {
+      return false
+    }
+  }
+  parts.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 })
   settle(parts)
+  true
 }
 
 ///|
-/// Parts that meet or near each other merged, then the fewest-growing pairs until `most_parts` are left.
+/// Parts that meet or near each other merged, then the fewest-growing pairs until `most_parts` are left, and those
+/// that then near each other merged too: none left near another.
 fn settle(parts : Array[Rect]) -> Unit {
+  merge_near(parts)
+  if parts.length() > most_parts {
+    fewer(parts)
+    merge_near(parts)
+  }
+}
+
+///|
+/// Parts that meet or near each other merged.
+fn merge_near(parts : Array[Rect]) -> Unit {
   let mut merged = true
   while merged {
     merged = false
@@ -690,6 +789,11 @@ fn settle(parts : Array[Rect]) -> Unit {
       }
     }
   }
+}
+
+///|
+/// The pairs whose rect grows least merged until `most_parts` are left.
+fn fewer(parts : Array[Rect]) -> Unit {
   while parts.length() > most_parts {
     let mut bi = 0
     let mut bj = 1
