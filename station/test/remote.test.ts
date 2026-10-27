@@ -329,12 +329,12 @@ describe("remote", { concurrency: true }, () => {
 
   // ── two stations ──
 
-  /// A source station "A" and a target "B" in one workspace; A's calls reach B as the transport would
-  /// carry them (B's errors come back as Refused).
+  /// A source station "A" and a target "B" in one workspace; each one's calls reach the other as the transport would
+  /// carry them (errors come back as Refused). `reach`: whether B's calls get through to A.
   function pair() {
     const clock = testClock();
     const a = station({ clock });
-    const b = station();
+    const b = station({ clock });
     mkdirSync(join(a.dir, "mesh"), { recursive: true });
     writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
     const home = join(a.dir, "work");
@@ -350,9 +350,18 @@ describe("remote", { concurrency: true }, () => {
       return answer.result;
     };
     a.remote.attach(transport);
+    const back = { reach: true, told: [] as Json[] };
+    b.remote.attach(async (target, workspace, request) => {
+      if (target !== "A") throw new Error("peer is not another station in this workspace");
+      if (!back.reach) throw new Error("not reached");
+      back.told.push(request);
+      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", JSON.parse(JSON.stringify(request)));
+      if ("error" in answer) throw new Refused(answer.error);
+      return answer.result;
+    });
     const tools = remoteTools(a.remote);
     const use = async (name: string, args: Json) => JSON.parse(await tools.find((t) => t.name === name)!.run("s1", args));
-    return { a, b, home, clock, use, asked };
+    return { a, b, home, clock, use, asked, back };
   }
 
   test("a session runs a task on another station: inputs up, its notices and end told here, its artifact down", async () => {
@@ -379,15 +388,14 @@ describe("remote", { concurrency: true }, () => {
     // Its spec says who asked for it.
     const listed = await use("station_task", { station: "B", action: "list" });
     assert.deepEqual(listed.tasks[0].spec, { name: "upper", command, requestedBy: "ann" });
-    // What it says on the way reaches the session that started it, once (as many rounds as it takes).
+    // What it says on the way reaches the session that started it, once: B tells A, which asks then.
     b.jobs.notified(job.token, "half way");
-    await rounds("its notice is told", clock, "5 seconds", () => a.told.length > 0);
+    await until("its notice is told", () => a.told.length > 0);
     assert.equal(a.told.length, 1);
     assert.equal(a.told[0][0], "s1");
     assert.ok(a.told[0][1].startsWith("Remote task k1 on B: {") && a.told[0][1].includes("half way"), a.told[0][1]);
     await writeFile(gate, "go");
-    await until("it ends", () => b.store.getJob(job.id)!.state !== "running");
-    await rounds("its end is told", clock, "5 seconds", () => a.told.length > 1);
+    await until("its end is told", () => a.told.length > 1);
     assert.equal(a.told.length, 2);
     assert.ok(a.told[1][1].includes('"state":"exited"'), a.told[1][1]);
     // Delivered: not told again.
@@ -509,17 +517,62 @@ describe("remote", { concurrency: true }, () => {
     await assert.rejects(use("station_task", { station: "B", key: "k", action: "run" }), /unknown task action/);
   });
 
-  test("the tasks followed on one station are asked about in one request", async () => {
-    const { use, asked, clock } = pair();
-    for (const key of ["k1", "k2", "k3"]) {
-      await use("station_task", { station: "B", key, action: "prepare", command: FOREVER });
-      await use("station_task", { station: "B", key, action: "start" });
-    }
+  test("a task's station tells of it: nothing asks about it while nothing happens to it", async () => {
+    const { a, b, use, asked, clock } = pair();
+    const started = await use("station_task", { station: "B", key: "k", action: "prepare", command: FOREVER });
+    assert.equal(started.prepared, true);
+    const job = (await use("station_task", { station: "B", key: "k", action: "start" })).job;
+    assert.equal(job.state, "running");
     const before = asked.length;
+    await Effect.runPromise(clock.adjust("10 minutes"));
+    await turn();
+    assert.deepEqual(asked.slice(before), [], "not asked about");
+    await b.jobs.stop(job.id);
+    await until("its end is told", () => a.told.length === 1);
+    assert.ok(a.told[0][1].includes('"state":"stopped"'), a.told[0][1]);
+    assert.deepEqual(asked.slice(before).map((r) => r.method), ["task.gets"], "asked once, after it was told");
+    assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
+  });
+
+  test("a change the source was not reached for is told again until it is, and after the target restarts", async () => {
+    const { a, b, use, clock, back } = pair();
+    await use("station_task", { station: "B", key: "k", action: "prepare", command: FOREVER });
+    const job = (await use("station_task", { station: "B", key: "k", action: "start" })).job;
+    back.reach = false;
+    b.jobs.notified(b.store.getJob(job.id)!.token, "one");
+    await rounds("told again until reached", clock, "1 second", () => {
+      back.reach = clock.asked() > 3;
+      return a.told.length === 1;
+    });
+    assert.ok(a.told[0][1].includes("one"));
+    // B stops before it tells A of its next change; started again, it tells A what A missed.
+    back.reach = false;
+    b.jobs.notified(b.store.getJob(job.id)!.token, "two");
+    await b.remote.close();
+    back.reach = true;
+    const again = station({ clock, dir: b.dir, store: b.store, jobs: b.jobs });
+    again.remote.attach(async (_target, workspace, request) => {
+      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", JSON.parse(JSON.stringify(request)));
+      if ("error" in answer) throw new Refused(answer.error);
+      return answer.result;
+    });
+    await until("what it missed is told", () => a.told.length === 2);
+    assert.ok(a.told[1][1].includes("two"));
+  });
+
+  test("the tasks followed on a station from before task.changed are asked about in one request", async () => {
+    const clock = testClock();
+    const s = station({ clock });
+    for (const key of ["k1", "k2", "k3"]) writeJson(s.remote.outgoing("ws", "s1", "old", key), { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+    const asked: Json[] = [];
+    s.remote.attach(async (_station, _workspace, request) => {
+      asked.push(request);
+      return { tasks: request.tasks.map((t: Json) => ({ ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } })) };
+    });
     const all = (r: Json) => r.method === "task.gets" && r.tasks.length === 3;
-    await rounds("a round asking about all three", clock, "5 seconds", () => asked.slice(before).some(all));
-    assert.deepEqual(asked.slice(before).find(all)!.tasks.map((t: Json) => t.key).sort(), ["k1", "k2", "k3"]);
-    assert.equal(asked.filter((r) => r.method === "task.get").length, 0, "none on its own");
+    await rounds("rounds asking about all three", clock, "5 seconds", () => asked.filter(all).length >= 3);
+    assert.deepEqual(asked.find(all)!.tasks.map((t: Json) => t.key).sort(), ["k1", "k2", "k3"]);
+    assert.ok(asked.every(all), "none on its own");
   });
 
   test("a station from before task.gets is asked about each task on its own", async () => {

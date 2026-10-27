@@ -119,6 +119,17 @@ async function pair(options: { queue?: boolean } = {}) {
   })();
   const port = target.sockets()[0]!.split(":").at(-1);
   const call = peerCall(source, cloudOf(source.id(), [B]), (id) => ({ id, ips: [`127.0.0.1:${port}`] }));
+  // B tells A of its tasks (`task.changed`) over the transport the other way.
+  const sourceCloud = cloudOf(source.id(), [B]);
+  void (async () => {
+    for (;;) {
+      const conn = await source.accept();
+      if (!conn) return;
+      void servePeer(conn, sourceCloud, a.remote).catch(() => {});
+    }
+  })();
+  const sourcePort = source.sockets()[0]!.split(":").at(-1);
+  b.remote.attach(peerCall(target, targetCloud, (id) => ({ id, ips: [`127.0.0.1:${sourcePort}`] })));
   /// `hold`: the methods held before they are asked, until `release`d. `bulk`/`most`: the bulk requests (contents,
   /// files' chunks) under way now, and the most there were at once.
   const state = { old: false, asked: [] as string[], hold: new Set<string>(), held: [] as (() => void)[], bulk: 0, most: 0 };
