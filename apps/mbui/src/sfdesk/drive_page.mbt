@@ -29,7 +29,7 @@ pub fn folder_page(
         // (what can be done to it at the bar's end, as far as half the bar less the title's half: the rest in its ⋯)
         if narrow_bar(c, n, folder_name(f.st, f.at), fn() {
             c.box(style=@ui.style(max_w=Fixed(actions_most)), fn() {
-              folder_actions(c, src, f, style=bar_actions_row)
+              folder_actions(c, src, f, style=bar_actions_row())
             })
             |> ignore
           }) {
@@ -137,9 +137,14 @@ let folder_page_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 let bar_title_half : Double = 40.0
 
 ///|
-/// What can be done to it in its own bar: at its end, as far as its room.
+/// What can be done to it in its own bar: at its end, as far as its room, as a bar's keys apart (@sf.keys_gap).
+fn bar_actions_row() -> @ui.Style {
+  bar_actions_look.then(@ui.style(gap=@sf.keys_gap()))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let bar_actions_row : @ui.Style = @ui.css("row gap=S1 align=ACenter justify=JEnd")
+let bar_actions_look : @ui.Style = @ui.css("row align=ACenter justify=JEnd")
 
 
 

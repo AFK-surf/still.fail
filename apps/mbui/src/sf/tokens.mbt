@@ -1903,6 +1903,29 @@ pub let wide_bar_h : Double = 45.0
 pub let bar_key_side : Double = 32.0
 
 ///|
+/// The room between keys `size` across side by side (a bar's, a player's, a viewer's tools): as much as makes each a
+/// press's room across (@ui.room_least: 36 with keyboard and mouse, 44 with touch; rule 2: drawn smaller, its room is
+/// not), `least` at least (the look's own room between them, where it has more: 2). Only the room between keys: one
+/// at a row's end stands where it stood (concentric with its corner).
+pub fn keys_gap(size? : Double = bar_key_side, least? : Double = 2.0) -> @ui.Space {
+  room(dmax(least, @ui.room_least() - size))
+}
+
+///|
+/// A row of tools' own room between them (tools_line, a folder's actions: 6), keys_gap's least there.
+pub let tools_apart : Double = 6.0
+
+///|
+/// A row of keys `size` across (a bar's, a player's group, a viewer's tools): keys_gap between them, in its middle.
+pub fn keys_row(size? : Double = bar_key_side) -> @ui.Style {
+  keys_row_look.then(@ui.style(gap=keys_gap(size~)))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_row_look : @ui.Style = @ui.css("row align=ACenter")
+
+///|
 /// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): its buttons (32 across) on the tape's
 /// one line, where they are concentric with the tape's corner, its bar as much taller over them
 /// (`tape_bar_over`: every bar of the tape and the sidebar's first row on it); at its end as far in as makes the last

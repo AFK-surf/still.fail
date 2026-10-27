@@ -707,7 +707,7 @@ fn row_items(
 /// is in front, or its own): the ways its room has, the preview, put up and a new folder (who may write), read again
 /// (turning while it is read), 收藏 (lit while it is kept), pin (for one who browses every folder: lit while pinned),
 /// its ⋯ (复制路径, 前往文件夹, 管理). Short of room they go into the ⋯, what is needed least first.
-pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Style = actions_row) -> Unit {
+pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Style = actions_row()) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
   let st = f.st
@@ -1715,6 +1715,11 @@ let drop_room : @ui.Style = @ui.style(w=Full, h=Full, p=@sf.inset_room)
 let drop_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 
 ///|
-/// What is done to the folder (actions): 6 apart.
+/// What is done to the folder (actions): 6 apart, more where a press's room needs it (@sf.keys_gap).
+fn actions_row() -> @ui.Style {
+  actions_row_look.then(@ui.style(gap=@sf.keys_gap(least=@sf.tools_apart)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let actions_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter justify=JEnd")
+let actions_row_look : @ui.Style = @ui.css("row align=ACenter justify=JEnd")

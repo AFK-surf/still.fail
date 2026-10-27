@@ -165,7 +165,10 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
         on_change(v)
       }
       let hot = c.lit(id)
-      let x = c.box(style=if on { view_on } else { view_off }, id~, fn() {
+      // (as wide as makes each a press's room across with the track's 2 between them: rule 2, drawn smaller, its room is
+      // not)
+      let across = @ui.style(w=Fixed(dmax(view_side, @ui.room_least() - views_apart)))
+      let x = c.box(style=(if on { view_on } else { view_off }).then(across), id~, fn() {
         @sf.icon(c, icon, size=view_icon, color=if on || hot { t.p.text } else { t.p.muted }) |> ignore
       })
       c.semantics(x, Radio, id~, label~, check=if on { On } else { Off })
@@ -654,6 +657,13 @@ let views_track : @ui.Style = @ui.css("row p=S0_5 gap=S0_5 radius=Full bg=Tint a
 /// A way (viewButton): 28 round; the one shown on the page's ground, a hairline and a shadow round it.
 // kept across runs: a value (no field of it changes)
 let view_off : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
+
+///|
+/// A way's side as drawn (view_off's S7), and the room between two in the track (views_track's S0_5).
+let view_side : Double = 28.0
+
+///|
+let views_apart : Double = 2.0
 
 ///|
 // kept across runs: a value (no field of it changes)

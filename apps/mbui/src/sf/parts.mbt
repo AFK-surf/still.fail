@@ -1330,7 +1330,7 @@ pub fn tools_row(
   tools : Array[Tool],
   more? : Array[MenuItem?] = [],
   label~ : String,
-  style? : @ui.Style = tools_line,
+  style? : @ui.Style = tools_line(),
 ) -> Unit {
   c.box(style~, fn() {
     let gone : Array[MenuItem?] = []
@@ -1360,9 +1360,14 @@ pub fn tools_row(
 }
 
 ///|
-/// A row of tools (tools_row): 6 apart, on a line.
+/// A row of tools (tools_row): 6 apart, more where a press's room needs it (keys_gap), on a line.
+pub fn tools_line() -> @ui.Style {
+  tools_line_look.then(@ui.style(gap=keys_gap(least=tools_apart)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-pub let tools_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
