@@ -165,6 +165,10 @@ fn top_bar_title(c : @ui.Ctx, s : String) -> Int {
 let top_title_tracking : Double = -0.4
 
 ///|
+/// A bar's round key's side (nav_button's 34).
+let nav_key_side : Double = 34.0
+
+///|
 /// A round button in a bar (Parts.kt NavButton): 34 across, the icon alone, no disc behind it (a ground while
 /// pressed). True on the frame after it was pressed.
 fn nav_button(

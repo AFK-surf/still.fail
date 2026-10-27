@@ -182,10 +182,6 @@ let ask_turns : Map[String, Int] = {}
 let ask_lift_ms : Double = 200.0
 
 ///|
-/// The least of a chat's title its bar keeps (64); its people leave the bar first when it is short of room.
-let bar_title_least : Double = 64.0
-
-///|
 let bar_drop_people : Int = 1
 
 ///|
@@ -221,22 +217,22 @@ fn bar_frame(
     )
     |> ignore
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
-      // the title as long as there is room for it beside what follows it (weight(1f, fill = false): what follows is
-      // measured first, as wide as it is, and the title has what is left), a few words of it at least: short of
-      // that, what follows leaves the row as it says (chat_bar: its people, then its station's update)
-      let least = dmin(@ui.text_advance(title, size=t.t.title, weight=600), bar_title_least)
-      c.box(style=@ui.style(min_w=Fixed(least)), fn() {
-        // (a name: cut short where what follows leaves it less)
-        c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line, w=Cut)
-        |> ignore
-      })
+      // the title whole beside what follows it while what follows may leave the row for it (chat_bar: its people, then
+      // its station's update), cut short only once nothing more may (a name: never cut while something less needed can
+      // go)
+      c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line, w=Cut, keep=true)
       |> ignore
       after()
     })
     |> ignore
     trailing()
-    if more && nav_button(c, "more", 18.0, key="chat-more", said=tr("android-chat.info.title")) {
-      on_more()
+    if more {
+      c.box(style=bar_key_apart(), fn() {
+        if nav_button(c, "more", 18.0, key="chat-more", said=tr("android-chat.info.title")) {
+          on_more()
+        }
+      })
+      |> ignore
     }
   })
   |> ignore
@@ -299,7 +295,8 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       fn() {
         match archive_look {
           Some(look) =>
-            c.box(dir=Row, w=Px(34.0 * archive_share), justify=JEnd, fn() {
+            // (coming with the room before it, as the keys after it stand apart: bar_key_apart)
+            c.box(dir=Row, w=Px((nav_key_side + bar_keys_apart()) * archive_share), justify=JEnd, fn() {
               let b = c.box(w=Px(34.0), min_w=34.0, h=Px(34.0), fn() {
                 if doing("archive/" + r.station + "/" + r.session) {
                   c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
@@ -319,7 +316,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         if has_jobs {
           // a dot when one died lately (red) or a service is started again (amber)
           let alarm = text(jobs.value, "alarm")
-          c.box(fn() {
+          c.box(style=bar_key_apart(), fn() {
             if nav_button(c, "web", 20.0, key="chat-jobs") {
               dui.jobs_all = false
               open_chat_jobs(src, r)
@@ -654,3 +651,15 @@ fn waiting_messages(c : @ui.Ctx, failed : String?) -> Unit {
 /// messages or no more (a minute at most); then from its end it is scrolled up 600 frames at 40 a frame, and the
 /// frames' times are said (CHATBENCH …) and the app ends.
 let bench_on : Ref[Int] = { val: -1 }
+
+///|
+/// The bar's keys at its end (its archive, its jobs, its "…") as far apart as makes each a press's room across
+/// (@sf.keys_apart: 2 with keyboard and mouse, 10 with touch), the room before each.
+fn bar_keys_apart() -> Double {
+  @sf.keys_apart(size=nav_key_side)
+}
+
+///|
+fn bar_key_apart() -> @ui.Style {
+  @ui.style(row=true, pl=@sf.room_of(bar_keys_apart()))
+}

@@ -306,8 +306,9 @@ test "a long title has what is left beside what follows it, which keeps its own 
   t.draw()
   let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
   let (ax, _, _, _) = t.rect_of("尾").unwrap()
-  // 390 - 16 (its end) - 34 (…) - 8, the box of 60: what follows starts where it would with a short title
-  assert_eq(ax, 390.0 - 16.0 - 34.0 - 8.0 - 60.0)
+  // 390 - 16 (its end) - 34 (…) and the room before it (bar_keys_apart) - 8, the box of 60: what follows starts where
+  // it would with a short title
+  assert_eq(ax, 390.0 - 16.0 - 34.0 - bar_keys_apart() - 8.0 - 60.0)
   // the title cut to what is left, 8 before it
   assert_true(tx + tw <= ax - 8.0 + 0.5)
   assert_true(t.lines_of("端到端")[0].has_suffix("…"))
