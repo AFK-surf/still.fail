@@ -504,6 +504,32 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
   let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
   let hot = c.lit(id)
   match station {
+    Some(s) if @sf.tile_whole() => {
+      // (with touch the tile itself the button, as it is drawn: tapped its history's, as the agent's half's click;
+      // held, its card and its station's as one, below)
+      let b = c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, id~, fn() {
+        c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, fn() {
+          agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
+        })
+        |> ignore
+        c.box(style=if hot { agent_station_part_hot } else { agent_station_part }, fn() {
+          if @sf.has_station_mark(s.emoji, s.icon) {
+            @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, @sf.theme().p.muted)
+          } else {
+            c.text(s.name, style=chat_station_words) |> ignore
+          }
+        })
+        |> ignore
+        if s.via != "" {
+          c.layer(fn() {
+            c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      c.semantics(b, Button, id~, label=said)
+    }
     Some(s) =>
       c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, fn() {
         let b = c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, id~, fn() {
@@ -541,14 +567,28 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
       c.semantics(b, Button, id~, label=said)
     }
   }
-  // the pointer resting on it: its card (AgentCard.tsx)
-  hover(c, "agent-hover/" + a.key, id, tile=true, fn() {
-    match aj {
-      Some(j) => agent_card(c, src, r.station, j)
-      None => ()
-    }
-  })
-  |> ignore
+  // the pointer resting on it: its card (AgentCard.tsx); with touch, held, the tile's whole: its card and its
+  // station's as one (the user, 2026-10-27: 它们是一体的), each as the pointer's shows it
+  match station {
+    Some(_) if @sf.tile_whole() =>
+      hover(c, "agent-hover/" + a.key, id, tile=true, padded=false, fn() {
+        match aj {
+          Some(j) => c.box(style=tile_card_agent, fn() { agent_card(c, src, r.station, j) }) |> ignore
+          None => ()
+        }
+        // (its head as the agent's: the two start alike)
+        @settings.station_peek_part(c, r.station)
+      })
+      |> ignore
+    _ =>
+      hover(c, "agent-hover/" + a.key, id, tile=true, fn() {
+        match aj {
+          Some(j) => agent_card(c, src, r.station, j)
+          None => ()
+        }
+      })
+      |> ignore
+  }
 }
 
 ///|
@@ -1099,6 +1139,12 @@ let agent_station_part : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_station_part_hot : @ui.Style = agent_station_part.then(@ui.css("bg=Hover"))
+
+///|
+/// The agent's card in the tile's whole (with touch, held): as a card of its own holds it, 10 in from the panel's
+/// padding (the hover's padded), the station's card under it at the padding, its rows there.
+// kept across runs: a value (no field of it changes)
+let tile_card_agent : @ui.Style = @ui.css("w=Full p=S2_5")
 
 ///|
 /// The dot on the tile's bottom right corner, 3 past it.

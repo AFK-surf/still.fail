@@ -242,6 +242,9 @@ pub fn rich_chat(older : Int) -> Json {
           "runtime": "claude",
           "maker": { "id": "anthropic", "name": "Anthropic" },
           "agentText": "Claude",
+          // (where it stands in words and its tone, as the core says an idle one: present.ts session, format.ts)
+          "statusText": "未开始",
+          "tone": "neutral",
         },
         "status": "idle",
       },
@@ -273,6 +276,9 @@ pub fn small_chat(title : String, session : String) -> Json {
           "runtime": "claude",
           "maker": { "id": "anthropic", "name": "Anthropic" },
           "agentText": "Claude",
+          // (where it stands in words and its tone, as the core says an idle one: present.ts session, format.ts)
+          "statusText": "未开始",
+          "tone": "neutral",
         },
         "status": "idle",
       },
@@ -329,6 +335,9 @@ pub fn long_chat(n : Int) -> Json {
           "runtime": "claude",
           "maker": { "id": "anthropic", "name": "Anthropic" },
           "agentText": "Claude",
+          // (where it stands in words and its tone, as the core says an idle one: present.ts session, format.ts)
+          "statusText": "未开始",
+          "tone": "neutral",
         },
         "status": "idle",
       },

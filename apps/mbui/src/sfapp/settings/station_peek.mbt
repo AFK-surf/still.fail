@@ -64,6 +64,93 @@ pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
 }
 
 ///|
+/// The same card under another's in one card (a tablet's agent tile held: its agent's card over it), its head as an
+/// agent card's so the two start alike (the user, 2026-10-27: 最好有个一致的开头好视觉分割): its mark on a square 28 of
+/// the neutral ground, its name beside it; under them a dot in its tone (online or not) and what it says of itself;
+/// then its machine at a glance and where to go on, as the card has them.
+pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
+  guard panels_core.val is Some(core) else { return }
+  let s = peek_station(core, address)
+  let t = @sf.theme()
+  let online = flag(s, "online")
+  c.box(style=peek_card, fn() {
+    c.box(style=peek_card_words, fn() {
+      c.box(style=peek_part_head, fn() {
+        c.box(style=peek_part_square.then(@ui.style(radius=@sf.small_radius)), fn() {
+          if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
+            @sf.station_mark(c, text(s, "emoji"), text(s, "icon"), peek_card_mark, t.p.text)
+          } else {
+            // (none of its own: its name's first letter)
+            let name = peek_name(address)
+            if name.length() > 0 {
+              c.text(name.view(end_offset=1).to_string(), style=peek_part_name) |> ignore
+            }
+          }
+        })
+        |> ignore
+        c.text(peek_name(address), style=peek_part_name) |> ignore
+      })
+      |> ignore
+      if s is Some(_) {
+        let blocked = text(s, "blocked")
+        let said = if online {
+          text(s, "summary")
+        } else if blocked != "" {
+          blocked
+        } else {
+          fill("android-settings.stations.offline", [("app", "still.fail")])
+        }
+        c.box(style=peek_part_status, fn() {
+          c.box(style=peek_part_dot_room, fn() {
+            c.box(style=peek_part_dot.then(@ui.style(bg=if online { Positive } else { Subtle })), fn() {  }) |> ignore
+          })
+          |> ignore
+          c.text(said, style=peek_part_words) |> ignore
+        })
+        |> ignore
+        if online {
+          peek_figures(c, core, s)
+        }
+      }
+    })
+    |> ignore
+    peek_ways(c, core, address, s, fn() { })
+  })
+  |> ignore
+}
+
+///|
+/// Its head as an agent card's (AgentCard.css.ts head): its mark's square and its name, 10 apart, in their middle.
+// kept across runs: a value (no field of it changes)
+let peek_part_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
+/// Its mark's square: 28, the neutral ground, its mark in its middle (an agent card's mark's: agent_mark's tile).
+// kept across runs: a value (no field of it changes)
+let peek_part_square : @ui.Style = @ui.css("w=S7 h=S7 bg=Neutral align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_part_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
+
+///|
+/// Where it stands, as an agent card's: a dot 6 across 6 down, 6 before its words, 2 in.
+// kept across runs: a value (no field of it changes)
+let peek_part_status : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart pl=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_part_dot_room : @ui.Style = @ui.css("pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_part_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let peek_part_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=3)
+
+///|
 /// The hover card's: its words 10 in from its padding, 8 apart (Hover.css.ts card), its rows at its padding.
 // kept across runs: a value (no field of it changes)
 let peek_card : @ui.Style = @ui.css("w=Full")
