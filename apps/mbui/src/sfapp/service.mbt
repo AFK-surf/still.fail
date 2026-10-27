@@ -86,17 +86,12 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
 }
 
 ///|
-/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and under it its station.
+/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and its station on one line (as
+/// an in-app browser's bar has its page's: what is over the page as little as it can be; the user, 2026-10-27:
+/// 是不是上面也应该少一点).
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
-  let t = @sf.theme()
-  let went = if station != "" {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top(), sub=fn() {
-      c.text(station, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-    })
-  } else {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top())
-  }
-  if went {
+  let said = if station == "" { title } else { title + " · " + station }
+  if @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top()) {
     @sfbase.go_back() |> ignore
   }
 }
