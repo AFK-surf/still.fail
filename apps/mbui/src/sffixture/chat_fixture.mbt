@@ -433,7 +433,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_working(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
-          } else if f.mode == "chat-download" {
+          } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
           } else {
             rich_chat(f.older)

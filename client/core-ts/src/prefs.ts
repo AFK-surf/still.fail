@@ -11,7 +11,7 @@ import * as keymap from "./keymap.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "fillOff", "fillMax"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -173,6 +173,8 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if (isObject(prefs.sidebars) && Object.values(prefs.sidebars).some((v) => typeof v !== "string" || !/^([0-9]{1,4}|[0-9]{1,4},closed|closed)$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "sidebars" }));
   if (isObject(prefs.trouble) && (Object.keys(prefs.trouble).some((k) => !/\n(seen|gone)$/.test(k)) || Object.values(prefs.trouble).some((v) => v !== null && (typeof v !== "string" || v.length > 2000)))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "trouble" }));
   if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
+  if ("fillOff" in prefs && typeof prefs.fillOff !== "boolean") throw CoreError.invalid(t("core-misc.params.invalid", { error: "fillOff" }));
+  if ("fillMax" in prefs && (typeof prefs.fillMax !== "number" || !Number.isSafeInteger(prefs.fillMax) || prefs.fillMax < 0)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "fillMax" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
   const shaped = conform("PrefsView", prefs);

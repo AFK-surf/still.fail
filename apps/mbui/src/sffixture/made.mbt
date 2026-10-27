@@ -25,6 +25,7 @@ pub fn fixture_reset() -> Unit {
   fix_chats.clear()
   fix_timers.clear()
   fix_downloads.clear()
+  fix_keeping_reset()
   fix_due.clear()
   fix_unsaid.clear()
   fix_drafts.clear()

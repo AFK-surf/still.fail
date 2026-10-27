@@ -296,7 +296,9 @@ test "downloads: the desk's files page lists the drive's downloads among its tra
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   open_fixture_mode("drive-download")
   t.run_for(@ui.nav_push_ms)
-  t.tap_text("2 个传输")
+  // (the rail's key: what comes, how far)
+  let (x, y, w, h) = t.query(Button, label="2 个传输 · 40%").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("到此设备") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("正在打包") is Some(_))

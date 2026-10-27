@@ -59,7 +59,11 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
       // kept as played, as the folder lists it (Player.kt: DriveCache.played by its mtime and size); one not in it
       // played without being kept
       match listed {
-        Some((mtime, size)) => drive_keep(p, "played", mtime, size)
+        Some((mtime, size)) => {
+          drive_keep(p, "played", mtime, size)
+          // (opened here, where it is: brought after everything else once let go)
+          p["from"] = { "root": Json::string(root), "path": Json::string(at.path) }
+        }
         None => ()
       }
       stream_part(src, "drive.read", p, listed.map(fn(l) { l.1 }).unwrap_or(0.0), answer, ended=fn(r) {

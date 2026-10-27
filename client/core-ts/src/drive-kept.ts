@@ -19,6 +19,8 @@
 // app ended goes on from here as it starts again, not failed for a source the app no longer has. It goes as its message
 // is sent or discarded (`dropUpload`), and one left behind a week (a message gone some other way) as the core starts;
 // never let go by `clear` while its message waits.
+// Where a chat's file was opened (`origin`: its chat, the file as its message has it) is written down beside it while
+// any of it is kept, so what lists it (fill.ts, views/downloads.ts) leads back there.
 // The downloads asked of this device and not yet saved are written down here too (views/downloads.ts), beside the
 // files they bring: one stopped by the app's end goes on as it starts again. A chat's file saved where the person
 // keeps files, where the app can read it back (Host.savedRead), is that file's copy on the device: what was kept of it
@@ -66,6 +68,10 @@ export function outboxKeptId(id: string): string {
   return `outbox\n${id}`;
 }
 
+/// A file kept in part (`unfinished`): what it is kept as, `have` bytes of it, the first of it not kept (`at`,
+/// `length` bytes on from there).
+export type Unfinished = { id: string; kind: KeepKind; mtime: number; size: number; have: number; at: number; length: number };
+
 /// A chat's file kept: where it is, its size, the bytes kept of it (fewer: a part of it read), when it was last read.
 export type ChatKept = { station: string; key: string; name: string; size: number; bytes: number; used: number };
 
@@ -98,7 +104,8 @@ export class DriveKept {
           id TEXT NOT NULL, at INTEGER NOT NULL, length INTEGER NOT NULL, key TEXT NOT NULL, PRIMARY KEY (id, at, length)
         ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS saved (id TEXT PRIMARY KEY, at TEXT NOT NULL, size INTEGER NOT NULL, type TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS upload (id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS upload (id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS origin (id TEXT PRIMARY KEY, json TEXT NOT NULL);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -117,6 +124,7 @@ export class DriveKept {
     const keys = sql.all("SELECT key FROM part WHERE id = ?", [id]).map((r) => String(r[0]));
     sql.run("DELETE FROM part WHERE id = ?", [id]);
     sql.run("DELETE FROM kept WHERE id = ?", [id]);
+    sql.run("DELETE FROM origin WHERE id = ?", [id]);
     return this.#forget(keys);
   }
 
@@ -252,14 +260,14 @@ export class DriveKept {
     });
   }
 
-  /// The files of `kinds` a part of which is kept and not all, read since `since` (ms), the most lately read first,
+  /// The files of `kinds` a part of which is kept and not all (`have` bytes of it), read since `since` (ms), the most lately read first,
   /// each with where the first of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what
   /// their kind keeps beside all else kept of it (bringing it would not push out another, nor then itself), and none
   /// being written now.
-  unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<{ id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number }[]> {
+  unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<Unfinished[]> {
     return Effect.map(this.#db(), (sql) => {
       if (sql === null) return [];
-      const found: { id: string; kind: KeepKind; mtime: number; size: number; at: number; length: number; used: number }[] = [];
+      const found: (Unfinished & { used: number })[] = [];
       for (const kind of kinds) {
         const rows = sql.all("SELECT k.id, k.mtime, k.size, k.used FROM kept k WHERE k.kind = ?", [kind]);
         const parts = new Map<string, [number, number][]>();
@@ -286,7 +294,7 @@ export class DriveKept {
           }
           if (gap === null && end < size) gap = [end, size];
           if (gap === null || total - have + size > this.#most[kind]) continue;
-          found.push({ id, kind, mtime, size, at: gap[0], length: gap[1] - gap[0], used });
+          found.push({ id, kind, mtime, size, have: Math.min(have, size), at: gap[0], length: gap[1] - gap[0], used });
         }
       }
       return found.sort((a, b) => b.used - a.used || (a.id < b.id ? -1 : 1)).map(({ used: _, ...f }) => f);
@@ -331,6 +339,29 @@ export class DriveKept {
       sql.run("INSERT OR REPLACE INTO saved (id, at, size, type) VALUES (?, ?, ?, ?)", [id, at, size, type]);
       if (!this.#writing.has(id)) yield* this.#drop(sql, id);
       return true;
+    });
+  }
+
+  /// Where the file `id` was opened (KeptFrom, as its viewer said it), written down while any of it is kept.
+  noteFrom(id: string, from: unknown): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("INSERT OR REPLACE INTO origin (id, json) VALUES (?, ?)", [id, JSON.stringify(from)]); });
+  }
+
+  /// Where each of the files `ids` was opened, those written down.
+  fromOf(ids: readonly string[]): Effect.Effect<Map<string, unknown>> {
+    return Effect.map(this.#db(), (sql) => {
+      const out = new Map<string, unknown>();
+      if (sql === null) return out;
+      for (const id of ids) {
+        const r = sql.all("SELECT json FROM origin WHERE id = ?", [id])[0];
+        if (r === undefined) continue;
+        try {
+          out.set(id, JSON.parse(String(r[0])));
+        } catch {
+          // (not one this core can read: left out)
+        }
+      }
+      return out;
     });
   }
 

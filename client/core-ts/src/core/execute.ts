@@ -100,7 +100,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         }
         break;
       case "prefsSet":
-        return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), null), catch: asCoreError });
+        // (what is brought after everything else goes by them: fill.ts)
+        return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), inner.fill?.poke(), null), catch: asCoreError });
       case "keysSet":
         return Effect.try({
           try: () => {

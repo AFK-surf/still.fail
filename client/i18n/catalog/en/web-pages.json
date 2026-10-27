@@ -1952,6 +1952,7 @@
   "web-pages.files.copyWhat": "copy",
   "web-pages.files.into": "→ {to}",
   "web-pages.files.toDevice": "To this device",
+  "web-pages.files.stopKeeping": "Stop caching",
   "web-pages.files.fromInto": "{from} → {to}",
   "web-pages.files.moving": "move {way}",
   "web-pages.files.filesCount": {

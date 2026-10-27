@@ -194,6 +194,21 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
     open_cards_fixture(mode)
   }
+  // what comes and goes, every kind of it (downloads_fixture.mbt fix_transfers): over Home its card on a small screen,
+  // its chip in the sidebar's foot on a wide one, their list open (transfers.mbt); 本机缓存 with what is being brought
+  if mode == "transfers" || mode == "home-transfers" || mode == "home-transfers-update" || mode == "settings-kept-fill" {
+    @sffixture.fix_every_transfer("ws1/st1", "s-c1", @sffixture.fix_docs)
+  }
+  // a newer build offered among them (home-transfers-update), or alone (home-update: the key's dot)
+  if mode == "home-transfers-update" || mode == "home-update" || mode == "home-update-list" {
+    @sffixture.fixture_update("0.1.5640")
+  }
+  if mode == "home-transfers" || mode == "home-transfers-update" || mode == "home-update-list" {
+    @sfdesk.open_transfers()
+  }
+  if mode == "chat-keeping" {
+    @sffixture.fix_keeping_message("ws1/st1", "s-c1")
+  }
   // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
   open_drive_fixture(mode)
   // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
@@ -440,7 +455,7 @@ pub fn open_mode(mode : String) -> Unit {
           all: false,
           done: fn(_) {  },
         })
-      // the bar's 传输 open: a copy to MBA going (as the core says it)
+      // what comes and goes open (the rail's key, transfers.mbt): a copy to MBA going (as the core says it)
       "files-transfers" => {
         @sffixture.fix_transfer({
           "from": { "station": "ws1/st1", "root": Json::string(@sffixture.fix_docs), "path": "", "names": ["演示录屏.mp4"] },

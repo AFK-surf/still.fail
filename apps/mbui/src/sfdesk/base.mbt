@@ -187,6 +187,8 @@ using @sfbase {
   chat_ref_of,
   chosen_none,
   count,
+  coming_of,
+  keeping_stop,
   download_cancel,
   download_drive_file,
   download_drive_zip,

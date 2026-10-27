@@ -94,7 +94,8 @@ fn top_bar(
       }
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
         // the name as long as there is room for it
-        let room = c.width - 16.0 * 2.0 - 34.0 * 2.0 - 10.0 * 2.0 - 6.0 * 2.0 - 16.0 - 10.0
+        let keys = if @sfdesk.transfers_key_shown(src, w.id) { 1 } else { 0 }
+        let room = c.width - 16.0 * 2.0 - 34.0 * (2 + keys).to_double() - 10.0 * (2 + keys).to_double() - 6.0 * 2.0 - 16.0 - 10.0
         c.box(max_w=dmax(room, 40.0), fn() {
           top_bar_title(c, w.name) |> ignore
         })
@@ -111,14 +112,15 @@ fn top_bar(
         @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
       })
       |> ignore
-      // catching up on what changed while away: its mark, the size of the keys beside it (update_button's)
+      // catching up on what changed while away: its mark, the size of the keys beside it (transfers_key's)
       let (syncing, said) = match view {
         Some({ syncing: Some(y), .. }) => (true, y)
         _ => (false, "")
       }
       @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
-      // a newer build that brings something (updates.mbt): its key, or how far it has come
-      update_button(c, src)
+      // what comes to this device and goes between the stations, a newer build of the app among it: its key, how far
+      // they have come (transfers.mbt)
+      @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       match view {
         Some(v) if v.stations > 0 =>

@@ -758,6 +758,30 @@ pub fn file_params(v : Viewer) -> Map[String, Json] {
 }
 
 ///|
+/// Where it was opened, as the core keeps it with what it reads of it (its KeptFrom: what is brought after everything
+/// else is only what was opened, and is opened again from where it is listed): a drive's where it is; a chat's, the
+/// chat and the file as its message has it.
+pub fn Viewer::opened_from(self : Viewer) -> Json {
+  match self.drive {
+    Some(d) => { "root": Json::string(d.root), "path": Json::string(d.path) }
+    None => {
+      let o : Map[String, Json] = { "file": attachment_json(self.file, self.file.owner) }
+      match self.steps {
+        InChat(thread, session) => {
+          o["session"] = Json::string(session)
+          match thread {
+            Some(n) => o["thread"] = Json::number(n)
+            None => ()
+          }
+        }
+        _ => ()
+      }
+      Json::object(o)
+    }
+  }
+}
+
+///|
 /// The call a part of it is read by: a chat's file `station.file.part`, a drive's `drive.read`.
 pub fn Viewer::part_call(self : Viewer) -> String {
   if self.drive is Some(_) {
@@ -802,6 +826,10 @@ pub fn Viewer::part_params(self : Viewer, offset : Double, length : Int, keep : 
       }
       p
     }
+  }
+  // (where it was opened, for what is brought after everything else: a video or song, as played)
+  if keep == "played" {
+    p["from"] = self.opened_from()
   }
   p["offset"] = Json::number(offset)
   p["length"] = Json::number(length.to_double())
@@ -913,6 +941,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
       p["progress"] = Json::boolean(true)
       if self.kept_whole() {
         chat_keep(p, self.file.size)
+        p["from"] = self.opened_from()
       }
       (src.read_going)(
         "station.file",
@@ -1211,8 +1240,8 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   // (told once the frame's builds are over, as the tap is the build's that took it)
   if v.download_asked {
     v.download_asked = false
-    let (station, key, name, size) = (v.station, v.key, v.name, v.file.size)
-    c.tell("download/" + name, fn() { download_start(src, station, key, name, size) })
+    let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
+    c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
   }
   // (one going takes back no more: it is the page's)
   if !v.closing {

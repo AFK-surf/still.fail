@@ -1877,6 +1877,7 @@
   "web-pages.files.copyWhat": "复制",
   "web-pages.files.into": "→ {to}",
   "web-pages.files.toDevice": "到此设备",
+  "web-pages.files.stopKeeping": "停止缓存",
   "web-pages.files.fromInto": "{from} → {to}",
   "web-pages.files.moving": "移动 {way}",
   "web-pages.files.filesCount": {

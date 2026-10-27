@@ -173,7 +173,6 @@ pub fn files_shell(
         None => ()
       }
       c.box(style=bar_apart, fn() {  }) |> ignore
-      transfers_button(c, src, ws, files_go)
       let lit = @sf.theme().p.accent
       // (as a bar's buttons are: round on the tape, the last in the panel's corner concentric with it; at the window's
       // corner the corner they share, following it: @sf.bar_keys_link)

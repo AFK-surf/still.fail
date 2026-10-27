@@ -244,7 +244,7 @@ export function install(): void {
         let type = "";
         for (let at = 0; at < size;) {
           const from = at;
-          const part: Extract<Call, { kind: "stationFilePart" }> = { kind: "stationFilePart", station: c.station, key: c.key, name: c.name, offset: at, length: Math.min(DOWNLOAD_PART, size - at), progress: c.progress, stream: false, keep: size };
+          const part: Extract<Call, { kind: "stationFilePart" }> = { kind: "stationFilePart", station: c.station, key: c.key, name: c.name, offset: at, length: Math.min(DOWNLOAD_PART, size - at), progress: c.progress, stream: false, keep: size, ...(c.from !== undefined ? { from: c.from } : {}) };
           const got = yield* Effect.result(handlers.stationFilePart!(inner, part, (v) => progress({ loaded: from + ((v as { loaded: number }).loaded ?? 0), total: size }), at_, ctx));
           if (got._tag === "Failure") {
             if (at === 0 && got.failure.code === "unsupported") return yield* whole;
@@ -274,10 +274,12 @@ export function install(): void {
   // Its bytes beside its answer `{ type, total }`; with `stream`, beside values `{ loaded }` as they come instead (what
   // takes them writes each where it goes, and nothing waits for the whole part).
   // With `keep`: as `drive.read`'s, a chat's file kept by its size alone (a file sent never changes).
-  // With `keep`, one a viewer let go of before all of it was kept is brought all the same (fill.ts), unless `quiet`
-  // (that bringing itself).
+  // With `keep`, one a viewer opened (`from`: where) and let go of before all of it was kept is brought all the same
+  // (fill.ts), unless `quiet` (that bringing itself).
   handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
+    // (where it was opened, written down beside what is kept of it)
+    if (c.keep !== null && c.from !== undefined) inner.runner.fork(inner.driveKept.noteFrom(chatKeptId(c.station, c.key, c.name), c.from));
     return c.keep !== null && c.quiet !== true ? Effect.ensuring(chatPart(inner, c, progress, ctx), Effect.sync(() => inner.fill.poke())) : chatPart(inner, c, progress, ctx);
   };
   const chatPart = (inner: Inner, c: Extract<Call, { kind: "stationFilePart" }>, progress: Progress, ctx: SpanContext) => {
@@ -346,6 +348,7 @@ export function install(): void {
   // A video's or song's (`played`) let go of before all of it was kept is brought all the same, as a chat's file is.
   handlers.driveRead = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveRead" }>;
+    if (c.keep === "played" && c.from !== undefined) inner.runner.fork(inner.driveKept.noteFrom(keptId(c.station, c.root, c.path), c.from));
     return c.keep === "played" && c.quiet !== true ? Effect.ensuring(drivePart(inner, c, progress, ctx), Effect.sync(() => inner.fill.poke())) : drivePart(inner, c, progress, ctx);
   };
   const drivePart = (inner: Inner, c: Extract<Call, { kind: "driveRead" }>, progress: Progress, ctx: SpanContext) => {

@@ -1,6 +1,9 @@
-// The files' page's copies between folders and stations and the drive's files downloaded to this device (ember
-// web/src/pages/Transfers.tsx, Files.css.ts transfers): the bar's 传输 (how many go, how far), its list (each copy's way,
-// how it stands, stopped, tried again, its folder shown once done; each download, how far, stopped, tried again).
+// What comes to this device and goes between its stations (ember web/src/pages/Transfers.tsx, Files.css.ts
+// transfers): the copies between folders and stations, the files downloaded to this device (a chat's, a drive's) and
+// those opened and let go being brought after everything else (client/core-ts fill.ts). On the files' bar its 传输,
+// and in the chats' sidebar's foot (how many go, how far); its list (each copy's way, how it stands, stopped, tried
+// again, its folder shown once done; each download, how far, stopped, tried again; each file being brought, how far
+// and how it stands, stopped).
 
 ///|
 /// Whether the bar's 传输 has its list open, and the list as presented (@sf.last_presented; 0 none).
@@ -32,69 +35,76 @@ fn transfer_list(src : Source, ws : String) -> Array[Json] {
 }
 
 ///|
-/// This device's downloads of the workspace's stations' drives (the `downloads` topic's with a root: a file, a folder
-/// zipped), newest first.
-fn download_list(src : Source, ws : String) -> Array[Json] {
-  items((src.topic)("downloads", {}).value, "downloads").filter(fn(d) {
-    field(Some(d), "root") is Some(_) && text(Some(d), "station").has_prefix(ws + "/")
-  })
+/// What comes and goes for the workspace: its copies (the `driveTransfers` topic), this device's downloads from its
+/// stations (a chat's file, a drive's, a folder zipped: the `downloads` topic) and what was opened and let go being
+/// brought after everything else (its `keeping`: client/core-ts fill.ts).
+priv struct Coming {
+  transfers : Array[Json]
+  downloads : Array[Json]
+  keeping : Array[Json]
 }
 
 ///|
-/// On the bar: the transfers and the drive's downloads, how many go and how far they are (in the accent while they go,
-/// red when one failed); pressed, their list. Nothing while there has been none.
-pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -> Unit) -> Unit {
-  let t = @sf.theme()
-  let all = transfer_list(src, ws)
-  let downloads = download_list(src, ws)
-  let id = c.id("files/transfers")
-  if all.length() == 0 && downloads.length() == 0 {
-    ftransfers.open = false
-    if ftransfers.shown > 0 {
-      @sf.close_presented_of(ftransfers.shown)
-      ftransfers.shown = 0
-    }
-    return
-  }
-  let going = all.filter(fn(x) { flag(Some(x), "active") })
-  let coming = downloads.filter(fn(d) { flag(Some(d), "active") })
-  let failed = all.iter().any(fn(x) { text(Some(x), "state") == "failed" }) ||
-    downloads.iter().any(fn(d) { text(Some(d), "state") == "failed" })
-  let total = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "total") }) +
-    coming.fold(init=0.0, fn(a, d) { a + number(Some(d), "size") })
-  let copied = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "copied") }) +
-    coming.fold(init=0.0, fn(a, d) { a + number(Some(d), "loaded") })
-  let n = going.length() + coming.length()
-  let label = if n > 0 {
-    let percent = if total > 0.0 { (copied / total * 100.0).floor().to_int() } else { 0 }
+fn coming(src : Source, ws : String) -> Coming {
+  let (downloads, keeping) = coming_of(src, ws)
+  { transfers: transfer_list(src, ws), downloads, keeping }
+}
+
+///|
+/// Whether there is none of it.
+fn Coming::none(self : Coming) -> Bool {
+  self.transfers.length() == 0 && self.downloads.length() == 0 && self.keeping.length() == 0
+}
+
+///|
+/// How many go (copies and downloads under way, the files being brought), how far they are in all (a percent), and
+/// whether one failed.
+fn Coming::going(self : Coming) -> (Int, Int, Bool) {
+  let going = self.transfers.filter(fn(x) { flag(Some(x), "active") })
+  let coming = self.downloads.filter(fn(d) { flag(Some(d), "active") })
+  let failed = self.transfers.iter().any(fn(x) { text(Some(x), "state") == "failed" }) ||
+    self.downloads.iter().any(fn(d) { text(Some(d), "state") == "failed" })
+  let sizes = fn(a : Array[Json], field : String) { a.fold(init=0.0, fn(n, x) { n + number(Some(x), field) }) }
+  let total = sizes(going, "total") + sizes(coming, "size") + sizes(self.keeping, "size")
+  let copied = sizes(going, "copied") + sizes(coming, "loaded") + sizes(self.keeping, "loaded")
+  let percent = if total > 0.0 { (copied / total * 100.0).floor().to_int() } else { 0 }
+  (going.length() + coming.length() + self.keeping.length(), percent, failed)
+}
+
+///|
+/// What their chip says: how many go and how far, else 传输.
+fn coming_words(n : Int, percent : Int) -> String {
+  if n > 0 {
     @sf.t("web-pages.files.transfersGoing", args=[("n", n.to_string()), ("percent", percent.to_string())])
   } else {
     @sf.t("web-pages.files.transfers")
   }
-  if c.clicked(id) {
-    ftransfers.open = !ftransfers.open
+}
+
+///|
+/// Their list, while `ftransfers.open`: the library's panel from `id` (beside it, or a sheet from the foot on a small
+/// screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
+/// closed once there is none. `go`: where a copy's folder is shown.
+fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveAt) -> Unit, none : Bool) -> Unit {
+  if none {
+    ftransfers.open = false
   }
-  let (style, words, ink) = if failed {
-    (ftransfers_chip_failed, ftransfers_chip_failed_words, t.p.red)
-  } else if n > 0 {
-    (ftransfers_chip_going, ftransfers_chip_going_words, t.p.accent_text)
-  } else {
-    (ftransfers_chip, ftransfers_chip_words, t.p.muted)
-  }
-  let b = c.box(style~, id~, fn() {
-    @sf.icon(c, "move", size=transfer_icon, color=ink) |> ignore
-    c.text(label, style=words) |> ignore
-  })
-  c.semantics(b, Button, id~, label~)
-  // its list: the library's panel under it, along its end (what is in it read as it is drawn)
   if ftransfers.open && ftransfers.shown == 0 {
     @sf.panel(
       @sf.t("web-pages.files.transfers"),
       fn(c, _) {
-        for d in download_list(src, ws) {
+        let all = coming(src, ws)
+        // (a newer build of the app first: sfbase updates.mbt)
+        if update_coming() {
+          update_row(c, src)
+        }
+        for k in all.keeping {
+          keeping_row(c, src, k)
+        }
+        for d in all.downloads {
           download_row(c, src, d)
         }
-        for x in transfer_list(src, ws) {
+        for x in all.transfers {
           transfer_row(c, src, x, go)
         }
       },
@@ -109,6 +119,237 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
   } else if !ftransfers.open && ftransfers.shown > 0 {
     @sf.close_presented_of(ftransfers.shown)
     ftransfers.shown = 0
+  }
+}
+
+
+///|
+/// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
+/// comes and goes, a ring round its mark as far as it has come, red's dot when one failed; pressed, their list beside
+/// it. Nothing while there is none.
+fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
+  let all = coming(src, ws)
+  let id = c.id("rail/transfers")
+  let go = fn(at : DriveAt) { open_page(Drive(at)) }
+  if all.none() {
+    transfers_list(c, src, ws, id, go, true)
+    return
+  }
+  let (n, percent, failed) = all.going()
+  if c.clicked(id) {
+    ftransfers.open = !ftransfers.open
+  }
+  rail_ground(
+    c,
+    id,
+    ftransfers.open,
+    fn(color) {
+      @sf.icon(c, "download", size=rail_icon_size, color~) |> ignore
+      // (round its mark, as the small screen's key's: @sf.progress_key)
+      c.layer(fn() {
+        c.box(style=rail_ring_at, fn() {
+          @sf.progress_spinner(c, "rail/transfers", Some(percent.to_double() / 100.0), size=rail_icon_size + rail_ring_room) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      if failed {
+        rail_tone_mark(c, "alert")
+      }
+    },
+    label=coming_words(n, percent),
+  )
+  transfers_list(c, src, ws, id, go, false)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let rail_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+
+///|
+/// The ring's room round the mark (2 clear, its line 2, either side).
+let rail_ring_room : Double = 8.0
+
+///|
+/// In a small screen's home's top bar: what comes to this device and goes between the stations, a newer build of the
+/// app among it (offered, coming, failed: sfbase updates.mbt), as one key (@sf.progress_key: the download's mark, a
+/// ring as far as what comes has come, the accent's dot while a build is offered, red's when one failed); pressed,
+/// their list (from the foot). Nothing while there is none.
+pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark : Double) -> Unit {
+  let all = coming(src, ws)
+  let id = c.id("home/transfers")
+  let go = fn(at : DriveAt) { open_page(Drive(at)) }
+  let build = update_coming()
+  if all.none() && !build {
+    transfers_list(c, src, ws, id, go, true)
+    return
+  }
+  let (n, percent, failed) = all.going()
+  let updating = @sfbase.update_under_way()
+  // how far: what comes, else the build as far as the host says (not known: none)
+  let ring = if n > 0 {
+    Some(percent.to_double() / 100.0)
+  } else if updating {
+    Some(@sfbase.update_part().or(0.0))
+  } else {
+    None
+  }
+  let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
+  let offered = build && !updating && @sfbase.update.phase != "failed"
+  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update.phase == "failed") {
+    ftransfers.open = !ftransfers.open
+  }
+  transfers_list(c, src, ws, id, go, false)
+}
+
+///|
+/// Whether a newer build of the app is to be listed with what comes: offered (it brings something the changelog
+/// says), coming, being installed, or failed.
+fn update_coming() -> Bool {
+  let offered = match @sfbase.update.available {
+    Some(v) => items(Some(v), "news").length() > 0
+    None => false
+  }
+  offered || @sfbase.update_under_way() || @sfbase.update.phase == "failed"
+}
+
+///|
+/// A newer build of the app with what comes (sfbase updates.mbt): 更新到 …; offered, what it brings first, its key
+/// to install it; coming, how far (a bar) and how it stands; failed, why in red, its key to try again.
+fn update_row(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.theme()
+  let failed = @sfbase.update.phase == "failed"
+  let going = @sfbase.update_under_way()
+  let version = text(@sfbase.update.available, "versionName")
+  let first = match items(@sfbase.update.available, "news").get(0) {
+    Some(String(line)) => line
+    _ => ""
+  }
+  let said = if going { @sfbase.update_progress() } else if failed { @sfbase.update_error("") } else { first }
+  c.box(style=ftransfer_row, fn() {
+    c.box(style=ftransfer_mark, fn() {
+      @sf.icon(c, if failed { "retry" } else { "sparks" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted }) |> ignore
+    })
+    |> ignore
+    c.box(style=ftransfer_text, fn() {
+      c.box(style=ftransfer_title, fn() {
+        c.text(@sf.t("android-chat.home.update", args=[("version", version)]), style=ftransfer_title_words) |> ignore
+      })
+      |> ignore
+      if going {
+        @sf.progress(c, "update/coming", @sfbase.update_part())
+      }
+      if said != "" {
+        c.text(said, style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
+      }
+    })
+    |> ignore
+    c.box(style=ftransfer_actions, fn() {
+      if !going &&
+        @sf.panel_icon_button(c, "update/install", if failed { "retry" } else { "download" }, @sf.t("android-chat.home.update", args=[("version", version)])) {
+        ftransfers.open = false
+        c.tell("update/install", fn() { @sfbase.update_install(src) })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Whether a small screen's home's top bar has its key (transfers_key): what comes, or a newer build.
+pub fn transfers_key_shown(src : Source, ws : String) -> Bool {
+  transfers_shown(src, ws) || update_coming()
+}
+
+///|
+/// Whether there is anything that comes and goes (the sidebar's foot, a small screen's home show it then).
+pub fn transfers_shown(src : Source, ws : String) -> Bool {
+  !coming(src, ws).none()
+}
+
+///|
+/// The list open over the sidebar's foot (a fixture's: MBUI_FIXTURE=home-transfers).
+pub fn open_transfers() -> Unit {
+  ftransfers.open = true
+}
+
+///|
+/// A file opened and let go, being brought after everything else (fill.ts): its mark, what it is called, how far (a
+/// bar), how it stands (后台缓存 …); stopped by its ✕, what was kept of it let go.
+fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
+  let t = @sf.theme()
+  let j = Some(k)
+  let kid = text(j, "id")
+  c.box(style=ftransfer_row, fn() {
+    c.box(style=ftransfer_mark, fn() { @sf.icon(c, "download", size=transfer_icon, color=t.p.muted) |> ignore }) |> ignore
+    c.box(style=ftransfer_text, fn() {
+      // (its words say it is kept here as it comes: 后台缓存 …; pressed, it is opened again where it was)
+      opened_title(c, j, "keeping/open/" + kid, None)
+      @sf.progress(c, "keeping/" + kid, Some(number(j, "progress")))
+      c.text(text(j, "statusText"), style=ftransfer_status) |> ignore
+    })
+    |> ignore
+    c.box(style=ftransfer_actions, fn() {
+      if @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping")) {
+        c.tell("keeping/stop/" + kid, fn() { keeping_stop(src, kid) })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What comes, by what it is called (and its way, where it says one): pressed, opened again where it was opened (its
+/// `from`, as what opened it said: a chat's file in the viewer over its chat's files, a drive's video or song in its
+/// player), or a drive's file's folder; only words where there is nowhere to go.
+fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
+  let id = c.id(key)
+  let there = opens(j)
+  if there && c.clicked(id) {
+    open_coming(j)
+  }
+  let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
+    c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
+    match way {
+      Some(w) => c.text(w, style=ftransfer_way) |> ignore
+      None => ()
+    }
+  })
+  if there {
+    c.semantics(b, Button, id~, label=text(j, "title"))
+  }
+}
+
+///|
+/// Whether it can be opened again from the list: where it was opened is known, or it is a drive's file.
+fn opens(j : Json?) -> Bool {
+  let from = field(j, "from")
+  field(from, "file") is Some(_) || text(from, "root") != "" || text(j, "root") != ""
+}
+
+///|
+/// Opened again where it was opened: a chat's file in the viewer over its chat's files (its message's file, as the
+/// core kept it), a drive's video or song in its player; else a drive's download's folder. The list goes.
+fn open_coming(j : Json?) -> Unit {
+  let from = field(j, "from")
+  let station = text(j, "station")
+  ftransfers.open = false
+  match field(from, "file") {
+    Some(f) => {
+      let thread = match field(from, "thread") {
+        Some(Number(n, ..)) => Some(n)
+        _ => None
+      }
+      @sfbase.open_preview(station, text(j, "key"), @sfbase.attachment_of(f), steps=@sfbase.Stepping::InChat(thread, text(from, "session")))
+    }
+    None =>
+      if text(from, "root") != "" {
+        open_page(DrivePlay({ station, root: Some(text(from, "root")), path: text(from, "path") }))
+      } else {
+        open_page(Drive({ station, root: Some(text(j, "root")), path: @sfbase.dv_parent(text(j, "path")) }))
+      }
   }
 }
 
@@ -188,11 +429,7 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
     })
     |> ignore
     c.box(style=ftransfer_text, fn() {
-      c.box(style=ftransfer_title, fn() {
-        c.text(text(j, "name"), style=ftransfer_title_words) |> ignore
-        c.text(@sf.t("web-pages.files.toDevice"), style=ftransfer_way) |> ignore
-      })
-      |> ignore
+      opened_title(c, j, "download/open/" + did, Some(@sf.t("web-pages.files.toDevice")))
       if flag(j, "active") {
         @sf.progress(c, "download/" + did, Some(number(j, "progress")))
       }
@@ -217,30 +454,11 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
 let ftransfers_w : Double = 360.0
 
 
-///|
-/// The chip (transfersChip: 28 high, 10 in, the neutral ground, its words muted; going: the accent's; failed: red's).
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Neutral")
 
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip_going : @ui.Style = ftransfers_chip.then(@ui.css("bg=AccentBg"))
 
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip_failed : @ui.Style = ftransfers_chip.then(@ui.css("bg=DangerBg"))
 
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Meta, color=AccentText, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 apart): what it holds as far in as a small panel's words

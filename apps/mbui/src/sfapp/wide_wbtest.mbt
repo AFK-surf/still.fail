@@ -1546,8 +1546,8 @@ test "wide: 文件's rows dragged as Finder's: onto a folder moved there within 
   assert_false(flag(Some(copied[0].params), "move"))
   assert_eq(text(field(Some(copied[0].params), "to"), "path"), "会议记录")
   assert_eq(items(field(Some(copied[0].params), "from"), "names").length(), 1)
-  // the bar's 传输: it goes (as the core says), its list on a press
-  assert_true(t.find("1 个传输 · 37%") is Some(_), msg="the transfers' chip")
+  // what comes and goes in the rail's key: it goes (as the core says)
+  assert_true(t.query(Button, label="1 个传输 · 37%") is Some(_), msg="the rail's transfers' key")
   // a folder onto 个人收藏: kept there
   let (x0, y0) = t.find("设计稿").unwrap()
   let (x1, y1) = t.find("个人收藏").unwrap()
