@@ -209,6 +209,8 @@ pub(all) struct Elsewhere {
   place : Place?
   failed : Bool
   received : Bool
+  /// the files a person's message there came with
+  attachments : Array[Attachment]
   by : By
   time : Stamp?
 }
@@ -232,6 +234,7 @@ pub fn elsewhere_of(e : Json) -> Elsewhere {
     },
     failed: flag(s, "failed"),
     received: flag(s, "received"),
+    attachments: items(s, "attachments").map(attachment_of),
     by: by_of(s),
     time: stamp_of(s, "createdAt"),
   }

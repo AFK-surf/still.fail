@@ -882,6 +882,7 @@ pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhe
         open_link(h)
       })
       |> ignore
+      message_files(c, src, here, s.attachments, false)
     },
   )
 }

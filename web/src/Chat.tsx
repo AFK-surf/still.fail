@@ -1125,6 +1125,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
         </span>
       }>
       <div className={conversationCss.markdown}><Prose>{s.text}</Prose></div>
+      <Files files={s.attachments} />
     </OthersMessage>
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));

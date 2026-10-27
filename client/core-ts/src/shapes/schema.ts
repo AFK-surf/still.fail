@@ -2900,6 +2900,7 @@ export const SHAPES: Record<string, Shape> = {
     ["place", opt("Place"), { doc: "Where it went; none when the core cannot name it." }],
     ["failed", "bool", { default: true }],
     ["received", opt("bool"), { doc: "A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there." }],
+    ["attachments", vec("Attachment"), { default: true, doc: "The files a person's message in Slack came with, as the station keeps them for its agent (`owner`: that\nagent's session). Empty for what the agent sent there." }],
     ["by", "MessageBy"],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
   ], { doc: "A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,\nread from its transcript: the chat shows it after the message it followed, without it being one of the chat's." }),

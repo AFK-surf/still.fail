@@ -76,6 +76,24 @@ export type Said = {
   text: string; failed: boolean;
 };
 
+/// A file a person's Slack message came with, where the station keeps it (in the workspace of the session it was given
+/// to), as the station lists it to the agent.
+export type Heard = { name: string; path: string; size: number };
+
+/// A Slack message as given to an agent, its words and the files the station listed after them ("Attached files:",
+/// station/src/agents/instructions.ts `messageForAgent`): those the chat draws as its files, not as words.
+export function heardFiles(text: string): { text: string; files: Heard[] } {
+  const at = text.lastIndexOf("Attached files:\n");
+  if (at < 0 || (at > 0 && !text.startsWith("\n\n", at - 2))) return { text, files: [] };
+  const files: Heard[] = [];
+  for (const line of text.slice(at + "Attached files:\n".length).split("\n")) {
+    const m = /^- (\/.+?) \((.+), (\d+) bytes\)$/.exec(line);
+    if (!m) return { text, files: [] };
+    files.push({ path: m[1]!, name: m[2]!, size: Number(m[3]) });
+  }
+  return { text: text.slice(0, Math.max(0, at - 2)), files };
+}
+
 /// What a transcript item says of Slack: what the agent sends there or was given from there (`said`), or the result of
 /// a call (`result`: its call's id, else none, then it is the item just before's).
 export function readItem(i: number, e: J): { said: Said[] } | { result: { call: string | null; failed: boolean; ts: string | null } } | null {

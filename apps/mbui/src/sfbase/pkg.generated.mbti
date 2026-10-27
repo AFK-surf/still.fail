@@ -709,6 +709,10 @@ pub let login_card_of : @ref.Ref[(@ui.Ctx, @settings.Core, String, String, Bool)
 
 pub fn long_jobs(Source, Workspace) -> Int32
 
+pub fn long_jobs_lit(Source, Workspace) -> Bool
+
+pub fn long_jobs_seen(Source, Workspace) -> Unit
+
 pub let machine_here : @ref.Ref[String?]
 
 pub fn[T] made_again(Array[Json], Array[(Json, T)], (Json) -> String, (Json) -> T) -> Array[(Json, T)]
@@ -2007,6 +2011,7 @@ pub(all) struct Elsewhere {
   place : Place?
   failed : Bool
   received : Bool
+  attachments : Array[Attachment]
   by : By
   time : Stamp?
 }
