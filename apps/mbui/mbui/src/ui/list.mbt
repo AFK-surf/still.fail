@@ -242,7 +242,7 @@ impl Moving for ListState with rest_at(self, now, frame) {
   if self.built != frame {
     return -1.0
   }
-  if self.glide && self.glide_t0 == @double.infinity {
+  if (self.glide && self.glide_t0 == @double.infinity) || self.edge_v != 0.0 {
     return @double.infinity
   }
   // (its own motions, and its bar's after them: a finger's list has none, its rest theirs)
@@ -265,7 +265,7 @@ impl Moving for ListState with rest_at(self, now, frame) {
 ///|
 /// When the list is at rest by itself (ListInfo's `rest`).
 fn ListState::own_rest(self : ListState) -> Double {
-  if self.held || (self.glide && self.glide_t0 == @double.infinity) {
+  if self.held || (self.glide && self.glide_t0 == @double.infinity) || self.edge_v != 0.0 {
     return @double.infinity
   }
   let mut t = -1.0
@@ -318,6 +318,35 @@ fn Ctx::step_ease(self : Ctx, st : ListState) -> Unit {
     st.ease = 0.0
     st.ease_v = 0.0
     st.ease_done = 0.0
+  }
+}
+
+///|
+/// What it has scrolled toward the pointer since the last frame, words picked past its shown edge (Ctx::edge_scroll).
+fn Ctx::step_edge(self : Ctx, st : ListState) -> Unit {
+  if st.edge_v == 0.0 {
+    return
+  }
+  st.pending = st.pending + st.edge_v * dmax(0.0, self.now - st.edge_t)
+  st.edge_t = self.now
+  self.scrolled(st)
+  st.glide = false
+  st.follow_item = -1
+}
+
+///|
+/// List `id` scrolls toward the pointer at `v` (px a ms, the way a wheel scrolls it; 0: no more), from now
+/// (Ctx::step_edge), as words are picked with the pointer held past its shown edge (desktop.mbt).
+fn Ctx::edge_scroll(self : Ctx, id : Int, v : Double) -> Unit {
+  match self.lists.get(id) {
+    Some(st) if st.edge_v != v => {
+      if st.edge_v == 0.0 {
+        st.edge_t = self.now
+      }
+      st.edge_v = v
+      self.scrolled(st)
+    }
+    _ => ()
   }
 }
 
@@ -425,6 +454,8 @@ pub fn Ctx::list(
         ease_mover: Mover::new(),
         learned: 0,
         heights_learned: @signals.signal(0),
+        edge_v: 0.0,
+        edge_t: 0.0,
         vw: 0.0,
         vh: 0.0,
         sel: false,
@@ -466,6 +497,7 @@ pub fn Ctx::list(
   }
   if !again {
     self.step_ease(st)
+    self.step_edge(st)
     self.step_glide(st)
     self.step_scroll(st)
   }

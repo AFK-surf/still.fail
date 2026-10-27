@@ -139,8 +139,8 @@ fn Bar::rest(self : Bar, now : Double, scrolled : Double) -> Double {
 
 ///|
 /// A bar as a frame drew it, for the pointer: what it is for (its id; `foot`: along its foot), where what scrolls shows
-/// (x0 y0 x1 y1), its thumb (x y w h), how far what scrolls goes for a point the thumb moves, and the thumb's id as a
-/// target.
+/// (x0 y0 x1 y1) and how much of its top and foot what floats over it takes (Ctx::floated, along its right), its thumb
+/// (x y w h), how far what scrolls goes for a point the thumb moves, and the thumb's id as a target.
 struct BarAt {
   id : Int
   foot : Bool
@@ -148,6 +148,8 @@ struct BarAt {
   y0 : Double
   x1 : Double
   y1 : Double
+  top_in : Double
+  foot_in : Double
   tx : Double
   ty : Double
   tw : Double
@@ -399,6 +401,8 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
       y0,
       x1,
       y1,
+      top_in: dmax(0.0, n.y + top - y0),
+      foot_in: dmax(0.0, y1 - (n.y + n.fh - foot)),
       tx: x1 - scroll_bar_inset - scroll_bar_size,
       ty,
       tw: scroll_bar_size,
@@ -421,7 +425,10 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
           self.across_seen.push((n.id, n.x, n.fw))
           None
         } else {
-          foot_bar(n.id, n.x, n.fw, n.fw + st.max, st.x, (x0, y0, x1, y1), r_bl, r_br)
+          // (along the view it is for: `bar_in` in from either side, what it holds as wide less that)
+          let b = dclamp(st.bar_in, 0.0, dmax(0.0, n.fw / 2.0 - scroll_bar_least))
+          let shows = (dmax(x0, n.x + b), y0, dmin(x1, n.x + n.fw - b), y1)
+          foot_bar(n.id, n.x + b, n.fw - 2.0 * b, n.fw + st.max - 2.0 * b, st.x, shows, dmax(0.0, r_bl - b), dmax(0.0, r_br - b))
         }
       _ => None
     }
@@ -458,6 +465,8 @@ fn foot_bar(
     y0,
     x1,
     y1,
+    top_in: 0.0,
+    foot_in: 0.0,
     tx,
     ty: y1 - scroll_bar_inset - scroll_bar_size,
     tw,

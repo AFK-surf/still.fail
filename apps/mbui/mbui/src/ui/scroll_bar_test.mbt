@@ -193,6 +193,34 @@ test "scroll bar: a box kept to a height has one along its right, a box scrolled
 }
 
 ///|
+test "scroll bar: a box scrolled sideways out past the view it is for has its bar under that view only" {
+  // (a table out 40 across a margin either side of a message 220 wide)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.sideways("wide", padx=40.0, bar_in=40.0, fn() { c.box(w=Px(1000.0), h=Px(100.0), fn() {  }) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(150.0, 50.0)
+  t.wheel_with(150.0, 50.0, 100.0, 0.0, 0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  let at_start = thumbs(t)
+  assert_eq(at_start.length(), 1, msg="\{at_start}")
+  assert_true(at_start[0].0 >= 40.0 + 2.0, msg="\{at_start}")
+  // (scrolled to its end: at the view's end, not the screen's)
+  t.wheel_with(150.0, 50.0, 2000.0, 0.0, 0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  let at_end = thumbs(t)
+  assert_eq(at_end.length(), 1, msg="\{at_end}")
+  assert_true((at_end[0].0 + at_end[0].2 - (300.0 - 40.0 - 2.0)).abs() < 0.01, msg="\{at_end}")
+}
+
+///|
 test "scroll bar: a box scrolled sideways keeps room at its foot for its bar while it can scroll, none once what it holds fits" {
   let content = Ref::new(1000.0)
   let t = @ui.Tester::new(

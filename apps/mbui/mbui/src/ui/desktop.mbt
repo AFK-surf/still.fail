@@ -259,17 +259,18 @@ priv struct SelSpan {
 ///|
 /// What is picked with the pointer, as a browser's selection: from where the press went down (`from`; its paragraph 0:
 /// nothing picked) to where the pointer took it (`to`), the paragraphs between them in the page's order whole; what
-/// is picked of each paragraph, by its id (those scrolled out of view kept as they were); and whether the pointer is
-/// still taking it.
+/// is picked of each paragraph, by its id (those scrolled out of view kept as they were); whether the pointer is
+/// still taking it; and the list the press went down in (0 none), scrolled toward the pointer held past its edge.
 priv struct Picked {
   mut from : SelSpot
   mut to : SelSpot
   mut spans : Map[Int, SelSpan]
   mut dragging : Bool
+  mut list : Int
 }
 
 ///|
-let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false }
+let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0 }
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -713,6 +714,7 @@ fn select_none() -> Unit {
   picked.to = no_spot
   picked.spans.clear()
   picked.dragging = false
+  select_edge_stop()
 }
 
 ///|
@@ -985,6 +987,56 @@ fn Ctx::select_after_layout(self : Ctx) -> Unit {
   if picked.dragging && self.down {
     self.select_to(self.px, self.py)
   }
+  self.select_edge()
+}
+
+///|
+/// How fast the list words are picked in scrolls toward the pointer held past its shown edge (px a ms for each px it
+/// is past it, from select_edge_least px), as a browser scrolls what a selection is dragged out of: further out,
+/// faster.
+let select_edge_rate : Double = 0.02
+
+///|
+/// How far past the edge the pointer counts as from the edge itself (px): just past it, the list already scrolls at a
+/// pace one sees (200 px a second), not a crawl.
+let select_edge_least : Double = 10.0
+
+///|
+/// Words being picked with the pointer held past the top or the foot of the list the press went down in, as it shows
+/// (what floats over it, a page's bar, a composer, is not where it shows: Ctx::floated): the list scrolls toward the
+/// pointer, faster the further past it is, words coming as it does (select_after_layout), until the pointer comes
+/// back in or lets go. Its edges as the last frame drew it (its scroll bar's: none where it does not scroll).
+fn Ctx::select_edge(self : Ctx) -> Unit {
+  let id = picked.list
+  if id == 0 {
+    return
+  }
+  let v = match self.bar_drawn(id) {
+    Some(b) if picked.dragging && self.down && !b.foot => {
+      let top = b.y0 + b.top_in
+      let foot = b.y1 - b.foot_in
+      if foot <= top {
+        0.0
+      } else if self.py < top {
+        -(top - self.py + select_edge_least) * select_edge_rate
+      } else if self.py > foot {
+        (self.py - foot + select_edge_least) * select_edge_rate
+      } else {
+        0.0
+      }
+    }
+    _ => 0.0
+  }
+  self.edge_scroll(id, v)
+}
+
+///|
+/// The list words were picked in scrolls no more toward the pointer (it let go, or they did).
+fn select_edge_stop() -> Unit {
+  if picked.list != 0 {
+    g().edge_scroll(picked.list, 0.0)
+    picked.list = 0
+  }
 }
 
 ///|
@@ -1026,6 +1078,8 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.to = { base: target.base, off: e, at }
       picked.spans[target.base] = { a: s, b: e, text, at }
       picked.dragging = clicks <= 1
+      // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
+      picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
     }
     None => ()
   }
