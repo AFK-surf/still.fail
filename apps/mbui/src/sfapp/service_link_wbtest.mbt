@@ -331,8 +331,11 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes
   let (x1, y1, _, _) = view_rect(t, site).unwrap()
   assert_true(x1 < x0 - 40.0)
   assert_true(y1 > y0 + 20.0)
-  // 适应, among the sizes (the size key's): fitted again, the sizes gone
-  t.click(Button, label="页面尺寸")
+  // 适应, among the sizes (its ⋯'s): fitted again, the sizes gone
+  t.click(Button, label="更多操作")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.tap_text("页面尺寸")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.click(Button, label="适应")

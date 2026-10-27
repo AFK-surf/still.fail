@@ -13,12 +13,19 @@ fn service_tester(mode : String) -> @ui.Tester {
 }
 
 ///|
-test "a service's page: its name and station in the bar, where it is, its size key, its resources' ring; no toolbar" {
+test "a service's page: its name and station in the bar, under the page one row (where it is, its ⋯); no toolbar" {
   let t = service_tester("service")
   t.frame()
   assert_true(t.find("web") is Some(_))
   assert_true(t.find("对话") is Some(_))
-  assert_true(t.query(Button, label="页面尺寸") is Some(_), msg="its size key")
+  // back, forward, where it is with reload at its end, marking, its ⋯ (its size, how far its resources came): one row
+  for key in ["后退", "前进", "刷新", "标注", "更多操作"] {
+    assert_true(t.query(Button, label=key) is Some(_), msg=key)
+  }
+  let reload = t.query(Button, label="刷新").unwrap().rect
+  let more = t.query(Button, label="更多操作").unwrap().rect
+  assert_true((reload.1 + reload.3 / 2.0 - (more.1 + more.3 / 2.0)).abs() < 1.0, msg="one row")
+  assert_true(t.query(Button, label="页面尺寸") is None, msg="its size in its ⋯")
   // (its sizes are chosen in one place on every screen: none under the page)
   assert_true(t.find("自适应") is None, msg="no toolbar under the page")
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("open ") && s.contains(" 3 ") }))
@@ -38,10 +45,13 @@ test "the address tapped: typed in with the keyboard for addresses, its action k
 }
 
 ///|
-test "a phone's size key: its sizes in a sheet; 移动页面 on, said on the key in the accent, pressed it stops" {
+test "a phone's size, in its ⋯: its sizes in a sheet; 移动页面 on, said on its key in the ⋯'s place, pressed it stops" {
   let t = service_tester("service-sized")
   t.frame()
-  t.click(Button, label="页面尺寸")
+  t.click(Button, label="更多操作")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.tap_text("页面尺寸")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
@@ -52,12 +62,13 @@ test "a phone's size key: its sizes in a sheet; 移动页面 on, said on the key
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
   assert_true(p.moving, msg="moving")
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
-  // said on the size key, which stops it at once
+  // said on the size key in the ⋯'s place, which stops it at once
   assert_true(t.query(Button, label="停止移动页面") is Some(_), msg="the key says it")
+  assert_true(t.query(Button, label="更多操作") is None, msg="in the ⋯'s place")
   t.click(Button, label="停止移动页面")
   t.frame()
   assert_true(!p.moving, msg="stopped")
-  assert_true(t.query(Button, label="页面尺寸") is Some(_))
+  assert_true(t.query(Button, label="更多操作") is Some(_))
 }
 
 ///|
@@ -137,10 +148,13 @@ test "a size chosen: kept on the device (prefs), read as a page opens in a later
 }
 
 ///|
-test "the resources' ring pressed on a phone: their list in a sheet as tall as they are, not a share of the window" {
+test "how far the resources came, from a phone's ⋯: their list in a sheet as tall as they are, not a share of the window" {
   let t = service_tester("service")
   t.frame()
-  t.click(Button, label="资源加载 75% · 3/4")
+  t.click(Button, label="更多操作")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.tap_text("资源加载 75% · 3/4")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("/app.css") is Some(_), msg="its rows")

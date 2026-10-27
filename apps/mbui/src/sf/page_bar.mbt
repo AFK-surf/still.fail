@@ -50,15 +50,74 @@ let bar_key_off : @ui.Style = @ui.css("opacity=O35")
 /// Where the page is (previewAddress): one capsule taking what the bar leaves, 160 at least (where the bar has less,
 /// what may leave it does first: its page's drop), 4 in from what is beside it, its words 12 in and 6 apart, on the
 /// chip's ground; typed in, on the card's with the focus's ring (`editing`). `id`: pressed anywhere, what its page says
-/// to do (typing in it).
-pub fn bar_field(c : @ui.Ctx, id : Int, editing : Bool, body : () -> Unit) -> Unit {
+/// to do (typing in it); `end`, a key of its own at its end, in a press's room across (Safari's reload in its
+/// address), the rest `id`'s; `part`, how far what the page waits on has come, a line along its foot that far across in
+/// its colour (Safari's, its address's).
+pub fn bar_field(
+  c : @ui.Ctx,
+  id : Int,
+  editing : Bool,
+  body : () -> Unit,
+  end? : (() -> Unit)? = None,
+  part? : (Double, @ui.Color)? = None,
+) -> Unit {
   let b = theme().bars
+  let look = (if editing { bar_field_editing } else { bar_field_box }).then(@ui.style(h=Fixed(b.field)))
   c.box(style=bar_field_room, fn() {
-    c.box(style=(if editing { bar_field_editing } else { bar_field_box }).then(@ui.style(h=Fixed(b.field))), id~, body)
-    |> ignore
+    match end {
+      None =>
+        c.box(style=look, id~, fn() {
+          body()
+          field_part(c, part)
+        })
+        |> ignore
+      Some(end) =>
+        c.box(style=look.then(bar_field_ended), fn() {
+          c.box(style=bar_field_words, id~, body) |> ignore
+          c.box(style=bar_field_end.then(@ui.style(w=Fixed(@ui.room_least()))), end) |> ignore
+          field_part(c, part)
+        })
+        |> ignore
+    }
   })
   |> ignore
 }
+
+///|
+/// How far it has come along the capsule's foot (bar_field's `part`), over what is in it, cut to its round.
+fn field_part(c : @ui.Ctx, part : (Double, @ui.Color)?) -> Unit {
+  match part {
+    Some((k, color)) => {
+      let across = k * 100.0
+      c.box(style=bar_field_line.then(@ui.style(w=Pct(across), bg=color)), left=field_edge, bottom=field_edge, fn() {  })
+      |> ignore
+    }
+    None => ()
+  }
+}
+
+///|
+/// Where the line of how far it has come lies: at the capsule's left and foot.
+let field_edge : Double = 0.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_field_line : @ui.Style = @ui.css("h=S0_5")
+
+///|
+/// With a key at its end: its words' room the rest, the key's own after it, the capsule's right its own.
+// kept across runs: a value (no field of it changes)
+let bar_field_ended : @ui.Style = @ui.css("pr=S0 gap=S0")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_field_words : @ui.Style = @ui.css("row w=Full h=Full gap=S1_5 align=ACenter")
+
+///|
+/// The key at its end: in a press's room across, at its right 4 in, so its icon stands as far in from the capsule's
+/// end as the place's icon from its start (12).
+// kept across runs: a value (no field of it changes)
+let bar_field_end : @ui.Style = @ui.css("row h=Full pr=S1 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)

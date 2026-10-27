@@ -188,10 +188,11 @@ fn service_page_bar(
 }
 
 ///|
-/// The same under the page, in a thumb's reach (as a phone's browser has them: Safari's bar at the foot): where it is
-/// across it with reload after it (marking's say in its place while marking), and under it back, forward, how far it
-/// came, its size and marking it, spread across it, nothing leaving; in a panel of its own (the tape's), the first and
-/// the last concentric with its foot corners (@sf.foot_capsule).
+/// The same under the page, in a thumb's reach, in one row (as a phone's browser has it: Safari's compact bar at the
+/// foot): back and forward, where it is with reload at its end (marking's say in its place while marking) and how far
+/// the page came along its foot, marking it, its ⋯ (its size, how far each of its resources came); while a finger moves
+/// the page, the size key in the ⋯'s place, a press stopping it. In a panel of its own (the tape's) the first and the
+/// last keys concentric with its foot corners (@sf.foot_capsule).
 fn service_foot_bar(
   c : @ui.Ctx,
   src : Source,
@@ -204,60 +205,80 @@ fn service_foot_bar(
 ) -> Unit {
   let n = bar_now(c, p, site, fixed)
   let load = load_of(src, station, port, fixed)
-  // (each key in its row's middle, as far over its foot as its room leaves under it)
+  // (each key in the row's middle, as far over its foot as its room leaves under it)
   let under = (@ui.room_least() - @sf.theme().bars.key) / 2.0
   let (left, right, foot) = @sf.foot_capsule(@sf.theme().bars.key, foot_keys_in, under)
   let lifted = dmax(0.0, foot - under)
-  c.box(style=foot_bar_box.then(@ui.style(pb=@sf.room_of(lifted))), fn() {
-    c.box(style=foot_address_row(), fn() {
-      address_or_marking(c, src, p, site, name, fixed, n)
-      reload_key(c, site)
-    })
-    |> ignore
-    c.box(style=foot_keys_row().then(@ui.style(pl=@sf.room_of(left), pr=@sf.room_of(right))), fn() {
-      back_forward(c, site, n)
-      if load is Some(Object(_)) {
-        load_key(c, src, station, port, load)
-      }
+  let row = foot_row_look.then(
+    @ui.style(
+      h=Fixed(@ui.room_least() + lifted),
+      pl=@sf.room_of(left),
+      pr=@sf.room_of(right),
+      pb=@sf.room_of(lifted),
+      gap=@sf.keys_gap(size=@sf.theme().bars.key),
+    ),
+  )
+  c.box(style=row, fn() {
+    back_forward(c, site, n)
+    address_or_marking(c, src, p, site, name, fixed, n, end=Some(fn() { reload_key(c, site) }), part=load_part(load))
+    mark_key_of(c, p, site)
+    if p.moving {
       size_key_of(c, p)
-      mark_key_of(c, p, site)
-    })
-    |> ignore
+    } else {
+      foot_more(c, src, p, station, port, load)
+    }
   })
   |> ignore
 }
 
 ///|
-/// The bars under the page (service_foot_bar): on the page's ground (none of their own: what parts them from the page
-/// is where it ends); their two rows each as tall as a press's room (@ui.room_least), what is in them in their middle,
-/// so none takes another's room.
-// kept across runs: a value (no field of it changes)
-let foot_bar_box : @ui.Style = @ui.css("w=Full")
-
-///|
-/// Where it is and reload after it, 8 in at its sides, keys_gap apart.
-fn foot_address_row() -> @ui.Style {
-  foot_address_look.then(@ui.style(h=Fixed(@ui.room_least()), gap=@sf.keys_gap(size=@sf.theme().bars.key)))
+/// How far the page came, along the address's foot while its resources come (the accent), all of it red once one of
+/// them failed; none once all came.
+fn load_part(load : Json?) -> (Double, @ui.Color)? {
+  if !(load is Some(Object(_))) {
+    return None
+  }
+  if number(load, "failed") > 0.0 {
+    Some((1.0, Danger))
+  } else {
+    let k = number(load, "percent") / 100.0
+    if k >= 1.0 {
+      None
+    } else {
+      Some((dmax(0.0, k), Accent))
+    }
+  }
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let foot_address_look : @ui.Style = @ui.css("row w=Full px=S2 align=ACenter")
-
-///|
-/// Its keys spread across it (justified), the first and the last as far in as the address's ends (foot_keys_in) where
-/// no corner of a panel's is to be followed.
-fn foot_keys_row() -> @ui.Style {
-  foot_keys_look.then(@ui.style(h=Fixed(@ui.room_least())))
+/// The foot bar's ⋯: its size (its choices in the presenters' sheet), how far each of its resources came (a sheet).
+fn foot_more(c : @ui.Ctx, src : Source, p : ServicePage, station : String, port : Int, load : Json?) -> Unit {
+  let more = c.id("service/more")
+  if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+    let lines : Array[@sf.MenuItem?] = [
+      Some(bar_line(size_said(p), "devices", disabled=false, on_press=fn() {
+        service_sizes_panel(service_key(p.station, p.job), Of(more))
+      })),
+    ]
+    if load is Some(Object(_)) {
+      lines.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
+    }
+    @sf.menu(lines, from=Of(more))
+  }
 }
 
 ///|
+/// The bar under the page (service_foot_bar): on the page's ground (none of its own: what parts it from the page is
+/// where it ends), a press's room high (@ui.room_least) over what lifts its keys into a panel's foot corners, its keys
+/// keys_gap apart, the address taking what they leave (160 at least: a phone's 360 holds it, its four keys and their
+/// rooms just so).
 // kept across runs: a value (no field of it changes)
-let foot_keys_look : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
+let foot_row_look : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
-/// How far in the keys under the address stand at its sides: as far as its capsule's ends (its row's 8, its room's 4).
-let foot_keys_in : Double = 12.0
+/// How far in its first and last keys stand at its sides where no corner of a panel's is to be followed: as a page
+/// bar's, 8.
+let foot_keys_in : Double = 8.0
 
 ///|
 /// Back and forward in the page's own history.
@@ -304,7 +325,8 @@ fn load_key(c : @ui.Ctx, src : Source, station : String, port : Int, load : Json
 }
 
 ///|
-/// Where it is (previewAddress: its name, then its path, typed to go elsewhere), or what marking says in its place.
+/// Where it is (previewAddress: its name, then its path, typed to go elsewhere), or what marking says in its place;
+/// `end` and `part` as @sf.bar_field has them (reload at its end, how far the page came along its foot).
 fn address_or_marking(
   c : @ui.Ctx,
   src : Source,
@@ -313,6 +335,8 @@ fn address_or_marking(
   name : String,
   fixed : Bool,
   n : BarNow,
+  end? : (() -> Unit)? = None,
+  part? : (Double, @ui.Color)? = None,
 ) -> Unit {
   let t = @sf.theme()
   let markable = p.session != ""
@@ -320,7 +344,7 @@ fn address_or_marking(
     c.box(style=mark_mode_place, keep=true, fn() { page_mark_mode(c, src, p, site) }) |> ignore
     return
   }
-  @sf.bar_field(c, n.pill, n.editing, fn() {
+  @sf.bar_field(c, n.pill, n.editing, end~, part~, fn() {
     @sf.icon(c, "web", size=t.bars.icon, color=t.p.muted) |> ignore
     if fixed {
       // nowhere else to go (a visualization): the address is only its name
