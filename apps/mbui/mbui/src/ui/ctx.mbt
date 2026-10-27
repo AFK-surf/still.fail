@@ -338,6 +338,9 @@ pub struct Ctx {
   mut editor_drag : Bool
   /// the field whose caret handle a finger drags (0 none), and how far under the handle's tip the finger came down
   mut handle_drag : Int
+  /// the loupe asked for this frame (Ctx::loupe)
+  mut loupe_asked : Bool
+  mut loupe_reach : Double
   /// Android's: the field a finger came down on, which a tap gives the focus as it lifts (0 none)
   mut editor_tap : Int
   /// which handle `handle_drag` is: 1 the caret's, 2 the selection's start, 3 its end
@@ -624,6 +627,8 @@ fn Ctx::new() -> Ctx {
     vel: 0.0,
     editor_drag: false,
     handle_drag: 0,
+    loupe_asked: false,
+    loupe_reach: 0.0,
     editor_tap: 0,
     handle_which: 0,
     word_drag: 0,

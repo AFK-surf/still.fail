@@ -45,6 +45,8 @@
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
+//   holdon MS DX DY MOVE TEXT   held still on the lowest TEXT (or @X,Y) MS, then dragged DX DY over MOVE ms (a long
+//                               press slid on)
 //   backswipe DX [MS] [right] [off]  the system's back gesture (Android's predictive back) from the left edge (right:
 //                               the right's), DX across over MS (300 by default), a step a frame, then gone through
 //                               (off: called off)
@@ -703,7 +705,10 @@ fn drive_steps(c : Ctx) -> Unit {
     return
   }
   if d.gms > 0.0 {
-    // a drag on its way: a move this frame, lifted once all the way
+    // a drag on its way: a move this frame, lifted once all the way (`holdon`'s held still till it sets out)
+    if now < d.gt0 {
+      return
+    }
     let f = dmin((now - d.gt0) / d.gms, 1.0)
     let x = d.gx + d.gdx * f
     let y = d.gy + d.gdy * f
@@ -965,6 +970,44 @@ fn drive_steps(c : Ctx) -> Unit {
         d.rx = x
         d.ry = y
         d.release_at = now + ms
+        return
+      }
+      "holdon" => {
+        // `holdon MS DX DY MOVE TEXT`: held still on TEXT MS, then dragged DX DY over MOVE ms (a long press slid on)
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        if words.length() < 5 {
+          drive_fail(c, d, "holdon MS DX DY MOVE TEXT")
+          return
+        }
+        let what = words[4:].to_owned().join(" ")
+        // (`@X,Y`: there, words in a field being none of what is on screen to find)
+        let at = if what.has_prefix("@") {
+          match what.find(",") {
+            Some(i) => {
+              let x = number(what.unsafe_substring(start=1, end=i))
+              [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
+            }
+            None => []
+          }
+        } else {
+          reachable(c, what)
+        }
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        d.gx = x
+        d.gy = y
+        d.gdx = number(words[1])
+        d.gdy = number(words[2])
+        d.gms = dmax(number(words[3]), 16.0)
+        d.gt0 = now + number(words[0])
+        h_log("DRIVE holdon \{arg} from \{x.to_int()},\{y.to_int()}")
+        tell_step(d.steps[d.at], Acted)
+        on_pointer(0, x, y, 0)
         return
       }
       "drag" | "dragon" => {
