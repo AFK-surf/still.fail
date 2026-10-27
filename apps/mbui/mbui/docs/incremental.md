@@ -62,18 +62,27 @@ and the scale are as they were.
 
 ## Held by the tests
 
-Every test runs twice, with what is kept drawn again where it can be and with everything built every frame
-(`MBUI_KEPT=again` and `built`), and the two must come out the same at every frame: what is drawn, what is said
-(Tester::said), what is read out. The first frame they part at says which test and which frame; dumping both there
-shows what was read and not followed. Each step below is merged only with this check green.
+Whatever work a frame skips, a Tester draws that frame whole after it as well, and the two must come out the same:
+the instances drawn, and what they ask for next. The first frame they part at fails the test, saying the frame, the
+instance and the value. So every test holds every way of skipping work as it comes in, and each step below is merged
+only with all of them green (frame_watch.mbt, `looks_check`).
 
 ## The way there
 
-1. The check above, for every test (scripts/kept_check.sh), in CI.
-2. The view's own state into signals: the pointer, presses, the focus, what is picked, scrolling, the current input;
-   `outside_events`, `held`, `pointed` and `came_built` go.
-3. Motions as `animated(target)`, read in the phase that uses them, unread not stepped; the motion package's told
-   moves and the movers go.
-4. What is built as a value, a list's row first (in place of kept_rows.mbt), then a pane and a page (in place of
+1. Measured: still.fail's scenes offscreen (scripts/appbench.sh) and on a phone (scripts/appbench_phone.sh), what each
+   frame built, laid out and drew, how long each took and what asked for it (Tester::wanted_why); each step below
+   compared with the one before it.
+2. The whole frame first: its work runs under one watch of what it reads (signals' Watch, frame_watch.mbt), and it is
+   built again only where that changed. The clock is a signal (Ctx::now reads it followed; what changes only at a
+   moment reads it as one and wakes then), the host's settings are one (frame_env), and what is no signal yet is
+   counted into two (outside_said, inputs_said: what came from outside, the hand). A frame where nothing it read
+   changed but its looks by the clock (a spinner, the spokes, a breath: cycle_look.mbt) draws the last frame's
+   instances, each look applied at its time.
+3. The view's own state into signals (the pointer, presses, the focus, what is picked, scrolling, the current input) and
+   the app's (its store's, its timers'): `outside_said` and `inputs_said` go, with `outside_events`, `held`, `pointed` and
+   `came_built`.
+4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped: a move, a slide, a fade read
+   as it is drawn, so their frames are of the looks alone too; the motion package's told moves and the movers go.
+5. What is built as a value, a list's row first (in place of kept_rows.mbt), then a pane and a page (in place of
    kept_part.mbt).
-5. The replay, said.mbt's recording and src/damage's comparing go; only the instances that changed are sent.
+6. The replay, said.mbt's recording and src/damage's comparing go; only the instances that changed are sent.

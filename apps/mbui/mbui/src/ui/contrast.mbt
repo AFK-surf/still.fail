@@ -643,5 +643,7 @@ pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_le
   inst_owners_clear()
   self.frame()
   inst_owners.on = false
+  // (drawn as before from the next frame on, built whole: frame_watch.mbt)
+  test_stepped()
   c.contrast_faults_drawn(marks)
 }

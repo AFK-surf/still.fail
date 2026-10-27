@@ -34,6 +34,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
+  looks_reset()
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
@@ -63,7 +64,6 @@ fn reset_globals() -> Unit {
   in_frame.val = false
   building.val = false
   messages_reset()
-  step_reset()
   drop_reset()
   image_cache.clear()
   views_told_text.clear()
@@ -184,6 +184,8 @@ fn leaked_state() -> Array[String] {
 /// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
 /// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
 /// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt).
+/// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt).
+#callsite(autofill(loc))
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -209,6 +211,7 @@ pub fn Tester::new(
   live? : Live,
   corners_held? : Bool = true,
   window_corner? : Double = 0.0,
+  loc~ : SourceLoc,
 ) -> Tester {
   let f = {
     time,
@@ -347,6 +350,9 @@ pub fn Tester::new(
   // Tester::keep_parts)
   parts_on.val = false
   drawn_again_on.val = true
+  // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
+  looks_check.val = true
+  looks_made_at.val = loc.to_string()
   said_log.on = false
   said_log.built.reset()
   said_log.sb.reset()
@@ -489,9 +495,15 @@ pub let first_frame_ms : Double = 1000.0 / 60.0
 ///|
 /// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
 /// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
+/// What the test changed before it shows in it: a step of the test's, as an event from outside is (frame_watch.mbt).
 pub fn Tester::frame(self : Tester, ms? : Double = 0.0) -> Unit {
-  // (what the test changed before it: built, not stepped, step_frame.mbt)
-  step_test_changed()
+  test_stepped()
+  self.clock_frame(ms~)
+}
+
+///|
+/// The display's next frame (Tester::frame), nothing said changed: what the time alone does.
+fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
   let next = self.tick_after(self.fake.time)
   let want = self.fake.time + ms
   if ms > 0.0 && !self.host_frames {

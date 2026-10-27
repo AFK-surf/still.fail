@@ -13,6 +13,8 @@
 // the node drew (all its instances' rects together, as it is drawn there), moved by the look's offset. A recording
 // keeps the cycles of the tags it holds (KeptPart's `cycles`), so a look drawn again goes on from the cycle its build
 // said. Pictures, glass and native views in it are drawn as they are.
+// A frame where nothing but these looks changed is of them alone: the last frame's instances, each look applied at its
+// time, nothing built, laid out or painted (frame_watch.mbt).
 
 ///|
 /// A look by the clock: a cycle of `period` ms, stepping on the resident clock (`resident`, Ctx::cycle's) or each
@@ -145,13 +147,14 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
   for tag, _ in boxes {
     match cycle_frame.get(tag) {
       Some(cy) => {
-        let (f, next) = cy.at(self.now)
+        let (f, next) = cy.at(self.clock)
         looks[tag] = (cy.look)(f)
         if !self.cycles.iter().any(fn(c) { c.1.to_string() == cy.loc.to_string() }) {
           self.cycles.push((cy.period, cy.loc))
         }
         if next < 0.0 {
           self.cycling = true
+          looks_own.cycling = true
         } else if next < @double.infinity {
           self.wake_at_time(next, later=true)
         }

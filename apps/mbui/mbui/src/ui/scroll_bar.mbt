@@ -512,7 +512,15 @@ fn Ctx::across_bars(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
 /// Bar `b` drawn as it shows now (none while hidden), its thumb a target for a mouse.
 fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
   guard self.bar_owner(b.id) is Some((bar, until, theme)) else { return }
-  let shown = bar.shown(self.now, until) * alpha
+  // (the clock followed only while it fades in or out: shown or hidden, it is the same each frame, woken as it begins
+  // to hide)
+  let hide = bar.hides_at(until)
+  let t = self.clock
+  let fading = t < bar.in_at + scrollbar_fade_ms || (t >= hide && t < hide + scrollbar_fade_ms)
+  if !fading && t < hide && hide < @double.infinity {
+    self.wake_at_time(hide, later=true)
+  }
+  let shown = bar.shown(if fading { self.now() } else { t }, until) * alpha
   if shown <= 0.002 {
     return
   }
@@ -582,14 +590,14 @@ fn Ctx::bar_pointer(self : Ctx, x : Double, y : Double) -> Unit {
   match self.bar_owner(self.bar_near) {
     Some((b, _, _)) => {
       b.near = false
-      b.near_left = self.now
+      b.near_left = self.clock
       self.bar_moved(self.bar_near)
     }
     None => ()
   }
   match self.bar_owner(at) {
     Some((b, until, _)) => {
-      b.wake(self.now, until)
+      b.wake(self.clock, until)
       b.near = true
       self.bar_moved(at)
     }
@@ -611,7 +619,7 @@ fn Ctx::bar_press(self : Ctx, target : Int) -> Bool {
     if b.thumb == target {
       match self.bar_owner(b.id) {
         Some((bar, until, _)) => {
-          bar.wake(self.now, until)
+          bar.wake(self.clock, until)
           bar.held = true
           // (what moved by itself stops where it is)
           match self.lists.get(b.id) {
@@ -678,7 +686,7 @@ fn Ctx::bar_let_go(self : Ctx) -> Unit {
   match self.bar_owner(self.bar_drag) {
     Some((b, _, _)) => {
       b.held = false
-      b.let_go = self.now
+      b.let_go = self.clock
       self.bar_moved(self.bar_drag)
     }
     None => ()

@@ -70,7 +70,7 @@ pub fn Ctx::cover(
   s.seen = self.frame_no
   if at != s.to {
     // where it is now, as a blend: what it set out from by 1 - p, the item it went to by p; from there to `at`
-    let p = s.path.value(self.now)
+    let p = s.path.value(self.now_before(s.path.end()))
     let from : Array[(Int, Double)] = []
     let mut put_to = false
     for e in s.from {
@@ -87,7 +87,7 @@ pub fn Ctx::cover(
     s.from = from
     s.to = at
     s.path.put(0.0)
-    s.path.go(self.now, 1.0)
+    s.path.go(self.clock, 1.0)
   }
   if self.still() {
     s.path.put(1.0)
@@ -97,7 +97,7 @@ pub fn Ctx::cover(
     items,
     from: s.from,
     to: s.to,
-    p: s.path.value(self.now),
+    p: s.path.value(self.now_before(s.path.end())),
     look,
     theme: self.theme,
     direction: self.direction,

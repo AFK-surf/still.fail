@@ -73,16 +73,16 @@ pub fn Ctx::held(
     return false
   }
   if w.last >= 0.0 {
-    w.held = w.held + (self.now - w.last)
+    w.held = w.held + (self.clock - w.last)
   }
-  w.last = self.now
+  w.last = self.clock
   // (at its wake it has held: the time added up a frame at a time comes to `ms` short by a rounding at most, and that
   // is not a frame more to wait)
   if w.held >= ms - held_slack_ms {
     w.due = -1.0
     true
   } else {
-    w.due = self.now + (ms - w.held)
+    w.due = self.clock + (ms - w.held)
     self.wake_in(ms - w.held, later~, loc~)
     false
   }
@@ -115,16 +115,20 @@ fn Ctx::sweep_helds(self : Ctx) -> Unit {
 ///|
 /// What `id` names happened now (letters typed, a tip closed): Ctx::within asks how long ago.
 pub fn Ctx::mark(self : Ctx, id : Int) -> Unit {
-  marks_at[id] = self.now
+  marks_at[id] = self.clock
 }
 
 ///|
-/// Whether what `id` names was marked (Ctx::mark) less than `ms` (a declared length) ago. Nothing is woken when that
-/// ends: what asks it asks at a frame of its own (the next letter typed, the next tip hovered).
+/// Whether what `id` names was marked (Ctx::mark) less than `ms` (a declared length) ago: woken as that ends, later
+/// (nothing waits on it), so what read it is built again then.
 pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
   match marks_at.get(id) {
-    Some(at) => self.now - at < ms
-    None => false
+    Some(at) if self.clock - at < ms => {
+      // (what reads it read so till then: drawn again as it ends)
+      self.wake_at_time(at + ms, later=true)
+      true
+    }
+    _ => false
   }
 }
 

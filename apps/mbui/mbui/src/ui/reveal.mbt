@@ -109,7 +109,7 @@ pub fn Ctx::reveal_from(self : Ctx, x : Double, y : Double, dark? : () -> Bool) 
   reveal.y = y
   reveal.dark = dark_now()
   reveal.dark_now = dark_now
-  reveal.asked = self.now
+  reveal.asked = self.clock
 }
 
 ///|
@@ -133,15 +133,15 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
       reveal_drop()
       return
     }
-    reveal.start = self.now
-    let run : RevealRun = { end: self.now + reveal_ms }
+    reveal.start = self.clock
+    let run : RevealRun = { end: self.clock + reveal_ms }
     self.moving(reveal.mover, run as &Moving, what="the theme's reveal")
   }
-  let p = if reveal.start < 0.0 { 1.0 } else { (self.now - reveal.start) / reveal_ms }
+  let p = if reveal.start < 0.0 { 1.0 } else { (self.now() - reveal.start) / reveal_ms }
   if p >= 1.0 {
     // not set out (or done): the view as it is, the picture hidden
     self.look(picture, look(alpha=0.0))
-    if reveal.start >= 0.0 || self.now - reveal.asked > reveal_wait_most {
+    if reveal.start >= 0.0 || self.now() - reveal.asked > reveal_wait_most {
       reveal_drop()
     }
     return

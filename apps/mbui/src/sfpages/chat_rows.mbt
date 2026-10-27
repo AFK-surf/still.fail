@@ -347,15 +347,15 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String), hot : Bool) 
   if key == st.key || words == st.words {
     st.key = key
     st.words = words
-  } else if c.now >= st.at + steady_dwell_ms {
+  } else if c.moment() >= st.at + steady_dwell_ms {
     st.was = st.words
     st.key = key
     st.words = words
-    st.at = c.now
+    st.at = c.moment()
     swap.snap(0.0)
     swap.animate(1.0, @motion.tween(steady_cross_ms, ease=Out))
   } else {
-    c.wake_in(st.at + steady_dwell_ms - c.now)
+    c.wake_in(st.at + steady_dwell_ms - c.moment())
   }
   let k = swap.get()
   c.box(style=now_room, fn() {

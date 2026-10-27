@@ -494,7 +494,7 @@ fn parted_rows(mark : @signals.Signal[Int], spring : SpringPath, go : @signals.S
         c.kept_part(c.id("list_part"), "", fn() {
           c.list("parted", 30, 50.0, fn(i) {
             let words = if i == 3 { "row 3 mark \{mark.get()}" } else { "row \{i}" }
-            let w = if i == 5 { 40.0 + spring.value(c.now) } else { 40.0 }
+            let w = if i == 5 { 40.0 + spring.value(c.now()) } else { 40.0 }
             c.box(h=Px(50.0), padx=10.0, dir=Row, fn() {
               c.box(w=Px(w), h=Px(10.0), bg=0x3366CCFFL, fn() {  }) |> ignore
               c.text(words, size=12.0) |> ignore

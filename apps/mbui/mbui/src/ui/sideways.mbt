@@ -174,22 +174,22 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
   if !st.held && st.rest >= 0.0 {
     if st.t0 == @double.infinity {
       // its first step: it sets out now, its way solved once (where it stops, when)
-      st.fling_from(self.now)
+      st.fling_from(self.clock)
     }
-    if self.now >= st.rest {
+    if self.clock >= st.rest {
       st.x = st.x_end
       // (its bar fades from the fling's end)
       st.last_scroll = dmax(st.last_scroll, st.rest)
       st.rest = -1.0
       st.vel = 0.0
     } else {
-      st.x = fling_at(st.x0, st.v0, self.now - st.t0)
+      st.x = fling_at(st.x0, st.v0, self.now() - st.t0)
     }
   }
   st.x = dclamp(st.x, 0.0, dmax(st.max, 0.0))
   // (where its fling and its bar have it, read by what is built round it, a part or a row kept: built again as it is
   // told anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion)
-  self.shows_motion(st.mover, dmax(st.fling_rest(), st.bar.rest(self.now, st.bar_until())) > self.now)
+  self.shows_motion(st.mover, dmax(st.fling_rest(), st.bar.rest(self.clock, st.bar_until())) > self.clock)
   st
 }
 
@@ -265,8 +265,8 @@ impl Moving for Sideways with rest_at(self, now, frame) {
 /// Box `st` scrolled now (a finger, the wheel, its thumb, sent to its end or to a part where it showed): its bar shows
 /// (and then fades) from now, said as what moves.
 fn Ctx::sideways_scrolled(self : Ctx, st : Sideways) -> Unit {
-  st.bar.wake(self.now, st.bar_until())
-  st.last_scroll = self.now
+  st.bar.wake(self.clock, st.bar_until())
+  st.last_scroll = self.clock
   self.moving(st.mover, st as &Moving, what="a box scrolled inside a list and its scroll bar")
 }
 

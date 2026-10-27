@@ -812,7 +812,7 @@ pub fn Ctx::rich(
         if moved {
           break
         }
-        let held = self.now - self.press_at
+        let held = self.now() - self.press_at
         if held < long_press_ms {
           self.wake_in(long_press_ms - held)
           break

@@ -759,7 +759,7 @@ pub fn Ctx::editor(
     }
     (Some(s), None) => s
     (None, None) => {
-      let s = EditorState::fresh("", self.now)
+      let s = EditorState::fresh("", self.clock)
       self.editors[id] = s
       self.own(id)
       s
@@ -800,7 +800,7 @@ pub fn Ctx::editor(
               desk.pasted[id] = [(pasted_picture_name, png)]
               self.read_changed("a picture pasted")
             }
-            _ => if got.text != "" { st.text_input(text_paste, got.text, 0, 0, self.now) }
+            _ => if got.text != "" { st.text_input(text_paste, got.text, 0, 0, self.clock) }
           }
         }
         None => ()
@@ -813,7 +813,7 @@ pub fn Ctx::editor(
       st.marked = ""
       st.anchor = 0
       st.caret = st.text.length()
-      st.text_input(0, t, 0, 0, self.now)
+      st.text_input(0, t, 0, 0, self.clock)
     }
     None => ()
   }
@@ -824,13 +824,13 @@ pub fn Ctx::editor(
     self.down &&
     !self.dragging &&
     self.held_told != self.press_at {
-    let held = self.now - self.press_at
+    let held = self.now() - self.press_at
     if held >= long_press_ms {
       self.held_told = self.press_at
       self.take_press()
       self.editor_tap = 0
       self.focus = id
-      if st.pick_word(self.press_x, self.press_y, self.now) {
+      if st.pick_word(self.press_x, self.press_y, self.clock) {
         self.word_drag = id
       }
       haptic(LongPress)
@@ -840,7 +840,7 @@ pub fn Ctx::editor(
   }
   if st.blink_again {
     st.blink_again = false
-    st.blink0 = self.now
+    st.blink0 = self.clock
   }
   st.line = line
   st.color = color
@@ -1047,8 +1047,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   }
   // caret
   if focused {
-    let since = self.now - st.blink0
-    let (phase, next) = periods_at(self.now, st.blink0, caret_blink())
+    let since = self.clock - st.blink0
+    let (phase, next) = periods_at(self.clock, st.blink0, caret_blink())
     // blinking till caret_blinks_for_ms, then shown at rest
     let resting = since >= caret_blinks_for_ms
     if !resting {
@@ -1346,10 +1346,10 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
       st.caret = text.length()
       st.anchor = st.caret
       st.upstream = -1
-      st.blink0 = self.now
+      st.blink0 = self.clock
     }
     None => {
-      let st = EditorState::fresh(text, self.now)
+      let st = EditorState::fresh(text, self.clock)
       self.editors[id] = st
       self.own(id)
     }
@@ -1599,14 +1599,14 @@ pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -
     Some(st) => {
       if what == @hostapi.text_menu_paste {
         if paste != "" {
-          st.text_input(text_paste, paste, 0, 0, self.now)
+          st.text_input(text_paste, paste, 0, 0, self.clock)
         }
       } else if what == @hostapi.text_menu_cut {
-        st.key(key_cut, 0, self.now)
+        st.key(key_cut, 0, self.clock)
       } else if what == @hostapi.text_menu_copy {
-        st.key(key_copy, 0, self.now)
+        st.key(key_copy, 0, self.clock)
       } else if what == @hostapi.text_menu_select_all {
-        st.key(key_select_all, 0, self.now)
+        st.key(key_select_all, 0, self.clock)
       }
       self.focus_on(id)
       self.read_changed("a field edited")

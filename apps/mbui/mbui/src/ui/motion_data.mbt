@@ -78,7 +78,7 @@ pub fn Ctx::moving(self : Ctx, who : Mover, m : &Moving, what? : String = "", lo
 pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Double {
   self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
   if self.in_frame() {
-    self.now
+    self.clock
   } else {
     self.owe_frame()
     h_now()
@@ -120,7 +120,7 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
   // (what a sample sets out anew is handed the time from the next frame)
   let n = self.movers.length()
   for i in 0..<n {
-    self.movers[i].m.sample(self.now)
+    self.movers[i].m.sample(self.now())
   }
 }
 
@@ -143,8 +143,8 @@ pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Un
 fn Ctx::moving_now(self : Ctx) -> Array[String] {
   let out = []
   for e in self.movers {
-    let r = e.m.rest_at(self.now, self.frame_no)
-    if r > self.now {
+    let r = e.m.rest_at(self.clock, self.frame_no)
+    if r > self.clock {
       let at = if r == @double.infinity { "not started" } else { "at rest at \{r} ms" }
       out.push(e.what + " (" + at + ")")
     }
@@ -176,10 +176,10 @@ pub fn Ctx::every(
   }
   let gone = match elapsed {
     Some(e) => e
-    None => self.now - from
+    None => self.clock - from
   }
   if gone < 0.0 {
-    self.wake_at_time(self.now - gone, later=true)
+    self.wake_at_time(self.clock - gone, later=true)
     return 0
   }
   // the next period's start: a wake the test's idle does not wait for (it comes for as long as it is shown); counted
@@ -188,10 +188,10 @@ pub fn Ctx::every(
     Some(_) => {
       let n = (gone / period).floor()
       // (on a period's start, the division a hair short of it: that period begun, as periods_at counts)
-      let n = if self.now + period - (gone - period * n) <= self.now { n + 1.0 } else { n }
-      (n.to_int(), self.now + period - (gone - period * n))
+      let n = if self.clock + period - (gone - period * n) <= self.clock { n + 1.0 } else { n }
+      (n.to_int(), self.clock + period - (gone - period * n))
     }
-    None => periods_at(self.now, from, period)
+    None => periods_at(self.clock, from, period)
   }
   self.wake_at_time(next, later=true)
   n
@@ -228,13 +228,13 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
     return 0.0
   }
   let at = if resident {
-    let step = (self.now / cycle_step_ms).floor()
+    let step = (self.clock / cycle_step_ms).floor()
     self.wake_at_time((step + 1.0) * cycle_step_ms, later=true)
     step * cycle_step_ms
   } else {
     self.cycling = true
     part_live()
-    self.now
+    self.now()
   }
   let p = at / period
   p - p.floor()
@@ -252,8 +252,8 @@ pub fn Ctx::loop_at(self : Ctx, length : Double, ends : Array[Double], loc~ : So
   if length <= 0.0 {
     return 0.0
   }
-  let laps = (self.now / length).floor()
-  let t = self.now - laps * length
+  let laps = (self.clock / length).floor()
+  let t = self.clock - laps * length
   let mut next = length
   for e in ends {
     if e > t {
@@ -272,8 +272,8 @@ fn Ctx::motion_owed(self : Ctx) -> Bool {
   let mut owed = false
   self.motion_unstarted = false
   self.movers.retain(fn(e) {
-    let r = e.m.rest_at(self.now, self.frame_no)
-    if r > self.now {
+    let r = e.m.rest_at(self.clock, self.frame_no)
+    if r > self.clock {
       owed = true
       if r == @double.infinity {
         self.motion_unstarted = true
@@ -291,7 +291,7 @@ fn Ctx::motion_owed(self : Ctx) -> Bool {
 fn Ctx::motion_end(self : Ctx) -> Double {
   let mut last = -1.0
   for e in self.movers {
-    let r = e.m.rest_at(self.now, self.frame_no)
+    let r = e.m.rest_at(self.clock, self.frame_no)
     if r > last {
       last = r
     }
@@ -387,15 +387,15 @@ pub impl Moving for SpringPath with rest_at(self, now, frame) {
 #callsite(autofill(loc))
 pub fn SpringPath::go_at(self : SpringPath, c : Ctx, to : Double, v? : Double, loc~ : SourceLoc) -> Unit {
   match v {
-    Some(v) => self.go(c.now, to, v~, loc~)
-    None => self.go(c.now, to, loc~)
+    Some(v) => self.go(c.clock, to, v~, loc~)
+    None => self.go(c.clock, to, loc~)
   }
 }
 
 ///|
 /// Where it is at this frame's time (`c`'s clock).
 pub fn SpringPath::value_at(self : SpringPath, c : Ctx) -> Double {
-  self.value(c.now)
+  self.value(c.now_before(self.end))
 }
 
 ///|

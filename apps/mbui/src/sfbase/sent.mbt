@@ -141,7 +141,7 @@ pub fn sent_local(
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
       progress: None,
       uploads: cards,
-      created_at: @ui.current().now,
+      created_at: @ui.current().moment(),
       final: false,
     },
     // (a chat just made: none)

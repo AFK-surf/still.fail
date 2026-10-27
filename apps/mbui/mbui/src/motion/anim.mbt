@@ -78,10 +78,11 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
       // it starts at the next frame
       return
     }
-    self.start = c.now()
+    self.start = c.moment()
     // (said to move again: not read in the frame it was to start in, it had been let be)
     c.moving_as(self.id, self as &@ui.Moving, self.told)
   }
+  // (going: what reads it reads the clock, built again each frame: frame_watch.mbt)
   let ms = c.now() - self.start
   match (self.gen, self.spec) {
     (Some(g), Motion(tr)) => {
@@ -165,7 +166,7 @@ pub fn Anim::ends(self : Anim) -> Double {
 /// not before it starts; with motion reduced, as it was told.
 pub fn Anim::over(self : Anim) -> Bool {
   let c = @ui.current()
-  let over = (self.start < 0.0 && self.asked < 0) || c.now() >= self.ends()
+  let over = (self.start < 0.0 && self.asked < 0) || c.moment() >= self.ends()
   // (what is built from it changes as it is told, and at its end, or the next frame where it starts then)
   c.shows_motion(self.id, !over && self.ends() == @double.infinity)
   if !over && self.ends() < @double.infinity {
@@ -242,13 +243,13 @@ pub fn Anim::animate(
     Some(at) => {
       // (the motion before done at its end as whole_ms has it, its end summed another way than now: the same moment,
       // 4066.666666666667 for 4066.6666666666665, from now)
-      if at > c.now() + @ui.same_moment_ms {
-        let s = "Anim::animate: start_at \{at} is later than now (\{c.now()}), told at \{loc}"
+      if at > c.moment() + @ui.same_moment_ms {
+        let s = "Anim::animate: start_at \{at} is later than now (\{c.moment()}), told at \{loc}"
         println(s)
         abort(s)
       }
-      if at > c.now() {
-        c.now()
+      if at > c.moment() {
+        c.moment()
       } else {
         at
       }
@@ -263,10 +264,10 @@ pub fn Anim::animate(
   if c.still() {
     self.dur = 0.0
     if self.start < 0.0 {
-      self.start = c.now()
+      self.start = c.moment()
     }
   }
-  let over = start_at is Some(at) && at + self.dur <= c.now()
+  let over = start_at is Some(at) && at + self.dur <= c.moment()
   if c.still() || over || (self.dur <= 0.0 && self.from == self.end) {
     // (there at once: what was built from where it was, built again)
     if self.value != self.end {
@@ -364,7 +365,7 @@ pub fn animate(
     a.follow(target, spec, loc~)
   }
   if a.running && logging() {
-    @ui.log("MOTION \{c.now()} \{key} value=\{a.value} to=\{a.target}")
+    @ui.log("MOTION \{c.moment()} \{key} value=\{a.value} to=\{a.target}")
   }
   // (read so: what reads it is built again as it is told and each frame while it goes, Anim::get)
   a.get()

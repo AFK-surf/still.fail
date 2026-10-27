@@ -50,6 +50,7 @@ let outside_due : Ref[(() -> Double)?] = Ref::new(None)
 ///|
 fn messages_reset() -> Unit {
   fake_posted.clear()
+  messages_in.clear()
   post_wakes.val = 0
   messages_handed.val = 0
   tape.val = None
@@ -101,29 +102,47 @@ fn fake_post(f : FakeHost, channel : String, json : String, bytes : Bytes?) -> U
 }
 
 ///|
-/// As a frame begins: all that was posted since the last, taken and handed to their handlers in the order posted
-/// (app.mbt frame_body). What is posted meanwhile (a handler's own post, the other thread's) is the next frame's.
+/// What was posted since the last frame, taken as this one begins (messages_arrive), for its build to hand on.
+// kept across runs: taken as each frame begins, handed on by its build (take_messages)
+let messages_in : Array[(String, String, Bytes?)] = []
+
+///|
+/// As a frame begins, before it is decided what it does again (frame_watch.mbt): all that was posted since the last,
+/// taken from the host in the order posted, said come from outside where any came (so the frame is built and hands
+/// them on: take_messages).
+fn messages_arrive() -> Unit {
+  match fake.val {
+    Some(_) =>
+      if fake_posted.length() > 0 {
+        for m in fake_posted {
+          messages_in.push(m)
+        }
+        fake_posted.clear()
+      }
+    None =>
+      if @hostapi.post_take() > 0 {
+        while @hostapi.post_next() is Some((channel, json, b)) {
+          messages_in.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
+        }
+      }
+  }
+  if messages_in.length() > 0 {
+    outside_counted()
+  }
+}
+
+///|
+/// As a frame is built: all that was posted since the last (messages_arrive), handed to their handlers in the order
+/// posted (app.mbt frame_body). What is posted meanwhile (a handler's own post, the other thread's) is the next frame's.
 fn take_messages() -> Unit {
   messages_handed.val = 0
-  match fake.val {
-    Some(_) => {
-      if fake_posted.length() == 0 {
-        return
-      }
-      let taken = fake_posted.copy()
-      fake_posted.clear()
-      for m in taken {
-        hand_on(m.0, m.1, m.2)
-      }
-    }
-    None => {
-      if @hostapi.post_take() == 0 {
-        return
-      }
-      while @hostapi.post_next() is Some((channel, json, b)) {
-        hand_on(channel, json, if b.length() > 0 { Some(b) } else { None })
-      }
-    }
+  if messages_in.length() == 0 {
+    return
+  }
+  let taken = messages_in.copy()
+  messages_in.clear()
+  for m in taken {
+    hand_on(m.0, m.1, m.2)
   }
 }
 

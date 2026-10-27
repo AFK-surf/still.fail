@@ -130,7 +130,7 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
   if self.held_told == self.press_at {
     return false
   }
-  let held = self.now - self.press_at
+  let held = self.now() - self.press_at
   if held >= long_press_ms {
     self.held_told = self.press_at
     self.held_on = id

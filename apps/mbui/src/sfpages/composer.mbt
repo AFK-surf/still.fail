@@ -715,7 +715,8 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
             f
           }
         }
-        if w.focus == id {
+        // (the one the core says asks for the focus: none where it says none, a quote of its own with no id among them)
+        if w.focus != "" && w.focus == id {
           c.focus_editor(key)
           writing_focused(src, w)
         }

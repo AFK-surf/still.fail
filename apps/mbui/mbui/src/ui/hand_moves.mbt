@@ -189,15 +189,15 @@ pub fn Tester::hand_moves(self : Tester) -> Array[String] {
   let rest = c.hand_marks()
   c.lit_every = true
   c.lit_all = true
+  // (how it is drawn changed by the test: built whole, as the frame after it is, frame_watch.mbt)
+  test_stepped()
   self.fake.wants = false
-  step_test_changed()
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
   let faults = c.hand_faults(rest)
   c.lit_every = false
   c.lit_all = false
-  // (the frame after it built as before, not stepped from this one: step_frame.mbt)
-  step_test_changed()
+  test_stepped()
   frame_ended_outside()
   faults
 }

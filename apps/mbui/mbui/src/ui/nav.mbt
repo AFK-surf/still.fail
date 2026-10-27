@@ -236,7 +236,7 @@ fn[P] Nav::go(
   self.curve = curve
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
   // frame that builds it (Ctx::nav)
-  self.t0 = if in_frame.val { g().now } else { -1.0 }
+  self.t0 = if in_frame.val { g().clock } else { -1.0 }
   self.wait_from = -1.0
   self.waited = false
   // (a page brought in: its start moved on by how late its first frame is to the screen)
@@ -280,7 +280,7 @@ pub fn nav_rest() -> Double {
 /// When this stack's slide is over (the frames' clock; +inf: told to go, not started yet; -1: it is not sliding): what
 /// a test runs to.
 pub fn[P] Nav::rest(self : Nav[P]) -> Double {
-  self.rest_at(g().now, g().frame_no)
+  self.rest_at(g().clock, g().frame_no)
 }
 
 ///|
@@ -367,12 +367,12 @@ pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
       self.waited = true
       return
     }
-    self.wait_from = if self.t0 >= 0.0 { self.t0 } else { c.now }
+    self.wait_from = if self.t0 >= 0.0 { self.t0 } else { c.clock }
   }
-  if c.now >= self.wait_from + most || ready() {
+  if c.clock >= self.wait_from + most || ready() {
     self.waited = true
     if self.t0 == nav_held {
-      self.t0 = c.now
+      self.t0 = c.clock
       // (its first frame this one, the page built with what it shows)
       self.late_at = -1.0
       c.moving(self.mover, self as &Moving, what="a stack's slide")
@@ -406,9 +406,9 @@ fn[P] Nav::flat_held(self : Nav[P], c : Ctx) -> NavPage[P]? {
     Some(shown) if shown.serial != top.serial && self.flat_asked == c.frame_no && self.flat_frame >= c.frame_no - 1 => {
       if self.flat_for != top.serial {
         self.flat_for = top.serial
-        self.flat_from = c.now
+        self.flat_from = c.clock
       }
-      if c.now < self.flat_from + self.flat_most && !(self.flat_ready)() {
+      if c.clock < self.flat_from + self.flat_most && !(self.flat_ready)() {
         c.wake_at_time(self.flat_from + self.flat_most)
         Some(shown)
       } else {
@@ -612,14 +612,14 @@ pub fn[P] Ctx::nav(
   if nav.t0 == nav_held {
     // held for what the page pushed shows (Nav::comes_when): where it was, not moving yet; at rest by the latest its
     // slide could end (nav_rest)
-    let r = nav.rest_at(self.now, self.frame_no)
+    let r = nav.rest_at(self.clock, self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
   } else if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
     if nav.t0 < 0.0 {
       // it starts now: said to move again (not built in the frame it was to start in, it had been let be)
-      nav.t0 = self.now
+      nav.t0 = self.clock
       self.moving(nav.mover, nav as &Moving, what="a stack's slide")
     }
     // (over at the end it says, t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding, and a
@@ -628,8 +628,8 @@ pub fn[P] Ctx::nav(
     // told how late that one was to the screen
     if nav.waits_late {
       if nav.late_at < 0.0 {
-        nav.late_at = self.now
-      } else if self.now > nav.late_at {
+        nav.late_at = self.clock
+      } else if self.now() > nav.late_at {
         nav.waits_late = false
         let late = dmin(h_frame_late(), nav_late_most)
         if late > 0.0 {
@@ -639,10 +639,10 @@ pub fn[P] Ctx::nav(
       }
     }
     // (from where it starts until its start: a start moved on by how late its first frame was)
-    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur {
+    let t = if nav.dur <= 0.0 || self.clock >= nav.t0 + nav.dur {
       1.0
     } else {
-      dmax((self.now - nav.t0) / nav.dur, 0.0)
+      dmax((self.now() - nav.t0) / nav.dur, 0.0)
     }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
@@ -654,7 +654,7 @@ pub fn[P] Ctx::nav(
       }
       nav.gone.clear()
     }
-    let r = nav.rest_at(self.now, self.frame_no)
+    let r = nav.rest_at(self.clock, self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
@@ -810,7 +810,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 pub fn Ctx::back(self : Ctx) -> Bool {
   match self.back {
     Some(f) => {
-      f(4, 0.0, 1.0, self.now)
+      f(4, 0.0, 1.0, self.clock)
       self.read_changed("gone back")
       true
     }

@@ -57,14 +57,14 @@ pub fn Ctx::press(self : Ctx) -> Press {
   let mut p = { ..was, down, fresh, lifted }
   if fresh {
     p = { ..p, x: px, y: py, frame: self.frame_no, moved: false, long: false, mods: self.press_mods }
-    self.press_seen_at = self.now
+    self.press_seen_at = self.clock
   }
   // (a tap down and up between two frames: a press of its own, not the long one before it, gone down and let go there)
   if !down && !self.press_was_down {
     match self.tapped {
       Some((tx, ty)) => {
         p = { ..p, fresh: true, lifted: true, x: tx, y: ty, frame: self.frame_no, moved: false, long: false, mods: self.press_mods }
-        self.press_seen_at = self.now
+        self.press_seen_at = self.clock
       }
       None => ()
     }
@@ -73,7 +73,7 @@ pub fn Ctx::press(self : Ctx) -> Press {
     p = { ..p, moved: true }
   }
   if down && !p.moved && !p.long {
-    let held = self.now - self.press_seen_at
+    let held = self.now() - self.press_seen_at
     if held >= long_press_ms - held_slack_ms {
       p = { ..p, long: true }
     } else {

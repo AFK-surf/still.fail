@@ -772,7 +772,13 @@ pub let fix_turn_end_ms : Double = 700.0
 pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   match (fix_clock.val, fix_ctx.val) {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
-    (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_due.push(f) })
+    // (told as it is due, as the core tells a change it made: what read the made-up core is built again, and reads
+    // it then: fix_tick)
+    (None, Some(_)) =>
+      @ui.runtime().after(ms.ceil().to_int(), fn() {
+        fix_due.push(f)
+        @settings.fixture_changed()
+      })
     (None, None) => fix_unsaid.push((ms, f))
   }
 }

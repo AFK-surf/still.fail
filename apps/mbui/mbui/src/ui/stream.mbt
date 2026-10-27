@@ -318,8 +318,34 @@ fn stream_num(s : String) -> Double? {
 }
 
 ///|
-/// As the frame begins (frame_body, before the view builds): each stream's events since the last, its own then the
-/// host's, in the order said; the last frame said decoded is the one it shows from now (the host told to latch it).
+/// As a frame begins, before it is decided what it does again (frame_watch.mbt): what the host said of each stream
+/// since the last, taken after what it said itself; where any came, said come from outside (the frame is built and
+/// takes it: streams_frame_start).
+fn streams_arrive() -> Unit {
+  let mut came = false
+  for s in open_streams {
+    if s.closed || s.id == 0 {
+      continue
+    }
+    // (a bound, so a host that says without end cannot hold the frame)
+    for _ in 0..<256 {
+      let e = h_stream_next(s.id)
+      if e == "" {
+        break
+      }
+      s.own.push(e)
+      came = true
+    }
+  }
+  if came {
+    outside_counted()
+  }
+}
+
+///|
+/// As the frame is built (frame_body, before the view builds): each stream's events since the last, its own then the
+/// host's (streams_arrive), in the order said; the last frame said decoded is the one it shows from now (the host told
+/// to latch it).
 fn streams_frame_start() -> Unit {
   let c = g()
   for s in open_streams.copy() {
@@ -327,18 +353,9 @@ fn streams_frame_start() -> Unit {
       continue
     }
     s.taken = c.frame_no
+    // (what the host said of it, taken as the frame began: streams_arrive)
     let events = s.own.copy()
     s.own.clear()
-    if s.id != 0 {
-      // (a bound, so a host that says without end cannot hold the frame)
-      for _ in 0..<256 {
-        let e = h_stream_next(s.id)
-        if e == "" {
-          break
-        }
-        events.push(e)
-      }
-    }
     let latch : Ref[Double?] = Ref::new(None)
     let take = fn(e : String) {
       let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()

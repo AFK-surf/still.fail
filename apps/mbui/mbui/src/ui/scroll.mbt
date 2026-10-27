@@ -450,14 +450,14 @@ fn Ctx::absorb(self : Ctx, st : ListState, edge : Int, vel : Double) -> Unit {
   }
   st.over_edge = edge
   // the fling ends here, now; what it took springs out and back from now
-  st.last_scroll = self.now
+  st.last_scroll = self.clock
   let v = if kind == 2 {
     // pixels per second, times EdgeEffect's ON_ABSORB_VELOCITY_ADJUSTMENT
     (speed * 1000.0 * self.scale).round() * 13.0
   } else {
     speed
   }
-  self.spring_back(st, v, self.now)
+  self.spring_back(st, v, self.clock)
 }
 
 ///|
@@ -596,10 +596,10 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
   if st.vel != 0.0 && st.fling != 0 {
     // Android's and iOS's start at their first frame (Compose's playtime 0); the desktop's coast as it was let go
     if st.fling_t0 < 0.0 {
-      st.fling_t0 = self.now
+      st.fling_t0 = self.clock
     }
     let end = st.fling_t0 + st.fling_length()
-    let t = dmin(self.now, end) - st.fling_t0
+    let t = dmin(self.now_before(end), end) - st.fling_t0
     let sign = if st.fling_v < 0.0 { -1.0 } else { 1.0 }
     let (pos, vel) = match st.fling {
       1 => {
@@ -621,7 +621,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
     let d = pos - st.fling_done
     st.fling_done = pos
     self.feed(st, d, 2)
-    if self.now >= end {
+    if self.clock >= end {
       st.stop()
       // its scroll bar fades from the fling's end
       st.last_scroll = end
@@ -634,25 +634,25 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
     if scroll_kind() == 1 {
       st.over = rubber(st.over, st.vp_h)
     }
-    self.spring_back(st, 0.0, self.now)
+    self.spring_back(st, 0.0, self.clock)
   }
   if st.over_state == 2 {
     if st.back.t0 < 0.0 {
-      self.plan_back(st, self.now)
+      self.plan_back(st, self.clock)
     }
     let p = st.back
-    if self.now >= p.rest {
+    if self.clock >= p.rest {
       st.over = 0.0
       st.over_v = 0.0
       st.over_state = 0
       st.over_edge = 0
       st.last_scroll = p.rest
     } else if scroll_kind() == 2 {
-      let (x, v) = p.edge_now(dmax(st.vp_h * self.scale, 1.0), self.now)
+      let (x, v) = p.edge_now(dmax(st.vp_h * self.scale, 1.0), self.now())
       st.over = x
       st.over_v = v
     } else {
-      let (x, v) = rubber_at(p.x0, p.v0, self.now - p.t0)
+      let (x, v) = rubber_at(p.x0, p.v0, self.now() - p.t0)
       st.over = x
       st.over_v = v
     }
@@ -746,7 +746,7 @@ fn Ctx::log_scroll(self : Ctx) -> Unit {
       if moving || off != last_logged.val {
         last_logged.val = off
         let stretch = st.over * st.over_edge.to_double()
-        h_log("SCROLL \{self.now} \{off} \{stretch} \{st.vel}")
+        h_log("SCROLL \{self.clock} \{off} \{stretch} \{st.vel}")
       }
     }
     None => ()

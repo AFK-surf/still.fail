@@ -205,6 +205,8 @@ let outside_events : Ref[Int] = Ref(0)
 /// An event from outside came (kept_part.mbt's head): every part kept is built anew by the next frame.
 fn outside_came() -> Unit {
   outside_events.val = outside_events.val + 1
+  // (and what each frame's build reads of it: frame_watch.mbt)
+  outside_counted()
 }
 
 ///|
@@ -250,7 +252,6 @@ fn parts_frame_start(c : Ctx) -> Unit {
       parts_run.ctx = Some(c)
     }
   }
-  answers_by_the_frame()
   let steps = fx.val.steps
   if steps != parts_run.steps {
     parts_run.steps = steps
@@ -691,6 +692,10 @@ fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
 /// or not (a part's, a list's row's: kept_part.mbt's head).
 pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
   ignore(self)
+  // (going, what reads it reads the clock: built again each frame, frame_watch.mbt)
+  if going {
+    clock_read_here()
+  }
   if !part_building() {
     return
   }
@@ -712,7 +717,7 @@ pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
 /// What is being built changes at `t` (the frames' clock: a motion's declared end, read as whether it is over): built
 /// again in the first frame at or past it, kept as it was drawn or not.
 pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
-  part_wake(self.now, t, true)
+  part_wake(self.clock, t, true)
 }
 
 ///|
@@ -722,7 +727,7 @@ fn clock_frame_start(c : Ctx) -> Unit {
   kept_clock.frame.set(c.frame_no)
   let dues = kept_clock.dues
   let mut n = 0
-  while n < dues.length() && dues[n].at <= c.now {
+  while n < dues.length() && dues[n].at <= c.clock {
     dues[n].come.set(true)
     n = n + 1
   }

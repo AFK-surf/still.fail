@@ -340,7 +340,7 @@ fn h_frame_late() -> Double {
   match fake.val {
     Some(f) => {
       let c = g()
-      if f.late_after < 0.0 || c.now <= f.late_after {
+      if f.late_after < 0.0 || c.clock <= f.late_after {
         return 0.0
       }
       if f.late_frame < 0 {
@@ -440,6 +440,19 @@ let feel_over : Ref[Int] = { val: -1 }
 
 ///|
 fn h_request_frame() -> Unit {
+  // (asked from outside a frame: what asked changed what the view is built from, frame_watch.mbt)
+  if !in_frame.val && !frame_running.val {
+    outside_counted()
+  }
+  match fake.val {
+    Some(f) => f.wants = true
+    None => @hostapi.request_frame()
+  }
+}
+
+///|
+/// The host's next frame asked for what the frames' watch saw change (frame_watch.mbt): nothing come from outside.
+fn h_frame_owed() -> Unit {
   match fake.val {
     Some(f) => f.wants = true
     None => @hostapi.request_frame()

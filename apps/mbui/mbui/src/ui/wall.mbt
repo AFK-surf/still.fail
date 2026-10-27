@@ -14,6 +14,10 @@ pub let tester_wall : Double = 1790000000000.0
 ///
 ///   c.every(60000.0, elapsed=@ui.wall_ms() - t)   // its minutes' words change at each minute since t
 pub fn wall_ms() -> Double {
+  // (read as a view is built: said where a frame of its looks alone parts from it built whole, frame_watch.mbt)
+  if @signals.active_sub() is Some(_) {
+    wall_read.val = true
+  }
   h_wall_ms()
 }
 
