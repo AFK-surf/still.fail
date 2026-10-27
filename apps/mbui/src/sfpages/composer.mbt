@@ -368,11 +368,8 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
   let press = c.press()
   if press.fresh {
-    let within = match c.rect_of(cap) {
-      Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
-      None => false
-    }
-    composing.outside = !within && !@sf.presenting() && !composing.menu_up
+    // (on the composer or what is in it, as the press went down: the hand's, not where it was drawn)
+    composing.outside = !c.press_within(cap) && !@sf.presenting() && !composing.menu_up
   }
   if composing.outside && c.editor_focused(composer_field_key) && (press.moved || (press.lifted && !press.long)) {
     composing.outside = false
