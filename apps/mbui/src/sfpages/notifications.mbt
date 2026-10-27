@@ -16,6 +16,11 @@
 let notify_kinds : Array[String] = ["wait", "failed", "done", "message"]
 
 ///|
+/// The services and jobs left up long: told of only by the rail's bell (`badgeKinds.services`), after the kinds.
+// kept across runs: a table, never written
+let notify_kinds_shown : Array[String] = ["wait", "failed", "done", "message", "services"]
+
+///|
 /// As at the start (settings_reset): no kind opened, nothing chosen.
 fn notify_page_reset() -> Unit {
   kind_open.val = ""
@@ -147,7 +152,7 @@ pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> 
     }
   }
   let kept_badge = field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value, "badgeKinds")
-  for k in ["on", "wait", "failed", "done", "message"] {
+  for k in ["on", "wait", "failed", "done", "message", "services"] {
     match (badge_chosen.get(k), field(kept_badge, k)) {
       (Some(true), Some(True)) | (Some(false), Some(False)) => badge_chosen.remove(k)
       _ => ()
@@ -180,8 +185,8 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
     Some(v) => v
     None => flag(notify, "on")
   }
-  // the kind the preview shows: the one opened, else the first that comes as a banner
-  let shown_kind = if kind_open.val != "" {
+  // the kind the preview shows: the one opened (one that has a banner), else the first that comes as a banner
+  let shown_kind = if notify_kinds.contains(kind_open.val) {
     kind_open.val
   } else {
     notify_kinds.iter().find_first(fn(k) { on && kind_banner(notify, k) }).unwrap_or("wait")
@@ -226,7 +231,7 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
     @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
       c.box(style=kinds_card, fn() {
         // (each its row, apart by its room: no line between)
-        for kind in notify_kinds {
+        for kind in notify_kinds_shown {
           kind_row(c, core, here, notify, kind, on)
         }
       })
@@ -314,8 +319,13 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
 /// while open; opened, each way on or off (a done turn's banner: off, while away, always).
 fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String, on : Bool) -> Unit {
   let t = @sf.theme()
-  let banner = on && kind_banner(notify, kind)
+  // the services left up long: the bell's alone
+  let bell = kind == "services"
+  let banner = !bell && on && kind_banner(notify, kind)
   let ways : Array[String] = []
+  if bell && badge_kind(core, here, kind) {
+    ways.push(@sf.t("web-pages.notifications.ways.bell"))
+  }
   if banner {
     ways.push(
       if kind == "done" && done_banner(notify) == "away" {
@@ -325,7 +335,7 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
       },
     )
   }
-  if @ui.badge_shown() && badge_kind(core, here, "on") && badge_kind(core, here, kind) {
+  if !bell && @ui.badge_shown() && badge_kind(core, here, "on") && badge_kind(core, here, kind) {
     ways.push(@sf.t("web-pages.notifications.ways.badge"))
   }
   let open = kind_open.val == kind
@@ -349,7 +359,14 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
     return
   }
   c.box(style=kind_ways, fn() {
-    if kind == "done" {
+    if bell {
+      // 点亮铃铛: whether they put the dot on the rail's bell until it has shown them
+      way_switch(c, "notify-bell/" + kind, @sf.t("web-pages.notifications.inBell"), badge_kind(core, here, kind), false, fn(
+        v,
+      ) {
+        c.after_build("notify-bell/" + kind, fn() { set_badge_kind(core, kind, v) })
+      })
+    } else if kind == "done" {
       c.box(style=way_row, fn() {
         c.text(@sf.t("web-pages.notifications.ways.banner"), style=way_words) |> ignore
         let choices = ["off", "away", "always"]
@@ -378,7 +395,7 @@ fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String
       })
     }
     // 计入红点: whether the app's icon counts it (off while the badge is), where the system shows the app's number
-    if @ui.badge_shown() {
+    if !bell && @ui.badge_shown() {
       way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, here, kind), !badge_kind(core, here, "on"), fn(
         v,
       ) {

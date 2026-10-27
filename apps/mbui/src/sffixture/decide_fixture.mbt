@@ -553,6 +553,8 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
                 "jobs": [long_job()],
               },
             ],
+            "lit": true,
+            "ids": ["ws1/st1/j-web"],
           }),
         )
       } else {
@@ -768,7 +770,7 @@ pub fn fix_attention_marks() -> Json {
     },
     "others": "done",
     "badge": 1,
-    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false },
+    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
   }
 }
 

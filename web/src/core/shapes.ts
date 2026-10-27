@@ -741,6 +741,11 @@ export interface BadgeKinds {
 	done?: boolean;
 	/** Someone else said something they have not read. */
 	message?: boolean;
+	/**
+	 * Services and jobs left up long (an hour) light the rail's bell until it has shown them; never
+	 * counted in the app's number.
+	 */
+	services?: boolean;
 }
 
 /**
@@ -4548,6 +4553,16 @@ export interface LongJobsGroup {
  */
 export interface LongJobsView {
 	groups: LongJobsGroup[];
+	/**
+	 * They light the rail's bell: one is there it has not shown yet (`prefs.jobsSeen`), and the
+	 * bell is lit by them (`badgeKinds.services`).
+	 */
+	lit?: boolean;
+	/**
+	 * Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)
+	 * once the bell opens.
+	 */
+	ids?: string[];
 }
 
 /** Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over). */
@@ -5402,6 +5417,11 @@ export interface PrefsView {
 	 * the trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed).
 	 */
 	trouble?: Record<string, string>;
+	/**
+	 * The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the
+	 * `longJobs` view's `ids` were when it opened. They no longer light it.
+	 */
+	jobsSeen?: Record<string, string[]>;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */

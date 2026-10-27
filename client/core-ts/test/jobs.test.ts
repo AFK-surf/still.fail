@@ -76,10 +76,21 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "长时间运行的网页服务 · 1", "不属于任何对话"]);
   assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["长时间运行的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
   assert.equal(g[1].jobs[1].whereText, "studio · 修登录 · 已归档");
-  assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [] });
+  assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [], lit: false, ids: [] });
   const watch = job("w", { startedAt: NOW - 5 * LONG, watch: true });
-  assert.deepEqual(longJobs([st(null, [watch])], c()), { groups: [] });
+  assert.deepEqual(longJobs([st(null, [watch])], c()), { groups: [], lit: false, ids: [] });
   assert.equal(shown(watch, c()).word, "监控中");
+});
+
+test("those_up_long_light_the_bell_until_it_has_shown_them", () => {
+  const up = (id: string) => job(id, { port: 1, startedAt: NOW - 2 * LONG });
+  const st: [string, string | null, J[]][] = [["w/s1", null, [up("a"), up("b")]]];
+  const v = longJobs(st, c());
+  assert.deepEqual([v.lit, v.ids], [true, ["w/s1/a", "w/s1/b"]]);
+  assert.equal(longJobs(st, c(), undefined, { on: true, seen: new Set(v.ids) }).lit, false, "both shown");
+  assert.equal(longJobs(st, c(), undefined, { on: true, seen: new Set(["w/s1/a"]) }).lit, true, "a new one since");
+  assert.equal(longJobs(st, c(), undefined, { on: false, seen: new Set() }).lit, false, "the bell not lit by them");
+  assert.equal(longJobs(st, c(), undefined, { on: false, seen: new Set() }).groups[0].jobs.length, 2, "still listed");
 });
 
 test("a_task_another_stations_chat_runs_is_in_that_chat", () => {

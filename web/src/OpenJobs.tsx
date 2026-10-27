@@ -25,12 +25,15 @@ export const SHOWN = 3;
  */
 export function useLongJobs(scope: string, toast: (text: string) => void) {
   // A core from before it knows none: nothing to show.
-  const groups = useTopic<LongJobsView>({ topic: "longJobs", scope }).value?.groups ?? [];
+  const view = useTopic<LongJobsView>({ topic: "longJobs", scope }).value;
+  const groups = view?.groups ?? [];
   const call = useCall();
   // The core puts the job in place as it is now: gone from here, stopped in its chat.
   const stop = (job: Job) => void (call("job.stop", { station: job.station, id: job.id }) as Promise<unknown>)
     .catch((e: unknown) => toast(t("web-main.jobs.stopFailed", { name: job.name, error: failure(e) })));
-  return { groups, stop };
+  // The rail's bell has shown them: they no longer light it (the core's `lit`) until another is left up long.
+  const seen = () => void (call("prefs.set", { jobsSeen: { [scope]: view?.ids ?? [] } }) as Promise<unknown>).catch(() => undefined);
+  return { groups, stop, lit: view?.lit ?? false, seen };
 }
 
 /** Its chat's address, when it is in one (on another station for a task that station's chat runs here). */

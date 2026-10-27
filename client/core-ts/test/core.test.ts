@@ -491,6 +491,26 @@ test("a_service_page_s_size_and_folded_toolbar_are_kept_on_the_device", async ()
   assert.deepEqual(v(values, 1).previewSizes, { "ws/st\nj1": "390x844" });
 });
 
+test("the_jobs_a_bell_has_shown_are_kept_by_workspace", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  call(core, ui, 2, "prefs.set", { jobsSeen: { ws: ["ws/st/j1", "ws/st/j2"] }, badgeKinds: { services: false } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).jobsSeen, { ws: ["ws/st/j1", "ws/st/j2"] });
+  assert.equal(v(values, 1).badgeKinds.services, false);
+  // each a job's key
+  call(core, ui, 3, "prefs.set", { jobsSeen: { ws: [1] } });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 3).length, 1);
+  apply(host, values);
+  assert.deepEqual(v(values, 1).jobsSeen, { ws: ["ws/st/j1", "ws/st/j2"] });
+});
+
 test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();

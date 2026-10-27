@@ -1192,6 +1192,7 @@ web-pages.notifications.hidden.failed
 web-pages.notifications.hidden.message
 web-pages.notifications.hidden.wait
 web-pages.notifications.inBadge
+web-pages.notifications.inBell
 web-pages.notifications.kinds.done
 web-pages.notifications.kinds.doneAlways
 web-pages.notifications.kinds.doneAway
@@ -1201,6 +1202,8 @@ web-pages.notifications.kinds.failed
 web-pages.notifications.kinds.failedNote
 web-pages.notifications.kinds.message
 web-pages.notifications.kinds.messageNote
+web-pages.notifications.kinds.services
+web-pages.notifications.kinds.servicesNote
 web-pages.notifications.kinds.title
 web-pages.notifications.kinds.wait
 web-pages.notifications.kinds.waitNote
@@ -1222,6 +1225,7 @@ web-pages.notifications.sample.wait
 web-pages.notifications.sound
 web-pages.notifications.sumBannerAway
 web-pages.notifications.ways.badge
+web-pages.notifications.ways.bell
 web-pages.notifications.ways.banner
 web-pages.notifications.ways.title
 web-pages.permissions.allow
