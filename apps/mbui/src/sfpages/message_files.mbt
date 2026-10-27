@@ -225,8 +225,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     None => (src.file)(here.station, owner, stored_name(a.path))
   }
   // could not be had for want of its station (not its station having none): pressed, asked again
-  let unreached = key == "!" && sent is None &&
-    src.images.unreached(@sfbase.file_image_id(here.station, owner, stored_name(a.path)))
+  let id = @sfbase.file_image_id(here.station, owner, stored_name(a.path))
+  let unreached = key == "!" && sent is None && src.images.unreached(id)
   if c.clicked(open) {
     if unreached {
       src.images.again(here.station)
@@ -244,7 +244,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
   let picture = fn() {
     if key != "" && sent is None {
-      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=corner)
+      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=corner, held=src.images.held(id))
     } else if key != "" {
       c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, radius=corner, bg=0L, fade=false) |> ignore
     } else if likeness != "" {
@@ -430,7 +430,8 @@ fn reveal_px(c : @ui.Ctx, w : Double, h : Double) -> Double {
 /// A message's image coming in, as the web's (msgImageWait, msgImageReveal): until it is decoded what it waits on (its
 /// likeness, the ThumbHash sent with it, else the neutral ground); once it is, brushed in from its top (an edge half its
 /// height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it
-/// waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown comes as it is.
+/// waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown, or one the device had
+/// (`held`: kept here, not brought from its station, a decode away), comes as it is.
 pub fn image_reveal(
   c : @ui.Ctx,
   key : String,
@@ -439,12 +440,13 @@ pub fn image_reveal(
   fit : @ui.Fit,
   hash : String,
   radius? : Double = @sf.message_file_corner,
+  held? : Bool = false,
 ) -> Unit {
   let ready = c.image_ready(key, reveal_px(c, w, h))
   let way = match reveals.get(key) {
     Some(a) => a
     None => {
-      let a = if ready { None } else { Some(@motion.Anim::new(0.0)) }
+      let a = if ready || held { None } else { Some(@motion.Anim::new(0.0)) }
       reveals[key] = a
       a
     }

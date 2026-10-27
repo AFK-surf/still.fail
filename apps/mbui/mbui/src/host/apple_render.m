@@ -325,16 +325,15 @@ static id<MTLTexture> atlas_texture(int color, int side) {
   return [dev newTextureWithDescriptor:td];
 }
 
-void mb_render_init(CAMetalLayer *layer) {
+// The device, the shaders compiled and the pipelines made: what drawing needs whatever it draws into, on a queue of its
+// own from as the program loads (prepare, below), so that compiling the shaders (most of a start's time before its
+// window, as AppKit waited on Metal's compiler: 2026-10-27) goes on while the program starts and AppKit makes the app
+// and its window; what is drawn into waits for it only as it is made (mb_render_init).
+static dispatch_group_t prepared;
+
+static void prepare_gpu(void) {
   dev = MTLCreateSystemDefaultDevice();
   queue = [dev newCommandQueue];
-  mlayer = layer;
-  layer.device = dev;
-  layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-  // glass copies what is drawn so far out of the drawable
-  layer.framebufferOnly = NO;
-  // native views show under it through holes (mb_views_*); a frame clears opaque
-  layer.opaque = NO;
   NSError *err = nil;
   id<MTLLibrary> lib = [dev newLibraryWithSource:shader_src options:nil error:&err];
   if (!lib) NSLog(@"shader: %@", err);
@@ -355,7 +354,26 @@ void mb_render_init(CAMetalLayer *layer) {
   inflight = dispatch_semaphore_create(3);
 }
 
-id<MTLDevice> mb_render_device(void) { return dev; }
+__attribute__((constructor)) static void prepare(void) {
+  prepared = dispatch_group_create();
+  dispatch_group_async(prepared, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{ prepare_gpu(); });
+}
+
+void mb_render_init(CAMetalLayer *layer) {
+  dispatch_group_wait(prepared, DISPATCH_TIME_FOREVER);
+  mlayer = layer;
+  layer.device = dev;
+  layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+  // glass copies what is drawn so far out of the drawable
+  layer.framebufferOnly = NO;
+  // native views show under it through holes (mb_views_*); a frame clears opaque
+  layer.opaque = NO;
+}
+
+id<MTLDevice> mb_render_device(void) {
+  dispatch_group_wait(prepared, DISPATCH_TIME_FOREVER);
+  return dev;
+}
 
 void mb_render_set_size(double w, double h, double scale) {
   vw = w;

@@ -397,7 +397,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       keeps_frame(c)
       // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
       @sfdesk.keys(c, src, w)
-      // the first page built as it opens, asking for all it shows, and shown once it has it (LOCAL_MS at most), as a
+      // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
       // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
       first_waiting.val = !first_page_shown(c, src, w)
       if @sfdesk.is_wide(c) {
@@ -808,6 +808,14 @@ fn dmax(a : Double, b : Double) -> Double {
 let page_local_ms : Double = @sf.local_ms
 
 ///|
+/// How long the app's first page waits for what it shows (all of it the core's on the device, as a page opening's):
+/// as long as the window shows its ground alone (splash_label_ms), not a page opening's LOCAL_MS. The core is starting
+/// then and answers more slowly than in a running app; cut short at LOCAL_MS, the page came in pieces (2026-10-27,
+/// the sidebar by itself, then the chat's bones, then its messages), where an opening quicker than that is meant to be
+/// one picture and then the page (splash).
+let first_page_ms : Double = splash_label_ms
+
+///|
 /// Whether the core has answered (a value or why not) for what page `p` of workspace `w` shows as it opens (App.kt
 /// opening): a chat, an agent's history, Home's list and what the last update brought over it (home.mbt); any other
 /// page is not waited for.
@@ -830,10 +838,10 @@ fn list_ready(src : Source, w : Workspace) -> Bool {
 
 ///|
 /// Whether the app's first page shows: once the core has answered for what it shows (first_page_ready), or
-/// `page_local_ms` after the workspace came into view, from then on.
+/// `first_page_ms` after the workspace came into view, from then on.
 fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
   if !first_shown.val &&
-    (first_page_ready(c, src, w) || @kit.after(c, "first-page", true, page_local_ms)) {
+    (first_page_ready(c, src, w) || @kit.after(c, "first-page", true, first_page_ms)) {
     first_shown.val = true
   }
   first_shown.val
@@ -841,10 +849,11 @@ fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 
 ///|
 /// Whether the core has answered for what the app's first page shows, as a page opening waits for it: laid out Small
-/// the page on top (page_ready), in the wide frame the sidebar's list and the page in the pane (pane_ready).
+/// the page on top (page_ready), in the wide frame the sidebar's list and the page in the pane (pane_ready), the chat
+/// the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
 fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
   if @sfdesk.is_wide(c) {
-    list_ready(src, w) && pane_ready(src, app.nav.top())
+    list_ready(src, w) && !@sfdesk.landing(w) && pane_ready(src, app.nav.top())
   } else {
     page_ready(src, w, app.nav.top())
   }
