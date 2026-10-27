@@ -9,7 +9,8 @@
 // - the station's: this process, its launcher, and what else is under it.
 // The rest of the machine is no one's here and not read. A process that began since the last look counts whole; one
 // that ended meanwhile loses what it used after the last look (a command of a few seconds may not show at all).
-// Looked at only while a page asks (within WANTED_MS), every LOOK_MS; nothing read otherwise. Kept: the last look by
+// Looked at only while a page asks (within WANTED_MS) or follows (`follow`: told each look), every LOOK_MS; nothing
+// read otherwise. Kept: the last look by
 // process and the totals of the last HISTORY_MS. A chat's process (not its agent's own) can be ended from the page.
 import { basename } from "node:path";
 import type { Clock } from "effect";
@@ -134,6 +135,8 @@ export class ResourceWatch {
   #now: { at: number; groups: Group[]; total: Use } | null = null;
   #history: Point[] = [];
   #wanted = Number.NEGATIVE_INFINITY;
+  /// Those following: told after each look, and looked at for while any is.
+  readonly #followers = new Set<() => void>();
   /// Whether looks are going (a page asked lately).
   #going = false;
   /// Whether anything was read: none, not macOS.
@@ -168,11 +171,20 @@ export class ResourceWatch {
         try {
           await this.look();
         } finally {
-          if (this.#fibers.now() - this.#wanted < WANTED_MS) next();
+          for (const told of this.#followers) told();
+          if (this.#followers.size > 0 || this.#fibers.now() - this.#wanted < WANTED_MS) next();
           else this.#going = false;
         }
       });
     next();
+  }
+
+  /// Followed (a page's stream, GET /resources as events): `told` after each look from the first on, until the
+  /// returned stop. Looks go on while any follows.
+  follow(told: () => void): () => void {
+    this.#followers.add(told);
+    void this.want().then(() => this.#followers.has(told) && told());
+    return () => void this.#followers.delete(told);
   }
 
   /// Whether the last look is recent enough to count from: else what was used since is a long while's average.

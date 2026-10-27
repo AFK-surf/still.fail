@@ -127,8 +127,28 @@ export function stationHost(answers: Answers) {
   // itself (FOLLOWS).
   const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean } = { stream: "open", resumes: false, marks: false, follows: false };
   let marked = 0;
+  // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
+  // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
+  const told = new Map<string, { queues: Set<Queue.Queue<Uint8Array | null>>; asked: number }>();
+  const tell = (path: string, name: string, data: unknown) => {
+    for (const q of told.get(path)?.queues ?? []) Queue.offerUnsafe(q, new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+  };
   host.onFetchStream((req) =>
     Effect.gen(function* () {
+      const asked = req.url.replace("https://stillfail.test/admin/api", "");
+      const feed = told.get(asked);
+      if (feed || `GET ${asked}` in answers) {
+        if (!feed) {
+          const whole = answer(req);
+          let given = false;
+          return { status: whole.status, headers: whole.headers, body: { take: Effect.sync(() => (given ? null : ((given = true), whole.body))) } };
+        }
+        const queue = yield* Queue.unbounded<Uint8Array | null>();
+        feed.asked++;
+        feed.queues.add(queue);
+        yield* Effect.addFinalizer(() => Effect.sync(() => feed.queues.delete(queue)));
+        return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) } };
+      }
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
       if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
@@ -163,7 +183,7 @@ export function stationHost(answers: Answers) {
     const s = streams[streams.length - 1];
     Queue.offerUnsafe(s.queue, null);
   };
-  return { host, streams, push, end, gate, changes, batches, cloud };
+  return { host, streams, push, end, gate, changes, batches, cloud, told, tell };
 }
 
 /// A session as the station lists it (core/tests.rs `session`).
