@@ -599,6 +599,7 @@ export const SHAPES: Record<string, Shape> = {
     ["usedBy", vec("String")],
     ["loginCommand", "String", { said: true }],
     ["machine", "bool", { default: true, doc: "On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login." }],
+    ["perUse", opt("bool"), { doc: "Billed per use (an API key, a gateway): the station runs a chat on it only when no account paid for already\n(a subscription, a membership) can; None from a station of before it." }],
     ["backgroundOnMessage", opt("bool"), { doc: "Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a\nstation older than the setting." }],
     ["fast", opt("bool")],
     ["check", opt("ProfileCheck")],
