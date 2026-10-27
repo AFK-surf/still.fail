@@ -5502,6 +5502,8 @@ export interface ProfileFlowView {
 	choices: FlowChoice[];
 	showEndpoint: boolean;
 	endpoint: string;
+	/** An example of the address, for the protocol chosen. */
+	endpointExample?: string;
 	endpointHint?: string;
 	/** Asked only when there are more than one. */
 	protocols: FlowOption[];
