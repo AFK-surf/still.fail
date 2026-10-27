@@ -1127,7 +1127,12 @@ final class NativeViews {
     static void tell(int id, int what, String text) {
         NView v = views.get(id);
         if (v == null) return;
-        if (what == 1) {
+        if (what == 5) {
+            // raised over the others (the app paints it after them): what takes a touch where they meet
+            Host.main.post(() -> {
+                if (v.clip != null && v.clip.getParent() != null) v.clip.bringToFront();
+            });
+        } else if (what == 1) {
             v.script(text);
         } else if (what == 2) {
             String[] p = text.split(" ");

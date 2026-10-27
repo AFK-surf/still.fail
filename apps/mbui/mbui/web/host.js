@@ -971,6 +971,7 @@
   // DOM elements in a layer under the canvas, shown through its holes: a <video> whose bytes come through the app
   // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML.
   const views = new Map();
+  let nextZ = 0;  // the z-index the next view raised takes (view_tell 5); one opened goes over those before it
   let nextView = 0, viewLayer = null;
   function layer() {
     if (!viewLayer) {
@@ -1008,6 +1009,9 @@
   };
   H.viewTell = (id, what, text) => {
     const v = views.get(id);
+    // raised over all the others (the app paints it after them): by z-index, as moving an iframe in the page loads it
+    // again
+    if (v && what === 5) { v.clip.style.zIndex = String(++nextZ); return; }
     if (!v || v.kind !== 2) return;
     if (what === 1) { v.scripts.push(text); runScripts(v); }
   };
@@ -1070,6 +1074,7 @@
       v.el = el;
     }
     clip.appendChild(v.el);
+    clip.style.zIndex = String(++nextZ);
     layer().appendChild(clip);
     views.set(id, v);
     return id;

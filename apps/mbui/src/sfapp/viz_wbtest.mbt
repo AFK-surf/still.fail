@@ -308,3 +308,27 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   t.tap(x + w / 2.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
 }
+
+///|
+test "a page opened over the chat on a wide window shows over the chat's visualization still painted under it, not under it" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  t.frame()
+  let (page, _) = viz_views(t)
+  assert_true(view_rect(t, page) is Some(_))
+  viz_open_full("release.html", "ws1/st1", "s-c1", "work/s-c1/release.html", "s-c1")
+  t.frame()
+  t.frame()
+  let full = opened_views(t, 2)
+  let top = full[full.length() - 1]
+  assert_true(view_rect(t, top) is Some(_))
+  // the chat's page still painted under the one opened over it: the host told to stack that one over it
+  assert_true(view_rect(t, page) is Some(_), msg=t.views().join("\n"))
+  let raises = t.views().filter(fn(l) { l.has_prefix("raise ") })
+  assert_eq(raises.last(), Some("raise \{top}"), msg=t.views().join("\n"))
+  let raised_page = raises.search("raise \{page}")
+  assert_true(raised_page is Some(_), msg=raises.join(", "))
+}

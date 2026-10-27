@@ -28,6 +28,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
 #include <deque>
 #include <map>
 #include <string>
@@ -223,6 +224,7 @@ struct MediaRead {
 
 struct View {
   int vid, kind;
+  long long z = 0;  // where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
   double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0, radius = 0;
   ComPtr<IDCompositionRectangleClip> round;  // its content cut to its rect, rounded (radius > 0)
   bool shown = false, placed = false;
@@ -269,8 +271,9 @@ struct View {
 };
 
 static HWND hwnd_main;
-static std::map<int, View *> views;  // by id: as they are stacked
+static std::map<int, View *> views;  // by id
 static int next_vid;
+static long long next_z;  // the z the next view opened or raised takes: over all the others
 static ComPtr<ICoreWebView2Environment> env;
 static int env_state;  // 0 not asked, 1 being made, 2 here, -1 failed
 static int runtime;    // 0 not looked for, 1 installed, -1 not
@@ -306,6 +309,31 @@ static void fail(View *v, const char *why, HRESULT hr) {
 }
 
 static double scale_now(void) { return mb_app_scale(); }
+
+// Its box put among the others' as its z says: under the lowest of those over it, else over them all.
+// (AddVisual with no reference visual and insertAbove TRUE puts it under all of them: FALSE, over them.)
+static void stack(View *v) {
+  IDCompositionVisual *under = (IDCompositionVisual *)mb_render_views_visual();
+  if (!under || !v->box) return;
+  View *over = NULL;
+  for (auto &kv : views) {
+    View *o = kv.second;
+    if (o != v && o->box && o->z > v->z && (!over || o->z < over->z)) over = o;
+  }
+  under->RemoveVisual(v->box.Get());
+  under->AddVisual(v->box.Get(), FALSE, over ? over->box.Get() : NULL);
+}
+
+// How the views are stacked, the lowest first (VIEWSTACK: scripts/host_contract.sh HOST views compares it with the
+// order the app told, VIEWSTACKTOLD).
+static void say_stack(void) {
+  std::vector<View *> order;
+  for (auto &kv : views) order.push_back(kv.second);
+  std::sort(order.begin(), order.end(), [](View *a, View *b) { return a->z < b->z; });
+  std::string line = "VIEWSTACK";
+  for (View *v : order) line += " " + std::to_string(v->vid);
+  vlog("%s", line.c_str());
+}
 
 // Placed as it was last told: its box at the clip, the web view at its rect within it, hidden by an empty clip.
 static void apply_place(View *v) {
@@ -718,7 +746,7 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
     return;
   }
   v->box->AddVisual(v->content.Get(), FALSE, NULL);
-  under->AddVisual(v->box.Get(), TRUE, NULL);  // over the views opened before it
+  stack(v);  // over the views opened (or raised) before it, under those raised since
   v->box->SetClip(D2D_RECT_F{0, 0, 0, 0});
   cc->put_RootVisualTarget(v->content.Get());
   ComPtr<ICoreWebView2Controller2> c2;
@@ -935,6 +963,7 @@ extern "C" int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
   View *v = new View;
   v->vid = ++next_vid;
   v->kind = kind;
+  v->z = ++next_z;
   if (kind == 1) {
     // (the app draws its controls over it: the mouse the canvas's)
     v->mime = wstr(arg);
@@ -1175,6 +1204,14 @@ extern "C" moonbit_bytes_t mb_host_view_still(int32_t vid) {
 // waits on a request's deferral as long as the app takes: no head wait here).
 extern "C" void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
   View *v = find(vid);
+  if (v && what == 5) {
+    // raised over all the others (the app paints it after them)
+    v->z = ++next_z;
+    stack(v);
+    mb_render_commit();
+    say_stack();
+    return;
+  }
   if (!v || v->kind < 2) return;
   std::wstring t = wstr(text);
   if (what == 1) {
@@ -1314,14 +1351,16 @@ static bool covered_at(View *v, double x, double y) {
 // what takes a press over it; never a player's: a video takes no input, the app's clicks, wheel and keys over it, as
 // the Mac's MBPlayerView. Its page took the mouse and with it the keys: Esc, Space, the wheel's zoom went to it)
 static View *view_at(double x, double y) {
-  for (auto it = views.rbegin(); it != views.rend(); ++it) {
-    View *v = it->second;
+  View *top = NULL;
+  for (auto &kv : views) {
+    View *v = kv.second;
+    if (top && top->z > v->z) continue;
     if (!v->shown || !v->placed || !v->comp || v->kind == 1 || v->touch == "through" || covered_at(v, x, y)) continue;
     double x0 = fmax(v->cx0, v->x), y0 = fmax(v->cy0, v->y);
     double x1 = fmin(v->cx1, v->x + v->w), y1 = fmin(v->cy1, v->y + v->h);
-    if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
+    if (x >= x0 && x < x1 && y >= y0 && y < y1) top = v;
   }
-  return NULL;
+  return top;
 }
 
 extern "C" int mb_views_pass_through(double x, double y) { return view_at(x, y) != NULL; }
@@ -1431,8 +1470,11 @@ extern "C" void mb_views_snap_all(void) {
 // The views' pictures (white where a page has none yet) into `out` (w × h premultiplied BGRA, zeroed), at their rects
 // within their clips, as they are stacked.
 extern "C" void mb_views_draw_under(uint8_t *out, int w, int h, double scale) {
-  for (auto &kv : views) {
-    View *v = kv.second;
+  // (as they are stacked: the one over the others drawn last)
+  std::vector<View *> order;
+  for (auto &kv : views) order.push_back(kv.second);
+  std::sort(order.begin(), order.end(), [](View *a, View *b) { return a->z < b->z; });
+  for (View *v : order) {
     if (!v->shown || !v->placed || v->w <= 0 || v->h <= 0) continue;
     double rx = v->x * scale, ry = v->y * scale, rw = v->w * scale, rh = v->h * scale;
     int x0 = (int)lround(fmax(v->cx0, v->x) * scale), y0 = (int)lround(fmax(v->cy0, v->y) * scale);

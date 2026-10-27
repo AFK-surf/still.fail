@@ -1991,7 +1991,9 @@ pub fn view_site_load(id : Int, path : String) -> Unit {
 /// waits for it, all in the order sent. 2 who takes a finger on it: "all", "through", "pinch" or "vertical", then the
 /// slop in points (ui's NativeView::touch). 3 a site's settings, as JSON: `head_wait_ms` (how long a request waits for
 /// its head before the host says `{"late":n}`, still waiting), `backlog` (how many bytes of an answer may wait for the
-/// page to read them before the host says `{"slow":n}` and takes no more of it).
+/// page to read them before the host says `{"slow":n}` and takes no more of it). 4 where the app draws what takes a
+/// press over it. 5 (any view, `text` "") raised over all the others: stacked under none of them, the one a press goes
+/// to where they meet (ui's stack_views, as the app paints them); a view opened goes over those opened before it.
 pub fn view_tell(id : Int, what : Int, text : String) -> Unit {
   current.val.view_tell(id, what, text)
 }

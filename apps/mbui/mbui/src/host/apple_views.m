@@ -163,6 +163,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) PView *content;  // in it: at the view's rect
 @property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1, radius;
 @property(nonatomic) BOOL shown, placed, failed, closed;
+// where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
+@property(nonatomic) int64_t z;
 // a player's
 @property(nonatomic, strong) AVPlayer *player;
 @property(nonatomic, strong) AVPlayerItem *item;
@@ -236,6 +238,7 @@ static NSMutableDictionary<NSNumber *, MBNative *> *views;
 // a site's own scheme: nothing else answers it
 static NSString *const kSiteScheme = @"stillfail-preview";
 static int32_t next_vid;
+static int64_t next_z;  // the z the next view opened or raised takes: over all the others
 // a view put elsewhere on the screen since the canvas's last frame was presented (moved, shown, hidden, closed): that
 // frame is presented in the transaction that puts it there (apple.h mb_views_take_moved)
 static int views_moved;
@@ -1113,11 +1116,27 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
   MBNative *v = kind == 1 ? open_video(vid, a) : kind == 2 ? open_web(vid, a) : open_site(vid, a);
   v.vid = vid;
   v.kind = kind;
+  v.z = ++next_z;
   v.box = new_box();
   [v.box addSubview:v.content];
   v.box.hidden = YES;
   views[@(vid)] = v;
   return vid;
+}
+
+// Its box put among the others' in views_root as its z says: under the lowest of those over it, else over them all.
+static void stack(MBNative *v) {
+  if (!views_root) return;
+  MBNative *over = nil;
+  for (MBNative *o in views.allValues)
+    if (o != v && o.box.superview == views_root && o.z > v.z && (!over || o.z < over.z)) over = o;
+#if TARGET_OS_OSX
+  [views_root addSubview:v.box positioned:over ? NSWindowBelow : NSWindowAbove relativeTo:over.box];
+#else
+  if (over) [views_root insertSubview:v.box belowSubview:over.box];
+  else if (v.box.superview == views_root) [views_root bringSubviewToFront:v.box];
+  else [views_root addSubview:v.box];
+#endif
 }
 
 void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0, double cx1,
@@ -1136,7 +1155,7 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.cx0 = cx0; v.cy0 = cy0; v.cx1 = cx1; v.cy1 = cy1;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  if (!v.box.superview && views_root) [views_root addSubview:v.box];
+  if (!v.box.superview) stack(v);
   v.box.hidden = !s;
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
@@ -1436,6 +1455,25 @@ void mb_host_view_site_load(int32_t vid, moonbit_string_t path) {
 // finger on it, a site's settings.
 void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
   MBNative *v = views[@(vid)];
+  if (v && what == 5) {
+    // raised over all the others (the app paints it after them)
+    v.z = ++next_z;
+    if (v.box.superview) {
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      stack(v);
+      [CATransaction commit];
+      views_moved = 1;
+    }
+    // how they are stacked, the lowest first (scripts/host_contract.sh HOST views: as the app told, VIEWSTACKTOLD)
+    NSArray<MBNative *> *order = [views.allValues sortedArrayUsingComparator:^NSComparisonResult(MBNative *a, MBNative *b) {
+      return a.z < b.z ? NSOrderedAscending : a.z > b.z ? NSOrderedDescending : NSOrderedSame;
+    }];
+    NSMutableString *line = [NSMutableString stringWithString:@"VIEWSTACK"];
+    for (MBNative *o in order) [line appendFormat:@" %d", o.vid];
+    vlog(@"%@", line);
+    return;
+  }
   if (!v || v.kind < 2) return;
   NSString *t = mb_ns_from_string(text);
   if (what == 1) {
@@ -1467,14 +1505,17 @@ static BOOL covered_at(MBNative *v, double x, double y) {
 }
 
 // The page's view a point is on (shown, placed, not under what the app draws over it that takes a press), or nil.
+// (the one stacked over the others where several are)
 static MBNative *page_at(double x, double y) {
+  MBNative *top = nil;
   for (MBNative *v in views.allValues) {
+    if (top && top.z > v.z) continue;
     if (v.kind < 2 || !v.shown || !v.placed || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
-    if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
+    if (x >= x0 && x < x1 && y >= y0 && y < y1) top = v;
   }
-  return nil;
+  return top;
 }
 
 // Who takes a finger (or the mouse) at a point over a page: its mode ("all", "through", "pinch", "vertical") and its
@@ -1521,9 +1562,11 @@ void mb_views_snap_all(void) {
 
 void mb_views_draw_under(CGContextRef ctx, double scale) {
   size_t H = CGBitmapContextGetHeight(ctx);
-  NSArray *ids = [views.allKeys sortedArrayUsingSelector:@selector(compare:)];  // as they are stacked
-  for (NSNumber *k in ids) {
-    MBNative *v = views[k];
+  // as they are stacked: the one over the others drawn last
+  NSArray<MBNative *> *order = [views.allValues sortedArrayUsingComparator:^NSComparisonResult(MBNative *a, MBNative *b) {
+    return a.z < b.z ? NSOrderedAscending : a.z > b.z ? NSOrderedDescending : NSOrderedSame;
+  }];
+  for (MBNative *v in order) {
     if (!v.shown || !v.placed || v.w <= 0 || v.h <= 0) continue;
     CGContextSaveGState(ctx);
     // the app's coordinates: points from the top left

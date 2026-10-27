@@ -567,3 +567,51 @@ test "what a site's page asked of its host, as a run recorded it, is asked again
   assert_eq(asked, [("POST", "/api", [("User-Agent", "WebKit")], false, b"hi")])
   assert_eq(v.page_at(), ("/svc", true, false, false, "Service"))
 }
+
+///|
+test "native views are stacked on the host as they are painted: the one painted last on top, told again when that changes" {
+  let chat : Ref[@ui.NativeView?] = { val: None }
+  let file : Ref[@ui.NativeView?] = { val: None }
+  // the file's page opened first, the chat's visualization after it: opened in the other order than they are painted
+  let file_shown : Ref[Bool] = { val: false }
+  let file_under : Ref[Bool] = { val: false }
+  let t = @ui.Tester::new(
+    fn(c) {
+      let f = once(file, fn() { @ui.NativeView::page("<p>file</p>") })
+      let v = once(chat, fn() { @ui.NativeView::page("<p>chart</p>") })
+      // (painted in the order built: the later one is what shows where both are)
+      let page = fn() { c.native(f, h=Px(400.0)) |> ignore }
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        if file_shown.val && file_under.val {
+          page()
+        }
+        c.native(v, h=Px(200.0)) |> ignore
+        if file_shown.val && !file_under.val {
+          page()
+        }
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  let raises = fn() { t.views().filter(fn(l) { l.has_prefix("raise ") }) }
+  let f = file.val.unwrap().id()
+  let v = chat.val.unwrap().id()
+  // one shown: over nothing, nothing told
+  assert_eq(raises(), [])
+  // the file's page over the chat: the chat's view raised, then the page's over it
+  file_shown.val = true
+  t.frame()
+  assert_eq(raises(), ["raise \{v}", "raise \{f}"])
+  // the same order: nothing told again
+  t.frame()
+  assert_eq(raises().length(), 2)
+  // painted the other way round: told again
+  file_under.val = true
+  t.frame()
+  let r = raises()
+  assert_eq([r[2], r[3]], ["raise \{f}", "raise \{v}"])
+  file.val.unwrap().close()
+  chat.val.unwrap().close()
+}
