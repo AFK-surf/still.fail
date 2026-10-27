@@ -1787,9 +1787,12 @@ fn side_default(group : String) -> Double {
 }
 
 ///|
-/// The sidebar shown follows the place and the workspace, each as it was left on this device (prefs `sidebars`, by
-/// `<workspace>\n<group>`: its width, `,closed` folded; Rail.tsx widthFor, folded); what changes of it is kept, once a
-/// drag of its edge is over.
+/// The sidebar shown follows the place and the workspace as it was left on this device (prefs `sidebars`): its width
+/// the person's, the same in every workspace, by `\n<group>` (no workspace before the line); folded or not each
+/// workspace's own, by `<workspace>\n<group>` (`closed`; Rail.tsx widthFor, folded). A width kept before by a
+/// workspace (`<width>` or `<width>,closed` there) is read where none is kept across them. What changes of it is
+/// kept, once a drag of its edge is over. (The user, 2026-10-27: a sidebar's width is the person's, not the
+/// workspace's.)
 fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   // (not read yet: as it is until it is)
@@ -1800,11 +1803,16 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   // 2026-10-27, the sidebar jumping from tab to tab)
   let group = if @sf.native_on() { "tabs" } else { side_group(src, ws) }
   let key = ws + "\n" + group
+  let width_key = "\n" + group
   if wide.side_key != key {
-    let said = text(field(prefs, "sidebars"), key)
-    let parts = said.split(",").map(fn(p) { p.to_string() }).collect()
+    let kept = field(prefs, "sidebars")
+    let parts = text(kept, key).split(",").map(fn(p) { p.to_string() }).collect()
     let closed = parts.contains("closed")
-    let width = if parts.length() > 0 && parts[0] != "closed" { parts[0] } else { "" }
+    let own = if parts.length() > 0 && parts[0] != "closed" { parts[0] } else { "" }
+    let width = match text(kept, width_key) {
+      "" => own
+      w => w
+    }
     wide.side_w = match whole_of(width) {
       Some(n) if n > 0 => dmax(side_min, dmin(side_max, n.to_double()))
       _ => side_default(group)
@@ -1821,17 +1829,16 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   }
   let (kept_w, kept_folded) = (wide.side_w, wide.folded)
   let w = if wide.side_w == side_default(group) { "" } else { wide.side_w.round().to_int().to_string() }
-  let v = match (w, wide.folded) {
-    ("", false) => Json::null()
-    ("", true) => Json::string("closed")
-    (w, true) => Json::string(w + ",closed")
-    (w, false) => Json::string(w)
-  }
+  // (the workspace's says only whether it is folded from now on: a width it kept before is the one across them now)
+  let said = Map::from_array([
+    (width_key, if w == "" { Json::null() } else { Json::string(w) }),
+    (key, if wide.folded { Json::string("closed") } else { Json::null() }),
+  ])
   // (kept once the frame's builds are over, as the last saw it)
   c.after_build("side-kept", fn() {
     wide.kept_w = kept_w
     wide.kept_folded = kept_folded
-    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(Map::from_array([(key, v)])) }), fn(_) {  })
+    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), fn(_) {  })
   })
 }
 
