@@ -167,9 +167,10 @@ export class Station {
         const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
-        // A large reply: how fast a way brings one.
+        // A large reply: how fast a way brings one, written a piece at a time (as the station's file reads are), so two at
+        // once share their way's line.
         if (parsed.path === "/admin/api/big") {
-          await stream.write(Buffer.alloc(1024 * 1024, 7)).catch(() => {});
+          for (let i = 0; i < 16; i++) await stream.write(Buffer.alloc(64 * 1024, 7)).catch(() => {});
           ended = true;
           await stream.finish().catch(() => {});
           return;
