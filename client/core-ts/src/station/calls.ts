@@ -384,7 +384,7 @@ export function install(): void {
   handlers.fileOpen = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "fileOpen" }>;
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.fileOpen(addr, c.key, c.path, ctx), (got) => new Beside({ name: got.name, path: got.path, type: got.type, size: got.size }, got.bytes)),
+      Effect.map(inner.stations.requests.fileOpen(addr, c.key, c.path, c.range, ctx), (got) => new Beside({ name: got.name, path: got.path, type: got.type, size: got.size }, got.bytes)),
     );
   };
   // With `keep`: what is kept of the file as its folder said it is answered as the station would (a stream's bytes in

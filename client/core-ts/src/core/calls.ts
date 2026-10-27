@@ -82,7 +82,7 @@ export type Call =
   /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean; from?: unknown }
   | { kind: "stationPoster"; station: string; key: string; name: string }
-  | { kind: "fileOpen"; station: string; key: string; path: string }
+  | { kind: "fileOpen"; station: string; key: string; path: string; range: { offset: number; length: number } | null }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
   /// `quiet`: as a chat's file's part's.
@@ -285,6 +285,8 @@ export function counts(call: Call, name: string): boolean {
 }
 
 const S = "string" as const;
+/// What a part of a file a message names (`file.open` with `offset`) is when no `length` is asked.
+const FILE_OPEN_PART = 4 * 1024 * 1024;
 
 /// The vault's calls (views/vault.ts).
 export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny", "setLasts", "migrate"];
@@ -982,14 +984,18 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "driveRefresh", station: p.station as string, root: p.root as string, path: p.path as string };
     }
-    // A file a message names, whole, its bytes beside the answer (as the station's op, from before, put them in it).
+    // A file a message names, whole, its bytes beside the answer (as the station's op, from before, put them in it);
+    // with `offset` and `length`, a part of it.
     case "file.open": {
       const p = read(params, [
         ["station", S, "req"],
         ["key", S, "req"],
         ["path", S, "req"],
+        ["offset", "u64", "opt"],
+        ["length", "u64", "opt"],
       ]);
-      return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string };
+      const range = p.offset === null && p.length === null ? null : { offset: (p.offset as number | null) ?? 0, length: (p.length as number | null) ?? FILE_OPEN_PART };
+      return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string, range };
     }
     case "station.poster": {
       const p = read(params, [

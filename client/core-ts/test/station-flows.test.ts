@@ -213,6 +213,31 @@ test("a_file_a_message_names_opens_whole_its_bytes_beside_from_a_station_new_or_
   core.close();
 });
 
+test("a_part_of_a_file_a_message_names_is_read_by_its_path_its_whole_size_said_or_cut_from_the_whole_of_an_old_station", async () => {
+  const { host, core } = await started(base());
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/sessions/k/open?path=%2Fw%2Fnew.log&raw=1&offset=2&length=3")) {
+      return new Raw({ status: 200, headers: [["content-type", "text/plain"], ["stillfail-name", "new.log"], ["stillfail-path", encodeURIComponent("/w/new.log")], ["stillfail-total", "40"]], body: new Uint8Array([3, 4, 5]) });
+    }
+    // A station from before parts by path: the whole, no total.
+    if (req.url.endsWith("/sessions/k/open?path=%2Fw%2Fold.log&raw=1&offset=2&length=3")) {
+      return new Raw({ status: 200, headers: [["content-type", "text/plain"], ["stillfail-name", "old.log"], ["stillfail-path", encodeURIComponent("/w/old.log")]], body: new Uint8Array([1, 2, 3, 4, 5, 6, 7]) });
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const said = (id: number) => host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m)) as J;
+  call(core, ui, 1, "file.open", { station: ST, key: "k", path: "/w/new.log", offset: 2, length: 3 });
+  await host.settle();
+  const fresh = said(1);
+  assert.deepEqual([fresh.ok, [...fresh.bytes]], [{ name: "new.log", path: "/w/new.log", type: "text/plain", size: 40 }, [3, 4, 5]]);
+  call(core, ui, 2, "file.open", { station: ST, key: "k", path: "/w/old.log", offset: 2, length: 3 });
+  await host.settle();
+  const old = said(2);
+  assert.deepEqual([old.ok, [...old.bytes]], [{ name: "old.log", path: "/w/old.log", type: "text/plain", size: 7 }, [3, 4, 5]]);
+  core.close();
+});
+
 void stationReplies;
 
 const linkOf = (values: Map<number, unknown>, id: number) => (values.get(id) as J)?.state;

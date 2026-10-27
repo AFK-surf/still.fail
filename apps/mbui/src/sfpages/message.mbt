@@ -519,9 +519,13 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
           Some(a) => open_file(here, a)
-          // (a file its path names: its card is what it opens, as the chip is tapped)
-          None if @sf.path_of_link(h) is Some(_) => ()
-          None => open_link(h)
+          None =>
+            match @sf.path_of_link(h) {
+              // a file its path names: itself, as it is now, in the preview (its card is the pointer's, or a finger's
+              // as it holds the chip)
+              Some((path, _)) => open_named(here, m.by.agent, path)
+              None => open_link(h)
+            }
         }
       },
       on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),

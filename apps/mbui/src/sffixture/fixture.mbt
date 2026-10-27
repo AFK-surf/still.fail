@@ -1084,8 +1084,8 @@ pub fn fixture(mode : String) -> Source {
     if name == "download.read" && fixture_download_read(params, done) {
       return
     }
-    // a chat's made-up files (the preview's), else the made-up drive's
-    if name.has_prefix("station.file") {
+    // a chat's made-up files (the preview's), and those its messages name by their paths; else the made-up drive's
+    if name.has_prefix("station.file") || name == "file.open" {
       fixture_fetch(name, params, done)
       return
     }
