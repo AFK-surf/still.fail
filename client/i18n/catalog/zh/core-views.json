@@ -404,6 +404,7 @@
   "core-views.profiles.signedIn": "已在 {station} 登录",
   "core-views.profiles.allowed": "仅限 {stations}",
   "core-views.profiles.away": "{station} 离线",
+  "core-views.profiles.troubleOn": "{station}：{trouble}",
   "core-views.profiles.on": "在 {stations}",
   "core-views.profiles.borrows": "向 {station} 借用",
   "core-views.profiles.copyOf": "来自 {station} 的共享副本",

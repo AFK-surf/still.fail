@@ -432,6 +432,28 @@ describe("the accounts routes", { concurrency: true }, () => {
     await s.close();
   });
 
+  test("a profile on the machine's login is signed in where the machine's is, and checked again when that login changes", async () => {
+    const m = fakeMachine({ claude: `echo '{"loggedIn": true, "email": "b@x.com", "subscriptionType": "pro"}'` });
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "fake-access", expiresAt: Date.now() + 3_600_000 } }));
+    const machine = new MachineLogins(m.env, undefined, () => "zh");
+    const checked: string[] = [];
+    const s = await rig({ machine, check: async (o) => (checked.push(o.home), { state: "ok", detail: "fake", models: [], checkedAt: Date.now() }) });
+    assert.equal((await s.call("POST", "/profiles/machine", { runtime: "claude" }))[0], 200);
+    // Its home holds no login: the command is the machine's own.
+    assert.equal(s.view("machine-claude")!.loginCommand, "claude auth login");
+    await until(() => checked.length >= 1, "checked once made");
+    const made = checked.length;
+    // Read again with nothing changed: not checked again.
+    await machine.refresh();
+    assert.equal(checked.length, made);
+    // Signed out in a terminal: checked again.
+    script(join(m.bin, "claude"), `#!/bin/sh\necho '{"loggedIn": false}'\nexit 1\n`);
+    await machine.refresh();
+    await until(() => checked.length > made, "checked again");
+    await s.close();
+  });
+
   test("a profile's home is read on the thread for its first view alone; what changes in it shows once read again off the thread, ten seconds on", async () => {
     // Its time moves only as the test says.
     const time = testClock();

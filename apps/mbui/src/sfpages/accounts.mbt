@@ -149,22 +149,29 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
   }
   // its head says who it is: no title over it
   @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
-    profile_head(c, core, here, address, p, entry)
+    profile_head(c, core, here, address, text(s, "name"), p, entry)
   })
 }
 
 ///|
 /// Its head (AccountView's identity): its provider's mark, its name (renamed here, but for the machine's own and a
-/// copy) and the runtimes it serves, what it is, its last check and when, checking again (its allowance read again
-/// with it); its ⋯.
-fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, p : Json?, entry : Json?) -> Unit {
+/// copy) and the runtimes it serves, what it is (`name`: its station's), its last check and when, checking again (its
+/// allowance read again with it); its ⋯.
+fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : String, p : Json?, entry : Json?) -> Unit {
   let id = text(p, "id")
   let on = [("station", address), ("id", id)]
   let copy = text(field(p, "share"), "role") == "user"
   let machine = flag(p, "machine")
   // what it is, in a line: its kind, the address signed in (when not its name), where it is
   let email = text(p, "email")
-  let facts = join([text(p, "kindText"), if email != text(p, "name") { email } else { "" }, text(entry, "where")], " · ")
+  // of an account on several stations, this station's (each's own part is under 各 station), not all of them
+  let several = items(entry, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length() > 1
+  let place = if several {
+    @sf.t("web-pages.profiles.onStation", args=[("station", name)])
+  } else {
+    text(entry, "where")
+  }
+  let facts = join([text(p, "kindText"), if email != text(p, "name") { email } else { "" }, place], " · ")
   @sf.own_head(
     c,
     fn(_) { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), pf_mark_glyph) |> ignore },
@@ -750,7 +757,7 @@ fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, en
 // ── who uses it, where it is ────────────────────────────────────────────
 
 ///|
-/// Who uses it (its connects), a row each, the model it runs at its end, to the connect's page.
+/// Who uses it (the connects bound to it: Slack, Feishu), a row each, the model it runs at its end, to the connect's page.
 fn profile_used_by(c : @ui.Ctx, core : Core, address : String, o : Json?, p : Json?) -> Unit {
   let users = strings(p, "usedBy").filter_map(fn(uid) {
     match items(o, "connects").search_by(fn(cn) { text(Some(cn), "id") == uid }) {
@@ -758,11 +765,10 @@ fn profile_used_by(c : @ui.Ctx, core : Core, address : String, o : Json?, p : Js
       None => None
     }
   })
+  // none says nothing of the station's own chats, which run on any: no section then
+  guard users.length() > 0 else {  }
   @sf.section(c, @sf.t("web-pages.profiles.usedBy"), fn() {
     @sf.group(c, fn() {
-      if users.length() == 0 {
-        @sf.said_row(c, @sf.t("web-pages.profiles.usedByNone"), "")
-      }
       for cn in users {
         let cv = Some(cn)
         let model = match opt_text(cv, "modelName") {

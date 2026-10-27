@@ -448,7 +448,6 @@
   "web-mobile.profiles.signedInAdded": "已登录，已添加 Profile",
   "web-mobile.profiles.startLoginFailed": "无法开始登录：{error}",
   "web-mobile.profiles.stationOffline": "{station} 已离线，恢复连接后才能操作",
-  "web-mobile.profiles.unused": "暂无连接使用此 Profile",
   "web-mobile.profiles.useThis": "使用此账号",
   "web-mobile.profiles.usedBy": "使用它的连接",
   "web-mobile.profiles.value": "值",

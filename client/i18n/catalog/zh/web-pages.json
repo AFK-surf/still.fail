@@ -693,7 +693,7 @@
   "web-pages.profiles.useMachineTip": "使用这台机器的登录，无需再次登录；在这台机器上切换账号或退出登录时，它也会随之更新",
   "web-pages.profiles.useThis": "使用此账号",
   "web-pages.profiles.usedBy": "使用它的连接",
-  "web-pages.profiles.usedByNone": "暂无连接使用此 Profile",
+  "web-pages.profiles.onStation": "在 {station}",
   "web-pages.profiles.usage": "近 7 天",
   "web-pages.profiles.usageHere": "近 7 天 · 在 {station}",
   "web-pages.profiles.usageAll": "全部用量",

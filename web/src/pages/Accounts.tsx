@@ -126,11 +126,13 @@ function AccountView({ profile, connects, sharing }: { profile: Profile; connect
   const workspace = station.address.split("/")[0]!;
   // Its row of the workspace's list: the account it is, on whichever stations have it.
   const entry = useProfiles(workspace).value?.items.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === profile.id));
-  // What it is, in a line: its kind, the address signed in (when not its name), where it is.
+  // What it is, in a line: its kind, the address signed in (when not its name), where it is: of an account on several
+  // stations, this station's (each's own part is under 各 station), not all of them.
+  const several = entry !== undefined && hosts(entry).length > 1;
   const facts = [
     profile.kindText,
     profile.email && profile.email !== profile.name ? profile.email : null,
-    entry?.where,
+    several ? t("web-pages.profiles.onStation", { station: station.name }) : entry?.where,
   ].filter(Boolean).join(" · ");
   return (
     <>
@@ -187,15 +189,14 @@ function AccountView({ profile, connects, sharing }: { profile: Profile; connect
         </Section>
       )}
 
-      <Section title={t("web-pages.profiles.usedBy")}>
-        {users.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.usedByNone")}</p> : (
-          <ul className={pagesCss.list}>
-            {users.map((c) => (
-              <li key={c.id}><Link className={pagesCss.listRow} to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className={pagesCss.listRowTitle}>{c.name}</span><span className={shellCss.muted}>{c.modelName ?? (profile.model ? profile.names[profile.model] ?? profile.model : t("web-pages.profiles.defaultModel"))}</span></Link></li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {/* The connects bound to it (Slack, Feishu): none says nothing of the station's own chats, which run on any. */}
+      {users.length > 0 && <Section title={t("web-pages.profiles.usedBy")}>
+        <ul className={pagesCss.list}>
+          {users.map((c) => (
+            <li key={c.id}><Link className={pagesCss.listRow} to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className={pagesCss.listRowTitle}>{c.name}</span><span className={shellCss.muted}>{c.modelName ?? (profile.model ? profile.names[profile.model] ?? profile.model : t("web-pages.profiles.defaultModel"))}</span></Link></li>
+          ))}
+        </ul>
+      </Section>}
 
       {copy ? null : profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
         onSave={(input) => saveThen(input, () => toast(t("web-pages.profiles.savedChecking")))} busy={save.busy} />}

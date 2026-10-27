@@ -116,9 +116,12 @@ export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runt
 export const runtimesFor = (access: Json, runtime: unknown): Runtime[] => profileRuntimes({ id: "", home: "", runtime: runtime as Runtime, access });
 
 /// The command to sign a subscription profile in, run on the station's machine.
-/// None for DeepSeek Harness, which has no subscription here.
-export const loginCommand = (runtime: Runtime, home: string) =>
-  runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login`
+/// None for DeepSeek Harness, which has no subscription here. One on the machine's own login (`machine`) is signed in
+/// where the machine's is, its usual home (machine-logins.ts): its own home holds no login, so signing that in changes
+/// nothing it uses.
+export const loginCommand = (runtime: Runtime, home: string, machine = false) =>
+  machine ? (runtime === "claude" ? "claude auth login" : runtime === "codex" ? "codex login" : "")
+  : runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login`
   : runtime === "codex" ? `CODEX_HOME=${home} codex login`
   : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
   : runtime === "devin" ? `XDG_DATA_HOME=${devinData(home)} devin auth login --force-manual-token-flow`
