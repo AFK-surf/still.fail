@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's keyboard (mbui's Keyboard.java, src/keyboard): Chinese typed by pinyin, 小鹤双拼 or full. -->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsSwitchingToNextInputMethod="true">
+    <subtype
+        android:label="中文"
+        android:imeSubtypeLocale="zh_CN"
+        android:languageTag="zh-CN"
+        android:imeSubtypeMode="keyboard" />
+</input-method>

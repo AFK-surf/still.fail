@@ -1,0 +1,20 @@
+#!/bin/bash
+# The keyboard's words, src/pinyin/words.txt, from the open sets tools/pinyin reads (its main.mbt says what and how),
+# fetched at the commits named here:  scripts/pinyin-words
+set -e
+D=$(cd "$(dirname "$0")" && pwd)
+A=$(cd "$D/.." && pwd)
+. "$D/env.sh"
+JIEBA=67fa2e36e72f69d9134b8a1037b83fbb070b9775
+PINYIN=9d05c9e29cb6a7e5c79f2f5279f5c1014246a19a
+PHRASE=195893902791321fe38ae7b4ebdd9905389cfd41
+W=$(mktemp -d)
+trap 'rm -rf "$W"' EXIT
+get() { curl -fsSL --retry 3 -o "$W/$1" "https://raw.githubusercontent.com/$2"; }
+get dict.txt "fxsjy/jieba/$JIEBA/jieba/dict.txt"
+get pinyin.txt "mozillazg/pinyin-data/$PINYIN/pinyin.txt"
+get usual.txt "mozillazg/pinyin-data/$PINYIN/kMandarin_8105.txt"
+get phrases.txt "mozillazg/phrase-pinyin-data/$PHRASE/pinyin.txt"
+(cd "$A/tools" && env -u MOON_CC moon build --target native --release >&2)
+"$A/tools/_build/native/release/build/sftools/pinyin/pinyin.exe" "$W/dict.txt" "$W/pinyin.txt" "$W/usual.txt" \
+  "$W/phrases.txt" "$A/src/pinyin/words.txt"

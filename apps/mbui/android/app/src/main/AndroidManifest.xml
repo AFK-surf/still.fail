@@ -123,6 +123,19 @@
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
         </service>
+        <!-- The app's keyboard, for typing in any app (mbui's Keyboard.java; src/keyboard): in a process of its own, the
+             keyboard's program apart from the app's (StillfailApp starts nothing of the app's there). -->
+        <service
+            android:name=".Keyboard"
+            android:label="${appLabel}"
+            android:exported="true"
+            android:process=":keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data android:name="android.view.im" android:resource="@xml/keyboard" />
+        </service>
         <!-- Reads the Wireless debugging pairing dialog's code off Settings while 共享调试 pairs (AdbCodeReader.java), once
              the person turns it on in Accessibility; only the system binds it. -->
         <service

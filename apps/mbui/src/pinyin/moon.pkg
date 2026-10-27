@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  targets: { "load_native.mbt": [ "native" ], "load_js.mbt": [ "js" ], "words_native_wbtest.mbt": [ "native" ] },
+  "native-stub": [ "read_file.c" ],
+)

@@ -1,0 +1,9 @@
+import {
+  "mbctools/sys",
+  "moonbitlang/core/env",
+  "moonbitlang/core/math",
+}
+
+options(
+  "is-main": true,
+)
