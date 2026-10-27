@@ -322,8 +322,9 @@ jobs:
     uses: ./.github/workflows/mbui-check.yml
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
-  # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
-  # the motion in two since its cases grew to over two minutes (2026-10-17).
+  # out between seven of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
+  # the motion in two since its cases grew to over two minutes (2026-10-17); the stories in five since a share of three
+  # was 131-151 s, the pipeline's longest once mbui's app part was on four runners (models-density, 40431110522, 2026-10-27).
   check-browser:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
@@ -332,7 +333,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        share: ["stories 1/3", "stories 2/3", "stories 3/3", "motion 1/2", "motion 2/2"]
+        share: ["stories 1/5", "stories 2/5", "stories 3/5", "stories 4/5", "stories 5/5", "motion 1/2", "motion 2/2"]
     env:
       STILLFAIL_CHECK_PART: browser
       STILLFAIL_BROWSER: ${{ matrix.share }}
