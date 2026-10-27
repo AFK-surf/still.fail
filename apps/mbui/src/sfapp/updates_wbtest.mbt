@@ -61,12 +61,12 @@ test "a newer build installed from the list of what comes: the list stays open, 
     t.tap(x + w / 2.0, y + h / 2.0)
     t.run_for(@ui.nav_push_ms)
   }
-  let listed = fn() { t.words().iter().any(fn(w) { w.0 == "列表滑得更顺" && w.5 > 0.5 }) }
   open("传输")
-  assert_true(listed(), msg="the list opened, the build in it")
+  let list = @sf.last_presented()
+  assert_true(list > 0 && @sf.presented_open_of(list), msg="the list opened")
   open("更新到 0.1.1")
   assert_eq(asked, ["1 false", "1 true"])
-  assert_true(listed(), msg="the list still open once the build is asked for")
+  assert_true(@sf.presented_open_of(list), msg="the list still open once the build is asked for")
 }
 
 ///|
