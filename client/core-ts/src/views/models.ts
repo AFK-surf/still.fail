@@ -286,33 +286,15 @@ const stationsOf = (stations: J): StationOf[] =>
       : [],
   );
 
-/// Whether a profile can run now as the station's pool sees it (sessions/pool.ts `usable`): it signs in, its key was not
-/// refused, and none of its windows is used up.
-function canRun(profile: J): boolean {
-  const state = get(get(profile, "check"), "state");
-  return state !== "login" && state !== "failed" && spentUntil(profile) === null;
-}
-
-/// Of the profiles that run a model, those the station's pool runs a new chat on (sessions/pool.ts `pickProfile`):
-/// those that can run now, and of them those paid for already, one billed per use only when none of those can; none
-/// can run, all of them.
-function pickedFirst(profiles: J[]): J[] {
-  const fit = profiles.filter(canRun);
-  const paid = fit.filter((p) => get(p, "perUse") !== true);
-  return paid.length > 0 ? paid : fit.length > 0 ? fit : profiles;
-}
-
-/// Each option said where the accounts a chat left to the station runs it on are (`pickedFirst`): `here` when one of
-/// them is the station's own, else `borrowed` from the station that shares them with it (`from`: its name, as
-/// `stations` names it). A key of its own billed per use beside a subscription borrowed is not what it runs on.
+/// Each option said where its accounts are: `here` when one of them is the station's own, else `borrowed` from the
+/// station that shares them with it (`from`: its name, as `stations` names it).
 export function sourced(options: J[], overview: J, stations: J): J[] {
   const byStation = new Map(stationsOf(stations).map((s) => [s.id, s]));
   const byId = new Map(profilesOf(overview).map((p) => [str(get(p, "id")) ?? "", p]));
   return options.map((o) => {
     const ids = Object.values(get(o, "accounts") ?? {}).flatMap((list) => arr(list).map((a) => str(get(a, "id")) ?? ""));
-    const profiles = pickedFirst(ids.map((id) => byId.get(id) ?? { id }));
-    const hosts = profiles.map((p) => {
-      const share = get(p, "share");
+    const hosts = ids.map((id) => {
+      const share = get(byId.get(id), "share");
       return get(share, "role") === "user" ? (str(get(share, "host")) ?? "") : null;
     });
     if (hosts.length === 0 || hosts.some((h) => h === null)) return { ...o, availability: "here" };
