@@ -1173,6 +1173,8 @@ pub fn round_rect(Double, Double, Double, Double, Double) -> Array[(Double, Doub
 
 pub fn row_agent_groups(ChatItem) -> Array[RowAgent]
 
+pub fn row_is(ChatItem, ChatRef) -> Bool
+
 pub fn row_keys(@ui.Ctx, Reading, String, ChatView, Array[Entry], String, Turns, Emits, SendFlight?, rise_ms~ : Double) -> (Array[Entry], Array[String])
 
 pub fn row_lead(ChatItem) -> String

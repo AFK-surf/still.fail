@@ -294,7 +294,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Row(item) => {
             let name = key + "\u{1}" + key_at(i)
             let on = match open {
-              Some(r) => r.station == item.station && (r.session == item.session || r.session == item.id)
+              Some(r) => @sfbase.row_is(item, r)
               None => false
             }
             chat_row(

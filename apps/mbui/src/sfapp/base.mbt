@@ -496,6 +496,7 @@ pub using @sfbase {
   quote_of,
   read_only_words,
   row_agent_groups,
+  row_is,
   row_name,
   row_tone,
   say,

@@ -96,7 +96,7 @@ fn recent_rows_of(c : @ui.Ctx, src : Source, items : Array[ChatItem], lead : Str
   c.box(style=recent_rows, fn() {
     for item in items {
       let here = match top {
-        Some(Chat(r)) => r.station == item.station && r.session == item.session
+        Some(Chat(r)) => row_is(item, r)
         _ => false
       }
       c.box(style=if here { recent_row_here } else { recent_row }, fn() {
