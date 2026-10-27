@@ -218,17 +218,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // the first after its work was done, so the display's frames that passed past the one it was drawn for are how
         // late it was, on the vsyncs' grid; 0 where it was asked for otherwise (its vsync perhaps one during that work),
         // or either has no vsync
-        // (on the grid the frames are drawn on: every vsync, or every so many where they are paced, keptApart)
-        long apart = keptApart();
         double late = 0;
         if (v != 0 && lastVsync != 0 && askedAtEnd) {
-            long frames = Math.round((double) (v - lastVsync) / apart);
-            if (frames > 1) late = (frames - 1) * apart / 1e6;
+            long frames = Math.round((double) (v - lastVsync) / framePeriod);
+            if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
         }
         // drawn at the vsync after the frame before's: the hand moving what it holds, a frame each vsync
-        boolean following = v > lastVsync && lastVsync != 0 && v - lastVsync < apart * 3 / 2;
+        boolean following = v > lastVsync && lastVsync != 0 && v - lastVsync < framePeriod * 3 / 2;
         lastVsync = v;
-        if (v != 0) drawnVsync = v;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
         boolean later = takeBacks(v != 0 ? v : began);
         // (what it waits for said again by the frame, if it still does: Host.wakeAfter, from its time)
@@ -245,10 +242,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
         Script.frameDrawn();
-        long work = System.nanoTime() - began;
-        frameWorked(work);
-        // (drawn one after another while it moves: weighed against the rate said, weigh)
-        if (more || later || following) weigh(work, late > 0);
+        frameWorked(System.nanoTime() - began);
     }
 
     // ---- the drawing thread, as the system's own ----
@@ -314,19 +308,13 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         android.view.Display d = getDisplay();
         if (d != null && d.getRefreshRate() > 1) framePeriod = (long) (1e9 / d.getRefreshRate());
         if (d == null) return;
-        // the rates the display shows at the size it has now (another size is another mode, not a rate), its highest
+        // the highest rate the display shows at the size it has now (another size is another mode, not a rate)
         android.view.Display.Mode m = d.getMode();
         float top = 0;
-        java.util.ArrayList<Float> at = new java.util.ArrayList<>();
         for (android.view.Display.Mode o : d.getSupportedModes()) {
-            if (o.getPhysicalWidth() == m.getPhysicalWidth() && o.getPhysicalHeight() == m.getPhysicalHeight()) {
+            if (o.getPhysicalWidth() == m.getPhysicalWidth() && o.getPhysicalHeight() == m.getPhysicalHeight())
                 top = Math.max(top, o.getRefreshRate());
-                at.add(o.getRefreshRate());
-            }
         }
-        float[] all = new float[at.size()];
-        for (int i = 0; i < all.length; i++) all[i] = at.get(i);
-        rates = all;
         topRate = top;
     }
 
@@ -342,133 +330,24 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      * still or not.
      */
     private volatile float topRate;
-    /** The rates the display shows at the size it has now (readFramePeriod). */
-    private volatile float[] rates = new float[0];
-    /** Whether this surface says a rate now, and which (GL thread; a new surface says nothing). */
-    private volatile boolean rateSaid;
-    private float saidRate;
+    /** Whether this surface says the display's highest rate now (GL thread; a new surface says nothing). */
+    private boolean rateSaid;
     /** The app's frames drawn (GL thread): one drawn since a frame that asked for none is told by it. */
     private int drawn;
 
-    /** The surface says the rate its frames keep (keptRate), or nothing (GL thread). */
+    /** The surface says the display's highest rate, or nothing (GL thread). */
     private void sayRate(boolean on) {
-        if (android.os.Build.VERSION.SDK_INT < 30) return;
-        float rate = on ? keptRate() : 0;
-        if (on == rateSaid && (!on || rate == saidRate)) return;
+        if (on == rateSaid || android.os.Build.VERSION.SDK_INT < 30) return;
+        float rate = on ? topRate : 0;
         if (on && rate <= 0) return;
         android.view.Surface s = getHolder().getSurface();
         if (s == null || !s.isValid()) return;
         try {
             s.setFrameRate(rate, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT);
             rateSaid = on;
-            saidRate = rate;
-            // (the frames just after a rate is said are the display's going over to it: not weighed)
-            if (on) weighFrom = drawn + 8;
         } catch (RuntimeException e) {
             Host.log("display rate: " + e);
         }
-    }
-
-    // ---- the rate the frames keep ----
-
-    /**
-     * A rate said that the frames do not keep is worse than a lower one: a frame that takes about the display's frame
-     * (8–10 ms of work on an OPPO Find N6 at 120 Hz, its refresh 8.3) reaches one refresh and misses the next, so what
-     * moves goes by uneven steps, a refresh's and two's, and shakes (a list scrolled, the keyboard going away, a page
-     * sliding), however well each frame is shown at its vsync's refresh (showAt). So the rate said while the app moves
-     * is the display's highest only while its frames keep it: where they do not (of the frames drawn one after another,
-     * more than one in twenty-four over 80% of the display's frame or a vsync late), the highest of its rates at half
-     * that or less, where they do (60 for 120: every frame drawn in time, each step alike). Tried at the highest again
-     * once that many frames in a row took little enough of the highest's frame (55%), as what is drawn gets lighter;
-     * kept from it twice as long each time it was tried and not kept (a phone that never keeps it is not shaken each
-     * time).
-     */
-    private volatile float lowered;
-    /** Of the frames weighed since the rate was said or last weighed: how many, how many did not keep it. */
-    private int weighed, overs;
-    /** Frames drawn before this are not weighed (the display going over to a rate just said). */
-    private int weighFrom;
-    /** How many frames in a row at the lower rate must each have taken little enough before the highest is tried. */
-    private int tryAfter = 120;
-    /** Whether the highest was tried again and its first frames are weighed (not kept: tried again later). */
-    private boolean trying;
-
-    /** The rate said while the app moves: the display's highest, or the lower one its frames keep. */
-    private float keptRate() {
-        return lowered > 0 ? lowered : topRate;
-    }
-
-    /** The vsync the last frame was drawn for (GL thread writes it; the vsyncs, on the main thread, read it). */
-    private volatile long drawnVsync;
-
-    /**
-     * How far apart the frames are drawn (ns): the display's frame, or where the rate said is a lower one (lowered),
-     * that rate's frame on the display's grid of vsyncs (two of 120's for 60).
-     */
-    private long keptApart() {
-        long p = framePeriod;
-        float r = lowered;
-        if (r <= 0 || !rateSaid) return p;
-        return Math.max(1, Math.round(1e9 / r / p)) * p;
-    }
-
-    /**
-     * Whether vsync `t` is one a frame is drawn at (main thread), paced by the rate the frames keep: where the display
-     * shows more frames than that (while it goes over to the rate said, or kept faster for another's sake: the keyboard,
-     * the system's own), every so many of its vsyncs, the frames as far apart as that rate's, each step alike.
-     */
-    boolean pacedAt(long t) {
-        long apart = keptApart();
-        long last = drawnVsync;
-        return last == 0 || apart <= framePeriod || t - last >= apart - framePeriod / 2;
-    }
-
-    /** The highest of the display's rates at half its highest or less; the highest itself where it has none. */
-    private float halfRate() {
-        float best = 0;
-        for (float r : rates) {
-            if (r <= topRate / 2 + 0.5f && r > best) best = r;
-        }
-        return best > 0 ? best : topRate;
-    }
-
-    /**
-     * A frame drawn while the app moves (GL thread), its work `work` ns: whether it kept the rate said (`late`: it came a
-     * vsync or more after the one before, which asked for it), weighed against it.
-     */
-    private void weigh(long work, boolean late) {
-        if (!rateSaid || drawn < weighFrom || topRate <= 0) return;
-        long period = keptApart();
-        boolean over = late || work > period * 8 / 10;
-        if (lowered <= 0) {
-            weighed++;
-            if (over) overs++;
-            if (weighed < 24) return;
-            if (overs > 1) {
-                float half = halfRate();
-                if (half < topRate) {
-                    lowered = half;
-                    if (trying) tryAfter = Math.min(tryAfter * 2, 3840);
-                    Host.log("display rate: frames keep " + half + " Hz, not " + topRate);
-                    sayRate(true);
-                }
-            }
-            trying = false;
-            weighed = 0;
-            overs = 0;
-            return;
-        }
-        long top = (long) (1e9 / topRate);
-        if (late || work > top * 55 / 100) {
-            weighed = 0;
-            return;
-        }
-        if (++weighed < tryAfter) return;
-        lowered = 0;
-        trying = true;
-        weighed = 0;
-        overs = 0;
-        sayRate(true);
     }
 
     /**
@@ -504,7 +383,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     private void frameWorked(long nanos) {
         if (hints == null) return;
-        long target = keptApart() * 7 / 10;
+        long target = framePeriod * 7 / 10;
         if (target != hintTarget) {
             hintTarget = target;
             hints.updateTargetWorkDuration(target);
@@ -555,18 +434,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     private volatile long[] vsyncAt = {0, 0};
     private final AtomicBoolean wanted = new AtomicBoolean();
-    private final Choreographer.FrameCallback vsync = new Choreographer.FrameCallback() {
-        @Override
-        public void doFrame(long t) {
-            // (a vsync between two the frames are drawn at: the next one, the rate the frames keep)
-            if (!pacedAt(t)) {
-                Choreographer.getInstance().postFrameCallback(this);
-                return;
-            }
-            vsyncAt = new long[] {t, 0};
-            wanted.set(false);
-            requestRender();
-        }
+    private final Choreographer.FrameCallback vsync = t -> {
+        vsyncAt = new long[] {t, 0};
+        wanted.set(false);
+        requestRender();
     };
     /** The vsync told with its frame's timelines (Timelines: Android 13's), made as first asked for. */
     private Object vsyncTimed;
@@ -581,6 +452,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (v.vsyncTimed == null) {
                 v.vsyncTimed = (Choreographer.VsyncCallback) d -> {
                     long shows = d.getPreferredFrameTimeline().getExpectedPresentationTimeNanos();
+                    v.vsyncAt = new long[] {d.getFrameTimeNanos(), shows};
                     // the display's frame now, as far apart as its timelines are: the rate the app's frames are shown
                     // at (since Android 16 the display's listener is told no change of rate unless it asks, so the
                     // frame read as the view was shown, at 60 Hz, stayed while the display went to 120 as the app
@@ -589,12 +461,6 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                     long period = tl.length > 1
                             ? tl[1].getExpectedPresentationTimeNanos() - tl[0].getExpectedPresentationTimeNanos() : 0;
                     if (period > 0 && Math.abs(period - v.framePeriod) * 16 > v.framePeriod) v.framePeriod = period;
-                    // (a vsync between two the frames are drawn at: the next one, the rate the frames keep)
-                    if (!v.pacedAt(d.getFrameTimeNanos())) {
-                        Choreographer.getInstance().postVsyncCallback((Choreographer.VsyncCallback) v.vsyncTimed);
-                        return;
-                    }
-                    v.vsyncAt = new long[] {d.getFrameTimeNanos(), shows};
                     v.wanted.set(false);
                     v.requestRender();
                 };
@@ -630,14 +496,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         if (shotTaken) return;
         // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn; shown as soon as
         // it is drawn, as the keyboard moves)
-        long t = System.nanoTime();
-        // (paced as the vsyncs' frames are, pacedAt: one between two drawn is the next drawn's, from where the keyboard is
-        // then)
-        if (!pacedAt(t)) {
-            wantFrame();
-            return;
-        }
-        vsyncAt = new long[] {t, 0};
+        vsyncAt = new long[] {System.nanoTime(), 0};
         wanted.set(false);
         requestRender();
     }
