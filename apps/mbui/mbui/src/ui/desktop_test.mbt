@@ -829,6 +829,42 @@ test "desktop: a menu is asked for by a mouse's right click, by a finger held st
 }
 
 ///|
+test "desktop: a finger that went past the slop asks for no menu, held still after it on what follows it itself" {
+  // (a picture's stage, as the viewer's: it takes the finger's moves itself, the framework drags nothing of it)
+  let asked : Array[String] = []
+  let view = fn(c : @ui.Ctx) {
+    let stage = c.id("stage")
+    @ui.capture(c, stage)
+    if c.menu_asked(stage) is Some(_) {
+      asked.push("menu")
+    }
+    c.box(id=stage, w=Px(300.0), h=Px(300.0), fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  t.press_at(150.0, 150.0)
+  t.draw()
+  t.touch(1, 100.0, 150.0)
+  t.run_for(@ui.long_press_ms)
+  t.release(100.0, 150.0)
+  assert_eq(asked, [])
+  // gone past it and back where it went down: a swipe still
+  t.press_at(150.0, 150.0)
+  t.draw()
+  t.touch(1, 120.0, 150.0)
+  t.touch(1, 150.0, 150.0)
+  t.run_for(@ui.long_press_ms)
+  t.release(150.0, 150.0)
+  assert_eq(asked, [])
+  // within it: held
+  t.press_at(150.0, 150.0)
+  t.draw()
+  t.touch(1, 153.0, 151.0)
+  t.run_for(@ui.long_press_ms)
+  t.release(153.0, 151.0)
+  assert_eq(asked, ["menu"])
+}
+
+///|
 test "desktop: a finger held still asks for the menu once, though what the menu opens builds the frame again" {
   let asked : Array[String] = []
   let view = fn(c : @ui.Ctx) {

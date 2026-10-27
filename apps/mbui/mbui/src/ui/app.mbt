@@ -814,6 +814,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     c.press_x = x
     c.press_y = y
     c.press_at = t
+    c.press_strayed = false
     // (not taken yet: one taken before at the same moment is not this one)
     c.taken_at = -1.0
     c.last_y = y
@@ -961,9 +962,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
-      // a finger on a field moved past the slop: no tap and no long press of it (Android's)
-      if c.editor_tap != 0 &&
-        ((x - c.press_x).abs() > touch_slop() || (y - c.press_y).abs() > touch_slop()) {
+      // moved past the slop: no long press of it (Android's), and on a field no tap either
+      if (x - c.press_x).abs() > touch_slop() || (y - c.press_y).abs() > touch_slop() {
+        c.press_strayed = true
         c.editor_tap = 0
       }
       // (a page already following the finger back, from the edge: its moves are where it is, Nav's `finger`)

@@ -340,6 +340,9 @@ pub struct Ctx {
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
+  /// whether the press under way has gone past the slop of where it went down, at any of its moves (then it holds
+  /// nothing long, Android's: a finger that has swiped is no long press, even held still after it)
+  mut press_strayed : Bool
   /// Android's: the press went down in what scrolls, so it shows as pressed only once it has stayed tap_indication_ms
   /// (Compose's clickable in a scrollable container: a finger that goes on to scroll presses nothing on the way)
   mut press_late : Bool
@@ -644,6 +647,7 @@ fn Ctx::new() -> Ctx {
     dragging: false,
     press_x: 0.0,
     press_at: -1.0,
+    press_strayed: false,
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
