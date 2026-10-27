@@ -1,7 +1,8 @@
 // A view of one of the station's screens over a member's link (docs/remote-screens.md, "Wire"): a stream whose head
 // line has a `screen` object, answered 200 `application/x-stillfail-screen`, then frames both ways, each a kind byte,
 // its payload's length (4 bytes, big-endian) and the payload. Station → client: `config`, `video`, `state`; client →
-// station: `input`, `ack`, `keyframe`; and the screen's clipboard both ways (`clipboard`), for a view that drives it
+// station: `input`, `ack`, `keyframe`, `look` (the part of the screen it shows, zoomed in: its frames are then of that
+// part, as large as the client shows it, each config saying which part); and the screen's clipboard both ways (`clipboard`), for a view that drives it
 // (the station sends it as it changes, the client to set it and paste). The source is asked for a frame only while the
 // `Pacer` lets one go: as many as the link holds (a far one holds several), none while the oldest not acknowledged
 // waits longer than the link takes with no queue; and the source is asked for the bit rate the link carries
@@ -16,14 +17,14 @@ import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
 import { FrameLatency, Pacer, STILL_MS, START_RATE, Sharpener, Sizer, ownRate } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
-export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, input: 16, ack: 17, keyframe: 18, setClipboard: 19 } as const;
+export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, input: 16, ack: 17, keyframe: 18, setClipboard: 19, look: 20 } as const;
 /// A client's frame is an input event at most: one larger ends the view.
 export const MAX_IN = 64 * 1024;
 /// A client's `clipboard` frame is its flags, its type and a picture at most.
@@ -43,7 +44,7 @@ export function frame(kind: number, payload: Buffer): Buffer {
 }
 
 export function configPayload(c: FrameConfig): Buffer {
-  return Buffer.from(JSON.stringify({ codec: c.codec, width: c.width, height: c.height, ...(c.description ? { description: Buffer.from(c.description).toString("base64") } : {}) }));
+  return Buffer.from(JSON.stringify({ codec: c.codec, width: c.width, height: c.height, ...(c.description ? { description: Buffer.from(c.description).toString("base64") } : {}), ...(c.region ? { region: c.region } : {}) }));
 }
 
 export function videoPayload(f: Frame): Buffer {
@@ -77,6 +78,22 @@ export function parseScale(v: any): number | null {
 /// What a client's input frame asks of the file manager (`{t: "reveal", path}`): the path, or null when it is not that.
 export function parseReveal(v: any): string | null {
   return v !== null && typeof v === "object" && v.t === "reveal" && typeof v.path === "string" && v.path !== "" && v.path.length <= 4096 ? v.path : null;
+}
+
+/// A client's `look` frame (JSON `{region, maxWidth, maxHeight}`): the part of the screen it shows (null: the whole) and
+/// the bounds its pictures are to fit in (the view's own when not said, or for the whole); null when it is none.
+export function parseLook(payload: Buffer, own: { maxWidth: number; maxHeight: number }): { region: Region | null; maxWidth: number; maxHeight: number } | null {
+  let v: any;
+  try {
+    v = JSON.parse(payload.toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (v === null || typeof v !== "object") return null;
+  const region = regionOf(v.region);
+  if (region === null) return { region: null, ...own };
+  const bound = (n: unknown, otherwise: number) => (num(n) ? Math.min(8192, Math.max(16, Math.round(n))) : otherwise);
+  return { region, maxWidth: bound(v.maxWidth, own.maxWidth), maxHeight: bound(v.maxHeight, own.maxHeight) };
 }
 
 /// Frames from a stream, after what came with its head line.
@@ -210,7 +227,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const pacer = new Pacer(now, START_RATE);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer, now, sleep }).run();
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, now, sleep }).run();
 }
 
 /// One view while it lasts.
@@ -254,8 +271,12 @@ class ViewSession {
   readonly latency = new FrameLatency();
   /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
   #size: { width: number; height: number } | null = null;
+  /// The bounds the view opened with (the whole screen's), and the part of the screen the client looks at now (null:
+  /// the whole).
+  readonly #own: { maxWidth: number; maxHeight: number };
+  #region: Region | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; now: () => number; sleep: (ms: number) => Promise<void> }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -268,6 +289,7 @@ class ViewSession {
     this.access = o.access;
     this.pacer = o.pacer;
     this.sizer = o.sizer;
+    this.#own = o.bounds;
     this.#now = o.now;
     this.#sleep = o.sleep;
     this.#title = o.source.title();
@@ -377,8 +399,25 @@ class ViewSession {
     }
     if (this.#size && this.view.bounds) {
       const bounds = this.sizer.step(rate, this.pacer.through(), this.#size);
-      if (bounds) this.view.bounds(bounds.maxWidth, bounds.maxHeight);
+      if (bounds) this.#bounds(bounds);
     }
+  }
+
+  /// The source asked for its pictures in these bounds, of the part of the screen looked at (where it frames parts).
+  #bounds(b: { maxWidth: number; maxHeight: number }) {
+    if (!this.view.bounds) return;
+    if (this.#region !== null) this.view.bounds(b.maxWidth, b.maxHeight, this.#region);
+    else this.view.bounds(b.maxWidth, b.maxHeight);
+  }
+
+  /// The client looks at a part of the screen (or the whole again): a source that frames parts frames it, as large as
+  /// asked (a config first, saying which part); one that does not goes on with the whole screen, which the client
+  /// draws as it did.
+  #look(look: { region: Region | null; maxWidth: number; maxHeight: number }) {
+    if (!this.view.bounds || this.view.regions?.() !== true) return;
+    if (JSON.stringify(look) === JSON.stringify({ region: this.#region, ...this.sizer.asked })) return;
+    this.#region = look.region;
+    this.#bounds(this.sizer.ask({ maxWidth: look.maxWidth, maxHeight: look.maxHeight }));
   }
 
   /// Frames out, while the client keeps up.
@@ -439,6 +478,11 @@ class ViewSession {
           case KIND.keyframe:
             this.view.keyframe();
             break;
+          case KIND.look: {
+            const look = parseLook(got.payload, this.#own);
+            if (look !== null) this.#look(look);
+            break;
+          }
           case KIND.input: {
             if (!this.control) break;
             let raw: unknown = null;

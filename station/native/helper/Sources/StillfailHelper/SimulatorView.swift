@@ -22,12 +22,15 @@ final class SimulatorView: ScreenView {
   let injector = HIDInjector()
   /// The ops posted, one after another.
   var ops: AsyncStream<[String: Any]>.Continuation?
-  /// What scales a picture into the bounds, and the bounds as the capture reads them (on its own queue).
+  /// The bounds and the part of the device's screen as the capture reads them (on its own queue), and the part the
+  /// latest picture shows (nil: the whole).
   let scaling = NSLock()
-  var transfer: VTPixelTransferSession?
-  var pool: CVPixelBufferPool?
-  var poolSize = (0, 0)
   var limits = (0, 0)
+  var limitsPart: [Double]?
+  var latestPart: [Double]?
+  /// The device's framebuffer as last captured (what it shows now: the device draws its next picture in it), for a part
+  /// asked of a still screen.
+  var source: CVPixelBuffer?
   /// The device's screen as captured, in its pixels.
   var screen = (0, 0)
 
@@ -50,11 +53,13 @@ final class SimulatorView: ScreenView {
           let size = (CVPixelBufferGetWidth(buffer), CVPixelBufferGetHeight(buffer))
           first.continuation.yield(size)
           // The framebuffer is the device's, used again for its next picture: scaled into one of ours now.
-          guard let picture = self.scaled(buffer) else { return }
+          guard let got = self.scaled(buffer) else { return }
           let at = Int64(CMTimeGetSeconds(time) * 1_000_000)
           self.queue.async {
             self.screen = size
-            self.took(picture, at)
+            self.source = buffer
+            self.latestPart = got.1
+            self.took(got.0, at)
           }
         }
         // Its first picture says its size (a device asleep still has one: the black screen).
@@ -105,45 +110,44 @@ final class SimulatorView: ScreenView {
     _ = done.wait(timeout: .now() + 2)
   }
 
-  override func bounds(_ width: Int, _ height: Int) {
+  /// From its next picture, fitted into `width`×`height`, of `region` of the device's screen alone (nil: the whole).
+  /// Its framebuffer is read whole at its own pixels anyway: the part is cut from each picture as it is scaled.
+  override func bounds(_ width: Int, _ height: Int, region: [Double]?) {
     queue.async {
       self.maxWidth = max(16, width)
       self.maxHeight = max(16, height)
       self.scaling.lock()
       self.limits = (self.maxWidth, self.maxHeight)
+      self.limitsPart = region
       self.scaling.unlock()
+      guard region != self.region else { return }
+      self.region = region
+      // a still screen brings no picture: the part cut from what it shows now
+      if let source = self.source, let got = self.scaled(source) {
+        self.latestPart = got.1
+        self.took(got.0, self.now())
+      }
     }
   }
 
-  /// The picture fitted into the view's bounds, in a buffer of the view's own: NV12 for the video's encoder, BGRA for a
-  /// JPEG. On the capture's queue.
-  func scaled(_ source: CVPixelBuffer) -> CVPixelBuffer? {
+  /// The latest picture as scaled, and the part it shows.
+  override func framed() -> (CVPixelBuffer, [Double]?)? {
+    latest.map { ($0, latestPart) }
+  }
+
+  /// The picture (the part asked of it) fitted into the view's bounds, in a buffer of the view's own: NV12 for the
+  /// video's encoder, BGRA for a JPEG; and the part it shows. On the capture's queue.
+  func scaled(_ source: CVPixelBuffer) -> (CVPixelBuffer, [Double]?)? {
     scaling.lock()
-    defer { scaling.unlock() }
+    let (limits, region) = (self.limits, limitsPart)
+    scaling.unlock()
     let width = CVPixelBufferGetWidth(source), height = CVPixelBufferGetHeight(source)
-    let scale = min(1.0, Double(limits.0) / Double(width), Double(limits.1) / Double(height))
+    let cut = region.map { ScreenView.crop($0, width, height) }
+    let (w, h) = cut.map { (Int($0.0.width), Int($0.0.height)) } ?? (width, height)
+    let scale = min(1.0, Double(limits.0) / Double(w), Double(limits.1) / Double(h))
     let even = { (v: Double) in max(2, Int(v.rounded()) & ~1) }
-    let size = (even(Double(width) * scale), even(Double(height) * scale))
-    if transfer == nil {
-      VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &transfer)
-      if let transfer { VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_ScalingMode, value: kVTScalingMode_Normal) }
-    }
-    if pool == nil || poolSize != size {
-      let attributes: [CFString: Any] = [
-        kCVPixelBufferPixelFormatTypeKey: jpeg ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-        kCVPixelBufferWidthKey: size.0,
-        kCVPixelBufferHeightKey: size.1,
-        kCVPixelBufferIOSurfacePropertiesKey: [:] as [CFString: Any],
-      ]
-      pool = nil
-      CVPixelBufferPoolCreate(nil, nil, attributes as CFDictionary, &pool)
-      poolSize = size
-    }
-    guard let transfer, let pool else { return nil }
-    var made: CVPixelBuffer?
-    guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &made) == kCVReturnSuccess, let picture = made else { return nil }
-    guard VTPixelTransferSessionTransferImage(transfer, from: source, to: picture) == noErr else { return nil }
-    return picture
+    guard let picture = transferred(source, crop: cut?.0, to: (even(Double(w) * scale), even(Double(h) * scale))) else { return nil }
+    return (picture, cut?.1)
   }
 
   override func post(_ op: [String: Any]) {

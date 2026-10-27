@@ -23,6 +23,7 @@ use super::clipboard::{Clipboard, PNG_MAX};
 use super::encode::H264;
 use super::image::{Images, Pixels};
 use super::input::Input;
+use super::region::{self, Region};
 
 /// Its coordinates in pixels, whatever the display's scale.
 pub fn dpi_aware() {
@@ -56,8 +57,8 @@ pub enum Msg {
     Closed,
     /// Bits a second to encode at from the next frame on (the link carries no more).
     Rate(u32),
-    /// The pictures from now on fitted into these bounds.
-    Bounds(u32, u32),
+    /// The pictures from now on fitted into these bounds, of a part of the display alone (None: the whole).
+    Bounds(u32, u32, Option<Region>),
 }
 
 struct Options {
@@ -125,7 +126,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
             8 => {
                 if let Ok(b) = serde_json::from_slice::<Value>(&payload) {
                     if let (Some(w), Some(h)) = (b["maxWidth"].as_u64(), b["maxHeight"].as_u64()) {
-                        drop(tx.send(Msg::Bounds(w.max(16) as u32, h.max(16) as u32)));
+                        drop(tx.send(Msg::Bounds(w.max(16) as u32, h.max(16) as u32, region::of(&b["region"]))));
                     }
                 }
             }
@@ -175,6 +176,12 @@ struct View {
     pps: Vec<u8>,
     jpeg_size: (u32, u32),
     staging: Option<ID3D11Texture2D>,
+    /// The part of the display framed alone as the station asks (None: the whole); the part the last picture pushed
+    /// shows, those of the pictures in the encoder by their time, and the last said (message 7).
+    region: Option<Region>,
+    pushed_region: Option<Region>,
+    regions: Vec<(i64, Option<Region>)>,
+    told_region: Option<Region>,
     /// When the picture in the encoder went in.
     pushed_at: Instant,
     /// When which display is the main one was looked at last.
@@ -219,6 +226,10 @@ impl View {
             pps: Vec::new(),
             jpeg_size: (0, 0),
             staging: None,
+            region: None,
+            pushed_region: None,
+            regions: Vec::new(),
+            told_region: None,
             pushed_at: Instant::now(),
             looked: Instant::now(),
         };
@@ -229,7 +240,7 @@ impl View {
             made
         };
         let codec = if view.options.jpeg { "jpeg" } else if view.encoder_hevc == Some(true) { "h265" } else { "h264" };
-        out.json(1, json!({ "width": width, "height": height, "encoder": encoder, "codec": codec }));
+        out.json(1, json!({ "width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true }));
         Ok(view)
     }
 
@@ -281,7 +292,15 @@ impl View {
             match msg {
                 Some(Msg::Next) => self.wanted += 1,
                 // The next picture is of the new size: the encoder made anew for it (from a key frame, a config first).
-                Some(Msg::Bounds(w, h)) => self.options.max = (w, h),
+                Some(Msg::Bounds(w, h, region)) => {
+                    self.options.max = (w, h);
+                    // Another part: sent at once, from a key frame, the screen still or not.
+                    if region != self.region {
+                        self.region = region;
+                        self.force_key = true;
+                        self.fresh = self.latest.is_some();
+                    }
+                }
                 Some(Msg::Rate(bits)) => {
                     let bits = bits.max(100_000);
                     self.options.bitrate = Some(bits);
@@ -329,8 +348,8 @@ impl View {
         }
     }
 
-    /// The scaler for the latest picture into `to`, made anew when either changed.
-    fn scaled(&mut self, to: (u32, u32), format: DXGI_FORMAT) -> windows::core::Result<ID3D11Texture2D> {
+    /// `crop` of the latest picture scaled into `to`, its scaler made anew when either size changed.
+    fn scaled(&mut self, crop: (u32, u32, u32, u32), to: (u32, u32), format: DXGI_FORMAT) -> windows::core::Result<ID3D11Texture2D> {
         let latest = self.latest.clone().unwrap();
         let mut desc = Default::default();
         unsafe { latest.GetDesc(&mut desc) };
@@ -338,13 +357,30 @@ impl View {
         if !self.scaler.as_ref().is_some_and(|s| s.from == from && s.to == to && s.format == format) {
             self.scaler = Some(Scaler::new(&self.gpu, from, to, format)?);
         }
-        self.scaler.as_mut().unwrap().run(&self.gpu, &latest)
+        self.scaler.as_mut().unwrap().run(&self.gpu, &latest, crop)
     }
 
-    fn size_now(&self) -> (u32, u32) {
+    /// What of the latest picture is encoded now (the whole, or the part asked for, in its pixels), the size it is
+    /// encoded at (fitted into the bounds), and the part it is (None: the whole).
+    fn framing(&self) -> ((u32, u32, u32, u32), (u32, u32), Option<Region>) {
         let mut desc = Default::default();
         unsafe { self.latest.as_ref().unwrap().GetDesc(&mut desc) };
-        fitted(desc.Width, desc.Height, self.options.max.0, self.options.max.1)
+        let (crop, part) = match self.region {
+            Some(r) => {
+                let (crop, part) = region::crop(r, desc.Width, desc.Height);
+                (crop, Some(part))
+            }
+            None => ((0, 0, desc.Width, desc.Height), None),
+        };
+        (crop, fitted(crop.2, crop.3, self.options.max.0, self.options.max.1), part)
+    }
+
+    /// The part of the display the frame about to go shows (message 7), when it is another than the last one's.
+    fn tell(&mut self, part: Option<Region>, out: &Out) {
+        if part != self.told_region {
+            self.told_region = part;
+            out.json(7, region::said(part));
+        }
     }
 
     fn timestamp(&mut self) -> i64 {
@@ -369,6 +405,8 @@ impl View {
         if self.encoder.as_ref().is_some_and(|e| e.busy()) && self.pushed_at.elapsed() > STUCK {
             out.json(4, json!({ "encoder": "gave nothing back; made anew" }));
             self.encoder = None;
+            self.regions.clear();
+            self.pushed_region = self.told_region;
             self.wanted += 1;
             self.force_key = true;
             self.fresh = self.latest.is_some();
@@ -376,7 +414,7 @@ impl View {
         if self.wanted == 0 || !self.fresh || self.latest.is_none() {
             return Ok(());
         }
-        let size = self.size_now();
+        let (crop, size, part) = self.framing();
         let remake = self.encoder.as_ref().is_none_or(|e| (e.width, e.height) != size) || (self.force_key && self.force_unheeded);
         if remake {
             if self.encoder.as_ref().is_some_and(|e| e.busy()) {
@@ -393,10 +431,13 @@ impl View {
         if !ready {
             return Ok(());
         }
-        let texture = self.scaled(size, DXGI_FORMAT_NV12)?;
+        let texture = self.scaled(crop, size, DXGI_FORMAT_NV12)?;
         let ts = self.timestamp();
-        let key = self.force_key;
+        // Another part of the display: from a key frame (the client's config says the part).
+        let key = self.force_key || part != self.pushed_region;
         self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key)?;
+        self.pushed_region = part;
+        self.regions.push((ts, part));
         self.pushed_at = Instant::now();
         self.wanted -= 1;
         self.fresh = false;
@@ -414,6 +455,17 @@ impl View {
             let p = avc::picture(&encoded.stream);
             (p.data, p.key, None, p.sps, p.pps)
         };
+        // The part this picture shows, as it was pushed (those before it gone with it).
+        let mut part = self.told_region;
+        while let Some(&(ts, p)) = self.regions.first() {
+            if ts > encoded.ts {
+                break;
+            }
+            self.regions.remove(0);
+            if ts == encoded.ts {
+                part = p;
+            }
+        }
         if data.is_empty() {
             return;
         }
@@ -437,6 +489,7 @@ impl View {
         }
         let description = if hevc { hevc::hvcc(&self.vps, &self.sps, &self.pps) } else { Some(avc::avcc(&self.sps, &self.pps)) };
         let Some(description) = description else { return };
+        self.tell(part, out);
         let (width, height) = self.encoder.as_ref().map(|e| (e.width, e.height)).unwrap_or((0, 0));
         let mut config = Vec::new();
         config.extend_from_slice(&width.to_be_bytes());
@@ -456,14 +509,15 @@ impl View {
     /// The latest picture as one JPEG, when one is wanted and it is new (or a key frame was asked for: every one is).
     fn pump_jpeg(&mut self, out: &Out) -> windows::core::Result<()> {
         while self.wanted > 0 && self.fresh && self.latest.is_some() {
-            let size = self.size_now();
-            let texture = self.scaled(size, DXGI_FORMAT_B8G8R8A8_UNORM)?;
+            let (crop, size, part) = self.framing();
+            let texture = self.scaled(crop, size, DXGI_FORMAT_B8G8R8A8_UNORM)?;
             let (bytes, pitch) = self.gpu.read(&texture, &mut self.staging)?;
             let images = self.images.as_ref().unwrap();
             let jpeg = images.jpeg(&Pixels { width: size.0, height: size.1, pitch: pitch as u32, bytes: &bytes })?;
             self.wanted -= 1;
             self.fresh = false;
             self.force_key = false;
+            self.tell(part, out);
             if size != self.jpeg_size {
                 self.jpeg_size = size;
                 let mut config = Vec::new();

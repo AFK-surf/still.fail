@@ -419,6 +419,83 @@ test "turned sideways the same view goes on, the controls down the side" {
 }
 
 ///|
+/// The streams the last frame drew, each where (x, y, w, h) and what it showed ("stream WxH ts=TS").
+fn drawn_streams(t : @ui.Tester) -> Array[(Double, Double, Double, Double, String)] {
+  t
+  .drawn_text()
+  .split("\n")
+  .filter_map(fn(line) {
+    let l = line.to_string()
+    guard l.has_prefix("inst ") && l.contains(" stream ") else { return None }
+    let words = l.split(" ").map(fn(w) { w.to_string() }).to_array()
+    let n = fn(i : Int) {
+      match (try Some(@json.parse(words[i])) catch { _ => None }) {
+        Some(Number(d, ..)) => d / 64.0
+        _ => 0.0
+      }
+    }
+    let said = l.split(" stream ").map(fn(w) { w.to_string() }).to_array()
+    Some((n(1), n(2), n(3), n(4), "stream " + said[said.length() - 1]))
+  })
+  .to_array()
+}
+
+///|
+test "zoomed in, the part in sight is asked for, as sharp as it is shown; its frames drawn over the whole where it is; zoomed out, the whole again once its frame comes" {
+  let r = screen_rig()
+  r.live()
+  let u = r.ui()
+  // not zoomed: nothing told
+  assert_eq(r.told("screen.look").length(), 0)
+  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w / 2.0, u.box_h / 2.0, false)
+  r.t.draw()
+  r.t.draw()
+  let looks = r.told("screen.look")
+  assert_eq(looks.length(), 1)
+  let region = field(Some(looks[0]), "region")
+  let shown = u.shown()
+  // a quarter of its width in the middle, all the stage's height of it, in the pixels it is shown in
+  assert_true(close_to(number(region, "x"), 0.375))
+  assert_true(close_to(number(region, "w"), 0.25))
+  let rh = number(region, "h")
+  assert_true(close_to(rh, u.box_h / shown.h))
+  assert_true(close_to(number(Some(looks[0]), "width") / number(Some(looks[0]), "height"), 0.25 * shown.w / (rh * shown.h)))
+  // the part's frames (the station's config saying the part): a decoder of their own, drawn over the whole there
+  let part : Json = { "x": 0.375, "y": number(region, "y"), "w": 0.25, "h": rh }
+  r.say({ "config": { "codec": "jpeg", "width": 1170.0, "height": 1000.0, "region": part } })
+  r.say({ "frame": { "key": true, "ts": 2000.0 } }, bytes=b"\xFF\xD8\xFF\xE0jpeg")
+  let pst = r.sess().part.unwrap()
+  assert_true(pst.id() != r.sess().stream.unwrap().id())
+  r.t.stream_shows(pst.id(), 2000.0, 1170, 1000)
+  r.t.draw()
+  assert_true(r.acked(2000.0))
+  let streams = drawn_streams(r.t)
+  assert_eq(streams.length(), 2)
+  let (px, py, pw, ph, what) = streams[1]
+  assert_eq(what, "stream 1170x1000 ts=2000")
+  assert_true(close_to(pw, 0.25 * shown.w))
+  assert_true(close_to(ph, rh * shown.h))
+  assert_true(close_to(px - streams[0].0, 0.375 * shown.w))
+  assert_true(close_to(py - streams[0].1, number(region, "y") * shown.h))
+  // laid out by the whole screen's size still
+  assert_eq(r.sess().frame_size(), Some((1280, 720)))
+  // zoomed out: the whole told; the part drawn until the whole's frame comes, then the whole alone
+  u.zoom.fit_now()
+  r.t.draw()
+  r.t.draw()
+  assert_eq(r.told("screen.look").length(), 2)
+  assert_true(field(Some(r.told("screen.look")[1]), "region") is Some(Null))
+  assert_eq(drawn_streams(r.t).length(), 2)
+  r.config()
+  r.frame(3000.0)
+  assert_true(r.acked(3000.0))
+  let streams = drawn_streams(r.t)
+  assert_eq(streams.length(), 1)
+  assert_eq(streams[0].4, "stream 1280x720 ts=3000")
+  screen_done(r.t)
+}
+
+///|
 test "a trackpad moves the pointer and clicks where it points; two fingers tapped right-click; the keys row" {
   let r = screen_rig()
   // a desktop's screen (a page of the station's browser is laid out for the phone, and tapped where it is)

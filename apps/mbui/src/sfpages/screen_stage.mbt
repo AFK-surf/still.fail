@@ -86,6 +86,17 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   }
   u.zoom.boxed(u.box_w, u.box_h)
   let fit = u.fit()
+  // zoomed in, the part of the screen in sight told the core, in this device's pixels (the whole once it is not)
+  let scale = c.scale
+  c.after_build("screen-look/" + key, fn() {
+    let part = u.in_sight()
+    let shown = u.shown()
+    let (w, h) = match part {
+      Some(p) => (p.w * shown.w * scale, p.h * shown.h * scale)
+      None => (0.0, 0.0)
+    }
+    s.look(s.src, part, w, h)
+  })
   // (the pointer's way taken once a frame, whatever builds it)
   screen_gestures(c, s, u, stage, fit, "screen-keys/" + key)
   c.drag_on(stage, axis=Free)
@@ -115,6 +126,15 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
             match s.stream {
               Some(st) => c.stream(st, w=Fill(1.0), h=Fill(1.0)) |> ignore
               None => ()
+            }
+            // zoomed in, the part of the screen the station sends alone, sharper, over the whole where it is
+            match (s.part, s.part_shown()) {
+              (Some(pst), Some(p)) =>
+                c.layer(fn() {
+                  c.stream(pst, at=Some((p.x * shown.w, p.y * shown.h, p.w * shown.w, p.h * shown.h))) |> ignore
+                })
+                |> ignore
+              _ => ()
             }
           },
         )

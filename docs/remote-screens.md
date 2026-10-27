@@ -88,14 +88,15 @@ JPEG frames are all key frames and their config has no `description`.
 
 | kind | direction | payload |
 |---|---|---|
-| 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?}`: `description` is the hvcC (H.265) or avcC (H.264), base64. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
+| 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?, region?}`: `description` is the hvcC (H.265) or avcC (H.264), base64; `region` `{x, y, w, h}` (0..1 of the screen) the part of the screen the frames after it show (after a `look`, below), none the whole. Sent first and whenever size, codec or part changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went: the core says the view's phase is `gone` then, over for good, as for a screen no longer listed), `stopping` (the station stops) |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the screen, whatever part the frames show, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went: the core says the view's phase is `gone` then, over for good, as for a screen no longer listed), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
-| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
+| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the screen (the whole of it, whatever part the frames show): `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
 | 19 `clipboard` | client → station | 1 byte flags (bit 0: paste it), 1 byte type (1 text, 2 PNG), the content: sets the screen's clipboard and, with paste, pastes it where its focus is. Only from a view that drives it, of a type its `clipboard` names; text at most 1 MB, a PNG 8 MB (a larger frame ends the view, as any client frame past its bound does) |
+| 20 `look` | client → station | JSON `{region: {x, y, w, h} \| null, maxWidth?, maxHeight?}`: the part of the screen the client shows (zoomed in), and the device pixels it is shown in; null, or about all of it, the whole at the view's own bounds (Regions, below). A station from before it lets it be. |
 
 - Read-only members (`viewer` role) may view but not send input (`control` ignored, input and clipboard frames
   dropped). The clipboard goes only to and from a view that drives the screen (never one that only looks, nor an
@@ -133,6 +134,26 @@ client, so any client that acknowledges what it drew is paced.
   3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
   next frame (macOS: VideoToolbox's `AverageBitRate`; Windows: the encoder's `CODECAPI_AVEncCommonMeanBitRate`); a
   browser tab's JPEGs keep theirs.
+- **Regions.** A client that zooms the picture in (two fingers on a phone) shows a part of the screen as large as its
+  stage: a whole 1920×1080 picture enlarged five times there blurs its text. It says the part it shows (`look`,
+  0..1 of the screen, and the device pixels it is shown in) once it has stayed 200 ms (the core's `LOOK_MS`: a pinch
+  or a pan asks once, as it settles), and the station asks the source (`ScreenView.bounds` with a region, the helper's
+  message 8 with `region`) for that part alone, fitted into those pixels (no larger than the view asked for the
+  whole, nor than the screen's own pixels there: never enlarged); the Sizer goes on as before, its smaller bounds within
+  the part's. The source frames it from the next picture on (the screen still or not), as a key frame after a config
+  whose `region` says the part as it was cut (on even pixels: what 4:2:0 crops at); the helpers say it before that
+  frame (message 7 out). Zoomed out, `look` with no region, and the whole at the view's own bounds. Input and the
+  pointer stay 0..1 of the whole screen, so a click lands where it is whatever part the frames show and while they
+  change. The client draws a part's frames on a decoder of their own, over the whole screen's last picture where the
+  part is, and only while its picture is newer than the whole's: a new part shows once its first frame has come (the
+  part before stays till then), and zoomed out, the part stays till the whole's first frame has; panned past the part,
+  the whole's last picture shows round it till the new part comes. still.fail Helper captures the whole display at as
+  many pixels as the part needs (ScreenCaptureKit, at most its own) and cuts the part from each picture it encodes
+  (VTPixelTransferSession); a simulator's part is cut from its framebuffer as it is scaled; stillfail-screen's video
+  processor scales the part alone (its source rectangle). A source that frames no parts (a tab of the browser:
+  Chrome's screencast; a helper from before them, whose info does not say `regions: true`) is not asked, and its
+  frames stay whole, which the client draws as it did; so does a station from before `look`. The core asks a stream
+  opened again for the part at once.
 - **Still.** A source makes a picture only when the screen changed, so a still screen shows its last frame's picture as
   it was encoded: a view's first at the start rate, a whole desktop in a few kilobytes, stayed a blur for as long as
   nothing on it moved (a Mac's desktop left alone, for minutes). Once no frame has gone for 0.5 s (`STILL_MS`) and the
@@ -324,7 +345,8 @@ On a phone (Android, the phone web) a finger drives a screen as a trackpad unles
 `padGain`), a tap clicks where it points, tapped again and moved (or held) it drags, two fingers tapped right-click, two
 moving together scroll. The page draws its own pointer while the finger moves it and takes the station's `cursor` again
 once the finger has been still 600 ms. Directly, a tap clicks where it is, a press held right-clicks, a drag drags. Either
-way two fingers spreading zoom the picture on the phone only (never sent); zoomed, the trackpad's pointer is kept in sight.
+way two fingers spreading zoom the picture (the zoom never sent as input); zoomed, the trackpad's pointer is kept in sight,
+and the station sends the part in sight alone, as sharp as the phone shows it (Pace, "Regions").
 A keys row under the picture while driving sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
 for the next key, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`). On Android a stage made shorter by the
 keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller. 全屏 puts

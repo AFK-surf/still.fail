@@ -6,15 +6,17 @@
 // who else is on it) is said whole as `{state}` each time it changes; the page only draws it. The link dropping opens
 // the view again; switching 只看/控制 opens it again with the other. While it drives the screen, the screen's clipboard
 // goes both ways (`screen.clipboard` sets it and pastes; a copy made on it comes as `{clipboard}`), and where a file
-// dropped into it goes (`drop`) is in its state, for the page to upload it with the drive's upload.
-import { Deferred, Effect, Queue } from "effect";
+// dropped into it goes (`drop`) is in its state, for the page to upload it with the drive's upload. Zoomed in, the page
+// says what part of the screen it shows (`screen.look`): once it has stayed so a moment, the station sends that part
+// alone, as large as the page shows it, each config saying which part (the page draws it there, over the whole).
+import { Deferred, Effect, Option, Queue } from "effect";
 import type { Inner, Progress } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import { encode } from "./ops.ts";
 import { unavailable } from "./permissions.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, ackFrame, clipboardFrame, inputFrame, keyframeFrame } from "./screen-frames.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, type Region, ackFrame, clipboardFrame, inputFrame, keyframeFrame, lookFrame } from "./screen-frames.ts";
 import { StationAddr } from "./station/addr.ts";
 import type { ScreenAsk, WireSocket } from "./station/wire.ts";
 import type { ClientId, RequestId } from "./protocol.ts";
@@ -34,6 +36,10 @@ export const MAX_HEIGHT = 1080;
 const LIMIT = 7680;
 /// A view whose stream went is opened again after these waits, one after another; then it has failed.
 export const REOPEN_MS = [500, 1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
+/// How long a part of the screen looked at stays before the station is asked for it (a pinch, a pan, settled).
+export const LOOK_MS = 200;
+/// A part this much of the screen or more, both ways, is the whole of it.
+const LOOK_WHOLE = 0.98;
 /// What a key's names and a text may hold.
 const KEY_MAX = 64;
 const TEXT_MAX = 16_384;
@@ -45,6 +51,8 @@ export type ScreenCall =
   | { kind: "keyframe"; view: string }
   | { kind: "input"; view: string; input: J }
   | { kind: "control"; view: string; control: boolean }
+  /// The part of the screen the page shows (null: the whole), in `width`×`height` of this device's pixels.
+  | { kind: "look"; view: string; region: Region | null; width: number; height: number }
   /// The screen's clipboard set to text or a PNG (its bytes), then pasted where its focus is unless `paste` is false.
   | { kind: "clipboard"; view: string; type: ClipType; data: Uint8Array; paste: boolean };
 
@@ -113,6 +121,19 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       if (data.length > CLIP_PNG_MAX) throw CoreError.invalid(t("core-misc.screen.clipTooLarge"));
       if (!PNG_SIGNATURE.every((b, i) => data[i] === b)) throw CoreError.invalid(t("core-misc.screen.notPng"));
       return { kind: "clipboard", view, type: "png", data, paste };
+    }
+    case "screen.look": {
+      const view = text(params, "view");
+      const r = get(params, "region");
+      const n = (k: string) => (finite(get(r, k)) ? (get(r, k) as number) : NaN);
+      const [x, y, w, h] = [n("x"), n("y"), n("w"), n("h")];
+      const px = (k: string) => (finite(get(params, k)) ? Math.min(LIMIT, Math.max(16, Math.round(get(params, k) as number))) : 0);
+      // Within the screen; about all of it is the whole.
+      const cw = Math.min(1, w), ch = Math.min(1, h);
+      if (!(cw > 0 && ch > 0) || (cw >= LOOK_WHOLE && ch >= LOOK_WHOLE) || px("width") === 0 || px("height") === 0) return { kind: "look", view, region: null, width: 0, height: 0 };
+      const at = (v: number, size: number) => Math.min(1 - size, Math.max(0, finite(v) ? v : 0));
+      const r4 = (v: number) => Math.round(v * 10_000) / 10_000;
+      return { kind: "look", view, region: { x: r4(at(x, cw)), y: r4(at(y, ch)), w: r4(cw), h: r4(ch) }, width: px("width"), height: px("height") };
     }
     case "screen.control": {
       const control = get(params, "control");
@@ -329,6 +350,7 @@ type Open = {
   keyframe(): void;
   input(input: J): void;
   control(on: boolean): void;
+  look(region: Region | null, width: number, height: number): void;
   /// Fails (why, in words) while the view does not drive the screen, or the screen carries no such clipboard.
   clipboard(type: ClipType, data: Uint8Array, paste: boolean): CoreError | null;
   /// The station's list changed: who is on it may have.
@@ -376,8 +398,8 @@ export function install(): void {
     const c = (call as Extract<import("./core/calls.ts").Call, { kind: "screen" }>).call;
     if (c.kind === "view") return view(inner, c, progress, at, ctx);
     const target = openIn(inner).get(key(at[0], c.view));
-    // A frame acknowledged, or a key frame asked, after the view went: nothing to do.
-    if (!target) return c.kind === "ack" || c.kind === "keyframe" ? Effect.succeed(null) : Effect.fail(new CoreError("not_found", t("core-misc.screen.closed")));
+    // A frame acknowledged, a key frame asked or a part looked at, after the view went: nothing to do.
+    if (!target) return c.kind === "ack" || c.kind === "keyframe" || c.kind === "look" ? Effect.succeed(null) : Effect.fail(new CoreError("not_found", t("core-misc.screen.closed")));
     switch (c.kind) {
       case "ack":
         target.ack(c.ts);
@@ -390,6 +412,9 @@ export function install(): void {
         break;
       case "control":
         target.control(c.control);
+        break;
+      case "look":
+        target.look(c.region, c.width, c.height);
         break;
       case "clipboard": {
         const refused = target.clipboard(c.type, c.data, c.paste);
@@ -466,6 +491,33 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
     };
+    // The part of the screen the page shows as it last said, and the part the station was asked for (null: the whole;
+    // each stream starts with the whole). A look goes once it has stayed LOOK_MS, so a pinch or a pan asks once, as it
+    // ends, not at each step of it.
+    type Look = { region: Region | null; maxWidth: number; maxHeight: number };
+    const whole: Look = { region: null, maxWidth: 0, maxHeight: 0 };
+    let looking: Look = whole;
+    let asked = JSON.stringify(whole);
+    const looks = yield* Queue.unbounded<void>();
+    const ask = () => {
+      const now = JSON.stringify(looking);
+      if (now === asked || out === null) return;
+      asked = now;
+      write(lookFrame(looking.region, looking.maxWidth, looking.maxHeight));
+    };
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.gen(function* () {
+          yield* Queue.take(looks);
+          // Settled: no other look for LOOK_MS.
+          for (;;) {
+            const more = yield* Effect.raceFirst(Effect.map(Queue.take(looks), () => Option.some(true)), Effect.as(Effect.sleep(LOOK_MS), Option.none<boolean>()));
+            if (Option.isNone(more)) break;
+          }
+          ask();
+        }),
+      ),
+    );
 
     open.set(name, {
       station,
@@ -481,6 +533,11 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         if (!clipTypesOf(get(listedItem(), "clipboard")).includes(type)) return new CoreError("unsupported", t("core-misc.screen.noClipboard"));
         write(clipboardFrame(type, data, paste));
         return null;
+      },
+      // Shown as large as the page shows it, no larger than the view asked for the whole screen.
+      look: (region, width, height) => {
+        looking = region === null ? whole : { region, maxWidth: Math.min(width, c.ask.maxWidth), maxHeight: Math.min(height, c.ask.maxHeight) };
+        Queue.offerUnsafe(looks, undefined);
       },
       control: (on) => {
         const next = on && may;
@@ -534,6 +591,9 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           const socket: WireSocket = opened.success;
           const queue = yield* Queue.unbounded<Uint8Array>();
           out = queue;
+          // A new stream frames the whole screen: the part looked at, asked of it at once.
+          asked = JSON.stringify(whole);
+          ask();
           yield* Effect.addFinalizer(() => Effect.sync(() => (out = out === queue ? null : out)));
           // Its writer goes with the stream (the attempt's scope).
           yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes)))));
@@ -564,12 +624,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
               }
               if (frame === null) break;
               if ("config" in frame) {
-                const { codec, width, height, description } = frame.config;
-                const changed = state.codec !== codec || state.width !== width || state.height !== height;
+                const { codec, width, height, description, region } = frame.config;
+                // The whole screen's size as its pictures have it (what the page lays it out by): a part's config
+                // leaves it as the whole's last said (one before any: as large as that part's pixels make it).
+                const [ww, wh] = region === null ? [width, height] : state.width === undefined ? [Math.round(width / region.w), Math.round(height / region.h)] : [state.width, state.height];
+                const changed = state.codec !== codec || state.width !== ww || state.height !== wh;
                 state.codec = codec;
-                state.width = width;
-                state.height = height;
-                progress({ config: { codec, width, height } }, description ?? undefined);
+                state.width = ww;
+                state.height = wh;
+                progress({ config: { codec, width, height, ...(region ? { region } : {}) } }, description ?? undefined);
                 if (changed) tell();
               } else if ("video" in frame) {
                 seen = true;

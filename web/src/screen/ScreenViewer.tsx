@@ -69,6 +69,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   const stage = useRef<HTMLDivElement>(null);
   const picture = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  /** A part of the screen the station sends alone while the picture is zoomed in, laid over the whole (frames.ts). */
+  const partCanvas = useRef<HTMLCanvasElement>(null);
+  /** The part in sight last told the core (`screen.look`): "" the whole. */
+  const looked = useRef("");
   const pointer = useRef<HTMLSpanElement>(null);
   /** A simulator's buttons beside the device, with a mouse (placed with the picture). */
   const device = useRef<HTMLDivElement>(null);
@@ -181,6 +185,19 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
     const left = shown.left + (device.current ? DEVICE_ROOM : 0);
     p.style.left = `${Math.round(left)}px`;
     p.style.top = `${Math.round(shown.top)}px`;
+    // Zoomed in, the part in sight, in this device's pixels: the station sends it alone, as sharp as it is shown here
+    // (the core asks once it has stayed a moment); the whole again once it is not.
+    const r = room();
+    const x0 = Math.max(0, -shown.left / shown.width), y0 = Math.max(0, -shown.top / shown.height);
+    const x1 = Math.min(1, (r.width - shown.left) / shown.width), y1 = Math.min(1, (r.height - shown.top) / shown.height);
+    const zoomed = zoom.current.zoomed && x1 > x0 && y1 > y0;
+    const ratio = window.devicePixelRatio || 1;
+    const look = zoomed ? { region: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, width: Math.round((x1 - x0) * shown.width * ratio), height: Math.round((y1 - y0) * shown.height * ratio) } : { region: null, width: 0, height: 0 };
+    const key = zoomed ? JSON.stringify(look) : "";
+    if (key !== looked.current && view.current) {
+      looked.current = key;
+      tell("screen.look", { view: view.current, ...look });
+    }
     // The buttons by the device's right edge, at its top (the stage's place in the viewer added).
     const d = device.current, s = stage.current;
     if (d && s) {
@@ -222,6 +239,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
     if (!c) return;
     const name = newName();
     view.current = name;
+    // (a view of its own: the part in sight told it again)
+    looked.current = "";
     setFailure(null);
     const abort = new AbortController();
     let open = true;
@@ -237,7 +256,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
         place();
         setDrawn(true);
       },
-    });
+    }, partCanvas.current);
     meter.current.decode = () => frames.stats();
     // A copy made on the screen: on this device's clipboard at once where the browser lets it, else offered.
     const copiedThere = (clip: Clip) => {
@@ -462,6 +481,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
       <div ref={stage} className={css.stage} data-driving={driving || undefined}>
         <div ref={picture} className={css.picture} data-shown={drawn || undefined} data-faded={over || undefined}>
           <canvas ref={canvas} className={css.canvas} />
+          <canvas ref={partCanvas} className={css.part} hidden />
           <span ref={pointer} className={css.cursor} hidden><Arrow /></span>
         </div>
         <textarea ref={keys} className={css.keys} aria-label={t("web-pages.screen.keys")} tabIndex={-1} rows={1}

@@ -268,6 +268,24 @@ fn ScreenUi::shown(self : ScreenUi) -> SRect {
 }
 
 ///|
+/// The part of the frame in sight while it is zoomed in (0..1 of it each way); None while it is not (all of it is).
+fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
+  let s = self.shown()
+  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w <= 0.0 || self.box_h <= 0.0 {
+    return None
+  }
+  let x0 = dmax(0.0, -s.x / s.w)
+  let y0 = dmax(0.0, -s.y / s.h)
+  let x1 = dmin(1.0, (self.box_w - s.x) / s.w)
+  let y1 = dmin(1.0, (self.box_h - s.y) / s.h)
+  if x1 <= x0 || y1 <= y0 {
+    None
+  } else {
+    Some(({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : Part))
+  }
+}
+
+///|
 /// How far the pointer goes for a finger's move of 1 px, by how fast it moves (dp per ms): slowly, less than the
 /// finger, to land on something small; fast, further, to cross the screen in a stroke.
 fn pad_gain(dp_per_ms : Double) -> Double {

@@ -219,7 +219,7 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
     ),
   );
   assert.deepEqual(station.views.map((v) => v.head), [{ method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: ask }]);
-  assert.deepEqual(seen[0], { config: { codec: "jpeg", width: 640, height: 480, description: null } });
+  assert.deepEqual(seen[0], { config: { codec: "jpeg", width: 640, height: 480, description: null, region: null } });
   const videos = seen.filter((f: J) => "video" in f).map((f: J) => f.video);
   assert.deepEqual(videos.map((v: J) => [v.key, v.ts, v.data.length]), station.screenFrames.map((f) => [f.key, f.ts, f.data.length]));
   for (const [i, v] of videos.entries()) assert.deepEqual(v.data, station.screenFrames[i]!.data);

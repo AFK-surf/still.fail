@@ -57,6 +57,8 @@ export const picture = style({
   },
 });
 export const canvas = style({ display: "block", width: "100%", height: "100%" });
+/** A part of the screen sent alone while zoomed in: over the whole where it is (placed by frames.ts). */
+export const part = style({ position: "absolute", display: "block", selectors: { "&[hidden]": { display: "none" } } });
 
 /** The station's pointer, where it says it is (none while a mouse here drives: it is that mouse's own). */
 export const cursor = style({ position: "absolute", left: "0", top: "0", width: "0", height: "0", pointerEvents: "none" });
