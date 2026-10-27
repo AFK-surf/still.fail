@@ -194,8 +194,14 @@ pub let media_bar_box : @ui.Style = @ui.css("radius=Xl3").then(
 pub let media_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
+/// A group of the controls' keys (vvGroup): as far apart as makes each a press's room across (keys_gap).
+pub fn media_group() -> @ui.Style {
+  media_group_look.then(@ui.style(gap=keys_gap(size=media_key_d)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-pub let media_group : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
+let media_group_look : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

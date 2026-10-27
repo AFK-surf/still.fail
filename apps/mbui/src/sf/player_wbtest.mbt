@@ -37,7 +37,8 @@ let test_words : Map[String, String] = {
 
 ///|
 /// The player of `name` among `list` (a folder's films), a phone's (`narrow`: laid out Small) or a desktop's (on a
-/// Mac), what it went to and how often it went back counted.
+/// Mac), what it went to and how often it went back counted; or in `window` (its width, height and platform);
+/// `subtitled`, a subtitle beside it the folder names (read as nothing).
 fn player_tester(
   narrow : Bool,
   name : String,
@@ -46,7 +47,10 @@ fn player_tester(
   backs : Array[Int],
   kind? : String = "video",
   facts? : FileFacts = no_facts,
+  window? : (Double, Double, Int),
+  subtitled? : Bool = false,
 ) -> @ui.Tester {
+  let (w, h, platform) = window.unwrap_or(if narrow { (390.0, 844.0, 1) } else { (1280.0, 800.0, 0) })
   viewer_reset()
   set_viewer_host(viewer_host_default())
   set_words(fn(key, args) {
@@ -54,14 +58,15 @@ fn player_tester(
   })
   let siblings : Array[ViewerEntry] = list.map(fn(n) { { name: n, size: 1.0, mtime: 0.0, mime: "", kind, dir: false } })
   let file = film(name, kind~, facts~)
+  let file = if subtitled { { ..file, beside: Some(fn(_, _) {  }) } } else { file }
   @ui.Tester::new(
     fn(c) {
       begin(c) |> ignore
       player(c, "k", file, siblings, back_label="影片", on_back=fn() { backs.push(1) }, on_go=fn(n) { gone.push(n) })
     },
-    w=if narrow { 390.0 } else { 1280.0 },
-    h=if narrow { 844.0 } else { 800.0 },
-    platform=if narrow { 1 } else { 0 },
+    w~,
+    h~,
+    platform~,
   )
 }
 
@@ -276,3 +281,14 @@ test "a desktop's: the bar says the film's size, length and rate as its message 
 ///|
 /// How long a single tap waits to be a double one (@kit.Media's double_tap_ms).
 let double_tap_wait : Double = 300.0
+
+///|
+test "a desktop's on a narrow page with a finger: short of room for its keys a finger apart, 保存此帧 leaves them for their ⋯" {
+  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(600.0, 900.0, 2), subtitled=true)
+  t.draw()
+  assert_true(t.query(Button, label="android-chat.video.saveFrame") is None)
+  // (the speed the last to go)
+  assert_true(t.find("1×") is Some(_))
+  t.click(Button, label="web-main.menu.more")
+  assert_true(t.find("android-chat.video.saveFrame") is Some(_))
+}

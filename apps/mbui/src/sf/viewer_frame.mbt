@@ -86,7 +86,7 @@ fn viewer_head(
         |> ignore
         c.box(style=vfr_head_gap, fn() {  }) |> ignore
         // (short of room, the tools kept whole: the name gives way)
-        c.box(style=vfr_head_tools, keep=true, fn() {
+        c.box(style=keys_row(), keep=true, fn() {
           tools()
           if viewer_tool(c, key + "/close", "close", t("web-main.preview.closeKey"), ink) {
             closed = true
@@ -270,9 +270,14 @@ pub fn viewer_text_tool(c : @ui.Ctx, key : String, words : String, label : Strin
 
 ///|
 /// An image's zoom in the bar (FilePreview.tsx ImageViewer's controls): −, its per cent (fitted when pressed), +, 1:1
-/// (not under 640), each a quarter more or less.
+/// (each a quarter more or less). None under 640 (the web's phone sizes, as its 1:1 was): there a picture is zoomed as a
+/// phone's photos are, two fingers apart or a double tap (a double click; ⌘ and the wheel, a trackpad's pinch, + − 0 1
+/// as anywhere), and the bar keeps the room for its name.
 pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) -> Unit {
-  c.box(style=vfr_zoom, fn() {
+  if c.width <= viewer_small_w {
+    return
+  }
+  c.box(style=keys_row(), fn() {
     if viewer_tool(c, key + "/zoom-out", "minus", t("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + viewer_zoom_slack) {
       z.zoom_to(z.scale / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
     }
@@ -282,8 +287,7 @@ pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) ->
     if viewer_tool(c, key + "/zoom-in", "plus", t("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - viewer_zoom_slack) {
       z.zoom_to(z.scale * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
     }
-    // (not on a phone's width: fpToolText's last in the zoom, none under 640)
-    if c.width > viewer_small_w && viewer_text_tool(c, key + "/zoom-actual", "1:1", t("web-main.preview.actualKey"), ink) {
+    if viewer_text_tool(c, key + "/zoom-actual", "1:1", t("web-main.preview.actualKey"), ink) {
       z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
     }
   })
@@ -410,19 +414,11 @@ let vfr_head_gap : @ui.Style = @ui.style(w=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vfr_head_tools : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
 let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
