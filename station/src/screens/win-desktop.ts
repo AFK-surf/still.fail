@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import type { Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -248,9 +248,9 @@ export class LastingView implements ScreenView {
   /// Who hears the pointer, heard again from a process started again.
   #pointer: ((cursor: ScreenCursor) => void) | null = null;
   #unpoint: (() => void) | null = null;
-  /// The bit rate and bounds asked last, asked again of a process started again.
+  /// The bit rate and bounds (and part of the display) asked last, asked again of a process started again.
   #rate: number | null = null;
-  #bounds: [number, number] | null = null;
+  #bounds: [number, number, Region | null] | null = null;
 
   constructor(view: HelperView, again: () => Promise<HelperView>, gone: () => void) {
     this.#view = view;
@@ -310,9 +310,13 @@ export class LastingView implements ScreenView {
     this.#view.rate(bitsPerSecond);
   }
 
-  bounds(maxWidth: number, maxHeight: number) {
-    this.#bounds = [maxWidth, maxHeight];
-    this.#view.bounds(maxWidth, maxHeight);
+  bounds(maxWidth: number, maxHeight: number, region?: Region | null) {
+    this.#bounds = [maxWidth, maxHeight, region ?? null];
+    this.#view.bounds(maxWidth, maxHeight, region);
+  }
+
+  regions(): boolean {
+    return this.#view.regions();
   }
 
   input(event: ScreenInput): Promise<void> {

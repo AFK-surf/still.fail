@@ -18,8 +18,10 @@
 //        5 watch     1 byte       1: say each copy made on the machine from now on (message 5 out), 0: stop
 //        6 reveal    UTF-8        a file's path, shown selected in Explorer
 //        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on
-//        8 bounds    JSON         {maxWidth, maxHeight}: the pictures from now on fitted into these
-//   out  1 info      JSON     first: {width, height, encoder, codec} (h265 where asked and the hardware has it), or
+//        8 bounds    JSON         {maxWidth, maxHeight, region?}: the pictures from now on fitted into these, of
+//                             `region` of the display alone ({x, y, w, h}, 0..1 of it: a client zoomed in) or, without
+//                             it, of the whole
+//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true} (h265 where asked and the hardware has it), or
 //                             {error, code: "capture"|"display"|"encoder"}
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and whenever
 //                             it changes
@@ -28,6 +30,9 @@
 //        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
 //        6 cursor    JSON     {x, y, shape}: the pointer (0..1 of the display, a CSS cursor's name; "none" hidden) as it
 //                             moves or changes; a video's pictures leave it out, a JPEG's have it drawn in
+//        7 region    JSON     {region: {x, y, w, h} | null}: the part of the display the frames from the next one on
+//                             show, as it was cut (null the whole), said before a frame whose part is another than the
+//                             last one's (that frame a key frame)
 //
 // Windows.Graphics.Capture captures the main display (the cursor drawn in, no border), a picture only when the screen
 // changed (an HDR display's as FP16, made SDR by a pixel shader: hdr.rs); the GPU's video processor scales it into the
@@ -53,6 +58,8 @@ mod hdr;
 mod image;
 #[cfg(windows)]
 mod input;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod region;
 mod scale;
 #[cfg(windows)]
 mod view;

@@ -221,6 +221,8 @@ impl Drop for Capture {
 /// encoder takes) or BGRA.
 pub struct Scaler {
     pub from: (u32, u32),
+    /// The part of the picture scaled (left, top, width, height in its pixels): all of it, or a part framed alone.
+    crop: (u32, u32, u32, u32),
     pub to: (u32, u32),
     pub format: DXGI_FORMAT,
     enumerator: ID3D11VideoProcessorEnumerator,
@@ -273,11 +275,17 @@ impl Scaler {
             unsafe { gpu.video.CreateVideoProcessorOutputView(&texture, &enumerator, &desc, Some(&mut view))? };
             outputs.push((texture, view.unwrap()));
         }
-        Ok(Scaler { from, to, format, enumerator, processor, outputs, turn: 0 })
+        Ok(Scaler { from, crop: (0, 0, from.0, from.1), to, format, enumerator, processor, outputs, turn: 0 })
     }
 
-    /// `source` scaled into the next output, which it returns.
-    pub fn run(&mut self, gpu: &Gpu, source: &ID3D11Texture2D) -> Result<ID3D11Texture2D> {
+    /// `crop` of `source` (left, top, width, height in its pixels) scaled into the next output, which it returns.
+    pub fn run(&mut self, gpu: &Gpu, source: &ID3D11Texture2D, crop: (u32, u32, u32, u32)) -> Result<ID3D11Texture2D> {
+        if crop != self.crop {
+            self.crop = crop;
+            let (x, y, w, h) = crop;
+            let rect = RECT { left: x as i32, top: y as i32, right: (x + w) as i32, bottom: (y + h) as i32 };
+            unsafe { gpu.vcontext.VideoProcessorSetStreamSourceRect(&self.processor, 0, true, Some(&rect)) };
+        }
         let desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
             FourCC: 0,
             ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,

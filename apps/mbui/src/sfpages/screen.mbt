@@ -3,8 +3,12 @@
 // frames with their bytes), frames handed to the decoder (@ui.Stream: H.264 or JPEG, drawn as the picture the viewer
 // shows), each acknowledged once shown (the stream says so) or dropped; input, 只看/控制 and key frames told back to
 // the core. While it drives the screen, the screen's clipboard goes both ways (a copy made on it comes as a `{clipboard}`
-// value, `screen.clipboard` pastes) and files picked go onto its machine (screen_drops.mbt). The connection, the
-// credentials and the reconnecting are the core's; this only draws what it says.
+// value, `screen.clipboard` pastes) and files picked go onto its machine (screen_drops.mbt). Zoomed in, the part of the
+// screen shown is told (`screen.look`): the station then sends that part alone, as sharp as this device shows it, each
+// config saying which part. Its frames go to a decoder of their own (`part`), drawn over the whole screen's last picture
+// where the part is, while its picture is newer than the whole's: so a part's frame shows only once one has come, and
+// the whole again only once the whole's has. The connection, the credentials and the reconnecting are the core's; this
+// only draws what it says.
 
 ///|
 /// Where a file dropped into the view goes on the screen's machine (ScreenDrop): the folder, and whether the view can
@@ -13,6 +17,31 @@ priv struct DropTo {
   folder : String
   reveal : Bool
 } derive(Eq)
+
+///|
+/// A part of the screen (0..1 of its width and height): its left, top, width, height.
+priv struct Part {
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+} derive(Eq)
+
+///|
+/// A config's part of the screen (`region`), when it says one.
+fn part_of(v : Json?) -> Part? {
+  match field(v, "region") {
+    Some(Object(_)) as r => {
+      let p : Part = { x: number(r, "x"), y: number(r, "y"), w: number(r, "w"), h: number(r, "h") }
+      if p.w > 0.0 && p.h > 0.0 {
+        Some(p)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
 
 ///|
 /// A copy made on the screen, for the device's clipboard (ScreenClips.kt Copied): its text, or its PNG.
@@ -55,6 +84,16 @@ priv struct ScreenSess {
   mut acked : Double
   /// the decoder the frames go to, and the picture it shows (made as the view first opens: own_stream)
   mut stream : @ui.Stream?
+  /// the decoder a part's frames go to (made as the first part's config comes), its codec; whether the frames now
+  /// coming are a part's; the part the next frame shows (from its config), and the part each of its frames shows from
+  /// (by the time of the first), oldest first
+  mut part : @ui.Stream?
+  mut part_codec : String?
+  mut parting : Bool
+  mut part_next : Part?
+  parts : Array[(Double, Part)]
+  /// the part of the screen last told the core (`screen.look`): "" the whole
+  mut looked : String
   /// the copies made on the screen not yet put on the device's clipboard (the viewer takes them)
   copied : Array[Copied]
   /// the files picked for its machine (screen_drops.mbt)
@@ -117,6 +156,12 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         call: 0,
         acked: -1.0,
         stream: None,
+        part: None,
+        part_codec: None,
+        parting: false,
+        part_next: None,
+        parts: [],
+        looked: "",
         copied: [],
         drops: [],
         drops_serial: 0,
@@ -130,6 +175,71 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
       s
     }
   }
+}
+
+///|
+/// The decoder of a part's frames, made the first time one comes (acknowledged as the whole's are).
+fn ScreenSess::part_stream(self : ScreenSess) -> @ui.Stream {
+  match self.part {
+    Some(st) => st
+    None => {
+      let st = @ui.Stream::new(shown=fn(ts) { screen_ack(self.src, self, ts) }, broken=fn() {
+        screen_tell(self.src, "screen.keyframe", { "view": Json::string(self.view) })
+      })
+      self.part = Some(st)
+      st
+    }
+  }
+}
+
+///|
+/// The part of the screen drawn over the whole now, and where: while the part's decoder shows a frame newer than the
+/// whole's, the part that frame shows; else none.
+fn ScreenSess::part_shown(self : ScreenSess) -> Part? {
+  guard self.part is Some(pst) && pst.shown_at() is Some(at) else { return None }
+  match self.stream.bind(fn(st) { st.shown_at() }) {
+    Some(whole) if whole >= at => return None
+    _ => ()
+  }
+  let mut shown = None
+  for p in self.parts {
+    if p.0 <= at {
+      shown = Some(p.1)
+    }
+  }
+  shown
+}
+
+///|
+/// The part of the screen shown (None: the whole), in `w` × `h` of this device's pixels: told the core when it is
+/// another than the last told (the core asks the station once it has stayed a moment). The whole is told only after a
+/// part was.
+fn ScreenSess::look(self : ScreenSess, src : Source, part : Part?, w : Double, h : Double) -> Unit {
+  let r4 = fn(v : Double) { (v * 10000.0).round() / 10000.0 }
+  let key = match part {
+    Some(p) => "\{r4(p.x)} \{r4(p.y)} \{r4(p.w)} \{r4(p.h)} \{w.round()} \{h.round()}"
+    None => ""
+  }
+  if key == self.looked || self.call == 0 {
+    return
+  }
+  self.looked = key
+  let region = match part {
+    Some(p) =>
+      Json::object({
+        "x": Json::number(r4(p.x)),
+        "y": Json::number(r4(p.y)),
+        "w": Json::number(r4(p.w)),
+        "h": Json::number(r4(p.h)),
+      })
+    None => Json::null()
+  }
+  screen_tell(src, "screen.look", {
+    "view": Json::string(self.view),
+    "region": region,
+    "width": Json::number(w.round()),
+    "height": Json::number(h.round()),
+  })
 }
 
 ///|
@@ -391,6 +501,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   }
   self.failure.set(None)
   self.finished.set(false)
+  // (a call of its own: the part in sight told it again)
+  self.looked = ""
   let quality = screen_quality(src)
   self.asked = quality
   let (mw, mh) = quality_bounds(quality)
@@ -462,6 +574,10 @@ fn ScreenSess::close(self : ScreenSess, src : Source) -> Unit {
   self.pause(src)
   self.drops.clear()
   match self.stream {
+    Some(st) => st.close()
+    None => ()
+  }
+  match self.part {
     Some(st) => st.close()
     None => ()
   }
@@ -555,17 +671,22 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       if kind != "" {
         let w = number(Some(c), "width").to_int()
         let h = number(Some(c), "height").to_int()
-        match bytes {
-          Some(b) if kind == "h264" =>
-            match self.stream {
-              Some(st) => st.h264(b, w, h)
-              None => ()
-            }
+        // a part's frames to the part's decoder, the whole's to the whole's (whose size the stage is laid out by)
+        let part = part_of(Some(c))
+        self.parting = part is Some(_)
+        self.part_next = part
+        let st = if part is Some(_) { Some(self.part_stream()) } else { self.stream }
+        match (bytes, st) {
+          (Some(b), Some(st)) if kind == "h264" => st.h264(b, w, h)
           _ => ()
         }
-        self.codec = Some(kind)
-        if w > 0 && h > 0 {
-          self.size = Some((w, h))
+        if part is Some(_) {
+          self.part_codec = Some(kind)
+        } else {
+          self.codec = Some(kind)
+          if w > 0 && h > 0 {
+            self.size = Some((w, h))
+          }
         }
       }
     }
@@ -601,7 +722,29 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
         Some(b) => {
           self.frames += 1
           self.bytes += b.length()
-          match (self.codec, self.stream) {
+          // a part's first frame after its config: the part it shows from (the parts its decoder shows no more let go)
+          match self.part_next {
+            Some(p) => {
+              self.part_next = None
+              let shown = self.part.bind(fn(st) { st.shown_at() }).unwrap_or(-1.0)
+              let later = self.parts.filter(fn(q) { q.0 > shown })
+              let now = self.parts.filter(fn(q) { q.0 <= shown }).last()
+              self.parts.clear()
+              match now {
+                Some(q) => self.parts.push(q)
+                None => ()
+              }
+              self.parts.append(later)
+              self.parts.push((ts, p))
+            }
+            None => ()
+          }
+          let (codec, st) = if self.parting {
+            (self.part_codec, self.part)
+          } else {
+            (self.codec, self.stream)
+          }
+          match (codec, st) {
             (Some("h264"), Some(st)) => st.frame(b, key, ts)
             (Some("jpeg"), Some(st)) => st.jpeg(b, ts)
             _ => screen_ack(self.src, self, ts)

@@ -7,12 +7,17 @@ export type Codec = "h265" | "h264" | "jpeg";
 
 /// A frame's format: sent before the first frame and whenever it changes; the next frame is then a key frame.
 /// `description`: H.264's avcC, H.265's hvcC (what WebCodecs and MediaCodec take as the decoder's configuration).
-export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array };
+/// `region`: the part of the screen the frames after it show (a view zoomed in: docs/remote-screens.md, "Regions");
+/// none: the whole screen.
+export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array; region?: Region };
+
+/// A part of the screen, 0..1 of its width and height: its left, its top, its width, its height.
+export type Region = { x: number; y: number; w: number; h: number };
 
 /// One encoded frame: H.264 or H.265 as length-prefixed NAL units (AVCC, HVCC), or a whole JPEG. `ts`: microseconds, rising.
 export type Frame = { config?: FrameConfig; key: boolean; ts: number; data: Uint8Array };
 
-/// A person's input; coordinates are 0..1 of the frame. `mods`: bit 0 alt, 1 ctrl, 2 meta, 3 shift (CDP's order).
+/// A person's input; coordinates are 0..1 of the screen (the whole of it, whatever part the frames show). `mods`: bit 0 alt, 1 ctrl, 2 meta, 3 shift (CDP's order).
 export type ScreenInput =
   | { t: "pointer"; kind: "down" | "up" | "move"; x: number; y: number; buttons: number }
   | { t: "wheel"; x: number; y: number; dx: number; dy: number }
@@ -25,6 +30,22 @@ export type ScreenInput =
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
 export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit };
 export type ViewFit = { width: number; height: number; scale: number };
+
+/// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).
+export const LOOK_LEAST = 0.02;
+/// A part this much of the screen or more, both ways, is the whole of it.
+const LOOK_WHOLE = 0.98;
+
+/// A part of the screen as a look or a source says it, checked: within the screen, at least LOOK_LEAST each way; null
+/// when it is not one, or is (about) the whole screen.
+export function regionOf(v: any): Region | null {
+  if (v === null || typeof v !== "object" || ![v.x, v.y, v.w, v.h].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+  const w = Math.min(1, Math.max(LOOK_LEAST, v.w)), h = Math.min(1, Math.max(LOOK_LEAST, v.h));
+  if (w >= LOOK_WHOLE && h >= LOOK_WHOLE) return null;
+  const x = Math.min(1 - w, Math.max(0, v.x)), y = Math.min(1 - h, Math.max(0, v.y));
+  const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
+  return { x: r4(x), y: r4(y), w: r4(w), h: r4(h) };
+}
 
 /// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
 export type ClipType = "text" | "png";
@@ -47,9 +68,11 @@ export interface ScreenView {
   /// Encodes from the next frame at about this many bits a second (the link carries no more: docs/remote-screens.md,
   /// "Pace"); one without it encodes at its own.
   rate?(bitsPerSecond: number): void;
-  /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"); one without it
-  /// keeps those it opened with.
-  bounds?(maxWidth: number, maxHeight: number): void;
+  /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"), of `region` of
+  /// the screen where it frames a part (`regions`), else of the whole; one without it keeps those it opened with.
+  bounds?(maxWidth: number, maxHeight: number, region?: Region | null): void;
+  /// It frames a part of the screen when `bounds` says one (its configs then say which: `FrameConfig.region`).
+  regions?(): boolean;
   /// How its pictures are made (once it opened); none: not said.
   video?(): ScreenVideo;
   /// Stops capturing; a pending `next` resolves null.
@@ -60,7 +83,7 @@ export interface ScreenView {
   /// Hears the source's clipboard each time it changes (a copy made on it; not what it holds as this starts), until
   /// the returned function. Only a view a person drives is asked, for as long as it is open.
   watchClipboard?(heard: (clip: Clip) => void): () => void;
-  /// Hears where the pointer is on the source (0..1 of the frame) and its shape (a CSS cursor's name) as it moves or
+  /// Hears where the pointer is on the source (0..1 of the screen) and its shape (a CSS cursor's name) as it moves or
   /// changes, until the returned function: a source whose pictures leave the pointer out (a video of the desktop) says
   /// it so; one without it draws it in its pictures, or has none.
   watchCursor?(heard: (cursor: ScreenCursor) => void): () => void;
@@ -76,7 +99,7 @@ export type ScreenKind = "desktop" | "browser" | "simulator";
 /// (none: a JPEG a picture, nothing to say).
 export type ScreenVideo = { capture: string; encoder?: string; hardware?: boolean };
 
-/// Where a screen's pointer is, 0..1 of the frame, and its shape as CSS names it.
+/// Where a screen's pointer is, 0..1 of the screen, and its shape as CSS names it.
 export type ScreenCursor = { x: number; y: number; shape: string };
 
 /// A display's scale as its system has it (Windows' Settings › Display › Scale): now, the one recommended, and the

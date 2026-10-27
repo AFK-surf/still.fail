@@ -8,8 +8,8 @@ import { Effect, Queue } from "effect";
 import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
-import { checkInput, othersOf } from "../src/screens.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, lookFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
+import { LOOK_MS, checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
@@ -86,7 +86,7 @@ each("a_views_frames_are_read_whole_however_the_stream_cuts_them", (seed) => {
     for (let f = reader.next(); f !== null; f = reader.next()) read.push(f);
   }
   assert.equal(read.length, 7);
-  assert.deepEqual(read[0], { config: { codec: "h264", width: 1920, height: 1080, description: avcc } });
+  assert.deepEqual(read[0], { config: { codec: "h264", width: 1920, height: 1080, description: avcc, region: null } });
   const video = read[1] as Extract<StationFrame, { video: unknown }>;
   assert.deepEqual([video.video.key, video.video.ts, video.video.data], [true, 0, bytesOf(70_000, seed)]);
   // Each frame's bytes are an array of their own (what the web transfers to its page).
@@ -95,14 +95,14 @@ each("a_views_frames_are_read_whole_however_the_stream_cuts_them", (seed) => {
   assert.deepEqual(read[2], { state: { cursor: { x: 0.5, y: 0.25, shape: "pointer" }, controlledBy: ["Bob"] } });
   assert.deepEqual(read[3], { video: { key: false, ts: 2 ** 40 + 33_333, data: bytesOf(3, seed + 1) } });
   assert.deepEqual(read[4], { other: 9 });
-  assert.deepEqual(read[5], { config: { codec: "jpeg", width: 800, height: 600, description: null } });
+  assert.deepEqual(read[5], { config: { codec: "jpeg", width: 800, height: 600, description: null, region: null } });
   assert.equal((read[6] as J).video.ts, 2 ** 40 + 66_666);
 });
 
 test("what_a_client_sends_on_a_view_is_framed_as_the_station_reads_it", () => {
-  const sent = join([inputFrame({ t: "text", text: "你好" }), ackFrame(2 ** 33 + 5), keyframeFrame()]);
+  const sent = join([inputFrame({ t: "text", text: "你好" }), ackFrame(2 ** 33 + 5), keyframeFrame(), lookFrame({ x: 0.5, y: 0, w: 0.5, h: 0.25 }, 1200, 300), lookFrame(null, 0, 0)]);
   const [frames, rest] = readClientFrames(sent);
-  assert.deepEqual(frames, [{ input: { t: "text", text: "你好" } }, { ack: 2 ** 33 + 5 }, { keyframe: true }]);
+  assert.deepEqual(frames, [{ input: { t: "text", text: "你好" } }, { ack: 2 ** 33 + 5 }, { keyframe: true }, { look: { region: { x: 0.5, y: 0, w: 0.5, h: 0.25 }, maxWidth: 1200, maxHeight: 300 } }, { look: { region: null } }]);
   assert.equal(rest.length, 0);
   assert.throws(() => {
     const r = new FrameReader();
@@ -435,6 +435,58 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();
   assert.equal(v!.closed, true);
+  core.close();
+});
+
+each("zoomed_in_the_part_looked_at_is_asked_once_it_settles_and_its_frames_say_the_part", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] });
+  await host.settle();
+  const avcc = bytesOf(38, seed);
+  views[0]!.send(join([configFrame({ codec: "h264", width: 1920, height: 1080, description: base64(avcc) }), videoFrame(true, 1_000, bytesOf(900, seed))]));
+  await host.settle();
+  // A pinch: a look each step of it; asked once, as it settles, no larger than the view asked for the whole screen.
+  const look = (id: number, region: J, width = 2400, height = 1080) => call(core, ui, id, "screen.look", { view: "v", region, width, height });
+  look(2, { x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  await host.time.pass(100);
+  look(3, { x: 0.3, y: 0.2, w: 0.5, h: 0.5 });
+  await host.time.pass(100);
+  look(4, { x: 0.4, y: 0.25, w: 0.333333, h: 0.333333 });
+  await host.time.pass(LOOK_MS - 1);
+  assert.deepEqual(views[0]!.got, [], "not settled yet");
+  await host.time.pass(1);
+  assert.deepEqual(views[0]!.got, [{ look: { region: { x: 0.4, y: 0.25, w: 0.3333, h: 0.3333 }, maxWidth: 1920, maxHeight: 1080 } }]);
+  // The part's frames: the page told where it is; the whole screen's size (what it is laid out by) as it was.
+  views[0]!.send(join([configFrame({ codec: "h264", width: 1920, height: 1080, description: base64(avcc), region: { x: 0.4, y: 0.25, w: 0.3333, h: 0.3333 } }), videoFrame(true, 2_000, bytesOf(900, seed + 1))]));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(log.filter((m) => m.id === 1 && m.value?.config).at(-1).value, { config: { codec: "h264", width: 1920, height: 1080, region: { x: 0.4, y: 0.25, w: 0.3333, h: 0.3333 } } });
+  const live = lastState(log, 1);
+  assert.deepEqual([live.width, live.height], [1920, 1080]);
+  // The same part again: nothing more. About all of it, or a bad one: the whole again.
+  look(5, { x: 0.4, y: 0.25, w: 0.3333, h: 0.3333 });
+  await host.time.pass(LOOK_MS);
+  assert.equal(views[0]!.got.length, 1);
+  look(6, { x: 0, y: 0, w: 0.99, h: 1 });
+  await host.time.pass(LOOK_MS);
+  assert.deepEqual(views[0]!.got.at(-1), { look: { region: null } });
+  // Zoomed in again, and the stream drops: the new one (the whole screen) asked for the part at once.
+  look(7, { x: 1.2, y: 0.5, w: 0.25, h: 0.25 }, 600, 300);
+  await host.time.pass(LOOK_MS);
+  assert.deepEqual(views[0]!.got.at(-1), { look: { region: { x: 0.75, y: 0.5, w: 0.25, h: 0.25 }, maxWidth: 600, maxHeight: 300 } });
+  views[0]!.end();
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  assert.deepEqual(views[1]!.got, [{ look: { region: { x: 0.75, y: 0.5, w: 0.25, h: 0.25 }, maxWidth: 600, maxHeight: 300 } }]);
+  // A look after the view went: let go.
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
+  look(8, null);
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(log.find((m) => m.id === 8), { id: 8, ok: null });
   core.close();
 });
 

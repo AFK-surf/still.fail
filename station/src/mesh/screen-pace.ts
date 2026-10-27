@@ -202,7 +202,7 @@ export const UPSIZE_MS = 3000;
 /// its own.
 export class Sizer {
   readonly #now: () => number;
-  readonly #asked: { maxWidth: number; maxHeight: number };
+  #asked: { maxWidth: number; maxHeight: number };
   #low = false;
   #since: number | null = null;
   constructor(now: () => number, asked: { maxWidth: number; maxHeight: number }) {
@@ -212,6 +212,19 @@ export class Sizer {
 
   get low(): boolean {
     return this.#low;
+  }
+
+  /// The bounds the view asks for now.
+  get asked(): { maxWidth: number; maxHeight: number } {
+    return { ...this.#asked };
+  }
+
+  /// The view asks for other bounds (a part of the screen, shown as large as the client has room for: a look): the
+  /// bounds to ask of the source now, the smaller one's within them while the link carries little.
+  ask(asked: { maxWidth: number; maxHeight: number }): { maxWidth: number; maxHeight: number } {
+    this.#asked = { ...asked };
+    this.#since = null;
+    return this.bounds();
   }
 
   /// With the rate asked now, what went through, and the picture's size now: the bounds to ask for, when they change;
@@ -230,7 +243,13 @@ export class Sizer {
     if (now - this.#since < (this.#low ? UPSIZE_MS : DOWNSIZE_MS)) return null;
     this.#since = null;
     this.#low = !this.#low;
-    return this.#low ? { ...LOW_BOUNDS } : { ...this.#asked };
+    return this.bounds();
+  }
+
+  /// The bounds to ask of the source as things are: the view's, or the smaller one's within them.
+  bounds(): { maxWidth: number; maxHeight: number } {
+    const a = this.#asked;
+    return this.#low ? { maxWidth: Math.min(a.maxWidth, LOW_BOUNDS.maxWidth), maxHeight: Math.min(a.maxHeight, LOW_BOUNDS.maxHeight) } : { ...a };
   }
 }
 

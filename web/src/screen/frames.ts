@@ -2,7 +2,9 @@
 // their bytes, drawn onto a canvas outside React. H.265 and H.264 through WebCodecs' VideoDecoder (the hvcC or avcC
 // the config carries configures it), JPEG through createImageBitmap; each frame acknowledged once drawn (the station
 // sends no more while those it sent wait: docs/remote-screens.md, "Pace"), and a key frame asked for when the decoder
-// lost its state.
+// lost its state. Zoomed in, the station sends a part of the screen alone (its config says which: `region`): those
+// frames are drawn on a canvas of their own laid over the whole one where the part is, shown while its picture is newer
+// than the whole's, so the whole's last picture stays under it, and shows again only once a frame of the whole has come.
 
 export type Codec = "h265" | "h264" | "jpeg";
 
@@ -72,7 +74,9 @@ export function viewSize(quality: Quality = "auto"): { maxWidth: number; maxHeig
   return { maxWidth: Math.min(w, Math.round(window.innerWidth * ratio)), maxHeight: Math.min(h, Math.round(window.innerHeight * ratio)) };
 }
 
-export interface FrameConfig { codec: string; width: number; height: number }
+/** A part of the screen, 0..1 of its width and height. */
+export type Region = { x: number; y: number; w: number; h: number };
+export interface FrameConfig { codec: string; width: number; height: number; region?: Region }
 export interface FrameHead { key: boolean; ts: number }
 
 export interface FramesHooks {
@@ -80,7 +84,7 @@ export interface FramesHooks {
   ack(ts: number): void;
   /** The decoder lost its state: the next frame must be a key frame. */
   keyframe(): void;
-  /** A frame was drawn, `width`×`height` (the first one, and each time the size changes). */
+  /** A frame of the whole screen was drawn, `width`×`height` (the first one, and each time the size changes). */
   drawn(width: number, height: number): void;
   /** The codec does not play here after all (H.265 that failed before a frame): the view is to be opened again. */
   unplayable?(): void;
@@ -102,6 +106,15 @@ export type DecodeStats = { ms: number | null; held: number; frames: number };
 export class ScreenFrames {
   readonly #canvas: HTMLCanvasElement;
   readonly #ctx: CanvasRenderingContext2D | null;
+  /** The canvas a part's frames are drawn on, laid over the whole one (placed in it as the part is). */
+  readonly #part: HTMLCanvasElement | null;
+  readonly #partCtx: CanvasRenderingContext2D | null;
+  /** The part the frames after the latest config show (null: the whole), and each frame's as it went in, by its time. */
+  #region: Region | null = null;
+  readonly #regions = new Map<number, Region | null>();
+  /** The times of the whole's and the part's pictures drawn last. */
+  #wholeTs = -1;
+  #partTs = -1;
   readonly #hooks: FramesHooks;
   #config: FrameConfig | null = null;
   #description: Uint8Array | undefined;
@@ -123,9 +136,12 @@ export class ScreenFrames {
   #held = 0;
   #decoded = 0;
 
-  constructor(canvas: HTMLCanvasElement, hooks: FramesHooks) {
+  constructor(canvas: HTMLCanvasElement, hooks: FramesHooks, part: HTMLCanvasElement | null = null) {
     this.#canvas = canvas;
     this.#ctx = canvas.getContext("2d", { alpha: false });
+    this.#part = part;
+    this.#partCtx = part?.getContext("2d", { alpha: false }) ?? null;
+    if (part) part.hidden = true;
     this.#hooks = hooks;
   }
 
@@ -134,6 +150,7 @@ export class ScreenFrames {
     if (this.#closed) return;
     this.#config = config;
     this.#description = bytes;
+    this.#region = config.region ?? null;
     this.#needKey = true;
     this.#dropDecoder();
     if (config.codec === "h264" || config.codec === "h265") this.#makeDecoder();
@@ -143,6 +160,7 @@ export class ScreenFrames {
   frame(head: FrameHead, bytes: Uint8Array | undefined): void {
     if (this.#closed) return;
     this.#lastTs = head.ts;
+    this.#regions.set(head.ts, this.#region);
     const config = this.#config;
     if (!config || !bytes) { this.#hooks.ack(head.ts); return; }
     if (config.codec === "jpeg") { this.#jpeg(head.ts, bytes); return; }
@@ -196,7 +214,7 @@ export class ScreenFrames {
         const at = this.#inside.get(ts);
         for (const t of [...this.#inside.keys()]) if (t <= ts) this.#inside.delete(t);
         if (at !== undefined) this.#decodeMs = [...this.#decodeMs.slice(-59), performance.now() - at];
-        this.#draw(frame, frame.displayWidth, frame.displayHeight);
+        this.#draw(frame, frame.displayWidth, frame.displayHeight, ts);
         frame.close();
         this.#hooks.ack(ts);
       },
@@ -244,13 +262,27 @@ export class ScreenFrames {
     const decoded = createImageBitmap(new Blob([bytes as BlobPart], { type: "image/jpeg" })).catch(() => null);
     this.#jpegs = this.#jpegs.then(async () => {
       const bitmap = await decoded;
-      if (bitmap && !this.#closed) this.#draw(bitmap, bitmap.width, bitmap.height);
+      if (bitmap && !this.#closed) this.#draw(bitmap, bitmap.width, bitmap.height, ts);
       bitmap?.close();
       if (!this.#closed) this.#hooks.ack(ts);
     });
   }
 
-  #draw(picture: CanvasImageSource, width: number, height: number): void {
+  #draw(picture: CanvasImageSource, width: number, height: number, ts: number): void {
+    const region = this.#regions.get(ts) ?? null;
+    for (const t of [...this.#regions.keys()]) if (t <= ts) this.#regions.delete(t);
+    const part = this.#part;
+    if (region && part) {
+      // A part: on its canvas, placed over the whole where it is, shown (its picture now newer than the whole's).
+      if (part.width !== width || part.height !== height) { part.width = width; part.height = height; }
+      this.#partCtx?.drawImage(picture, 0, 0, width, height);
+      Object.assign(part.style, { left: `${region.x * 100}%`, top: `${region.y * 100}%`, width: `${region.w * 100}%`, height: `${region.h * 100}%` });
+      this.#partTs = ts;
+      part.hidden = false;
+      return;
+    }
+    this.#wholeTs = ts;
+    if (part && this.#wholeTs >= this.#partTs) part.hidden = true;
     const c = this.#canvas;
     // Sized as the picture, its pixels its own: the page scales the canvas, not what is drawn on it. Resized only as a
     // frame of the new size is drawn, so the last one stays until then.

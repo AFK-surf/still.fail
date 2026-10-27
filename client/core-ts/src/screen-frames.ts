@@ -1,6 +1,7 @@
 // A screen view's frames on its stream (docs/remote-screens.md, Wire): a kind byte, the payload's length (4 bytes,
-// big-endian), the payload. The station sends `config`, `video` and `state`; the client `input`, `ack` and `keyframe`;
-// the screen's clipboard goes both ways (`clipboard`) while the view drives it.
+// big-endian), the payload. The station sends `config`, `video` and `state`; the client `input`, `ack`, `keyframe` and
+// `look` (the part of the screen it shows, zoomed in); the screen's clipboard goes both ways (`clipboard`) while the
+// view drives it.
 // Read as the stream's pieces come, however they are cut: each frame's bytes are copied once, into an array of its own
 // (what goes to the UI, transferred on the web).
 import { fromBase64, fromUtf8, isObject, utf8 } from "./util.ts";
@@ -13,6 +14,7 @@ export const INPUT = 16;
 export const ACK = 17;
 export const KEYFRAME = 18;
 export const SET_CLIPBOARD = 19;
+export const LOOK = 20;
 
 /// A clip's type on the wire.
 export type ClipType = "text" | "png";
@@ -28,7 +30,11 @@ export const MAX_FRAME = 64 * 1024 * 1024;
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-export type FrameConfig = { codec: string; width: number; height: number; description: Uint8Array | null };
+/// A part of the screen, 0..1 of its width and height.
+export type Region = { x: number; y: number; w: number; h: number };
+
+/// `region`: the part of the screen the frames after it show (null: the whole).
+export type FrameConfig = { codec: string; width: number; height: number; description: Uint8Array | null; region: Region | null };
 
 /// What the station sends, read.
 export type StationFrame =
@@ -78,7 +84,7 @@ export class FrameReader {
         const c = json(this.#take(length));
         if (!isObject(c) || typeof c.codec !== "string") throw new Error("a config that says no codec");
         const description = typeof c.description === "string" && c.description !== "" ? fromBase64(c.description) : null;
-        return { config: { codec: c.codec, width: whole(c.width), height: whole(c.height), description } };
+        return { config: { codec: c.codec, width: whole(c.width), height: whole(c.height), description, region: regionOf(c.region) } };
       }
       case STATE:
         return { state: json(this.#take(length)) };
@@ -144,6 +150,15 @@ function json(bytes: Uint8Array): J {
   return JSON.parse(fromUtf8(bytes));
 }
 
+/// A part of the screen as a station says it: within the screen, more than nothing each way; null when it is not one.
+export function regionOf(v: unknown): Region | null {
+  if (!isObject(v)) return null;
+  const n = (k: string) => (typeof v[k] === "number" && Number.isFinite(v[k]) ? (v[k] as number) : NaN);
+  const [x, y, w, h] = [n("x"), n("y"), n("w"), n("h")];
+  if (!(x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= 1.0001 && y + h <= 1.0001)) return null;
+  return { x, y, w, h };
+}
+
 function whole(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 0;
 }
@@ -175,6 +190,12 @@ export function keyframeFrame(): Uint8Array {
   return frame(KEYFRAME, new Uint8Array(0));
 }
 
+/// The part of the screen the client shows (null: the whole), and the bounds its pictures are to fit in (the device
+/// pixels it is shown in).
+export function lookFrame(region: Region | null, maxWidth: number, maxHeight: number): Uint8Array {
+  return frame(LOOK, utf8(JSON.stringify(region ? { region, maxWidth, maxHeight } : { region: null })));
+}
+
 /// The screen's clipboard set (and pasted, with `paste`): flags, type, the bytes.
 export function clipboardFrame(type: ClipType, data: Uint8Array, paste: boolean): Uint8Array {
   const payload = new Uint8Array(2 + data.length);
@@ -186,7 +207,7 @@ export function clipboardFrame(type: ClipType, data: Uint8Array, paste: boolean)
 
 // ── what a station sends, for its tests and the test station ──
 
-export function configFrame(config: { codec: string; width: number; height: number; description?: string }): Uint8Array {
+export function configFrame(config: { codec: string; width: number; height: number; description?: string; region?: Region }): Uint8Array {
   return frame(CONFIG, utf8(JSON.stringify(config)));
 }
 
@@ -212,7 +233,7 @@ export function copiedFrame(type: ClipType, data: Uint8Array): Uint8Array {
 }
 
 /// What the client sends, read (the test station's side).
-export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { clipboard: { type: ClipType | null; paste: boolean; data: Uint8Array } } | { other: number };
+export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { look: J } | { clipboard: { type: ClipType | null; paste: boolean; data: Uint8Array } } | { other: number };
 
 export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
   const frames: ClientFrame[] = [];
@@ -233,6 +254,9 @@ export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
       }
       case KEYFRAME:
         frames.push({ keyframe: true });
+        break;
+      case LOOK:
+        frames.push({ look: json(payload) });
         break;
       case SET_CLIPBOARD:
         frames.push({ clipboard: { type: CLIP_OF_BYTE[payload[1] ?? 0] ?? null, paste: ((payload[0] ?? 0) & 1) === 1, data: payload.slice(2) } });

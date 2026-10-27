@@ -17,7 +17,7 @@ import type { Viewer } from "../src/mesh/credential.ts";
 import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
-import { Desktop, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
+import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
 import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
@@ -247,6 +247,147 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
   assert.equal(view.keyframes, 1);
   await v.stream.finish();
   await v.served;
+});
+
+/// A view of a source that frames a part of its screen when asked (a desktop's): it says the bounds asked, and its next
+/// frame after them is a key frame with a config of that size, saying the part.
+class PartView extends FakeView {
+  bounded: [number, number, unknown][] = [];
+  #config: Frame["config"] | null = null;
+  regions() {
+    return true;
+  }
+  bounds(maxWidth: number, maxHeight: number, region?: unknown) {
+    this.bounded.push([maxWidth, maxHeight, region ?? null]);
+    this.#config = { codec: "h264", width: maxWidth, height: maxHeight, description: new Uint8Array([1, 100, 0, 31]), ...(region ? { region: region as any } : {}) };
+  }
+  override next(): Promise<Frame | null> {
+    const config = this.#config;
+    if (config === null) return super.next();
+    this.#config = null;
+    const n = ++this.asked;
+    return Promise.resolve({ config, key: true, ts: n * 1000, data: new Uint8Array([0, 0, 0, 1, n]) });
+  }
+}
+
+test("a look: a source that frames parts frames the part as large as the client shows it, its config saying which; the whole again at the view's own bounds; one that does not is not asked", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new PartView();
+  hub.add(source);
+  const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true });
+  await until(v.frames, KIND.video);
+  const view = source.views[0] as PartView;
+  const look = (said: unknown) => v.stream.write(frame(KIND.look, Buffer.from(JSON.stringify(said))));
+  const ack = async () => {
+    await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+    await settle();
+  };
+  // A quarter of the screen in its middle, shown 1200×676 device pixels: framed so, the config saying the part.
+  await look({ region: { x: 0.375, y: 0.375, w: 0.25, h: 0.25 }, maxWidth: 1200, maxHeight: 676 });
+  await settle();
+  assert.deepEqual(view.bounded, [[1200, 676, { x: 0.375, y: 0.375, w: 0.25, h: 0.25 }]]);
+  await ack();
+  let config = json(await until(v.frames, KIND.config));
+  assert.deepEqual(config.region, { x: 0.375, y: 0.375, w: 0.25, h: 0.25 });
+  assert.equal(config.width, 1200);
+  // The same look again: nothing asked. One past the screen's edge, or smaller than a 50th: kept within it.
+  await look({ region: { x: 0.375, y: 0.375, w: 0.25, h: 0.25 }, maxWidth: 1200, maxHeight: 676 });
+  await look({ region: { x: 0.99, y: -0.5, w: 0.001, h: 0.5 }, maxWidth: 99999, maxHeight: 4 });
+  await settle();
+  assert.deepEqual(view.bounded.slice(1), [[8192, 16, { x: 0.98, y: 0, w: 0.02, h: 0.5 }]]);
+  // The whole again (none, or about all of it): the view's own bounds, no part; its config says none.
+  await look({ region: { x: 0, y: 0, w: 0.99, h: 1 }, maxWidth: 400, maxHeight: 400 });
+  await settle();
+  assert.deepEqual(view.bounded.at(-1), [1920, 1080, null]);
+  await ack();
+  // (the configs of the looks before it first, as frames went meanwhile)
+  do config = json(await until(v.frames, KIND.config));
+  while (config.width !== 1920);
+  assert.equal(config.region, undefined);
+  assert.equal(config.width, 1920);
+  // Not JSON: let be.
+  await v.stream.write(frame(KIND.look, Buffer.from("{")));
+  await settle();
+  assert.equal(view.bounded.length, 3);
+  await v.stream.finish();
+  await v.served;
+  // A source that frames no parts (a tab of the browser) is not asked: the client goes on drawing the whole screen.
+  source.make = () => Object.assign(new PartView(), { regions: () => false });
+  const w = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true });
+  await until(w.frames, KIND.video);
+  await w.stream.write(frame(KIND.look, Buffer.from(JSON.stringify({ region: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 } }))));
+  await settle();
+  assert.deepEqual((source.views[1] as PartView).bounded, []);
+  await w.stream.finish();
+  await w.served;
+});
+
+test("the helper's view of a part of the display: the part asked with the bounds of a helper that frames parts (none of one from before them), each config saying the part its frames show as the helper said it", () => {
+  const written: Buffer[] = [];
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = {
+    write: (b: Buffer) => written.push(b),
+    destroy: () => {},
+    on: (event: string, f: any) => {
+      (listeners[event] ??= []).push(f);
+    },
+  };
+  const say = (kind: number, payload: Buffer | object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.isBuffer(payload) ? payload : Buffer.from(JSON.stringify(payload)))));
+  const frames: (Frame | null)[] = [];
+  const config = (w: number, h: number) => {
+    const c = Buffer.alloc(8);
+    c.writeUInt32BE(w, 0);
+    c.writeUInt32BE(h, 4);
+    return Buffer.concat([c, Buffer.from([1, 66, 0, 31])]);
+  };
+  const picture = (key: boolean, n: number) => {
+    const f = Buffer.alloc(9);
+    f[0] = key ? 1 : 0;
+    f.writeBigUInt64BE(BigInt(n * 1000), 1);
+    return Buffer.concat([f, Buffer.from([n])]);
+  };
+  const bounds = () => written.filter((b) => b[0] === TO_HELPER.bounds).map((b) => JSON.parse(b.subarray(5).toString()));
+  const part = { x: 0.5, y: 0, w: 0.5, h: 0.5 };
+  // A helper from before parts: the bounds alone, the whole display.
+  const old = new HelperView("h264", pipe, () => {});
+  say(1, { width: 1920, height: 1080, encoder: "e", codec: "h264" });
+  assert.equal(old.regions(), false);
+  old.bounds(1280, 720, part);
+  assert.deepEqual(bounds(), [{ maxWidth: 1280, maxHeight: 720 }]);
+  old.close();
+  written.length = 0;
+  delete listeners.data;
+  const view = new HelperView("h264", pipe, () => {});
+  say(1, { width: 1920, height: 1080, encoder: "e", codec: "h264", regions: true });
+  assert.equal(view.regions(), true);
+  view.bounds(1200, 676, part);
+  assert.deepEqual(bounds(), [{ maxWidth: 1200, maxHeight: 676, region: part }]);
+  const next = () => void view.next().then((f) => frames.push(f));
+  // The whole display first; then the part as the helper framed it, at another size (a config with the part); then
+  // a part of the same size (its config again, saying it); then the whole again.
+  next();
+  say(2, config(1920, 1080));
+  say(3, picture(true, 1));
+  next();
+  say(7, { region: part });
+  say(2, config(1200, 676));
+  say(3, picture(true, 2));
+  next();
+  say(3, picture(false, 3));
+  next();
+  say(7, { region: { x: 0.25, y: 0, w: 0.5, h: 0.5 } });
+  say(3, picture(true, 4));
+  next();
+  say(7, { region: null });
+  say(3, picture(true, 5));
+  return settle().then(() => {
+    assert.deepEqual(
+      frames.map((f) => f?.config && { width: f.config.width, region: f.config.region ?? null }),
+      [{ width: 1920, region: null }, { width: 1200, region: part }, undefined, { width: 1200, region: { x: 0.25, y: 0, w: 0.5, h: 0.5 } }, { width: 1200, region: null }],
+    );
+    view.close();
+  });
 });
 
 test("a still screen's picture goes again sharper as the rate goes up, a key frame each STILL_MS, until it is at the source's own", async () => {

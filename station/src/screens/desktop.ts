@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -189,10 +189,12 @@ type HelperError = Error & { code?: string };
 
 /// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
-/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight});
-/// a helper from before 7 and 8 lets them be.
+/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight,
+/// region?}: `region` a part of the display, 0..1 of it, framed alone; none, the whole); a helper from before 7 and 8
+/// lets them be, one from before regions frames the whole display (its info says `regions: true` where it frames parts).
 /// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
-/// pictures leave the pointer out).
+/// pictures leave the pointer out), 7 region (JSON {region}: the part of the display the frames from the next on show,
+/// as it was framed; null the whole; said before the frame whose part is another than the last one's).
 export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
@@ -224,6 +226,12 @@ export class HelperView implements ScreenView {
   #carry: Buffer = Buffer.alloc(0);
   #waiting: ((frame: Frame | null) => void)[] = [];
   #config: FrameConfig | undefined;
+  /// The latest config said (a frame of another part of the display goes with it again, its part said), the part the
+  /// next frame shows as the helper said it (null: the whole), and whether its info said it frames parts.
+  #lastConfig: FrameConfig | undefined;
+  #region: Region | null = null;
+  #sentRegion: Region | null = null;
+  #regions = false;
   #ended = false;
   #settle!: { resolve: (v: { width: number; height: number }) => void; reject: (e: Error) => void };
   readonly #gone: () => void;
@@ -279,6 +287,7 @@ export class HelperView implements ScreenView {
           this.#codec = info.codec === "h265" || info.codec === "h264" || info.codec === "jpeg" ? info.codec : this.#codec === "jpeg" ? "jpeg" : "h264";
           log.info("screens", "a view opened", { capture: this.#capture, width: info.width, height: info.height, encoder: info.encoder });
           if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
+          this.#regions = info.regions === true;
           this.#settle.resolve({ width: info.width, height: info.height });
         }
         return;
@@ -286,10 +295,23 @@ export class HelperView implements ScreenView {
       case 2:
         this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec !== "jpeg" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
         return;
+      case 7: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        this.#region = regionOf(said?.region);
+        return;
+      }
       case 3: {
         const frame: Frame = { key: (payload[0]! & 1) === 1, ts: Number(payload.readBigUInt64BE(1)), data: new Uint8Array(payload.subarray(9)) };
+        // Another part of the display than the last frame's: a config again, saying it (the same codec and size).
+        if (this.#config === undefined && this.#lastConfig !== undefined && JSON.stringify(this.#region) !== JSON.stringify(this.#sentRegion)) this.#config = this.#lastConfig;
         if (this.#config !== undefined) {
-          frame.config = this.#config;
+          const { region: _, ...config } = this.#config;
+          this.#lastConfig = config;
+          this.#sentRegion = this.#region;
+          frame.config = this.#region ? { ...config, region: this.#region } : config;
           this.#config = undefined;
         }
         this.#waiting.shift()?.(frame);
@@ -348,8 +370,13 @@ export class HelperView implements ScreenView {
     this.#send(TO_HELPER.rate, payload);
   }
 
-  bounds(maxWidth: number, maxHeight: number) {
-    this.#send(TO_HELPER.bounds, Buffer.from(JSON.stringify({ maxWidth: Math.round(maxWidth), maxHeight: Math.round(maxHeight) })));
+  bounds(maxWidth: number, maxHeight: number, region?: Region | null) {
+    const part = region && this.#regions ? { region } : {};
+    this.#send(TO_HELPER.bounds, Buffer.from(JSON.stringify({ maxWidth: Math.round(maxWidth), maxHeight: Math.round(maxHeight), ...part })));
+  }
+
+  regions(): boolean {
+    return this.#regions;
   }
 
   async input(event: ScreenInput): Promise<void> {

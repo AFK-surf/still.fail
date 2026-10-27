@@ -15,8 +15,10 @@
 //        6 reveal    UTF-8        a file's path, shown selected in Finder
 //        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on (the link carries no
 //                                 more: docs/remote-screens.md, "Pace")
-//        8 bounds    JSON         {maxWidth, maxHeight}: the pictures from now on fitted into these (a config first)
-//   out  1 info      JSON     first: {width, height, encoder, codec}, or {error, code: "capture"|"restart"|"display"|"encoder"}
+//        8 bounds    JSON         {maxWidth, maxHeight, region?}: the pictures from now on fitted into these (a config
+//                                 first), of `region` of the display alone ({x, y, w, h}, 0..1 of it: a client zoomed
+//                                 in) or, without it, of the whole
+//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true}, or {error, code: "capture"|"restart"|"display"|"encoder"}
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and
 //                             whenever it changes
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC or HVCC, or one JPEG)
@@ -25,6 +27,9 @@
 //        6 cursor    JSON     {x, y, shape} (x, y 0..1 of the display; shape a CSS cursor's name) as it moves or
 //                             changes: a video's pictures leave the pointer out (the client draws it, or shows its own in
 //                             its shape); a JPEG's have it drawn in
+//        7 region    JSON     {region: {x, y, w, h} | null}: the part of the display the frames from the next one on
+//                             show, as it was framed (0..1 of the display; null the whole), said before a frame whose
+//                             part is another than the last one's (that frame a key frame)
 // The view ends when the connection does. `synthetic: "moving"|"still"` encodes made-up pictures instead of capturing
 // (the side test's measurement of the encoder and the link): never what a person sees.
 import AppKit
@@ -45,6 +50,16 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// The view's bounds: as it opened, then as the station asks (`bounds`).
   var maxWidth: Int
   var maxHeight: Int
+  /// The part of the display framed alone as the station asks (x, y, w, h: 0..1 of it); nil the whole.
+  var region: [Double]?
+  /// The part the last frame encoded shows, and the last said (message 7), as framed.
+  var pushedRegion: [Double]?
+  var toldRegion: [Double]?
+  /// What crops and scales a picture into a buffer of the view's own (a part of the display; a simulator's pictures).
+  let transferring = NSLock()
+  var transfer: VTPixelTransferSession?
+  var pool: CVPixelBufferPool?
+  var poolSize = (0, 0)
   let fps: Int
   /// The bit rate asked when the view opened, then as the station asks (`rate`); none: the picture's size's.
   var bitrate: Int?
@@ -116,7 +131,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       case 6: clipboard.reveal(payload)
       case 8:
         if let b = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any], let w = b["maxWidth"] as? Int, let h = b["maxHeight"] as? Int {
-          bounds(w, h)
+          bounds(w, h, region: ScreenView.part(b["region"]))
         }
       case 7: if payload.count == 4 { rate(Int(payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) })) }
       default: break
@@ -136,6 +151,97 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     let scale = min(1.0, Double(maxWidth) / Double(width), Double(maxHeight) / Double(height))
     let even = { (v: Double) in max(2, Int(v.rounded()) & ~1) }
     return (even(Double(width) * scale), even(Double(height) * scale))
+  }
+
+  /// A part of the display as the station says it (`bounds`' region): x, y, w, h within 0..1, at least a 50th each
+  /// way; nil when it says none.
+  static func part(_ v: Any?) -> [Double]? {
+    guard let r = v as? [String: Any], let x = (r["x"] as? NSNumber)?.doubleValue, let y = (r["y"] as? NSNumber)?.doubleValue,
+      let w = (r["w"] as? NSNumber)?.doubleValue, let h = (r["h"] as? NSNumber)?.doubleValue, x.isFinite, y.isFinite, w.isFinite, h.isFinite
+    else { return nil }
+    let cw = min(1, max(0.02, w)), ch = min(1, max(0.02, h))
+    return [min(1 - cw, max(0, x)), min(1 - ch, max(0, y)), cw, ch]
+  }
+
+  /// `region` of a picture `width`×`height` in its pixels, on even ones (what 4:2:0 crops at), and that rectangle as
+  /// the part of it it is (0..1).
+  static func crop(_ region: [Double], _ width: Int, _ height: Int) -> (CGRect, [Double]) {
+    let even = { (v: Double) in Double(Int(v.rounded()) & ~1) }
+    let x = even(region[0] * Double(width)), y = even(region[1] * Double(height))
+    let w = max(2, min(Double(width) - x, even(region[2] * Double(width))))
+    let h = max(2, min(Double(height) - y, even(region[3] * Double(height))))
+    let r4 = { (v: Double) in (v * 10000).rounded() / 10000 }
+    return (CGRect(x: x, y: y, width: w, height: h), [r4(x / Double(width)), r4(y / Double(height)), r4(w / Double(width)), r4(h / Double(height))])
+  }
+
+  /// `crop` of `source` (all of it: nil) scaled into a buffer of the view's own `size`: NV12 for the video's encoder,
+  /// BGRA for a JPEG.
+  func transferred(_ source: CVPixelBuffer, crop: CGRect?, to size: (Int, Int)) -> CVPixelBuffer? {
+    transferring.lock()
+    defer { transferring.unlock() }
+    if transfer == nil {
+      VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &transfer)
+    }
+    if pool == nil || poolSize != size {
+      let attributes: [CFString: Any] = [
+        kCVPixelBufferPixelFormatTypeKey: jpeg ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        kCVPixelBufferWidthKey: size.0,
+        kCVPixelBufferHeightKey: size.1,
+        kCVPixelBufferIOSurfacePropertiesKey: [:] as [CFString: Any],
+      ]
+      pool = nil
+      CVPixelBufferPoolCreate(nil, nil, attributes as CFDictionary, &pool)
+      poolSize = size
+    }
+    guard let transfer, let pool else { return nil }
+    var made: CVPixelBuffer?
+    guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &made) == kCVReturnSuccess, let picture = made else { return nil }
+    // A part: the source's clean aperture (its centre's offset from the picture's, in pixels: right and down) scaled
+    // to the whole of ours, the attachment taken off again (the buffer is the capture's, used for its next picture).
+    if let crop {
+      let w = Double(CVPixelBufferGetWidth(source)), h = Double(CVPixelBufferGetHeight(source))
+      let aperture: [CFString: Any] = [
+        kCVImageBufferCleanApertureWidthKey: crop.width,
+        kCVImageBufferCleanApertureHeightKey: crop.height,
+        kCVImageBufferCleanApertureHorizontalOffsetKey: crop.midX - w / 2,
+        kCVImageBufferCleanApertureVerticalOffsetKey: crop.midY - h / 2,
+      ]
+      CVBufferSetAttachment(source, kCVImageBufferCleanApertureKey, aperture as CFDictionary, .shouldNotPropagate)
+      VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_ScalingMode, value: kVTScalingMode_CropSourceToCleanAperture)
+    } else {
+      VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_ScalingMode, value: kVTScalingMode_Normal)
+    }
+    defer { if crop != nil { CVBufferRemoveAttachment(source, kCVImageBufferCleanApertureKey) } }
+    guard VTPixelTransferSessionTransferImage(transfer, from: source, to: picture) == noErr else { return nil }
+    return picture
+  }
+
+  /// The latest picture as it is encoded, and the part of the display it shows (nil: the whole): the display's own
+  /// capture, or (a part asked for) that part of it, as large as the part fits the bounds at the display's pixels.
+  func framed() -> (CVPixelBuffer, [Double]?)? {
+    guard let picture = latest else { return nil }
+    guard let region else { return (picture, nil) }
+    let (dw, dh) = displayPixels()
+    let (rect, part) = ScreenView.crop(region, CVPixelBufferGetWidth(picture), CVPixelBufferGetHeight(picture))
+    guard let cropped = transferred(picture, crop: rect, to: fitted(Int(part[2] * Double(dw)), Int(part[3] * Double(dh)))) else { return nil }
+    return (cropped, part)
+  }
+
+  /// The display's size in its pixels.
+  func displayPixels() -> (Int, Int) {
+    let display = Status.display(displayID)
+    return (display["width"] as! Int, display["height"] as! Int)
+  }
+
+  /// The display's capture size for the bounds and the part asked for: fitted whole; with a part, the whole display
+  /// at as many pixels as that part fitted needs (its own at most).
+  func captureSize() -> (Int, Int) {
+    let (dw, dh) = displayPixels()
+    guard let region else { return fitted(dw, dh) }
+    let (rw, _) = fitted(Int(region[2] * Double(dw)), Int(region[3] * Double(dh)))
+    let scale = min(1.0, Double(rw) / (region[2] * Double(dw)))
+    let even = { (v: Double) in max(2, Int(v.rounded()) & ~1) }
+    return (even(Double(dw) * scale), even(Double(dh) * scale))
   }
 
   // MARK: capture
@@ -186,14 +292,14 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     if jpeg {
       encoder = "JPEG, quality 0.8"
       codec = "jpeg"
-      channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec])
+      channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true])
       return pump()
     }
     if !makeSession(width, height) {
       channel.sendJSON(1, ["error": "no H.264 encoder", "code": "encoder"])
       return
     }
-    channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec])
+    channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true])
     pump()
   }
 
@@ -358,13 +464,17 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// Encodes the latest picture when one is wanted and it is new (or a key frame was asked for).
   func pump() {
     if jpeg { return pumpJPEG() }
-    guard !ended, wanted > 0, !encoding, fresh, let picture = latest, let current = session else { return }
+    guard !ended, wanted > 0, !encoding, fresh, let current = session, let got = framed() else { return }
+    let (picture, part) = got
     let width = CVPixelBufferGetWidth(picture), height = CVPixelBufferGetHeight(picture)
     if (width, height) != size {
       if !makeSession(width, height) { return }
       forceKey = true
       return pump()
     }
+    // Another part of the display: from a key frame (the client's config says the part).
+    if part != pushedRegion { forceKey = true }
+    pushedRegion = part
     wanted -= 1
     encoding = true
     fresh = false
@@ -377,7 +487,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       current, imageBuffer: picture, presentationTimeStamp: CMTime(value: ts, timescale: 1_000_000), duration: .invalid,
       frameProperties: properties, infoFlagsOut: nil
     ) { status, _, sample in
-      self.queue.async { self.encoded(status, sample, ts, key) }
+      self.queue.async { self.encoded(status, sample, ts, key, part) }
     }
     if status != noErr {
       encoding = false
@@ -386,16 +496,18 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     }
   }
 
-  func encoded(_ status: OSStatus, _ sample: CMSampleBuffer?, _ ts: Int64, _ asked: Bool) {
+  func encoded(_ status: OSStatus, _ sample: CMSampleBuffer?, _ ts: Int64, _ asked: Bool, _ part: [Double]?) {
     encoding = false
     if ended { return }
     guard status == noErr, let sample, let block = CMSampleBufferGetDataBuffer(sample) else {
-      // Dropped: still owed, and from a key frame if one was asked for.
+      // Dropped: still owed, and from a key frame if one was asked for (as the part it showed was not said).
       wanted += 1
       forceKey = forceKey || asked
+      pushedRegion = toldRegion
       fresh = latest != nil
       return pump()
     }
+    tell(part)
     if let format = CMSampleBufferGetFormatDescription(sample),
       let atoms = CMFormatDescriptionGetExtension(format, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms) as? [String: Any],
       let avcC = atoms[codec == "h265" ? "hvcC" : "avcC"] as? Data, avcC != lastConfig
@@ -427,9 +539,22 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     pump()
   }
 
+  /// The part of the display the frame about to go shows (message 7), when it is another than the last one's.
+  func tell(_ part: [Double]?) {
+    if part == toldRegion { return }
+    toldRegion = part
+    if let part {
+      channel.sendJSON(7, ["region": ["x": part[0], "y": part[1], "w": part[2], "h": part[3]]])
+    } else {
+      channel.sendJSON(7, ["region": NSNull()])
+    }
+  }
+
   /// The latest picture as one JPEG, when one is wanted and it is new (or a key frame was asked for: every one is).
   func pumpJPEG() {
-    guard !ended, wanted > 0, fresh, let picture = latest else { return }
+    guard !ended, wanted > 0, fresh, let got = framed() else { return }
+    let (picture, part) = got
+    tell(part)
     wanted -= 1
     fresh = false
     forceKey = false
@@ -490,14 +615,20 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     cursorTimer = timer
   }
 
-  /// The pictures from now on fitted into `width`×`height`: the capture asked for the new size (its next picture is
-  /// that size, and the encoder is made anew for it, from a key frame).
-  func bounds(_ width: Int, _ height: Int) {
+  /// The pictures from now on fitted into `width`×`height`, of `region` of the display alone (nil: the whole): the
+  /// capture asked for the size that takes (its next picture is that size, and the encoder is made anew for it, from a
+  /// key frame); another part sent at once, the screen still or not.
+  func bounds(_ width: Int, _ height: Int, region: [Double]?) {
     queue.async {
+      defer { self.pump() }
       self.maxWidth = max(16, width)
       self.maxHeight = max(16, height)
-      let display = Status.display(self.displayID)
-      let (w, h) = self.fitted(display["width"] as! Int, display["height"] as! Int)
+      if region != self.region {
+        self.region = region
+        self.forceKey = true
+        if self.latest != nil { self.fresh = true }
+      }
+      let (w, h) = self.captureSize()
       if self.synthetic != nil {
         self.syntheticSize = (w, h)
         return
