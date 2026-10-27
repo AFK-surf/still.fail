@@ -132,6 +132,7 @@ pub using @sfbase {
   type VizLoad,
   viz_css,
   viz_bridge,
+  viz_components,
   page_js,
   clock_stamp,
   src_now,

@@ -3,6 +3,7 @@
 src/sfbase/web_assets.mbt holds, as strings,
   viz_css     web/src/viz/ember-viz.css   (a visualization's stylesheet: ui/Viz.kt documentOf)
   viz_bridge  web/src/viz/bridge.js       (its bridge: its height, what its widget keeps, words to send)
+  viz_components web/src/viz/components.js (still.fail's <sf-…> elements a figure is written with)
   page_js     apps/android/app/src/main/assets/preview/page.js (first in each page of a service's preview:
               its WebSockets, its requests' bodies and fetches, marking it; PreviewWeb.kt)
 
@@ -15,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(A))
 FILES = [
     ("viz_css", "web/src/viz/ember-viz.css"),
     ("viz_bridge", "web/src/viz/bridge.js"),
+    ("viz_components", "web/src/viz/components.js"),
     ("page_js", "apps/android/app/src/main/assets/preview/page.js"),
 ]
 OUT = os.path.join(A, "src/sfbase/web_assets.mbt")

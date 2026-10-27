@@ -66,6 +66,8 @@ pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
     ("r-field", "12px"),
     ("r-card", "20px"),
     ("corner-shape", "round"),
+    ("text-caption", px(t.caption)),
+    ("leading-caption", px(t.caption_line)),
     ("text-meta", px(t.meta)),
     ("leading-meta", px(t.meta_line)),
     ("text-ui", px(t.ui)),
@@ -182,6 +184,8 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -
   viz_relay +
   "</script><script>" +
   viz_bridge +
+  "</script><script>" +
+  viz_components +
   "</script></head><body>" +
   html +
   "</body></html>"
