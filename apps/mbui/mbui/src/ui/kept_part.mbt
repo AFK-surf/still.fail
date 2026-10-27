@@ -1,10 +1,14 @@
 // A part kept as it was drawn while nothing it shows can have changed (Ctx::kept_part): what the view builds is built
-// every frame, but a part nobody uses where it is (a panel behind the one in use, on still.fail's tape) changes only
-// by what comes from outside the hand on another part: the core's data, a timer, the system, a press or a key; its
-// size and its ground; or time, where what it shows changes with it (a motion, a cycle, a clock). A frame with none of
-// those (a list elsewhere scrolled, by a finger or a wheel, flung on) draws it again from what its last build drew,
-// not built, laid out nor painted anew: its instances as they were, where they were. (Zed's GPUI keeps a view so,
-// `AnyView::cached`: its last frame's paint replayed while it was not notified and its bounds are the same.)
+// every frame, but a part the hand is not on (still.fail's panels: one behind the one in use on the tape, and the one
+// in use between what the hand does in it) changes only by what comes from outside the hand on another part: the
+// core's data, a timer, the system, a press or a key; its size and its ground; or time, where what it shows changes
+// with it (a motion, a cycle, a clock). A frame with none of those (a list elsewhere scrolled, by a finger or a wheel,
+// flung on; a mark's step, a look by the clock) draws it again from what its last build drew, not built, laid out nor
+// painted anew: its instances as they were, where they were. (Zed's GPUI keeps a view so, `AnyView::cached`: its last
+// frame's paint replayed while it was not notified and its bounds are the same.) One in use is read out (`read_out`:
+// what it said to what reads the widgets said again, as a list's row's is), built once more the frame after an event
+// came to it (what its handler set after what reads it was built), and built each frame while it holds what is built
+// each frame wherever it is (a native view, the field that takes the keys).
 //
 // What it read of the core and of what was worked out of it (mbui/signals) is followed as it is built: a computed of
 // its own runs its build, so a topic it read changed builds it again whatever else said, and what it read stays kept
@@ -40,6 +44,18 @@ priv struct KeptPart {
   images : Array[ImageEntry]
   /// the looks by the clock its instances are tagged with, by tag (cycle_look.mbt): drawn again, they go on
   cycles : Map[Int, CycleLook]
+  /// read out (Ctx::kept_part's `read_out`: a panel in use): what its build said to what reads the widgets (relative
+  /// to its box, as a row's: RowKept's `sems`), said again as it is drawn again; whether its last build was read out
+  mut read : Bool
+  sems : Array[SemNode]
+  mut read_out : Bool
+  /// its last build drew what is built each frame wherever it is: a native view's hole (put where it is each frame:
+  /// native.mbt), the field that takes the keys (the keyboard's place, what it composes: sync_ime)
+  mut holds_live : Bool
+  /// its last build was for an event from outside: read out (in use: it takes the hand), it is built once more, for
+  /// what read the event late in that frame (a state its handler set after what reads it was built), as the frame
+  /// after an input is (inputrec.mbt)
+  mut came_built : Bool
   /// its build, run by `tracker` as what it read changes or it is invalidated (what is no signal changed); the build
   /// now, and what the tracker answered as it last ran it
   tracker : @signals.Computed[Int]
@@ -273,8 +289,11 @@ fn parts_forget() -> Unit {
 /// as if it held nothing else), not read out, and kept: built again only once something it shows can have changed
 /// (kept_part.mbt's head), else drawn again as its last build drew it, nothing of it built. `id` names it; `key` is what
 /// its caller builds it from besides what it reads (its size, where it is, its ground: what else changes it), another
-/// key building it anew. For a part nobody uses where it is (a panel behind the one in use).
-pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> Unit {
+/// key building it anew. Not read out, for a part nobody uses where it is (a panel behind the one in use); `read_out`,
+/// read out as its build said it, built or drawn again (a panel in use: what reads the widgets reads it as a list's
+/// row kept, semantics.mbt), built each frame while it holds what is built each frame wherever it is (a native view, the
+/// field that takes the keys).
+pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
   let st = match kept_parts.get(id) {
     Some(st) => st
     None => {
@@ -329,7 +348,12 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
     st.pointing == pointing() &&
     st.waits.is_empty() &&
     !moving &&
-    !st.moved_built
+    !st.moved_built &&
+    !(read_out && (st.holds_live || st.came_built)) &&
+    st.read == read_out &&
+    // (read out: what it said taken as it was built, else built so that it is)
+    (!read_out || st.read_out || !self.reads_out)
+  st.read = read_out
   st.body.val = body
   if !same {
     st.tracker.invalidate()
@@ -341,8 +365,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   let i = self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
     let part = part_now.part
     part_now.part = id
-    // (not read out: it is only drawn, built or drawn again alike)
-    self.hidden_from_semantics(fn() {
+    let build = fn() {
       let reading = @signals.set_active_sub(None)
       let stamp = st.tracker.get()
       @signals.set_active_sub(reading) |> ignore
@@ -350,7 +373,13 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
         ran = true
         st.stamp = stamp
       }
-    })
+    }
+    // (not read out: it is only drawn, built or drawn again alike)
+    if read_out {
+      build()
+    } else {
+      self.hidden_from_semantics(build)
+    }
     part_now.part = part
   })
   match holder {
@@ -362,10 +391,14 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit) -> 
   if ran {
     // (its rows say theirs as its lists are laid out)
     st.rows_said.clear()
+    // (what it says to what reads the widgets taken as the frame's tree is: semantics.mbt)
+    st.sems.clear()
+    st.read_out = false
     // (built while rows are not kept, a frame measured for contrast, parts off: its lists' rows said nothing to say
     // again, so it is not drawn again from it)
     st.built = if self.rows_on() { self.frame_no } else { -1 }
     st.moved_built = !st.waits.is_empty() || moving
+    st.came_built = st.outside != outside_events.val
     st.key = key
     st.outside = outside_events.val
     st.epoch = self.epoch
@@ -424,6 +457,11 @@ fn kept_new(id : Int, row~ : Bool) -> KeptPart {
     plot_seen: {},
     images: [],
     cycles: {},
+    read: false,
+    sems: [],
+    read_out: false,
+    holds_live: false,
+    came_built: false,
     tracker: @signals.computed(fn(_) {
       let c = g()
       let (layers, back) = (c.layers.length(), c.back_next)
@@ -749,6 +787,9 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, was : Int) ->
       st.lit = self.part_lit(st)
       st.take_insts(self, i0)
       st.drawn = self.frame_no
+      // (what is built each frame wherever it is: a native view's hole; the field that takes the keys)
+      st.holds_live = st.holds_native() ||
+        (self.focus != 0 && self.editors.contains(self.focus) && st.hit_ids.contains(self.focus))
       // (a Tester's: its words, found while it is drawn again)
       st.words.clear()
       if fake.val is Some(_) {

@@ -261,11 +261,19 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
   let rows : Array[(Int, RowKept, Int)] = []
   let in_row = Array::make(count, -1)
   let out_row : Array[Int] = []
+  // the parts kept and read out (kept_part.mbt's `read_out`, a panel in use) the same way: what one built this frame
+  // says is taken for it, what one drawn again said is said again; by node, the part built it is in (an index of
+  // `parts`), by what is said the same, and of each part the part built it is in
+  let parts : Array[(Int, KeptPart, Int)] = []
+  let part_up : Array[Int] = []
+  let in_part = Array::make(count, -1)
+  let out_part : Array[Int] = []
   for i in self.tree_order() {
     let n = self.nodes[i]
     let p = n.parent
     let parent_out = if p >= 0 { up[p] } else { -1 }
     in_row[i] = if p >= 0 { in_row[p] } else { -1 }
+    in_part[i] = if p >= 0 { in_part[p] } else { -1 }
     let said_before = out.length()
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
@@ -401,10 +409,108 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     }
     if n.item >= 0 {
       self.row_read_out(i, out, out_row, rows, in_row, up[i], hid[i] || !in_modal[i])
+    } else {
+      self.part_read_out(i, out, out_row, parts, part_up, in_part, up[i], hid[i] || !in_modal[i])
+    }
+    while out_part.length() < out.length() {
+      out_part.push(in_part[i])
     }
   }
   rows_read_out_taken(self, out, out_row, rows)
+  parts_read_out_taken(self, out, out_part, parts, part_up)
   out
+}
+
+///|
+/// Node `i`, a part's box read out (kept_part.mbt's `read_out`): one built this frame starts taking what it says
+/// (`parts`, `in_part`; the part it is in, `part_up`); one drawn again says again what it said as it was built, where it
+/// is now, under `outer`, hidden where it is now (`hidden`) or was. One whose build was not read out says nothing again:
+/// it is built anew while anything reads them (Ctx::kept_part).
+fn Ctx::part_read_out(
+  self : Ctx,
+  i : Int,
+  out : Array[SemNode],
+  out_row : Array[Int],
+  parts : Array[(Int, KeptPart, Int)],
+  part_up : Array[Int],
+  in_part : Array[Int],
+  outer : Int,
+  hidden : Bool,
+) -> Unit {
+  guard self.drawn_entry(i) is Some(e) else { return }
+  let depth = if outer >= 0 { out[outer].depth } else { -1 }
+  match e.again {
+    Some({ row: None, .. } as st) if st.read && st.read_out => {
+      let n = self.nodes[i]
+      let base = out.length()
+      for s in st.sems {
+        let (x, y, w, h) = s.rect
+        out.push({
+          ..s,
+          rect: (n.x + x, n.y + y, w, h),
+          focused: s.id != 0 && s.id == self.focus,
+          hidden: s.hidden || hidden,
+          parent: if s.parent < 0 { outer } else { base + s.parent },
+          depth: depth + 1 + s.depth,
+        })
+        out_row.push(-1)
+      }
+    }
+    None if e.part != 0 =>
+      match kept_parts.get(e.part) {
+        Some(st) if st.read => {
+          part_up.push(in_part[i])
+          parts.push((i, st, depth))
+          in_part[i] = parts.length() - 1
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+}
+
+///|
+/// What each part read out built this frame said (`parts`), taken for it, as a row's is (rows_read_out_taken): what was
+/// said in it, or in a part built in it, where from its node, under what among its own (-1: what holds it), how deep
+/// below what holds it.
+fn parts_read_out_taken(
+  c : Ctx,
+  out : Array[SemNode],
+  out_part : Array[Int],
+  parts : Array[(Int, KeptPart, Int)],
+  part_up : Array[Int],
+) -> Unit {
+  if parts.is_empty() {
+    return
+  }
+  let own = Array::make(out.length(), -1)
+  for r, part in parts {
+    let (node, st, depth) = part
+    let n = c.nodes[node]
+    let within = fn(o : Int) {
+      let mut q = out_part[o]
+      while q >= 0 && q != r {
+        q = part_up[q]
+      }
+      q == r
+    }
+    st.sems.clear()
+    for o in 0..<out.length() {
+      if !within(o) {
+        continue
+      }
+      let s = out[o]
+      let (x, y, w, h) = s.rect
+      own[o] = st.sems.length()
+      st.sems.push({
+        ..s,
+        rect: (x - n.x, y - n.y, w, h),
+        parent: if s.parent >= 0 && within(s.parent) { own[s.parent] } else { -1 },
+        depth: s.depth - depth - 1,
+      })
+    }
+    st.read_out = true
+  }
 }
 
 ///|
