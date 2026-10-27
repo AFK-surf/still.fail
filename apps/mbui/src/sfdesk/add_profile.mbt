@@ -316,7 +316,6 @@ fn connect_form(
   edit : (Array[(String, Json)]) -> Unit,
 ) -> Unit {
   let form = n.form
-  let tile = field(d, "tile")
   let pending = flag(d, "pending")
   let endpoint = profile_field("add-endpoint/" + form)
   let key = profile_field("add-key/" + form)
@@ -346,7 +345,7 @@ fn connect_form(
         let typed = @sf.input(
           c,
           "add-profile-endpoint/" + form,
-          placeholder=match text(tile, "endpointExample") {
+          placeholder=match text(d, "endpointExample") {
             "" => "https://"
             x => x
           },

@@ -354,7 +354,9 @@ export function isChinaVariant(id: string): boolean {
   return REGIONS.some(([, cn]) => cn === id);
 }
 
-export function example(id: string): string | null {
+/// An example of a source's own address; at Anthropic's protocol the root above `/v1` (clients add `/v1/messages`).
+export function example(id: string, protocol?: string | null): string | null {
+  if (id === "custom" && protocol === "anthropic") return "https://api.example.com";
   const examples: Record<string, string> = {
     "cloudflare-workers-ai": "https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1",
     "cloudflare-ai-gateway": "https://gateway.ai.cloudflare.com/v1/<account>/<gateway>",
@@ -371,6 +373,10 @@ export function cleanEndpoint(text: string): string | null {
   const rest = t.startsWith("https://") ? t.slice(8) : t.startsWith("http://") ? t.slice(7) : null;
   return rest !== null && rest !== "" && !/\s/.test(rest) ? t : null;
 }
+
+/// Anthropic's protocol is spoken at the root above `/v1` (clients add `/v1/messages`), so an address given with it is
+/// taken without it.
+export const anthropicRoot = (base: string): string => (base.endsWith("/v1") ? base.slice(0, -3) : base);
 
 export type Endpoints = { chat: string | null; responses: string | null; anthropic: string | null; decision: string | null };
 
@@ -392,8 +398,8 @@ export function endpoints(source: Source, endpoint: string | null | undefined, p
   else if (source.id === "cloudflare-workers-ai" || source.id === "ollama") at = { ...none, chat: base };
   else if (chosen === "chat_completions") at = { ...none, chat: base };
   else if (chosen === "responses") at = { ...none, responses: base };
-  else if (chosen === "anthropic") at = { ...none, anthropic: base };
-  else at = { anthropic: base.endsWith("/v1") ? base.slice(0, -3) : null, chat: base, responses: base, decision: null };
+  else if (chosen === "anthropic") at = { ...none, anthropic: anthropicRoot(base) };
+  else at = { anthropic: base.endsWith("/v1") ? anthropicRoot(base) : null, chat: base, responses: base, decision: null };
   if (chosen && source.id === "cloudflare-ai-gateway") {
     if (chosen !== "chat_completions") at.chat = null;
     if (chosen !== "responses") at.responses = null;

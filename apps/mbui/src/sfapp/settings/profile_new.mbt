@@ -315,7 +315,6 @@ fn connect_form(
 ) -> Unit {
   let t = @sf.theme()
   let form = n.form
-  let tile = field(d, "tile")
   let label = fn(words : String) {
     c.text(words, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
   }
@@ -328,7 +327,7 @@ fn connect_form(
   }
   if flag(d, "showEndpoint") {
     label(tr("common.provider.endpoint"))
-    let endpoint = field_box(c, ekey, match text(tile, "endpointExample") {
+    let endpoint = field_box(c, ekey, match text(d, "endpointExample") {
       "" => "https://"
       x => x
     }).trim(chars=" ").to_owned()

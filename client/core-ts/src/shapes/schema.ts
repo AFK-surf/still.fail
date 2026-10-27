@@ -788,6 +788,7 @@ export const SHAPES: Record<string, Shape> = {
     ["choices", vec("FlowChoice"), { doc: "At the method step: the two cards." }],
     ["showEndpoint", "bool"],
     ["endpoint", "String"],
+    ["endpointExample", opt("String"), { default: true, doc: "An example of the address, for the protocol chosen." }],
     ["endpointHint", opt("String")],
     ["protocols", vec("FlowOption"), { doc: "Asked only when there are more than one." }],
     ["protocol", opt("String")],

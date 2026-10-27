@@ -439,8 +439,12 @@ test("an_address_of_the_readers_own_and_its_protocol_are_asked_and_decide_what_i
   flows.change(topic, 1, "edit", { provider: "custom", endpoint: "http://127.0.0.1:4000/v1" });
   view = flows.value(topic);
   assert.deepEqual([view.protocols.length, view.protocol, view.canSubmit, view.keyLabel], [3, "chat_completions", true, "API key（可选）"]);
+  assert.equal(view.endpointExample, "https://api.example.com/v1");
   flows.change(topic, 1, "edit", { protocol: "anthropic" });
-  assert.equal(flows.value(topic).usesLine, "添加后可用于：Claude Code");
+  view = flows.value(topic);
+  assert.equal(view.usesLine, "添加后可用于：Claude Code");
+  // Anthropic's protocol is spoken at the root: the example has no /v1.
+  assert.deepEqual([view.endpointExample, view.endpointHint], ["https://api.example.com", "填写自己的地址，例如 https://api.example.com"]);
   assert.deepEqual(flows.begin(topic, 1), { access: { kind: "api-provider", provider: "custom", endpoint: "http://127.0.0.1:4000/v1", protocol: "anthropic" } });
   flows.finish(topic, 1, null);
   flows.change(topic, 1, "edit", { provider: "ollama" });

@@ -965,7 +965,9 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   const endpoint = str(draft.endpoint).trim();
   const keyOptional = tile.keyOptional === true;
   out.showEndpoint = own;
-  out.endpointHint = own && typeof tile.endpointExample === "string" ? t("core-views.flow.endpoint_hint", { example: tile.endpointExample }) : null;
+  const example = own ? providers.example(str(tile.id), protocol) : null;
+  out.endpointExample = example;
+  out.endpointHint = example !== null ? t("core-views.flow.endpoint_hint", { example }) : null;
   if (own && protocols.length > 1) out.protocols = protocols.map((p) => ({ id: p, label: t(`core-views.flow.protocol.${p}`) }));
   out.protocol = protocol;
   out.showKey = true;
