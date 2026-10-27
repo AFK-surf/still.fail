@@ -9,7 +9,7 @@ import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, 
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { routes } from "../src/api/routes/drive.ts";
 import type { Request } from "../src/api/request.ts";
 import { Drive, DriveError } from "../src/drive/drive.ts";
@@ -263,10 +263,17 @@ class FakeHelper {
   }
 }
 
+/// The machines' folders, removed when the tests end.
+const bases: string[] = [];
+after(() => {
+  for (const base of bases) rmSync(base, { recursive: true, force: true });
+});
+
 /// A machine: a home with Documents (a pinned project in it, the station's data in it too), the helper's release, and
 /// a drive with the helper.
 function machine() {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "drive-helper-")));
+  bases.push(base);
   const home = join(base, "home");
   const docs = join(home, "Documents");
   const project = join(docs, "project");

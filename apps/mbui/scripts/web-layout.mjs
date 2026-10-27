@@ -8,7 +8,7 @@
 // mbui's taken too: `app-sidebar-folded@640,400`, the folded sidebar not shown a while by the pointer its click left). TOPICS.json: topics besides those the page asked for (mbui's app
 // asks some the page does not: src/sflayout says which), a JSON array of the core's topic keys.
 // (from the repository's root, its packages installed; PLAYWRIGHT_MODULE picks Playwright, as web-ref.mjs)
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -235,4 +235,5 @@ try {
 } finally {
   await browser.close();
   server.httpServer.close();
+  await rm(dist, { recursive: true, force: true });
 }
