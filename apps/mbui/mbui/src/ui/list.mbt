@@ -449,6 +449,7 @@ pub fn Ctx::list(
         follow_margin: 0.0,
         built: -1,
         stepped: -1,
+        fresh: true,
         glide_shows: false,
         bar: Bar::new(),
         laid: -1,
@@ -510,6 +511,7 @@ pub fn Ctx::list(
   st.direction = self.direction
   st.layer = self.layer_cur
   st.part = part_now.part
+  st.fresh = nodes_run.fresh || nodes_run.part_fresh
   // shown again (not built the frame before): what of it still moves says so again (where it is at the frame's time
   // is its layout's to work out: Ctx::place_list)
   let back = st.built >= 0 && st.built < self.frame_no - 1
@@ -532,8 +534,9 @@ pub fn Ctx::list(
     }
   }
   // (where its own motions have it and the heights its rows came out at as they were laid out, what its bar and its
-  // rows' places are drawn from, read by a part kept as drawn that builds it: kept_part.mbt)
-  if part_building() {
+  // rows' places are drawn from, read by a part kept as drawn that builds it: kept_part.mbt; a part kept as its nodes
+  // lays its lists out each frame, kept_nodes.mbt)
+  if part_now.part != 0 || part_now.row != 0 {
     self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
     st.heights_learned.get() |> ignore
   }

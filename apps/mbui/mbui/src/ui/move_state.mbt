@@ -219,6 +219,7 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
   }
   let shown = FixedArray::make(1, v)
   self.shown_now[name] = { v: shown }
+  row_said_shown(name, shown)
   v
 }
 
@@ -246,6 +247,7 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
   let name = n.moves
   let nth = self.move_seen.get(name).unwrap_or(0)
   self.move_seen[name] = nth + 1
+  row_said_seen(name)
   // (a box with an id is itself whatever was built before it; others are the nth so named)
   let key = if n.id != 0 { name + "\u{1}#\{n.id}" } else { name + "\u{1}\{nth}" }
   let built = node_shown(n)
@@ -271,6 +273,7 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
     node_show(n, shown)
   }
   self.shown_now[key] = { v: shown }
+  row_said_shown(key, shown)
 }
 
 ///|

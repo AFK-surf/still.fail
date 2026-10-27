@@ -60,6 +60,12 @@ priv struct RowNodes {
   inners : Array[Int]
   inners_or : Array[Int]
   arounds : Array[Int]
+  floating : Array[Int]
+  /// what it showed of the boxes named to be moved (move_state.mbt), the names built, and what it read of how lists
+  /// stand (Ctx::list_info_as, read back)
+  moves_shown : Array[(String, FixedArray[Double])]
+  moves_seen : Array[String]
+  info : Array[(String, () -> Bool)]
   drawn : Array[Drawn]
   words : Array[WordsMark]
   used : Array[() -> Unit]
@@ -75,6 +81,13 @@ priv struct RowNodes {
   /// how many of its rows leave out what they have not the room for (Ctx::fit_rows: what is left out is worked out
   /// once the frame is laid out, readback.mbt)
   mut fit_rows : Int
+  /// how its nodes hold each other as built, from its first (-1: none of its own: what holds its root, a list's rows), and
+  /// the lists it holds by their ids (a part's), laid out each frame
+  links : Array[(Int, Int, Int, Int)]
+  lists : Array[Int]
+  /// a part's: what its caller builds it from (Ctx::kept_part's `key`), and whether it is read out
+  mut key : String
+  mut read : Bool
   /// the frame and the moment it was last built (said where it parts from it built whole: rows_check_end)
   mut built_frame : Int
   mut built_at : Double
@@ -99,6 +112,8 @@ let spare_nodes : Array[Node] = []
 /// kept at all (`on`: a Tester's frame built whole after one that kept rows keeps none).
 priv struct NodesRun {
   mut fresh : Bool
+  /// a part being built for what it read, or as it is new (Ctx::part_nodes): its lists' rows built anew
+  mut part_fresh : Bool
   mut told : Bool
   /// (the row told last, list and item: what says why a frame is asked for, Tester::assert_idle)
   mut told_by : (Int, Int)
@@ -117,6 +132,7 @@ priv struct NodesRun {
 // kept across runs: put back as a run begins (nodes_forget), its counts as each frame does
 let nodes_run : NodesRun = {
   fresh: true,
+  part_fresh: false,
   told: false,
   told_by: (0, 0),
   pass: 0,
@@ -132,6 +148,13 @@ let nodes_run : NodesRun = {
 /// Whether rows are kept as their nodes this frame.
 fn Ctx::nodes_keep(self : Ctx) -> Bool {
   nodes_run.on && !nodes_run.fresh && !inst_owners.on && !self.lit_every
+}
+
+///|
+/// Whether the rows of list `st` are kept as their nodes this frame: what built it built it from what had not changed
+/// (ListState's `fresh`: the frame built anew, or the part it is in built again for what it read, builds them anew).
+fn Ctx::nodes_keep_in(self : Ctx, st : ListState) -> Bool {
+  nodes_run.on && !st.fresh && !inst_owners.on && !self.lit_every
 }
 
 ///|
@@ -306,6 +329,10 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     inners: [],
     inners_or: [],
     arounds: [],
+    floating: [],
+    moves_shown: [],
+    moves_seen: [],
+    info: [],
     drawn: [],
     words: [],
     used: [],
@@ -314,6 +341,10 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     periodic: [],
     laid: [],
     laid_looks: [],
+    links: [],
+    lists: [],
+    key: "",
+    read: false,
     fit_rows: 0,
     built_frame: -1,
     built_at: -1.0,
@@ -330,16 +361,12 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.push(self.layers_opened.length())
   into.push(self.stuck.length())
   into.push(self.press_owners.length())
-  into.push(self.floating.length())
   into.push(self.cover_asks.length())
   into.push(self.place_reads.length())
-  into.push(self.info_reads.length())
   into.push(self.row_reads.length())
   into.push(self.words_reads.length())
   into.push(self.shown_watch.length())
   into.push(self.move_runs.length())
-  into.push(self.shown_now.length())
-  into.push(self.move_seen.length())
   into.push(self.asked_actions.length())
   into.push(self.told.length())
   into.push(self.shots.length())
@@ -366,10 +393,9 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
 // kept across runs: a table, never written
 let kept_census_names : Array[String] = [
   "a layer opened", "a layer opened as laid out", "what is held at its list's top", "what takes its presses",
-  "what floats",
-  "a cover", "a list's place read back", "a list read back", "a row read back", "words read back",
+  "a cover", "a list's place read back", "a row read back", "words read back",
   "what shows across read back",
-  "a move", "a move shown", "a move named", "an action asked", "what it tells outside", "a shot", "what dismisses",
+  "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
   "where the focus returns", "a list of its own", "a field of its own", "what it owns", "a focus group", "a cover",
   "a spring", "a native view", "a picture at a rect", "a stream", "what is drawn over", "what is raised", "a scrim",
   "words to pick", "what a package keeps of it",
@@ -405,7 +431,7 @@ fn Ctx::row_laid(
   }
   rn.shown = self.frame_no
   rn.laid_pass.val = nodes_run.pass
-  if self.nodes_keep() &&
+  if self.nodes_keep_in(st) &&
     rn.ok &&
     !rn.in_pool &&
     rn.n > 0 &&
@@ -427,36 +453,13 @@ fn Ctx::row_laid(
     return @signals.untracked(fn() { self.row_splice(li, rn, ix, y) })
   }
   // built: what it says of the frame from where each list stands
-  let census_before : Array[Int] = []
-  self.kept_census(census_before)
-  self.build_marks(rn.marks)
-  let sems0 = self.sems.length()
-  let hidden0 = self.sem_hidden.length()
-  let inners0 = self.inners.length()
-  let inners_or0 = self.inners_or.length()
-  let arounds0 = self.arounds.length()
-  let drawn0 = dr.entries.length()
-  let words0 = words_marks.length()
-  let cycles0 = self.cycles.length()
-  let periodic0 = self.periodic.length()
-  rn.used.clear()
-  rn.again.clear()
-  rn.laid.clear()
-  let fit0 = self.fit_rows
+  let b = self.nodes_begin(rn)
   nodes_run.building = Some(rn)
   let (r, h) = rn.watch.read(fn() {
     let r = self.build_row(li, st, k)
     (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
   })
   nodes_run.building = None
-  nodes_run.built = nodes_run.built + 1
-  rn.fit_rows = self.fit_rows - fit0
-  rn.built_frame = self.frame_no
-  rn.built_at = self.clock
-  rn.base = r
-  rn.said_base = r
-  rn.n = self.count - r
-  rn.in_pool = true
   rn.h = h
   rn.iw = iw
   rn.count = st.count
@@ -466,59 +469,129 @@ fn Ctx::row_laid(
   rn.sel = st.sel
   rn.layer = st.layer
   rn.direction = st.direction
+  self.nodes_end(rn, r, b, part=false)
+  (r, h)
+}
+
+///|
+/// Where what the frame's builds say stood as a row or a part began being built (Ctx::nodes_begin): what it said is
+/// taken from there as it is over (Ctx::nodes_end).
+priv struct NodesBegun {
+  census : Array[Int]
+  sems : Int
+  hidden : Int
+  inners : Int
+  inners_or : Int
+  arounds : Int
+  floating : Int
+  info : Int
+  drawn : Int
+  words : Int
+  cycles : Int
+  periodic : Int
+  fit : Int
+}
+
+///|
+/// Row or part `rn` about to be built: where what the frame's builds say stands.
+fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
+  let census : Array[Int] = []
+  self.kept_census(census)
+  self.build_marks(rn.marks)
+  rn.used.clear()
+  rn.again.clear()
+  rn.laid.clear()
+  rn.moves_shown.clear()
+  rn.moves_seen.clear()
+  {
+    census,
+    sems: self.sems.length(),
+    hidden: self.sem_hidden.length(),
+    inners: self.inners.length(),
+    inners_or: self.inners_or.length(),
+    arounds: self.arounds.length(),
+    floating: self.floating.length(),
+    info: self.info_reads.length(),
+    drawn: dr.entries.length(),
+    words: words_marks.length(),
+    cycles: self.cycles.length(),
+    periodic: self.periodic.length(),
+    fit: self.fit_rows,
+  }
+}
+
+///|
+/// Row or part `rn` built, its nodes from `r` (`b`: what the builds said stood as it began): its nodes and what it
+/// said of the frame kept with it, and whether it may be kept (it said nothing of the frame that is not said again, its
+/// nodes all its own and none of a kind built each frame; a part may hold lists, laid out each frame).
+fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bool) -> Unit {
+  nodes_run.built = nodes_run.built + 1
+  rn.fit_rows = self.fit_rows - b.fit
+  rn.built_frame = self.frame_no
+  rn.built_at = self.clock
+  rn.base = r
+  rn.said_base = r
+  rn.n = self.count - r
+  rn.in_pool = true
   rn.epoch = self.epoch
   rn.scale = self.scale
   rn.reads_out = self.reads_out
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
   rn.sems.clear()
-  for j in sems0..<self.sems.length() {
+  for j in b.sems..<self.sems.length() {
     rn.sems.push(self.sems[j])
   }
   rn.hidden.clear()
-  for j in hidden0..<self.sem_hidden.length() {
+  for j in b.hidden..<self.sem_hidden.length() {
     rn.hidden.push(self.sem_hidden[j])
   }
   rn.inners.clear()
-  for j in inners0..<self.inners.length() {
+  for j in b.inners..<self.inners.length() {
     rn.inners.push(self.inners[j])
   }
   rn.inners_or.clear()
-  for j in inners_or0..<self.inners_or.length() {
+  for j in b.inners_or..<self.inners_or.length() {
     rn.inners_or.push(self.inners_or[j])
   }
   rn.arounds.clear()
-  for j in arounds0..<self.arounds.length() {
+  for j in b.arounds..<self.arounds.length() {
     rn.arounds.push(self.arounds[j])
   }
+  rn.floating.clear()
+  for j in b.floating..<self.floating.length() {
+    rn.floating.push(self.floating[j])
+  }
+  rn.info.clear()
+  for j in b.info..<self.info_reads.length() {
+    rn.info.push(self.info_reads[j])
+  }
   rn.drawn.clear()
-  for j in drawn0..<dr.entries.length() {
+  for j in b.drawn..<dr.entries.length() {
     rn.drawn.push({ ..dr.entries[j] })
   }
   rn.words.clear()
-  for j in words0..<words_marks.length() {
+  for j in b.words..<words_marks.length() {
     rn.words.push(words_marks[j])
   }
   rn.cycles.clear()
-  for j in cycles0..<self.cycles.length() {
+  for j in b.cycles..<self.cycles.length() {
     rn.cycles.push(self.cycles[j])
   }
   rn.periodic.clear()
-  for j in periodic0..<self.periodic.length() {
+  for j in b.periodic..<self.periodic.length() {
     rn.periodic.push(self.periodic[j])
   }
-  // whether it may be kept: it said nothing of the frame that is not said again, its nodes all its own and none of a
-  // kind built each frame
   let census_after : Array[Int] = []
   self.kept_census(census_after)
   rn.why = ""
   for j in 0..<census_after.length() {
-    if rn.why == "" && census_after[j] != census_before[j] {
+    if rn.why == "" && census_after[j] != b.census[j] && !(part && kept_census_names[j] == "a list of its own") {
       rn.why = kept_census_names[j]
     }
   }
   if rn.why == "" {
-    rn.why = self.row_nodes_why(r, rn.n)
+    rn.why = self.row_nodes_why(r, rn.n, part~)
   }
   // (an entry of draw.mbt's of a node not its own: what holds it drawn otherwise for it)
   for e in rn.drawn {
@@ -528,26 +601,34 @@ fn Ctx::row_laid(
   }
   rn.ok = rn.why == ""
   rn.laid_looks.clear()
+  rn.links.clear()
+  rn.lists.clear()
   if rn.ok {
     for j in 0..<rn.n {
       let nd = self.nodes[r + j]
       rn.laid_looks.push((nd.opacity, nd.radius, nd.radii.map(fn(a) { a.copy() }), nd.corners_worked))
+      // (how its nodes hold each other as it built them, from its first: what holds its root is where it is put back;
+      // a list's rows are its layout's, none as built)
+      let at = fn(i : Int) { if i >= r && i < r + rn.n { i - r } else { -1 } }
+      rn.links.push((at(nd.parent), at(nd.first), at(nd.last), at(nd.next)))
+      if nd.kind == kind_list {
+        rn.lists.push(nd.id)
+      }
     }
   }
-  (r, h)
 }
 
 ///|
-/// Why the `n` nodes from `r` (a row just built) may not be kept: one held elsewhere, or of a kind built each frame
-/// (a list or a field of its own, what scrolls, a native view, a pager's page, a layer, a shot, what is placed by the
-/// clock); "" none.
-fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int) -> String {
+/// Why the `n` nodes from `r` (a row or a part just built) may not be kept: one held elsewhere, or of a kind built each
+/// frame (a list of a row's own: a part lays its lists out each frame; a field of its own, what scrolls, a native view,
+/// a pager's page, a layer, a shot, what is placed by the clock); "" none.
+fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
     if j > 0 && (nd.parent < r || nd.parent >= r + n) {
       return "a node of it held elsewhere"
     }
-    if nd.kind == kind_list {
+    if nd.kind == kind_list && !part {
       return "a list of its own"
     }
     if nd.kind == kind_editor {
@@ -577,6 +658,19 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int) -> String {
 /// where its list lays it now (`ix`, `y`), what its build said of the frame said again; its node and how tall its slot
 /// is.
 fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double) -> (Int, Double) {
+  let c0 = self.nodes_put_back(rn, li)
+  // where its list lays it now: placed as laying it out there places it, from what its layout worked out (Ctx::replace,
+  // as layout.mbt's commit places what it did not lay out anew), on the same numbers as building it there
+  self.replace(c0, ix, y)
+  self.nodes_said_again(rn)
+  (c0, rn.h)
+}
+
+///|
+/// The nodes of row or part `rn` put back into the frame's at its end, as its build made them, its root under node
+/// `parent` after what is there (as Ctx::alloc puts one): how they hold each other as built, from where they are now,
+/// and what the layout works out of them as their build left it. Their first.
+fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
   let c0 = self.count
   let n = rn.n
   while self.nodes.length() < c0 + n {
@@ -592,9 +686,7 @@ fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double)
     self.nodes[c0 + j] = rn.store[j]
     rn.store[j] = o
   }
-  // (its links within it, by how far it is from where it was; what is worked out of it once laid out as its build
-  // left it)
-  let d = c0 - rn.base
+  let at = fn(k : Int) { if k >= 0 { c0 + k } else { -1 } }
   for j in 0..<n {
     let nd = self.nodes[c0 + j]
     let (opacity, radius, radii, worked) = rn.laid_looks[j]
@@ -602,29 +694,13 @@ fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double)
     nd.radius = radius
     nd.radii = radii.map(fn(a) { a.copy() })
     nd.corners_worked = worked
+    let (up, first, last, next) = rn.links[j]
+    nd.parent = if j == 0 { parent } else { at(up) }
+    nd.first = at(first)
+    nd.last = at(last)
+    nd.next = at(next)
   }
-  if d != 0 {
-    for j in 0..<n {
-      let nd = self.nodes[c0 + j]
-      if j > 0 {
-        nd.parent = nd.parent + d
-      }
-      if nd.first >= 0 {
-        nd.first = nd.first + d
-      }
-      if nd.last >= 0 {
-        nd.last = nd.last + d
-      }
-      if nd.next >= 0 {
-        nd.next = nd.next + d
-      }
-    }
-  }
-  // its root under the list, after what is there (as Ctx::alloc puts it)
-  let root = self.nodes[c0]
-  root.parent = li
-  root.next = -1
-  let p = self.nodes[li]
+  let p = self.nodes[parent]
   if p.last >= 0 {
     self.nodes[p.last].next = c0
   } else {
@@ -634,11 +710,13 @@ fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double)
   self.count = c0 + n
   rn.base = c0
   rn.in_pool = true
-  // where its list lays it now: placed as laying it out there places it, from what its layout worked out (Ctx::replace,
-  // as layout.mbt's commit places what it did not lay out anew), on the same numbers as building it there
-  self.replace(c0, ix, y)
-  // what it said of the frame, said again of its nodes where they are now
-  let by = c0 - rn.said_base
+  c0
+}
+
+///|
+/// What row or part `rn`'s build said of the frame, said again of its nodes where they are now.
+fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
+  let by = rn.base - rn.said_base
   self.say_again(rn.said, { ..unmoved, by: by })
   for s in rn.sems {
     self.sems.push({ ..s, node: s.node + by })
@@ -678,6 +756,29 @@ fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double)
   for l in rn.laid {
     self.laid_said_again(l)
   }
+  // (the lists it holds built this frame, as built, from nothing changed: laid out from where they stand, their rows
+  // kept, Ctx::place_list)
+  for id in rn.lists {
+    match self.lists.get(id) {
+      Some(st) => {
+        st.built = self.frame_no
+        st.fresh = false
+      }
+      None => ()
+    }
+  }
+  for i in rn.floating {
+    self.floating.push(i + by)
+  }
+  for r in rn.info {
+    self.info_reads.push(r)
+  }
+  for s in rn.moves_shown {
+    self.shown_now[s.0] = { v: s.1 }
+  }
+  for name in rn.moves_seen {
+    self.move_seen[name] = self.move_seen.get(name).unwrap_or(0) + 1
+  }
   self.fit_rows = self.fit_rows + rn.fit_rows
   for cy in rn.cycles {
     if !self.cycles.iter().any(fn(x) { x.1.to_string() == cy.1.to_string() }) {
@@ -691,7 +792,90 @@ fn Ctx::row_splice(self : Ctx, li : Int, rn : RowNodes, ix : Double, y : Double)
   }
   nodes_run.kept = nodes_run.kept + 1
   nodes_run.kept_at.push((rn.list, rn.item))
-  (c0, rn.h)
+}
+
+///|
+/// What `body` builds, in a box of its own filling the one being built, read out or not (Ctx::kept_part's), kept as
+/// its nodes (kept_nodes.mbt's head): built again where something it read changed, or what builds it may build it
+/// otherwise (the frame built anew), or it is built elsewhere (`key`, its id's scope, its owner, its layer, ...); else
+/// its nodes put back as its build made them and what it said of the frame said again there, laid out with the rest.
+fn Ctx::part_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_out : Bool) -> Unit {
+  let build = fn() {
+    self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
+      if read_out {
+        body()
+      } else {
+        self.hidden_from_semantics(body)
+      }
+    })
+    |> ignore
+  }
+  // (a part in a row's or a part's build: what holds it is built every frame)
+  if nodes_run.building is Some(_) {
+    build()
+    return
+  }
+  let rn = match kept_nodes.get((id, -1)) {
+    Some(rn) => rn
+    None => {
+      let rn = row_nodes_new(id, -1)
+      kept_nodes[(id, -1)] = rn
+      rn
+    }
+  }
+  rn.shown = self.frame_no
+  rn.laid_pass.val = nodes_run.pass
+  if self.nodes_keep() &&
+    rn.ok &&
+    !rn.in_pool &&
+    rn.n > 0 &&
+    !rn.watch.is_stale() &&
+    rn.key == key &&
+    rn.read == read_out &&
+    rn.seed == self.id_seed &&
+    rn.owner == self.owner &&
+    rn.bones == self.bones &&
+    rn.sel == desk.selecting &&
+    rn.layer == self.layer_cur &&
+    rn.direction == self.direction &&
+    rn.epoch == self.epoch &&
+    rn.scale == self.scale &&
+    rn.reads_out == self.reads_out &&
+    rn.lit_all == self.lit_all {
+    // (what is worked out again of it as it is put back, what it marks used, read as its build read it: followed by its
+    // watch, not by what builds it)
+    @signals.untracked(fn() {
+      self.nodes_put_back(rn, self.cur) |> ignore
+      self.nodes_said_again(rn)
+    })
+    return
+  }
+  // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
+  // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
+  let fresh = nodes_run.fresh ||
+    rn.n == 0 ||
+    rn.watch.is_stale() ||
+    rn.key != key ||
+    rn.read != read_out ||
+    rn.seed != self.id_seed ||
+    rn.owner != self.owner
+  let b = self.nodes_begin(rn)
+  let r = self.count
+  nodes_run.building = Some(rn)
+  let was = nodes_run.part_fresh
+  nodes_run.part_fresh = fresh
+  rn.watch.read(build)
+  nodes_run.part_fresh = was
+  nodes_run.building = None
+  rn.key = key
+  rn.read = read_out
+  rn.seed = self.id_seed
+  rn.owner = self.owner
+  rn.bones = self.bones
+  rn.sel = desk.selecting
+  rn.layer = self.layer_cur
+  rn.direction = self.direction
+  self.nodes_end(rn, r, b, part=true)
 }
 
 ///|
@@ -702,12 +886,14 @@ pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
 }
 
 ///|
-/// Why the rows of the last frame that may not be kept may not, each reason once with how many (a test's, a bench's).
+/// Why the rows and the parts of the last frame that may not be kept may not (a part's said so), each reason once with
+/// how many (a test's, a bench's).
 pub fn rows_unkept() -> Array[(String, Int)] {
   let by : Map[String, Int] = {}
   for _, rn in kept_nodes {
     if !rn.ok && rn.why != "" {
-      by[rn.why] = by.get(rn.why).unwrap_or(0) + 1
+      let why = if rn.item < 0 { "a part: " + rn.why } else { rn.why }
+      by[why] = by.get(why).unwrap_or(0) + 1
     }
   }
   let out = []
@@ -968,5 +1154,25 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
         self.left_reads[id] = (v, loc)
       }
     }
+  }
+}
+
+///|
+/// What the row or part being built showed of a box named to be moved (Ctx::move_node, Ctx::moved): kept with it, said
+/// again each frame it is put back (what a move setting out later sets out from).
+fn row_said_shown(key : String, shown : FixedArray[Double]) -> Unit {
+  match nodes_run.building {
+    Some(rn) => rn.moves_shown.push((key, shown))
+    None => ()
+  }
+}
+
+///|
+/// A box named `name` to be moved built in the row or part being built (Ctx::move_node's `nth`): counted again each
+/// frame it is put back.
+fn row_said_seen(name : String) -> Unit {
+  match nodes_run.building {
+    Some(rn) => rn.moves_seen.push(name)
+    None => ()
   }
 }
