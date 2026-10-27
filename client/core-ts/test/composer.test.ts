@@ -973,6 +973,14 @@ test("a_message_whose_file_was_going_up_as_the_app_ended_is_sent_from_the_bytes_
   await Effect.runPromise(t.core.inner.data.written);
   t.core.close();
   t.host.takeEmitted();
+  // The core started again sends it on by itself (views/calls.ts resume), before the answers below are set on it: its
+  // naming held till they are, as a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it holds it (named
+  // for real, its hash is worked out on another thread in real time, which the test's clock does not wait for: whether
+  // the answers were set before it went on was the machine's to say; it failed so on main's CI, 2026-10-27).
+  const naming = Requests.prototype.uploadName;
+  let set = () => {};
+  const answered = new Promise<null>((r) => { set = () => r(null); });
+  Requests.prototype.uploadName = () => answered;
   const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
   try {
     const went: string[] = [];
@@ -984,6 +992,7 @@ test("a_message_whose_file_was_going_up_as_the_app_ended_is_sent_from_the_bytes_
     };
     const posted: J[] = [];
     (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    set();
     const ui = again.connect();
     const entry = again.inner.views.local.outbox("ws/st", 7)[0];
     assert.equal(entry.text, "with file");
@@ -997,7 +1006,10 @@ test("a_message_whose_file_was_going_up_as_the_app_ended_is_sent_from_the_bytes_
     // sent: nothing of it kept any more
     assert.equal(await Effect.runPromise(again.inner.driveKept.uploadNoted("slow")), null);
     assert.equal(await Effect.runPromise(again.inner.driveKept.has("outbox\nslow")), false);
-  } finally { again.close(); }
+  } finally {
+    again.close();
+    Requests.prototype.uploadName = naming;
+  }
 });
 
 // Its file was up before the app ended, its message not yet sent: what its station said of the file is kept, and the
