@@ -438,7 +438,16 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
                 // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide
                 // frame's pane says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter,
                 // move none of it (it goes with the page, at once)
-                let whole = c.box(style=page_whole, fn() { page_view(c, src, w, all, invited, page) })
+                let whole = c.box(style=page_whole, fn() {
+                  // kept as it was drawn while nothing it shows can have changed (mbui's Ctx::kept_part), read out, as
+                  // the wide frame's panes are (sfdesk's tape_part): a mark stepping in it, a list of another page
+                  // scrolled builds none of it. Its key what it is laid out by besides what it reads: the window, the
+                  // bars' room, the keyboard's, the ground, where it stands in the stack and the way a place came in
+                  let t = @sf.theme()
+                  let key = "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
+                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way}"
+                  c.kept_part(c.id("page/kept"), key, fn() { page_view(c, src, w, all, invited, page) }, read_out=true)
+                })
                 @motion.scope(c, whole, bottom=true)
               },
               bg=t.p.bg,
