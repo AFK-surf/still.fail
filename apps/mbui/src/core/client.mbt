@@ -346,6 +346,29 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
 }
 
 ///|
+/// Whether message `m` is a topic's change alone, its value or what changed of it, for one already read (not the first,
+/// nothing waiting on it: no wait of the runtime's ended by it, no edit's draft come with it): what it changes is said by
+/// its topic's signal and nothing else (Sub::changed), so it may be taken as it comes, before the frame decides what it
+/// does (@ui.on_message_said).
+pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
+  if m.contains("fatal") {
+    return false
+  }
+  let id = match m.get("id") {
+    Some(Number(d, ..)) => d.to_int()
+    _ => return false
+  }
+  match self.subs.get(id) {
+    Some(s) =>
+      s.version > 0 &&
+      !self.sub_waits.contains(id) &&
+      !self.echo_waits.values().any(fn(w) { w.0 == id }) &&
+      (m.contains("value") || m.contains("delta") || m.contains("error"))
+    None => false
+  }
+}
+
+///|
 /// One message from the core, as its JSON text. False when it is not JSON.
 pub fn Client::receive(self : Client, text : String) -> Bool {
   let msg = @json.parse(text) catch { _ => return false }

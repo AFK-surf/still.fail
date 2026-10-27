@@ -23,6 +23,20 @@ pub fn on_message(channel : String, handler : (String, Bytes?) -> Unit) -> Unit 
 }
 
 ///|
+// kept across runs: as message_handlers, the app's code
+let message_said : Map[String, (String, Bytes?) -> Bool] = Map::new()
+
+///|
+/// What of a message on `channel` changes only signals, taken by `said` as it comes, as the frame begins, before it is
+/// decided what the frame does: `said` answers whether it took it (all it changes said by signals: what read them is
+/// built again, nothing else); one it does not take is handed to the channel's handler (on_message) as the frame is
+/// built, which builds the whole frame again (what came from outside and is no signal). In the order they came: once one
+/// is left for the handler, those after it are too.
+pub fn on_message_said(channel : String, said : (String, Bytes?) -> Bool) -> Unit {
+  message_said[channel] = said
+}
+
+///|
 /// A Tester's messages posted and not taken by a frame yet (the fake host's queue), oldest first.
 let fake_posted : Array[(String, String, Bytes?)] = []
 
@@ -51,6 +65,7 @@ let outside_due : Ref[(() -> Double)?] = Ref::new(None)
 fn messages_reset() -> Unit {
   fake_posted.clear()
   messages_in.clear()
+  said_left.val = 0
   post_wakes.val = 0
   messages_handed.val = 0
   tape.val = None
@@ -112,20 +127,42 @@ let messages_in : Array[(String, String, Bytes?)] = []
 /// taken from the host in the order posted, said come from outside where any came (so the frame is built and hands
 /// them on: take_messages).
 fn messages_arrive() -> Unit {
+  messages_handed.val = 0
+  let came : Array[(String, String, Bytes?)] = []
   match fake.val {
     Some(_) =>
       if fake_posted.length() > 0 {
         for m in fake_posted {
-          messages_in.push(m)
+          came.push(m)
         }
         fake_posted.clear()
       }
     None =>
       if @hostapi.post_take() > 0 {
         while @hostapi.post_next() is Some((channel, json, b)) {
-          messages_in.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
+          came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
         }
       }
+  }
+  // (what changes only signals taken now, in the order they came, till one is left for its handler: messages_in)
+  for m in came {
+    if messages_in.is_empty() {
+      match message_said.get(m.0) {
+        Some(said) => {
+          if taping() {
+            tape_line("MSG " + message_line(m.0, m.1, m.2))
+          }
+          if said(m.1, m.2) {
+            messages_handed.val += 1
+            continue
+          }
+          // (left: handed on as the frame is built, its MSG line on the tape already)
+          said_left.val = said_left.val + 1
+        }
+        None => ()
+      }
+    }
+    messages_in.push(m)
   }
   if messages_in.length() > 0 {
     outside_counted()
@@ -133,10 +170,15 @@ fn messages_arrive() -> Unit {
 }
 
 ///|
+/// How many of the messages left for their handlers were put on the tape as they came (messages_arrive): not again as
+/// they are handed on.
+// kept across runs: taken as each frame's messages are handed on
+let said_left : Ref[Int] = Ref(0)
+
+///|
 /// As a frame is built: all that was posted since the last (messages_arrive), handed to their handlers in the order
 /// posted (app.mbt frame_body). What is posted meanwhile (a handler's own post, the other thread's) is the next frame's.
 fn take_messages() -> Unit {
-  messages_handed.val = 0
   if messages_in.length() == 0 {
     return
   }
@@ -150,7 +192,9 @@ fn take_messages() -> Unit {
 ///|
 fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   outside_came()
-  if taping() {
+  if said_left.val > 0 {
+    said_left.val = said_left.val - 1
+  } else if taping() {
     tape_line("MSG " + message_line(channel, json, bytes))
   }
   if channel == @hostapi.system_channel {

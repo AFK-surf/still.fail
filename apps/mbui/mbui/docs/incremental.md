@@ -91,7 +91,9 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    finger moves (hand.mbt's `beyond`); the system's back gesture as it goes is where the page follows it (Nav's
    `finger`), no event; what reads where the pointer is reads it only where it uses it (a field's while a press drags in
    it, a rail's place while it is dragged). Left: a box scrolled sideways, what a field holds, what a pager or a menu
-   keeps of a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
+   keeps of a press, read so; then `outside_said` (what comes as a topic's change alone is taken as it comes, before the frame decides what it
+   does, said by its signal: @ui.on_message_said, the core's `receive_said`; the rest still counts), the frame built
+   after an input taken (inputrec.mbt's `inputs_taken`),
    `outside_events`, `held`, `pointed` and `came_built` go.
 4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped. The frame's paint runs under a
    watch of its own (frame_watch.mbt's paint_watch): where a node is placed by the clock (Ctx::moved_by: a stack's

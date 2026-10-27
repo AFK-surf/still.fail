@@ -53,6 +53,8 @@ pub let state : SignIn = {
 pub fn start() -> Bool {
   // what the core says is posted to mbui's queue (core_native.c), which hands it here as the next frame begins
   @ui.on_message("core", @core.receive)
+  // (a topic's change alone taken as it comes: what read it built again, not the whole frame, mbui's messages.mbt)
+  @ui.on_message_said("core", @core.receive_said)
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
