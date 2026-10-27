@@ -60,10 +60,24 @@ pub fn switcher_open_with(words : String) -> Unit {
 }
 
 ///|
+/// How ⌘K's panel comes (Switcher.css.ts switcher: popKeyframes from its top, 140 ms on the ease-out).
+// kept across runs: a value (no field of it changes)
+let switcher_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0, spec=@motion.tween(@kit.pop_ms, ease=Out))
+
+///|
+/// How ⌘K goes: at once, as the web's (unmounted).
+// kept across runs: a value (no field of it changes)
+let gone_at_once : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap(0.0))
+
+///|
 /// ⌘K over the page (ChatSwitcher): over a scrim, 14% down the window, 560 wide at most (32 short of the window), 480
 /// high at most (72% of the window); its search, then sfpages' list of what is found and what can be done (finder_list),
-/// the latest chats with nothing typed. Drawn each frame; nothing while closed.
+/// the latest chats with nothing typed. Drawn each frame; nothing while closed. It comes in as the web's (Switcher.css.ts):
+/// its scrim faded in over 120 ms, the panel grown out of 97% from its top and faded in over 140 ms; it goes at once.
 pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  // (asked closed too: opened again, it comes in again)
+  let shows = @motion.presence(c, "\u{2}switcher", switching.val, initial=true, enter=switcher_in, exit=gone_at_once)
+  let ground = @motion.presence(c, "\u{2}switcher-ground", switching.val, initial=true, enter=@kit.tip_in, exit=gone_at_once)
   if !switching.val {
     return
   }
@@ -78,7 +92,8 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let panel = c.id("switcher")
   // mbui's layer over the page (modal: its scrim takes the presses outside, Tab stays in it; Esc, back or a press
   // outside dismiss it), the panel 14% down the window in its middle
-  let o = c.overlay("switcher-layer", modal=true, scrim=t.p.overlay, initial_focus=0, fn() {
+  let scrim = @sf.alpha(t.p.overlay, ground.map(fn(l) { l.alpha }).unwrap_or(1.0))
+  let o = c.overlay("switcher-layer", modal=true, scrim~, initial_focus=0, fn() {
     // (32 short of the window at most: room round it however narrow the frame is)
     let room = dmin(switcher_w, c.width - switcher_side - switcher_side)
     let i = c.box(
@@ -126,6 +141,10 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       },
     )
     c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * switcher_top_share) })
+    match shows {
+      Some(l) => c.look(i, l)
+      None => ()
+    }
   })
   if o.dismissed is Some(_) {
     close()

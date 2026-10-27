@@ -2052,6 +2052,8 @@ pub fn wait_pill(@ui.Ctx, String, key? : String, error? : Bool) -> Unit
 
 pub fn waiting(@ui.Ctx, () -> Unit, text? : String, error? : String, note? : WaitNote, fill? : Bool, body? : () -> Unit) -> Unit
 
+pub let waiting_in : @motion.Trans
+
 pub fn waiting_page(@ui.Ctx, String, String, String, () -> Unit) -> Unit
 
 pub let wake_ms : Double
@@ -2103,6 +2105,8 @@ pub fn window_keys_room_at(Double) -> Double
 pub fn window_keys_room_tape() -> Double
 
 pub fn window_keys_w() -> Double
+
+pub let window_page_in : @motion.Trans
 
 pub fn with_corner_remove(@ui.Ctx, String, String, Double, () -> Unit, w? : Double) -> Bool
 

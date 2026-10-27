@@ -318,11 +318,11 @@ pub let find_faint : Double = 0.45
 /// The bar (ChatFind.css.ts bar): before the field what it did not look in, said while it is so; the field 320 wide, 32
 /// high, a line round it on the raised ground, a capsule (so in a panel's corner where its shape is concentric); the
 /// words typed in 14, which of how many in 12, the one before, the next, close: 26 round, concentric in its end, the
-/// ground on hover.
+/// ground on hover. Opened, it fades in (kit's tip_in, ChatFind.css.ts bar's 120 ms); closed, it goes at once.
 pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : FindList) -> Unit {
   let t = @sf.theme()
   let key = chat_key(r)
-  c.box(style=find_bar_style, fn() {
+  let bar = c.box(style=find_bar_style, fn() {
     match finding.found.get() {
       Some(f) if !f.whole =>
         c.box(style=find_note_box, fn() {
@@ -398,7 +398,7 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
     })
     |> ignore
   })
-  |> ignore
+  @motion.entering(c, bar, "find-bar/" + key, @kit.tip_in)
 }
 
 ///|

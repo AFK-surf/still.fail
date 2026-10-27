@@ -166,8 +166,10 @@ pub fn chat_list(
               _ => ()
             }
             // what leaves the chat from the outbox goes as what leaves a list does, not what was sent from here and is
-            // now the core's
+            // now the core's; so does where it stands (gone as an agent takes it up) and the line over what was new
+            // (gone once it is read), each a row of the list, not its words going at once
             match e {
+              State(_, _, _) | Line => @motion.keyed(c, ri, mk, exit=@sf.leave, by=makes_way(lf, keys[i]))
               Out(o) if !local_sent(o) =>
                 @motion.keyed(
                   c,

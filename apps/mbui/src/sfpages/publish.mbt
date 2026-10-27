@@ -26,6 +26,8 @@ priv struct Publishing {
   off : @sf.LiveMap[String, Bool]
   busy : @signals.Signal[Bool]
   copied : @signals.Signal[Int]
+  /// the chat's thread its page is drawn for: the one open, and once closed while it goes (publish_layer)
+  mut drawn : (ChatRef, Double)?
 }
 
 ///|
@@ -37,10 +39,12 @@ let publishing : Publishing = {
   off: @sf.LiveMap::new(),
   busy: @signals.signal(false, same=fn(a, b) { a == b }),
   copied: @signals.signal(0, same=fn(a, b) { a == b }),
+  drawn: None,
 }
 
 ///|
 pub fn publish_reset() -> Unit {
+  publishing.drawn = None
   publishing.of.set(None)
   publishing.read.set(0)
   publishing.preview.set(None)
@@ -71,6 +75,13 @@ pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
       _ => ()
     }
   })
+}
+
+///|
+/// Its page closed: it goes (publish_layer), what it showed kept till it has gone, the rest put back as the next opens.
+pub fn publish_close() -> Unit {
+  publishing.of.set(None)
+  publishing.busy.set(false)
 }
 
 ///|
@@ -108,10 +119,17 @@ fn publish_go(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The page that shares it, while it is open, over the frame's pages (under the presenters and the toasts).
+/// It comes in faded in as a file opened over the window does, and goes as a dialog does (@sf.window_page_in,
+/// @kit.pop_out), drawn as it was while it goes.
 pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
-  match publishing.of.get() {
-    Some((r, thread)) => publish_page(c, src, r, thread)
-    None => ()
+  let open = publishing.of.get()
+  if open is Some(_) {
+    publishing.drawn = open
+  }
+  guard publishing.drawn is Some((r, thread)) else { return }
+  match @motion.presence(c, "publish", open is Some(_), initial=true, enter=@sf.window_page_in, exit=@kit.pop_out) {
+    Some(look) => publish_page(c, src, r, thread, look, open is None)
+    None => publishing.drawn = None
   }
 }
 
@@ -119,7 +137,7 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 /// The page that shares it (PublishDialog): over the whole window on the canvas, the picture as it would be at the
 /// chat's width, what it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the
 /// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
-fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
+fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : @ui.Look, leaving : Bool) -> Unit {
   let p = publishing.preview.get()
   let messages = items(p, "list")
   let here : MessageHere = {
@@ -137,8 +155,8 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   }
   // (the column's width: the window's on a phone)
   let column = dmin(c.width, publish_page_w)
-  let o = c.overlay("publish", modal=true, scrim=@sf.theme().p.bg, fn() {
-    c.box(style=publish_fill, fn() {
+  let o = c.overlay("publish", modal=true, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
+    let page = c.box(style=publish_fill, fn() {
       match publishing.read.get() {
         0 => c.box(style=publish_note, fn() { @sf.wait_line(c, @sf.t("web-pages.chat.publish.reading"), key="publish/reading") }) |> ignore
         2 => c.box(style=publish_note, fn() { c.text(publishing.error.get(), style=publish_problem) |> ignore }) |> ignore
@@ -182,19 +200,19 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           publish_go(c)
         }
         if closed {
-          publish_reset()
+          publish_close()
         }
       })
       |> ignore
     })
-    |> ignore
+    c.look(page, look)
     // the picture itself, while it is taken: the same, all of it, off the screen
     if messages.length() > 0 {
       c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
     }
   })
   if o.dismissed is Some(_) && !publishing.busy.get() {
-    publish_reset()
+    publish_close()
   }
 }
 

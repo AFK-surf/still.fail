@@ -110,9 +110,9 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
-  // 取消, beside it at the foot, closes it
+  // 取消, beside it at the foot, closes it: gone as a dialog goes
   t.click(Button, label="取消")
-  t.frame()
+  t.run_for(@kit.pop_out_ms)
   assert_true(t.find("部署登录页") is None)
 }
 
