@@ -10,7 +10,7 @@
 /// apart by them); the `@words` at its caret (where the `@` is, what follows) for the words and caret they were asked
 /// of; the `@` whose menu was closed (Escape, a pick; -1 none), not opened again until the `@words` are gone; the chat
 /// chosen in the menu; the marks in the words (where each starts and ends past its `]`) and the words the core read
-/// them in (others: moved along with an edit until it has read these).
+/// them in (others: moved along with an edit until it has read these); what the menu's words last found (refs_search).
 priv struct RefField {
   mut text : String
   mut anchor : Int
@@ -22,6 +22,7 @@ priv struct RefField {
   marks : @sf.LiveArray[(Int, Int)]
   marks_of : @signals.Signal[String]
   mut marks_asked : String
+  mut found : Json?
 }
 
 ///|
@@ -57,6 +58,7 @@ fn ref_field(key : String) -> RefField {
         marks: @sf.LiveArray::from([]),
         marks_of: @signals.signal(""),
         marks_asked: "",
+        found: None,
       }
       ref_fields[key] = f
       f
@@ -147,7 +149,10 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
               _ => None
             }
             match at {
-              None => f.closed.set(-1)
+              None => {
+                f.closed.set(-1)
+                f.found = None
+              }
               Some((_, q)) =>
                 match f.at.get() {
                   Some((_, was)) if was == q => ()
@@ -263,16 +268,37 @@ pub fn refs_marked(key : String) -> Bool? {
 }
 
 ///|
-/// The `@words` draft `key`'s field's caret is at the end of, as the core read its words and caret now (where the `@`
-/// is, what follows it); None in none, in one whose menu was closed, or not yet read.
+/// The `@words` draft `key`'s field's caret is at the end of, as the core last read its words and caret (where the
+/// `@` is, what follows it): while it reads them as they are now, as it read them before, if that `@` is still before
+/// the caret (the menu stays as it was while the next letter is read, not closed for it and opened again); None in
+/// none, in one whose menu was closed, or none read yet.
 pub fn refs_at(key : String) -> (Int, String)? {
   let f = ref_field(key)
-  if f.anchor != f.caret || f.at_of.get() != ref_key(f.text, f.caret) {
+  if f.anchor != f.caret {
     return None
   }
+  let read_now = f.at_of.get() == ref_key(f.text, f.caret)
   match f.at.get() {
-    Some((start, _)) as at if start != f.closed.get() => at
+    Some((start, _)) as at if start != f.closed.get() &&
+      (read_now || (start < f.caret && f.caret <= f.text.length() && f.text.at(start).to_int() == 64)) => at
     _ => None
+  }
+}
+
+///|
+/// What the `@words` of draft `key` find (the core's `chatSearch` with `params`): while the core looks up the next
+/// words, what the last ones found (the menu's chats stay till the next are there, not gone for a line saying it is
+/// reading); what it says when it has none yet, or failed.
+pub fn refs_search(src : Source, key : String, params : Map[String, Json]) -> Topic {
+  let f = ref_field(key)
+  let topic = (src.topic)("chatSearch", params)
+  match (topic.value, f.found) {
+    (Some(_), _) => {
+      f.found = topic.value
+      topic
+    }
+    (None, Some(_)) if topic.error is None => { value: f.found, error: None, version: topic.version }
+    _ => topic
   }
 }
 

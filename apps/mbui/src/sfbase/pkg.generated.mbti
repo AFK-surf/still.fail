@@ -1155,6 +1155,8 @@ pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 
 pub fn refs_reset() -> Unit
 
+pub fn refs_search(Source, String, Map[String, Json]) -> Topic
+
 pub fn relay_connect(String) -> Json?
 
 pub fn relay_go(Source, Json?, done? : () -> Unit) -> Unit

@@ -195,6 +195,54 @@ test "desk composer: the `@` menu offers the workspace's other stations' chats t
 }
 
 ///|
+test "desk composer: the pointer moving over the `@` menu's chats chooses them; resting, ↑ / ↓ still move the choice away from under it" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.type_text("@的")
+  t.frame()
+  let b = "首页的列表改成按天分组"
+  let chosen = fn() raise { t.get(Button, label=b).selected }
+  // moved onto it: chosen
+  let (x, y, w, h) = t.get(Button, label=b).rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(chosen(), Some(true))
+  // the keys move the choice to another, the pointer resting where it was
+  t.key(@ui.key_code_up)
+  t.frame()
+  t.frame()
+  assert_eq(chosen(), Some(false))
+  // moved again over it: chosen again
+  t.move(x + w / 2.0 + 4.0, y + h / 2.0)
+  t.frame()
+  assert_eq(chosen(), Some(true))
+}
+
+///|
+test "desk composer: while the core looks up the `@` menu's next words, the chats the last ones found stay, not a line saying it is reading" {
+  let calls : Array[Made] = []
+  // (from when it is set, the core answers no `chatSearch` yet)
+  let held = Ref(false)
+  let (t, _) = desk_composer_tester(calls, over=fn(name, topic) {
+    if name == "chatSearch" && held.val {
+      { value: None, error: None, version: 0 }
+    } else {
+      topic
+    }
+  })
+  desk_focus(t)
+  t.type_text("@首页")
+  t.frame()
+  assert_true(t.find("首页的列表改成按天分组") is Some(_))
+  held.val = true
+  t.type_text("的")
+  t.frame()
+  assert_true(t.find("引用对话") is Some(_))
+  assert_true(t.find("首页的列表改成按天分组") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+}
+
+///|
 test "desk composer: Escape closes the `@` menu for that `@`; the words stay, Enter sends them" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls)

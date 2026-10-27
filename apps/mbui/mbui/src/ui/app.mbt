@@ -206,6 +206,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
   c.frame_no = c.frame_no + 1
+  c.hand_moved = c.px != c.hand_was.0 || c.py != c.hand_was.1
+  c.hand_was = (c.px, c.py)
   if !layout_reuse.val {
     c.epoch = c.epoch + 1
   }
