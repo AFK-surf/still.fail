@@ -25,6 +25,8 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
     from=Unanchored,
     // (as large as the picture while the window has the room; past it, the picture drawn smaller: @sf.whole_fitted)
     stage=true,
+    // the looks it can be drawn in, over its buttons (share_looks.mbt)
+    above=fn(c) { share_looks_pick(c, src) },
     // (its title said as it is drawn, in the language then)
     live=fn() { (@sf.t("web-main.stations.shareCard"), "", "") },
     foot=fn(c, _) {
@@ -70,9 +72,21 @@ fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges).
+/// The poster (share_picture) as box `id`: round as a card, or `flat` (handed out: its ground to its edges), in the look
+/// chosen under it (share_look: the night's here, the others' share_looks.mbt).
 fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool = false) -> Int {
   let fleet = (src.topic)("fleet", { "scope": Json::string(w.id) }).value
+  match share_look(src) {
+    "poster" => poster_look(c, fleet, id, flat)
+    "receipt" => receipt_look(c, fleet, id, flat)
+    "terminal" => terminal_look(c, fleet, id, flat)
+    _ => night_look(c, fleet, id, flat)
+  }
+}
+
+///|
+/// The night's look: still.fail's own colours, the weeks' quota as rings.
+fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
   let quota = items(fleet, "quota")
   c.box(style=if flat { pic_box_flat } else { pic_box }, id~, fn() {
     c.box(style=pic_head, fn() {

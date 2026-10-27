@@ -5297,6 +5297,11 @@ export interface PrefsView {
 	 * (JSON: [{station, path, name}]), whoever else browses there.
 	 */
 	driveFavorites?: Record<string, string>;
+	/**
+	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
+	 * `poster`, `receipt`, `terminal`, or (none) `night`.
+	 */
+	shareLook?: string;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**

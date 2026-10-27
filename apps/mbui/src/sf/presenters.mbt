@@ -105,6 +105,8 @@ priv struct PanelOf {
   field : String
   /// a picture shown alone over the window, its buttons under it (panel's `stage`)
   stage : Bool
+  /// on a stage, what is chosen of the picture between it and its buttons (panel's `above`)
+  above : ((@ui.Ctx) -> Unit)?
 }
 
 ///|
@@ -241,7 +243,8 @@ pub fn pick(
 /// once with keyboard and mouse, looked at first with touch. `stage`: a picture to hand out shown alone, on every screen
 /// the same (stage_centred): no panel round it, the window under it the night (stage_scrim), what it holds in the
 /// middle drawn as large as the window lets it (whole_fitted), 关闭 and its `foot`'s buttons under it on the night;
-/// a press beside it, Escape and the back close it too.
+/// a press beside it, Escape and the back close it too; `above`, over those buttons, what is chosen of the picture (the
+/// card to share's looks).
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -261,9 +264,10 @@ pub fn panel(
   form? : Bool = false,
   field? : String = "",
   stage? : Bool = false,
+  above? : (@ui.Ctx) -> Unit,
 ) -> Unit {
   present(
-    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage }),
+    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage, above }),
     from,
     gone~,
   )
@@ -1253,16 +1257,23 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       draw_panel_body(x, c, close, keyed=p)
       panel_whole_now.val -= 1
       stage_room.val = was
-      c.box(style=stage_foot, id=foot_id, fn() {
+      c.box(style=stage_under, id=foot_id, fn() {
         let night = on_night.val
         on_night.val = true
-        if button(c, t("common.close"), key=key + "/stage-close") {
-          closed = true
-        }
-        match x.foot {
-          Some(f) => f(c, close)
+        match x.above {
+          Some(f) => f(c)
           None => ()
         }
+        c.box(style=stage_foot, fn() {
+          if button(c, t("common.close"), key=key + "/stage-close") {
+            closed = true
+          }
+          match x.foot {
+            Some(f) => f(c, close)
+            None => ()
+          }
+        })
+        |> ignore
         on_night.val = night
       })
       |> ignore
@@ -1279,6 +1290,11 @@ let stage_box : @ui.Style = @ui.css("align=ACenter gap=S5")
 ///|
 // kept across runs: a value (no field of it changes)
 let stage_foot : @ui.Style = @ui.css("row gap=S2 align=ACenter justify=JCenter")
+
+///|
+/// Under what a stage holds: what is chosen of it (`above`) over its buttons, as far apart as the stage's parts.
+// kept across runs: a value (no field of it changes)
+let stage_under : @ui.Style = @ui.css("gap=S5 align=ACenter")
 
 ///|
 /// How far what a stage holds stands from its buttons (stage_box's gap), and the stage from the window's edges.

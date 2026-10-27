@@ -1599,6 +1599,95 @@ pub let ring_turn_keep : Double = 0.82
 pub let share_orange : Int64 = 0xE5704AFFL
 
 ///|
+/// The card shared's other looks (2026-10-27 用户：「再搞几版骚气的分享图片模板，让用户可以选择」), chosen under it, each
+/// the same in either theme as the night is. 大字报: still.fail's orange to its edges, the night's black on it (6.1 to 1),
+/// said of in that black at 82% (4.9 to 1), the dot of still.fail white; its band of figures the black, the orange on
+/// it.
+pub let share_poster_ground : Int64 = 0xE5704AFFL
+
+///|
+pub let share_poster_ink : Int64 = 0x111114FFL
+
+///|
+pub let share_poster_dim : Int64 = 0x111114D1L
+
+///|
+/// Its weeks' bars' tracks, and the days' bars but today's: the black thinned on the orange.
+pub let share_poster_track : Int64 = 0x11111433L
+
+///|
+/// Its number: the scale's largest (Xl7, 72) drawn larger, as its line holds four of its figures and the percent (104);
+/// 1234% and past, 80.
+pub let share_poster_number_scale : Double = 1.45
+
+///|
+pub let share_poster_number_less : Double = 1.12
+
+///|
+/// 小票: a till's paper, its ink nearly black (15.2 to 1), said of in that ink at 62% (4.6 to 1), in the code face;
+/// still.fail's orange deepened for the paper (4.6 to 1: words in it too), its dashes the ink thinned.
+pub let share_receipt_ground : Int64 = 0xF5F2EAFFL
+
+///|
+pub let share_receipt_ink : Int64 = 0x1C1C1EFFL
+
+///|
+pub let share_receipt_dim : Int64 = 0x1C1C1E9EL
+
+///|
+pub let share_receipt_orange : Int64 = 0xB84A28FFL
+
+///|
+pub let share_receipt_rule : Int64 = 0x1C1C1E59L
+
+///|
+/// A dash of its torn lines: a point and a half high.
+pub let share_receipt_dash_h : @ui.Len = Fixed(1.5)
+
+///|
+/// 终端: a terminal's black, its words a light grey (15.4 to 1), said of in it at 62% (6.3 to 1), in the code face;
+/// still.fail's orange its prompt, its first meter, today and its cursor (6.2 to 1); a meter's cells unfilled the grey
+/// thinned.
+pub let share_terminal_ground : Int64 = 0x0E0F11FFL
+
+///|
+pub let share_terminal_ink : Int64 = 0xE6E6E6FFL
+
+///|
+pub let share_terminal_dim : Int64 = 0xE6E6E69EL
+
+///|
+pub let share_terminal_cell : Int64 = 0xE6E6E624L
+
+///|
+/// A meter's cell, 12 high; a day's cell, 3; its cursor a block 8 by 16, as a line of its words is tall.
+pub let share_terminal_cell_h : @ui.Len = Fixed(12.0)
+
+///|
+pub let share_terminal_day_cell_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let share_terminal_cursor_w : @ui.Len = Fixed(8.0)
+
+///|
+pub let share_terminal_cursor_h : @ui.Len = Fixed(16.0)
+
+///|
+/// Its window's three dots: the grey thinned.
+pub let share_terminal_dot : Int64 = 0xE6E6E640L
+
+///|
+/// The looks to choose under the card shared, each a small picture of it: a portrait 36 by 48 in its own ground (a
+/// small block's corner), a ring round the chosen one 3 out (concentric), its name under it.
+pub let share_look_tile : @ui.Style = @ui.style(w=Fixed(36.0), h=Fixed(48.0), radius=small_radius, clip=true)
+
+///|
+pub let share_look_in : @ui.Space = room(3.0)
+
+///|
+pub let share_look_ring : @ui.Radius = rounded(@ui.concentric_out(small_corner, 3.0))
+
+///|
 /// A picture shown alone to be handed out (a panel's `stage`: the card to share): the window under it the night at
 /// 92% (all but gone: at 80% a phone's bars and their notch showed through round its buttons), whatever the theme (2026-10-26 用户「分享的弹窗有点丑，感觉应该给分享特制一个逼格高点的」), the picture's edge a
 /// hairline of the white over it (the night on the night otherwise), its buttons under it on the night.
