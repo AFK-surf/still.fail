@@ -153,6 +153,15 @@ pub fn Ctx::stop_wheel(self : Ctx, i : Int) -> Unit {
 }
 
 ///|
+/// The pointer goes through box `i` and what it holds to what lies under it (a tooltip, which explains what it is
+/// over and takes nothing): never on top there for the pointer (Ctx::hovered), a press or the wheel, though drawn and
+/// found where it is (Ctx::rect_of). What is not so takes the pointer wherever it lies over something: what is under a
+/// dialog's ground, a panel's, is not pointed at.
+pub fn Ctx::passes(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].passes = true
+}
+
+///|
 /// The layer `id` dismissed (as though by `why`): a view's own close button for a layer it closes the same way. Told
 /// as the frame is built, it is built again with it.
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {

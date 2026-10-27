@@ -222,7 +222,7 @@ pub fn navigation_menu(
   let n = items.length()
   let tids = items.mapi(fn(k, _) { part_id(id, k) })
   let cid = c.id(key + "/content/panel")
-  let on_content = was >= 0 && pointer_in(c, cid)
+  let on_content = was >= 0 && c.hovered(cid)
   let mut hovered_any = -1
   // opened by the keyboard: it stays until Escape, a press outside or a trigger closes it
   let mut by_key = was >= 0 && kit.val.opens.get(cid).unwrap_or(false)

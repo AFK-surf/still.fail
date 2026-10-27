@@ -198,6 +198,55 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
 }
 
 ///|
+test "tooltip: not through a dialog over its trigger: the pointer rests on the dialog's ground, not on the trigger" {
+  let shown = Ref(false)
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=40.0, fn() {
+      let r = button(c, "Bold", key="bold")
+      shown.val = tooltip(c, "tip", r.id, "Bold (⌘B)")
+    })
+    |> ignore
+    open.val = dialog(c, "d", open.val, "Hello", w=200.0, fn() { c.text("Inside") |> ignore }).value
+  })
+  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  open.val = true
+  t.draw()
+  assert_true(t.query(@ui.Dialog, label="Hello") is Some(_))
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(tooltip_delay_ms * 2.0)
+  assert_false(shown.val)
+}
+
+///|
+test "tooltip: lying over its own trigger, it stays: the pointer on it there is on the trigger still" {
+  let shown = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=40.0, fn() {
+      let r = button(c, "Bold", key="bold")
+      // (put where the pointer is, over the trigger, as an edge's tip follows the pointer)
+      let at = match c.rect_of(r.id) {
+        Some((x, y, w, h)) => (x + w / 2.0, y + h / 2.0, 0.0, 0.0)
+        None => (0.0, 0.0, 0.0, 0.0)
+      }
+      shown.val = tooltip(c, "tip", r.id, "Bold (⌘B)", at~, side=Bottom, offset=-4.0)
+    })
+    |> ignore
+  })
+  t.draw()
+  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(tooltip_delay_ms)
+  assert_true(shown.val)
+  t.draw()
+  let (tx, ty, tw, th) = t.get(@ui.Tooltip, label="Bold (⌘B)").rect
+  // (the tip is over the trigger where the pointer is)
+  assert_true(tx < x + w / 2.0 + 2.0 && ty < y + h / 2.0 && tx + tw > x + w / 2.0 && ty + th > y + h / 2.0)
+  t.run_for(tooltip_delay_ms)
+  assert_true(shown.val)
+}
+
+///|
 test "tooltip: to a finger, shown as it is held on the trigger (no tap then), gone a moment after it is lifted or with the next touch" {
   let shown = Ref(false)
   let taps = Ref(0)

@@ -411,6 +411,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_hit_clips.clear()
   c.next_hit_ends.clear()
   c.next_points.clear()
+  c.next_passes.clear()
+  c.passing = 0
   c.next_point_hits.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
@@ -469,6 +471,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   let ps = c.points
   c.points = c.next_points
   c.next_points = ps
+  let pa = c.passes
+  c.passes = c.next_passes
+  c.next_passes = pa
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   let si = c.scroll_ids

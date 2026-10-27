@@ -648,7 +648,14 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if inst_owners.on {
     inst_owners.painting = i
   }
+  let passes = self.nodes[i].passes
+  if passes {
+    self.passing += 1
+  }
   self.paint_node(i, alpha_in)
+  if passes {
+    self.passing -= 1
+  }
   // a scrim: what is put over it (Stratum's OverScrim) over it, under the rest of its layer
   if !dr.raised.is_empty() && dr.mode != mode_hits && dr.scrims.contains(i) {
     self.paint_raised()

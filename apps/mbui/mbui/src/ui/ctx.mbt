@@ -284,6 +284,12 @@ pub struct Ctx {
   // the hit targets of the last frame (and of this one, collected) that are pointed at and never pressed (Ctx::box's
   // `points`): a press, or a finger reaching round it, goes past them to what holds them
   mut points : Map[Int, Bool]
+  // the hit targets of the last frame (and of this one, collected) the pointer goes through (Ctx::passes): never on
+  // top for a pointer, a press or a finger reaching round it, still where they were drawn (Ctx::rect_of)
+  mut passes : Map[Int, Bool]
+  mut next_passes : Map[Int, Bool]
+  // how many boxes the pointer goes through hold what is painted now
+  mut passing : Int
   mut next_points : Map[Int, Bool]
   /// of this frame's, the places of their targets among next_hit_ids, in order (said.mbt's HitsSaid)
   next_point_hits : Array[Int]
@@ -603,6 +609,9 @@ fn Ctx::new() -> Ctx {
     hit_ends: [],
     next_hit_ends: [],
     points: {},
+    passes: {},
+    next_passes: {},
+    passing: 0,
     next_points: {},
     next_point_hits: [],
     scroll_ids: [],
@@ -1874,10 +1883,12 @@ fn hit_at(
   pressed? : Bool = false,
 ) -> Int {
   let points = g().points
+  let passes = g().passes
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
     if !(pressed && points.contains(ids[k])) &&
+      !passes.contains(ids[k]) &&
       x >= rects[r] &&
       x < rects[r + 2] &&
       y >= rects[r + 1] &&
@@ -1990,7 +2001,7 @@ fn press_reach(
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     let (w, h) = (x1 - x0, y1 - y0)
-    if points.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+    if points.contains(ids[k]) || g().passes.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
       continue
     }
     // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window
@@ -2076,6 +2087,9 @@ fn Ctx::push_hit(
     return false
   }
   self.next_hit_ids.push(id)
+  if self.passing > 0 {
+    self.next_passes[id] = true
+  }
   // (holding none till what is drawn in it is: Ctx::paint)
   self.next_hit_ends.push(self.next_hit_ids.length())
   self.next_hit_rects.push(x0)

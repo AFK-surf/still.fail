@@ -95,7 +95,7 @@ pub fn toaster(
     return { open, acted }
   }
   // the time stops while the pointer is over one or the focus is in one
-  let paused = order.iter().any(fn(to) { pointer_in(c, c.id(key + "/" + to.id)) || focus_in(c, key, to.id) })
+  let paused = order.iter().any(fn(to) { c.hovered(c.id(key + "/" + to.id)) || focus_in(c, key, to.id) })
   let (ww, _) = c.window_size()
   let width = dmin(w, ww - 32.0)
   let mut region = 0

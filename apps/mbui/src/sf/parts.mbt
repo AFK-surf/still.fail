@@ -3358,11 +3358,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
     return
   }
   let (px, py, down) = c.pointer()
-  let on = c.lit(id) ||
-    (match c.rect_of(id) {
-      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-      None => false
-    })
+  let on = c.lit(id)
   let frame = c.frame_number()
   // (a drag area's in hand from the press on: pressed no more once it is dragged, Ctx::drag_on)
   if c.watch_press(id) || c.drag_of(id) is Some({ down: true, .. }) {
