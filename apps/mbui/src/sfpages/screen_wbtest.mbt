@@ -34,8 +34,14 @@ fn screen_rig(
   touch? : String = "",
   platform? : Int = 2,
   until_gone? : Bool = false,
+  screen? : String = "browser:tab-1",
+  here? : String = "",
 ) -> ScreenRig {
   @sfbase.reset()
+  // this machine's station, as its host says (`here`); none by default
+  if here != "" {
+    @sfbase.machine_here.val = Some(here)
+  }
   reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
@@ -142,7 +148,7 @@ fn screen_rig(
     platform~,
   )
   t.draw()
-  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone }))
+  app.nav.push(Screen({ station: "ws-1/st-1", screen, title: "Chrome", until_gone }))
   nav_rested(t)
   { t, calls, views, cancelled, answer, touch: touch_, quality: quality_ }
 }
@@ -915,4 +921,22 @@ fn tr(key : String) -> String {
 fn nav_rested(t : @ui.Tester) -> Unit {
   t.draw()
   t.run_for(@ui.nav_push_ms)
+}
+
+///|
+test "this machine's own display is not opened from here: said so, without 重新打开; its browser's tabs and another station's display are" {
+  let r = screen_rig(screen="desktop", here="ws-1/st-1")
+  assert_eq(r.told("screen.view").length(), 0)
+  assert_true(r.t.find("这是本机的屏幕") is Some(_))
+  assert_true(r.t.find("你就在这台机器上，在这里查看它的屏幕只会看到自己。") is Some(_))
+  assert_true(r.t.find("重新打开") is None)
+  screen_done(r.t)
+  let r = screen_rig(here="ws-1/st-1")
+  assert_eq(r.told("screen.view").length(), 1)
+  r.t.run_for(@sf.later_ms)
+  screen_done(r.t)
+  let r = screen_rig(screen="desktop", here="ws-1/st-2")
+  assert_eq(r.told("screen.view").length(), 1)
+  r.t.run_for(@sf.later_ms)
+  screen_done(r.t)
 }

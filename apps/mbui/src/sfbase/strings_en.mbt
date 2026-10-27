@@ -536,6 +536,8 @@ let en : Map[String, String] = {
   "android-misc.screen.failed": "Couldn't open this screen",
   "android-misc.screen.full": "Full screen",
   "android-misc.screen.gone": "This screen is gone",
+  "android-misc.screen.here": "This is this machine's own screen",
+  "android-misc.screen.hereWhy": "You are on this machine already: its screen viewed from here would only show itself.",
   "android-misc.screen.imageTooLarge": "The image is too large (8 MB at most)",
   "android-misc.screen.imageUnread": "Couldn't read the image on the clipboard",
   "android-misc.screen.key.command": "Command",

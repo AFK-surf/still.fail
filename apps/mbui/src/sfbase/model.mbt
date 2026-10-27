@@ -380,5 +380,13 @@ pub fn this_machine() -> String {
 
 
 ///|
+/// Whether `screen` of `station` is this machine's own display (its `desktop` screen: docs/remote-screens.md): seen
+/// from here it would only show itself, a window inside a window inside a window, and driven from here it would drive
+/// the very pointer driving it. A browser's tab or a simulator of this machine is a screen of its own, and is not this.
+pub fn own_screen(station : String, screen : String) -> Bool {
+  (screen == "desktop" || screen.has_prefix("desktop:")) && station != "" && station == this_machine()
+}
+
+///|
 /// The station this machine is, as read once it is one (this_machine).
 pub let machine_here : Ref[String?] = Ref(None)

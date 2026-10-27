@@ -495,6 +495,8 @@
   "android-misc.screen.ended": "已结束",
   "android-misc.screen.outdated": "此 station 需要更新",
   "android-misc.screen.gone": "此屏幕已不存在",
+  "android-misc.screen.here": "这是本机的屏幕",
+  "android-misc.screen.hereWhy": "你就在这台机器上，在这里查看它的屏幕只会看到自己。",
   "android-misc.screen.denied": "暂时无法查看此屏幕",
   "android-misc.screen.failed": "无法打开此屏幕",
   "android-misc.screen.outdatedRow": "此 station 版本过旧，更新后才能查看屏幕",

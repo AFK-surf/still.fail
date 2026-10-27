@@ -529,6 +529,8 @@ let zh : Map[String, String] = {
   "android-misc.screen.failed": "无法打开此屏幕",
   "android-misc.screen.full": "全屏",
   "android-misc.screen.gone": "此屏幕已不存在",
+  "android-misc.screen.here": "这是本机的屏幕",
+  "android-misc.screen.hereWhy": "你就在这台机器上，在这里查看它的屏幕只会看到自己。",
   "android-misc.screen.imageTooLarge": "图片过大，上限 8 MB",
   "android-misc.screen.imageUnread": "无法读取剪贴板中的图片",
   "android-misc.screen.key.command": "Command",
