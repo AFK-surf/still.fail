@@ -42,6 +42,7 @@ fn reset_globals() -> Unit {
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
+  floats_laid.clear()
   tester_size.val = None
   env_kept.val = ""
   app_state.val = 3
