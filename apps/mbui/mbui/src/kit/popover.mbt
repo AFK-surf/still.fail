@@ -295,7 +295,16 @@ fn beside(
   let pid = c.id(key + "/panel")
   let ar = match at {
     Some(r) => r
-    None => c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
+    None =>
+      match anchor_of(c, pid, anchor) {
+        Some(r) => r
+        // (by nothing drawn yet: a trigger come this frame, the keyboard's focus put on it as it came; shown by it the
+        // next frame, where it was drawn, never by the window's corner)
+        None => {
+          c.request_frame()
+          return
+        }
+      }
   }
   let went = went_side(c, pid, ar, side, along, offset)
   let i = c.box(id=pid, fn() { look(c, { side: went, room: c.place_most(), panel: pid }, body) })
@@ -309,6 +318,27 @@ fn beside(
     c.stop_wheel(i)
   }
   c.look(i, grown_from(shows, went, along))
+}
+
+///|
+/// Where the trigger `anchor` of panel `pid` was drawn last frame (Ctx::rect_of), else, while the panel was put by it
+/// the frame before, where it was then (a tip going out as its trigger goes, a row's button pressed away); else
+/// nowhere yet.
+fn anchor_of(c : @ui.Ctx, pid : Int, anchor : Int) -> (Double, Double, Double, Double)? {
+  let frame = c.frame_number()
+  let r = match c.rect_of(anchor) {
+    Some(r) => Some(r)
+    None =>
+      match kit.val.anchors.get(pid) {
+        Some((r, at)) if at == frame || at == frame - 1 => Some(r)
+        _ => None
+      }
+  }
+  match r {
+    Some(r) => kit.val.anchors[pid] = (r, frame)
+    None => ()
+  }
+  r
 }
 
 ///|
