@@ -46,9 +46,16 @@ fn init {
 
 ///|
 /// `name`: the image's as src/stillfail names it (its key), so a scripted run's `img:NAME` and the host's answers kept
-/// with the run's text (a picture's sizes, by its source) are the same here.
-fn image(station : String, id : String, call : String, params : Json, name : String) -> String {
-  images.get(station, id, name, fn(done) { @core.call_bytes(call, params~, on_done=done) })
+/// with the run's text (a picture's sizes, by its source) are the same here. `going`: how far it has come said as it
+/// comes (a chat's file's, as src/stillfail asks it).
+fn image(station : String, id : String, call : String, params : Json, name : String, going? : Bool = false) -> String {
+  images.get(station, id, name, fn(heard, done) {
+    if going {
+      @core.stream_bytes(call, params~, on_value=fn(v, _) { heard(v) }, on_done=done) |> ignore
+    } else {
+      @core.call_bytes(call, params~, on_done=done)
+    }
+  })
 }
 
 ///|
@@ -144,9 +151,10 @@ pub fn source() -> @sfapp.Source {
         "key": Json::string(key),
         "name": Json::string(name),
         "thumb": Json::boolean(true),
+        "progress": Json::boolean(true),
       }
       let id = @sfbase.file_image_id(station, key, name)
-      image(station, id, "station.file", Json::object(params), "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+      image(station, id, "station.file", Json::object(params), "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", going=true)
     },
     poster: fn(station, key, name) {
       let params : Map[String, Json] = {

@@ -16,15 +16,22 @@ fn no_preview() -> String {
 /// A message with picture line.png (800 × 600), its picture asked through `images`, each asking answered by `answer` (by how many
 /// times it was asked: from 1), counted in `asked`.
 fn image_tester(images : @sfbase.ChatImages, asked : Ref[Int], answer : (Int) -> Result[(Json, Bytes?), Json]) -> @ui.Tester {
+  image_tester_asking(images, fn(_, done) {
+    asked.val += 1
+    done(answer(asked.val))
+  })
+}
+
+///|
+/// The same, its picture asked by `ask` (told how far it has come, then its answer, when the test says).
+fn image_tester_asking(
+  images : @sfbase.ChatImages,
+  ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
+) -> @ui.Tester {
   reset()
   let src : Source = {
     ..fixture("chat"),
-    file: fn(station, key, name) {
-      images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, fn(done) {
-        asked.val += 1
-        done(answer(asked.val))
-      })
-    },
+    file: fn(station, key, name) { images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, ask) },
     images,
   }
   let m = message_of({
@@ -124,7 +131,7 @@ test "a chat's pictures that failed for want of its station asked again as the c
   let src : Source = {
     ..fixture("chat"),
     file: fn(station, key, name) {
-      images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, fn(done) {
+      images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, fn(_, done) {
         asked.val += 1
         done(Err({ "code": "mesh", "message": "unreachable" }))
       })
@@ -147,4 +154,41 @@ test "a chat's pictures that failed for want of its station asked again as the c
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.run_for(@ui.nav_push_ms)
   assert_true(asked.val > first, msg="asked \{asked.val} times, \{first} the first time")
+}
+
+///|
+test "a chat's picture slow to come: how far it has come at its foot once it has waited 300 ms, gone once it is here" {
+  let images = @sfbase.ChatImages::new()
+  let heard : Ref[(Json) -> Unit] = Ref(fn(_) {  })
+  let answer : Ref[(Result[(Json, Bytes?), Json]) -> Unit] = Ref(fn(_) {  })
+  let t = image_tester_asking(images, fn(h, done) {
+    heard.val = h
+    answer.val = done
+  })
+  t.draw()
+  (heard.val)({ "loaded": 350.0, "total": 1000.0 })
+  t.run_for(200.0)
+  // (one that comes at once never flashes it)
+  assert_true(t.find("35%") is None)
+  t.run_for(400.0)
+  assert_true(t.find("35%") is Some(_))
+  (heard.val)({ "loaded": 800.0, "total": 1000.0 })
+  t.draw()
+  assert_true(t.find("80%") is Some(_))
+  (answer.val)(Ok((Json::object({}), Some(png_head()))))
+  t.draw()
+  t.draw()
+  assert_true(t.find("80%") is None)
+}
+
+///|
+test "a chat's picture slow to come whose size is not known: the bytes here so far" {
+  let images = @sfbase.ChatImages::new()
+  let heard : Ref[(Json) -> Unit] = Ref(fn(_) {  })
+  let t = image_tester_asking(images, fn(h, _) { heard.val = h })
+  t.draw()
+  (heard.val)({ "loaded": 300000.0 })
+  t.run_for(600.0)
+  assert_true(t.find(@sf.file_size(300000.0)) is Some(_))
+  assert_true(t.find("%") is None)
 }

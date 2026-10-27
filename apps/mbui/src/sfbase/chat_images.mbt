@@ -2,7 +2,7 @@
 // each and kept as images: "" while one comes, "!" when it could not be had. One its station could not be reached for
 // (the network, the station away: any failure but the station saying it has none) is asked again, not kept failed
 // for the app's life (pengxiao, 2026-10-25): when its station is reached again, when its chat is opened again, when it
-// is pressed (`again`).
+// is pressed (`again`). How far one has come while it comes, as the core says it (`coming`), for its message to show.
 
 ///|
 pub struct ChatImages {
@@ -14,11 +14,14 @@ pub struct ChatImages {
   reached : Map[String, Bool]
   /// the ones the device had (the core's `held`), by id
   held : Map[String, Bool]
+  /// how far the ones coming have come, by id: the bytes here, of how many when that is known (the core's
+  /// `{loaded, total}`)
+  coming : Map[String, (Double, Double?)]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {}, held: {} }
+  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {} }
 }
 
 ///|
@@ -28,23 +31,39 @@ pub fn ChatImages::clear(self : ChatImages) -> Unit {
   self.unreached.clear()
   self.reached.clear()
   self.held.clear()
+  self.coming.clear()
 }
 
 ///|
 /// Picture `id` of `station`: its key once here (put up as `name`), "" while it comes (asked now with `ask`, the
-/// first time or again), "!" when it could not be had.
+/// first time or again, told how far it has come as it comes and then its answer), "!" when it could not be had.
 pub fn ChatImages::get(
   self : ChatImages,
   station : String,
   id : String,
   name : String,
-  ask : ((Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
+  ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
 ) -> String {
   match self.keys.get(id) {
     Some(k) => k
     None => {
       self.keys[id] = ""
-      ask(fn(r) {
+      ask(
+        fn(v) {
+          match field(Some(v), "loaded") {
+            Some(Number(n, ..)) if self.keys.get(id) == Some("") =>
+              self.coming[id] = (
+                n,
+                match field(Some(v), "total") {
+                  Some(Number(t, ..)) if t > 0.0 => Some(t)
+                  _ => None
+                },
+              )
+            _ => ()
+          }
+        },
+        fn(r) {
+        self.coming.remove(id)
         match r {
           Ok((said, Some(bytes))) if bytes.length() > 0 => {
             @ui.add_image(name, bytes)
@@ -62,10 +81,18 @@ pub fn ChatImages::get(
             }
           }
         }
-      })
+      },
+      )
       ""
     }
   }
+}
+
+///|
+/// How far picture `id` has come while it comes: the bytes here and of how many when known; None before the core has
+/// said, or once it is here.
+pub fn ChatImages::coming(self : ChatImages, id : String) -> (Double, Double?)? {
+  self.coming.get(id)
 }
 
 ///|
@@ -87,6 +114,7 @@ pub fn ChatImages::again(self : ChatImages, station : String) -> Unit {
   for id in ids {
     self.unreached.remove(id)
     self.keys.remove(id)
+    self.coming.remove(id)
   }
 }
 

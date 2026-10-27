@@ -64,8 +64,8 @@
 {"out":{"id":23,"subscribe":{"topic":"stations","scope":"01M5XE6GZ6KGC7C0NTK6BB7TZT"},"keyed":true},"w":1793063122885.238}
 {"out":{"id":24,"subscribe":{"topic":"chatJobs","station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","session":"ember:c-9a0b2e8604"},"keyed":true},"w":1793063122885.252}
 {"out":{"id":25,"call":"picture","params":{"url":"https://example.test/p.png"}},"w":1793063122885.568}
-{"out":{"id":26,"call":"station.file","params":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","key":"ember:c-9a0b2e8604","name":"2026-10-27T01-05-22-78bf1c-e2e-photo.jpg","thumb":true}},"w":1793063122889.28}
-{"out":{"id":27,"call":"station.file","params":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","key":"ember:c-9a0b2e8604","name":"2026-10-27T01-05-22-a895b0-e2e-photo2.png","thumb":true}},"w":1793063122889.585}
+{"out":{"id":26,"call":"station.file","params":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","key":"ember:c-9a0b2e8604","name":"2026-10-27T01-05-22-78bf1c-e2e-photo.jpg","thumb":true,"progress":true}},"w":1793063122889.28}
+{"out":{"id":27,"call":"station.file","params":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","key":"ember:c-9a0b2e8604","name":"2026-10-27T01-05-22-a895b0-e2e-photo2.png","thumb":true,"progress":true}},"w":1793063122889.585}
 {"out":{"id":28,"call":"chat.place","params":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","thread":2}},"w":1793063122890.945}
 {"out":{"id":29,"call":"client.focus","params":{"chat":{"station":"01M5XE6GZ6KGC7C0NTK6BB7TZT/679303d14a84a28cbe8f43fca893f6c6f35260633616848126e9dd4c24e640e0","session":"ember:c-9a0b2e8604","thread":2,"end":true,"seen":2}}},"w":1793063122890.958}
 {"step":"answered picture","w":1793063122892.852}

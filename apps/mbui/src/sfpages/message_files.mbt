@@ -218,10 +218,11 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (bw, bh, letterbox) = image_box(a, image_least)
   let h = bh * w / bw
   let sent = sent_picture(here.station, a)
+  // (still going up, its picture not here: no station has it to ask yet)
+  let going_up = sent is None && a.upload != "" && a.path == @sfbase.upload_path(a.upload)
   let key = match sent {
     Some(k) => k
-    // (still going up, its picture not here: no station has it to ask yet)
-    None if a.upload != "" && a.path == @sfbase.upload_path(a.upload) => ""
+    None if going_up => ""
     None => (src.file)(here.station, owner, stored_name(a.path))
   }
   // could not be had for want of its station (not its station having none): pressed, asked again
@@ -277,6 +278,10 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     } else {
       picture()
     }
+    // asked of its station and not here yet: how far it has come, at its foot's end
+    if key == "" && !going_up {
+      image_coming(c, "msg-coming/" + thumb, src.images.coming(id))
+    }
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
   note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~)
@@ -285,6 +290,69 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.view", args=[("name", a.name)]))
 }
+
+///|
+/// How far a message's picture coming from its station has come (pengxiao, 2026-10-27: one that was slow showed only
+/// its likeness, nothing telling it from one that was stuck): at its box's foot's end, 8 in, a pill on the video's
+/// shade with a ring of how much of it is here and that share in words (35%); its size not known, the spinner and the
+/// bytes here so far; nothing heard yet, the spinner alone. Shown only once it has waited 300 ms (fading in over
+/// 200), so one that comes at once never flashes it.
+fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit {
+  let shown = @motion.animate(c, key, 1.0, spec=@motion.tween(coming_in_ms, ease=Linear, delay=coming_after_ms), from=0.0)
+  if shown <= 0.0 {
+    return
+  }
+  c.layer(fn() {
+    c.box(style=coming_room, fn() {
+      let pill = c.box(style=coming_pill, fn() {
+        match coming {
+          Some((n, Some(total))) => {
+            let part = dmin(1.0, n / total)
+            @sf.progress_ring(c, coming_ring, part, @sf.white) |> ignore
+            c.text("\{(part * 100.0).floor().to_int()}%", style=coming_words) |> ignore
+          }
+          Some((n, None)) => {
+            @sf.spinner(c, size=coming_spinner, ring=coming_track, arc=@sf.white) |> ignore
+            c.text(@sf.file_size(n), style=coming_words) |> ignore
+          }
+          None => @sf.spinner(c, size=coming_spinner, ring=coming_track, arc=@sf.white) |> ignore
+        }
+      })
+      c.look(pill, @ui.look(alpha=shown))
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// How long a picture waits before how far it has come shows, and how long that takes to fade in.
+let coming_after_ms : Double = 300.0
+
+///|
+let coming_in_ms : Double = 200.0
+
+///|
+/// The pill's ring (14 across), the spinner in its place (12, as in a line of small text) on white at 25%.
+let coming_ring : Double = 14.0
+
+///|
+let coming_spinner : Double = 12.0
+
+///|
+let coming_track : Int64 = 0xFFFFFF40L
+
+///|
+// kept across runs: a value (no field of it changes)
+let coming_room : @ui.Style = @ui.css("w=Full h=Full p=S2 align=AEnd justify=JEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let coming_pill : @ui.Style = @ui.style(row=true, gap=S1, pl=S1, pr=S2, py=S0_5, radius=Full, bg=@sf.video_shade, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let coming_words : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false, tabular=true)
 
 ///|
 /// How much larger a message's picture is lifted all the way, held for its menu.
