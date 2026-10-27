@@ -128,3 +128,14 @@ test "an iPhone Duo on its side, the soft keyboard up: the composer whole over i
   let (_, y, _, h) = send[0].rect
   assert_true(y + h <= keyboard_top + 0.5, msg="send at \{y}..\{y + h}, keyboard at \{keyboard_top}")
 }
+
+///|
+test "an iPhone Duo folded, its outer screen: the bell and the workspaces in the system's short column, a page's actions its own" {
+  let t = native_chat(466.0, 678.0, true, side=70.0)
+  let said = t.nav_said()
+  // (one of the app's own in each of the column's bars is all it shows: the bell the toolbar's, the workspaces the
+  // navigation bar's)
+  assert_true(said.contains("act/attention"))
+  assert_true(said.contains("lead/workspaces"))
+  assert_false(said.contains("page/"))
+}
