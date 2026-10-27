@@ -95,7 +95,7 @@ test("a folder its station does not answer, nothing of it held, says why rather 
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "drive", station: ST, root: ROOT, path: "Desktop" });
   await host.time.pass(JSON_IDLE_MS + 1000, 1000);
-  assert.equal(said(host.takeEmitted(), 1), `${t("core-logic.mesh.timed_out")}（09:01:00）`);
+  assert.equal(said(host.takeEmitted(), 1), `${t("core-logic.mesh.timed_out")}（10月6日 09:01:00）`);
   // Failing: said too, and read again as it is shown again.
   stationLater(host, () => undefined);
   stationReplies(host, (req) => (req.url.includes("/admin/api/drive/list?") ? status(500, { error: "still.fail Helper did not start", code: "io" }) : undefined));

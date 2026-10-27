@@ -2,7 +2,7 @@
 // through as they are), `message` for people in their language, `status` the HTTP status when it came from still.fail
 // cloud or a station.
 import { t } from "./i18n.ts";
-import { clockSeconds } from "./format.ts";
+import { dateClockSeconds } from "./format.ts";
 import type { Span } from "./trace.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 
@@ -59,13 +59,13 @@ export class CoreError extends Error {
   }
 
   /// Gone wrong past what people did or can mend (the network, a host, a station's own fault): said with the local
-  /// time it failed at, to the second, by which an agent finds its spans (docs/telemetry.md). The first time, the
-  /// deepest span's: the one that has what the transport said.
+  /// date and time it failed at, to the second, by which an agent finds its spans (docs/telemetry.md). The first
+  /// time, the deepest span's: the one that has what the transport said.
   stamped(atMs: number, offsetMin: number): void {
     if (this.at !== undefined) return;
     if (!(this.code === "mesh" || this.code === "host" || this.code === "timeout" || (this.status ?? 0) >= 500)) return;
     this.at = atMs;
-    this.message = t("core-misc.error.at", { message: this.message, time: clockSeconds(atMs, offsetMin) });
+    this.message = t("core-misc.error.at", { message: this.message, time: dateClockSeconds(atMs, offsetMin) });
   }
 
   equals(other: CoreError): boolean {

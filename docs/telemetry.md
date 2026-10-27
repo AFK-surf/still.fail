@@ -232,9 +232,9 @@ One trace in order:
 | order by _time asc
 ```
 
-An error people see said with a time (`无法连接此 station（00:40:14）`: the network, a host or a station's own fault,
+An error people see said with a time (`无法连接此 station（10月28日 00:40:14）`: the network, a host or a station's own fault,
 CoreError `stamped`) failed at that second, the device's local time; its failed spans, the transport's words in
-`stillfail.cause` (the date from when it was reported, the zone from the reporter, the version from the feedback):
+`stillfail.cause` (the zone from the reporter, the version from the feedback):
 
 ```kusto
 ['ember']
