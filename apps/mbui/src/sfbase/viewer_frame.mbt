@@ -205,7 +205,13 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   let dl = v.download(src)
   if (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
-    @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
+    // (a picture or a film on a phone: into its photo album, said so)
+    let label = if keep_way_of(v.file.name) == Photos {
+      @sf.t("web-main.stations.saveToPhotos")
+    } else {
+      @sf.t("android-chat.file.download")
+    }
+    @sf.native_over_act("download", label, "download", fn() { v.ask_save(c) })
   }
 }
 

@@ -81,18 +81,53 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Bytes all here (a chat's file the preview has read, a picture made to share) kept `way` (where the system keeps
-/// downloads, or a picture into the photo album): `saved` or `failed` said once the host has answered (已保存到「下载」,
-/// 下载失败), `failed` at once where the host keeps nothing.
+/// Where a file named `name` is kept unless its caller says: on a phone a picture or a film its photo album takes goes
+/// there, where the person looks for it (2026-10-27 pengxiao：「保存视频或者图片的时候，应该保存到默认的 Photos 里面」),
+/// anything else into the system's downloads. (An SVG, a WebM: the album takes none, so downloads.)
+pub fn keep_way_of(name : String) -> @hostapi.KeepWay {
+  let lower = @sf.lower(name)
+  let ext = match lower.rev_find(".") {
+    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_owned()
+    _ => ""
+  }
+  let album = [
+    "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "mp4", "m4v", "mov",
+  ]
+  if @sf.picture_to_album() && album.contains(ext) {
+    Photos
+  } else {
+    Downloads
+  }
+}
+
+///|
+/// What is said once a file kept `way` is kept, and once it failed: 已保存到相册 / 没能保存到相册 for the photo album,
+/// else 已保存到「下载」 / 下载失败.
+pub fn keep_words(way : @hostapi.KeepWay) -> (String, String) {
+  if way == Photos {
+    (@sf.t("web-main.stations.savedToPhotos"), @sf.t("web-main.stations.saveToPhotosFailed"))
+  } else {
+    (@sf.t("android-chat.file.saved"), @sf.t("android-chat.file.saveFailed"))
+  }
+}
+
+///|
+/// Bytes all here (a chat's file the preview has read, a picture made to share) kept `way` (by default as keep_way_of
+/// says: a picture or a film into a phone's photo album, else where the system keeps downloads): `saved` or `failed`
+/// said once the host has answered (keep_words by default), `failed` at once where the host keeps nothing.
 pub fn keep_bytes(
   c : @ui.Ctx,
   name : String,
   mime : String,
   bytes : Bytes,
-  way? : @hostapi.KeepWay = Downloads,
-  saved? : String = @sf.t("android-chat.file.saved"),
-  failed? : String = @sf.t("android-chat.file.saveFailed"),
+  way? : @hostapi.KeepWay,
+  saved? : String,
+  failed? : String,
 ) -> Unit {
+  let way = way.unwrap_or(keep_way_of(name))
+  let (said, failed_said) = keep_words(way)
+  let saved = saved.unwrap_or(said)
+  let failed = failed.unwrap_or(failed_said)
   // (asked of the host once the frame's builds are over: its callers' bytes, given once)
   c.tell("keep/" + name, fn() {
     match @ui.keep(name, mime, bytes, way~) {

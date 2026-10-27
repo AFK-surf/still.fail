@@ -857,7 +857,10 @@ FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetch
   not give it (src/sfapp/keep.mbt). A folder's 下载为 zip: the station zips it (`drive.zip`: where the zip is, a root of
   its own), then it is read and kept as any file; the folder's row shows it under way (0% while zipped, then how far:
   the Android app shows nothing there). 分享 reads the same way, its row's progress shown too. The chat's preview's 下载
-  keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it).
+  keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it). On a phone (iOS,
+  Android) a picture or a film the album takes (png, jpg, gif, webp, heic, mp4, mov, m4v), downloaded or made (a
+  frame of a video, a picture marked), goes into the photo album instead, 已保存到相册 (sfbase keep_way_of; 2026-10-27
+  pengxiao: on iOS it went to the Files sheet); anything else as above.
 - `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): out/shots/mac-drive-download.png,
   web-drive-download.png.
 

@@ -146,6 +146,27 @@ test "downloads: one the core has all here is taken once, read off the device a 
 }
 
 ///|
+test "downloads: on a phone a picture or a film is kept in the photo album, said so; on the Mac, and a zip anywhere, in the downloads" {
+  for case in [
+    ("截图.png", 2, "Photos", "已保存到相册"),
+    ("录屏.MOV", 1, "Photos", "已保存到相册"),
+    ("截图.png", 0, "Downloads", "已保存到「下载」"),
+    ("dist.zip", 2, "Downloads", "已保存到「下载」"),
+  ] {
+    let (name, platform, way, said) = case
+    reset()
+    let calls : Array[(String, Json)] = []
+    let src = downloads_src("home", [listed(name, "ready", 4.0, 4.0, "已下载 · 4 B")], calls)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+    t.frame()
+    t.frame()
+    t.frame()
+    assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [(name, way)])
+    assert_true(t.find(said) is Some(_), msg="\{case}: \{t.words().map(fn(w) { w.0 }).join("|")}")
+  }
+}
+
+///|
 test "downloads: a file's card says how far the core has downloaded it in its size's place, ✕ calls it off; failed, why, ↻ asks it again" {
   reset()
   let calls : Array[(String, Json)] = []
