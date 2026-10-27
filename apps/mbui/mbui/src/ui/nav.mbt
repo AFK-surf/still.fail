@@ -90,6 +90,9 @@ struct Nav[P] {
   // the right, or the left for one from the left (from_left); the one under
   // it is edge to edge with it, at p - 1 (1 - p)
   mut p : Double
+  // where a finger has it (`p` while it follows one, mode 3), as a signal: what reads where it is (Nav::at) is drawn
+  // again as the finger moves, nothing taken as an input (on_back, edge_move)
+  finger : @signals.Signal[Double]
   mut p0 : Double
   mut p1 : Double
   // when the motion started (-1: at its first frame), how long, how
@@ -148,6 +151,7 @@ pub fn[P] Nav::new(
     leaving: None,
     gone: [],
     p: 0.0,
+    finger: @signals.signal(0.0),
     p0: 0.0,
     p1: 0.0,
     t0: -1.0,
@@ -216,6 +220,9 @@ pub fn[P] Nav::moving(self : Nav[P]) -> Bool {
 ///|
 /// How far the top page is off to the side now, in its widths.
 pub fn[P] Nav::offset(self : Nav[P]) -> Double {
+  if self.mode == 3 {
+    self.finger.get() |> ignore
+  }
   self.p
 }
 
@@ -540,6 +547,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
       if self.mode == 0 && self.pages.length() > self.floor + 1 {
         self.mode = 3
         self.p = 0.0
+        self.finger.set(0.0)
         self.x0 = x
         self.vel = 0.0
         self.track.reset()
@@ -548,6 +556,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
     1 =>
       if self.mode == 3 {
         self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
+        self.finger.set(self.p)
         self.track.add(t, x)
       }
     2 =>
@@ -763,6 +772,10 @@ fn[P] Nav::at(self : Nav[P], c : Ctx) -> Double {
       dmax((c.now() - self.t0) / self.dur, 0.0)
     }
     self.p = self.p0 + (self.p1 - self.p0) * self.curve.at(dmin(t, 1.0))
+  }
+  // (following a finger: where it has it, read so)
+  if self.mode == 3 {
+    self.finger.get() |> ignore
   }
   self.p
 }

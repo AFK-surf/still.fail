@@ -34,7 +34,8 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
   // to take, an event from outside for a part kept: kept_part.mbt; a wheel over what scrolls in a list's row kept, its
   // row's: kept_rows.mbt)
-  let moved = kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)
+  // (and the system's back gesture going on: where it is, Nav's `finger`, on_back)
+  let moved = (kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)) || (kind == "back" && args[0] == 1.0)
   // (a wheel: what it turned says whether it is taken, on_wheel; a list's place a signal of its own)
   let wheel = kind == "wheel"
   if !moved && !wheel {

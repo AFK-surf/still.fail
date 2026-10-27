@@ -24,6 +24,20 @@
 // after it as well and the two must be the same: every test holds it.
 
 ///|
+/// Where what the frames' watch was first told of since the frame before was set (Signal::set's place; "" none): said
+/// with why the next frame is built.
+// kept across runs: put back as each frame is decided
+let frame_told_at : Ref[String] = Ref("")
+
+///|
+/// The frames' watch told between frames or as one begins: where, the first time since the frame before.
+fn watch_told_at() -> Unit {
+  if frame_told_at.val == "" {
+    frame_told_at.val = @signals.last_set_at()
+  }
+}
+
+///|
 /// The frames' clock, as each frame begins (on_frame): what reads it followed (Ctx::now) is built again each frame.
 // kept across runs: set as each frame begins
 let frame_clock : @signals.Signal[Double] = @signals.signal(0.0)
@@ -176,7 +190,7 @@ fn frame_watch_of() -> @signals.Watch {
       let w = @signals.watch(fn() {
         if frame_running.val && !frame_built.val {
           // (as the frame begins, before it is built: the frame itself sees it, frame_drawn)
-          ()
+          watch_told_at()
         } else if frame_running.val {
           // (what it read set again as it was built: the next frame is built from it, said where: Tester::assert_idle)
           g().wants_frame = true
@@ -185,11 +199,12 @@ fn frame_watch_of() -> @signals.Watch {
             None => []
           }
           watch_said.val = if by.is_empty() {
-            "a value it read changed as the frame ended"
+            "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
           } else {
             "a value it read set again as it was built, at " + by.join(", ")
           }
         } else {
+          watch_told_at()
           h_frame_owed()
         }
       })
@@ -393,6 +408,7 @@ let paints_alone : Ref[Int] = Ref(0)
 fn looks_reset() -> Unit {
   nodes_forget()
   layout_said.val = ""
+  frame_told_at.val = ""
   layout_clock_at.val = ""
   for w in [frame_watch, layout_watch, paint_watch] {
     match w.val {
@@ -726,7 +742,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     if clock_read_at.val != "" {
       "the clock read at \{clock_read_at.val}"
     } else {
-      "what it read changed"
+      "what it read changed" + (if frame_told_at.val != "" { ", set at \{frame_told_at.val}" } else { "" })
     }
   } else if !looks_base.left {
     "it left more to come"
@@ -757,6 +773,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     ""
   }
   built_why.val = if why != "" { why } else { laid_why }
+  frame_told_at.val = ""
   frame_built.val = true
   if why != "" || laid_why != "" {
     looks_drawn.val = false

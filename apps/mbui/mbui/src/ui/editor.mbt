@@ -743,11 +743,11 @@ pub fn Ctx::editor(
   files? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
-  // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while one is down:
-  // hand.mbt)
+  // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
+  // its caret, what is picked in it or a handle of it: hand.mbt; not a press elsewhere)
   hand_events_read()
   hand.down.get() |> ignore
-  if self.down {
+  if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
   // (the focus in it: its caret and what the keys do, each frame; a part kept builds it each frame, kept_part.mbt)
