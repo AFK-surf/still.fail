@@ -299,8 +299,12 @@ fn MarkedImage::outside_id(self : MarkedImage) -> Int {
 ///|
 /// The PNG once drawn (Some(empty): it could not be), None while it is drawn; taken once.
 pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
+  if !answer_here(outside_marks, self.outside_id()) {
+    return None
+  }
   let got = self.png()
   if got is Some(_) {
+    answer_taken(outside_marks, self.outside_id())
     outside_end(outside_marks, self.outside_id())
   }
   got

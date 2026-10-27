@@ -1050,6 +1050,57 @@ fn outside_end(kind : Int, id : Int) -> Unit {
 }
 
 ///|
+/// How many answers of each kind (outside_*) have come, a signal each: what waits on one reads it (answer_here), so a
+/// part kept or a computed that does follows the host's answers, as it follows the core's.
+// kept across runs: they only count on
+let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1, fn(_) { @signals.signal(0) })
+
+///|
+/// The answers the host told of (outside_key) not taken yet.
+// kept across runs: emptied by each Tester (reset_globals)
+let answers_waiting : Map[Int64, Bool] = Map::new()
+
+///|
+/// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
+fn answer_told(kind : Int) -> Unit {
+  let s = answers_told[kind]
+  s.set(@signals.untracked(fn() { s.get() }) + 1)
+}
+
+///|
+/// Whether the host's answer of `kind` for `id` may be taken now, read as a signal (what reads it follows the
+/// answers as they come): once the host's event told of it, not asked of the host before; a Tester's (its answers
+/// come by the frame) and a host's that tells no events, whenever it is read.
+fn answer_here(kind : Int, id : Int) -> Bool {
+  answers_told[kind].get() |> ignore
+  fake.val is Some(_) || !outside_told.val || answers_waiting.contains(outside_key(kind, id))
+}
+
+///|
+/// The host's answer of `kind` for `id` taken.
+fn answer_taken(kind : Int, id : Int) -> Unit {
+  answers_waiting.remove(outside_key(kind, id))
+}
+
+///|
+/// A Tester's frame begins: its fake host's answers that were waited on may have come with it (each comes from the
+/// frame after it was asked or given), told as a host's event tells them.
+fn answers_by_the_frame() -> Unit {
+  if fake.val is None {
+    return
+  }
+  let kinds : Map[Int, Bool] = {}
+  for k, _ in outside_tickets {
+    kinds[(k >> 32).to_int()] = true
+  }
+  for kind, _ in kinds {
+    if kind < answers_told.length() && kind != outside_update {
+      answer_told(kind)
+    }
+  }
+}
+
+///|
 /// The native views the host said were ready (or failed): their work is the host's no more, whatever is asked after.
 let views_told : Map[Int, Bool] = Map::new()
 
@@ -1084,15 +1135,19 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
     }
   }
   outside_end(kind, id)
-  // an answer brought (what was picked, read, drawn, grabbed; a view the host is done opening): read as the next
-  // frame builds
-  if kind == outside_pick ||
-    (kind == outside_view && state != 0) ||
+  // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is
+  // done opening): read as the next frame builds
+  let answer = kind == outside_pick ||
     kind == outside_gallery ||
     kind == outside_marks ||
     kind == outside_grab ||
     kind == outside_clip ||
-    kind == outside_native {
+    kind == outside_native
+  if answer {
+    answers_waiting[outside_key(kind, id)] = true
+    answer_told(kind)
+  }
+  if answer || (kind == outside_view && state != 0) {
     h_request_frame()
   }
 }

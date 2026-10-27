@@ -106,6 +106,9 @@ pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
     self.taken.val = true
     return Some(Err(native_unsupported))
   }
+  if !answer_here(outside_native, self.outside_id()) {
+    return None
+  }
   let got = match self.host {
     Some(h) =>
       match h.got() {
@@ -132,6 +135,7 @@ pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
   }
   if got is Some(r) {
     self.taken.val = true
+    answer_taken(outside_native, self.outside_id())
     outside_end(outside_native, self.outside_id())
     native_said(self.name, r)
   }

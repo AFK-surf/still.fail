@@ -250,6 +250,7 @@ fn parts_frame_start(c : Ctx) -> Unit {
       parts_run.ctx = Some(c)
     }
   }
+  answers_by_the_frame()
   let steps = fx.val.steps
   if steps != parts_run.steps {
     parts_run.steps = steps
