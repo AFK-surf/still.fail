@@ -59,6 +59,9 @@ void mb_render_commit(void);  // the composition's changes shown
 void *mb_image_srv(int id);
 // a bitmap the clipboard holds (CF_DIB) as a PNG's bytes (malloc'd): 1 when made (win_image.cpp)
 int mb_png_of_dib(const void *dib, size_t n, unsigned char **png, size_t *len);
+// a PNG's bytes as a bitmap the clipboard takes (CF_DIB), in memory SetClipboardData takes: NULL where it cannot be
+// read (win_image.cpp)
+HGLOBAL mb_dib_of_png(const void *png, size_t n);
 // streams (win_stream.cpp): what stream id is drawn with now (ID3D11ShaderResourceView *), NULL before a frame shows;
 // an instance's image MB_STREAM_TEX + id is it (src/hostapi/stream.mbt)
 #define MB_STREAM_TEX 4194304
