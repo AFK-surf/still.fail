@@ -10,6 +10,7 @@ let kept_rows_kinds : Array[String] = [
   "chat-attach", "chat-attach-pic", "chat-download", "chat-failed", "chat-letters", "chat-need", "chat-quote", "chat-screens",
   "chat-sending", "chat-station-file", "chat-station-files", "chat-station-ref", "chat-station-tag", "chat-uploading",
   "chat-vault", "chat-working", "chat-jobs", "chat-publish", "chat-flash", "chat-update", "chat-answering", "chat-agent",
+  "chat-done",
 ]
 
 ///|

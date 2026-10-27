@@ -1841,6 +1841,18 @@ export class Views implements Owner {
       if (isObject(m)) (m as J).asked = true;
     }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
+    // said at the end of its messages too. A card waiting is not: it shows in the chat itself.
+    const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
+    const line = shown !== null ? present.rowStateLine(shown, false) : null;
+    if (line !== null) {
+      view.stateText = line[0];
+      const lead = line[3];
+      if (lead !== null) {
+        view.stateLead = lead.kind;
+        view.stateRest = lead.rest;
+      }
+    }
     if (letters > 0) view.letters = letters;
     // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
     const ccTo = arr(get(thread, "cc")).flatMap((o) => {
