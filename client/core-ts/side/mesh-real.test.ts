@@ -709,7 +709,7 @@ test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }
   const mesh = await e.runner.run(Mesh.make(e, []));
   mesh.addAddr({ id: endpoint.id(), ips: [endpoint.sockets().find((a: string) => a.startsWith("127.0.0.1"))] });
   const store = new Store(host, e.runner);
-  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
+  const adb = new Adb({ host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
   const station = `ws/${endpoint.id()}`;
   await e.runner.run(adb.run({ kind: "share", offer: { station, connect: port, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   for (let i = 0; i < 200 && (seen.echoed === undefined || adb.value().tunnels !== 1 || adb.value().adb !== "connected"); i++) await sleep(20);
