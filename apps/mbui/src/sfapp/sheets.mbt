@@ -637,29 +637,37 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let s = field(a, "session")
   let status = text(a, "status")
   c.box(w=Fill(1.0), fn() {
-    c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
-      model_mark_big(
-        c,
-        text(field(s, "maker"), "id"),
-        text(s, "runtime"),
-        40.0,
-        state_of_badge(text(a, "badge")),
-        @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
-      )
-      c.box(w=Fill(1.0), gap=1.0, fn() {
-        c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
-        agent_status(c, src, a)
+    // (its head, lines and figures on the panel's words' line: a small panel's beside a tablet's tile, its mark in its
+    // corner concentric with it; a phone's sheet's as they were)
+    c.box(style=@sf.panel_words_in().then(agent_words), fn() {
+      c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=agent_head_top(), gap=12.0, align=agent_head_align(), fn() {
+        model_mark_big(
+          c,
+          text(field(s, "maker"), "id"),
+          text(s, "runtime"),
+          40.0,
+          state_of_badge(text(a, "badge")),
+          @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+        )
+        c.box(w=Fill(1.0), gap=1.0, fn() {
+          c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+          agent_status(c, src, a)
+        })
+        |> ignore
+        if status == "running" || status == "queued" {
+          stop_button(c, src, r.station, key)
+        }
       })
       |> ignore
-      if status == "running" || status == "queued" {
-        stop_button(c, src, r.station, key)
-      }
+      agent_lines(c, card)
     })
     |> ignore
-    agent_lines(c, card)
     let entry = context_entry(c, src, r, key, s)
-    agent_tiles(c, card, 14.0, entry~)
-    agent_notes(c, card, 10.0)
+    c.box(style=@sf.panel_words_in().then(agent_words), fn() {
+      agent_tiles(c, card, 14.0, entry~)
+      agent_notes(c, card, 10.0)
+    })
+    |> ignore
     c.box(h=Px(12.0), fn() {  }) |> ignore
     info_list(c, fn() {
       match station {
@@ -747,6 +755,36 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   })
   |> ignore
 }
+
+///|
+/// How far under the panel's top an agent's card's head stands: in a small panel (beside a tablet's tile) as far as
+/// its words are in (text_in), its mark in the panel's corner concentric with it; in a sheet, 4.
+fn agent_head_top() -> Double {
+  if @sf.in_small_panel() {
+    @sf.text_in
+  } else {
+    agent_sheet_head_top
+  }
+}
+
+///|
+let agent_sheet_head_top : Double = 4.0
+
+///|
+/// How its head's mark and words stand across: in a small panel from its top, the mark as far under the panel's top as
+/// in from its side (agent_head_top), concentric with its corner; in a sheet in its middle.
+fn agent_head_align() -> @ui.Align {
+  if @sf.in_small_panel() {
+    AStart
+  } else {
+    ACenter
+  }
+}
+
+///|
+/// Its head, lines and figures across the card, on the panel's words' line (agent_body).
+// kept across runs: a value (no field of it changes)
+let agent_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// An agent's card (agent_body): the library's panel, as tall as what it shows, its head its own (its mark, name and
