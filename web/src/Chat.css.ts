@@ -723,7 +723,7 @@ globalStyle(`button${msgImage}:is([data-loaded], [data-letterbox]):not(${msgVide
 export const msgVideoPlay = style({
   position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
   width: "40px", height: "40px", display: "grid", placeItems: "center", borderRadius: "50%",
-  background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textHeading, pointerEvents: "none",
+  background: "rgba(0, 0, 0, 0.65)", pointerEvents: "none",
 });
 export const msgVideoName = style({
   position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",

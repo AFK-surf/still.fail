@@ -97,6 +97,19 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
 }
 
 ///|
+/// How big the play mark is in its disc: its triangle (15 of play-mark's 24) two fifths of the disc across.
+let play_mark_share : Double = 0.64
+
+///|
+/// A video's play mark over its picture (the web's msgVideoPlay): a disc `side` across of `shade`, the solid triangle
+/// in it white, its weight (where the triangle balances, not its box) in the disc's middle: play-mark draws it so.
+pub fn play_mark(c : @ui.Ctx, side : Double, shade : @ui.Color) -> Int {
+  c.box(style=@ui.style(w=Fixed(side), h=Fixed(side), radius=Full, bg=shade, align=ACenter, justify=JCenter), fn() {
+    icon(c, "play-mark", size=side * play_mark_share, color=white) |> ignore
+  })
+}
+
+///|
 /// Of icon `name`, only its parts `parts` (their places among what it is drawn of, from 0: a line, a closed line, a
 /// fill with its holes), as `icon` draws it whole: what of it moves drawn apart from what stays (ChatMark.css.ts
 /// leadSlot's copies, each showing one part of the icon).

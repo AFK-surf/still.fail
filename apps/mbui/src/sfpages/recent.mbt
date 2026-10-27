@@ -292,10 +292,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
                 |> ignore
                 // a video's still, its play mark in its foot corner (Attach.kt Thumbnail: 22 round, black at 45%)
                 if p.video {
-                  c.box(style=recent_play, fn() {
-                    @sf.icon(c, "play", size=14.0, color=0xFFFFFFFFL) |> ignore
-                  })
-                  |> ignore
+                  @sf.play_mark(c, recent_mark_side, A(Theater, O45)) |> ignore
                 }
               })
               |> ignore
@@ -478,18 +475,6 @@ let recent_tile_h : Double = 122.0
 /// The tiles, 6 apart, slid across by the finger.
 // kept across runs: a value (no field of it changes)
 let recent_tiles : @ui.Style = @ui.css("row gap=S1_5")
-
-///|
-/// A video's play mark (Attach.kt Thumbnail: 22 round, black at 45%).
-// kept across runs: a value (no field of it changes)
-let recent_play : @ui.Style = @ui.style(
-  w=Fixed(recent_mark_side),
-  h=Fixed(recent_mark_side),
-  radius=Full,
-  bg=A(Theater, O45),
-  align=ACenter,
-  justify=JCenter,
-)
 
 ///|
 /// The tile that asks for the gallery: its picture over what it asks, 8 in.

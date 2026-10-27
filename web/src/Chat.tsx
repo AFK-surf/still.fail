@@ -11,7 +11,7 @@ import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { CacheColdNotice } from "./CacheColdNotice.tsx";
 import { ComposerNotice, ComposerNotices } from "./ComposerNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, PlayMark, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -1559,7 +1559,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
             ? <img src={still.url} alt="" aria-hidden="true" />
             : <video src={still.url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />)}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
-            {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
+            {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : <PlayMark size={26} />}
           </span>
           <span className={css.msgVideoName}>{download?.active
             ? <>{download.statusText}<Progress part={download.progress} label={download.statusText} className={css.msgVideoBar} /></>

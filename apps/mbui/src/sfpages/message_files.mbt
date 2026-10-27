@@ -423,7 +423,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       |> ignore
     }
     c.box(style=video_middle, fn() {
-      c.box(style=video_play, fn() { @sf.icon(c, "play", size=video_play_icon, color=@sf.white) |> ignore }) |> ignore
+      @sf.play_mark(c, video_play_side, @sf.video_shade) |> ignore
     })
     |> ignore
     c.layer(fn() {
@@ -673,11 +673,12 @@ let box_tiny : Double = 40.0
 let files_gap : Double = 6.0
 
 ///|
-/// An unavailable image's mark (20), a video's play mark (16).
+/// An unavailable image's mark (20).
 let no_preview_icon : Double = 20.0
 
 ///|
-let video_play_icon : Double = 16.0
+/// A video's play mark, 40 round.
+let video_play_side : Double = 40.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -723,10 +724,6 @@ let video_frame : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=tru
 ///|
 // kept across runs: a value (no field of it changes)
 let video_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let video_play : @ui.Style = @ui.style(w=S10, h=S10, radius=Full, bg=@sf.video_shade, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
