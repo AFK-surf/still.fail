@@ -377,7 +377,7 @@ export function presentHistory(live: J, cx: Context): J {
             // A job's output is a block of code, all of it.
             md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more, cx.md),
           }))),
-          messages: messages.flatMap((m, k) => {
+          messages: messages.flatMap((m, k): J[] => {
             // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.
             const notice = notices[k];
             if (notice?.kind === "event") return [];
