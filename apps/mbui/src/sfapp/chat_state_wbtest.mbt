@@ -41,4 +41,17 @@ test "what a chat's agent needs is said under its last message" {
     }
   })
   assert_true(t.find(need) is Some(_))
+  // its bell's middle the middle of the words' first line: the bell's column as high as their line, whatever line the
+  // theme gives them (on 18 the bell stood a point under the words, 2026-10-27)
+  let run = t.text_runs().filter(fn(r) { need.has_prefix(r.text) })[0]
+  let bell = t
+    .boxes()
+    .filter(fn(b) {
+      (b.w - 14.0).abs() < 0.01 && (b.h - 14.0).abs() < 0.01 && b.x + b.w <= run.x0 && b.x > run.x0 - 30.0
+    })
+  // (its place and the icon in it: one square)
+  assert_true(bell.length() > 0 && bell.all(fn(b) { b.y == bell[0].y }), msg="\{bell.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
+  let line_mid = (run.top + run.bottom) / 2.0
+  let bell_mid = bell[0].y + bell[0].h / 2.0
+  assert_true((bell_mid - line_mid).abs() < 0.01, msg="bell \{bell_mid}, line \{line_mid}")
 }

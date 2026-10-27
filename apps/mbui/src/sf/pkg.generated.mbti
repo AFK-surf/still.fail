@@ -2192,6 +2192,7 @@ pub(all) struct ChatList {
   state_turn : @ui.TextStyle
   state_alert : @ui.TextStyle
   state_lead : @ui.TextStyle
+  state_slot : @ui.Style
   agent_mark : Double
   face_d : Double
   face : @ui.Style

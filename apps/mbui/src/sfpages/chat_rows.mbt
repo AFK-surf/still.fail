@@ -34,14 +34,14 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 /// check. What it needs of a person in ink, the rest quiet.
 fn chat_state(c : @ui.Ctx, words : String, lead : String, rest : String) -> Unit {
   let p = @sf.theme().p
-  // (the row's words, the theme's lists', on 20 either way: as high as the icon's column)
+  // (the row's words, the theme's lists', on their line: the icon's column, the theme's too, as high as it)
   let look = @sf.theme().chat_list
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   match lead {
     "need" | "done" | "wait" | "watch" =>
       c.box(style=chat_state_row, label=words, fn() {
-        c.box(style=chat_state_slot, fn() { lead_icon(c, lead, if turn { p.text } else { p.muted }) }) |> ignore
+        c.box(style=look.state_slot, fn() { lead_icon(c, lead, if turn { p.text } else { p.muted }) }) |> ignore
         let after = if rest == "" && lead == "done" { @sf.t("web-main.status.done") } else { rest }
         if after != "" {
           c.text(after, style=said) |> ignore
@@ -581,15 +581,11 @@ let activity_stop : @ui.Style = @ui.css("w=S6 h=S6 radius=Md align=ACenter justi
 let activity_stop_hot : @ui.Style = activity_stop.then(@ui.css("bg=Hover"))
 
 ///|
-/// Where it stands (chat_state): its icon's column 10 wide (the row's leadSlot) as high as a line of its words, 6
-/// before them; its words wrapping, 20 a line.
+/// Where it stands (chat_state): its icon's column (the theme's lists' state_slot, as high as a line of its words: the
+/// row's line, the theme's), 6 before them; its words wrapping.
 // kept across runs: a value (no field of it changes)
 let chat_state_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_state_slot : @ui.Style = @ui.css("w=S2_5 h=S5 justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let chat_state_wraps : @ui.TextStyle = @ui.text_style(wrap=true, leading=L5)
+let chat_state_wraps : @ui.TextStyle = @ui.text_style(wrap=true)
