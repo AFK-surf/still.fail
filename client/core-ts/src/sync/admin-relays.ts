@@ -1,6 +1,7 @@
 // The relays' load for the console's 中继 page (views/admin-relays.ts): still.fail cloud's samples change every minute
-// (cloud/src/relay-load.ts), so while something shows it, it is read again each minute; nothing reads it otherwise
-// (the operator's other lists are read with the account: ADMIN_LISTS).
+// (cloud/src/relay-load.ts), so while something shows it and a page of the app is in view, it is read again each minute
+// (as often as it changes: told it then, it would be as much); nothing reads it otherwise (the operator's other lists
+// are read with the account: ADMIN_LISTS).
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import type { Owner } from "../core/routing.ts";
@@ -26,7 +27,8 @@ export class AdminRelays implements Owner {
     const key = topicKey(topic);
     if (this.#live.has(key)) return;
     const read = this.#core.cloudSync.adminList(topic.account as string, "relays");
-    this.#live.set(key, this.#core.runner.fork(Effect.forever(Effect.andThen(read, laterSleep(RELAYS_EVERY_MS)))) as Fiber.Fiber<unknown, unknown>);
+    const inView = Effect.suspend(() => this.#core.attention?.attend.untilShown() ?? Effect.void);
+    this.#live.set(key, this.#core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(read, laterSleep(RELAYS_EVERY_MS))))) as Fiber.Fiber<unknown, unknown>);
   }
 
   stop(topic: Topic): void {

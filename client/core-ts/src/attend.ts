@@ -77,6 +77,8 @@ export class Attend {
   readonly #focus = new Map<ClientId, Focus>();
   /// Done when a page comes into view again (`untilShown`).
   #shownAgain = Deferred.makeUnsafe<void>();
+  /// Done when no page is in view any more (`untilHidden`).
+  #hiddenNow = Deferred.makeUnsafe<void>();
   readonly visits = new Map<string, Visit>();
   readonly #reads = new Map<string, number>();
   #show: [J, number][] = [];
@@ -148,8 +150,17 @@ export class Attend {
     return this.shown() ? Effect.void : Deferred.await(this.#shownAgain);
   }
 
+  /// Returns once no page is in view (never while one is).
+  untilHidden(): Effect.Effect<void> {
+    return this.shown() ? Deferred.await(this.#hiddenNow) : Effect.void;
+  }
+
   #told(): void {
-    if (!this.shown()) return;
+    if (!this.shown()) {
+      Deferred.doneUnsafe(this.#hiddenNow, Effect.void);
+      this.#hiddenNow = Deferred.makeUnsafe<void>();
+      return;
+    }
     Deferred.doneUnsafe(this.#shownAgain, Effect.void);
     this.#shownAgain = Deferred.makeUnsafe<void>();
   }

@@ -31,7 +31,8 @@ import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
 import { type HistoryRead, type Link, Links, type LiveView, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
-import { readAll, type StationWire } from "./wire.ts";
+import { readAll, replyHeader, type StationWire } from "./wire.ts";
+import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
@@ -62,8 +63,10 @@ const SEARCHED = new Set(["session", "session-removed", "thread", "thread-remove
 const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
-/// How often a shown resources page asks its station again (the station, asked, looks as often itself).
+/// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
+/// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
 export const RESOURCES_EVERY_MS = 5_000;
+const RESOURCES_SILENT_MS = 4 * RESOURCES_EVERY_MS;
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -697,27 +700,54 @@ export class StationsSync {
   /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
   /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
   /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
-  /// What still.fail uses of the station's machine now (GET /resources), read every RESOURCES_EVERY_MS while shown (a
-  /// fiber of the topic's, topics.ts). A station from before has none: its refusal is said, and asked again each time.
+  /// What still.fail uses of the station's machine now (GET /resources), while shown (a fiber of the topic's,
+  /// topics.ts) and a page of the app is in view: the station tells it as it looks, on a stream of its own (asked as
+  /// events). A station from before answers it once instead: asked again every RESOURCES_EVERY_MS. One that has none
+  /// says so (its refusal), asked again as often.
   resourcesWatch(address: string): Effect.Effect<void, never> {
     const key = topicKey({ topic: "stationResources", station: address });
-    return Effect.forever(
+    const attend = this.#core.attention?.attend;
+    const told = (link: Link, value: unknown) => {
+      link.errors.delete(key);
+      link.memory.set(key, value);
+      this.onChange(address, "log", key);
+    };
+    const follow = Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const link = this.#links.get(address);
-        if (link && this.reachable(address)) {
-          const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/resources", null, { quiet: true }));
-          if (answer._tag === "Success") {
-            link.errors.delete(key);
-            link.memory.set(key, answer.success);
-            this.onChange(address, "log", key);
-          } else if (answer.failure.status !== undefined && answer.failure.status < 500) {
-            link.errors.set(key, answer.failure);
+        if (!link || !this.reachable(address)) return;
+        const opened = yield* Effect.result(this.requests.stream(link.addr, "/resources", null));
+        if (opened._tag === "Failure") {
+          const status = opened.failure.status;
+          if (status !== undefined && status < 500) {
+            link.errors.set(key, opened.failure);
             this.onChange(address, "errors", key);
           }
+          return;
         }
-        yield* Effect.sleep(RESOURCES_EVERY_MS);
+        const reply = opened.success;
+        // From before: what it is now, once.
+        if (!(replyHeader(reply, "content-type") ?? "").startsWith("text/event-stream")) {
+          const bytes = yield* Effect.result(readAll(reply.body));
+          const value = bytes._tag === "Success" ? parseJson(bytes.success) : undefined;
+          if (value !== undefined) told(link, value);
+          return;
+        }
+        const parser = new SseParser();
+        const silent = Effect.sleep(RESOURCES_SILENT_MS).pipe(Effect.as(null));
+        for (;;) {
+          const next = yield* Effect.raceFirst(Effect.result(reply.body.take), silent);
+          if (next === null || next._tag === "Failure" || next.success === null) return;
+          for (const [name, data] of parser.feed(next.success)) {
+            const value = name === "resources" ? parseJson(data) : undefined;
+            if (value !== undefined) told(link, value);
+          }
+        }
       }),
     );
+    // (not while no page of the app is in view: a phone in a pocket asks nothing)
+    const whileShown = attend ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.suspend(() => attend.untilHidden()))) : follow;
+    return Effect.forever(Effect.andThen(whileShown, Effect.sleep(RESOURCES_EVERY_MS)));
   }
 
   driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {

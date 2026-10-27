@@ -136,6 +136,39 @@ test("looked at only while asked: nothing read before; woken, at once and again 
   await watch.close();
 });
 
+test("followed: looked at and told each look for as long as it is, past WANTED_MS; then as when asked", async () => {
+  const t = testClock();
+  let looks = 0;
+  let cpu = 0;
+  const watch = new ResourceWatch({
+    clock: t.clock,
+    table: async () => {
+      looks++;
+      return table;
+    },
+    usage: (pids) => pids.map(() => used((cpu += 0.5), 1)),
+    ...options,
+  });
+  let told = 0;
+  const stop = watch.follow(() => void told++);
+  await t.begun(1);
+  await t.adjust(FIRST_MS);
+  await t.adjust(0);
+  assert.equal(told, 1, "told once its first figures are there");
+  await t.adjust(WANTED_MS + 4 * LOOK_MS);
+  const long = told;
+  await t.adjust(LOOK_MS);
+  assert.equal(told, long + 1, "past WANTED_MS, told each look while followed");
+  stop();
+  const before = told;
+  await t.adjust(WANTED_MS + 2 * LOOK_MS);
+  const stopped = looks;
+  await t.adjust(10 * LOOK_MS);
+  assert.equal(looks, stopped, "no look once none follows nor asks");
+  assert.equal(told, before, "not told once stopped");
+  await watch.close();
+});
+
 test("a process there before but no one's (its chat begun since) counts from the next look, not whole", async () => {
   let now = 0;
   let runners = [{ runner: 20, pid: 21, session: "s1" }];
@@ -271,11 +304,34 @@ test("GET /resources: the chats named; one the asker does not see counted as the
     return { status: 200, headers: {}, body: Buffer.from(JSON.stringify({ mine: { thread: 7, title: "排查 p99" }, theirs: null })) };
   };
   const [route] = resourceRoutes({ read } as never, watch);
-  const answer = await route!.handle({ viewer: { workspace: "w" } } as never, []);
+  const answer = await route!.handle({ viewer: { workspace: "w" }, headers: {} } as never, []);
   assert.equal(wanted, 1);
   assert.deepEqual(asked, ["resourceChats", ["mine", "theirs"]]);
   const body = JSON.parse((answer.body as Buffer).toString("utf8"));
   assert.deepEqual(body.groups.map((g: { key: string; cpu: number }) => [g.key, g.cpu]), [["chat:mine", 2], ["agents", 1]]);
   assert.deepEqual(body.groups[1].processes.map((x: { name: string }) => x.name), ["cargo"]);
   assert.deepEqual(body.chats, { mine: { thread: 7, title: "排查 p99" } });
+});
+
+test("GET /resources as events: a resources event, as GET /resources answers, each time the station looks; until it ends", async () => {
+  let follower: (() => void) | null = null;
+  let stopped = 0;
+  const watch = {
+    follow: (told: () => void) => ((follower = told), () => void stopped++),
+    snapshot: () => ({ at: 1, everyMs: 5000, counted: true, total: { cpu: 1, memory: 1, netIn: 0, netOut: 0 }, history: [], groups: [] }),
+  } as unknown as ResourceWatch;
+  const read = async () => ({ status: 200, headers: {}, body: Buffer.from("{}") });
+  const [route] = resourceRoutes({ read } as never, watch);
+  const answer = await route!.handle({ viewer: { workspace: "w" }, headers: { accept: "text/event-stream" } } as never, []);
+  assert.equal(answer.headers["content-type"], "text/event-stream");
+  const body = answer.body as AsyncIterableIterator<Buffer>;
+  follower!();
+  const first = (await body.next()).value!.toString("utf8");
+  assert.match(first, /^event: resources\ndata: /);
+  assert.equal(JSON.parse(first.split("data: ")[1]!).machine.cores > 0, true);
+  follower!();
+  assert.match((await body.next()).value!.toString("utf8"), /^event: resources\n/);
+  await body.return!();
+  assert.equal(stopped, 1, "the station stops looking for it as it ends");
+  assert.equal((await body.next()).done, true);
 });

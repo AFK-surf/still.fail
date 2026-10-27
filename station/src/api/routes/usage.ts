@@ -100,44 +100,100 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
   },
 ];
 
-/// GET /resources, the resources part's (resources/module.ts): what still.fail uses of this machine now, by whose and
-/// process, and the last minutes' totals (resources/watch.ts), the chats named. A chat the asker
-/// does not see (another workspace's) is the agents', none of its processes endable. Asked, the station looks often for
-/// a while. POST /resources/processes/:pid/end ({session}): ends a process of a chat the asker sees (watch.ts `end`).
+/// What still.fail uses of this machine now as `r`'s asker sees it (GET /resources): by whose and process, and the
+/// last minutes' totals (resources/watch.ts), the chats named. A chat the asker does not see (another workspace's) is
+/// the agents', none of its processes endable.
+async function shownTo(r: Request, read: Tools["read"], watch: ResourceWatch | null): Promise<Answer> {
+  const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, disk: false, total: { cpu: 0, memory: 0, netIn: 0, netOut: 0, diskRead: 0, diskWrite: 0 }, groups: [], history: [] };
+  const sessions = [...new Set(shot.groups.flatMap((g) => (g.session ? [g.session] : [])))];
+  const named = await read(r, "resourceChats", { sessions, viewer: r.viewer });
+  if (named.status !== 200) return named;
+  const chats = JSON.parse((named.body as Buffer).toString("utf8")) as Record<string, { thread: number | null; title: string | null } | null>;
+  const seen = (key: string) => !key.startsWith("chat:") || chats[key.slice(5)] != null;
+  // Chats not seen: the agents' (their processes together).
+  const groups: typeof shot.groups = [];
+  for (const g of shot.groups) {
+    if (seen(g.key)) {
+      groups.push(g);
+      continue;
+    }
+    const agents = groups.find((d) => d.key === "agents");
+    if (agents) {
+      agents.cpu += g.cpu;
+      agents.memory += g.memory;
+      agents.netIn += g.netIn;
+      agents.netOut += g.netOut;
+      agents.diskRead += g.diskRead;
+      agents.diskWrite += g.diskWrite;
+      agents.processes = [...agents.processes, ...g.processes.map((p) => ({ ...p, endable: false }))];
+    } else groups.push({ ...g, key: "agents", kind: "agents", session: null, processes: g.processes.map((p) => ({ ...p, endable: false })) });
+  }
+  const shown = Object.fromEntries(Object.entries(chats).filter(([, c]) => c != null));
+  // The machine, for what is used to be said against.
+  return json(200, JSON.stringify({ ...shot, groups, chats: shown, machine: { cores: cpus().length, memory: totalmem() } }));
+}
+
+/// GET /resources as events (asked with `accept: text/event-stream`): a `resources` event, what GET /resources answers,
+/// after each look while the stream is open; the station looks for as long. A client from before asks GET /resources
+/// again and again, and is answered as before.
+function followed(r: Request, read: Tools["read"], watch: ResourceWatch | null): Answer {
+  const queue: string[] = [];
+  let wake: (() => void) | null = null;
+  let closed = false;
+  // One telling at a time, the latest look's: a look while one is being read is told once that is.
+  let telling = false;
+  let again = false;
+  const tell = async () => {
+    if (telling) return void (again = true);
+    telling = true;
+    try {
+      do {
+        again = false;
+        const a = await shownTo(r, read, watch).catch(() => null);
+        if (closed || a === null || a.status !== 200) continue;
+        queue.push(`event: resources\ndata: ${(a.body as Buffer).toString("utf8")}\n\n`);
+        wake?.();
+      } while (again && !closed);
+    } finally {
+      telling = false;
+    }
+  };
+  // Where processes are not read: what there is, once.
+  const stop = watch ? watch.follow(() => void tell()) : (void tell(), () => {});
+  const end = () => {
+    if (closed) return;
+    closed = true;
+    stop();
+    wake?.();
+  };
+  const body: AsyncIterableIterator<Buffer> = {
+    [Symbol.asyncIterator]: () => body,
+    next: async () => {
+      while (!closed && queue.length === 0) await new Promise<void>((resolve) => (wake = resolve));
+      wake = null;
+      if (queue.length === 0) return { done: true, value: undefined };
+      return { done: false, value: Buffer.from(queue.shift()!) };
+    },
+    return: async () => {
+      end();
+      return { done: true, value: undefined };
+    },
+  };
+  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
+}
+
+/// GET /resources, the resources part's (resources/module.ts): what still.fail uses of this machine now (`shownTo`);
+/// asked, the station looks often for a while. Asked as events, it is told as it looks (`followed`). POST
+/// /resources/processes/:pid/end ({session}): ends a process of a chat the asker sees (watch.ts `end`).
 /// `watch`: none where processes are not read (not macOS).
 export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Route[] => [
   {
     method: "GET",
     pattern: /^\/resources$/,
     handle: async (r: Request): Promise<Answer> => {
+      if ((r.headers["accept"] ?? "").includes("text/event-stream")) return followed(r, read, watch);
       await watch?.want();
-      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, disk: false, total: { cpu: 0, memory: 0, netIn: 0, netOut: 0, diskRead: 0, diskWrite: 0 }, groups: [], history: [] };
-      const sessions = [...new Set(shot.groups.flatMap((g) => (g.session ? [g.session] : [])))];
-      const named = await read(r, "resourceChats", { sessions, viewer: r.viewer });
-      if (named.status !== 200) return named;
-      const chats = JSON.parse((named.body as Buffer).toString("utf8")) as Record<string, { thread: number | null; title: string | null } | null>;
-      const seen = (key: string) => !key.startsWith("chat:") || chats[key.slice(5)] != null;
-      // Chats not seen: the agents' (their processes together).
-      const groups: typeof shot.groups = [];
-      for (const g of shot.groups) {
-        if (seen(g.key)) {
-          groups.push(g);
-          continue;
-        }
-        const agents = groups.find((d) => d.key === "agents");
-        if (agents) {
-          agents.cpu += g.cpu;
-          agents.memory += g.memory;
-          agents.netIn += g.netIn;
-          agents.netOut += g.netOut;
-          agents.diskRead += g.diskRead;
-          agents.diskWrite += g.diskWrite;
-          agents.processes = [...agents.processes, ...g.processes.map((p) => ({ ...p, endable: false }))];
-        } else groups.push({ ...g, key: "agents", kind: "agents", session: null, processes: g.processes.map((p) => ({ ...p, endable: false })) });
-      }
-      const shown = Object.fromEntries(Object.entries(chats).filter(([, c]) => c != null));
-      // The machine, for what is used to be said against.
-      return json(200, JSON.stringify({ ...shot, groups, chats: shown, machine: { cores: cpus().length, memory: totalmem() } }));
+      return shownTo(r, read, watch);
     },
   },
   {
