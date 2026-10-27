@@ -2616,6 +2616,11 @@ export interface StationsGlyph {
 	connecting?: number;
 	failing: number;
 	working: number;
+	/**
+	 * Every station down as the device's network is (their `cause` network): the glyph sleeps and fades. Absent
+	 * from a core before it.
+	 */
+	asleep?: boolean;
 	summary: string;
 	label: string;
 	/** The agents at work on them all (their `running`). Absent from a core before it. */

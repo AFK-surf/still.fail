@@ -40,10 +40,10 @@ export function glyphLayout(c: GlyphCounts): { arcs: GlyphArc[]; dots: number[] 
   return { arcs, dots };
 }
 
-/** What the glyph draws: the core's counts for the list (its `glyph`), asleep while the core reaches nothing at all. */
-export function glyphCounts(view: { glyph?: ChatsView["glyph"] | undefined } | undefined, asleep: boolean): GlyphCounts {
+/** What the glyph draws: the core's counts for the list (its `glyph`), asleep while every station is down as the device's network is. */
+export function glyphCounts(view: { glyph?: ChatsView["glyph"] | undefined } | undefined): GlyphCounts {
   const g = view?.glyph;
-  return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep, connecting: g?.connecting ?? 0 };
+  return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep: g?.asleep ?? false, connecting: g?.connecting ?? 0 };
 }
 
 /**

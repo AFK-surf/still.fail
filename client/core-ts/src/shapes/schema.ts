@@ -1165,6 +1165,7 @@ export const SHAPES: Record<string, Shape> = {
     ["connecting", opt("i64"), { client: opt("I54"), doc: "Of `dim`, those whose link is on its way: they pulse. Absent from a core before it." }],
     ["failing", "i64", { client: "I54" }],
     ["working", "i64", { client: "I54" }],
+    ["asleep", opt("bool"), { doc: "Every station down as the device's network is (their `cause` network): the glyph sleeps and fades. Absent\nfrom a core before it." }],
     ["summary", "String"],
     ["label", "String"],
     ["running", opt("i64"), { client: opt("I54"), doc: "The agents at work on them all (their `running`). Absent from a core before it." }],

@@ -23,6 +23,15 @@ test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
   assert.equal(g.label, "2 台 station，0 台在线，1 台正在连接，1 台离线");
 });
 
+test("the_glyph_sleeps_only_while_every_station_is_down_as_the_network_is", () => {
+  const down = (address: string, cause: string) => ({ ...station(address, address, "offline"), cause });
+  // still.fail cloud not reached while the stations are: awake.
+  assert.equal(glyph([station("w/a", "A", "online"), down("w/b", "network")], []).asleep, false);
+  assert.equal(glyph([down("w/a", "network"), down("w/b", "station")], []).asleep, false);
+  assert.equal(glyph([down("w/a", "network"), down("w/b", "network")], []).asleep, true);
+  assert.equal(glyph([], []).asleep, false);
+});
+
 test("the_stations_card_says_how_many_agents_each_station_has_at_work_and_all_of_them", () => {
   // Up, as it counts its own (its overview's `counts.running`); idle; connecting until its overview is read.
   assert.deepEqual(doing("online", undefined, { counts: { running: 3 } }), { running: 3, doing: "3 个正在运行" });
