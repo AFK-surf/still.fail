@@ -381,16 +381,20 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
           |> ignore
         _ => ()
       }
-      if find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0) {
-        c.tell("find/move", fn() { find_move(src, key, list, -1) })
-      }
-      if find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0) {
-        c.tell("find/move", fn() { find_move(src, key, list, 1) })
-      }
-      if find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true) {
-        (list.forget)()
-        find_close()
-      }
+      // (as far apart as makes each a press's room across: @sf.keys_row)
+      c.box(style=@sf.keys_row(size=find_button_w), fn() {
+        if find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0) {
+          c.tell("find/move", fn() { find_move(src, key, list, -1) })
+        }
+        if find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0) {
+          c.tell("find/move", fn() { find_move(src, key, list, 1) })
+        }
+        if find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true) {
+          (list.forget)()
+          find_close()
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
