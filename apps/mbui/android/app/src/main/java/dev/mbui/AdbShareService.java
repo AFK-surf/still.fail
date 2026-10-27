@@ -187,6 +187,7 @@ public final class AdbShareService extends Service {
             }
             boolean here = v.optBoolean("sharing") && station.equals(v.optString("station"));
             if (here) lent = true;
+            if (here && v.has("until") && !v.isNull("until")) AdbShare.keepUntil(this, v.optLong("until"));
             if (lent && !here) {
                 AdbShare.setPairingPort(-1);
                 if (!v.has("station") || v.isNull("station")) stopSelf();
@@ -242,8 +243,9 @@ public final class AdbShareService extends Service {
         AdbShare.setPairingPort(-1);
         end();
         probes.shutdownNow();
-        // gone with the service, whatever ended it
+        // gone with the service, whatever ended it; not lent again as the app next starts
         AdbCore.call("adb.stop", null, null);
+        AdbShare.letGo(this);
         super.onDestroy();
     }
 }

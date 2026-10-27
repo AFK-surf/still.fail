@@ -232,17 +232,22 @@ final class AdbShare {
                     }
                 }
                 String station = p.optString("station");
+                String name = p.optString("name", "station");
                 // lent at the tap, as the core has it (the page's switch follows `adbShare`), its ports given as the
                 // service finds them: not first once Android has started the service and it has looked for them
                 AdbCore.call("adb.share", offer(c, station, null, null), null);
                 c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START)
-                        .putExtra(STATION, station).putExtra(NAME, p.optString("name", "station")));
+                        .putExtra(STATION, station).putExtra(NAME, name));
+                kept(c).edit().putString(STATION, station).putString(NAME, name)
+                        .putString(TEXTS, words != null ? words.toString() : "{}")
+                        .putLong(UNTIL, System.currentTimeMillis() + 60 * 60_000L).apply();
                 reply.ok("{}");
             } catch (Exception e) {
                 AdbCore.call("adb.stop", null, null);
                 reply.fail(String.valueOf(e));
             }
         });
+        resume(c, System.currentTimeMillis() + 30_000);
         if (!supported()) return;
         // Wireless debugging switched (by the app, by the person, or by Android as the Wi-Fi goes)
         c.getContentResolver().registerContentObserver(wirelessUri(), false, new ContentObserver(new Handler(Looper.getMainLooper())) {
@@ -275,6 +280,85 @@ final class AdbShare {
 
             @Override
             public void onActivityDestroyed(Activity a) {}
+        });
+    }
+
+    // ---- a share that outlives the app's process ----
+    //
+    // The app started again while a share was on (it was updated, Android or a crash ended it): lent again to the same
+    // station for what was left of its time, as the person asked, not ended with the process. What it is lent to and
+    // until when kept on the device from the tap on; let go when the share ends (stopped, its time up: the service's
+    // onDestroy), which a process that is killed never reaches.
+
+    private static final String TEXTS = "texts";
+    private static final String UNTIL = "until";
+
+    static android.content.SharedPreferences kept(Context c) {
+        return c.getSharedPreferences("adb-share", Context.MODE_PRIVATE);
+    }
+
+    /** The share's end as the core says it (its `until`), kept for the next start. */
+    static void keepUntil(Context c, long until) {
+        android.content.SharedPreferences k = kept(c);
+        if (k.contains(STATION) && k.getLong(UNTIL, 0) != until) k.edit().putLong(UNTIL, until).apply();
+    }
+
+    static void letGo(Context c) {
+        kept(c).edit().clear().apply();
+    }
+
+    /**
+     * A share kept from a process before lent again, once the core runs (asked again each second till then, up to
+     * `by`): with a minute or more of its time left, for what is left; else let go.
+     */
+    private static void resume(Context c, long by) {
+        android.content.SharedPreferences k = kept(c);
+        String station = k.getString(STATION, null);
+        if (station == null) return;
+        long left = k.getLong(UNTIL, 0) - System.currentTimeMillis();
+        if (left < 60_000) {
+            letGo(c);
+            return;
+        }
+        try {
+            JSONObject words = new JSONObject(k.getString(TEXTS, "{}"));
+            synchronized (texts) {
+                for (java.util.Iterator<String> it = words.keys(); it.hasNext(); ) {
+                    String key = it.next();
+                    texts.put(key, words.optString(key));
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        JSONObject offer = offer(c, station, null, null);
+        try {
+            offer.put("minutes", (int) (left / 60_000));
+        } catch (Exception ignored) {
+        }
+        String name = k.getString(NAME, "station");
+        AdbCore.call("adb.share", offer, new AdbCore.Answer() {
+            @Override
+            public void ok(Object value) {
+                try {
+                    c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START)
+                            .putExtra(STATION, station).putExtra(NAME, name));
+                } catch (Exception e) {
+                    Host.log("adb share: not lent again: " + e);
+                    AdbCore.call("adb.stop", null, null);
+                    letGo(c);
+                }
+            }
+
+            @Override
+            public void error(String why) {
+                // (the core not running yet: asked again in a second)
+                if (why.contains("UnsatisfiedLinkError") && System.currentTimeMillis() < by) {
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> resume(c, by), 1000);
+                } else {
+                    Host.log("adb share: not lent again: " + why);
+                    letGo(c);
+                }
+            }
         });
     }
 
