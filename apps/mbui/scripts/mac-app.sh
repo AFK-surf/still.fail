@@ -100,9 +100,18 @@ ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$VARIANT.icn
 rm -rf "$APPDIR" "$ZIP"
 mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents/Frameworks"
 cp "$BIN" "$APPDIR/Contents/MacOS/$EXE"
+# Only the copies in the app are trimmed, before signing: the build keeps its symbols for diagnostics.
+strip -S -x "$APPDIR/Contents/MacOS/$EXE"
 # Hermes from the app's Frameworks (@executable_path/../Frameworks), not from the build's tree (the other rpath, gone)
 install_name_tool -delete_rpath @executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx "$APPDIR/Contents/MacOS/$EXE"
 ditto out/core/hermes/Library/Frameworks/macosx/hermes.framework "$APPDIR/Contents/Frameworks/hermes.framework"
+# The app is arm64 only; the upstream framework also carries x86_64. Keep its versioned layout and exported symbols.
+HERMES=$APPDIR/Contents/Frameworks/hermes.framework/Versions/Current/hermes
+if [ "$(lipo -archs "$HERMES")" != arm64 ]; then
+  lipo "$HERMES" -thin arm64 -output "$HERMES.arm64"
+  mv "$HERMES.arm64" "$HERMES"
+fi
+strip -S -x "$HERMES"
 # Built in the Electron app's place: what that app's updater runs out of the app it has put in place to open it
 # (src/host/shipit.c), where it runs it: Frameworks/Squirrel.framework/Resources/ShipIt, here the framework's program
 SQUIRREL=$APPDIR/Contents/Frameworks/Squirrel.framework
