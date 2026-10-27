@@ -175,14 +175,14 @@ fn update_key_drawn(busy : Bool, coming : Double?) -> ((Double, Double, Double, 
 }
 
 ///|
-test "the update key while an update comes, one look on every screen: its mark where it was, how far round it from the top, close to it, no words; how far not known, a quarter turning" {
+test "the update key while an update comes, one look on every screen: the ring in its mark's place, as big as the icons' circles, how far round it from the top, no words; how far not known, a quarter turning" {
   let (idle, _, _) = update_key_drawn(false, None)
   let (mark, accent, ring) = update_key_drawn(true, Some(0.42))
-  // the mark not moved a hair
+  // in the mark's box, not moved a hair
   assert_eq(mark, idle)
-  // close round the mark (20; the ring's inside 2 off it, its line 2 wide: r 13, not out on the key's edge, 17): all
-  // of it in line_strong, 42% of it in the accent
-  let round = 2.0 * 3.141592653589793 * 13.0
+  // where the icons draw their circles (20: 8.5 of their 24 from its middle), not round the mark, where it stood half
+  // again as wide as the icons beside it: all of it in line_strong, 42% of it in the accent
+  let round = 2.0 * 3.141592653589793 * 20.0 * 8.5 / 24.0
   assert_true((ring - round).abs() < 3.0, msg="the ring: \{ring} of \{round}")
   assert_true((accent - 0.42 * round).abs() < 2.0, msg="how far: \{accent} of \{0.42 * round}")
   // not known: the spinner's quarter
