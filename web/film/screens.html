@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- What each machine's screen shows as the film goes (920 × 575, drawn at twice that): ?screen=home|studio|win|cloud,
+     then draw(seconds). record.mjs films each into frames/screen-<name>/, which scene.html puts on the machines' glass.
+     The three machines work at once: the Mac at home sends them their work in one go (9.4 s), and each answers when it
+     is done, the cloud first, Windows last (the phone's story, story.ts: their answers reach its chat then). -->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 920px; height: 575px; overflow: hidden; background: #000; }
+  body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; color: #17181b; -webkit-font-smoothing: antialiased; }
+  #screen { position: absolute; inset: 0; overflow: hidden; }
+  .mono { font-family: "SF Mono", Menlo, monospace; }
+  .menubar { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13.5px; color: #111; background: rgba(246,246,248,.78); backdrop-filter: blur(20px); }
+  .menubar b { font-weight: 700; }
+  .menubar .r { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+  .win-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: rgba(238,241,247,.86); backdrop-filter: blur(30px); display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid rgba(255,255,255,.5); }
+  .win-bar i { width: 30px; height: 30px; border-radius: 6px; display: block; }
+  .win-bar .clock { position: absolute; right: 14px; top: 6px; text-align: right; font-size: 11.5px; line-height: 16px; color: #111; }
+  .sf { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 16px; background: rgba(252,251,249,.94); color: #3b3d42; border-radius: 12px; box-shadow: 0 8px 26px -8px rgba(0,0,0,.45); }
+  .sf b { font-weight: 650; color: #17181b; }
+  .sf .ring { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #e06d2c; border-right-color: transparent; }
+  .sf .ok { width: 15px; height: 15px; border-radius: 50%; background: #2fb36b; position: relative; }
+  .sf .ok::after { content: ""; position: absolute; left: 5px; top: 2.5px; width: 3px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .sf .t { margin-left: auto; color: #8b8d93; font-variant-numeric: tabular-nums; }
+  .flash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
+  .code { font-family: "SF Mono", Menlo, monospace; font-size: 19px; line-height: 31px; }
+  .tok-k { color: #c792ea; } .tok-p { color: #82aaff; } .tok-v { color: #f78c6c; } .tok-s { color: #c3e88d; } .tok-c { color: #6b7089; }
+  .del { background: rgba(255,90,90,.2); text-decoration: line-through; text-decoration-color: rgba(255,120,120,.8); }
+  .add { background: rgba(80,220,140,.18); }
+  .term { font-family: "SF Mono", Menlo, monospace; font-size: 18px; line-height: 27px; color: #d7dae0; white-space: pre; }
+  .term .g { color: #5fd38d; } .term .d { color: #7f8592; } .term .y { color: #e5c07b; } .term .c { color: #61afef; } .term .b { font-weight: 700; }
+  .win { position: absolute; border-radius: 10px; overflow: hidden; box-shadow: 0 22px 50px -10px rgba(0,0,0,.5), 0 0 0 .5px rgba(0,0,0,.4); }
+  .titlebar { height: 30px; display: flex; align-items: center; padding: 0 12px; gap: 7px; font-size: 13px; }
+  .titlebar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .login { display: flex; flex-direction: column; padding: 22px 18px; border-radius: 16px; }
+  .login .lg { width: 34px; height: 34px; border-radius: 10px; background: #5b5bd6; margin-bottom: 14px; }
+  .login h4 { font-size: 19px; margin-bottom: 3px; } .login small { font-size: 12px; opacity: .6; margin-bottom: 16px; }
+  .login .f { height: 36px; border-radius: 9px; margin-bottom: 9px; font-size: 12px; display: flex; align-items: center; padding: 0 11px; opacity: .8; }
+  .login .btn { height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 650; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<script type="module">
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const span = (s, a, b) => clamp((s - a) / (b - a));
+const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const latest = (list, s, none = null) => { let v = none; for (const [t, x] of list) if (s >= t) v = x; return v; };
+const lines = (list, s) => list.filter(([t]) => s >= t).map(([, l]) => l).join('\n');
+
+/** The film's moments (seconds). */
+const T = { sent: 4.8, sendOut: 9.4, done: { cloud: 20.0, studio: 19.6, win: 21.6 }, merged: 30.65 };
+/** The clock as the film fast-forwards it: 8:40 as it opens, 8:53 when the last answer is in. */
+function clock(s) {
+  const m = s < 9.4 ? 40 + s / 9.4 : 41 + (s - 9.4) / (22.2 - 9.4) * 12;
+  const mm = Math.min(59, Math.floor(m));
+  return `8:${String(mm).padStart(2, '0')}`;
+}
+/** How long a step has been running, as its line says, the fast-forwarded clock's. */
+function took(s, from) { const sec = Math.max(0, Math.round((s - from) * 56)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+
+function strip(chat, s, doing, since, done, from) {
+  if (s < from) return '';
+  const icon = done ? '<span class="ok"></span>' : `<span class="ring" style="transform:rotate(${(s * 360) % 360}deg)"></span>`;
+  return `<div class="sf">${icon}<b>still.fail</b><span>· ${chat} · ${esc(doing)}</span>${done ? '' : `<span class="t">${took(s, since)}</span>`}</div>`;
+}
+function menubar(app, items, s) {
+  return `<div class="menubar"><span style="font-size:15px"></span><b>${app}</b>${items.map((i) => `<span>${i}</span>`).join('')}<span class="r"><span>⌁</span><span>📶</span><span>周三 ${clock(s)}</span></span></div>`;
+}
+function loginCard(dark, fixed, w = 250) {
+  const bg = dark ? '#1c1d21' : '#fff', fg = dark ? '#eceef2' : '#16181d', line = dark ? '#34353b' : '#dcdfe4';
+  const btn = fixed ? 'background:#5b5bd6;color:#fff' : (dark ? 'background:#202124;color:#1a1a1a' : 'background:#e9e9ec;color:#e1e1e4');
+  return `<div class="login" style="width:${w}px;background:${bg};color:${fg};box-shadow:0 1px 3px rgba(0,0,0,.1)"><div class="lg"></div><h4>登录 Acme</h4><small>欢迎回来</small>
+    <div class="f" style="border:1px solid ${line}">you@acme.dev</div><div class="f" style="border:1px solid ${line}">••••••••••</div><div class="btn" style="${btn}">登录</div></div>`;
+}
+const MAC_WALL = 'background:radial-gradient(1200px 700px at 20% 110%,#f5a37a,transparent 60%),radial-gradient(900px 700px at 90% -10%,#7b6cf6,transparent 60%),linear-gradient(160deg,#3f4aa8,#9b6bd3 55%,#f0a07c)';
+
+// ---- The Mac at home: its editor, the button's colours changed, its preview beside ----
+const MAC_DOING = [[4.8, '收到你的消息'], [5.4, '思考中'], [6.7, '搜索 LoginButton'], [7.5, '读取 login.css'], [8.2, '编辑 login.css'],
+  [9.4, '把活派给 Studio、Win 台式机、云主机'], [10.6, '等 3 台机器回来'], [20.0, 'Studio 回来了'], [20.4, '云主机回来了'], [22.0, 'Win 台式机回来了'],
+  [23.0, '写回复'], [24.2, '等你决定：合进 main 吗？'], [28.0, '运行 gh pr merge'], [30.65, '已合进 main']];
+const MAC_SINCE = [[4.8, 4.8], [9.4, 9.4], [23.0, 23.0], [28.0, 28.0]];
+function home(s) {
+  const edited = s >= 8.2;
+  const found = s >= 6.7 && s < 8.2;
+  const code = [
+    ['<span class="tok-p">.login</span> { <span class="tok-k">display</span>: grid; <span class="tok-k">gap</span>: <span class="tok-v">12px</span>; }'],
+    ['<span class="tok-p">.field</span> { <span class="tok-k">height</span>: <span class="tok-v">44px</span>; }'],
+    [''],
+    ['<span class="tok-c">/* 登录按钮 */</span>'],
+    [`<span class="tok-p" style="${found ? 'background:rgba(255,210,80,.35);border-radius:3px' : ''}">.submit</span> {`],
+    ['  <span class="tok-k">height</span>: <span class="tok-v">46px</span>;'],
+    ['  <span class="tok-k">color</span>: <span class="tok-v">#1a1a1a</span>;', edited ? 'del' : ''],
+    ['  <span class="tok-k">background</span>: <span class="tok-v">#202124</span>;', edited ? 'del' : ''],
+    ...(edited ? [['  <span class="tok-k">color</span>: <span class="tok-s">var(--on-primary)</span>;', 'add'], ['  <span class="tok-k">background</span>: <span class="tok-s">var(--primary)</span>;', 'add']] : []),
+    ['}'],
+  ];
+  const rows = code.map(([html, cls], i) => `<div class="${cls ?? ''}" style="display:flex;white-space:pre"><span style="width:46px;color:#4b4f63;text-align:right;padding-right:14px">${i + 18}</span><span>${html}</span></div>`).join('');
+  const tree = ['src', '  auth', '    LoginForm.tsx', '    login.css', '  pages', '  theme.css'].map((n) => `<div style="padding:3px 12px;white-space:pre;${n.trim() === 'login.css' ? 'background:#2c3040;color:#fff' : ''}">${n}</div>`).join('');
+  return `<div style="position:absolute;inset:0;${MAC_WALL}">${menubar('Code', ['文件', '编辑', '选择', '查看', '终端'], s)}
+    <div class="win" style="left:16px;top:38px;right:16px;bottom:16px;background:#1b1c22;color:#c8cad3">
+      <div class="titlebar" style="background:#24252d;color:#9a9db0"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin-left:12px">login.css — acme</span>${found ? '<span style="margin-left:auto;background:#2c3040;padding:2px 10px;border-radius:6px;color:#fff" class="mono">LoginButton · 1 处</span>' : ''}</div>
+      <div style="position:absolute;top:30px;left:0;bottom:0;width:150px;background:#202129;font-size:13px;padding-top:8px;color:#9a9db0">${tree}</div>
+      <div class="code" style="position:absolute;top:40px;left:156px;width:470px">${rows}</div>
+      <div style="position:absolute;top:30px;right:0;bottom:0;width:250px;background:#121316;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:12px;color:#7f8592">预览 · 深色模式</span>${loginCard(true, edited, 200)}</div></div>
+    ${strip('Acme App', s, latest(MAC_DOING, s, ''), latest(MAC_SINCE, s, s), s >= T.merged, T.sent)}</div>`;
+}
+
+// ---- Studio: building the Android app, onto the emulator, its screenshot ----
+const STUDIO_TERM = [
+  [9.9, '<span class="c">~/acme</span> $ git switch fix/login-button'], [10.4, "Switched to branch 'fix/login-button'"],
+  [10.8, '<span class="c">~/acme</span> $ ./gradlew assembleDebug'], [11.4, '<span class="d">&gt; Task :app:preBuild</span>'], [12.1, '<span class="d">&gt; Task :app:mergeDebugResources</span>'],
+  [13.0, '<span class="d">&gt; Task :app:compileDebugKotlin</span>'], [14.3, '<span class="d">&gt; Task :app:dexBuilderDebug</span>'], [15.1, '<span class="d">&gt; Task :app:packageDebug</span>'],
+  [15.6, '<span class="g b">BUILD SUCCESSFUL</span> in 3m 12s'], [15.8, '<span class="c">~/acme</span> $ adb install -r app-debug.apk'], [16.3, 'Performing Streamed Install'], [16.4, '<span class="g">Success</span>'],
+  [16.9, '<span class="c">~/acme</span> $ adb exec-out screencap -p &gt; login.png'], [17.2, 'saved <span class="y">login.png</span>'],
+];
+const STUDIO_DOING = [[9.6, '思考中'], [9.9, '运行 git switch'], [10.8, '运行 gradlew assembleDebug'], [15.8, '运行 adb install'], [16.9, '截图 登录页'], [17.5, '写回复'], [T.done.studio, '已回复 Acme App']];
+const STUDIO_SINCE = [[9.6, 9.6], [10.8, 10.8], [15.8, 15.8], [16.9, 16.9], [17.5, 17.5]];
+function studio(s) {
+  const fixed = s >= 16.5;
+  const building = s >= 10.8 && s < 15.6 ? span(s, 10.8, 15.6) : null;
+  const flash = s >= 17.0 && s < 17.35 ? 1 - span(s, 17.0, 17.35) : 0;
+  const bar = building !== null ? `\n<span class="y">&lt;${'='.repeat(Math.round(building * 22)).padEnd(22, '-')}&gt; ${Math.round(building * 100)}% EXECUTING [${took(s, 10.8)}]</span>` : '';
+  const term = lines(STUDIO_TERM, s).split('\n').slice(-13).join('\n');
+  return `<div style="position:absolute;inset:0;${MAC_WALL}">${menubar('终端', ['外壳', '编辑', '显示', '窗口'], s)}
+    <div style="position:absolute;left:28px;top:40px;width:236px;height:470px;border-radius:30px;background:#0e0e10;padding:9px;box-shadow:0 18px 40px rgba(0,0,0,.4)">
+      <div style="position:relative;width:100%;height:100%;border-radius:22px;overflow:hidden;background:#121316;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;top:8px;left:16px;right:16px;display:flex;font-size:11px;color:#ccc"><span>${clock(s)}</span><span style="margin-left:auto">▾ ▴ 86%</span></div>
+        ${loginCard(true, fixed, 190)}
+        <div style="position:absolute;bottom:8px;left:50%;width:90px;height:4px;margin-left:-45px;border-radius:2px;background:#ddd;opacity:.8"></div>
+        <div class="flash" style="opacity:${flash}"></div></div></div>
+    <div class="win" style="left:284px;top:40px;right:20px;height:470px;background:#1d1f24">
+      <div class="titlebar" style="background:#2a2c33;color:#9a9db0"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin:0 auto">acme — gradle — 96×28</span></div>
+      <div class="term" style="padding:10px 16px;font-size:17px;line-height:26px">${term}${bar}</div></div>
+    ${strip('安卓上验证登录按钮', s, latest(STUDIO_DOING, s, ''), latest(STUDIO_SINCE, s, s), s >= T.done.studio, 9.6)}</div>`;
+}
+
+// ---- The Windows desktop: building the installer, installing it, the new version opened ----
+const WIN_TERM = [
+  [9.9, 'PS C:\\acme&gt; git pull'], [10.3, 'Already up to date.'], [10.9, 'PS C:\\acme&gt; pnpm build:win'], [11.6, '<span class="d">vite v7.2  building for production…</span>'],
+  [12.9, '<span class="d">✓ 1,284 modules transformed.</span>'], [13.6, '<span class="d">dist/assets/index-4f2a9c.js  812 kB</span>'], [14.3, '<span class="d">electron-builder  target=nsis arch=x64</span>'],
+  [15.2, '<span class="d">packaging  app.asar</span>'], [15.8, '<span class="d">signing  Acme-Setup-2.4.0.exe</span>'],
+  [16.2, '<span class="g">built</span> dist\\Acme-Setup-2.4.0.exe'], [16.3, 'PS C:\\acme&gt; .\\dist\\Acme-Setup-2.4.0.exe /S'],
+];
+const WIN_DOING = [[9.6, '思考中'], [9.9, '运行 git pull'], [10.9, '运行 pnpm build:win'], [16.3, '安装 Acme 2.4.0'], [18.4, '截图 登录页'], [18.9, '写回复'], [T.done.win, '已回复 Acme App']];
+const WIN_SINCE = [[9.6, 9.6], [10.9, 10.9], [16.3, 16.3], [18.4, 18.4], [18.9, 18.9]];
+function win(s) {
+  const installing = s >= 16.4 && s < 17.7;
+  const app = s >= 17.8;
+  const flash = s >= 18.4 && s < 18.75 ? 1 - span(s, 18.4, 18.75) : 0;
+  const pop = app ? ease(span(s, 17.8, 18.1)) : 0;
+  const now = clock(s);
+  return `<div style="position:absolute;inset:0;background:radial-gradient(700px 520px at 62% 48%,#a8c8ff,#3d6fd6 45%,#1a3c8c 75%,#0d2050)">
+    <div class="win" style="left:22px;top:20px;width:560px;height:440px;background:#0c0c0c;border-radius:8px">
+      <div class="titlebar" style="background:#1f1f1f;color:#ddd;gap:10px"><span>▣</span><span>Windows PowerShell</span><span style="margin-left:auto;letter-spacing:20px;color:#bbb">—☐✕</span></div>
+      <div class="term" style="padding:8px 14px;font-size:16px;line-height:25px;color:#e8e8e8">${lines(WIN_TERM, s)}${s >= 10.9 && s < 16.2 ? '\n<span class="y">' + '█'.repeat(Math.round(span(s, 10.9, 16.2) * 24)).padEnd(24, '░') + `</span> ${took(s, 10.9)}` : ''}</div></div>
+    ${installing ? `<div class="win" style="left:300px;top:150px;width:430px;height:190px;background:#f3f3f3;border-radius:8px;padding:0">
+      <div class="titlebar" style="background:#fff;color:#222">Acme 2.4.0 安装<span style="margin-left:auto;letter-spacing:20px;color:#666">—✕</span></div>
+      <div style="padding:16px 22px;font-size:15px;color:#222"><div style="font-weight:650;margin-bottom:6px">正在安装</div><div style="font-size:13px;color:#666;margin-bottom:16px">正在复制文件到 C:\\Program Files\\Acme…</div>
+      <div style="height:8px;border-radius:4px;background:#ddd;overflow:hidden"><div style="height:100%;width:${Math.round(span(s, 16.4, 17.6) * 100)}%;background:#0f6cbd"></div></div></div></div>` : ''}
+    ${app ? `<div class="win" style="left:390px;top:40px;width:470px;height:430px;background:#f4f5f7;border-radius:8px;transform:scale(${0.94 + 0.06 * pop});opacity:${pop}">
+      <div class="titlebar" style="background:#fff;color:#333;border-bottom:1px solid #e5e5e5">Acme<span style="margin-left:auto;letter-spacing:20px;color:#555">—☐✕</span></div>
+      <div style="position:absolute;top:30px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center">${loginCard(false, true, 250)}</div><div class="flash" style="opacity:${flash}"></div></div>` : ''}
+    <div class="win-bar">${['#2b88d8', '#f0b429', '#3c3c3c', '#0f6cbd', '#6c3fc4'].map((c, i) => `<i style="background:${c};${i === 2 && s >= 10.9 ? 'box-shadow:0 3px 0 -1px #0f6cbd' : ''}"></i>`).join('')}
+      <div class="clock">${now}<br>2026/10/28</div></div>
+    ${strip('Windows 上验证登录按钮', s, latest(WIN_DOING, s, ''), latest(WIN_SINCE, s, s), s >= T.done.win, 9.6).replace('bottom: 12px', 'bottom:58px').replace('class="sf"', 'class="sf" style="bottom:58px"')}</div>`;
+}
+
+// ---- The cloud machine, seen over ssh: its tests, one by one green ----
+const TESTS = ['auth/login.test.ts (18)', 'auth/session.test.ts (24)', 'theme/colors.test.ts (12)', 'orders/export.test.ts (31)', 'orders/list.test.ts (27)',
+  'api/client.test.ts (40)', 'pages/home.test.ts (22)', 'pages/settings.test.ts (19)', 'ui/button.test.ts (16)', 'ui/form.test.ts (21)', 'billing/plan.test.ts (33)', 'search/query.test.ts (49)'];
+const CLOUD_DOING = [[9.6, '思考中'], [9.9, '运行 pnpm install'], [11.4, '运行 pnpm test'], [18.0, '运行 pnpm e2e login'], [19.0, '写回复'], [T.done.cloud, '已回复 Acme App']];
+const CLOUD_SINCE = [[9.6, 9.6], [9.9, 9.9], [11.4, 11.4], [18.0, 18.0], [19.0, 19.0]];
+const PROMPT = '<span class="g">ci@cloud-01</span>:<span class="c">~/acme</span>$';
+function cloud(s) {
+  const out = [[9.9, `${PROMPT} pnpm install --frozen-lockfile`], [10.6, '<span class="d">Lockfile is up to date, resolution step is skipped</span>'], [11.2, 'Done in 6.2s'], [11.4, `${PROMPT} pnpm test`], [11.6, '']];
+  const per = (17.4 - 11.8) / TESTS.length;
+  TESTS.forEach((t, i) => out.push([11.8 + i * per, ` <span class="g">✓</span> ${t}  <span class="d">${(0.4 + ((i * 37) % 23) / 10).toFixed(1)}s</span>`]));
+  const done = TESTS.filter((_, i) => s >= 11.8 + i * per).length;
+  const count = Math.min(312, Math.round((done / TESTS.length) * 312));
+  out.push([17.5, ''], [17.5, ' <span class="d">Test Files</span>  <span class="g b">41 passed</span> (41)'], [17.55, '      <span class="d">Tests</span>  <span class="g b">312 passed</span> (312)'],
+    [18.0, `${PROMPT} pnpm e2e login`], [18.8, '  <span class="g b">24 passed</span> (2 browsers)']);
+  const text = lines(out, s).split('\n').slice(-15).join('\n');
+  return `<div style="position:absolute;inset:0;background:#0f1115">
+    <div style="height:30px;background:#1a1d23;display:flex;align-items:center;padding:0 14px;font-size:13px;color:#8c93a0">ssh ci@cloud-01 — acme<span style="margin-left:auto" class="mono">${s >= 11.6 && s < 17.5 ? `<span style="color:#5fd38d">${count}</span> / 312 tests` : `load 3.2 · ${clock(s)}`}</span></div>
+    <div class="term" style="padding:10px 18px">${text}</div>
+    ${strip('跑全部测试', s, latest(CLOUD_DOING, s, ''), latest(CLOUD_SINCE, s, s), s >= T.done.cloud, 9.6)}</div>`;
+}
+
+const SCREENS = { home, studio, win, cloud };
+const name = new URLSearchParams(location.search).get('screen') ?? 'home';
+const el = document.getElementById('screen');
+window.draw = (s) => { el.innerHTML = SCREENS[name](s); };
+window.draw(0);
+</script>
+</body>
+</html>

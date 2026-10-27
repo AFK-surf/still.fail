@@ -1,7 +1,8 @@
-// The promo film, made: `node web/film/record.mjs [shots] [build] [panes] [compose]` (all four with none), into
+// The promo film, made: `node web/film/record.mjs [shots] [build] [panes] [screens] [scene]` (all with none), into
 // out/film/ (FILM_OUT). shots: the login pages the agents "took" (web/film/shots/); build: the panes' page
-// (vite.film.config.ts); panes: each pane (story.ts) filmed frame by frame on its own clock, into frames/<pane>/;
-// compose: compose.html puts them together, frame by frame, into film.mp4. Nothing waits on real time: the page's
+// (vite.film.config.ts); panes: the phone's (story.ts) filmed frame by frame on its own clock, into frames/<pane>/;
+// screens: each machine's screen (screens.html) into frames/screen-<name>/; scene: the room they are in (scene.html)
+// rendered frame by frame into film.mp4 (FILM_AT=<s,…>: only those moments, into peek/). Nothing waits on real time: the page's
 // clock is Playwright's, and every animation of the page is held to it (step()). PANES=phone,home picks panes;
 // PLAYWRIGHT_MODULE / PLAYWRIGHT_CHANNEL as test/browser's.
 import { spawn } from 'node:child_process';
@@ -173,40 +174,84 @@ async function film(name, base, browser) {
 if (doing('panes')) {
   const { server, base } = await serve(here('../../dist/film'));
   const browser = await launch();
-  const names = (process.env.PANES || Object.keys(PANES).join(',')).split(',');
+  const names = (process.env.PANES || 'phone').split(',');
   await Promise.all(names.map((n) => film(n, base, browser)));
   await browser.close();
   server.close();
   console.log('panes: done');
 }
 
-// ---- compose ----
-if (doing('compose')) {
-  await writeFile(join(OUT, 'compose.html'), await readFile(here('compose.html')));
-  const { readdir } = await import('node:fs/promises');
-  const count = {};
-  for (const n of Object.keys(PANES)) count[n] = (await readdir(join(OUT, 'frames', n)).catch(() => [])).filter((f) => f.endsWith('.jpg')).length;
-  await writeFile(join(OUT, 'frames', 'count.json'), JSON.stringify(count));
+// ---- screens: what each machine's screen shows (screens.html), 30 a second ----
+const LENGTH = 38;
+const SCREEN_FPS = 30;
+if (doing('screens')) {
+  await writeFile(join(OUT, 'screens.html'), await readFile(here('screens.html')));
   const { server, base } = await serve(OUT);
   const browser = await launch();
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-  page.on('pageerror', (e) => console.error(`compose: ${e.message}`));
-  page.on('console', (m) => console.log(`compose: ${m.text()}`));
-  await page.goto(`${base}compose.html`);
-  await page.waitForFunction(() => typeof window.render === 'function');
-  const length = await page.evaluate(() => window.LENGTH);
-  const ff = spawn(process.env.FFMPEG || 'ffmpeg', ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', join(OUT, 'film.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
-  const frames = Math.round(length * FPS);
-  for (let f = 0; f < frames; f++) {
-    await page.evaluate((s) => window.render(s), f / FPS);
-    const jpg = await page.screenshot({ type: 'jpeg', quality: 95 });
-    if (!ff.stdin.write(jpg)) await new Promise((ok) => ff.stdin.once('drain', ok));
-    if (f % 300 === 0) console.log(`compose: ${f}/${frames}`);
-  }
-  ff.stdin.end();
-  await new Promise((ok, no) => ff.on('close', (code) => (code === 0 ? ok() : no(new Error(`ffmpeg ${code}`)))));
+  await Promise.all(['home', 'studio', 'win', 'cloud'].map(async (name) => {
+    const dir = join(OUT, 'frames', `screen-${name}`);
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    const page = await browser.newPage({ viewport: { width: 920, height: 575 }, deviceScaleFactor: 2 });
+    page.on('pageerror', (e) => console.error(`screen ${name}: ${e.message}`));
+    await page.goto(`${base}screens.html?screen=${name}`);
+    await page.waitForFunction(() => typeof window.draw === 'function');
+    for (let f = 0; f < LENGTH * SCREEN_FPS; f++) {
+      await page.evaluate((s) => window.draw(s), f / SCREEN_FPS);
+      await page.screenshot({ path: join(dir, `${String(f).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 90 });
+    }
+    await page.close();
+  }));
   await browser.close();
   server.close();
-  console.log(`compose: ${join(OUT, 'film.mp4')}`);
+  console.log('screens: done');
+}
+
+// ---- scene: the room (scene.html, three.js), frame by frame, into film.mp4 ----
+if (doing('scene')) {
+  const { readdir } = await import('node:fs/promises');
+  // three.js, beside the page (the repository does not carry it).
+  if (!existsSync(join(OUT, 'vendor/node_modules/three'))) {
+    await mkdir(join(OUT, 'vendor'), { recursive: true });
+    await new Promise((ok, no) => spawn('npm', ['install', '--no-save', '--prefix', join(OUT, 'vendor'), 'three@0.180.0'], { stdio: 'inherit' }).on('close', (c) => (c === 0 ? ok() : no(new Error(`npm ${c}`)))));
+  }
+  await writeFile(join(OUT, 'scene.html'), await readFile(here('scene.html')));
+  const count = {};
+  for (const n of await readdir(join(OUT, 'frames'))) if (!n.endsWith('.json')) count[n] = (await readdir(join(OUT, 'frames', n))).filter((f) => f.endsWith('.jpg')).length;
+  await writeFile(join(OUT, 'frames', 'count.json'), JSON.stringify(count));
+  const { server, base } = await serve(OUT);
+  const browser = await playwright.chromium.launch({
+    ...(process.env.PLAYWRIGHT_CHANNEL === '' ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' }),
+    args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'],
+  });
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  page.on('pageerror', (e) => console.error(`scene: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(`scene: ${m.text()}`); });
+  await page.goto(`${base}scene.html`);
+  await page.waitForFunction(() => window.ready === true, null, { timeout: 120000 });
+  console.log('scene: gl', await page.evaluate(() => { const gl = document.querySelector('canvas').getContext('webgl2'); const d = gl.getExtension('WEBGL_debug_renderer_info'); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : '?'; }));
+  const only = process.env.FILM_AT?.split(',').map(Number);
+  if (only) {
+    await mkdir(join(OUT, 'peek'), { recursive: true });
+    for (const s of only) {
+      await page.evaluate((s) => window.render(s), s);
+      await page.screenshot({ path: join(OUT, 'peek', `at-${s}.jpg`), type: 'jpeg', quality: 88 });
+    }
+  } else {
+    const ff = spawn(process.env.FFMPEG || 'ffmpeg', ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', join(OUT, 'film.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
+    const frames = Math.round(LENGTH * FPS);
+    const t0 = Date.now();
+    for (let f = 0; f < frames; f++) {
+      await page.evaluate((s) => window.render(s), f / FPS);
+      const jpg = await page.screenshot({ type: 'jpeg', quality: 95 });
+      if (!ff.stdin.write(jpg)) await new Promise((ok) => ff.stdin.once('drain', ok));
+      if (f % 300 === 0) console.log(`scene: ${f}/${frames} (${Math.round((Date.now() - t0) / 1000)} s)`);
+    }
+    ff.stdin.end();
+    await new Promise((ok, no) => ff.on('close', (code) => (code === 0 ? ok() : no(new Error(`ffmpeg ${code}`)))));
+    console.log(`scene: ${join(OUT, 'film.mp4')}`);
+  }
+  await browser.close();
+  server.close();
 }
