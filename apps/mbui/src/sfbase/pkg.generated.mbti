@@ -1557,6 +1557,8 @@ pub let viz_heights : Map[String, Int32]
 
 pub fn viz_icon(@ui.Ctx, Int32, String, String, Int64) -> Unit
 
+pub let viz_icons : String
+
 pub fn viz_id(String, String, String) -> String
 
 pub fn viz_is_fragment(String) -> Bool

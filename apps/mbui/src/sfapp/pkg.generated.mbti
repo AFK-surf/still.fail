@@ -1064,6 +1064,8 @@ pub let viz_ground : @ui.Style
 
 pub fn viz_ground_style(Int64) -> String
 
+pub let viz_icons : String
+
 pub fn viz_id(String, String, String) -> String
 
 pub fn viz_is_fragment(String) -> Bool

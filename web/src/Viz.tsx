@@ -23,6 +23,10 @@ import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
 import { t } from "./i18n.ts";
 
+/** still.fail's own icons (design/icons, the one source), for a frame's data-icon / data-lucide marks: each SVG's inside. */
+const ICONS = JSON.stringify(Object.fromEntries(Object.entries(import.meta.glob<string>("../../design/icons/*.svg", { query: "?raw", import: "default", eager: true }))
+  .map(([path, svg]) => [path.slice(path.lastIndexOf("/") + 1, -4), (/<svg[^>]*>([^]*)<\/svg>/.exec(svg)?.[1] ?? "").replace(/\s+/g, " ").trim()]))).replace(/</g, "\\u003c");
+
 /**
  * Where a visualization opens on its own, beside its chat: the chat page's side panel (a tab of its own) on a wide
  * screen, a page over the chat on a narrow one. None: the chat is shown where nothing can open it.
@@ -115,6 +119,7 @@ function documentOf(html: string, state: unknown): string {
     + `<meta http-equiv="Content-Security-Policy" content="${CSP}">`
     + `<style>:root{color-scheme:${theme};${vars}}</style><style>${stylesheet}</style>`
     + `<script type="application/json" id="ember-viz-state">${scriptJson({ widgetState: state })}</script>`
+    + `<script type="application/json" id="viz-icons">${ICONS}</script>`
     + `<script>${bridge}</script><script>${components}</script></head><body>${html}</body></html>`;
 }
 

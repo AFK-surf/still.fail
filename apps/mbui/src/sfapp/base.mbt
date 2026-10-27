@@ -133,6 +133,7 @@ pub using @sfbase {
   viz_css,
   viz_bridge,
   viz_components,
+  viz_icons,
   page_js,
   clock_stamp,
   src_now,

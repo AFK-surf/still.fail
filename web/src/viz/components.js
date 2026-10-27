@@ -282,15 +282,48 @@
     pick(next);
   });
 
-  // ── Icons: <i data-lucide="name">, drawn once Lucide has come (from a CDN the frame may load) ──────────────────
-  const icons = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  // ── Icons: <i data-icon="name"> (or Codex's data-lucide) as still.fail's own, given beside this (design/icons, in
+  // #viz-icons); a Lucide name still.fail has under another name is taken as its; one it has not at all, Lucide's own
+  // (from a CDN the frame may load), so a figure written for Codex still draws ───────────────────────────────────────
+  const OWN = (() => { try { return JSON.parse(document.getElementById("viz-icons")?.textContent || "{}"); } catch { return {}; } })();
+  const LUCIDE = {
+    x: "close", "rotate-cw": "refresh", "rotate-ccw": "retry", "refresh-cw": "refresh", "refresh-ccw": "refresh", ellipsis: "more",
+    "more-horizontal": "more", pencil: "edit", "square-pen": "edit", "pen-line": "edit", "trash-2": "trash", "external-link": "external",
+    "circle-check": "check-circle", "check-circle-2": "check-circle", clipboard: "paste", "clipboard-paste": "paste", funnel: "filter",
+    "circle-info": "info", image: "photo", smartphone: "phone", globe: "web", "sliders-horizontal": "sliders",
+    "chart-column": "chart", "bar-chart": "chart", "bar-chart-3": "chart", "chart-bar": "chart", "message-circle": "chat",
+    "messages-square": "chats", sparkles: "sparks", "volume-2": "volume", maximize: "expand", "maximize-2": "expand",
+    minimize: "shrink", "minimize-2": "shrink", "panel-left-open": "panel-open", "panel-left-close": "panel-close",
+    "hard-drive": "disk", "mouse-pointer": "cursor", "mouse-pointer-2": "cursor", type: "text-size", columns: "view-columns",
+    "columns-2": "view-columns", "list-tree": "view-tree", "log-in": "log-in", "log-out": "log-out", "user-round": "user",
+    "users-round": "users", "file-image": "photo", "folder-open": "folder", "square-terminal": "command", terminal: "command",
+    "skip-back": "skip-back", "skip-forward": "skip-forward", "circle-stop": "stop", octagon: "stop", "loader": "wait",
+  };
+  /** Draws every icon mark not yet drawn; again after a script adds some (window.vizIcons()). */
+  const icons = () => {
+    let foreign = false;
+    for (const el of document.querySelectorAll("[data-icon]:not(svg), [data-lucide]:not(svg)")) {
+      const asked = el.getAttribute("data-icon") ?? el.getAttribute("data-lucide");
+      const name = OWN[asked] ? asked : LUCIDE[asked];
+      if (!name || !OWN[name]) { foreign = true; continue; }
+      const svg = document.createElementNS(NS, "svg");
+      for (const a of el.attributes) if (a.name !== "data-lucide" && a.name !== "data-icon") svg.setAttribute(a.name, a.value);
+      Object.entries({ viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", "stroke-width": 1.75, "stroke-linecap": "round", "stroke-linejoin": "round", "data-icon": name }).forEach(([k, v]) => svg.setAttribute(k, v));
+      svg.classList.add("viz-icon");
+      svg.innerHTML = OWN[name];
+      el.replaceWith(svg);
+    }
+    if (!foreign) return;
+    const lucide = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16, "stroke-width": 1.75, class: "viz-icon" } });
+    if (globalThis.lucide) return lucide();
+    document.head.append(Object.assign(document.createElement("script"), { src: "https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js", onload: lucide }));
+  };
+  window.vizIcons = icons;
   addEventListener("DOMContentLoaded", () => {
     for (const list of document.querySelectorAll('.nav[role="tablist"]')) {
       const tab = list.querySelector('[role="tab"][aria-selected="true"]') ?? list.querySelector('[role="tab"].active') ?? list.querySelector('[role="tab"]');
       if (tab) pick(tab);
     }
-    if (!document.querySelector("[data-lucide]")) return;
-    if (globalThis.lucide) return icons();
-    document.head.append(Object.assign(document.createElement("script"), { src: "https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js", onload: icons }));
+    icons();
   });
 })();

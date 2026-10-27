@@ -78,7 +78,8 @@ states) and never hard-code a colour (`#fff`, `black`, `slate-500`): light and d
 ### Controls
 
 - `.btn`; `.btn-primary` for the one main action, `.btn-secondary`, `.btn-ghost` for low emphasis; `.btn-xs`,
-  `.btn-sm`, `.btn-lg`; `.btn-block` to fill the row. `aria-pressed="true"`, `aria-selected="true"` or
+  `.btn-sm`, `.btn-lg`; `.btn-block` to fill the row. An icon goes before the words inside it. `.btn-icon` is a
+  button of an icon alone (with `aria-label` and `data-tooltip`). `aria-pressed="true"`, `aria-selected="true"` or
   `.is-selected` mark one chosen. `.btn.viz-tile` is a selectable cell of a dense grid.
 - `.form-label` above `.form-control` (input or textarea) or `.form-select`; `-sm`/`-xs` for smaller ones.
   `<label class="form-check">` around `.form-check-input` and `.form-check-label`; `.form-switch`; `.form-range`
@@ -96,14 +97,22 @@ states) and never hard-code a colour (`#fff`, `black`, `slate-500`): light and d
 ```
 
 - `data-tooltip="text"` on any element shows it on hover, focus and touch; put a truncated label's full text there.
-- Icons: `<i data-lucide="search" aria-hidden="true"></i>` (Lucide's names); never draw icon SVG yourself. After adding
-  icons from a script, call `lucide.createIcons()`.
+- Icons are still.fail's own: `<i data-icon="refresh" aria-hidden="true"></i>`, 16 px in the words' colour. Names:
+  agent archive arrow-down arrow-left arrow-right arrow-up arrow-up-right bell bot boxes brain camera chart chat chats
+  check check-circle chevron-down chevron-left chevron-right chevron-up chevrons-up-down close command copy cursor
+  devices disk download edit expand external eye file file-code file-text filter folder folder-plus info key keyboard
+  list log-in log-out minus monitor moon more move paste pause phone photo pin play plug plus power quote redo refresh
+  retry search send server settings shield-check shrink sliders sparks square star stop sun text trash unplug upload
+  user user-plus users volume volume-x wait web. Codex's `data-lucide="…"` works too: a Lucide name still.fail has
+  under another name draws as its own. Never draw icon SVG yourself; after adding icons from a script, call
+  `vizIcons()`.
 - Native `button`, `input`, `select`, `textarea` only; essential content and actions never only on hover.
 
 ### Tables and text
 
-- `.table` on a semantic table (`thead` for the head), in `.table-responsive` when it may be too wide; `.table-sm`;
-  `.text-end` on number cells, `.text-center`, `.text-nowrap`.
+- `.table` on a semantic table (`thead` for the head): framed as the tables in messages are, as wide as its content;
+  in `.table-responsive` when it may be too wide; `.table-sm`; `.text-end` on number cells, `.text-center`,
+  `.text-nowrap`.
 - `.text-small`, `.text-muted` (never for essential values), `.text-destructive` (only errors), `.text-success`,
   `<code>`, `<pre><code>`, `.sr-only`.
 

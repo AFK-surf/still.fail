@@ -133,7 +133,8 @@ pre { margin: 0; padding: 10px 12px; border-radius: var(--radius-lg); corner-sha
 /* No rules between things: a separator is room. */
 hr { height: 0; margin: 8px 0; border: 0; }
 button { font: inherit; color: inherit; }
-[data-lucide], .lucide { width: 16px; height: 16px; flex: none; vertical-align: -3px; stroke-width: 1.75; }
+/* Icons: still.fail's own, 16 and their line 1.75, in the words' colour (data-icon; the runtime draws them). */
+[data-icon], [data-lucide], .viz-icon { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
 
 /* ── Text ─────────────────────────────────────────────────────────────────────────── */
 .text-small { font-size: var(--font-size-small); line-height: var(--line-height-small); }
@@ -198,7 +199,7 @@ button { font: inherit; color: inherit; }
 
 /* ── Buttons: the app's pills ─────────────────────────────────────────────────────── */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px;
   border: 1px solid var(--input); border-radius: 999px; background: var(--background); color: var(--foreground);
   font: inherit; font-size: var(--font-size-ui); font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer;
   transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
@@ -211,9 +212,18 @@ button { font: inherit; color: inherit; }
 .btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 12%, transparent); }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn-ghost:hover:not(:disabled) { background: var(--hover); }
-.btn-lg { height: 36px; padding: 0 16px; }
-.btn-sm { height: 26px; padding: 0 10px; font-size: var(--font-size-small); }
-.btn-xs { height: 22px; padding: 0 8px; font-size: var(--font-size-small); }
+.btn-lg { height: 40px; padding: 0 18px; }
+.btn-sm { height: 28px; padding: 0 12px; }
+.btn-xs { height: 24px; padding: 0 10px; font-size: var(--font-size-small); }
+/* An icon alone (the app's IconButton): a 32 square, its icon grey, a ground only while pointed at or pressed. */
+.btn-icon {
+  display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0;
+  border-radius: var(--radius-lg); corner-shape: var(--corner-shape); background: transparent; color: var(--muted-foreground);
+  cursor: pointer; transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+.btn-icon:hover:not(:disabled) { background: var(--hover); color: var(--foreground); }
+.btn-icon:is([aria-pressed="true"], [aria-selected="true"], .is-selected) { background: var(--selected); color: var(--foreground); }
+.btn-icon:disabled { opacity: .45; cursor: default; }
 .btn-block { display: flex; width: 100%; }
 
 /* ── Fields ───────────────────────────────────────────────────────────────────────── */
@@ -253,10 +263,16 @@ textarea.form-control { height: auto; min-height: 72px; padding: 8px 12px; borde
 .nav-pills .nav-link:is(.active, .is-selected, [aria-selected="true"]) { background: var(--lifted); box-shadow: 0 0 2px var(--shadow), 0 0 0 .5px var(--border); }
 .nav-link:disabled { opacity: .4; cursor: default; }
 
-/* ── Tables: as a message's Markdown tables ───────────────────────────────────────── */
-.table-responsive { width: 100%; overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; font-size: var(--font-size-ui); line-height: var(--line-height-ui); }
-.table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+/* ── Tables: as a message's Markdown tables, framed as a card (a line round it, a faint ground, its head tinted), the
+   rows ruled between them only, as wide as their content ─────────────────────────────────────────────────────── */
+.table-responsive { max-width: 100%; overflow-x: auto; }
+.table {
+  width: auto; max-width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius-xl); corner-shape: var(--corner-shape);
+  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+  font-size: var(--font-size-ui); line-height: var(--line-height-ui);
+}
+.table :is(th, td) { min-width: 4em; padding: 7px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 .table thead th {
   color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500;
   background: color-mix(in srgb, var(--foreground) 4%, transparent);

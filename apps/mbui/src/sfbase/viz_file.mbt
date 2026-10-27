@@ -180,6 +180,9 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -
   "<script type=\"application/json\" id=\"ember-viz-state\">" +
   kept +
   "</script>" +
+  "<script type=\"application/json\" id=\"viz-icons\">" +
+  viz_icons +
+  "</script>" +
   "<script>" +
   viz_relay +
   "</script><script>" +
