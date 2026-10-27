@@ -1219,6 +1219,39 @@ pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
 }
 
 ///|
+/// Where the pointer let what is picked go, in the window: the end of it the pointer took (Picked's `to`: dragged
+/// down, the last of its lines' right end; dragged up, the first's left end), x and its line's top and height; None
+/// as selection_box. What it holds is what was dragged over, so this is where the pointer let go, not past the words.
+pub fn Ctx::selection_end(self : Ctx) -> (Double, Double, Double)? {
+  ignore(self)
+  if picked.dragging {
+    return None
+  }
+  let down = spot_cmp(picked.from, picked.to) <= 0
+  let mut end : (Array[Int], Double, Double, Double)? = None
+  // (of the paragraphs drawn, where they are drawn: those scrolled out of view are nowhere)
+  for t in desk.sels {
+    for r in selected_rects(t.base, t.lay) {
+      let (x, y) = (t.ox + r.0, t.oy + r.1)
+      let here = (t.at, if down { x + r.2 } else { x }, y, r.3)
+      end = match end {
+        None => Some(here)
+        Some((at, _, ey, _) as e) => {
+          let k = order_cmp(t.at, at)
+          let k = if k == 0 { y.compare(ey) } else { k }
+          if (down && k > 0) || (!down && k < 0) {
+            Some(here)
+          } else {
+            Some(e)
+          }
+        }
+      }
+    }
+  }
+  end.map(fn(e) { (e.1, e.2, e.3) })
+}
+
+///|
 /// What is picked with the pointer let go (a quote taken from it).
 pub fn Ctx::selection_clear(self : Ctx) -> Unit {
   ignore(self)

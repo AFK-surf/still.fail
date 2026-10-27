@@ -291,11 +291,12 @@ pub fn pick_layer(
 
 ///|
 /// What the mouse picked in a message (Chat.tsx useSelectionQuote, Chat.css.ts quotePop): once it is let go, a small
-/// dark pill 8 over the middle of what is picked, 引用 with its mark, quoting it (whose words they are, as the message
-/// says: pickable). ⌘C copies it (Ctx::selectable); a press elsewhere lets it go.
+/// dark pill 8 over where the pointer let it go (Ctx::selection_end: the end it dragged, on its line), 引用 with its
+/// mark, quoting it (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press
+/// elsewhere lets it go.
 fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Unit {
-  let (x, y) = match c.selection_box() {
-    Some((sx, sy, sw, _)) if pk.ts != "" => (sx + sw / 2.0, sy - 8.0 - pick_pop_h)
+  let (x, y) = match c.selection_end() {
+    Some((ex, ey, _)) if pk.ts != "" => (ex, ey - 8.0 - pick_pop_h)
     _ => {
       pk.ts = ""
       return
@@ -319,10 +320,16 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     Some((fx, fy, fw, _)) => (fx, fy, fw)
     None => (0.0, 0.0, c.width)
   }
+  // (its middle there, the whole of it in the layer: let go at the end of a line by its edge, it stands in from it)
+  let half = match c.laid_rect(pop) {
+    Some((_, _, w, _)) => w / 2.0
+    None => 0.0
+  }
+  let pop_x = dmax(half, dmin(x - fx, fw - half))
   c.layer(fn() {
     c.box(style=pick_pop_frame, id=frame, fn() {
       c.box(style=pick_pop_row, ty=dmax(0.0, y - fy), fn() {
-        c.box(tx=x - fx - fw / 2.0, fn() {
+        c.box(tx=pop_x - fw / 2.0, fn() {
           let hot = c.lit(pop)
           c.box(style=if hot { pick_pop_hot } else { pick_pop_box }, id=pop, fn() {
             @sf.icon(c, "quote", size=12.0, color=@sf.theme().p.on_primary) |> ignore
