@@ -768,8 +768,6 @@ pub let relaying : @sfbase.Relaying
 
 pub let reporting_host : @ref.Ref[@sfbase.ReportingHost?]
 
-pub let rest_ms : Double
-
 pub fn row_agent_groups(@sfbase.ChatItem) -> Array[@sfbase.RowAgent]
 
 pub fn row_is(@sfbase.ChatItem, @sfbase.ChatRef) -> Bool
@@ -927,8 +925,6 @@ pub fn tag_place(Bytes, Bool) -> Int32?
 pub fn tagging_new() -> @sfbase.Tagging
 
 pub fn tagging_take(@sfbase.Tagging, Bytes, Bool) -> Bytes
-
-pub let tap_rest_ms : Double
 
 pub fn tape_differences(String, base~ : @sfbase.Source, trace? : Array[String]) -> Array[String]
 

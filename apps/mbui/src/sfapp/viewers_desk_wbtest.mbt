@@ -88,14 +88,37 @@ test "desk: Esc closes a chat's film as it flies in, before its player is up" {
 }
 
 ///|
-test "desk: a click on the image does nothing, one round it closes the preview" {
+test "desk: a click on the image hides the bar, another brings it back; one round it closes the preview" {
   let t = desk_tester("chat-preview-image")
+  let v = viewer.val.unwrap()
+  // left alone, the bar stays
+  t.run_for(left_alone_ms)
+  assert_true(v.bars_shown())
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is
   t.tap(640.0, 400.0)
   t.run_for(double_tap_ms)
   assert_true(viewer.val is Some(_))
+  assert_true(!v.bars_shown())
+  t.tap(640.0, 400.0)
+  t.run_for(double_tap_ms)
+  assert_true(v.bars_shown())
   t.tap(150.0, 700.0)
   assert_true(viewer.val is None)
+}
+
+///|
+test "desk: the bar hidden by a click shows while the pointer is along the top, where it is, and hides again past it" {
+  let t = desk_tester("chat-preview-image")
+  let v = viewer.val.unwrap()
+  t.tap(640.0, 400.0)
+  t.run_for(double_tap_ms)
+  assert_true(!v.bars_shown())
+  t.move(640.0, 20.0)
+  t.draw()
+  assert_true(v.bars_shown())
+  t.move(640.0, 400.0)
+  t.draw()
+  assert_true(!v.bars_shown())
 }
 
 ///|

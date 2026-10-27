@@ -38,7 +38,6 @@ using @sfbase {
   open_drive_file,
   open_preview,
   pv,
-  rest_ms,
   sent_picture,
   thumb_shows,
   upper,

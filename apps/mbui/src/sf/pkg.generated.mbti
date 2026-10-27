@@ -1114,7 +1114,7 @@ pub fn nav_words(@ui.Ctx, String, color? : Int64) -> Unit
 
 pub fn neg(Double) -> Double
 
-pub fn new_media(String, rest_ms? : Double) -> @kit.Media
+pub fn new_media(String) -> @kit.Media
 
 pub fn next_in(String, Array[String]) -> String?
 

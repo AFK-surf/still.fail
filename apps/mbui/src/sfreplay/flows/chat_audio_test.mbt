@@ -45,8 +45,6 @@ test "46-chat-audio" {
     f.t.draw()
     f.see("0:02 /")
     read_whole(f, v, 177424)
-    // left alone, its bars fade
-    f.run_for(@sfapp.rest_ms)
     f.back()
     f.run_to(@sfapp.preview_rest())
     f.end()

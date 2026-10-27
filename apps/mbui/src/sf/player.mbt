@@ -76,9 +76,9 @@ pub let player_speeds : Array[Double] = [0.1, 0.25, 0.5, 1.0, 1.25, 1.5, 2.0]
 
 ///|
 /// A player for a page (`key` keeps its widgets apart from another's), its waits said once they have waited later_ms;
-/// its controls left alone `rest_ms` while it plays go (0: they stay, as a scripted run on a slow device asks).
-pub fn new_media(key : String, rest_ms? : Double = @kit.media_rest_ms) -> @kit.Media {
-  @kit.Media::new(key~, speeds=player_speeds, wait_ms=later_ms, rest_ms~)
+/// its controls there till a tap (a click) on its picture hides them, never going of themselves (the user, 2026-10-28).
+pub fn new_media(key : String) -> @kit.Media {
+  @kit.Media::new(key~, speeds=player_speeds, wait_ms=later_ms, rest_ms=0.0)
 }
 
 ///|
@@ -319,7 +319,6 @@ priv struct PlayerView {
   mut listing : Bool
   mut list_closing : Bool
   mut rates : Bool
-  mut moves : (Double, Double)?
   mut fulled : Bool
   zoom : @kit.Zoom
   mut grabbing : Bool
@@ -363,7 +362,6 @@ fn view_for(key : String) -> PlayerView {
         listing: false,
         list_closing: false,
         rates: false,
-        moves: None,
         fulled: false,
         // (a film edge to edge in its stage, enlarged as players do: no margin round it)
         zoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
@@ -890,13 +888,10 @@ fn desk_player(
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
   let mac = @ui.platform() == 0
   take_grab(v, p, name)
-  // a mouse's moves wake the controls; a finger (a tablet's screen) taps them on and off, as on a phone
+  // a click (a finger's tap, on a tablet's screen too) shows or hides the controls; a mouse's pointer over the bar or
+  // the controls shows them while it is there
   let finger = @ui.pointing() is Finger
   let (px, py, _) = c.pointer()
-  if !finger && v.moves is Some((x, y)) && (x != px || y != py) {
-    p.wake()
-  }
-  v.moves = Some((px, py))
   let go = fn(other : String) {
     p.pause()
     on_go(other)
@@ -909,6 +904,7 @@ fn desk_player(
   }
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
+  p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
   // the keys (see the file's head)
   let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
   let shifted = fn(ch : Char) {
@@ -1000,8 +996,9 @@ fn desk_player(
     }
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
-    // the picture, in the window less the list beside it: a click plays or pauses, a double click fills the screen; a
-    // finger's tap shows or hides the controls, its double tap nudges or plays (Media::stage, the phone's)
+    // the picture, in the window less the list beside it: a click shows or hides the controls (the user, 2026-10-28;
+    // Space plays or pauses), a double click fills the screen (showing them again); a finger's tap shows or
+    // hides them too, its double tap nudges or plays (Media::stage, the phone's)
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
     if finger {
@@ -1009,8 +1006,7 @@ fn desk_player(
     } else if picture && mac && c.double_clicked(stage) {
       full()
     } else if c.clicked(stage) {
-      p.play_pause()
-      p.wake()
+      p.toggle()
     }
     // the wheel: with ⌃ or ⌘ held (or a trackpad's pinch) it zooms round the pointer, alone it moves what is zoomed in
     let (wx, wy, mods) = @ui.wheel_of(c, stage)
