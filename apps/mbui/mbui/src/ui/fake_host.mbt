@@ -139,6 +139,11 @@ impl @hostapi.Host for FakeHost with gpu_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with cpu_ms(_) {
+  h_cpu_ms()
+}
+
+///|
 impl @hostapi.Host for FakeHost with set_ime(_, a0, a1, a2, a3, a4, a5, a6, a7) {
   h_set_ime(a0, a1, a2, a3, a4, a5, a6, a7)
 }

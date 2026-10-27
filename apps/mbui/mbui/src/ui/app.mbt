@@ -90,7 +90,20 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
-  let t0 = frame_body(c, w, h, scale, t)
+  // (where only looks by the clock move on, the frame before stepped to now, nothing built: step_frame.mbt; under a
+  // Tester built whole all the same, held to what the step would have drawn)
+  let can_step = c.step_can(w, h, scale, t, fed)
+  let t0 = if can_step && fake.val is None && c.step_try(t) {
+    h_now()
+  } else {
+    let stepped = if can_step && fake.val is Some(_) { c.step_predict(t) } else { None }
+    let t0 = frame_body(c, w, h, scale, t)
+    match stepped {
+      Some(s) => c.step_check(s)
+      None => ()
+    }
+    t0
+  }
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
   c.took_input = fed
@@ -120,6 +133,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // whether the frame left nothing that ends to come (Ctx::at_rest): said of a run, asserted (Tester::at_rest), never
   // waited on
   c.frame_rest = c.at_rest()
+  c.step_keep(w, h, scale)
   let held = bench.held
   bench.held = false
   if c.wants_frame || bench.mode > 0 || held {
@@ -306,8 +320,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.said_built_logged()
   // what the last build said to tell outside, told now, once by its key: the last said of it, where the first was
   // (Ctx::after_build)
+  let tell_ids = c.tells.map(fn(t) { t.0 })
   let tells = tells_once(c.tells)
   c.tells.clear()
+  // (what is told changes what the next frame builds, though nothing came from outside: built, not stepped)
+  step_told(tell_ids, c.told.map(fn(t) { t.0 }))
   for f in tells {
     f()
   }
@@ -350,7 +367,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint_raised()
   c.paint_overlays()
   c.raise_tops()
-  // what is drawn by the clock, as its cycle is now (cycle_look.mbt)
+  // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn on kept to step the next frames
+  // from (step_frame.mbt)
+  c.step_note()
   c.cycle_looks()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
@@ -1559,6 +1578,16 @@ let probe_gpu : Ref[Double] = { val: 0.0 }
 let probe_gpu_n : Ref[Int] = { val: 0 }
 
 ///|
+/// The process's CPU time (every thread's: the core's too, @hostapi.cpu_ms) as the probe's 2 s began.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_cpu : Ref[Double] = { val: -1.0 }
+
+///|
+/// The frames stepped (step_frame.mbt) as the probe's 2 s began.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_steps : Ref[Int] = { val: 0 }
+
+///|
 let probe_slow_ms : Double = 24.0
 
 ///|
@@ -1593,10 +1622,17 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   if probe_since.val < 0.0 {
     probe_since.val = t
+    probe_cpu.val = h_cpu_ms()
   } else if t - probe_since.val >= 2000.0 {
     let span = t - probe_since.val
+    // (the whole process's share of one CPU since, whatever drew: 100% one core busy throughout)
+    let cpu_now = h_cpu_ms()
+    let cpu = if cpu_now >= 0.0 && probe_cpu.val >= 0.0 { ((cpu_now - probe_cpu.val) * 100.0 / span).round() } else { -1.0 }
+    probe_cpu.val = cpu_now
+    let stepped = step.n - probe_steps.val
+    probe_steps.val = step.n
     h_log(
-      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
+      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% stepped=\{stepped} (\{step.why}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
       "work_avg=\{(probe_work.val / probe_frames.val.to_double() * 10.0).round() / 10.0}ms " +
       "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / probe_frames.val.to_double() * 10.0).round() / 10.0 })} nodes=\{c.count} " +
       "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / probe_frames.val.to_double() * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / probe_frames.val.to_double()).round()}% " +

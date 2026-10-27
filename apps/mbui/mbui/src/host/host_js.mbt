@@ -422,6 +422,12 @@ fn gpu_ms() -> Double {
 }
 
 ///|
+/// A browser says not how much of a CPU its page has had (@hostapi.cpu_ms).
+fn cpu_ms() -> Double {
+  -1.0
+}
+
+///|
 /// The page's query parameter `name` ("" when there is none).
 fn env(name : String) -> String {
   js_env(name)

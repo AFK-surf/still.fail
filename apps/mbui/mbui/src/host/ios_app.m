@@ -14,6 +14,7 @@
 #import <mach/mach.h>
 #import <os/log.h>
 #import "apple.h"
+#include <sys/resource.h>
 #include "post.h"
 
 mb_callbacks mb_cb;
@@ -912,8 +913,34 @@ static void network_start(void);
 static void watch_shown(void);
 static void watch_keyboard(void);
 
+double mb_host_cpu_ms(void);
+
+// How warm the device is said to be (ProcessInfo's thermal state: 0 nominal, 1 fair, 2 serious, 3 critical), on the
+// log as it changes; with MBUI_PROBE=1 also the process's share of a CPU every 5 s, frames or none (the app's probe
+// says it only as it draws: what the core does while nothing is drawn shows here).
+static void watch_heat(void) {
+  say([NSString stringWithFormat:@"ios: thermal state %ld", (long)NSProcessInfo.processInfo.thermalState]);
+  [NSNotificationCenter.defaultCenter addObserverForName:NSProcessInfoThermalStateDidChangeNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+                                                say([NSString stringWithFormat:@"ios: thermal state %ld",
+                                                                               (long)NSProcessInfo.processInfo.thermalState]);
+                                              }];
+  const char *probe = getenv("MBUI_PROBE");
+  if (!probe || probe[0] != '1') return;
+  __block double was_cpu = mb_host_cpu_ms(), was_at = mb_now_ms();
+  [NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *t) {
+    double cpu = mb_host_cpu_ms(), at = mb_now_ms();
+    fprintf(stderr, "PROBE ios: cpu=%.0f%% thermal=%ld\n", (cpu - was_cpu) * 100.0 / MAX(1, at - was_at),
+            (long)NSProcessInfo.processInfo.thermalState);
+    was_cpu = cpu;
+    was_at = at;
+  }];
+}
+
 @implementation MBAppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)opts {
+  watch_heat();
   notice_start();
   network_start();
   watch_shown();
@@ -1178,6 +1205,13 @@ void mb_host_exit(int32_t code) { exit(code); }
 
 // The system's Reduce Transparency (glass drawn solid).
 int32_t mb_host_reduce_transparency(void) { return UIAccessibilityIsReduceTransparencyEnabled() ? 1 : 0; }
+
+// The CPU's time the whole process has had, every thread's (@hostapi.cpu_ms: MBUI_PROBE's share of a CPU), in ms.
+double mb_host_cpu_ms(void) {
+  struct rusage u;
+  if (getrusage(RUSAGE_SELF, &u) != 0) return -1;
+  return (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000.0 + (u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1000.0;
+}
 
 double mb_host_mem_bytes(void) {
   task_vm_info_data_t info;

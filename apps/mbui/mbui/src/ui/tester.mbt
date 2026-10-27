@@ -63,6 +63,7 @@ fn reset_globals() -> Unit {
   in_frame.val = false
   building.val = false
   messages_reset()
+  step_reset()
   drop_reset()
   image_cache.clear()
   views_told_text.clear()
@@ -489,6 +490,8 @@ pub let first_frame_ms : Double = 1000.0 / 60.0
 /// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
 /// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
 pub fn Tester::frame(self : Tester, ms? : Double = 0.0) -> Unit {
+  // (what the test changed before it: built, not stepped, step_frame.mbt)
+  step_test_changed()
   let next = self.tick_after(self.fake.time)
   let want = self.fake.time + ms
   if ms > 0.0 && !self.host_frames {

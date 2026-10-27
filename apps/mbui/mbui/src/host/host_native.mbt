@@ -145,6 +145,8 @@ extern "C" fn ffi_reduce_transparency() -> Int = "mb_host_reduce_transparency"
 
 extern "C" fn ffi_gpu_ms() -> Double = "mb_host_gpu_ms"
 
+extern "C" fn ffi_cpu_ms() -> Double = "mb_host_cpu_ms"
+
 extern "C" fn ffi_set_back(
   back : FuncRef[(Int, Double, Double, Int) -> Unit],
 ) -> Unit = "mb_host_set_back"
@@ -698,6 +700,12 @@ fn reduce_transparency() -> Bool {
 /// this host).
 fn gpu_ms() -> Double {
   ffi_gpu_ms()
+}
+
+///|
+/// The CPU's time the process has had, every thread's, in ms (-1: not known on this host).
+fn cpu_ms() -> Double {
+  ffi_cpu_ms()
 }
 
 ///|
