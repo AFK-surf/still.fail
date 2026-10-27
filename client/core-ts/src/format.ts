@@ -100,12 +100,12 @@ export function clock(ms: number, offsetMin: number): string {
   return `${two(h)}:${two(m)}`;
 }
 
-/// 14:05:09, local.
-export function clockSeconds(ms: number, offsetMin: number): string {
-  const [, , , , h, m] = local(ms, offsetMin);
+/// 10月28日 00:40:14, local: a moment said to the second, for an error people may report days later.
+export function dateClockSeconds(ms: number, offsetMin: number): string {
+  const [, month, day, , h, m] = local(ms, offsetMin);
   // Offsets are whole minutes: the second is the same everywhere.
   const s = Math.floor(remEuclid(Math.floor(ms), 60_000) / 1000);
-  return `${two(h)}:${two(m)}:${two(s)}`;
+  return tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: `${two(h)}:${two(m)}:${two(s)}` });
 }
 
 /// 10月26日 04:12, local: a moment said whole, for what is shared of it.
