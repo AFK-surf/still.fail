@@ -44,6 +44,27 @@ test "a box's border is drawn over what it holds, its ground inside it" {
 }
 
 ///|
+test "a clipping box with a border cuts what it holds at the border's inside, its corners concentric there" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(100.0), h=Px(40.0), bg=0xFFFFFFFFL, border=1.0, border_color=0xD2D2D73FL, radius=8.0, clip=true, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), bg=0x2233AAFFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=100.0,
+  )
+  ignore(t)
+  let c = g()
+  // (what it holds: the instance of its colour, its clip 16-19, its corners 24-27)
+  let k = (0).until(c.ninst).iter().find_first(fn(k) { c.inst[k * inst_size + 5] == 0.0 && c.inst[k * inst_size + 9] == 51.0 / 255.0 }).unwrap()
+  let at = k * inst_size
+  assert_eq([c.inst[at + 16], c.inst[at + 17], c.inst[at + 18], c.inst[at + 19]], [1.0, 1.0, 99.0, 39.0])
+  assert_eq(c.inst[at + 24], concentric(8.0, 1.0))
+}
+
+///|
 test "a box holding nothing draws its border with its ground, once" {
   let t = Tester::new(
     fn(c) {

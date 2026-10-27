@@ -737,6 +737,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       // (where it is laid out, not where it is drawn: its outer the one where it is drawn, as it is)
       outer_kept=true,
     )
+    // (the window's edges moved with it are still the window's: what cuts nothing drawn)
+    clip_say_window(clip_is_window(clip_top() - clip_n))
   }
   if look.circle > 0.0 {
     // (about its point as it is drawn)

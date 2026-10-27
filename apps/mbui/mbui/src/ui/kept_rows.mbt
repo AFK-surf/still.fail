@@ -725,6 +725,19 @@ fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
   let y0 = dmax(oy0, s[k + 1])
   let x1 = dmin(ox1, s[k + 2])
   let y1 = dmin(oy1, s[k + 3])
+  // (cut by the window's edges alone, as much of its own rect kept as its corners take: push_round_clip)
+  let most = dmax(dmax(c[4], c[5]), dmax(c[6], c[7]))
+  let edges = clip_is_window(k)
+  let (x0, x1) = if edges && x1 - x0 < 2.0 * most {
+    (if x0 > ox0 { dmax(ox0, x1 - 2.0 * most) } else { x0 }, if x1 < ox1 { dmin(ox1, x0 + 2.0 * most) } else { x1 })
+  } else {
+    (x0, x1)
+  }
+  let (y0, y1) = if edges && y1 - y0 < 2.0 * most {
+    (if y0 > oy0 { dmax(oy0, y1 - 2.0 * most) } else { y0 }, if y1 < oy1 { dmin(oy1, y0 + 2.0 * most) } else { y1 })
+  } else {
+    (y0, y1)
+  }
   for j in 0..<4 {
     let left = j == 0 || j == 3
     let top = j < 2
