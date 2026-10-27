@@ -489,11 +489,14 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
 
 /// A large reply's bytes, once the device has taken them all in (acknowledged): said on the log when that took over
 /// SLOW_REPLY_MS, with how long it was made in (`made`) and the way it went (a relay or an address, its round trip, the
-/// packets sent and lost on it), so a part of a video slow to come is seen here, the station's time apart from the way's.
+/// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
+/// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
+/// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
+/// said, and a desktop app's images coming at 30 KB/s from ccvm for an hour left no word of how.)
 function slowly(stream: Stream, conn: Connection, method: string, path: string, bytes: number, made: number, from: number) {
   void stream.stopped().then((code) => {
     const ms = wall.now() - from;
-    if (code !== null || ms < SLOW_REPLY_MS) return;
+    if (typeof code === "number" || ms < SLOW_REPLY_MS) return;
     const way = (conn.paths?.() ?? []).find((p) => p.selected);
     log.info("mesh", "a reply went slowly", {
       route: `${method} ${route(path.split("?")[0] ?? path)}`,
@@ -506,6 +509,8 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
       rtt: way ? Math.round(way.rttMs) : null,
       sent: way?.txPackets ?? null,
       lost: way?.lostPackets ?? null,
+      cwnd: way?.cwnd ?? null,
+      cuts: way?.congestionEvents ?? null,
     });
   }, () => {});
 }

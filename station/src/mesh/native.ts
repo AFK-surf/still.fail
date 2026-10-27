@@ -9,7 +9,9 @@ export type Stream = {
   read(): Promise<Buffer | null>;
   write(bytes: Buffer): Promise<void>;
   finish(): Promise<void>;
-  stopped(): Promise<void>;
+  /// Once what was sent is acknowledged: null, or the code the other end stopped reading with (an addon from before
+  /// 2026-10-28: nothing).
+  stopped(): Promise<number | null | void>;
   reset(code: number): Promise<void>;
 };
 /// What went over a connection since it opened (native/mesh `Stats`): bytes; and from the addon of 2026-10-19 on,
@@ -33,7 +35,7 @@ export type Connection = {
   alpn(): Buffer;
   via(): string | null;
   /// Every way it can go now (the native connection's; a test's may have none).
-  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
+  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number; cwnd?: number; congestionEvents?: number }[];
   acceptBi(): Promise<Stream | null>;
   openBi(): Promise<Stream>;
   /// Whether the other end is still there: true once anything is heard from it within `withinMs` (superseded.ts).
