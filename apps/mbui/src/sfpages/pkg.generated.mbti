@@ -20,6 +20,8 @@ pub let acc_narrow_foot : @ui.Style
 
 pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String, String, String) -> Unit
 
+pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
+
 pub fn agent_card(@ui.Ctx, @sfbase.Source, String, Json) -> Unit
 
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit

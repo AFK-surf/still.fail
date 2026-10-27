@@ -28,11 +28,12 @@ pub fn workspace_mark(
 }
 
 ///|
-/// An invitation waiting (inviteDot): the accent's dot, 8 across; said as `label`.
+/// An invitation waiting (inviteDot): the viewer's turn, so the chats' blue dot (chat_mark.mbt), 8 across; said as
+/// `label`.
 pub fn invite_dot(c : @ui.Ctx, label : String) -> Unit {
   c.box(style=invite_dot_look, label~, fn() {  }) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_dot_look : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Accent")
+let invite_dot_look : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=@sf.mark_blue)

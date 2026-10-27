@@ -266,7 +266,7 @@ pub fn row_lead(item : ChatItem) -> String {
 /// What a chat's row says of it (Home.kt rowTone): the core's `tone` when it says one, else from its state.
 pub fn row_tone(item : ChatItem) -> String {
   match item.tone {
-    "alert" | "busy" | "done" | "wait" | "other" => item.tone
+    "alert" | "busy" | "done" | "wait" => item.tone
     _ =>
       match item.state {
         "block" | "failed" => "alert"

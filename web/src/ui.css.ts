@@ -18,8 +18,8 @@ export const kindMark = style({ color: vars.text });
 /** Centred on the line: aligned by baseline, the letter inside a small avatar would pull it down. */
 /**
  * An agent: its model's maker on a tile; where it stands is a mark at the corner in the chat list's colours
- * (ChatMark.css.ts): yellow spokes stepping round at work, red when it wants someone (blocked, failed); no halo, the tile is
- * small. A gap of the ground (`--ring`: the page's, a panel's where it is in one) round it. The badge as a 20 one's has
+ * (ChatMark.css.ts), one meaning each: yellow spokes stepping round at work, blue when it waits on a person (blocked),
+ * red when it failed. A gap of the ground (`--ring`: the page's, a panel's where it is in one) round it. The badge as a 20 one's has
  * it and no larger on a larger mark; on a smaller one all of it as much smaller (`--badge`, AgentMark's: a badge 12
  * across covered a 14 one's whole maker but a sliver).
  */
@@ -33,7 +33,8 @@ export const agentMark = style({
       width: "calc(12px * var(--badge))", height: "calc(12px * var(--badge))", boxSizing: "border-box", borderRadius: "50%",
       border: `calc(2px * var(--badge)) solid var(--ring, ${vars.canvas})`, background: `var(--ring, ${vars.canvas})`,
     },
-    "&[data-badge=\"block\"]::after, &[data-badge=\"failed\"]::after": { background: "#e5484d" },
+    "&[data-badge=\"block\"]::after": { background: "#3b82f6" },
+    "&[data-badge=\"failed\"]::after": { background: "#e5484d" },
     // At work: yellow spokes stepping round (spokes.ts), 10px, with no disc of the ground round them (it showed as a
     // dark rim, 2026-10-19).
     "&[data-badge=\"run\"]::after": { display: "none" },

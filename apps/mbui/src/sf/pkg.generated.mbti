@@ -884,8 +884,6 @@ pub let mark_bubble : @ui.Color
 
 pub let mark_bubble_dark : @ui.Color
 
-pub let mark_halo : @ui.Color
-
 pub let mark_key_on : @ui.Color
 
 pub let mark_open_bg : @ui.Color
@@ -2658,6 +2656,8 @@ pub fn Surface::corner(Self) -> Double
 pub fn Surface::inner_radius(Self) -> @ui.Radius
 pub fn Surface::radius(Self) -> @ui.Radius
 pub fn Surface::style(Self) -> @ui.Style
+
+type SyncRest
 
 pub(all) struct TextMatch {
   chunk : Int32

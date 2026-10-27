@@ -45,8 +45,9 @@ export const menuRareItem = style({
   },
 });
 export const menuRareIcon = style({ width: "14px", flex: "none", display: "flex", justifyContent: "center" });
+/** An invitation waiting: the viewer's turn, so the chats' blue dot (ChatMark.css.ts). */
 export const inviteDot = style({
-  width: "8px", height: "8px", borderRadius: "50%", background: vars.accent, flex: "none",
+  width: "8px", height: "8px", borderRadius: "50%", background: "#3b82f6", flex: "none",
 });
 export const menuInvite = style({
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", padding: "6px 10px", fontSize: vars.textUi,

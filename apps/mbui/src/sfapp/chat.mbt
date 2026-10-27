@@ -454,20 +454,10 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// An agent's state at its mark's corner (Parts.kt AgentStateMark): a 12 disc of the ground, red in it when it wants
-/// someone, yellow spokes stepping round at work (Spokes.kt); nothing when done.
-fn agent_state_mark(c : @ui.Ctx, badge : String) -> Unit {
-  let t = @sf.theme()
-  match badge {
-    // yellow spokes 10 across stepping round, no disc round them (it showed as a dark rim)
-    "run" => @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-    "block" | "failed" =>
-      c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=t.p.bg, align=ACenter, justify=JCenter, fn() {
-        c.box(w=Px(8.0), h=Px(8.0), radius=4.0, bg=mark_red, fn() {  }) |> ignore
-      })
-      |> ignore
-    _ => ()
-  }
+/// At work, as a row says it (Spokes.kt): yellow spokes 10 across stepping round in 12, no disc round them (it showed as
+/// a dark rim).
+fn at_work_mark(c : @ui.Ctx) -> Unit {
+  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
 }
 
 ///|
@@ -488,12 +478,8 @@ fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
       fn() { @sf.maker_mark(c, a.maker, a.runtime, mark_logo(size)) |> ignore },
     )
     |> ignore
-    if a.badge != "" {
-      c.layer(fn() {
-        c.box(tx=size - 9.0, ty=size - 9.0, fn() { agent_state_mark(c, a.badge) }) |> ignore
-      })
-      |> ignore
-    }
+    // its state on the corner, as every agent's mark has it (sfpages' agent_badge)
+    @sfpages.agent_badge(c, a.badge, size, t.p.bg)
   })
   |> ignore
 }
@@ -541,7 +527,7 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
         // the agent's state on the maker's corner, how the station is reached on the tile's: each 3 past it
         c.layer(fn() {
           c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-            c.box(tx=m - 9.0, ty=m - 9.0, fn() { agent_state_mark(c, a.badge) }) |> ignore
+            c.box(w=Px(m), h=Px(m), fn() { @sfpages.agent_badge(c, a.badge, m, t.p.bg) }) |> ignore
             c.spacer()
             if s.via != "" {
               c.box(tx=3.0, ty=m - 7.0, fn() { via_dot(c, s.via, 10.0, 2.0) }) |> ignore
