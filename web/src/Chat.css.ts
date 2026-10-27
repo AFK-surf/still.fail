@@ -55,13 +55,13 @@ export const chatEmpty = style({
   color: vars.muted, margin: "auto", textAlign: "center", fontSize: vars.textUi, display: "grid", gap: "4px",
 });
 export const chatError = style({ padding: "0 32px 10px" });
-/** A chat whose station is offline: read from what was kept, not written to. */
+/** What is said over a chat's composer (ComposerNotice.tsx): as wide as the composer (dock.css.ts: its pane less 12 each
+ * side, 804 at most), 8 over it as it is now (the dock's height, less the 12 its wrap has over the composer), going
+ * with it as it opens and closes. */
 export const offlineNotice = style({
-  margin: "0 auto 8px", maxWidth: "760px", width: "calc(100% - 64px)", padding: "8px 12px",
-  borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: vars.hover, color: vars.muted, fontSize: vars.textUi,
+  margin: "0 auto 8px", maxWidth: "804px", width: "calc(100% - 24px)",
   selectors: {
-    [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-room))" },
+    [`${chat}[data-under-composer] > &`]: { vars: { "--composer-height": "inherit" }, marginBottom: "calc(var(--composer-height) - 4px)" },
   },
 });
 /**

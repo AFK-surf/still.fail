@@ -2,8 +2,10 @@
 // at its foot is one, kept, with what is typed, the focus and a composition under way, as a new chat becomes its chat
 // (the shell keeps a page that is replaced by another, app.tsx). What the composer writes to is the page's: it says so
 // (`useHost().use`), and the composer asks it when a message goes.
+import { Unplug } from "@stillfail/ui/icons.tsx";
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
 import { CacheColdNotice } from "../CacheColdNotice.tsx";
+import { ComposerNotice, ComposerNotices } from "../ComposerNotice.tsx";
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
@@ -180,13 +182,15 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
       {menu}
+      {(shown.archived || shown.cacheCold || shown.offline) && <ComposerNotices>
+        {shown.archived && <ArchiveNotice offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
+        {shown.cacheCold && !shown.archived && <CacheColdNotice cold={shown.cacheCold} offline={shown.offline} afresh={(session) => latest.current?.afresh?.(session) ?? Promise.resolve()} />}
+        {shown.offline && <ComposerNotice mark={<Unplug size={16} />}>{shown.offlineNote ?? t("web-mobile.chat.offline")}</ComposerNotice>}
+      </ComposerNotices>}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
       <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} data-made-composer onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !noFiles) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!noFiles) upload(e.dataTransfer.files); } }}>
-        {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
-        {shown.cacheCold && <CacheColdNotice className={css.mComposerOffline} cold={shown.cacheCold} offline={shown.offline} afresh={(session) => latest.current?.afresh?.(session) ?? Promise.resolve()} />}
-        {shown.offline && <p className={css.mComposerOffline}>{shown.offlineNote ?? t("web-mobile.chat.offline")}</p>}
         <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus}
           onRef={(f) => openRefSheet(app, f, {
             // A folder goes as a zip only from the chat's own station (zipped there).

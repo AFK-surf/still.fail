@@ -9,8 +9,9 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { CacheColdNotice } from "./CacheColdNotice.tsx";
+import { ComposerNotice, ComposerNotices } from "./ComposerNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -164,9 +165,11 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       </div>
       {quoting.pop}
       {askedFile}
-      {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.cacheCold && <CacheColdNotice className={css.offlineNotice} cold={chat.cacheCold} offline={chat.offline} afresh={api.afresh} />}
-      {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
+      {(chat.archived || chat.cacheCold || chat.offline) && <ComposerNotices className={css.offlineNotice}>
+        {chat.archived && <ArchiveNotice offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
+        {chat.cacheCold && !chat.archived && <CacheColdNotice cold={chat.cacheCold} offline={chat.offline} afresh={api.afresh} />}
+        {chat.offline && <ComposerNotice mark={<Unplug size={16} />}><StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} /></ComposerNotice>}
+      </ComposerNotices>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
         toolbar={chat.cc?.length && id !== null ? <CcChooser station={station.address} thread={id} to={chat.cc} /> : undefined}
