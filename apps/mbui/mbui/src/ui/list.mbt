@@ -883,10 +883,26 @@ fn Ctx::place_list(
 }
 
 ///|
-/// Row node `r` of a list, laid out `h` tall: where rows are kept (Ctx::rows_on), as tall as whole device pixels, its
-/// room to the next row what is left of the last one (the rows' tops on the pixels together: Ctx::rows_on_pixels).
+/// Whether a list's rows are laid on the device's pixels (Ctx::row_slot, rows_on_pixels): on a host, its rows kept or
+/// not, as it draws each glyph on its pixels; in a Tester where it keeps parts as drawn (Tester::keep_parts), else as
+/// every frame of a Tester's was always laid out; not while anything reads what each frame builds as it was (a test's
+/// instance owners, a test lighting everything). Not with the parts kept as drawn (Ctx::rows_on): on a host with them,
+/// they went off with them (#2325), and a list scrolled had its words crawl again.
+fn Ctx::rows_on_grid(self : Ctx) -> Bool {
+  (fake.val is None || parts_on.val || rows_grid_test.val) && !inst_owners.on && !self.lit_every
+}
+
+///|
+/// A Tester's list rows laid on the pixels as a host lays them, its rows kept as their nodes (a test of it).
+// kept across runs: set by a test, put back by each Tester (Tester::new)
+let rows_grid_test : Ref[Bool] = Ref(false)
+
+///|
+/// Row node `r` of a list, laid out `h` tall: where rows are laid on the pixels (Ctx::rows_on_grid), as tall as whole
+/// device pixels, its room to the next row what is left of the last one (the rows' tops on the pixels together:
+/// Ctx::rows_on_pixels).
 fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
-  if !self.rows_on() {
+  if !self.rows_on_grid() {
     return h
   }
   let sc = self.scale
@@ -897,14 +913,14 @@ fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
 
 ///|
 /// A list's rows (`order`, top to bottom, laid where the list stands, each as tall as whole device pixels: row_slot)
-/// set on the device's pixels, all moved alike, less than a pixel (where rows are kept: Ctx::rows_on). Each glyph is
-/// set on the pixels where it is (Ctx::emit_text, paint_rich), so a row put a part of a pixel off them has its lines
-/// set apart, one moved a pixel and the next not as the list moves it, its words crawling: so it is as the list
-/// stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the keyboard
-/// comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole pixels, and
-/// a row drawn again is moved as its laying out there would move it (kept_rows.mbt).
+/// set on the device's pixels, all moved alike, less than a pixel (where they are laid on them: Ctx::rows_on_grid).
+/// Each glyph is set on the pixels where it is (Ctx::emit_text, paint_rich), so a row put a part of a pixel off them
+/// has its lines set apart, one moved a pixel and the next not as the list moves it, its words crawling: so it is as
+/// the list stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the
+/// keyboard comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole
+/// pixels, and a row kept is moved as its laying out there would move it (kept_nodes.mbt, kept_rows.mbt).
 fn Ctx::rows_on_pixels(self : Ctx, order : Array[Int]) -> Unit {
-  if !self.rows_on() || order.length() == 0 {
+  if !self.rows_on_grid() || order.length() == 0 {
     return
   }
   let y = self.nodes[order[0]].y

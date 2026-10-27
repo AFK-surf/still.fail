@@ -670,3 +670,29 @@ test "a list's row drawn again says again what every build of it says, but tells
   assert_eq(taps_built, 1)
   assert_eq(seen_kept, seen_built)
 }
+
+///|
+test "a list's rows kept as their nodes on the device's pixels as a host lays them: at its end as what is under them grows, dragged, flung" {
+  let foot = @signals.signal(20.0)
+  let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
+  // (as a host lays them: its rows on the pixels, kept as their nodes, no part kept as drawn; how frames are built
+  // changed by the test, the next built whole)
+  rows_grid_test.val = true
+  test_stepped()
+  t.draw()
+  assert_eq(rows_off_pixels(), [])
+  foot.set(20.37)
+  t.draw()
+  assert_eq(rows_off_pixels(), [])
+  t.press_at(200.0, 300.0)
+  t.move(200.0, 310.0)
+  t.move(200.0, 320.73)
+  assert_eq(rows_off_pixels(), [])
+  // (the rows that stayed in view kept, put back where the list lays them, on the pixels with the rest)
+  assert_true(t.rows_as_nodes().0 > 0)
+  t.move(200.0, 390.31)
+  assert_eq(rows_off_pixels(), [])
+  t.release(200.0, 390.31)
+  t.run_for(rows_fling_ms)
+  assert_eq(rows_off_pixels(), [])
+}
