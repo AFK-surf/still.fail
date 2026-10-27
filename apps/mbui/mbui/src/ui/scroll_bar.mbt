@@ -211,6 +211,31 @@ pub fn Ctx::floats_over(self : Ctx, i : Int) -> Unit {
 }
 
 ///|
+/// Where what floats over what scrolls (Ctx::floats_over) was laid out last, in the window: x, y, w, h of each.
+let floats_laid : Array[(Double, Double, Double, Double)] = []
+
+///|
+/// Once laid out: where what floats over what scrolls is, kept (Ctx::floats_laid).
+fn Ctx::floats_after_layout(self : Ctx) -> Unit {
+  floats_laid.clear()
+  for i in self.floating {
+    let f = self.nodes[i]
+    if f.fw > 0.0 && f.fh > 0.0 {
+      floats_laid.push((f.x, f.y, f.fw, f.fh))
+    }
+  }
+}
+
+///|
+/// What floats over what scrolls (Ctx::floats_over: a page's bar, a composer), where the frame laid it out last, in
+/// the window: x, y, w, h of each. For what is drawn over the page where something under such a bar is (a picture
+/// flying back into a thumbnail a page's bar is over).
+pub fn Ctx::floats_laid(self : Ctx) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  floats_laid
+}
+
+///|
 /// How much of the top and of the foot of what scrolls, `n`, in (x0 y0 x1 y1) what floats over it takes
 /// (Ctx::floats_over; not what it holds itself, which scrolls with it), with scroll_bar_clear more each, and the
 /// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does. In a part kept

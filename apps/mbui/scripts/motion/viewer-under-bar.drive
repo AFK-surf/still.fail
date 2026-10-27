@@ -1,0 +1,30 @@
+# A picture whose thumbnail the chat's bar is over opened in the viewer and closed (sfbase viewer.mbt draw_flight):
+# where the bar is, the picture flying shows as far as the bar does not. (MBUI_WIN=1280x600)
+timeout 20000
+until 发消息
+wait 1000
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -50
+wait 400
+wheel -45
+wait 400
+wheel -60
+wait 800
+until img:compare.png
+tap img:compare.png
+wait 1000
+back
+wait 1000

@@ -276,6 +276,9 @@ pub(all) struct Thumb {
   letterbox : Bool
   /// the picture it shows (its image's key), what the viewer shows of it until it has the whole: "" none of its own
   picture : String
+  /// what floats over it on its page (its bar, a composer: @ui.Ctx::floats_laid), in the window: x, y, w, h of each.
+  /// It is under them, and so is its picture flying back into it as they show again (Viewer::draw_flight).
+  under : Array[(Double, Double, Double, Double)]
 }
 
 ///|
@@ -439,7 +442,17 @@ pub fn thumb_shows(id : String) -> Double {
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
     (Some(l), Some((x, y, w, h))) if w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 =>
-      Some({ x, y, w, h, radius: l.radius, letterbox: l.letterbox, picture: l.picture })
+      Some({
+        x,
+        y,
+        w,
+        h,
+        radius: l.radius,
+        letterbox: l.letterbox,
+        picture: l.picture,
+        // (what floats across it: over the column it is in)
+        under: c.floats_laid().filter(fn(f) { f.0 < x + w && f.0 + f.2 > x }),
+      })
     _ => None
   }
 }
@@ -1817,7 +1830,10 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 /// value takes the box to the picture's place and its corners to none, and the picture from where it lies in the box
 /// to there, at its own proportions all the way. From the thumbnail where the chat lays it out now (it may move under
 /// the viewer: the keyboard let go as it opened, a message come), else where it was last. `ground`: under the picture
-/// in the box (a film's black).
+/// in the box (a film's black). The thumbnail is under what floats over its page (its bar, a composer: Thumb's
+/// `under`), and the picture flying is too as far as they show: they show as the viewer's ground goes, `p` of it,
+/// and where one is the picture is drawn that much through (none at the stage, all at the thumbnail): no edge cuts it
+/// that is not there to see.
 pub fn Viewer::draw_flight(
   self : Viewer,
   c : @ui.Ctx,
@@ -1846,15 +1862,81 @@ pub fn Viewer::draw_flight(
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
+  let bars = from.under.filter(fn(f) { f.0 < bx + bw && f.0 + f.2 > bx && f.1 < by + bh && f.1 + f.3 > by })
+  if bars.is_empty() || p >= 1.0 {
+    c.layer(fn() {
+      c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, bg=ground, fn() {
+        if picture != "" {
+          c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+    return
+  }
+  // the whole of it as far through as the bars over it let it show (`p`), and where no bar is, all of it over that:
+  // the same picture over itself, no seam where they meet
+  let piece = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double, opacity : Double) {
+    c.layer(fn() {
+      c.box(w=Px(x1 - x0), h=Px(y1 - y0), tx=x0 - bx, ty=y0 - by, clip=true, bg=ground, opacity~, fn() {
+        if picture != "" {
+          c.picture(picture, x=px - x0, y=py - y0, w=pw, h=ph, max_px=stage_px) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  }
   c.layer(fn() {
-    c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, bg=ground, fn() {
-      if picture != "" {
-        c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
+    c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, fn() {
+      piece(bx, by, bx + bw, by + bh, p)
+      for o in open_of(bx, by, bx + bw, by + bh, bars) {
+        piece(o.0, o.1, o.2, o.3, 1.0)
       }
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What of (x0 y0 x1 y1) none of `over` (x, y, w, h each) lies on: x0, y0, x1, y1 of each piece, in bands down it
+/// between their edges, and across each band between those over it there.
+fn open_of(
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  over : Array[(Double, Double, Double, Double)],
+) -> Array[(Double, Double, Double, Double)] {
+  let ys = [y0, y1]
+  for f in over {
+    for y in [f.1, f.1 + f.3] {
+      if y > y0 && y < y1 && !ys.contains(y) {
+        ys.push(y)
+      }
+    }
+  }
+  ys.sort()
+  let open = []
+  for k in 0..<(ys.length() - 1) {
+    let (ya, yb) = (ys[k], ys[k + 1])
+    // (those across this band, from the left)
+    let across = over.filter(fn(f) { f.1 <= ya && f.1 + f.3 >= yb && f.0 < x1 && f.0 + f.2 > x0 })
+    across.sort_by(fn(a, b) { a.0.compare(b.0) })
+    let mut x = x0
+    for f in across {
+      if f.0 > x {
+        open.push((x, ya, f.0, yb))
+      }
+      x = dmax(x, f.0 + f.2)
+    }
+    if x < x1 {
+      open.push((x, ya, x1, yb))
+    }
+  }
+  open
 }
 
 ///|

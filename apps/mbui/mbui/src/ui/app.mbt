@@ -314,6 +314,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.reads_after_layout()
       // how far what scrolls sideways can (sideways.mbt)
       c.sideways_after_layout()
+      // where what floats over what scrolls is (scroll_bar.mbt)
+      c.floats_after_layout()
     })
     laying.val = false
     layout_coming.val = false
