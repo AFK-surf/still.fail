@@ -24,7 +24,23 @@ pub let media_bar_top : Double = 2.0
 pub let media_key_d : Double = 32.0
 
 ///|
-pub let media_bar_h : Double = media_bar_top + media_timeline_h + media_key_d + media_bar_pad
+pub fn media_bar_h() -> Double {
+  media_bar_top + media_timeline_h() + media_row_h() + media_bar_foot()
+}
+
+///|
+/// The keys' row: as tall as a press's room (@ui.room_least: 36 with keyboard and mouse, 44 with touch), its keys (32)
+/// in its middle, so the timeline over it never takes the room they are pressed in.
+pub fn media_row_h() -> Double {
+  dmax(media_key_d, @ui.room_least())
+}
+
+///|
+/// Under the keys' row: as much less than media_bar_pad as the row is taller than its keys, the keys in the bar's foot
+/// corners concentric with them where they were.
+pub fn media_bar_foot() -> Double {
+  media_bar_pad - (media_row_h() - media_key_d) / 2.0
+}
 
 ///|
 pub let media_glass_share : Double = 0.72
@@ -41,8 +57,11 @@ pub let media_track_share : Double = 0.2
 pub let media_came_share : Double = 0.22
 
 ///|
-/// The timeline (vvTimeline): 22 high, 10 in from the bar's sides; its head (vvHead) 12 across, centred on where it is.
-pub let media_timeline_h : Double = 22.0
+/// The timeline (vvTimeline): as tall as a press's room (the web's 22 was less: @ui.room_least), its track in its
+/// middle, 10 in from the bar's sides; its head (vvHead) 12 across, centred on where it is.
+pub fn media_timeline_h() -> Double {
+  @ui.room_least()
+}
 
 ///|
 let media_head_r : Double = 6.0
@@ -184,14 +203,24 @@ pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on 
 pub let media_strong : Int = 600
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let media_bar_box : @ui.Style = @ui.css("radius=Xl3").then(
-  @ui.style(pt=room(media_bar_top), pl=room(media_bar_pad), pr=room(media_bar_pad), pb=room(media_bar_pad)),
-)
+pub fn media_bar_box() -> @ui.Style {
+  media_bar_look.then(
+    @ui.style(pt=room(media_bar_top), pl=room(media_bar_pad), pr=room(media_bar_pad), pb=room(media_bar_foot())),
+  )
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+let media_bar_look : @ui.Style = @ui.css("radius=Xl3")
+
+///|
+pub fn media_row() -> @ui.Style {
+  media_row_look.then(@ui.style(h=Fixed(media_row_h())))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let media_row_look : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 /// A group of the controls' keys (vvGroup): as far apart as makes each a press's room across (keys_gap).
@@ -208,8 +237,9 @@ let media_group_look : @ui.Style = @ui.css("row align=ACenter")
 pub let media_time_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let media_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(media_timeline_h), px=S2_5, justify=JCenter)
+pub fn media_timeline_box() -> @ui.Style {
+  @ui.style(w=Full, h=Fixed(media_timeline_h()), px=S2_5, justify=JCenter)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -25,7 +25,7 @@
 /// room fewer. The same day a profile's models side by side by series, each a row's least height: 45 room fewer.
 /// Keys in a row as far apart as makes each a press's room across (@sf.keys_gap: a bar's, the viewer's, the
 /// player's, beside 新建对话): 1432 room fewer.)
-let rooms_known : Map[String, Int] = { "room": 1047, "apart": 0, "hover": 28 }
+let rooms_known : Map[String, Int] = { "room": 647, "apart": 0, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

@@ -642,7 +642,7 @@ pub fn player_room(width : Double) -> (Double, Double) {
   }
   let (top, foot) = (viewer_host().room)()
   let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
-  (viewer_bar_h + top, media_bar_h + said + media_bar_in + foot)
+  (viewer_bar_h + top, media_bar_h() + said + media_bar_in + foot)
 }
 
 ///|
@@ -735,14 +735,14 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
 }
 
 ///|
-/// A subtitle's lines over the picture's middle: higher while the controls show (`up`), lower once they go; `right`
-/// kept clear (a list docked there).
-fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double) -> Unit {
+/// A subtitle's lines over the picture's middle: `over` off the foot while the controls show (`up`: clear of them),
+/// lower once they go; `right` kept clear (a list docked there).
+fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double, over~ : Double) -> Unit {
   if words == "" {
     return
   }
   c.layer(fn() {
-    c.box(style=if up { desk_cue_up } else { desk_cue_down }, fn() {
+    c.box(style=if up { desk_cue_look.then(@ui.style(pb=room(over))) } else { desk_cue_down }, fn() {
       c.box(style=desk_cue_row, fn() {
         c.box(style=desk_grow_middle, fn() {
           c.box(style=desk_cue_box, fn() { c.text(words, style=desk_cue_words) |> ignore }) |> ignore
@@ -1047,7 +1047,7 @@ fn desk_player(
       c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {  }) |> ignore
     })
     |> ignore
-    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, panel)
+    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, panel, over=desk_cue_over(c.width))
     // the bar along the top
     c.layer(fn() {
       // which of the folder's, its size; a film's own facts after them
@@ -1076,7 +1076,7 @@ fn desk_player(
           c.box(style=desk_grow_middle, fn() {
             let most = dmin(media_bar_most, dmax(desk_none, c.width - panel - 2.0 * media_bar_in))
             let over = if desk_narrow(c.width) { desk_time_over } else { media_bar_top }
-            let n = c.box(style=media_bar_box.then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
+            let n = c.box(style=media_bar_box().then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
               desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, picture, ink)
             })
             c.look(n, @ui.look(alpha=f.shown))
@@ -1141,7 +1141,7 @@ fn desk_play_controls(
     c.box(style=desk_time_line, fn() { c.rich(said, style=desk_time_words) |> ignore }) |> ignore
   }
   desk_play_timeline(c, p, s, fr, on, ink)
-  c.box(style=media_row, fn() {
+  c.box(style=media_row(), fn() {
     c.box(style=media_group(), fn() {
       if many && media_key(c, key + "/prev", "skip-back", t("web-pages.drive.player.prev"), on && prev is Some(_), small=true, ink~) {
         match prev {
@@ -1285,7 +1285,7 @@ fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool, ink : MediaInk) -> Unit {
   let key = p.key()
   let (volume, muted) = p.volume()
   let silent = muted || volume == 0.0
-  c.box(style=desk_volume_row, fn() {
+  c.box(style=desk_volume_row(), fn() {
     if media_key(c, key + "/mute", if silent { "volume-x" } else { "volume" }, t(if silent { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }), on, small=true, ink~) {
       p.toggle_mute()
       p.wake()
@@ -1308,7 +1308,7 @@ fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool, ink : MediaInk) -> Unit {
       _ => ()
     }
     let shown = if muted { desk_none } else { volume }
-    let b = c.box(style=desk_volume_line, id=if on { id } else { 0 }, fn() {
+    let b = c.box(style=desk_volume_line(), id=if on { id } else { 0 }, fn() {
       c.box(style=media_track.then(@ui.style(bg=Data(alpha(ink.text, media_track_share)))), fn() {
         c.layer(fn() { media_share_bar(c, shown, ink.text) }) |> ignore
       })
@@ -1331,7 +1331,7 @@ fn desk_play_timeline(c : @ui.Ctx, p : @kit.Media, s : @kit.MediaStatus, fr : Fr
   let part = fn(ms : Double) { if dur <= 0.0 { desk_none } else { dmin(desk_whole, dmax(desk_none, ms / dur)) } }
   let shown = part(p.scrubbing().unwrap_or(s.position))
   let came = part(s.buffered)
-  c.box(style=media_timeline_box, id=if on { id } else { 0 }, fn() {
+  c.box(style=media_timeline_box(), id=if on { id } else { 0 }, fn() {
     c.box(style=media_track.then(@ui.style(bg=Data(alpha(ink.text, media_track_share)))), fn() {
       c.layer(fn() { media_share_bar(c, came, alpha(ink.text, media_came_share)) }) |> ignore
       c.layer(fn() { media_share_bar(c, shown, ink.text) }) |> ignore
@@ -1496,7 +1496,7 @@ fn phone_player(
     if f.audio {
       player_cover(c, name, ink)
     }
-    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, desk_none)
+    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, desk_none, over=phone_cue_over())
     player_waits(c, p, f, ink)
     // what a double tap did, a held finger's 2×, where a finger along it has gone: said a moment in the middle
     let said = match (f.note, v.held >= 0.0, v.drag) {
@@ -1715,7 +1715,7 @@ fn phone_controls(
   p.keep_awake(c, id)
   let playing = plays(p, f)
   let inspect = picture && !playing && s.duration > 0.0
-  c.box(style=phone_controls_box.then(@ui.style(bg=Data(ink.ground))), id~, fn() {
+  c.box(style=phone_controls_box().then(@ui.style(bg=Data(ink.ground))), id~, fn() {
     c.box(style=phone_time_box, fn() {
       c.rich(where_runs(p, fr, s, playing, picture, ink), style=phone_time_words) |> ignore
     })
@@ -1806,7 +1806,7 @@ fn phone_timeline(c : @ui.Ctx, v : PlayerView, p : @kit.Media, s : @kit.MediaSta
     _ => None
   }
   let shown = part(scrub.unwrap_or(s.position))
-  c.box(style=phone_timeline_box, id=if on { id } else { 0 }, fn() {
+  c.box(style=phone_timeline_box(), id=if on { id } else { 0 }, fn() {
     c.box(style=media_track.then(@ui.style(bg=Data(alpha(ink.text, media_track_share)))), fn() {
       c.layer(fn() { media_share_bar(c, part(s.buffered), alpha(ink.text, media_came_share)) }) |> ignore
       c.layer(fn() { media_share_bar(c, shown, ink.text) }) |> ignore
@@ -1985,11 +1985,16 @@ let phone_key_r : Double = 20.0
 let player_pill_spinner : Double = 12.0
 
 ///|
-/// The controls at most 720 wide; the timeline 26 high.
+/// The controls at most 720 wide; the timeline 26 high, as tall as a press's room where that is more (@ui.room_least).
 let phone_controls_most : Double = 720.0
 
 ///|
-let phone_timeline_h : Double = 26.0
+fn phone_timeline_h() -> Double {
+  dmax(phone_timeline_least, @ui.room_least())
+}
+
+///|
+let phone_timeline_least : Double = 26.0
 
 ///|
 let player_next_w : Double = 280.0
@@ -2068,18 +2073,26 @@ let phone_index_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 let phone_foot_place : @ui.Style = @ui.css("w=Full p=S2 align=ACenter")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let phone_controls_box : @ui.Style = @ui.style(
-  w=Full,
-  max_w=Fixed(phone_controls_most),
-  px=room(phone_keys_in),
-  pt=S2,
-  pb=room(phone_keys_in),
-  radius=Xl3,
-)
+fn phone_controls_box() -> @ui.Style {
+  @ui.style(
+    w=Full,
+    max_w=Fixed(phone_controls_most),
+    px=room(phone_keys_in),
+    pt=S2,
+    pb=room(phone_controls_foot()),
+    radius=Xl3,
+  )
+}
 
 ///|
 let phone_keys_in : Double = capsule_in(card_corner, 40.0)
+
+///|
+/// Under the keys' row: as much less than phone_keys_in as the row is taller than its keys (phone_keys_row), the keys
+/// in the foot corners concentric with them where they were.
+fn phone_controls_foot() -> Double {
+  phone_keys_in - (phone_row_h() - phone_key_side) / 2.0
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2090,23 +2103,30 @@ let phone_time_box : @ui.Style = @ui.css("pl=S2_5")
 let phone_time_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-///|
 /// The timelines' track in from either side of what takes the pointer (their boxes' px).
 pub let player_track_inset : Double = @ui.Space::S2_5.px()
 
-let phone_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(phone_timeline_h), px=S2_5, justify=JCenter)
+///|
+fn phone_timeline_box() -> @ui.Style {
+  @ui.style(w=Full, h=Fixed(phone_timeline_h()), px=S2_5, justify=JCenter)
+}
 
 ///|
 /// The keys' row: 2 apart at least (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the
-/// one pressed, as far as makes each a press's room across (keys_gap); 40 high.
+/// one pressed, as far as makes each a press's room across (keys_gap); 40 high, as tall as a press's room where that is
+/// more (its keys in its middle).
 fn phone_keys_row() -> @ui.Style {
-  phone_keys_look.then(@ui.style(gap=keys_gap(size=phone_key_side)))
+  phone_keys_look.then(@ui.style(h=Fixed(phone_row_h()), gap=keys_gap(size=phone_key_side)))
+}
+
+///|
+fn phone_row_h() -> Double {
+  dmax(phone_key_side, @ui.room_least())
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_keys_look : @ui.Style = @ui.css("row w=Full h=S10 align=ACenter")
+let phone_keys_look : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// A key: 40 across, round; where the row has not the room for them all, some leave it (phone_drop_grab), none
@@ -2172,12 +2192,20 @@ let desk_pointed_words : @ui.TextStyle = @ui.text_style(size=Caption, color=OnVe
 let desk_volume_steps : Double = 20.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-let desk_volume_row : @ui.Style = @ui.css("row pr=S1_5 gap=S0_5 align=ACenter")
+/// Its mute and its line as far apart as keys are (keys_gap), so the mute is pressed in a press's room.
+fn desk_volume_row() -> @ui.Style {
+  desk_volume_look.then(@ui.style(gap=keys_gap(size=media_key_d)))
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_volume_line : @ui.Style = @ui.style(w=Fixed(desk_volume_w), h=Fixed(media_timeline_h), justify=JCenter)
+let desk_volume_look : @ui.Style = @ui.css("row pr=S1_5 align=ACenter")
+
+///|
+/// The line: as tall as a press's room, as the timeline is (media_timeline_h).
+fn desk_volume_line() -> @ui.Style {
+  @ui.style(w=Fixed(desk_volume_w), h=Fixed(media_timeline_h()), justify=JCenter)
+}
 
 ///|
 let desk_volume_w : Double = 72.0
@@ -2210,8 +2238,28 @@ let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=
 let desk_play_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
+/// A cue over a desktop's controls: as far off the foot as they reach (player_room), and 16 more (with keyboard and
+/// mouse on a wide page, the 112 it stood at before).
+fn desk_cue_over(width : Double) -> Double {
+  player_room(width).1 + desk_cue_apart
+}
+
+///|
+let desk_cue_apart : Double = 16.0
+
+///|
+/// Over a phone's controls: 112 off the foot (Player.kt), and as much more as the controls are taller where their
+/// timeline and keys' row are a press's room (phone_timeline_h, phone_row_h, phone_controls_foot).
+fn phone_cue_over() -> Double {
+  phone_cue_least + (phone_timeline_h() - phone_timeline_least) + (phone_row_h() - phone_key_side) / 2.0
+}
+
+///|
+let phone_cue_least : Double = 112.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_up : @ui.Style = @ui.css("w=Full h=Full pb=S28 justify=JEnd")
+let desk_cue_look : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
