@@ -365,6 +365,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.at\",\"text\":\"@的\",\"caret\":2}",{"at":{"start":0,"query":"的"}}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"@路线\",\"caret\":3}",{"at":{"start":0,"query":"路线"}}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"@首页\",\"caret\":3}",{"at":{"start":0,"query":"首页"}}]
+  #|["words","{\"call\":\"ref.at\",\"text\":\"@首页的\",\"caret\":4}",{"at":{"start":0,"query":"首页的"}}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 吧\",\"caret\":53}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)\",\"caret\":51}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2?history=k&entry=3)\",\"caret\":69}",{"at":null}]

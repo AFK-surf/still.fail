@@ -97,7 +97,7 @@ fn ref_found(src : Source, spec : ComposerSpec, w : Writing, focused : Bool) -> 
   if spec.session != "" {
     params["exclude"] = Json::string(spec.session)
   }
-  let topic = (src.topic)("chatSearch", params)
+  let topic = @sfbase.refs_search(src, w.key, params)
   Some((query, topic, items(topic.value, "items")))
 }
 
@@ -158,7 +158,8 @@ fn ref_menu_body(
     if c.clicked(id) {
       pick(x)
     }
-    if c.hovered(id) && i != active {
+    // (the pointer moving over a chat chooses it, as the keys do; resting, it leaves the keys' choice be)
+    if c.hand_on(id) && i != active {
       @sfbase.refs_active(draft, chats.length(), to=i) |> ignore
     }
     let b = c.box(style=(if i == active { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {

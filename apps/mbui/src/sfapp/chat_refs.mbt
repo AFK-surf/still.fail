@@ -107,7 +107,7 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
   if here != "" {
     params["exclude"] = Json::string(here)
   }
-  let topic = (src.topic)("chatSearch", params)
+  let topic = @sfbase.refs_search(src, d.key, params)
   let chats = match topic.value {
     Some(v) => items(Some(v), "items")
     None => []

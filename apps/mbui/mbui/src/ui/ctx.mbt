@@ -482,6 +482,10 @@ pub struct Ctx {
   // the ids whose choice the hand moves this frame (Ctx::hand_on: the one chosen follows the pointer), so chosen is not
   // kept lit while the hand is on another (gaps.mbt)
   hand_chooses : Set[Int]
+  // where the pointer was as the last frame began, and whether it has moved since (Ctx::hand_on: a choice follows the
+  // pointer as it moves, not while it rests)
+  mut hand_was : (Double, Double)
+  mut hand_moved : Bool
   mut lit_apart : Double
   // how far in from the sides of what holds it a row that lights up stands (Theme::lit_reach): gaps.mbt's rule 7
   mut lit_reach : Double
@@ -713,6 +717,8 @@ fn Ctx::new() -> Ctx {
     corner_fit: None,
     lit_asked: Set::new(),
     hand_chooses: Set::new(),
+    hand_was: (-1.0, -1.0),
+    hand_moved: false,
     lit_apart: 0.0,
     lit_reach: 0.0,
     lit_all: false,
@@ -1568,14 +1574,22 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
 
 ///|
 /// Whether the hand is on `id` as Ctx::lit has it, where what it changes is not `id`'s look but what is chosen (the
-/// pointer over a found line choosing it, as the keys do: the one chosen shown so, one at a time). Not a look that
-/// lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
+/// pointer over a found line choosing it, as the keys do: the one chosen shown so, one at a time). A mouse's pointer
+/// chooses as it moves onto or over `id` (the web's mousemove), not while it rests there: the keys move the choice away
+/// from under a resting pointer, and what moves under it (the list scrolled to the keys' choice, new lines come) is not
+/// chosen by it. Not a look that lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
 pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     self.hand_chooses.add(id)
     built_used(fn() { g().hand_chooses.add(id) })
   }
-  self.hand_at(id)
+  guard self.hand_at(id) else { return false }
+  if self.lit_every || pointing() is Finger {
+    return true
+  }
+  // (read so: built again as the pointer moves over it, Ctx::pointer)
+  self.pointer() |> ignore
+  self.hand_moved
 }
 
 ///|
