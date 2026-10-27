@@ -1880,6 +1880,8 @@ pub(all) struct ChatView {
   offline_note : String?
   cache_cold : (String, String, Bool)?
   state : (String, String, String)?
+  state_ask : Double?
+  ask_clear : Bool
   archived : Bool
   archivable : Bool
   pending : Bool

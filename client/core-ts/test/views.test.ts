@@ -1483,7 +1483,7 @@ test("an_agents_need_without_a_card_is_let_go_where_the_chats_end_says_it", asyn
   t.set(threads("ws/a"), [thread(7, ["k"], now)]);
   const asks = { ...entry(2, "你在手机上试一下新的列表"), authorKind: "agent", author: "k", ending: "need_help" };
   t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "做吧"), asks], thread: null });
-  const agent = { ...session("k"), lastTurn: { ending: "need_help", need: "在手机上试新列表", startedAt: 1, endedAt: 2 } };
+  const agent = { ...session("k"), lastTurn: { id: "t", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed", declared: "block", ending: "need_help", need: "在手机上试新列表" } };
   const chatRow = { ...row("k", now), thread: 7, agents: [agent], need: { seq: 2, message: { seq: 2, text: "你在手机上试一下新的列表" }, before: [] } };
   t.set(rows("ws/a"), [chatRow]);
   await t.read(u, 1);

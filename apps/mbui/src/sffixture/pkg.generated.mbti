@@ -435,6 +435,8 @@ pub let me : Json
 
 pub fn msg(Int32, String, Json, String, String, Map[String, Json]) -> Json
 
+pub let need_state : (String, String, String)
+
 pub let new_fix : NewFix
 
 pub fn novel_text() -> String
