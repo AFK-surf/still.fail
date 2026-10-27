@@ -1684,9 +1684,267 @@ pub let share_terminal_palette : Array[Int64] = [
 pub let share_terminal_dot : Int64 = 0xE6E6E640L
 
 ///|
+/// The game and paper looks' colours (2026-10-27 用户：「平面也能做骚，比如经典游戏的风格」「整一点经典的东西进去」「搞十个
+/// 不同类型的」, sfpages' share_games.mbt, share_classics.mbt), each the same in either theme. Their words' contrast held as
+/// every other's (docs/ui-panels.md 对比度).
+pub let share_white : Int64 = 0xFFFFFFFFL
+
+///|
+pub let share_black : Int64 = 0x000000FFL
+
+///|
+/// The dot matrix's square (5 by 7, so 9 makes a figure 45 by 63) and the hairline between squares.
+pub let share_dot_cell : Double = 9.0
+
+///|
+pub let share_dot_gap : Double = 1.0
+
+///|
+/// 掌机: a handheld's four greens, darkest to lightest (its darkest on its lightest 6.0 to 1, on the light 5.0).
+pub let share_pocket_ink : Int64 = 0x0F380FFFL
+
+///|
+pub let share_pocket_mid : Int64 = 0x306230FFL
+
+///|
+pub let share_pocket_light : Int64 = 0x8BAC0FFFL
+
+///|
+pub let share_pocket_ground : Int64 = 0x9BBC0FFFL
+
+///|
+/// A block of its well.
+pub let share_pocket_block : Double = 16.0
+
+///|
+/// 方块: a voxel game's sky (its ink 10.6 to 1, the dimmer 7.1), its blocks 12 across seen 6 deep, grass on dirt.
+pub let share_blocks_sky : Int64 = 0x9DD3FFFFL
+
+///|
+pub let share_blocks_ink : Int64 = 0x1D1D1DFFL
+
+///|
+pub let share_blocks_dim : Int64 = 0x2E3B4EFFL
+
+///|
+pub let share_block_cell : Double = 12.0
+
+///|
+pub let share_block_deep : Double = 6.0
+
+///|
+/// The ground's blocks under its sky, each twice the words' (12 of 24 across and their depth: inside the picture's 320).
+pub let share_ground_blocks : Int = 12
+
+///|
+/// The colours of a block: its front, its top, its right side; the front's band where nothing is over it (grass on
+/// dirt), the top's; the specks on its front (a texture's), the lines round its faces.
+pub(all) struct BlockInks {
+  front : Int64
+  top : Int64
+  side : Int64
+  band : Int64
+  band_side : Int64
+  speck : Int64
+  line : Int64
+}
+
+///|
+/// Its grass block: the dirt's front, the grass's top, the dirt's shaded side; the grass over the front and the side
+/// where nothing is on it; the dirt's specks; the lines round the faces.
+pub let share_grass_inks : BlockInks = {
+  front: 0x8B5A2BFFL,
+  top: 0x6DBA3FFFL,
+  side: 0x6B4423FFL,
+  band: 0x5FA83AFFL,
+  band_side: 0x4C8A2EFFL,
+  speck: 0x7A4E24FFL,
+  line: 0x2A1A0E66L,
+}
+
+///|
+/// Its tooltip: the night, a violet rim, the white for its name, a grey, a gold and an aqua for the rest.
+pub let share_tip_ground : Int64 = 0x100010FFL
+
+///|
+pub let share_tip_rim : Int64 = 0x5A2DD6FFL
+
+///|
+pub let share_tip_grey : Int64 = 0xAAAAAAFFL
+
+///|
+pub let share_tip_gold : Int64 = 0xFFFF55FFL
+
+///|
+pub let share_tip_aqua : Int64 = 0x55FFFFFFL
+
+///|
+/// 街机: an arcade's night, its scan lines the white barely; its whites, reds, cyans and yellows; each rank of its table
+/// the next of these.
+pub let share_arcade_ground : Int64 = 0x07070AFFL
+
+///|
+pub let share_arcade_white : Int64 = 0xF2F2F2FFL
+
+///|
+pub let share_arcade_shade : Int64 = 0xD02040FFL
+
+///|
+pub let share_arcade_red : Int64 = 0xFF3B3BFFL
+
+///|
+pub let share_arcade_cyan : Int64 = 0x3BE8FFFFL
+
+///|
+pub let share_arcade_yellow : Int64 = 0xFFE14DFFL
+
+///|
+pub let share_arcade_dim : Int64 = 0x9A9AA5FFL
+
+///|
+pub let share_arcade_scan : Int64 = 0xFFFFFF0AL
+
+///|
+// kept across runs: a table, never written
+pub let share_arcade_rows : Array[Int64] = [0xFF3B3BFFL, 0xFFE14DFFL, 0x3BE8FFFFL, 0x7CFF5CFFL, 0xFF5CE1FFL]
+
+///|
+/// How far its scan lines go down (past the picture's foot: cut there), its table's rank's and score's columns.
+pub let share_scan_h : Double = 720.0
+
+///|
+pub let share_arcade_rank_w : @ui.Len = Fixed(48.0)
+
+///|
+pub let share_arcade_score_w : @ui.Len = Fixed(72.0)
+
+///|
+/// RPG: a role-playing game's blue window (its gold 11.3 to 1, the dim 8.5), HP's green on the white thinned.
+pub let share_rpg_ground : Int64 = 0x14145CFFL
+
+///|
+pub let share_rpg_gold : Int64 = 0xFFD24AFFL
+
+///|
+pub let share_rpg_dim : Int64 = 0xB8B8E0FFL
+
+///|
+pub let share_rpg_track : Int64 = 0xFFFFFF33L
+
+///|
+pub let share_rpg_hp : Int64 = 0x5CE65CFFL
+
+///|
+/// 扫雷: the old desktop's teal (white on it 4.8 to 1), its navy title bar, its greys; a counter's red segments lit and
+/// dark; the field's figures, each the next of the game's own deepened as far as the grey asks (4.5 to 1).
+pub let share_mines_desk : Int64 = 0x008080FFL
+
+///|
+pub let share_mines_title : Int64 = 0x000080FFL
+
+///|
+pub let share_bevel_dark : Int64 = 0x808080FFL
+
+///|
+pub let share_bevel_face : Int64 = 0xC0C0C0FFL
+
+///|
+pub let share_led_on : Int64 = 0xFF0000FFL
+
+///|
+pub let share_led_off : Int64 = 0x3A0000FFL
+
+///|
+pub let share_segment_h : Double = 32.0
+
+///|
+// kept across runs: a table, never written
+pub let share_mines_figures : Array[Int64] = [
+  0x0000FFFFL, 0x005000FFL, 0x900000FFL, 0x000080FFL, 0x800000FFL, 0x004848FFL, 0x000000FFL, 0x4A4A4AFFL,
+]
+
+///|
+/// 成就: a console's night, its toast's lighter night, its trophy's gold (10 to 1), its dim.
+pub let share_trophy_ground : Int64 = 0x0E1116FFL
+
+///|
+pub let share_trophy_toast : Int64 = 0x1E2530FFL
+
+///|
+pub let share_trophy_gold : Int64 = 0xFFC83DFFL
+
+///|
+pub let share_trophy_dim : Int64 = 0xA7AFBFFFL
+
+///|
+/// 报纸: newsprint, its ink, the ink thinned (5.6 to 1).
+pub let share_paper_ground : Int64 = 0xF4F1E8FFL
+
+///|
+pub let share_paper_ink : Int64 = 0x161616FFL
+
+///|
+pub let share_paper_dim : Int64 = 0x161616A8L
+
+///|
+/// 黄历: its paper, its vermilion (5.2 to 1), its ink and the ink thinned (4.9).
+pub let share_almanac_ground : Int64 = 0xF6EEDCFFL
+
+///|
+pub let share_almanac_red : Int64 = 0xB8322AFFL
+
+///|
+pub let share_almanac_ink : Int64 = 0x2A1F1AFFL
+
+///|
+pub let share_almanac_dim : Int64 = 0x2A1F1AA8L
+
+///|
+/// 登机牌: its white, an airline's blue (6.4 to 1), its ink and the ink thinned (4.9).
+pub let share_boarding_ground : Int64 = 0xF7F8FAFFL
+
+///|
+pub let share_boarding_blue : Int64 = 0x1F4FD1FFL
+
+///|
+pub let share_boarding_ink : Int64 = 0x15171CFFL
+
+///|
+pub let share_boarding_dim : Int64 = 0x15171C9EL
+
+///|
+/// 奖状: its red, its gold (on the red 5.0 to 1), its paper and ink.
+pub let share_award_red : Int64 = 0xA0141CFFL
+
+///|
+pub let share_award_gold : Int64 = 0xF5C542FFL
+
+///|
+pub let share_award_paper : Int64 = 0xFFF8E7FFL
+
+///|
+pub let share_award_ink : Int64 = 0x2A1A12FFL
+
+///|
+/// A look's small picture under the card (share_looks_pick) and its room: as wide as a press's least with touch, its
+/// picture 30 by 40 in it.
+pub let share_look_item_w : @ui.Len = Fixed(44.0)
+
+///|
 /// The looks to choose under the card shared, each a small picture of it: a portrait 36 by 48 in its own ground (a
-/// small block's corner), a ring round the chosen one 3 out (concentric), its name under it.
-pub let share_look_tile : @ui.Style = @ui.style(w=Fixed(36.0), h=Fixed(48.0), radius=small_radius, clip=true)
+/// small block's corner, an edge round it: share_look_edge), a ring round the chosen one 3 out (concentric).
+pub let share_look_tile : @ui.Style = @ui.style(
+  w=Fixed(30.0),
+  h=Fixed(40.0),
+  radius=small_radius,
+  clip=true,
+  border=B1,
+  border_color=Data(share_look_edge),
+)
+
+///|
+/// Each small picture's edge: the white at 30%, seen round the darkest of them on the stage's night.
+pub let share_look_edge : Int64 = 0xF4F4F54DL
 
 ///|
 pub let share_look_in : @ui.Space = room(3.0)

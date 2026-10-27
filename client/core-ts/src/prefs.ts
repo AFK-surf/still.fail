@@ -55,7 +55,7 @@ export function badgeKindsOf(prefs: unknown): BadgeKinds {
 }
 
 /// The looks the card shared can be drawn in (`shareLook`, chosen under it): none kept, night.
-export const SHARE_LOOKS = ["night", "poster", "receipt", "terminal"];
+export const SHARE_LOOKS = ["night", "poster", "receipt", "terminal", "pocket", "blocks", "arcade", "rpg", "mines", "trophy", "paper", "almanac", "boarding", "award"];
 
 export type ArchiveHint = "off" | "done" | "reviewed";
 

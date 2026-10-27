@@ -4,14 +4,21 @@
 // night (stations_now.mbt night_look, all of it), 大字报 (one number as large as the picture holds, still.fail's orange
 // to its edges, a line under it), 小票 (a till's receipt: each day a line of the chats archived, the week's spend its
 // total, a barcode) and 终端 (a fetch run in a terminal: still.fail's mark beside who it is, a line a figure, the
-// palette). Each 360 wide as it is (@sf.share_w_most), nothing cut short, the same in either theme, as a poster is. The
+// palette); the games' and the papers' (share_games.mbt, share_classics.mbt). Each 360 wide as it is (@sf.share_w_most), nothing cut short, the same in either theme, as a poster is. The
 // code face only for what a till or a terminal prints in it (figures, dates, keys, the command): words of Chinese in
 // it stand a cell apart (「9  个对话」), so what is said is in the face of words.
 
 ///|
 /// The looks, in the order they are offered.
 // kept across runs: a table, never written
-let share_looks : Array[String] = ["night", "poster", "receipt", "terminal"]
+let share_looks : Array[String] = [
+  "night", "poster", "receipt", "terminal", "pocket", "blocks", "arcade", "rpg", "mines", "trophy", "paper", "almanac",
+  "boarding", "award",
+]
+
+///|
+/// How many looks a row of the pick holds (two rows of seven: a small screen's width, each a press's room).
+let looks_a_row : Int = 7
 
 ///|
 /// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the night).
@@ -25,23 +32,33 @@ fn share_look(src : Source) -> String {
 }
 
 ///|
-/// Under the picture, over its buttons: each look a small picture of it, its name under it, the chosen one ringed; a
-/// press on another draws the card in it at once and keeps it the device's (`prefs.set`).
+/// Under the picture, over its buttons: the chosen look's name, then each look a small picture of it in rows of seven
+/// (fourteen: a name under each had not the room), the chosen one ringed, its name its button's; a press on another
+/// draws the card in it at once and keeps it the device's (`prefs.set`).
 fn share_looks_pick(c : @ui.Ctx, src : Source) -> Unit {
   let now = share_look(src)
-  c.box(style=looks_row, fn() {
-    for look in share_looks {
-      let id = c.id("share-card/look/" + look)
-      let on = look == now
-      let name = @sf.t("web-main.stations.shareLook." + look)
-      let b = c.box(style=looks_item, id~, fn() {
-        c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look) }) |> ignore
-        c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
+  c.box(style=looks_box, fn() {
+    c.text(@sf.t("web-main.stations.shareLook." + now), style=looks_name_on) |> ignore
+    for row in 0..<((share_looks.length() + looks_a_row - 1) / looks_a_row) {
+      c.box(style=looks_row, fn() {
+        for k in (row * looks_a_row)..<@cmp.minimum(share_looks.length(), (row + 1) * looks_a_row) {
+          let look = share_looks[k]
+          let id = c.id("share-card/look/" + look)
+          let on = look == now
+          let name = @sf.t("web-main.stations.shareLook." + look)
+          let b = c.box(style=looks_item, id~, fn() {
+            c.box(style=if on { looks_ring_on } else if c.lit(id) { looks_ring_lit } else { looks_ring }, fn() {
+              look_tile(c, look)
+            })
+            |> ignore
+          })
+          c.semantics(b, Button, id~, label=name, selected=on)
+          if c.clicked(id) && !on {
+            (src.call)("prefs.set", { "shareLook": Json::string(look) }, fn(_) {  })
+          }
+        }
       })
-      c.semantics(b, Button, id~, label=name, selected=on)
-      if c.clicked(id) && !on {
-        (src.call)("prefs.set", { "shareLook": Json::string(look) }, fn(_) {  })
-      }
+      |> ignore
     }
   })
   |> ignore
@@ -54,17 +71,28 @@ fn look_tile(c : @ui.Ctx, look : String) -> Unit {
     "poster" => (@sf.share_poster_ground, @sf.share_poster_ink, @sf.share_poster_dim, @sf.share_poster_ink)
     "receipt" => (@sf.share_receipt_ground, @sf.share_receipt_ink, @sf.share_receipt_dim, @sf.share_receipt_orange)
     "terminal" => (@sf.share_terminal_ground, @sf.share_orange, @sf.share_terminal_dim, @sf.share_terminal_dim)
+    "pocket" => (@sf.share_pocket_ground, @sf.share_pocket_ink, @sf.share_pocket_mid, @sf.share_pocket_ink)
+    "blocks" => (@sf.share_blocks_sky, @sf.share_grass_inks.top, @sf.share_grass_inks.front, @sf.share_grass_inks.top)
+    "arcade" => (@sf.share_arcade_ground, @sf.share_arcade_white, @sf.share_arcade_red, @sf.share_arcade_yellow)
+    "rpg" => (@sf.share_rpg_ground, @sf.share_white, @sf.share_rpg_hp, @sf.share_rpg_gold)
+    "mines" => (@sf.share_bevel_face, @sf.share_mines_title, @sf.share_bevel_dark, @sf.share_led_on)
+    "trophy" => (@sf.share_trophy_ground, @sf.share_trophy_gold, @sf.share_trophy_dim, @sf.share_trophy_gold)
+    "paper" => (@sf.share_paper_ground, @sf.share_paper_ink, @sf.share_paper_dim, @sf.share_paper_ink)
+    "almanac" => (@sf.share_almanac_ground, @sf.share_almanac_red, @sf.share_almanac_dim, @sf.share_almanac_red)
+    "boarding" => (@sf.share_boarding_ground, @sf.share_boarding_blue, @sf.share_boarding_dim, @sf.share_boarding_blue)
+    "award" => (@sf.share_award_red, @sf.share_award_gold, @sf.share_award_paper, @sf.share_award_gold)
     _ => (@sf.share_ground, @sf.share_ink, @sf.share_dim, @sf.share_orange)
   }
-  c.box(style=@sf.share_look_tile.then(@ui.style(bg=Data(ground))), fn() {
+  // (a picture of the look, in its colours: as a logo's, asked no contrast of its own parts)
+  let tile = c.box(style=@sf.share_look_tile.then(@ui.style(bg=Data(ground))), fn() {
     c.box(style=tile_inner, fn() {
-      c.box(style=tile_dot.then(@ui.style(bg=Data(dot))), fn() {  }) |> ignore
-      c.box(style=tile_line.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
-      c.box(style=tile_short.then(@ui.style(bg=Data(dim))), fn() {  }) |> ignore
+      c.own_colours(c.box(style=tile_dot.then(@ui.style(bg=Data(dot))), fn() {  }))
+      c.own_colours(c.box(style=tile_line.then(@ui.style(bg=Data(ink))), fn() {  }))
+      c.own_colours(c.box(style=tile_short.then(@ui.style(bg=Data(dim))), fn() {  }))
     })
     |> ignore
   })
-  |> ignore
+  c.own_colours(tile)
 }
 
 ///|
@@ -366,14 +394,19 @@ fn prompt(c : @ui.Ctx, command : String) -> Unit {
 // ── the picker's styles ──────────────────────────────────────────────────
 
 ///|
-/// The looks side by side, 12 apart, in the stage's middle.
+/// The chosen one's name over the rows, 8 apart, in the stage's middle.
 // kept across runs: a value (no field of it changes)
-let looks_row : @ui.Style = @ui.css("row gap=S3 justify=JCenter")
+let looks_box : @ui.Style = @ui.css("gap=S2 align=ACenter")
 
 ///|
-/// A look: its small picture over its name, 6 apart, as wide as its name or its ring.
+/// A row of looks, each a press's room wide, side by side.
 // kept across runs: a value (no field of it changes)
-let looks_item : @ui.Style = @ui.css("gap=S1_5 align=ACenter")
+let looks_row : @ui.Style = @ui.css("row justify=JCenter")
+
+///|
+/// A look: its small picture in the middle of its room.
+// kept across runs: a value (no field of it changes)
+let looks_item : @ui.Style = @ui.css("align=ACenter justify=JCenter").then(@ui.style(w=@sf.share_look_item_w))
 
 ///|
 /// The ring round a small picture: none but the chosen one's (the white), as far out either way.
@@ -385,13 +418,14 @@ let looks_ring : @ui.Style = @ui.style(p=@sf.share_look_in, radius=@sf.share_loo
 let looks_ring_on : @ui.Style = looks_ring.then(@ui.style(border_color=Data(@sf.share_ink)))
 
 ///|
-/// Its name: the white thinned, the white chosen or under the hand.
+/// Under the hand: the white thinned.
 // kept across runs: a value (no field of it changes)
-let looks_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_dim), wrap=false)
+let looks_ring_lit : @ui.Style = looks_ring.then(@ui.style(border_color=Data(@sf.share_dim)))
 
 ///|
+/// The chosen one's name: the white, as the stage's words.
 // kept across runs: a value (no field of it changes)
-let looks_name_on : @ui.TextStyle = looks_name.then(@ui.text_style(color=Data(@sf.share_ink)))
+let looks_name_on : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Data(@sf.share_ink), wrap=false)
 
 ///|
 /// A small picture's insides: its dot, its line, its shorter line, 6 in, 4 apart.

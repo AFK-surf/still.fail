@@ -277,8 +277,8 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "files-add-folder" {
     @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
   }
-  // (share-card-dark: over the dark theme; share-card-poster, -receipt, -terminal: in those looks)
-  if mode == "share-card" || mode == "share-card-dark" || mode == "share-card-poster" || mode == "share-card-receipt" || mode == "share-card-terminal" {
+  // (share-card-dark: over the dark theme; share-card-<look>: in that look)
+  if mode == "share-card" || mode.has_prefix("share-card-") {
     @sfpages.share_card_open(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" })
   }
   if mode == "chat-station-files" {

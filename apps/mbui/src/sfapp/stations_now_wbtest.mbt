@@ -85,6 +85,16 @@ test "the card to share's looks: each chosen under it draws the picture in it at
       ("大字报", "489%", "OpenCode Go 订阅"),
       ("小票", "5 个", "9 个对话正在运行"),
       ("终端", "still.fail fetch", "10/20"),
+      ("掌机", "PRESS START", "10/20"),
+      ("方块", "今天用了 3 台设备", "10/20"),
+      ("街机", "INSERT COIN", "10/20"),
+      ("RPG", "GOLD", "10/20"),
+      ("扫雷", "still.fail.exe", "10/20"),
+      ("成就", "成就解锁", "10/20"),
+      ("报纸", "still.fail 日报", "10/20"),
+      ("黄历", "盯着进度条", "10/20"),
+      ("登机牌", "SF489", "10/20"),
+      ("奖状", "特发此状，以资鼓励。", "10/20"),
       ("夜色", "用 6 个 Claude 订阅账号消耗了", "5 个"),
     ] {
       t.click(Button, label=look.0)
@@ -97,7 +107,10 @@ test "the card to share's looks: each chosen under it draws the picture in it at
       let png = if at.2 == 2 {
         t.click(Button, label="保存到相册")
         t.run_for(@kit.presence_in_ms)
-        t.kept()[t.kept().length() - 1].2
+        let png = t.kept()[t.kept().length() - 1].2
+        // (已保存到相册 gone from over the looks before the next is pressed)
+        t.run_for(@sf.toast_ms + @kit.presence_in_ms)
+        png
       } else {
         t.click(Button, label="复制图片")
         t.frame()

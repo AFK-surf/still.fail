@@ -1024,11 +1024,11 @@ pub fn fixture(mode : String) -> Source {
     queue_set_aside: {},
     queue_was: { "key": Json::null(), "at": 0 },
     sidebars: {},
-    share_look: match mode {
-      "share-card-poster" => "poster"
-      "share-card-receipt" => "receipt"
-      "share-card-terminal" => "terminal"
-      _ => ""
+    // (share-card-<look>: the card opened in that look; share-card-dark is the night over the dark theme)
+    share_look: if mode.has_prefix("share-card-") && !mode.has_suffix("-dark") {
+      mode.view(start_offset=11).to_string()
+    } else {
+      ""
     },
   }
   if f.mode == "home-motion" {

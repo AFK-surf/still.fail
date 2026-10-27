@@ -80,6 +80,16 @@ fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool
     "poster" => poster_look(c, fleet, id, flat)
     "receipt" => receipt_look(c, fleet, id, flat)
     "terminal" => terminal_look(c, fleet, id, flat)
+    "pocket" => pocket_look(c, fleet, id, flat)
+    "blocks" => blocks_look(c, fleet, id, flat)
+    "arcade" => arcade_look(c, fleet, id, flat)
+    "rpg" => rpg_look(c, fleet, id, flat)
+    "mines" => mines_look(c, fleet, id, flat)
+    "trophy" => trophy_look(c, fleet, id, flat)
+    "paper" => paper_look(c, fleet, id, flat)
+    "almanac" => almanac_look(c, fleet, id, flat)
+    "boarding" => boarding_look(c, fleet, id, flat)
+    "award" => award_look(c, fleet, id, flat)
     _ => night_look(c, fleet, id, flat)
   }
 }
