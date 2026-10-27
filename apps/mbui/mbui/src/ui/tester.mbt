@@ -354,6 +354,7 @@ pub fn Tester::new(
   // Tester::keep_parts)
   parts_on.val = false
   drawn_again_on.val = true
+  rows_grid_test.val = false
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
