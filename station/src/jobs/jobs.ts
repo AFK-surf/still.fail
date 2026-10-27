@@ -355,9 +355,31 @@ export class Jobs {
     this.notifyUrl = url;
   }
 
+  /// Who hears that a remote task's job changed (it ended, or said something): Remote, which tells the station that
+  /// asked for it.
+  private remoteHeard: ((job: JobRow) => void)[] = [];
+
+  /// `f` whenever a remote task's job ends or says something.
+  onRemote(f: (job: JobRow) => void): void {
+    this.remoteHeard.push(f);
+  }
+
+  private remoteChanged(id: string): void {
+    if (!id.startsWith("remote_")) return;
+    const job = this.store.getJob(id);
+    if (!job) return;
+    for (const f of this.remoteHeard) {
+      try {
+        f(job);
+      } catch (error) {
+        log.warn("jobs", "remote task change not heard", { job: id, error: (error as Error).message });
+      }
+    }
+  }
+
   /// A remote task's notices are kept by its job and returned to the source station by Remote, not told here.
   private tell(job: JobRow, text: string): void {
-    if (job.sessionKey.startsWith("remote:")) return;
+    if (job.sessionKey.startsWith("remote:")) return this.remoteChanged(job.id);
     try {
       this.notify(job.sessionKey, text);
     } catch (error) {
@@ -819,6 +841,7 @@ export class Jobs {
     if (!job) return;
     if (stopped) {
       this.store.jobEnded(id, "stopped", code);
+      this.remoteChanged(id);
       return;
     }
     const said = code !== null ? `exit code ${code}` : "a signal";
@@ -904,6 +927,7 @@ export class Jobs {
         this.store.forgetProcess(entry.pgid);
       }
       this.store.jobEnded(id, "stopped", job.exitCode);
+      this.remoteChanged(id);
     }
     return this.store.getJob(id) ?? job;
   }
@@ -989,6 +1013,7 @@ export class Jobs {
       // it again. Its stable task id remains queryable and cannot be reused.
       if (job.id.startsWith("remote_")) {
         this.store.jobEnded(job.id, "failed", null);
+        this.remoteChanged(job.id);
         continue;
       }
       try {
