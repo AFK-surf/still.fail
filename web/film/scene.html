@@ -22,9 +22,10 @@
   #fade { position: absolute; inset: 0; background: #000; opacity: 0; }
   #end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; background: #f6f5f2; color: #17181b; }
   #end h1 { font-family: "Inter", -apple-system, "Helvetica Neue", sans-serif; font-size: 112px; font-weight: 700; letter-spacing: -3px; }
+  #end .credits { position: absolute; bottom: 48px; left: 0; right: 0; text-align: center; font-size: 15px; line-height: 24px; color: #8a8c92; }
   #end p { margin-top: 26px; font-size: 34px; color: #5d5f66; font-weight: 500; letter-spacing: .5px; }
 </style>
-<script type="importmap">{ "imports": { "three": "./vendor/node_modules/three/build/three.module.js", "three/addons/": "./vendor/node_modules/three/examples/jsm/" } }</script>
+<script type="importmap">{ "imports": { "three": "./vendor/node_modules/three/build/three.module.js", "three/addons/": "./vendor/node_modules/three/examples/jsm/", "three/examples/jsm/": "./vendor/node_modules/three/examples/jsm/", "n8ao": "./vendor/node_modules/n8ao/dist/N8AO.js", "postprocessing": "./vendor/node_modules/postprocessing/build/index.js" } }</script>
 </head>
 <body>
 <div id="tags"></div>
@@ -32,11 +33,15 @@
 <div class="caption" id="cap"><h2></h2><p></p></div>
 <div id="clock" style="opacity:0"><small>快进</small><span id="clockText">8:41</span></div>
 <div id="fade"></div>
-<div id="end"><h1>One devices.</h1><p>still.fail</p></div>
+<div id="end"><h1>One devices.</h1><p>still.fail</p><small class="credits">3D 模型（CC BY 4.0）：iPhone 17 Pro · Ibrahim.Bhl　MacBook Pro M3 16 · jackbaeten　Apple Studio Display · alboxer2000_　Mac Mini M4 · B41dur　Asus PC Gaming Monitor · Artik　Custom Gaming PC · Yolala1232<br>环境光照、材质、植物：Poly Haven（CC0）</small></div>
+<script>addEventListener('error', (e) => { window.failed = String(e.message); console.error(e.message); }); addEventListener('unhandledrejection', (e) => { window.failed = String(e.reason); console.error(String(e.reason?.stack ?? e.reason)); });</script>
 <script type="module">
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { N8AOPass } from 'n8ao';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
@@ -63,88 +68,164 @@ renderer.toneMappingExposure = 1.0;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.75;
 const camera = new THREE.PerspectiveCamera(32, W / H, 0.01, 60);
 
-// ---- Materials ----
+// ---- Materials and the room's surfaces (Poly Haven's, CC0) ----
 const physical = (o) => new THREE.MeshPhysicalMaterial(o);
-const ALU = physical({ color: 0xc9cbd0, metalness: 1, roughness: 0.3 });
-const ALU_DARK = physical({ color: 0x55575c, metalness: 1, roughness: 0.34 });
-const BLACK = physical({ color: 0x18191b, metalness: 0.5, roughness: 0.42 });
-const GLASS = physical({ color: 0x050506, metalness: 0, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.04 });
-const TITANIUM = physical({ color: 0x8f8a83, metalness: 1, roughness: 0.25 });
-
-/** A canvas texture drawn by `draw` (w × h px). */
-function painted(w, h, draw, repeat) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); }
+const texLoader = new THREE.TextureLoader();
+/** A texture of assets/, `repeat` times across, its colours as colours (srgb) or as numbers. */
+function tex(name, repeat = [1, 1], srgb = true) {
+  const t = texLoader.load(`assets/${name}`);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); t.anisotropy = 16;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
-// The desk's wood: oak, its grain along it (seeded, the same every time).
-let seed = 7;
-const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const WOOD = painted(2048, 512, (g, w, h) => {
-  g.fillStyle = '#b48a5f'; g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 260; i++) {
-    const y = rand() * h, a = 0.04 + rand() * 0.08;
-    g.strokeStyle = rand() > 0.5 ? `rgba(90,58,30,${a})` : `rgba(230,200,160,${a})`;
-    g.lineWidth = 1 + rand() * 3;
-    g.beginPath(); g.moveTo(0, y);
-    for (let x = 0; x <= w; x += 64) g.lineTo(x, y + Math.sin(x / (180 + rand() * 80) + i) * (4 + rand() * 6));
-    g.stroke();
-  }
-});
+const BLACK = physical({ color: 0x18191b, metalness: 0.5, roughness: 0.42 });
+const rgbe = new RGBELoader();
+const hdr = (name) => new Promise((ok) => rgbe.load(`assets/${name}`, (t) => { t.mapping = THREE.EquirectangularReflectionMapping; ok(t); }));
+const [officeHdr, metroHdr] = await Promise.all([hdr('office.hdr'), hdr('metro.hdr')]);
+const officeEnv = pmrem.fromEquirectangular(officeHdr).texture;
+const metroEnv = pmrem.fromEquirectangular(metroHdr).texture;
+scene.environment = officeEnv;
+scene.environmentIntensity = 0.9;
 
 // ---- The room ----
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), physical({ color: 0xcfc8be, roughness: 0.85 }));
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), physical({ map: tex('floor_diff.jpg', [5, 5]), roughness: 0.55 }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const wall = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), physical({ color: 0xece8e1, roughness: 0.95 }));
-wall.position.set(0, 4, -1.3); wall.receiveShadow = true; scene.add(wall);
+const wall = new THREE.Mesh(new THREE.PlaneGeometry(12, 5), physical({ map: tex('wall_diff.jpg', [4, 2]), normalMap: tex('wall_nor.jpg', [4, 2], false), color: 0xf3efe8, roughness: 0.92 }));
+wall.position.set(0, 2.5, -1.3); wall.receiveShadow = true; scene.add(wall);
 const DESK_Y = 0.75;
-const desk = new THREE.Mesh(new RoundedBoxGeometry(3.0, 0.036, 1.05, 4, 0.008), physical({ map: WOOD, roughness: 0.48, clearcoat: 0.25, clearcoatRoughness: 0.4 }));
+const desk = new THREE.Mesh(new RoundedBoxGeometry(3.0, 0.036, 1.05, 4, 0.006),
+  physical({ map: tex('wood_diff.jpg', [2.4, 0.9]), roughnessMap: tex('wood_rough.jpg', [2.4, 0.9], false), normalMap: tex('wood_nor.jpg', [2.4, 0.9], false), roughness: 1, clearcoat: 0.15, clearcoatRoughness: 0.5 }));
 desk.position.set(0, DESK_Y - 0.018, -0.2); desk.castShadow = desk.receiveShadow = true; scene.add(desk);
 for (const x of [-1.42, 1.42]) for (const z of [-0.66, 0.26]) {
   const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, DESK_Y - 0.036, 0.04), BLACK);
   leg.position.set(x, (DESK_Y - 0.036) / 2, z); leg.castShadow = true; scene.add(leg);
 }
-// A plant at the end of the desk, so it is a room someone works in.
-const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.14, 40), physical({ color: 0xe9e4dc, roughness: 0.6 }));
-pot.position.set(-1.3, DESK_Y + 0.07, -0.55); pot.castShadow = true; scene.add(pot);
-for (let i = 0; i < 14; i++) {
-  const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), physical({ color: 0x4f7a4a, roughness: 0.7 }));
-  const a = i * 2.4, r = 0.03 + (i % 4) * 0.018;
-  leaf.scale.set(0.55, 1.4, 0.25);
-  leaf.position.set(-1.3 + Math.cos(a) * r, DESK_Y + 0.2 + (i % 5) * 0.035, -0.55 + Math.sin(a) * r);
-  leaf.rotation.set(Math.sin(a) * 0.6, a, Math.cos(a) * 0.6);
-  leaf.castShadow = true; scene.add(leaf);
-}
 
-// ---- Light: a window's, from the left, and the room's ----
-const sun = new THREE.DirectionalLight(0xfff3e2, 2.6);
-sun.position.set(-3, 5, 3.5); sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = 6; sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.01;
-Object.assign(sun.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 15 });
+// ---- Light: a window's, from the left, and the room's (the HDR) ----
+const sun = new THREE.DirectionalLight(0xfff1de, 2.2);
+sun.position.set(-3, 4.5, 3); sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = 8; sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.01;
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 12 });
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xf4f1ec, 0xb9ad9c, 0.55));
+
+// ---- The machines: public models (CREDITS.md), each put to its real size, its screen showing our frames ----
+const gltf = new GLTFLoader();
+const load = (path) => new Promise((ok, no) => gltf.load(`assets/${path}`, (g) => ok(g.scene), undefined, no));
+/** The mesh whose node, mesh or material is called `name`. */
+function meshNamed(root, test) { return meshesNamed(root, test)[0] ?? null; }
+function meshesNamed(root, test) {
+  const found = [];
+  root.traverse((o) => { if (o.isMesh && (test(o.name) || test(o.material?.name ?? '') || test(o.parent?.name ?? ''))) found.push(o); });
+  return found;
+}
+/**
+ * A model as a machine: turned so its screen faces +z (the camera), scaled so it is `width` wide, standing with its
+ * foot at its group's origin; its screen's material taken over by the film's (the frame of `key`).
+ */
+function machine(root, key, width, screenTest, o = {}) {
+  const group = new THREE.Group();
+  root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const screens = screenTest ? meshesNamed(root, screenTest) : [];
+  // The largest of them is the one the picture goes on; the others (its back, a second skin) the same.
+  const screen = screens.sort((a, b) => { const s1 = new THREE.Box3().setFromObject(a).getSize(new THREE.Vector3()), s2 = new THREE.Box3().setFromObject(b).getSize(new THREE.Vector3()); return s2.x * s2.y - s1.x * s1.y; })[0] ?? null;
+  group.add(root);
+  if (screen) {
+    // Which way the screen faces: its normals, averaged, in the world.
+    root.updateMatrixWorld(true);
+    const n = new THREE.Vector3(), a = screen.geometry.attributes.normal;
+    for (let i = 0; i < a.count; i += Math.max(1, Math.floor(a.count / 200))) n.add(new THREE.Vector3().fromBufferAttribute(a, i));
+    n.transformDirection(screen.matrixWorld);
+    root.rotation.y = Math.atan2(-n.x, n.z) + root.rotation.y;
+  }
+  root.rotation.y += o.yaw ?? 0;
+  root.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(root);
+  const k = o.by === 'height' ? width / (box.max.y - box.min.y) : width / (box.max.x - box.min.x);
+  root.scale.multiplyScalar(k);
+  root.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(root);
+  root.position.sub(new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2));
+  group.userData.size = box.getSize(new THREE.Vector3());
+  if (screen) {
+    const t = new THREE.Texture(); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.flipY = o.flipY ?? !o.ownUv;
+    const m = new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 1.12, roughness: 0.3, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.08, side: THREE.DoubleSide });
+    // The picture laid flat across the screen, by its own two longest sides (the model's own way of laying one on, if
+    // any, is for its own wallpaper): `o.uv` turns it the right way round.
+    for (const sc of o.ownUv ? [] : screens) {
+      const g = sc.geometry; g.computeBoundingBox(); const b = g.boundingBox, p = g.attributes.position;
+      const d = b.getSize(new THREE.Vector3());
+      const axes = ['x', 'y', 'z'].sort((a1, a2) => d[a2] - d[a1]);
+      let [u, v] = axes; if (o.uv?.swap) [u, v] = [v, u];
+      const uv = new Float32Array(p.count * 2);
+      for (let i = 0; i < p.count; i++) {
+        let x = (p.getComponent(i, 'xyz'.indexOf(u)) - b.min[u]) / d[u], y = (p.getComponent(i, 'xyz'.indexOf(v)) - b.min[v]) / d[v];
+        if (o.uv?.flipU) x = 1 - x; if (o.uv?.flipV) y = 1 - y;
+        uv[i * 2] = x; uv[i * 2 + 1] = y;
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    // Glass over it, clear.
+    root.traverse((x) => { if (x.isMesh && !screens.includes(x) && x.material?.transparent && (x.material.opacity < 0.05 || /glass/i.test(x.material.name))) x.visible = false; });
+    for (const sc of screens) sc.material = m;
+    group.userData.screen = { key, tex: t, mesh: screen };
+  }
+  return group;
+}
+const [laptopModel, displayModel, miniModel, monitorModel, pcModel, phoneModel, plantModel] = await Promise.all([
+  load('macbook/scene.gltf'), load('studio-display.glb'), load('mac-mini.glb'), load('monitor/scene.gltf'), load('gaming-pc/scene.gltf'), load('iphone.glb'), load('plant/plant.gltf'),
+]);
+// The Mac at home: a MacBook Pro 16, turned towards the middle of the desk.
+const laptop = machine(laptopModel, 'home', 0.356, (n) => n === 'sfCQkHOWyrsLmor', { ownUv: true, flipY: true });
+laptop.position.set(-0.98, DESK_Y, 0.22); laptop.rotation.y = 0.42; scene.add(laptop);
+// Studio: a Studio Display, a Mac mini beside it.
+const studio = machine(displayModel, 'studio', 0.623, (n) => n === 'eiyvwciksFOahcg');
+studio.position.set(-0.5, DESK_Y, -0.38); studio.rotation.y = 0.14; scene.add(studio);
+const mini = machine(miniModel, null, 0.127, null);
+mini.position.set(-0.1, DESK_Y, -0.18); mini.rotation.y = -0.3; scene.add(mini);
+// The Windows desktop: a 27-inch monitor, the tower under the desk.
+const win = machine(monitorModel, 'win', 0.61, (n) => n === 'Screen' || n === 'Plano.001_Screen_0', { yaw: Math.PI, uv: { flipU: true } });
+win.position.set(0.18, DESK_Y, -0.4); win.rotation.y = -0.06; scene.add(win);
+const tower = machine(pcModel, null, 0.46, null, { by: 'height' });
+tower.position.set(1.15, 0, -0.62); tower.rotation.y = -0.25; scene.add(tower);
+// A plant at the far end of the desk: someone works here.
+const plant = machine(plantModel, null, 0.3, null);
+plant.position.set(-1.28, DESK_Y, -0.55); scene.add(plant);
+// The cloud machine: far away in its machine room; what it does, seen over ssh, a window floating on the desk's right.
+const cloud = { userData: { leds: [] } };
+const ssh = new THREE.Group();
+{
+  const frame = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.39, 0.012, 4, 0.012), physical({ color: 0x1d1f24, metalness: 0.2, roughness: 0.25, transparent: true, opacity: 0.9 }));
+  ssh.add(frame);
+  const t = new THREE.Texture(); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.576, 0.36), new THREE.MeshPhysicalMaterial({ color: 0, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 1.1, roughness: 0.1, clearcoat: 1 }));
+  screen.position.z = 0.0065; ssh.add(screen);
+  screen.material.clearcoat = 0.35; screen.material.roughness = 0.3;
+  ssh.userData.screen = { key: 'cloud', tex: t, mesh: screen };
+}
+ssh.position.set(0.82, DESK_Y + 0.42, -0.3); ssh.rotation.y = -0.32; scene.add(ssh);
+
+// The phone, on a train: an iPhone 17 Pro, the real app on it, the station going by behind it.
+const PHONE_AT = new THREE.Vector3(30, 1.3, 0);
+const phone = machine(phoneModel, 'phone', 0.0716, (n) => n === 'Screen_BG', { uv: { swap: true } });
+{
+  // Its glass, clear: the picture under it is what is seen.
+  const glass = meshNamed(phoneModel, (n) => n === 'Screen_Glass');
+  if (glass) glass.material = new THREE.MeshPhysicalMaterial({ color: 0x000000, transparent: true, opacity: 0.04, roughness: 0.05, metalness: 0 });
+  // Stood up, its middle where the shot looks.
+  const inner = phone.children[0];
+  inner.position.y -= phone.userData.size.y / 2;
+}
+phone.position.copy(PHONE_AT); scene.add(phone);
+const phoneLight = new THREE.PointLight(0xffe2c4, 0.5, 2); phoneLight.position.set(PHONE_AT.x + 0.3, PHONE_AT.y + 0.4, PHONE_AT.z + 0.6); scene.add(phoneLight);
+/** A texture drawn on a canvas, for the glow along the lines. */
+function painted(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
 
 // ---- Screens: their pictures, one frame of screens.html (or the phone's) at a time ----
-/** A screen's glass: a plane w × h with rounded corners (r), its picture on it, lit by itself, the room reflected. */
-function glassOf(w, h, r) {
-  const s = new THREE.Shape();
-  s.moveTo(-w / 2 + r, -h / 2); s.lineTo(w / 2 - r, -h / 2); s.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r); s.lineTo(w / 2, h / 2 - r);
-  s.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2); s.lineTo(-w / 2 + r, h / 2); s.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r); s.lineTo(-w / 2, -h / 2 + r);
-  s.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
-  const g = new THREE.ShapeGeometry(s, 12);
-  const pos = g.attributes.position, uv = g.attributes.uv;
-  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / w + 0.5, pos.getY(i) / h + 0.5);
-  const tex = new THREE.Texture(); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 16; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
-  const m = new THREE.MeshPhysicalMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 1.12, roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05 });
-  const mesh = new THREE.Mesh(g, m);
-  return { mesh, tex };
-}
 const shown = {};
 /** The phone's picture: the app's frame, and over it what the system draws (its clock, its signal, the island). */
 const phoneCanvas = document.createElement('canvas'); phoneCanvas.width = 780; phoneCanvas.height = 1688;
@@ -164,118 +245,22 @@ async function show(screen, src, clock) {
   for (let i = 0; i < 4; i++) g.fillRect(604 + i * 11, 74 - 8 - i * 5, 7, 8 + i * 5);
   g.strokeStyle = '#17181b'; g.lineWidth = 3; g.beginPath(); g.roundRect(660, 52, 50, 26, 8); g.stroke();
   g.fillRect(665, 57, 34, 16); g.fillRect(712, 60, 4, 10);
-  g.fillStyle = '#000'; g.beginPath(); g.roundRect(390 - 122, 22, 244, 72, 36); g.fill();
   screen.tex.image = phoneCanvas; screen.tex.needsUpdate = true;
 }
 
-const R = (geo, mat, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; return m; };
-const box = (w, h, d, r = 0.004) => new RoundedBoxGeometry(w, h, d, 4, r);
-
-// The Mac at home: a laptop, open, turned towards the middle of the desk.
-const laptop = new THREE.Group();
-{
-  const base = R(box(0.312, 0.0155, 0.221, 0.006), ALU); base.position.y = 0.0078; laptop.add(base);
-  const keys = R(new THREE.PlaneGeometry(0.27, 0.1), physical({ color: 0x1b1c1e, roughness: 0.6 }), false); keys.rotation.x = -Math.PI / 2; keys.position.set(0, 0.0157, -0.035); laptop.add(keys);
-  const pad = R(new THREE.PlaneGeometry(0.13, 0.08), physical({ color: 0xb9bbc0, metalness: 0.6, roughness: 0.25 }), false); pad.rotation.x = -Math.PI / 2; pad.position.set(0, 0.0157, 0.06); laptop.add(pad);
-  const lid = new THREE.Group(); lid.position.set(0, 0.0155, -0.108); lid.rotation.x = -0.27; laptop.add(lid);
-  const back = R(box(0.312, 0.214, 0.006, 0.006), ALU); back.position.set(0, 0.107, -0.002); lid.add(back);
-  const bezel = R(box(0.306, 0.208, 0.002, 0.005), GLASS, false); bezel.position.set(0, 0.107, 0.0015); lid.add(bezel);
-  const g = glassOf(0.29, 0.18125, 0.006); g.mesh.position.set(0, 0.11, 0.0027); lid.add(g.mesh);
-  laptop.userData.screen = { key: 'home', ...g, mesh: g.mesh };
-}
-laptop.position.set(-0.98, DESK_Y, 0.24); laptop.rotation.y = 0.42; scene.add(laptop);
-
-// Studio: a display on its stand, the Mac Studio beside it.
-const studio = new THREE.Group();
-{
-  const foot = R(box(0.17, 0.008, 0.2, 0.003), ALU); foot.position.set(0, 0.004, 0); studio.add(foot);
-  const arm = R(box(0.15, 0.3, 0.012, 0.004), ALU); arm.position.set(0, 0.16, -0.035); arm.rotation.x = -0.12; studio.add(arm);
-  const body = R(box(0.623, 0.36, 0.028, 0.012), ALU); body.position.set(0, 0.39, 0.0); studio.add(body);
-  const bezel = R(box(0.613, 0.35, 0.002, 0.01), GLASS, false); bezel.position.set(0, 0.39, 0.0145); studio.add(bezel);
-  const g = glassOf(0.56, 0.35 * 0.96, 0.004); g.mesh.scale.set(1, 1, 1); g.mesh.position.set(0, 0.392, 0.0158); studio.add(g.mesh);
-  studio.userData.screen = { key: 'studio', ...g };
-  const mac = R(box(0.197, 0.095, 0.197, 0.028), ALU); mac.position.set(0.2, 0.0475, 0.17); studio.add(mac);
-  const led = new THREE.Mesh(new THREE.CircleGeometry(0.0025, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })); led.position.set(0.27, 0.02, 0.269); studio.add(led);
-}
-studio.position.set(-0.5, DESK_Y, -0.38); studio.rotation.y = 0.14; scene.add(studio);
-
-// The Windows desktop: a black display, the tower behind it, its light.
-const win = new THREE.Group();
-{
-  const foot = R(box(0.24, 0.01, 0.17, 0.004), BLACK); foot.position.set(0, 0.005, 0); win.add(foot);
-  const arm = R(box(0.06, 0.3, 0.03, 0.005), BLACK); arm.position.set(0, 0.16, -0.04); win.add(arm);
-  const body = R(box(0.6, 0.355, 0.032, 0.006), BLACK); body.position.set(0, 0.39, 0); win.add(body);
-  const g = glassOf(0.586, 0.34, 0.002); g.mesh.position.set(0, 0.392, 0.0165); win.add(g.mesh);
-  win.userData.screen = { key: 'win', ...g };
-  // The tower stands under the desk, its light on the floor.
-  const tower = R(box(0.21, 0.46, 0.44, 0.01), BLACK); tower.position.set(0.3, -DESK_Y + 0.23, 0.05); win.add(tower);
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.006, 0.34), new THREE.MeshBasicMaterial({ color: 0x4cc2ff })); strip.position.set(0.3 - 0.07, -DESK_Y + 0.25, 0.271); win.add(strip);
-}
-win.position.set(0.15, DESK_Y, -0.4); win.rotation.y = -0.06; scene.add(win);
-
-// The cloud machine: a rack in a machine room far away; what it does seen over ssh, a window on the desk's right.
-const cloud = new THREE.Group();
-{
-  const rack = R(box(0.6, 1.95, 0.8, 0.01), physical({ color: 0x1c1e22, metalness: 0.55, roughness: 0.45 })); rack.position.set(0, 0.975, 0); cloud.add(rack);
-  cloud.userData.leds = [];
-  for (let i = 0; i < 16; i++) {
-    const unit = R(box(0.54, 0.085, 0.02, 0.003), physical({ color: 0x2b2e35, metalness: 0.6, roughness: 0.35 }), false); unit.position.set(0, 0.2 + i * 0.1, 0.405); cloud.add(unit);
-    for (let j = 0; j < 3; j++) {
-      const led = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), new THREE.MeshBasicMaterial({ color: 0x2fb36b })); led.position.set(-0.22 + j * 0.022, 0.2 + i * 0.1, 0.416); cloud.add(led);
-      cloud.userData.leds.push({ led, i, j });
-    }
-  }
-}
-cloud.position.set(1.62, 0, -0.95); cloud.rotation.y = -0.3; // (the rack: far away in its machine room, not in this room)
-const ssh = new THREE.Group();
-{
-  const frame = R(box(0.6, 0.39, 0.012, 0.012), physical({ color: 0x24262b, metalness: 0.3, roughness: 0.3, transparent: true, opacity: 0.92 }), false); ssh.add(frame);
-  const g = glassOf(0.576, 0.36, 0.008); g.mesh.position.z = 0.0065; ssh.add(g.mesh);
-  ssh.userData.screen = { key: 'cloud', ...g };
-}
-ssh.position.set(0.78, DESK_Y + 0.4, -0.3); ssh.rotation.y = -0.32; scene.add(ssh);
-
-// The phone, on a train: the person's, the real app on it, the city going by behind it.
-const PHONE_AT = new THREE.Vector3(30, 1.3, 0);
-const phone = new THREE.Group();
-{
-  const body = R(box(0.0716, 0.1477, 0.0083, 0.011), TITANIUM); phone.add(body);
-  const front = R(box(0.0706, 0.1467, 0.001, 0.0105), GLASS, false); front.position.z = 0.0041; phone.add(front);
-  const g = glassOf(0.0672, 0.1455, 0.0085); g.mesh.position.z = 0.0047; phone.add(g.mesh);
-  phone.userData.screen = { key: 'phone', ...g };
-}
-phone.position.copy(PHONE_AT); scene.add(phone);
-// The train's window behind it: dusk, the city's lights going by, out of focus.
-const CITY = painted(2048, 1024, (g, w, h) => {
-  const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#2b3557'); sky.addColorStop(0.55, '#6a5a78'); sky.addColorStop(1, '#d99a73');
-  g.fillStyle = sky; g.fillRect(0, 0, w, h);
-  seed = 99;
-  for (let i = 0; i < 160; i++) {
-    const x = rand() * w, y = h * (0.35 + rand() * 0.6), r = 10 + rand() * 46;
-    const c = ['255,200,140', '255,230,190', '160,200,255', '255,160,120'][Math.floor(rand() * 4)];
-    const grad = g.createRadialGradient(x, y, 0, x, y, r); grad.addColorStop(0, `rgba(${c},${0.55 + rand() * 0.3})`); grad.addColorStop(0.7, `rgba(${c},.18)`); grad.addColorStop(1, `rgba(${c},0)`);
-    g.fillStyle = grad; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-  }
-}, [1, 1]);
-CITY.wrapS = THREE.RepeatWrapping;
-const city = new THREE.Mesh(new THREE.PlaneGeometry(9, 4.5), new THREE.MeshBasicMaterial({ map: CITY, toneMapped: false }));
-city.position.set(PHONE_AT.x, PHONE_AT.y, PHONE_AT.z - 2.6); scene.add(city);
-const inside = new THREE.Mesh(new THREE.PlaneGeometry(9, 2), physical({ color: 0x3b3f48, roughness: 0.6 }));
-inside.position.set(PHONE_AT.x, PHONE_AT.y - 1.55, PHONE_AT.z - 2.4);
-const phoneLight = new THREE.PointLight(0xffe2c4, 0.6, 2); phoneLight.position.set(PHONE_AT.x + 0.3, PHONE_AT.y + 0.4, PHONE_AT.z + 0.6); scene.add(phoneLight);
-
-const SCREENS = [laptop, studio, win, ssh, phone].map((g) => g.userData.screen);
-for (const s of SCREENS) scene.updateMatrixWorld();
+const SCREENS = [laptop, studio, win, ssh, phone].map((g) => g.userData.screen).filter(Boolean);
+scene.updateMatrixWorld(true);
 
 // ---- The work sent out and its answers: light along a line from the laptop to each ----
 const DOT = painted(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(120,255,170,1)'); r.addColorStop(0.35, 'rgba(60,220,130,.6)'); r.addColorStop(1, 'rgba(47,179,107,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
-const midOf = (g) => { const v = new THREE.Vector3(); g.userData.screen.mesh.getWorldPosition(v); return v; };
+const midOf = (g) => new THREE.Box3().setFromObject(g.userData.screen.mesh).getCenter(new THREE.Vector3());
 const SENT = 9.4;
 const BACK = { studio: 20.0, cloud: 20.4, win: 22.0 };
 const routes = {};
 for (const [key, g] of Object.entries({ studio, win, cloud: ssh })) {
-  const a = midOf(laptop).add(new THREE.Vector3(0, 0.1, 0)), b = midOf(g).add(new THREE.Vector3(0, 0.19, 0));
-  const curve = new THREE.CatmullRomCurve3([a, new THREE.Vector3((a.x + b.x) / 2, Math.max(a.y, b.y) + 0.08, (a.z + b.z) / 2 + 0.05), b]);
+  const top = (x) => { const b = new THREE.Box3().setFromObject(x); return new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y + 0.03, (b.min.z + b.max.z) / 2); };
+  const a = top(laptop.userData.screen.mesh), b = top(g.userData.screen.mesh);
+  const curve = new THREE.CatmullRomCurve3([a, new THREE.Vector3((a.x + b.x) / 2, Math.max(a.y, b.y) + 0.22, (a.z + b.z) / 2 - 0.1), b]);
   const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.0016, 8), new THREE.MeshBasicMaterial({ color: 0x5fe39a, transparent: true, opacity: 0, toneMapped: false }));
   scene.add(tube);
   const pulses = [0, 1, 2].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false })); s.scale.setScalar(0.07); scene.add(s); return s; });
@@ -287,8 +272,8 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const shot = (pos, at, fov = 32, blur = 0) => ({ pos, at, fov, blur });
 const PHONE_SHOT = shot(V(PHONE_AT.x + 0.03, PHONE_AT.y + 0.005, PHONE_AT.z + 0.36), PHONE_AT.clone(), 30, 0.006);
 const lapMid = midOf(laptop);
-const LAPTOP_SHOT = shot(lapMid.clone().add(V(0.2, 0.06, 0.4)), lapMid.clone(), 30, 0.004);
-const LAPTOP_NEAR = shot(lapMid.clone().add(V(0.15, 0.04, 0.3)), lapMid.clone().add(V(0.01, 0, 0)), 30, 0.004);
+const LAPTOP_SHOT = shot(lapMid.clone().add(V(0.32, 0.12, 0.62)), lapMid.clone().add(V(0, -0.02, 0)), 30, 0.004);
+const LAPTOP_NEAR = shot(lapMid.clone().add(V(0.24, 0.1, 0.48)), lapMid.clone().add(V(0.01, -0.01, 0)), 30, 0.004);
 const WIDE = shot(V(-0.12, 1.3, 2.05), V(-0.1, 0.97, -0.3), 38, 0);
 const WIDE_IN = shot(V(-0.11, 1.27, 1.9), V(-0.1, 0.98, -0.3), 38, 0);
 const ROOM = shot(V(-0.05, 1.5, 2.3), V(-0.08, 0.9, -0.25), 38, 0);
@@ -318,6 +303,9 @@ function cameraAt(s) {
 const composer = new EffectComposer(renderer);
 composer.setPixelRatio(1); composer.setSize(W, H);
 composer.addPass(new RenderPass(scene, camera));
+const ao = new N8AOPass(scene, camera, W, H);
+Object.assign(ao.configuration, { gammaCorrection: false, aoRadius: 0.25, distanceFalloff: 0.6, intensity: 2.2, halfRes: false, aoSamples: 16, denoiseSamples: 8 });
+composer.addPass(ao);
 const bokeh = new BokehPass(scene, camera, { focus: 0.4, aperture: 0.0, maxblur: 0.01 });
 composer.addPass(bokeh);
 composer.addPass(new OutputPass());
@@ -334,7 +322,7 @@ const CAPTIONS = [
 const TAGS = { laptop: ['家里的 Mac', 'MacBook Pro'], studio: ['Studio', 'Mac Studio'], win: ['Win 台式机', 'Windows 11'], ssh: ['云主机', '在机房 · ssh 连着'] };
 const tagEls = {};
 for (const [k, [a, b]] of Object.entries(TAGS)) { const el = document.createElement('div'); el.className = 'tag'; el.innerHTML = `<i></i>${a}<span>${b}</span>`; document.getElementById('tags').append(el); tagEls[k] = el; }
-const TAG_AT = { laptop: [laptop, V(0, 0.27, -0.12)], studio: [studio, V(0, 0.6, 0)], win: [win, V(0, 0.6, 0)], ssh: [ssh, V(0, 0.23, 0)] };
+const TAG_AT = { laptop: [laptop, V(0, laptop.userData.size.y + 0.03, -0.1)], studio: [studio, V(0, studio.userData.size.y + 0.03, 0)], win: [win, V(0, win.userData.size.y + 0.03, 0)], ssh: [ssh, V(0, 0.23, 0)] };
 const cap = document.getElementById('cap'), capH = cap.querySelector('h2'), capP = cap.querySelector('p');
 const clockEl = document.getElementById('clock'), clockText = document.getElementById('clockText');
 const fade = document.getElementById('fade'), end = document.getElementById('end'), tapEl = document.getElementById('tap');
@@ -356,7 +344,6 @@ window.render = async (s) => {
   await Promise.all(waits);
   // The machine room's lights; the city going by.
   for (const { led, i, j } of cloud.userData.leds) led.material.color.setHex(Math.floor(s * 9 + i * 5 + j * 3) % 5 === 0 ? 0x15301f : j === 2 ? 0x3aa0ff : 0x2fb36b);
-  CITY.offset.x = s * 0.06;
   // The work going out (all at once) and the answers coming back.
   for (const [key, r] of Object.entries(routes)) {
     const back = BACK[key];
@@ -374,7 +361,12 @@ window.render = async (s) => {
   // At the end the phone is on the desk with the rest.
   if (s >= 31.4) { phone.position.set(0.05, DESK_Y + 0.0045, 0.36); phone.rotation.set(-Math.PI / 2, 0, 0.3); }
   else { phone.position.copy(PHONE_AT); phone.rotation.set(0, -0.08, 0); }
-  // The camera.
+  // The camera; in the station the station's light and its picture, at the desk the room's.
+  const onTrain = s < 6.0 || (s >= 22.6 && s < 31.4);
+  scene.environment = onTrain ? metroEnv : officeEnv;
+  scene.background = onTrain ? metroHdr : null;
+  scene.backgroundBlurriness = 0.12; scene.backgroundIntensity = 0.9;
+  scene.backgroundRotation.y = 1.2 + s * 0.02;
   const c = cameraAt(s);
   camera.position.copy(c.pos); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.lookAt(c.at);
   bokeh.uniforms.focus.value = c.pos.distanceTo(c.at);

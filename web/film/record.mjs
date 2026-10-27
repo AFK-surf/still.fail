@@ -181,6 +181,58 @@ if (doing('panes')) {
   console.log('panes: done');
 }
 
+// ---- assets: the machines' models and the light, public and free (CREDITS.md says whose each is) ----
+/** Files fetched once into assets/: [where, url]. */
+const RAW = 'https://raw.githubusercontent.com';
+const PH = 'https://dl.polyhaven.org/file/ph-assets';
+const FILES = [
+  ['iphone.glb', `${RAW}/lenxism/mockstudio/HEAD/public/models/iphone-17-pro/device.glb`],
+  ['studio-display.glb', `${RAW}/lenxism/mockstudio/HEAD/public/models/studio-display/device.glb`],
+  ['mac-mini.glb', `${RAW}/kosumic/whip/HEAD/launch-videos/source-assets/models/mac-mini-m4/mac-mini-m4.glb`],
+  ['office.hdr', `${PH}/HDRIs/hdr/2k/lythwood_room_2k.hdr`],
+  ['metro.hdr', `${PH}/HDRIs/hdr/4k/metro_noord_4k.hdr`],
+  ['wood_diff.jpg', `${PH}/Textures/jpg/2k/wood_table_001/wood_table_001_diff_2k.jpg`],
+  ['wood_rough.jpg', `${PH}/Textures/jpg/2k/wood_table_001/wood_table_001_rough_2k.jpg`],
+  ['wood_nor.jpg', `${PH}/Textures/jpg/2k/wood_table_001/wood_table_001_nor_gl_2k.jpg`],
+  ['wall_diff.jpg', `${PH}/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_diff_2k.jpg`],
+  ['wall_nor.jpg', `${PH}/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_nor_gl_2k.jpg`],
+  ['floor_diff.jpg', `${PH}/Textures/jpg/2k/wood_floor_deck/wood_floor_deck_diff_2k.jpg`],
+];
+/** Folders (a model and its textures) taken out of a repository: [where, repository, path]. */
+const FOLDERS = [
+  ['macbook', 'jeantimex/liquid-glass-html-in-canvas', 'public/models/macbook'],
+  ['monitor', 'SalamPS/TekkomFiber', 'public/3dasset/asus_pc_gaming_monitor'],
+  ['gaming-pc', 'SalamPS/TekkomFiber', 'public/3dasset/custom_gaming_pc'],
+];
+const run = (cmd, args, cwd) => new Promise((ok, no) => spawn(cmd, args, { cwd, stdio: 'inherit' }).on('close', (c) => (c === 0 ? ok() : no(new Error(`${cmd} ${args.join(' ')}: ${c}`)))));
+if (doing('assets')) {
+  const A = join(OUT, 'assets');
+  await mkdir(A, { recursive: true });
+  for (const [name, url] of FILES) if (!existsSync(join(A, name))) await run('curl', ['-fsSL', '--retry', '3', '-o', join(A, name), url]);
+  // The plant: Poly Haven's model, its glTF and the files it names.
+  if (!existsSync(join(A, 'plant'))) {
+    const info = await (await fetch('https://api.polyhaven.com/files/potted_plant_02')).json();
+    const g = info.gltf['1k'].gltf;
+    await mkdir(join(A, 'plant'), { recursive: true });
+    await run('curl', ['-fsSL', '-o', join(A, 'plant', 'plant.gltf'), g.url]);
+    for (const [path, f] of Object.entries(g.include ?? {})) { await mkdir(join(A, 'plant', path, '..'), { recursive: true }); await run('curl', ['-fsSL', '-o', join(A, 'plant', path), f.url]); }
+  }
+  for (const [name, repo, path] of FOLDERS) {
+    if (existsSync(join(A, name))) continue;
+    const tmp = join(A, `.${name}`);
+    await rm(tmp, { recursive: true, force: true });
+    await run('git', ['clone', '--depth', '1', '--filter=blob:none', '--sparse', `https://github.com/${repo}.git`, tmp]);
+    await run('git', ['sparse-checkout', 'set', '--no-cone', path], tmp);
+    await run('mv', [join(tmp, path), join(A, name)]);
+    await rm(tmp, { recursive: true, force: true });
+  }
+  if (!existsSync(join(OUT, 'vendor/node_modules/n8ao'))) {
+    await mkdir(join(OUT, 'vendor'), { recursive: true });
+    await run('npm', ['install', '--no-save', '--prefix', join(OUT, 'vendor'), 'three@0.180.0', 'n8ao@^1.9.0', 'postprocessing@^6.37.0']);
+  }
+  console.log('assets: done');
+}
+
 // ---- screens: what each machine's screen shows (screens.html), 30 a second ----
 const LENGTH = 38;
 const SCREEN_FPS = 30;
@@ -210,11 +262,6 @@ if (doing('screens')) {
 // ---- scene: the room (scene.html, three.js), frame by frame, into film.mp4 ----
 if (doing('scene')) {
   const { readdir } = await import('node:fs/promises');
-  // three.js, beside the page (the repository does not carry it).
-  if (!existsSync(join(OUT, 'vendor/node_modules/three'))) {
-    await mkdir(join(OUT, 'vendor'), { recursive: true });
-    await new Promise((ok, no) => spawn('npm', ['install', '--no-save', '--prefix', join(OUT, 'vendor'), 'three@0.180.0'], { stdio: 'inherit' }).on('close', (c) => (c === 0 ? ok() : no(new Error(`npm ${c}`)))));
-  }
   await writeFile(join(OUT, 'scene.html'), await readFile(here('scene.html')));
   const count = {};
   for (const n of await readdir(join(OUT, 'frames'))) if (!n.endsWith('.json')) count[n] = (await readdir(join(OUT, 'frames', n))).filter((f) => f.endsWith('.jpg')).length;
@@ -228,7 +275,7 @@ if (doing('scene')) {
   page.on('pageerror', (e) => console.error(`scene: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(`scene: ${m.text()}`); });
   await page.goto(`${base}scene.html`);
-  await page.waitForFunction(() => window.ready === true, null, { timeout: 120000 });
+  await page.waitForFunction(() => window.ready === true || window.failed, null, { timeout: 180000 });
   console.log('scene: gl', await page.evaluate(() => { const gl = document.querySelector('canvas').getContext('webgl2'); const d = gl.getExtension('WEBGL_debug_renderer_info'); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : '?'; }));
   const only = process.env.FILM_AT?.split(',').map(Number);
   if (only) {
