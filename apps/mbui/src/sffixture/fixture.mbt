@@ -152,6 +152,7 @@ pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
     "newchat-files" => { "new:ws1": kept("files") }
     "chat-letters-side" => { "ws1/st1:s-c1": kept("letters") }
     "chat-jobs-side" => { "ws1/st1:s-c1": kept("jobs") }
+    "chat-service-side" => { "ws1/st1:s-c1": kept("service:j-web") }
     "chat-history-side" | "chat-model-pop" => { "ws1/st1:s-c1": kept("s-c1") }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "tabs": ["s-c1", "jobs"], "active": "jobs" } }
     _ => {}

@@ -8,12 +8,14 @@
 // each of its pages, with the app's StillFailPreviewNative behind it (service_link.mbt): its WebSockets, its requests'
 // bodies, its top page's fetch() as it comes, marking it (service_marks.mbt). No port on the station is open to anyone.
 //
-// The bar: back and forward in the page's own history (the system's back too, while there is a page to go back to),
-// reload, how far its resources came (the `previewLoad` topic's ring; tapped, each of them in a sheet), where it is
-// (its name, then its path; typed, it goes there), marking it. The page fills what is under the bar, or is laid out at
+// Its bar under the page, one row in a thumb's reach (as a phone's browser has it: Safari's compact bar at the foot;
+// sfpages' service_foot_bar): back and forward in the page's own history (the system's back too, while there is a page
+// to go back to), where it is (its name, then its path; typed, it goes there) with reload at its end and how far its
+// resources came along its foot (the `previewLoad` topic), marking it, its ⋯ (its size; each of its resources, in a
+// sheet). The page fills what is over the bar, or is laid out at
 // a size of its own (a phone's, a tablet's, a laptop's, a desktop's, one typed) on the grey of a canvas, fitted and
-// centred, with its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again: the
-// bar's size key chooses (the sizes, 自定义, turned; 移动页面, 适应), as on every screen (sfpages' service.mbt). A
+// centred, with its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again: its
+// sizes chosen from the ⋯ (the sizes, 自定义, turned; 移动页面, 适应), as on every screen (sfpages' service.mbt). A
 // service being started again is said over the page, which loads anew once it is back; one stopped, or not found, is
 // said in its place.
 //
@@ -84,17 +86,12 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
 }
 
 ///|
-/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and under it its station.
+/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and its station on one line (as
+/// an in-app browser's bar has its page's: what is over the page as little as it can be; the user, 2026-10-27:
+/// 是不是上面也应该少一点).
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
-  let t = @sf.theme()
-  let went = if station != "" {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top(), sub=fn() {
-      c.text(station, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-    })
-  } else {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top())
-  }
-  if went {
+  let said = if station == "" { title } else { title + " · " + station }
+  if @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top()) {
     @sfbase.go_back() |> ignore
   }
 }

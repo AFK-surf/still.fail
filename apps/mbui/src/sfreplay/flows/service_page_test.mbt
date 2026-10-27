@@ -2,7 +2,7 @@
 // port), its page from the chat's jobs: the page drawn by a web view whose every request goes through the core to the
 // station (station.preview: its HTML, its stylesheet, what its script fetches; the view's requests as the run's host
 // made them, on its record: mbui's site lines), where it is typed in the bar (b.html), back in the page's own history,
-// shown at a phone's width (its bar's size key's sheet), left by its bar's 对话. (19107: the service's port as the run's local still.fail gives it,
+// shown at a phone's width (its bar's ⋯, its sizes' sheet), left by its bar's 对话. (19107: the service's port as the run's local still.fail gives it,
 // e2e-E's: E2E_PORT + 7.)
 
 ///|
@@ -40,8 +40,10 @@ test "47-service-page" {
     f.answered("station.preview", 4)
     f.tap("icon:arrow-left")
     f.gone("/b.html")
-    // its size from the bar's size key, in the presenters' sheet (a phone's)
-    f.tap("icon:devices")
+    // its size from the bar's ⋯ (a phone's, its one row under the page), in the presenters' sheet
+    f.tap("icon:more")
+    f.run_to(@kit.sheet_rest("sf-present"))
+    f.tap("页面尺寸")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("手机")
     f.run_to(@kit.sheet_rest("sf-present"))
