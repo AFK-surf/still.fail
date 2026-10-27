@@ -42,6 +42,9 @@ fn ListState::set_height(self : ListState, k : Int, h : Double) -> Unit {
   let d = h - self.height(k)
   self.heights[k] = h
   if d != 0.0 {
+    // (laid out other than it was had: what was built from what it had, built again)
+    self.learned = self.learned + 1
+    self.heights_learned.set(self.learned)
     let mut i = k + 1
     while i < self.sums.length() {
       self.sums[i] = self.sums[i] + d
@@ -420,6 +423,8 @@ pub fn Ctx::list(
         ease_t0: 0.0,
         ease_done: 0.0,
         ease_mover: Mover::new(),
+        learned: 0,
+        heights_learned: @signals.signal(0),
         vw: 0.0,
         vh: 0.0,
         sel: false,
@@ -451,8 +456,6 @@ pub fn Ctx::list(
   st.direction = self.direction
   st.layer = self.layer_cur
   st.part = part_now.part
-  // (what moves it, in the part it is built in: Mover's `part`)
-  st.ease_mover.part = part_now.part
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   // (built again in the same frame: its motion stepped once a frame, at the first)
@@ -475,6 +478,13 @@ pub fn Ctx::list(
     } else {
       self.app_scrolled(id, st)
     }
+  }
+  // (where its own motions have it, read by what is built round it, a part or a row kept: built again as it is told
+  // anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion; and the heights its rows came out
+  // at as they were laid out, what its bar and its rows' places are drawn from)
+  self.shows_motion(st.ease_mover, st.rest_at(self.now, self.frame_no) > self.now)
+  if part_building() {
+    st.heights_learned.get() |> ignore
   }
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]

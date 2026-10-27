@@ -737,7 +737,8 @@ fn[P] Ctx::nav_layer(
   page : (P) -> Unit,
   inert? : Bool = false,
 ) -> Unit {
-  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
+  // (its drop on the device's pixels, as its slide is laid: Ctx::slid)
+  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=on_pixels(drop, self.scale), fn() {
     let saved = self.owner
     let saved_stint = self.stint
     self.owner = e.serial

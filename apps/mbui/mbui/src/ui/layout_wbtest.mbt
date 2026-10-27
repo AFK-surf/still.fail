@@ -768,6 +768,8 @@ test "a list's running sums are its rows' heights added up" {
     anchor: 0,
     anchor_off: 0.0,
     heights: [],
+    learned: 0,
+    heights_learned: @signals.signal(0),
     sums: [],
     est: 30.0,
     count: 0,

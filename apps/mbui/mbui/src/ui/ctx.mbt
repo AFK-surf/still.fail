@@ -7,6 +7,10 @@ struct ListState {
   mut anchor : Int
   mut anchor_off : Double
   heights : Array[Double]
+  /// how many times a row's height came out other than it was had as it was laid out (ListState::set_height), and the
+  /// same as a signal: what its build drew from what it had (its bar, where its rows are) is built again
+  mut learned : Int
+  heights_learned : @signals.Signal[Int]
   // the rows' heights (est for those not measured) summed as a Fenwick
   // tree (1-based: sums[i] holds rows i - lowbit(i) until i): what is
   // above a row and the whole, without adding every row up (list.mbt)

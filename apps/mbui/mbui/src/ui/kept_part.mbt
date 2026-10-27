@@ -21,13 +21,13 @@
 // what it shows changes each frame (a motion going on read where it is now, a cycle drawn each frame, a layer it
 // opened), and the moment what it shows changes at (a clock's step, a timer's end), whoever told the motion or the
 // timer and wherever it was told (a look by the clock is not read: what it draws carries it, cycle_look.mbt); what the
-// rows of a list in it read as they are laid out, after its build, is read by it too (kept_rows.mbt). What is not a
-// signal is caught by what changes it: an event from outside (outside_events: what the host or the runtime did, not a
-// pointer moved nor a wheel turned elsewhere), its `key` (what it is built from by its caller), the layout's epoch,
-// what moves what it holds (its own motions, and what moves a list or a box built in it, whenever it was told: a list
-// flung before the part was kept flings on in it), a press held down on it or a wheel turned over it (what it holds may
-// take them), the mouse's pointer over it (it lights what it points at). It is built whole the first frames it shows,
-// while a motion going on as it came may still move what it holds. Drawn again, what its build and its paint said of
+// rows of a list in it read as they are laid out, after its build, is read by it too (kept_rows.mbt), and what moves
+// what it laid out, read once the frame is laid out (the motion package's moves and reshapes, Ctx::reads_for): a
+// dependence is said where it is read, never by who told a motion or when. What is not a signal is caught by what
+// changes it: an event from outside (outside_events: what the host or the runtime did, not a pointer moved nor a wheel
+// turned elsewhere), its `key` (what it is built from by its caller), the layout's epoch, a press held down on it or a
+// wheel turned over it (what it holds may take them), the mouse's pointer over it (it lights what it points at). It is
+// built the first frame it shows. Drawn again, what its build and its paint said of
 // the frame is said again, moved with it, all of it by one rule (said.mbt): what takes the focus, the pointer's shape,
 // what asks for a menu, what is told outside, its targets, what scrolls in it, the words that can be picked, its scroll
 // bars, so keys, presses, the wheel and the pointer find in it what they found as it was built; and what the rows of
@@ -85,11 +85,6 @@ priv struct KeptPart {
   mut built : Int
   mut drawn : Int
   mut shown : Int
-  /// the motions going on as it first showed: it is built while any of them still goes, and once more as they are
-  /// over (`moved_built`: its last build was while one was, so what it drew is where the motion had it then, as far as
-  /// the window showed it there)
-  waits : Array[MoverEntry]
-  mut moved_built : Bool
   /// drawn again this frame (not built)
   mut again : Bool
   /// a Tester's: the words its build drew (KeptWord), what the Tester finds in it while it is drawn again
@@ -104,6 +99,14 @@ priv struct KeptPart {
   mut band : (Double, Double, Double, Double)
   mut drops : Bool
   mut moved : (Double, Double)
+  /// what its paint read of what floats over its scroll bars from outside it (Ctx::floated): each bar's rect, from its
+  /// box's corner, and what of its top and its foot that took; read again where it is drawn again (Ctx::parts_placed)
+  floats_read : Array[(Double, Double, Double, Double, Double, Double)]
+  floats_was : Array[(Double, Double, Double, Double, Double, Double)]
+  /// its box was moved where it could not be drawn again, or what floats over it from outside moved (Ctx::parts_placed):
+  /// built, from its frame's first build, while they go on moving (each frame laid out elsewhere than the one before),
+  /// not drawn again and then built again
+  mut shifted : Bool
   /// what its build's paint said of the frame (said.mbt), said again as it is drawn again; where each of the frame's
   /// paint lists stood as it began
   said : Array[&SaidAgain]
@@ -162,6 +165,8 @@ priv struct PartNow {
   mut painting : Int
   mut row : Int
   mut painting_row : Int
+  /// the box node of the part whose build is being painted (-1 none)
+  mut painting_node : Int
 }
 
 ///|
@@ -171,6 +176,7 @@ let part_now : PartNow = {
   painting: 0,
   row: 0,
   painting_row: 0,
+  painting_node: -1,
 }
 
 ///|
@@ -294,6 +300,7 @@ fn parts_forget() -> Unit {
   part_now.painting = 0
   part_now.row = 0
   part_now.painting_row = 0
+  part_now.painting_node = -1
 }
 
 ///|
@@ -314,25 +321,11 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, rea
       st
     }
   }
-  // (shown in the frame before, or in this one's build before: else it comes now, the motions going on waited for)
-  // (what moves asked as the last frame left it: this frame's build has not said yet what it moves, a list not built
-  // yet says it is at rest)
-  let last = self.frame_no - 1
-  if st.shown < last {
+  // (shown in the frame before, or in this one's build before: else it comes now, built)
+  if st.shown < self.frame_no - 1 {
     st.built = -1
-    st.waits.clear()
-    for e in self.movers {
-      if e.m.rest_at(self.now, last) > self.now {
-        st.waits.push(e)
-      }
-    }
   }
   st.shown = self.frame_no
-  st.waits.retain(fn(e) { e.m.rest_at(self.now, last) > self.now })
-  // (what moves what it holds, told as it was built or not: a list in it flung before it was kept)
-  let moving = self.movers.iter().any(fn(e) {
-    (e.part == id || e.who.part == id) && e.m.rest_at(self.now, last) > self.now
-  })
   // (a finger or a button held down on it: what it holds may take the press, a hold picking its words)
   let (rx, ry, rw, rh) = st.rect
   let held = self.down &&
@@ -358,9 +351,7 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, rea
     st.epoch == self.epoch &&
     st.scale == self.scale &&
     st.pointing == pointing() &&
-    st.waits.is_empty() &&
-    !moving &&
-    !st.moved_built &&
+    !st.shifted &&
     !(read_out && (st.holds_live || st.came_built)) &&
     st.read == read_out &&
     // (read out: what it said taken as it was built, else built so that it is)
@@ -409,7 +400,6 @@ pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, rea
     // (built while rows are not kept, a frame measured for contrast, parts off: its lists' rows said nothing to say
     // again, so it is not drawn again from it)
     st.built = if self.rows_on() { self.frame_no } else { -1 }
-    st.moved_built = !st.waits.is_empty() || moving
     st.came_built = st.outside != outside_events.val
     st.key = key
     st.outside = outside_events.val
@@ -503,8 +493,6 @@ fn kept_new(id : Int, row~ : Bool) -> KeptPart {
     built: -1,
     drawn: -1,
     shown: -1,
-    waits: [],
-    moved_built: false,
     again: false,
     words: [],
     rect: (0.0, 0.0, 0.0, 0.0),
@@ -512,6 +500,9 @@ fn kept_new(id : Int, row~ : Bool) -> KeptPart {
     band: (0.0, 0.0, 0.0, 0.0),
     drops: false,
     moved: (0.0, 0.0),
+    floats_read: [],
+    floats_was: [],
+    shifted: false,
     said: [],
     marks: [],
     hit_ids: [],
@@ -576,6 +567,29 @@ fn part_rows(part : Int, build : () -> Unit) -> Unit {
 }
 
 ///|
+/// What `f` reads, read by the list's row kept `row` (0: none) and the part kept `part` (0: none) it is drawn in, as
+/// though their builds had read it (Ctx::reads_for): the row's lent to the part, as what its build reads is
+/// (kept_rows.mbt's row_of).
+fn read_for(part : Int, row : Int, f : () -> Unit) -> Unit {
+  let (was_part, was_row) = (part_now.part, part_now.row)
+  part_now.part = part
+  part_now.row = row
+  match (kept_rows.get(row), kept_parts.get(part)) {
+    (Some(rp), p) if row != 0 => {
+      rp.tracker.reading(f)
+      match p {
+        Some(st) if part != 0 => rp.tracker.lend(st.tracker)
+        _ => ()
+      }
+    }
+    (_, Some(st)) if part != 0 => st.tracker.reading(f)
+    _ => f()
+  }
+  part_now.part = was_part
+  part_now.row = was_row
+}
+
+///|
 /// What is being built now that is kept as it was built (a part, or a list's row: kept_rows.mbt, in a part or not) and
 /// reads what is built in it after it ran, laid out later: its computed (None: none is).
 fn part_holder() -> @signals.Computed[Int]? {
@@ -621,6 +635,15 @@ priv struct KeptDue {
 ///|
 // kept across runs: its frame only counts on; its moments let go as they come and with the parts (parts_forget)
 let kept_clock : KeptClock = { frame: @signals.signal(0), dues: [] }
+
+///|
+/// What is painted now changes each frame (an image fading in, read as it is painted): the part or the list's row kept
+/// whose build is being painted is built again each frame, as were it read as built.
+fn painted_live() -> Unit {
+  if part_now.painting != 0 || part_now.painting_row != 0 {
+    read_for(part_now.painting, part_now.painting_row, fn() { part_live() })
+  }
+}
 
 ///|
 /// What is built now shows what changes each frame (as what it holds moves): built again each frame, kept or not.
@@ -779,6 +802,7 @@ fn KeptPart::plot_used(self : KeptPart, p : Int) -> Unit {
 /// many of what is put off to be drawn over everything (Ctx::kept_clip_into's `drops`).
 priv struct PartPainting {
   was : Int
+  was_node : Int
   cut : Int
   segs : Int
   over : Int
@@ -790,8 +814,9 @@ priv struct PartPainting {
 /// past it every way as that is wide and tall, nothing of that one's corners nor any outer (as a list's row's is
 /// recorded unclipped by its list: kept_rows.mbt), so that what it draws is what it would draw wherever its box is, and
 /// it is drawn again moved (a page sliding wholly out of the window) as building it there draws it.
-fn Ctx::part_paint_begin(self : Ctx, id : Int) -> PartPainting {
+fn Ctx::part_paint_begin(self : Ctx, id : Int, node : Int) -> PartPainting {
   let was = part_now.painting
+  let was_node = part_now.painting_node
   let cut = clip_top()
   let mut band = false
   match kept_parts.get(id) {
@@ -799,6 +824,10 @@ fn Ctx::part_paint_begin(self : Ctx, id : Int) -> PartPainting {
       st.plots.clear()
       st.plot_seen.clear()
       st.images.clear()
+      st.floats_was.clear()
+      st.floats_was.append(st.floats_read)
+      st.floats_read.clear()
+      part_now.painting_node = node
       self.paint_marks(st.marks)
       if self.rows_on() {
         let s = clip_stack
@@ -820,6 +849,7 @@ fn Ctx::part_paint_begin(self : Ctx, id : Int) -> PartPainting {
   part_now.painting = id
   {
     was,
+    was_node,
     cut: if band { cut } else { -1 },
     segs: self.segs.length(),
     over: dr.tops.length() + dr.overlay.length() + dr.raised.length(),
@@ -832,6 +862,7 @@ fn Ctx::part_paint_begin(self : Ctx, id : Int) -> PartPainting {
 /// put in the clip it is in, what it said too, as it is put there drawn again (Ctx::part_paint_again).
 fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, p : PartPainting) -> Unit {
   part_now.painting = p.was
+  part_now.painting_node = p.was_node
   match kept_parts.get(id) {
     Some(st) => {
       if p.cut >= 0 {
@@ -842,6 +873,16 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, p : PartPaint
       self.paint_take(st.marks, st.said)
       st.lit = self.part_lit(st)
       st.take_insts(self, i0)
+      let n = self.nodes[node]
+      // (built for a move it could not be drawn again by: so while its box, or what floats over it from outside, goes
+      // on moving)
+      if st.shifted &&
+        (
+          st.drawn != self.frame_no - 1 ||
+          (n.x == st.at.0 && n.y == st.at.1 && st.floats_read == st.floats_was)
+        ) {
+        st.shifted = false
+      }
       st.drawn = self.frame_no
       // (what is built each frame wherever it is: a native view's hole; the field that takes the keys)
       st.holds_live = st.holds_native() ||
@@ -851,7 +892,6 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, p : PartPaint
       if fake.val is Some(_) {
         st.words.append(self.part_words(node))
       }
-      let n = self.nodes[node]
       st.at = (n.x, n.y)
       st.moved = (0.0, 0.0)
       if p.cut >= 0 {
@@ -1015,6 +1055,8 @@ fn Ctx::part_words(self : Ctx, root : Int) -> Array[KeptWord] {
         }
         out.push({ text: n.text, x: n.x, y: n.y, w: n.fw, h: n.fh, drawn_x: x, drawn_y: y, alpha })
       }
+      // (a list's row or a part drawn again in it: the words its build drew)
+      out.append(self.kept_words_at(i))
     }
   }
   out
@@ -1124,7 +1166,8 @@ fn parts_build_start() -> Unit {
 /// (KeptPart's `moved`), the packages told (on_drawn_again), the rows its drawing holds with it. One moved so that what
 /// can show of it there (the window, cut by the clips round it as laid out) was not all recorded (past its band), moved
 /// by less than whole device pixels (laid there, its words would be set on other pixels), or holding a native view
-/// (put where it is by its build) is built there: the frame built again (Ctx::read_changed).
+/// (put where it is by its build) is built there: the frame built again (Ctx::read_changed), and the frames after
+/// built from their first build while its box goes on moving (KeptPart's `shifted`).
 fn Ctx::parts_placed(self : Ctx) -> Unit {
   for p in parts_again {
     let (i, st) = p
@@ -1132,6 +1175,17 @@ fn Ctx::parts_placed(self : Ctx) -> Unit {
     let dx = n.x - st.at.0
     let dy = n.y - st.at.1
     st.moved = (dx, dy)
+    // (what floats over its bars from outside it, where it is now: as its paint read it, else built)
+    let floats_same = st.floats_read.iter().all(fn(r) {
+      let (x0, y0, x1, y1, top, foot) = r
+      self.floats_round(x0 + n.x, y0 + n.y, x1 + n.x, y1 + n.y, -1, None) == (top, foot)
+    })
+    if !floats_same {
+      st.built = -1
+      st.shifted = true
+      self.read_changed("what floats over a part kept from outside it changed")
+      continue
+    }
     if dx != 0.0 || dy != 0.0 {
       let (l, t, r, b) = self.shown_at(i)
       let (bl, bt, br, bb) = st.band
@@ -1145,6 +1199,7 @@ fn Ctx::parts_placed(self : Ctx) -> Unit {
         b - dy > bb ||
         st.holds_native() {
         st.built = -1
+        st.shifted = true
         self.read_changed("a part kept moved past what its build drew")
         continue
       }

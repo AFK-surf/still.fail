@@ -713,7 +713,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     dr.mode = mode_draw
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
-  let painting = if e.part != 0 { Some(self.part_paint_begin(e.part)) } else { None }
+  let painting = if e.part != 0 { Some(self.part_paint_begin(e.part, i)) } else { None }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
