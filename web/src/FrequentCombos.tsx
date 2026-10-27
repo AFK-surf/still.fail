@@ -8,8 +8,8 @@ export function FrequentCombos({ items, onPick }: { items: FrequentCombo[] | und
   if (!items?.length) return null;
   return <div className={css.frequent} aria-label={t("web-main.combos.label")} data-made-leave="fade">
     <span className={css.label}>{t("web-main.combos.short")}</span>
-    <div className={css.choices}>{items.map((c) => <button type="button" key={`${c.runtime}:${c.model}:${c.effort ?? ""}`}
-      className={css.combo} aria-pressed={c.selected} onClick={() => onPick({ model: c.model, runtime: c.runtime, effort: c.effort ?? null })}>
+    <div className={css.choices}>{items.map((c) => <button type="button" key={`${c.runtime}:${c.model}:${c.effort ?? ""}:${c.fast ?? "default"}`}
+      className={css.combo} aria-pressed={c.selected} onClick={() => onPick({ model: c.model, runtime: c.runtime, effort: c.effort ?? null, fast: c.fast ?? null })}>
       {c.label}
     </button>)}</div>
   </div>;

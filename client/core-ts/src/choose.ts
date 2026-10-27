@@ -78,13 +78,15 @@ function picked(r: Resolved): J {
   return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, profile: r.profile };
 }
 
+const comboFast = (v: J): boolean | null => get(v, "runtime") === "codex" && typeof get(v, "fast") === "boolean" ? v.fast : null;
+
 /// Usage stays bounded on the device; ties favour the most recently started chat.
 export function recordCombo(history: J[], choice: J, now: number): J[] {
-  const same = (v: J) => ["model", "runtime", "effort"].every((f) => text(get(v, f)) === text(get(choice, f)));
+  const same = (v: J) => ["model", "runtime", "effort"].every((f) => text(get(v, f)) === text(get(choice, f))) && comboFast(v) === comboFast(choice);
   const found = history.find(same);
   const count = (typeof get(found, "count") === "number" ? found.count : 0) + 1;
   const out = history.filter((v) => !same(v));
-  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), count, last: now });
+  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: comboFast(choice), count, last: now });
   out.sort((a, b) => (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0));
   return out.slice(0, 64);
 }
@@ -103,11 +105,12 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const runtime = get(v, "runtime");
     if (typeof runtime !== "string" || !arr(entry.runtimes).some((r) => r === runtime)) continue;
     const effort = text(get(v, "effort"));
-    const r = resolve(options, { model: entry.model, runtime, effort, profile: current.profile });
+    const fast = comboFast(v);
+    const r = resolve(options, { model: entry.model, runtime, effort, fast, profile: current.profile });
     if (r.effort !== effort) continue;
     const m = typeof entry.model === "string" ? entry.model : null;
     if (m === null) continue;
-    const key = JSON.stringify([m, runtime, effort]);
+    const key = JSON.stringify([m, runtime, effort, fast]);
     if (seen.has(key)) continue;
     seen.add(key);
     // (the effort as the picker says it; none, the runtime's own)
@@ -115,9 +118,11 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const name = typeof entry.name === "string" ? entry.name : m;
     // the runtime only where the model runs on more than one
     const runtimeText = arr(entry.runtimes).length > 1 ? format.runtimeLabel(runtime) : null;
-    const label = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
-    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort;
-    out.push({ model: m, runtime, effort, label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
+    const speedText = fast === null ? null : fast ? "Fast" : t("core-logic.choose.speed.standard");
+    const baseLabel = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
+    const label = speedText === null ? baseLabel : `${baseLabel} · ${speedText}`;
+    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast;
+    out.push({ model: m, runtime, effort, fast, ...(speedText === null ? {} : { speedText }), label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
   }
   return out;
 }

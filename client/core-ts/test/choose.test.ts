@@ -57,6 +57,27 @@ test("frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history",
   assert.equal(frequentCombos(history, options, resolve(options, {})).length, 1);
 });
 
+test("frequent_combos_keep_speed_separate_and_restore_it_including_defaults", () => {
+  const options = [{ model: "astra", name: "Astra", ids: ["openai/astra"], runtimes: ["codex"], efforts: { codex: ["high"] } }];
+  const base = { model: "astra", runtime: "codex", effort: "high" };
+  let history: J[] = [ { ...base, count: 2, last: 0 } ]; // history written before speed was kept
+  for (const [at, fast] of [true, false, null, true].entries()) {
+    history = recordCombo(history, { ...base, fast }, at + 1);
+  }
+  assert.equal(history.length, 3);
+  assert.deepEqual(history.map((v) => [v.fast, v.count]), [[true, 2], [null, 3], [false, 1]]);
+  for (const fast of [true, false, null]) {
+    const combos = frequentCombos(history, options, resolve(options, { ...base, fast }));
+    assert.deepEqual(combos.filter((c) => c.selected).map((c) => c.fast), [fast]);
+    assert.equal(new Set(combos.map((c) => c.label)).size, 3);
+    for (const combo of combos) assert.equal(resolve(options, { ...base, fast: !fast, ...combo }).fast, combo.fast);
+    assert.equal(combos.find((c) => c.fast === true).speedText, "Fast");
+    assert.equal(combos.find((c) => c.fast === null).speedText, undefined);
+  }
+  const other = { ...base, runtime: "claude" };
+  assert.equal(recordCombo(recordCombo([], { ...other, fast: true }, 1), { ...other, fast: false }, 2).length, 1);
+});
+
 test("speed_choices_preserve_false_and_follow_the_runtime", () => {
   const options = [{ model: "gpt-6-astra", runtimes: ["codex", "claude", "dsh"], efforts: {}, accounts: {} }];
   for (const fast of [true, false, null]) {

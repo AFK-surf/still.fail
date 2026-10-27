@@ -3754,6 +3754,9 @@ export interface FootprintView {
 
 /** One-click model and depth for a new chat; ranked and labelled by the core. */
 export interface FrequentCombo {
+	fast?: boolean;
+	/** Explicit speed (Fast / Standard); absent for the account default. */
+	speedText?: string;
 	model: string;
 	runtime: RuntimeKind;
 	effort?: string;
