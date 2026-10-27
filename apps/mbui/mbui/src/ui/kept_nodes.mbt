@@ -61,6 +61,10 @@ priv struct RowNodes {
   inners_or : Array[Int]
   arounds : Array[Int]
   floating : Array[Int]
+  /// what it holds near its list's top as it scrolls past (Ctx::stick); what scrolls in it (sideways.mbt: its id, its
+  /// box and what that holds)
+  stuck : Array[Int]
+  sideways : Array[(Int, Int, Int)]
   /// what it showed of the boxes named to be moved (move_state.mbt), the names built, and what it read of how lists
   /// stand (Ctx::list_info_as, read back)
   moves_shown : Array[(String, FixedArray[Double])]
@@ -330,6 +334,8 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     inners_or: [],
     arounds: [],
     floating: [],
+    stuck: [],
+    sideways: [],
     moves_shown: [],
     moves_seen: [],
     info: [],
@@ -359,7 +365,6 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.clear()
   into.push(self.layers.length())
   into.push(self.layers_opened.length())
-  into.push(self.stuck.length())
   into.push(self.press_owners.length())
   into.push(self.cover_asks.length())
   into.push(self.place_reads.length())
@@ -392,7 +397,7 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
 /// What kept_census counts, by name, in its order.
 // kept across runs: a table, never written
 let kept_census_names : Array[String] = [
-  "a layer opened", "a layer opened as laid out", "what is held at its list's top", "what takes its presses",
+  "a layer opened", "a layer opened as laid out", "what takes its presses",
   "a cover", "a list's place read back", "a row read back", "words read back",
   "what shows across read back",
   "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
@@ -484,6 +489,7 @@ priv struct NodesBegun {
   inners_or : Int
   arounds : Int
   floating : Int
+  stuck : Int
   info : Int
   drawn : Int
   words : Int
@@ -503,6 +509,7 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.laid.clear()
   rn.moves_shown.clear()
   rn.moves_seen.clear()
+  rn.sideways.clear()
   {
     census,
     sems: self.sems.length(),
@@ -511,6 +518,7 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
     inners_or: self.inners_or.length(),
     arounds: self.arounds.length(),
     floating: self.floating.length(),
+    stuck: self.stuck.length(),
     info: self.info_reads.length(),
     drawn: dr.entries.length(),
     words: words_marks.length(),
@@ -561,6 +569,10 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.floating.clear()
   for j in b.floating..<self.floating.length() {
     rn.floating.push(self.floating[j])
+  }
+  rn.stuck.clear()
+  for j in b.stuck..<self.stuck.length() {
+    rn.stuck.push(self.stuck[j])
   }
   rn.info.clear()
   for j in b.info..<self.info_reads.length() {
@@ -620,8 +632,9 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 
 ///|
 /// Why the `n` nodes from `r` (a row or a part just built) may not be kept: one held elsewhere, or of a kind built each
-/// frame (a list of a row's own: a part lays its lists out each frame; a field of its own, what scrolls, a native view,
-/// a pager's page, a layer, a shot, what is placed by the clock); "" none.
+/// frame (a list of a row's own: a part lays its lists out each frame; a native view, a pager's page, a layer, a shot,
+/// what is placed by the clock); "" none. (A field is kept as the rest: what changes what it holds is an event, which
+/// builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
 fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
@@ -631,10 +644,7 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
     if nd.kind == kind_list && !part {
       return "a list of its own"
     }
-    if nd.kind == kind_editor {
-      return "a field of its own"
-    }
-    if nd.kind == kind_scroll || nd.sideways {
+    if nd.kind == kind_scroll {
       return "what scrolls in it"
     }
     if nd.kind == kind_native {
@@ -769,6 +779,15 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   }
   for i in rn.floating {
     self.floating.push(i + by)
+  }
+  for i in rn.stuck {
+    self.stuck.push(i + by)
+  }
+  for s in rn.sideways {
+    match sideways.get(s.0) {
+      Some(st) => self.sideways_built(st, s.1 + by, s.2 + by)
+      None => ()
+    }
   }
   for r in rn.info {
     self.info_reads.push(r)
@@ -1173,6 +1192,16 @@ fn row_said_shown(key : String, shown : FixedArray[Double]) -> Unit {
 fn row_said_seen(name : String) -> Unit {
   match nodes_run.building {
     Some(rn) => rn.moves_seen.push(name)
+    None => ()
+  }
+}
+
+///|
+/// A box scrolling what `inner` holds (sideways.mbt's, `id`) built as `b` in the row or part being built: said again of
+/// its nodes where they are each frame it is put back.
+fn row_said_sideways(id : Int, b : Int, inner : Int) -> Unit {
+  match nodes_run.building {
+    Some(rn) => rn.sideways.push((id, b, inner))
     None => ()
   }
 }
