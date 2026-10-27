@@ -217,7 +217,7 @@ priv struct Desk {
   mut selecting : Bool
   mut sel_color : Int64
   /// the paragraphs that can be picked, as this frame paints them and as the last one did (in the order they are
-  /// painted): their id, where they stand in the page (Ctx::page_order), layout, words, where their text starts, the
+  /// painted): their id, the layer they are in (Ctx::layer_of), where they stand in the page (Ctx::page_order), layout, words, where their text starts, the
   /// part of them shown (x0, y0, x1, y1)
   next_sels : Array[SelTarget]
   mut sels : Array[SelTarget]
@@ -226,6 +226,7 @@ priv struct Desk {
 ///|
 priv struct SelTarget {
   base : Int
+  layer : Int
   at : Array[Int]
   lay : RichLayout
   text : String
@@ -260,17 +261,20 @@ priv struct SelSpan {
 /// What is picked with the pointer, as a browser's selection: from where the press went down (`from`; its paragraph 0:
 /// nothing picked) to where the pointer took it (`to`), the paragraphs between them in the page's order whole; what
 /// is picked of each paragraph, by its id (those scrolled out of view kept as they were); whether the pointer is
-/// still taking it; and the list the press went down in (0 none), scrolled toward the pointer held past its edge.
+/// still taking it; the list the press went down in (0 none), scrolled toward the pointer held past its edge; and the
+/// layer it went down in (overlay.mbt; 0 the page), the only one whose words it picks, as a browser's selection
+/// started in a dialog stays in it.
 priv struct Picked {
   mut from : SelSpot
   mut to : SelSpot
   mut spans : Map[Int, SelSpan]
   mut dragging : Bool
   mut list : Int
+  mut layer : Int
 }
 
 ///|
-let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0 }
+let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0, layer: 0 }
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -439,7 +443,7 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
         Cursor::IBeam.code()
       } else if said is None && target != 0 && desk.takers.contains(target) {
         Cursor::Hand.code()
-      } else if sel_at(self.px, self.py) is Some(_) {
+      } else if self.sel_at(self.px, self.py) is Some(_) {
         // words that are picked with the pointer
         Cursor::IBeam.code()
       } else {
@@ -714,6 +718,7 @@ fn select_none() -> Unit {
   picked.to = no_spot
   picked.spans.clear()
   picked.dragging = false
+  picked.layer = 0
   select_edge_stop()
 }
 
@@ -729,6 +734,38 @@ fn Ctx::page_order(self : Ctx, i : Int) -> Array[Int] {
     k = self.nodes[k].parent
   }
   up.rev()
+}
+
+///|
+/// The layer node `i` is in (overlay.mbt: its id; 0 the page).
+fn Ctx::layer_of(self : Ctx, i : Int) -> Int {
+  let mut k = i
+  while k >= 0 {
+    let n = self.nodes[k]
+    if n.portal {
+      return n.portal_id
+    }
+    k = n.parent
+  }
+  0
+}
+
+///|
+/// The layer a press at (x, y) goes to, as last laid out (0 the page): the topmost whose content is there, or a modal
+/// one, whose ground takes it (Ctx::layer_keys's way).
+fn Ctx::layer_at(self : Ctx, x : Double, y : Double) -> Int {
+  let mut k = self.last_layers.length() - 1
+  while k >= 0 {
+    let l = self.last_layers[k]
+    k = k - 1
+    if l.inert {
+      continue
+    }
+    if l.modal || self.in_layer(l, x, y) {
+      return l.id
+    }
+  }
+  0
 }
 
 ///|
@@ -755,7 +792,7 @@ fn Ctx::node_place(self : Ctx, i : Int) -> Int {
 fn Ctx::sel_laid(self : Ctx) -> Array[SelTarget] {
   let out = []
   if self.count > 0 {
-    self.sel_walk(0, [], -1.0e9, -1.0e9, 1.0e9, 1.0e9, 1.0, out)
+    self.sel_walk(0, [], 0, -1.0e9, -1.0e9, 1.0e9, 1.0e9, 1.0, out)
   }
   out
 }
@@ -765,6 +802,7 @@ fn Ctx::sel_walk(
   self : Ctx,
   i : Int,
   at : Array[Int],
+  layer : Int,
   x0 : Double,
   y0 : Double,
   x1 : Double,
@@ -778,6 +816,7 @@ fn Ctx::sel_walk(
   if alpha <= 0.002 {
     return
   }
+  let layer = if n.portal { n.portal_id } else { layer }
   if n.kind == kind_rich {
     match (n.rcut, n.rich) {
       (Some(r), _) | (None, Some(r)) if r.select =>
@@ -785,6 +824,7 @@ fn Ctx::sel_walk(
           Some(lay) =>
             out.push({
               base: r.base,
+              layer,
               at: at.copy(),
               lay,
               text: n.text,
@@ -809,7 +849,7 @@ fn Ctx::sel_walk(
   let mut k = n.first
   while k >= 0 {
     at.push(self.node_place(k))
-    self.sel_walk(k, at, x0, y0, x1, y1, alpha, out)
+    self.sel_walk(k, at, layer, x0, y0, x1, y1, alpha, out)
     at.pop() |> ignore
     k = self.nodes[k].next
   }
@@ -853,6 +893,7 @@ fn field_picks(c : Ctx) -> Bool {
 /// A paragraph that can be picked, as painted (rich.mbt paint_rich).
 fn selectable_painted(
   base : Int,
+  layer : Int,
   at : Array[Int],
   lay : RichLayout,
   text : String,
@@ -863,7 +904,7 @@ fn selectable_painted(
   x1 : Double,
   y1 : Double,
 ) -> Unit {
-  desk.next_sels.push({ base, at, lay, text, ox, oy, x0, y0, x1, y1 })
+  desk.next_sels.push({ base, layer, at, lay, text, ox, oy, x0, y0, x1, y1 })
 }
 
 ///|
@@ -923,12 +964,12 @@ fn sel_spot_at(laid : Array[SelTarget], x : Double, y : Double) -> (SelTarget, I
 
 ///|
 /// What is picked with the pointer taken to (x, y) (sel_spot_at) from where the press went down, as the view is laid
-/// out now: the paragraphs between them in the page's order whole, the two ends' paragraphs from and to their spots;
+/// out now, in the layer it went down in: the paragraphs between them in the page's order whole, the two ends' paragraphs from and to their spots;
 /// those not laid out now (scrolled out of view) kept as they were while they lie between, let go once they do not
 /// (the one the press went down in kept, empty).
 fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   // the paragraphs laid out: their words and where they stand in the page, now
-  let laid = self.sel_laid()
+  let laid = self.sel_laid().filter(fn(t) { t.layer == picked.layer })
   let drawn : Map[Int, SelSpan] = {}
   for t in laid {
     if !drawn.contains(t.base) {
@@ -1040,15 +1081,17 @@ fn select_edge_stop() -> Unit {
 }
 
 ///|
-/// The paragraph that can be picked under (x, y), the topmost.
-fn sel_at(x : Double, y : Double) -> SelTarget? {
+/// The paragraph that can be picked under (x, y), the topmost, in the layer a press there goes to (Ctx::layer_at):
+/// none of the page's under a popover's panel or a dialog's ground.
+fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
   if desk.mouse_drags || x < 0.0 {
     return None
   }
+  let layer = self.layer_at(x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 {
+    if t.layer == layer && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 {
       return Some(t)
     }
     k = k - 1
@@ -1062,7 +1105,7 @@ fn sel_at(x : Double, y : Double) -> SelTarget? {
 /// do); elsewhere what was picked is let go.
 fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
   select_none()
-  match sel_at(x, y) {
+  match self.sel_at(x, y) {
     Some(target) => {
       let text = target.text
       let off = imax(0, imin(target.lay.offset_at(x - target.ox, y - target.oy), text.length()))
@@ -1078,6 +1121,7 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.to = { base: target.base, off: e, at }
       picked.spans[target.base] = { a: s, b: e, text, at }
       picked.dragging = clicks <= 1
+      picked.layer = target.layer
       // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
       picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
     }
