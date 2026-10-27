@@ -48,6 +48,9 @@
 //   (written, or the installer said it failed; the person's no is not a failure).
 // - `{"menu": action}`: one of the app's items in the menu bar chosen (@hostapi.menu_setup: an item's `action`).
 // - `{"nav": id}`: a tab or an item of the system's own bars chosen (nav.mbt: iOS's tab bar and navigation bar).
+// - `{"nav_action": {"x": …, "y": …, "w": …, "h": …}}`: where the system's bars put the app's action of its own (iOS
+//   27's prominent tab: an iPhone Duo's round one at the column's foot) in the app's view, in points (`w` 0: none
+//   shown); said as it moves.
 //
 // Android's (dev.mbui.MainActivity), iOS's (ios_app.m: `shown`, `link`, `network`, `size_class`, `fold`, `bars`
 // where its Info.plist's MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge) and macOS's (mac_app.m:
@@ -88,6 +91,8 @@ pub(all) enum SystemSaid {
   Menu(String)
   /// a tab or an item of the system's own bars chosen (nav.mbt: its `id`)
   NavTapped(String)
+  /// where the system's bars put the app's action of its own in the app's view (x, y, w, h in points; w 0: none)
+  NavAction(x~ : Double, y~ : Double, w~ : Double, h~ : Double)
 } derive(Eq, Show)
 
 ///|
@@ -192,6 +197,10 @@ pub fn system_said(json : String) -> Array[SystemSaid] {
   }
   match m.get("menu") {
     Some(String(action)) => out.push(Menu(action))
+    _ => ()
+  }
+  match m.get("nav_action") {
+    Some(Object(a)) => out.push(NavAction(x=number(a, "x"), y=number(a, "y"), w=number(a, "w"), h=number(a, "h")))
     _ => ()
   }
   match m.get("nav") {

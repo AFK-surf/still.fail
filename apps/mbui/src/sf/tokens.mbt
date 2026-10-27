@@ -380,6 +380,12 @@ pub fn in_pane() -> Bool {
 pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
   match pane_radii() {
     None => (side, side, foot)
+    // (beside the system's action at the column's foot, as high as it: on its line, in the foot left corner made for
+    // it (native_foot_corner) however far in that is, its other end as far from what it stands in)
+    Some(k) if native_capsule_h() is Some(h) && (h - height).abs() < 0.5 && native_foot_corner_now(k[3]) => {
+      let d = capsule_in(k[3], height)
+      (d, d, d)
+    }
     Some(k) => {
       let at_l = capsule_in(k[3], height)
       let at_r = capsule_in(k[2], height)
@@ -511,6 +517,10 @@ pub fn pane_foot_corner(holds? : Double = 0.0) -> Double {
 /// nearer than 4 in its own ends, at corner_fit's nearest (4) at most; else `own`. In the tape's 28 (a circle reads it
 /// as 26.78): keyboard and mouse's 48 (its 32 buttons) 41.6, 6 in; a finger's 52 (its 36) 44, 4.8 in.
 pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
+  // (beside the system's action at the column's foot: as high as it, one row with it)
+  if in_pane() && native_capsule_h() is Some(h) {
+    return h
+  }
   match pane_radii() {
     Some(k) => {
       let r = @ui.round_like(dmax(k[2], k[3]))

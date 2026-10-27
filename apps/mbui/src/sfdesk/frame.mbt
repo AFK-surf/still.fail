@@ -828,7 +828,9 @@ pub fn frame(
       c.box(style=frame_tape, fn() {
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
-        let page_corners = tape_pane_corners(Page, panel_of is Some(_))
+        // (its foot left corner, beside the system's action at the column's foot, the one the composer there stands
+        // concentric in as high as that action and on its line: @sf.native_foot_corner)
+        let page_corners = native_foot(tape_pane_corners(Page, panel_of is Some(_)), panel_top + panel_h)
         let page_w = if panel_of is None { main_w + under } else { main_w }
         let pane = tape_behind(c, Page, fn() { c.box(
           style=page_apart.then(
@@ -1572,6 +1574,17 @@ fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[@ui.CornerOf] {
     Side => @sf.tape_side_corners()
     Page => @sf.tape_corners(left=false, right=!panel)
     Panel => @sf.tape_corners(left=false, right=true)
+  }
+}
+
+///|
+/// A tape's panel `k`'s corners with its foot left one beside the system's action (@sf.native_foot_corner) where its
+/// foot is at `foot` in the window: what stands across its foot (the composer) on the action's line and as high,
+/// concentric with it there.
+fn native_foot(k : FixedArray[@ui.CornerOf], foot : Double) -> FixedArray[@ui.CornerOf] {
+  match @sf.native_foot_corner(foot) {
+    Some(r) => [k[0], k[1], k[2], Own(r)]
+    None => k
   }
 }
 

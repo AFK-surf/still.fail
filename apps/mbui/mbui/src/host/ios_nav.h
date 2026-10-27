@@ -373,6 +373,22 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   self.navs = [NSMutableDictionary dictionary];
   [self applyNone];
 }
+// Where the system put the action's tab (iOS 27's prominent one: an iPhone Duo's round one at its column's foot) in
+// the app's view, said as it moves (`nav_action`; w 0 where none shows), for what the app lines up with it (its
+// composer at the foot of the card beside it).
+- (void)viewDidLayoutSubviews {
+  [super viewDidLayoutSubviews];
+  UIView *v = the_view;
+  CGRect r = CGRectZero;
+  if (v && self.action.length && !self.tabBarHidden)
+    for (UITab *t in self.tabs)
+      if ([t.identifier isEqualToString:self.action]) r = [t frameInView:v];
+  if (CGRectIsNull(r) || CGRectIsInfinite(r)) r = CGRectZero;
+  static CGRect said;
+  if (CGRectEqualToRect(r, said)) return;
+  said = r;
+  say_system(@{@"nav_action" : @{@"x" : @(r.origin.x), @"y" : @(r.origin.y), @"w" : @(r.size.width), @"h" : @(r.size.height)}});
+}
 // What is pressed, not gone to, as the navigation bar's own items on every tab's page (the system lays them out:
 // down the side with the tabs where its vertical bar is, across the top upright), its title none: the action most
 // wanted prominent, on the accent; a dot a badge.

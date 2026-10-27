@@ -186,6 +186,32 @@ test "an iPhone Duo, folded or on its side: the composer's end concentric with t
 }
 
 ///|
+test "an iPhone Duo, folded or on its side: the cards as far from the screen's foot as from its side, the composer one row with the system's action at the column's foot, as high, concentric in the page's foot corner" {
+  for size in [(466.0, 678.0, 70.0), (951.0, 669.0, 84.0)] {
+    let (w, h, side) = size
+    let t = native_chat(w, h, true, side~, corner=59.0)
+    // (the system's round action, 24 in from the screen's side and foot, 48.67 across: as the Duo's iOS 27.1 lays it)
+    let a = 48.67
+    let (ax, ay) = (w - 24.0 - a, h - 24.0 - a)
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}},\"nav_action\":{\"x\":\{ax},\"y\":\{ay},\"w\":\{a},\"h\":\{a}}}")
+    t.run_for(@ui.nav_push_ms)
+    if w < 600.0 {
+      t.drag(400.0, 330.0, 140.0, 330.0)
+      t.run_for(@ui.nav_push_ms * 2.0)
+    }
+    guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
+    let near = fn(x : Double, y : Double) { (x - y).abs() < 0.05 }
+    assert_true(near(p.y + p.h, h - @sf.native_in), msg="\{size}: the page's foot at \{p.y + p.h}")
+    assert_true(near(b.h, a), msg="\{size}: the composer \{b.h} high")
+    assert_true(near(b.y + b.h / 2.0, ay + a / 2.0), msg="\{size}: the composer's middle at \{b.y + b.h / 2.0}")
+    let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
+    assert_true(near(at.0, at.1), msg="\{size}: the composer \{at} from the page's side and foot")
+    assert_true(near(at.1, @sf.capsule_in(p.radii.3, b.h)), msg="\{size}: not concentric with \{p.radii.3}")
+    assert_eq(t.corner_faults(), [])
+  }
+}
+
+///|
 test "an iPhone Duo folded, its outer screen: the bell and the workspaces in the system's short column, a page's actions its own" {
   let t = native_chat(466.0, 678.0, true, side=70.0)
   let said = t.nav_said()

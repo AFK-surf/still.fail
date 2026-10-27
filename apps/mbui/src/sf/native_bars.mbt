@@ -25,6 +25,7 @@ pub fn native_bars_reset() -> Unit {
   native_bars.on = false
   native_bars.side = 0.0
   native_bars.corner = 0.0
+  native_foot_made.val = None
   native_over_clear()
 }
 
@@ -57,6 +58,47 @@ pub fn native_clear() -> Double {
     0.0
   }
 }
+
+///|
+/// How high a capsule across a card's foot stands beside the system's action at the column's foot (iOS 27's prominent
+/// tab, an iPhone Duo's round one: @ui.system_nav_action): as high as it, so the two are one row (the user, 2026-10-28:
+/// 输入框跟右边的对上); None where there is none (every other device, upright, none said).
+pub fn native_capsule_h() -> Double? {
+  if !native_side() {
+    return None
+  }
+  match @ui.system_nav_action() {
+    Some((_, _, _, h)) => Some(h)
+    None => None
+  }
+}
+
+///|
+/// The foot left corner of a card whose foot is at `foot` in the window, beside the system's action at the column's
+/// foot: the corner a capsule as high as the action (native_capsule_h), its foot on the action's, stands concentric in
+/// (as far in from the card's side as from its foot); None where there is none, or the action is not over the card's
+/// foot (the keyboard up: under it).
+pub fn native_foot_corner(foot : Double) -> Double? {
+  guard native_capsule_h() is Some(h) && @ui.system_nav_action() is Some((_, y, _, _)) else { return None }
+  let d = foot - (y + h)
+  if d < corner_fit.near || d > h {
+    return None
+  }
+  let r = @ui.round_like_out(h / 2.0 + d)
+  native_foot_made.val = Some(r)
+  Some(r)
+}
+
+///|
+/// Whether a panel's foot left corner `r` round is one native_foot_corner made this frame (beside the system's action).
+fn native_foot_corner_now(r : Double) -> Bool {
+  native_foot_made.val is Some(m) && (m - r).abs() < 1.0e-6
+}
+
+///|
+// kept across runs: said by native_foot_corner as the frame lays out the card beside the action, None as the app
+// begins anew
+let native_foot_made : Ref[Double?] = Ref(None)
 
 ///|
 /// How far the cards stand from the window's edges and from each other beside the system's tabs (the user,
