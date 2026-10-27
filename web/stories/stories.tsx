@@ -377,7 +377,7 @@ const together = (...all: DemoExtension[]): DemoExtension => ({
 const fullStation = (): DemoExtension => together(
   permissionsDemo("missing", screensDemo()), agentEnvDemo("set"), logins(), memberships(),
   { then: (t, value) => (t.topic === "stations" && Array.isArray(value)
-    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false } } } : s))
+    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false }, network: { congestion: "cubic" } } } : s))
     : undefined) },
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
@@ -1284,6 +1284,7 @@ export const stories: Story[] = [
   // The variables what a station starts for its agents runs with (docs/agent-env.md): set, none yet, and edited on a phone.
   { id: "app-station-full", group: "应用", title: "station · 什么都有的 Mac", app: true, demo: fullStation(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-full-settings", group: "应用", title: "station · 什么都有的 Mac · 设置", app: true, demo: fullStation(), steps: toStation("设置") },
+  { id: "app-station-network", group: "应用", title: "station · 高级网络设置", app: true, demo: fullStation(), steps: [...toStation("设置"), { click: 'button:has-text("高级网络设置")' }] },
   { id: "app-station-full-machine", group: "应用", title: "station · 什么都有的 Mac · 软件与设备", app: true, demo: fullStation(), steps: toStation("软件与设备") },
   { id: "app-station-software", group: "设置", title: "station · 软件与更新 · 都能安装", app: true, demo: softwareDemo("installable"), steps: toStation("软件与设备") },
   { id: "app-station-software-no-npm", group: "设置", title: "station · 软件与更新 · 没有 npm、无法安装 Node", app: true, demo: softwareDemo("noNpm"), steps: toStation("软件与设备") },
