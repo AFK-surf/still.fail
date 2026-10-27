@@ -215,7 +215,8 @@ fn update_coming() -> Bool {
 
 ///|
 /// A newer build of the app with what comes (sfbase updates.mbt): 更新到 …; offered, what it brings first, its key
-/// to install it; coming, how far (a bar) and how it stands; failed, why in red, its key to try again.
+/// to install it (the list staying open, to watch it come); coming, how far (a bar) and how it stands; failed, why in
+/// red, its key to try again.
 fn update_row(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let failed = @sfbase.update.phase == "failed"
@@ -247,7 +248,7 @@ fn update_row(c : @ui.Ctx, src : Source) -> Unit {
     c.box(style=ftransfer_actions, fn() {
       if !going &&
         @sf.panel_icon_button(c, "update/install", if failed { "retry" } else { "download" }, @sf.t("android-chat.home.update", args=[("version", version)])) {
-        ftransfers.open = false
+        // (the list stays: how far the build has come is said in this row as it downloads)
         c.tell("update/install", fn() { @sfbase.update_install(src) })
       }
     })
