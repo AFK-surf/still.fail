@@ -1779,26 +1779,7 @@ export class Views implements Owner {
     if (Array.isArray(thread.people)) thread.people = people;
     if (thread.creator !== undefined) thread.creator = present.person(thread.creator, viewer, members_);
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
-    const surface = strOf(thread, "surface");
-    const channel = strOf(thread, "channel");
-    const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
-    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
-    const place = placeName(surface, channel, strOf(thread, "channelName"));
-    // A Feishu chat opens in Feishu (Lark's own app for its connect's).
-    const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
-    const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
-    let workspaceUrl: string | null = null;
-    for (const a of agents) {
-      const c = a.connect;
-      if (strOf(c, "kind") !== "slack") continue;
-      const conn = get(c, "connection");
-      const state = get(conn, "state");
-      if ((state === "connected" || state === "reconnecting") && typeof get(get(conn, "workspace"), "url") === "string") {
-        workspaceUrl = conn.workspace.url;
-        break;
-      }
-    }
-    const slackUrl = slack && workspaceUrl !== null ? `${workspaceUrl}archives/${channel}/p${strOf(thread, "threadTs").replaceAll(".", "")}` : null;
+    const { place, slackUrl, feishuUrl } = this.#whereIn(station, agents, strOf(thread, "surface"), strOf(thread, "channel"), strOf(thread, "channelName"), strOf(thread, "threadTs"));
     const found = this.#row(station, { thread: id });
     const row = found ?? undefined;
     const open = (d: J) => !this.local.answered(station, id, u64(d.seq) ?? 0);
@@ -2135,6 +2116,31 @@ export class Views implements Owner {
     return out;
   }
 
+  /// Where a Slack or Feishu thread is, in words (placeName), and its link in Slack (while one of `agents`' Slack
+  /// connects is signed in) or in Feishu: none of them for a still.fail chat.
+  #whereIn(station: string, agents: J[], surface: string, channel: string, channelName: string, threadTs: string): { place: string | null; slackUrl: string | null; feishuUrl: string | null } {
+    const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
+    const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
+    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
+    const place = placeName(surface, channel, channelName);
+    // A Feishu chat opens in Feishu (Lark's own app for its connect's).
+    const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
+    const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
+    let workspaceUrl: string | null = null;
+    for (const a of agents) {
+      const c = a.connect;
+      if (strOf(c, "kind") !== "slack") continue;
+      const conn = get(c, "connection");
+      const state = get(conn, "state");
+      if ((state === "connected" || state === "reconnecting") && typeof get(get(conn, "workspace"), "url") === "string") {
+        workspaceUrl = conn.workspace.url;
+        break;
+      }
+    }
+    const slackUrl = slack && workspaceUrl !== null ? `${workspaceUrl}archives/${channel}/p${threadTs.replaceAll(".", "")}` : null;
+    return { place, slackUrl, feishuUrl };
+  }
+
   /// The page of an item whose agent has no chat yet.
   #unchatted(station: string, key: string): Value | undefined {
     const agent = this.agent(station, key);
@@ -2159,10 +2165,17 @@ export class Views implements Owner {
     // No chat at all, as its detail says: none here, none in Slack (a Slack thread has no chat here either), not archived.
     const detail = this.value({ topic: "session", station, key });
     const noChat = !archived && detail !== undefined && "ok" in detail && arr(get(detail.ok, "threads")).length === 0;
+    // Where the Slack or Feishu thread it came from is (the row's origin), as a chat's page says its own.
+    const origin = get(row, "origin");
+    const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
+    const surface = isObject(origin) && isObject(agent.connect) ? `${strOf(agent.connect, "kind")}:${strOf(agent.connect, "id")}` : "";
+    const where = isObject(origin) ? this.#whereIn(station, [agent], surface, strOf(origin, "channel"), strOf(origin, "channelName"), strOf(origin, "threadTs")) : null;
     return {
       ok: {
         me: this.me(ofAddress(station)),
         thread: null,
+        ...(where !== null && where.place !== null ? { place: where.place, slackUrl: where.slackUrl } : {}),
+        ...(where !== null && where.feishuUrl !== null ? { feishuUrl: where.feishuUrl } : {}),
         ...(noChat ? { noChat: true } : {}),
         title: row !== undefined && row.title !== undefined ? row.title : t("core-views.new_chat"),
         people: [],

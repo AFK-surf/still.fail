@@ -1585,9 +1585,9 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   t.set(sessionOf("ws/a", "k"), { session: fullSession("k"), threads: [slackThread(3)], turns: [turn("t1")] });
   await t.read(u, 1);
   assert.equal(u.value === undefined, true, "its title is the station's: it waits for the items");
-  const item = { ...row("k", t.host.nowMs()), title: "部署挂了" };
+  const item = { ...row("k", t.host.nowMs()), title: "部署挂了", origin: { teamName: "AFK", channel: "C1", channelName: "ops", threadTs: "1.2" } };
   t.set(rows("ws/a"), [row("7", t.host.nowMs()), item]);
-  t.set(overview("ws/a"), overviewOf([connect("c1", "Slack")], []));
+  t.set(overview("ws/a"), overviewOf([{ ...connect("c1", "Slack"), connection: { state: "connected", workspace: { team: "AFK", teamId: "T1", url: "https://afk.slack.com/", botUserId: "U0BOT", botName: "bot" } } }], []));
   await t.read(u, 1);
   const v = u.value;
   assert.deepEqual([v.thread ?? null, v.title, v.messages, v.outbox, v.more], [null, "部署挂了", [], [], false]);
@@ -1595,6 +1595,8 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   assert.deepEqual([v.agents.length, a.session.key, a.connect.name, a.status], [1, "k", "Slack", "idle"]);
   assert.deepEqual([a.turns[0].id, a.threads[0].id], ["t1", 3]);
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
+  // where its Slack thread is, and the way there, as a chat's info says them
+  assert.deepEqual([v.place, v.slackUrl, v.feishuUrl], ["#ops", "https://afk.slack.com/archives/C1/p12", undefined]);
   assert.equal(v.noChat, undefined, "its Slack thread is its chat: the page does not open its history by itself");
   for (const archived of [42, null]) {
     t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { archivedAt: archived }), threads: [], turns: [] });
