@@ -42,6 +42,7 @@ fn chat_state(c : @ui.Ctx, words : String, lead : String, rest : String) -> Unit
   match lead {
     "need" | "done" | "wait" | "watch" =>
       c.box(style=chat_state_row, label=words, fn() {
+        // det-ok(style-literal): no number of its own, the line the theme sets its words on
         let slot = chat_state_slot.then(@ui.style(h=Fixed(c.style_size(said).1)))
         c.box(style=slot, fn() { lead_icon(c, lead, if turn { p.text } else { p.muted }) }) |> ignore
         let after = if rest == "" && lead == "done" { @sf.t("web-main.status.done") } else { rest }
