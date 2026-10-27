@@ -79,7 +79,7 @@ pub fn has_icon(name : String) -> Bool {
 ///|
 /// Icon `name` (design/icons: "chevron-left", "list", "search"…) `size`
 /// square in `color`.
-pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -> Int {
+pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64, by_ink? : Bool = false) -> Int {
   let color = color.unwrap_or(theme().p.text)
   let drawn = match icons_made.get((name, size, color)) {
     Some(d) => d
@@ -93,7 +93,8 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
       d
     }
   }
-  c.shapes(drawn.shapes, w=Px(size), h=Px(size), name=drawn.name)
+  // (`by_ink`: laid out by where it draws, its grid's room either side taking none: at a button's end, Ctx::shapes)
+  c.shapes(drawn.shapes, w=Px(size), h=Px(size), name=drawn.name, by_ink~)
 }
 
 ///|

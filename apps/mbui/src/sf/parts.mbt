@@ -12,12 +12,12 @@ pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 
 ///|
 /// For parts whose own parameter is called `icon`.
-fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Unit {
+fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? : Bool = false) -> Unit {
   // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
   if name.has_prefix("runtime:") {
     maker_mark(c, "", name.view(start_offset=8).to_string(), size) |> ignore
   } else {
-    icon(c, name, size~, color~) |> ignore
+    icon(c, name, size~, color~, by_ink~) |> ignore
   }
 }
 
@@ -123,7 +123,9 @@ pub fn button(
         )
         |> ignore
       } else if icon != "" {
-        draw_icon(c, icon, 16.0, ink)
+        // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes
+        // taking none, so the two ends look alike)
+        draw_icon(c, icon, button_icon, ink, by_ink=true)
       }
       c.text(
         label,
@@ -152,6 +154,10 @@ pub fn button(
 ///|
 /// How far a button's words are in from its sides.
 let button_padx : Double = 16.0
+
+///|
+/// How big a button's icon is.
+let button_icon : Double = 16.0
 
 ///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each

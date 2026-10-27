@@ -514,14 +514,20 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     while k >= 0 {
       let ch = self.nodes[k]
       if whole[k] && layer[k] == layer[gi] && ch.fw > 0.0 && ch.fh > 0.0 {
-        if ch.x < bx0 {
+        // (a drawing laid out by its ink (Ctx::shapes by_ink: its box past its room either side) by that room)
+        let (cx0, cx1) = if ch.shapes.length() > 0 {
+          (ch.x - dmin(ch.mar_l, 0.0), ch.x + ch.fw + dmin(ch.mar_r, 0.0))
+        } else {
+          (ch.x, ch.x + ch.fw)
+        }
+        if cx0 < bx0 {
           first = k
         }
-        if ch.x + ch.fw > bx1 {
+        if cx1 > bx1 {
           last = k
         }
-        bx0 = dmin(bx0, ch.x)
-        bx1 = dmax(bx1, ch.x + ch.fw)
+        bx0 = dmin(bx0, cx0)
+        bx1 = dmax(bx1, cx1)
       }
       k = ch.next
     }
