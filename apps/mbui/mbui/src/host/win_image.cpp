@@ -450,6 +450,69 @@ int mb_png_of_dib(const void *dib, size_t n, unsigned char **png, size_t *len) {
   return ok;
 }
 
+// A PNG's bytes as a bitmap the clipboard takes (CF_DIB: a BITMAPINFOHEADER, then 32 bits a pixel in BGRA, its rows
+// from the bottom as most programs that paste one read it), in memory SetClipboardData takes (GMEM_MOVEABLE): NULL
+// where it cannot be read. What a PNG alone under "PNG" is not pasted into (Paint, chat apps, the clipboard's history,
+// Win+V) takes this. On a thread with COM (the UI thread's, OleInitialize).
+HGLOBAL mb_dib_of_png(const void *png, size_t n) {
+  IWICImagingFactory *wic = NULL;
+  IWICStream *in = NULL;
+  IWICBitmapDecoder *dec = NULL;
+  IWICBitmapFrameDecode *frame = NULL;
+  IWICFormatConverter *bgra = NULL;
+  HGLOBAL g = NULL;
+  UINT w = 0, h = 0;
+  if (n > 0 && n <= MAXDWORD &&
+      SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic))) &&
+      SUCCEEDED(wic->CreateStream(&in)) && SUCCEEDED(in->InitializeFromMemory((BYTE *)png, (DWORD)n)) &&
+      SUCCEEDED(wic->CreateDecoderFromStream(in, NULL, WICDecodeMetadataCacheOnDemand, &dec)) &&
+      SUCCEEDED(dec->GetFrame(0, &frame)) && SUCCEEDED(wic->CreateFormatConverter(&bgra)) &&
+      SUCCEEDED(bgra->Initialize(frame, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, NULL, 0.0,
+                                 WICBitmapPaletteTypeCustom)) &&
+      SUCCEEDED(bgra->GetSize(&w, &h)) && w > 0 && h > 0 && w <= 0x7fffffff / 4) {
+    UINT stride = w * 4;
+    size_t pixels = (size_t)stride * h;
+    // (what a DWORD-sized buffer CopyPixels takes holds, at most)
+    if (pixels <= MAXDWORD) g = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + pixels);
+    uint8_t *p = g ? (uint8_t *)GlobalLock(g) : NULL;
+    BYTE *row = p ? (BYTE *)malloc(stride) : NULL;
+    int ok = 0;
+    if (row) {
+      BITMAPINFOHEADER *bh = (BITMAPINFOHEADER *)p;
+      ZeroMemory(bh, sizeof *bh);
+      bh->biSize = sizeof *bh;
+      bh->biWidth = (LONG)w;
+      bh->biHeight = (LONG)h;
+      bh->biPlanes = 1;
+      bh->biBitCount = 32;
+      bh->biCompression = BI_RGB;
+      bh->biSizeImage = (DWORD)pixels;
+      uint8_t *bits = p + sizeof *bh;
+      // (read from the top, then turned upside down: a DIB's rows from the bottom)
+      if (SUCCEEDED(bgra->CopyPixels(NULL, stride, (UINT)pixels, bits))) {
+        for (UINT y = 0; y < h / 2; y++) {
+          memcpy(row, bits + (size_t)y * stride, stride);
+          memcpy(bits + (size_t)y * stride, bits + (size_t)(h - 1 - y) * stride, stride);
+          memcpy(bits + (size_t)(h - 1 - y) * stride, row, stride);
+        }
+        ok = 1;
+      }
+    }
+    free(row);
+    if (p) GlobalUnlock(g);
+    if (!ok && g) {
+      GlobalFree(g);
+      g = NULL;
+    }
+  }
+  if (bgra) bgra->Release();
+  if (frame) frame->Release();
+  if (dec) dec->Release();
+  if (in) in->Release();
+  if (wic) wic->Release();
+  return g;
+}
+
 }  // extern "C"
 
 // ---------------------------------------------------------------------------

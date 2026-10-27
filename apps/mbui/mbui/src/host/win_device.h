@@ -276,7 +276,31 @@ moonbit_bytes_t mb_host_clip_file(int32_t id, int32_t i) {
   return b;
 }
 
-// ---- the clipboard written: words (as @hostapi.clipboard_set), or a PNG under "PNG" (no label on Windows) ----
+// ---- the clipboard written: words (as @hostapi.clipboard_set), or a picture (no label on Windows) ----
+
+// A PNG on the clipboard, in place of what it held: under "PNG" (browsers, Office read it, its pixels as they are) and
+// as a bitmap, CF_DIB (Windows makes CF_BITMAP and CF_DIBV5 of it): what Paint, chat apps and the clipboard's history
+// (Win+V) take, none of which reads "PNG" (2026-10-27: 分享图片's 复制图片 put nothing they could paste). Either alone
+// when the other cannot be made.
+static void clipboard_png(const unsigned char *png, size_t n) {
+  UINT f = RegisterClipboardFormatW(L"PNG");
+  HGLOBAL h = f ? GlobalAlloc(GMEM_MOVEABLE, n) : NULL;
+  if (h) {
+    memcpy(GlobalLock(h), png, n);
+    GlobalUnlock(h);
+  }
+  HGLOBAL dib = mb_dib_of_png(png, n);
+  if (!h && !dib) return;
+  if (!OpenClipboard(hwnd)) {
+    if (h) GlobalFree(h);
+    if (dib) GlobalFree(dib);
+    return;
+  }
+  EmptyClipboard();
+  if (h && !SetClipboardData(f, h)) GlobalFree(h);
+  if (dib && !SetClipboardData(CF_DIB, dib)) GlobalFree(dib);
+  CloseClipboard();
+}
 
 void mb_host_clip_set(moonbit_string_t text, moonbit_bytes_t png, moonbit_string_t label) {
   (void)label;
@@ -285,17 +309,7 @@ void mb_host_clip_set(moonbit_string_t text, moonbit_bytes_t png, moonbit_string
     mb_host_clipboard_set(text);
     return;
   }
-  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, n);
-  if (!h) return;
-  memcpy(GlobalLock(h), png, n);
-  GlobalUnlock(h);
-  if (!OpenClipboard(hwnd)) {
-    GlobalFree(h);
-    return;
-  }
-  EmptyClipboard();
-  if (!SetClipboardData(RegisterClipboardFormatW(L"PNG"), h)) GlobalFree(h);
-  CloseClipboard();
+  clipboard_png(png, n);
 }
 
 // ---- the display kept on; no haptics ----
