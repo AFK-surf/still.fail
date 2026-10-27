@@ -209,6 +209,10 @@ pub fn chat_list(
               }
               None => ()
             }
+            // where it stands: its room what it leaves as a floor when it goes, as an agent's line's (act_rooms)
+            if e is State(_, _, _) {
+              rd.act_whole[keys[i]] = true
+            }
           }
         }
       },
