@@ -315,10 +315,10 @@ pub let kept_frame_side : Double = 640.0
 
 ///|
 /// A chat's video the station made no poster of (one from before posters, or with neither QuickLook nor ffmpeg), small
-/// enough to read for it (ChatFiles.kt ChatVideo: BIG_FILE): its first frame drawn here. A player of it made out of
-/// sight (never placed), its frame at 0 grabbed, then let go; what it read kept with the chat by the core, as the
-/// viewer's reads are. By the thumbnail's id: the player while it grabs, and the frame's image ("" while it comes,
-/// "!" none to be had).
+/// enough to read for it (ChatFiles.kt ChatVideo: BIG_FILE), or one waiting in a draft that the host has no picture
+/// of: its first frame drawn here. A player of it made out of sight (never placed), its frame at 0 grabbed, then let
+/// go; what it read of a chat's kept with the chat by the core, as the viewer's reads are. By the thumbnail's id: the
+/// player while it grabs, and the frame's image ("" while it comes, "!" none to be had).
 pub(all) struct FirstFrame {
   mut view : @ui.NativeView?
   mut picture : String
@@ -332,6 +332,45 @@ pub let pv_first : Map[String, FirstFrame] = Map([])
 /// station made no poster: an image's key once here, "" while it comes or where it is too big to read for it, "!"
 /// when it could not be.
 pub fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a : Attachment, id : String) -> String {
+  if !pv_first.contains(id) && (a.size <= 0.0 || a.size > big_file) {
+    return ""
+  }
+  let (_, mime, _) = preview_kind(a.name)
+  grab_first(c, id, a.name, fn() {
+    @ui.NativeView::video(mime, fn(offset, length, answer) {
+      let p : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(base_name(a.path)),
+        "offset": Json::number(offset),
+        "length": Json::number(length.to_double()),
+      }
+      chat_keep(p, a.size)
+      stream_part(src, "station.file.part", p, a.size, answer)
+    })
+  })
+}
+
+///|
+/// The first frame of video `name` read whole here (a file picked or pasted where the host has no picture of it:
+/// @hostapi.Picked.src), from its `bytes`; by `id`, as first_frame.
+pub fn bytes_first_frame(c : @ui.Ctx, id : String, name : String, bytes : Bytes) -> String {
+  let (_, mime, _) = preview_kind(name)
+  grab_first(c, id, name, fn() {
+    @ui.NativeView::video(mime, fn(offset, length, answer) {
+      let n = bytes.length()
+      let from = if offset < 0.0 { 0 } else if offset > n.to_double() { n } else { offset.to_int() }
+      let to = if length > n - from { n } else { from + length }
+      answer(bytes[from:to].to_owned(), n.to_double(), false)
+      fn() {  }
+    })
+  })
+}
+
+///|
+/// A video's first frame (`id` naming it, `name` its file's), from the player `open` makes of it (pv_first): an image's
+/// key once here, "" while it comes, "!" when it could not be.
+fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeView) -> String {
   match pv_first.get(id) {
     Some(f) => {
       match f.view {
@@ -345,7 +384,7 @@ pub fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a 
             Some(png) => {
               f.view = None
               if png.length() > 0 {
-                let k = "mem:pv-first/\{@ui.stable_hash(id)}/\{id.length()}/\{a.name}"
+                let k = "mem:pv-first/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
                 @ui.add_image(k, png)
                 f.picture = k
               } else {
@@ -361,23 +400,9 @@ pub fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a 
       f.picture
     }
     None => {
-      if a.size <= 0.0 || a.size > big_file {
-        return ""
-      }
       let f : FirstFrame = { view: None, picture: "" }
       pv_first[id] = f
-      let (_, mime, _) = preview_kind(a.name)
-      let n = @ui.NativeView::video(mime, fn(offset, length, answer) {
-        let p : Map[String, Json] = {
-          "station": Json::string(station),
-          "key": Json::string(key),
-          "name": Json::string(base_name(a.path)),
-          "offset": Json::number(offset),
-          "length": Json::number(length.to_double()),
-        }
-        chat_keep(p, a.size)
-        stream_part(src, "station.file.part", p, a.size, answer)
-      })
+      let n = open()
       if !n.here() {
         f.picture = "!"
         return "!"

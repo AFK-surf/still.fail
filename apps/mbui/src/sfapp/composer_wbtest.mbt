@@ -415,6 +415,46 @@ test "a video picked shows as the host's still of it in its tile and its message
 }
 
 ///|
+test "a video picked or pasted that the host has no picture of shows its first frame, made from its bytes, in its tile and its message" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let w = @sfbase.writing(src, draft_key(r))
+  // (macOS's pasteboard and pickers, Windows', iOS's say no address for a file: no still of the host's)
+  let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
+  @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
+  let id = text(Some(w.files[0]), "id")
+  assert_eq(@sfbase.writing_pictures.get(id), None)
+  // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
+  let before = t.views().length()
+  t.draw()
+  // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
+  let opened = t.views()[before:].to_array().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
+  assert_eq(opened.length(), 1)
+  let view = (1).until(1000).find_first(fn(i) { opened[0].has_prefix("open \{i} ") }).unwrap()
+  let req = t.view_reads(view, 0.0, 1 << 20)
+  t.draw()
+  assert_eq(t.view_answers(view), [(req, clip.length(), clip.length().to_double())])
+  assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"89504e47\"}"))
+  t.draw()
+  let still = @sfbase.writing_pictures.get(id).unwrap()
+  assert_true(still.has_prefix("mem:pv-first/"))
+  // sent while it still goes up: its message draws it from here, as a picture's
+  let file = attachment_of({
+    "name": Json::string("录屏.mov"),
+    "path": Json::string(@sfbase.upload_path(id)),
+    "size": Json::number(clip.length().to_double()),
+    "upload": Json::string(id),
+  })
+  assert_eq(sent_picture(r.station, file), Some(still))
+  // the player let go
+  t.draw()
+  assert_true(t.views().contains("close \{view}"))
+}
+
+///|
 test "image sizes from their bytes" {
   // a PNG's header (IHDR 1600 × 900), a GIF's (3 × 2)
   let png = Bytes::from_array([
