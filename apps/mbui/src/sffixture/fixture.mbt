@@ -432,8 +432,9 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
     }),
     row("c3", "夜里的构建又失败了", "ws1/st2", "15 分钟前", {
-      "state": "failed",
-      "tone": "alert",
+      // (an agent asking for help: the core's tone for it is wait, the viewer's turn: decisions.ts tone)
+      "state": "block",
+      "tone": "wait",
       "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
       "stateLead": "need",
       "stateRest": "测试机的磁盘满了，要不要清理旧的缓存？",
@@ -459,7 +460,6 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   let today = if f.mode == "home-pins" { today.map(fix_pins) } else { today }
   let yesterday = [
     row("c6", "和 Ana 一起看新版的引导页", "ws1/st1", "昨天 21:14", {
-      "tone": "other",
       "last": last("Ana：第二屏的插画可以再小一点"),
       "people": [ana, me, zhou],
       "creator": { "id": "ana@example.com", "name": "Ana", "via": "cloud" },
@@ -485,6 +485,10 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       "agents": [agent("anthropic", "claude"), agent("openai", "codex"), agent("deepseek", "dsh"), agent("qwen", "dsh"), agent("kimi", "dsh")],
     }),
     row("c10", "周报的模板", "ws1/st1", "星期三", {
+      // (an agent that failed in a chat the viewer started: present.ts session, marks.ts rowTone; its line the last
+      // message, not the core's 出错：…, whose words the recorded screens' text has not got)
+      "state": "failed",
+      "tone": "alert",
       "last": last("模板放在共享文件夹的第一层"),
       "agents": [agent("gemini", "dsh")],
     }),

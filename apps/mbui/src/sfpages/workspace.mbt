@@ -285,7 +285,8 @@ let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=fal
 
 ///|
 /// What a workspace has waiting, after its name (SettingParts.kt MarkCounts): the chats its person takes part in that
-/// want them, that wait on them, that are unread, each its mark (chat_mark.mbt) and how many, 8 apart.
+/// went wrong, and those where it is their turn (waiting on them or unread), each its mark (chat_mark.mbt: red, blue)
+/// and how many, 8 apart.
 fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
   let m = Some(mark)
   if text(m, "tone") == "" {
@@ -293,8 +294,8 @@ fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
   }
   // (read out as what it says: MarkCounts' contentDescription)
   c.box(style=ws_counts, label=text(m, "label"), fn() {
-    for k in [("alert", "alert"), ("wait", "wait"), ("done", "unread")] {
-      let n = @sfbase.count(m, k.1)
+    for k in [("alert", ["alert"]), ("done", ["wait", "unread"])] {
+      let n = k.1.fold(init=0, fn(n, x) { n + @sfbase.count(m, x) })
       if n > 0 {
         c.box(style=ws_count, fn() {
           chat_mark(c, k.0) |> ignore

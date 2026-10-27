@@ -1,6 +1,6 @@
 // An agent's mark (ember web/src/ui.tsx AgentMark, ui.css.ts agentMark): its model's maker on a tile of the neutral
-// ground, its corner .3 of its side; where it stands a mark at the corner in the chat list's colours (ChatMark.css.ts):
-// yellow spokes stepping round at work, red when it wants someone (blocked, failed), ringed in the ground it is on.
+// ground, its corner .3 of its side; where it stands a mark at the corner, the chat list's own (chat_mark.mbt): yellow
+// spokes stepping round at work, blue when it waits on a person, red when it failed, ringed in the ground it is on.
 
 ///|
 /// `maker`'s mark (of `runtime`) on its tile `side` across: 14 (an agent's line in the chat's info), 16 (a line of a
@@ -34,10 +34,10 @@ pub fn agent_mark(
 
 ///|
 /// The badge at a mark's corner `side` across, as a 20 one's has it (ui.css.ts agentMark ::after, ::before) and no
-/// larger on a larger one: red 12 across ringed 2 in `ground`, 3 past the corner; the spokes 10, 2 past it. On a smaller
-/// mark all of it as much smaller, its maker still seen past it (a badge 12 across covered a 14 one's whole maker but
-/// a sliver).
-fn agent_badge(c : @ui.Ctx, badge : String, side : Double, ground : Int64) -> Unit {
+/// larger on a larger one: a dot 12 across ringed 2 in `ground`, 3 past the corner, blue waiting on a person (block)
+/// and red failed; the spokes 10, 2 past it. On a smaller mark all of it as much smaller, its maker still seen past it
+/// (a badge 12 across covered a 14 one's whole maker but a sliver). A phone's bar and its 奏 rows draw this one too.
+pub fn agent_badge(c : @ui.Ctx, badge : String, side : Double, ground : Int64) -> Unit {
   let k = dmin(side / agent_badge_full, 1.0)
   match badge {
     "block" | "failed" => {
@@ -46,7 +46,7 @@ fn agent_badge(c : @ui.Ctx, badge : String, side : Double, ground : Int64) -> Un
       let ring = @ui.style(w=Fixed(d), h=Fixed(d), p=@sf.room_of(agent_badge_ring * k)).then(agent_badge_round)
       c.layer(fn() {
         c.box(style=ring.then(@ui.style(bg=Data(ground))), tx=at, ty=at, fn() {
-          c.box(style=agent_badge_red, fn() {  }) |> ignore
+          c.box(style=if badge == "block" { agent_badge_blue } else { agent_badge_red }, fn() {  }) |> ignore
         })
         |> ignore
       })
@@ -108,3 +108,7 @@ let agent_badge_round : @ui.Style = @ui.css("radius=Full")
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_badge_red : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=@sf.mark_red)
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_badge_blue : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=@sf.mark_blue)

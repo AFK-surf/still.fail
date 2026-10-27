@@ -2428,15 +2428,12 @@ pub let edge_tip_gap : Double = 14.0
 // The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
 
 ///|
-/// A chat's marks' colours, bright in both themes (ChatMark.css.ts: #3b82f6 done and waiting on the viewer, #e5484d to
-/// be seen now and its halo at 25%, #f2b01e at work).
+/// An agent's and a chat's marks' colours, bright in both themes, one meaning each wherever they are (ChatMark.css.ts:
+/// #3b82f6 the viewer's turn, unread or waited on; #e5484d gone wrong; #f2b01e at work).
 pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
 
 ///|
 pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
-
-///|
-pub let mark_halo : @ui.Color = A(mark_red, O25)
 
 ///|
 pub let mark_yellow : Int64 = 0xF2B01EFFL

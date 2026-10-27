@@ -567,7 +567,7 @@ fn zi_row(
   }
   let b = c.box(style=if c.lit(id) { zi_row_hot } else { zi_row_box }, id~, fn() {
     if busy {
-      c.box(style=zi_busy_room, fn() { @sf.spokes(c, zi_busy, zi_busy_ink) |> ignore }) |> ignore
+      c.box(style=zi_busy_room, fn() { @sf.spokes(c, zi_busy, @sf.mark_yellow) |> ignore }) |> ignore
     } else {
       c.box(style=zi_done, fn() {  }) |> ignore
     }
@@ -843,9 +843,6 @@ let zi_busy_room : @ui.Style = @ui.css("pt=S1")
 
 ///|
 let zi_busy : Double = 12.0
-
-///|
-let zi_busy_ink : Int64 = 0xF2B01EFFL
 
 ///|
 /// Answered: a quiet dot (done: 6, 7 down, 3 in).

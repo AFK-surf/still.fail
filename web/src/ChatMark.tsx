@@ -8,14 +8,14 @@ import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
 import { Archive, Bell, Check, Wait, Watch } from "@stillfail/ui/icons.tsx";
 
-export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
+export type ChatTone = "busy" | "done" | "alert" | "wait";
 
-const TONES: readonly string[] = ["busy", "done", "alert", "wait", "other"];
+const TONES: readonly string[] = ["busy", "done", "alert", "wait"];
 
 /**
- * What a chat's row says of it: the core's mark when it gives one (`tone`, with its pieces of work: a blue ring when
- * something waits on the viewer, a grey one when only on others). From a core before it: red when it wants someone now
- * (blocked, failed), yellow while at work, blue when it ended well with something unread; nothing otherwise.
+ * What a chat's row says of it: the core's mark when it gives one (`tone`: done and wait both the viewer's turn, the
+ * same blue dot). From a core before it: red when it wants someone now (blocked, failed), yellow while at work, blue
+ * when it ended well with something unread; nothing otherwise.
  */
 export function chatTone(item: ChatItem): ChatTone | undefined {
   if (item.tone !== undefined) return TONES.includes(item.tone) ? item.tone as ChatTone : undefined;
@@ -59,8 +59,7 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
   return (
     <span className={css.markCounts} role="img" aria-label={mark.label ?? ""}>
       {mark.alert > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="alert" />{mark.alert}</span>}
-      {(mark.wait ?? 0) > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="wait" />{mark.wait}</span>}
-      {mark.unread > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="done" />{mark.unread}</span>}
+      {(mark.wait ?? 0) + mark.unread > 0 && <span className={css.markCount}><span className={css.chatMarkInline} data-tone="done" />{(mark.wait ?? 0) + mark.unread}</span>}
     </span>
   );
 }

@@ -249,7 +249,7 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
     fn() {
       c.box(w=Px(12.0), h=Px(12.0), pt=4.0, align=ACenter, justify=JCenter, fn() {
         if busy {
-          agent_state_mark(c, "run")
+          at_work_mark(c)
         } else {
           c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=t.p.subtle, fn() {  }) |> ignore
         }
