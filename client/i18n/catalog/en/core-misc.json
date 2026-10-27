@@ -123,6 +123,7 @@
   "core-misc.device.desktop": "{brand} Desktop{more}",
   "core-misc.device.ios": "{brand} iOS{more}",
   "core-misc.device.web": "{brand} Web · {browser}{more}",
+  "core-misc.error.traced": "{message} (error ID {id})",
   "core-misc.decisionForm.notYours": "This automatic decisions draft belongs to another page",
   "core-misc.decisionForm.wait": "Wait for the save to finish",
   "core-misc.decisionForm.modelGone": "This decision model is no longer available",

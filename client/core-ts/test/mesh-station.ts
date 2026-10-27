@@ -80,6 +80,11 @@ export class Station {
     this.endpoint.holdIncoming(n);
   }
 
+  /// The next `n` connections coming are refused (an endpoint not taking new connections).
+  refused(n: number): void {
+    this.endpoint.refuseIncoming(n);
+  }
+
   id(): string {
     return this.endpoint.id();
   }

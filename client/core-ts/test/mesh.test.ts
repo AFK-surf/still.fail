@@ -548,6 +548,20 @@ sim("a_write_whose_link_went_before_its_answer_is_asked_again_once_its_station_i
   await close(s, station, mesh);
 });
 
+sim("a_refused_connection_is_said_in_plain_words_and_what_the_transport_said_kept_as_its_cause", async (s) => {
+  const { mesh, station } = await setup(s);
+  station.refused(1);
+  const error = await s.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+    () => null,
+    (e) => e as CoreError,
+  );
+  // Said with the start of the trace it failed in, by which its spans are found.
+  assert.equal(error?.message, `无法连接此 station（错误编号 ${error?.trace?.slice(0, 8)}）`);
+  assert.match(error?.trace ?? "", /^[0-9a-f]{32}$/);
+  assert.equal(error?.cause, "aborted by peer: the server refused to accept a new connection");
+  await close(s, station, mesh);
+});
+
 sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) => {
   const { mesh, station } = await setup(s);
   station.unanswered(1);
@@ -557,7 +571,7 @@ sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) 
     () => null,
     (e) => e as CoreError,
   );
-  assert.equal(error?.message, "无法连接此 station：无响应");
+  assert.equal(error?.message, `无法连接此 station：无响应（错误编号 ${error?.trace?.slice(0, 8)}）`);
   const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   // Another endpoint (other sockets), the same device.

@@ -341,7 +341,7 @@ test("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", { skip },
     () => null,
     (e) => e as CoreError,
   );
-  assert.equal(error?.message, "无法连接此 station：无响应");
+  assert.equal(error?.message, `无法连接此 station：无响应（错误编号 ${error?.trace?.slice(0, 8)}）`);
   times.clear();
   const link = await runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal((await request(runner, link, head("/admin/api/overview"))).status, 200);

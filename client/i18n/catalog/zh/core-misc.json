@@ -123,6 +123,7 @@
   "core-misc.device.desktop": "{brand} 桌面版{more}",
   "core-misc.device.ios": "{brand} iOS{more}",
   "core-misc.device.web": "{brand} 网页版 · {browser}{more}",
+  "core-misc.error.traced": "{message}（错误编号 {id}）",
   "core-misc.decisionForm.notYours": "此自动决策草稿不属于当前页面",
   "core-misc.decisionForm.wait": "请等保存完成",
   "core-misc.decisionForm.modelGone": "此决策模型已不可用",

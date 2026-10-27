@@ -4,7 +4,7 @@ import { RUNTIMES } from "../format.ts";
 import { Effect, Scope } from "effect";
 import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
-import { CoreError, HostError, asCoreError } from "../error.ts";
+import { CoreError, HostError, asCoreError, failedIn } from "../error.ts";
 import { FileSource } from "../file-source.ts";
 import type { Host, Pull, Unzstd } from "../host.ts";
 import { current, t } from "../i18n.ts";
@@ -50,10 +50,7 @@ export function httpError(status: number, data: unknown): CoreError {
   return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
 }
 
-export function failed(span: Span, error: CoreError): void {
-  span.fail();
-  span.set("error.type", error.code);
-}
+export const failed = failedIn;
 
 export function answered(span: Span, reply: WireReply): void {
   span.set("http.response.status_code", reply.status);
@@ -115,7 +112,7 @@ function plainBy(z: Unzstd, reply: WireReply, partial: boolean): Pull<Uint8Array
       if (chunk === null) {
         ended = true;
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
-        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: "zstd: the last frame was cut short" })));
+        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.cut")));
         return null;
       }
       if (chunk.length === 0) continue;
