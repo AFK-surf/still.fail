@@ -910,6 +910,10 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     // under its rows: what the motion package draws there (its rows gone, leaving)
     self.paint_underlay(i)
   }
+  match n.magnify {
+    Some(m) => self.paint_magnified(n, m, alpha)
+    None => ()
+  }
   self.paint_held(n, alpha)
   glass_paint.ink_x = ink.0
   glass_paint.ink_y = ink.1

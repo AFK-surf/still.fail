@@ -346,8 +346,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.raise_tops()
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt)
   c.cycle_looks()
-  // what a finger hides, shown larger over it while it drags what needs seeing (loupe.mbt): over all of it
-  c.paint_loupe()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
