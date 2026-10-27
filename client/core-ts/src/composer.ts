@@ -119,13 +119,12 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 const PART = 4 * 1024 * 1024;
 /// How much more of a file has gone before it is said again, at the least.
 const SENT_STEP = 64 * 1024;
-/// The biggest image kept on the device as it is sent up (`keepSent`).
-const KEEP_SENT_MOST = 64 * 1024 * 1024;
-/// The biggest file kept on the device as it goes up with a message (`outbox`, drive-kept.ts): a bigger one whose
-/// source the app no longer has (it ended meanwhile) fails, to be added again.
+/// The biggest file kept on the device as it goes up with a message (`outbox`, drive-kept.ts), and once it is up
+/// (`keepSent`): a bigger one whose source the app no longer has (it ended meanwhile) fails, to be added again, and its
+/// chat reads it from its station.
 const KEEP_OUTBOX_MOST = 256 * 1024 * 1024;
 
-/// An image sent up from here, kept on the device as it is, a part at a time, under the name its station keeps it by
+/// A file sent up from here, kept on the device as it is, a part at a time, under the name its station keeps it by
 /// (drive-kept.ts `sent`): its chat shows it, and opens it, from here, not read back from the station it went to. One
 /// that could not be read again whole is not kept (its chat reads it from its station).
 function keepSent(inner: Inner, station: string, path: string, blob: Blob | FileSource, size: number): Effect.Effect<void> {
@@ -606,16 +605,19 @@ export class Composers {
         else have = told.have;
         went(told.file !== undefined ? f.size : have);
       }
-      // Kept before its message can name it, so its chat neither reads it back nor waits for it.
       const path = isObject(saved) ? saved.path : undefined;
-      if (local && local.type.startsWith("image/") && f.size <= KEEP_SENT_MOST && typeof path === "string") yield* keepSent(inner, station, path, local, f.size);
       const size = yield* Effect.promise(() => sizing);
       if (size) saved = { ...saved, ...size };
-      // What its station said written down for its message (before the message can take it and let it go), the bytes
-      // no longer needed.
-      if (kept && !replaced()) {
-        yield* inner.driveKept.noteUpload(f.id, { ...noted, done: saved });
-        yield* inner.driveKept.forget(outboxKeptId(f.id));
+      // What its station said written down for its message (before the message can take it and let it go).
+      const ours = kept && !replaced();
+      if (ours) yield* inner.driveKept.noteUpload(f.id, { ...noted, done: saved });
+      // Kept on the device as it went, whatever it is, before its message can name it, so its chat neither reads it back
+      // nor waits for it: the bytes kept for its message, kept on as that once they are all there, else read again.
+      const sent = typeof path === "string" && f.size > 0 && f.size <= KEEP_OUTBOX_MOST ? path : null;
+      const moved = sent !== null && ours && (yield* inner.driveKept.rename(outboxKeptId(f.id), sentKeptId(station, sent.split("/").at(-1)!), "sent", f.size));
+      if (!moved) {
+        if (ours) yield* inner.driveKept.forget(outboxKeptId(f.id));
+        if (sent !== null && local) yield* keepSent(inner, station, sent, local, f.size);
       }
       return saved;
     });
@@ -758,7 +760,7 @@ export class Composers {
   }
 
   /// A picture of the draft the page holds no bytes of (a draft kept, read again as the app starts): as this device
-  /// keeps it, an image up as it went (`keepSent`), else one waiting or going up as it is kept for its message
+  /// keeps it, up as it went (`keepSent`), else one waiting or going up as it is kept for its message
   /// (`#keepWhole`); null where none is kept here (drawn as any other file).
   picture(key: string, id: string): Effect.Effect<Beside | null> {
     const s = this.#state(key);

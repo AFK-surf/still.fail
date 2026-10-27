@@ -47,7 +47,10 @@ test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () =
   bridge.close(); t.core.close();
 });
 
-test("an_image_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_back_from_its_station", async () => {
+// A file sent up from here is on the device: its chat shows, opens and plays it from there, whatever it is (an image
+// first, #1267; a video sent from the phone was read back from its station to play, and its download offered
+// 重新下载 when that failed, 2026-10-28).
+test("a_file_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_back_from_its_station", async () => {
   const t = await setup();
   const png = Uint8Array.from({ length: 40 }, (_, i) => i);
   // The station keeps each under a name of its own, kept as it moves it into the chat's uploads.
@@ -64,10 +67,10 @@ test("an_image_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_ba
   await t.watch(1, "ws/st:k");
   await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [
     { id: "shot", name: "shot.png", size: png.length, blob: new Blob([png], { type: "image/png" }) },
-    { id: "notes", name: "notes.txt", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "text/plain" }) },
+    { id: "clip", name: "clip.mp4", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" }) },
   ] });
   await t.settle();
-  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done?.path), [`/data/uploads/${stored("shot.png")}`, `/data/uploads/${stored("notes.txt")}`]);
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done?.path), [`/data/uploads/${stored("shot.png")}`, `/data/uploads/${stored("clip.mp4")}`]);
   // In whichever chat its message is, as its station names it there.
   const file = async (id: number, op: string, name: string, params: J = {}) => {
     call(t.core, t.ui, id, op, { station: "ws/st", key: "k1", name, ...params });
@@ -80,18 +83,18 @@ test("an_image_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_ba
   assert.deepEqual([...whole.bytes], [...png]);
   const part = await file(203, "station.file.part", stored("shot.png"), { offset: 10, length: 8 });
   assert.deepEqual([part.ok, [...part.bytes]], [{ type: "image/png", total: 40 }, [...png.slice(10, 18)]]);
+  // A video the same, played a part at a time.
+  const played = await file(204, "station.file.part", stored("clip.mp4"), { offset: 1, length: 2, keep: true, size: 3 });
+  assert.deepEqual([played.ok, [...played.bytes]], [{ type: "video/mp4", total: 3 }, [2, 3]]);
   assert.deepEqual(asked, [], "its station not asked");
-  // What is not an image is read from its station as before.
-  await file(204, "station.file", stored("notes.txt"));
-  assert.deepEqual(asked, [`files ${stored("notes.txt")}`]);
   // Counted and let go with the drives' files: then read from its station.
   call(t.core, t.ui, 205, "cache.usage", {});
   await t.host.settle();
-  assert.equal((answers(t.host.takeEmitted(), 205)?.ok as { drive: number }).drive, png.length);
+  assert.equal((answers(t.host.takeEmitted(), 205)?.ok as { drive: number }).drive, png.length + 3);
   call(t.core, t.ui, 206, "drive.kept.clear", {});
   await t.host.settle();
   await file(207, "station.file", stored("shot.png"), { thumb: true });
-  assert.deepEqual(asked, [`files ${stored("notes.txt")}`, `files ${stored("shot.png")}`]);
+  assert.deepEqual(asked, [`files ${stored("shot.png")}`]);
   t.core.close();
 });
 
