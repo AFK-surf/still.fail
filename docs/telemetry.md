@@ -149,7 +149,8 @@ no query), `http.response.status_code`, sizes (`http.request.body.size`,
 `http.response.body.size`), `ember.station` (the station's id), `ember.path`
 (`relay`, `direct`, or `local` for a station's own page), `ember.stream`,
 `ember.cancelled` (the span's task ended before it did: the chat was closed
-before it opened), `error.type`. Never message content, titles, file names or
+before it opened), `error.type`, `stillfail.cause` (what the transport said where a connection failed under it:
+people are told only 无法连接此 station or 连接中断). Never message content, titles, file names or
 emails. `service.name` says which hop: `ember-web`, `ember-native`,
 `stillfail-cloud`, `ember-mesh` (historical cloud spans use `ember-cloud`); a station's spans also carry the
 resource attribute `ember.station`, and a client's `service.version`, its app's build (`0.1.2420`) once its UI has
@@ -228,6 +229,16 @@ One trace in order:
 ['ember']
 | where trace_id == "<trace id>"
 | project _time, ['service.name'], name, duration, span_id, parent_span_id
+| order by _time asc
+```
+
+An error people see with an 错误编号 / error ID (`3f9a1c2e`: the network, a host or a station's own fault, CoreError
+`traced`) is the start of the trace it failed in; its spans, the failed ones with `stillfail.cause`:
+
+```kusto
+['ember']
+| where _time > ago(7d) and trace_id startswith "3f9a1c2e"
+| project _time, ['service.name'], ['service.version'], name, duration, error, ['attributes.custom']['stillfail.cause']
 | order by _time asc
 ```
 

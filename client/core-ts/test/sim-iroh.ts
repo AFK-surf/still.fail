@@ -487,6 +487,7 @@ export class SimEndpoint {
   readonly #incoming: SimConnection[] = [];
   #accepting: ((c: SimConnection | null) => void) | null = null;
   #held = 0;
+  #refusing = 0;
   #closed = false;
 
   readonly net: SimNet;
@@ -568,6 +569,10 @@ export class SimEndpoint {
       there.#held--;
       return NEVER;
     }
+    if (there.#refusing > 0) {
+      there.#refusing--;
+      throw new Error("aborted by peer: the server refused to accept a new connection");
+    }
     const first = this.net.now() - started;
     const mine = new SimConnection(this.net, this, there.id(), spoken, way, first);
     const theirs = new SimConnection(this.net, there, this.id(), spoken, new Way(this.net, relay, [there.side, this.side]), 2 * way.oneWay());
@@ -639,6 +644,10 @@ export class SimEndpoint {
   /// The next `n` connections are never answered (their handshake held).
   holdIncoming(n: number): void {
     this.#held += n;
+  }
+  /// The next `n` connections are refused once their handshake comes (QUIC's CONNECTION_REFUSED, as quinn says it).
+  refuseIncoming(n: number): void {
+    this.#refusing += n;
   }
   /// Held on these relays too (keep.rs).
   keep(relays: string[]): void {

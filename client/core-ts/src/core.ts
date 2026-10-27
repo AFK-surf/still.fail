@@ -19,7 +19,7 @@ import { Data, holds } from "./data.ts";
 import { chatDerive } from "./views/views.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { DriveKept } from "./drive-kept.ts";
-import { CoreError, asCoreError } from "./error.ts";
+import { CoreError, asCoreError, failedIn } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { markdown } from "./markdown.ts";
@@ -480,16 +480,13 @@ export class Core {
         Effect.gen(function* () {
           if (stoppable) inner.calls.delete(key);
           const result: { ok: unknown } | { err: CoreError } = exit._tag === "Success" ? { ok: exit.value } : { err: failureOf(exit.cause) };
+          if ("err" in result) failedIn(span, result.err);
           if (loads && resource) {
             const said = "ok" in result ? (result.ok instanceof Beside ? result.ok.value : result.ok) : undefined;
             const status = isObject(said) ? said.status : undefined;
             if (typeof status === "number") loads.head(resource, status);
             loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
             inner.store.invalidate(resource[0]);
-          }
-          if ("err" in result) {
-            span.fail();
-            span.set("error.type", result.err.code);
           }
           span.end();
           let failed: number | null = null;

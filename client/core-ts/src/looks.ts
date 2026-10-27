@@ -106,8 +106,10 @@ export function linkShown(link: J, name: string): J {
         const i = m.indexOf(sep);
         return i < 0 ? null : [m.slice(0, i), m.slice(i + sep.length)];
       };
+      const down = (s: string) => s.includes("连不上") || s.includes("无法连接") || s.startsWith("Can't reach") || s.startsWith("Couldn't reach");
       const split = cut("：") ?? cut(": ");
-      why = split && (split[0].includes("连不上") || split[0].includes("无法连接") || split[0].startsWith("Can't reach")) ? split[1] : m;
+      // 无法连接此 station alone says no more than the line does.
+      why = split && down(split[0]) ? split[1] : down(m) ? null : m;
     }
     return { tone: "trouble", text: said("core-logic.looks.link.down", "core-logic.looks.link.down.named"), detail: why };
   }

@@ -12,7 +12,7 @@
 import { Clock, Deferred, Effect, Fiber, type Result, Semaphore } from "effect";
 import type { Credential } from "./cloud.ts";
 import type { Inner } from "./core.ts";
-import { CoreError, asCoreError } from "./error.ts";
+import { CoreError, asCoreError, failedIn } from "./error.ts";
 import type { Host, Pull } from "./host.ts";
 import { t } from "./i18n.ts";
 import type { CloseReason, Iroh, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
@@ -108,6 +108,15 @@ export const RECHECK_MS = 5 * 60 * 1000;
 
 const noAnswer = () => t("core-logic.mesh.no_answer");
 const meshError = (message: string) => new CoreError("mesh", message);
+/// A connection that failed under the transport (refused, reset, lost on the way): said to people as where it failed
+/// (`unreached` dialling, `cut` once it was up), what the transport said kept as its `cause` for telemetry, not shown.
+const transportError = (key: "core-logic.mesh.unreached" | "core-logic.mesh.cut") => (e: { message: string }) => {
+  const error = meshError(t(key));
+  error.cause = e.message;
+  return error;
+};
+const unreached = transportError("core-logic.mesh.unreached");
+const cut = transportError("core-logic.mesh.cut");
 
 /// This device's credential for a workspace, for the device's endpoint id; `fresh` asks for a new one.
 export type CredentialSource = (device: string, fresh: boolean) => Effect.Effect<Credential, CoreError>;
@@ -255,7 +264,7 @@ function closeMessage(reason: CloseReason): string {
   }
   if (reason.kind === "local") return t("core-logic.mesh.closed");
   if (reason.kind === "timeout") return t("core-logic.mesh.timed_out");
-  return t("core-logic.mesh.lost", { error: reason.reason });
+  return t("core-logic.mesh.cut");
 }
 
 /// Reads lines off a stream, keeping what followed.
@@ -278,7 +287,7 @@ export class Lines {
           return line;
         }
         if (this.carry.length > MAX_HEAD) return yield* Effect.fail(meshError(t("core-logic.mesh.head_too_long")));
-        const chunk = yield* Effect.mapError(this.#stream.read(), (e) => meshError(t("core-logic.mesh.read_failed", { error: e.message })));
+        const chunk = yield* Effect.mapError(this.#stream.read(), cut);
         if (chunk === null) {
           if (this.carry.length === 0) return null;
           return yield* Effect.fail(meshError(t("core-logic.mesh.reply_cut")));
@@ -304,7 +313,7 @@ class Control {
   /// `lock`: the device's claim for this endpoint (lock.ts), said in the first line, for a station with a workspace lock.
   send(credential: string, lock?: LockClaim): Effect.Effect<void, CoreError> {
     const line = utf8(`${JSON.stringify(lock ? { credential, protocol: 2, lock } : { credential, protocol: 2 })}\n`);
-    return Effect.mapError(this.stream.write(line), (e) => meshError(t("core-logic.mesh.credential_unsent", { error: e.message })));
+    return Effect.mapError(this.stream.write(line), cut);
   }
 
   /// The station's answer to the credential last sent; fails if it refused.
@@ -385,20 +394,19 @@ export class Link {
   /// read let go of; or failed), the stream goes at once: the station stops what it is sending on it, which no one
   /// would read.
   #open(head: J, finish: boolean, body: Uint8Array | null, wrote?: (sent: number) => void): Effect.Effect<[IrohStream, Lines, J], CoreError> {
-    const sent = (e: { message: string }) => meshError(t("core-logic.mesh.request_unsent", { error: e.message }));
     let opened: IrohStream | null = null;
     return Effect.gen({ self: this }, function* () {
-      const stream = (opened = yield* Effect.mapError(this.conn.openBi(), sent));
-      yield* Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), sent);
+      const stream = (opened = yield* Effect.mapError(this.conn.openBi(), cut));
+      yield* Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), cut);
       // A body that is told of goes a step at a time, each said as the stream takes it (as far as the link lets it).
       if (body !== null && body.length > 0 && wrote) {
         for (let at = 0; at < body.length; at += BODY_STEP) {
           const end = Math.min(at + BODY_STEP, body.length);
-          yield* Effect.mapError(stream.write(body.subarray(at, end)), sent);
+          yield* Effect.mapError(stream.write(body.subarray(at, end)), cut);
           wrote(end);
         }
-      } else if (body !== null && body.length > 0) yield* Effect.mapError(stream.write(body), sent);
-      if (finish) yield* Effect.mapError(stream.finish(), sent);
+      } else if (body !== null && body.length > 0) yield* Effect.mapError(stream.write(body), cut);
+      if (finish) yield* Effect.mapError(stream.finish(), cut);
       const lines = new Lines(stream);
       const line = yield* lines.next();
       if (line === null) return yield* Effect.fail(meshError(t("core-logic.mesh.no_reply")));
@@ -459,7 +467,7 @@ export class Link {
   #duplex(wire: J): Effect.Effect<[Reply, SocketOut], CoreError> {
     return Effect.map(this.#open(wire, false, null), ([stream, lines, reply]) => {
       const out: SocketOut = {
-        write: (bytes) => Effect.mapError(stream.write(bytes), (e) => meshError(t("core-logic.mesh.unsent", { error: e.message }))),
+        write: (bytes) => Effect.mapError(stream.write(bytes), cut),
         finish: () => void Effect.runFork(Effect.ignore(stream.finish())),
       };
       return [{ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }, out] as [Reply, SocketOut];
@@ -969,8 +977,7 @@ export class Mesh {
           if (via !== null) span.set("stillfail.via", relayHost(via));
         } else {
           if (link.failure.message === noAnswer()) self.#stuck = true;
-          span.fail();
-          span.set("error.type", link.failure.code);
+          failedIn(span, link.failure);
           span.set("stillfail.relay", relayStatus(endpoint));
         }
         span.end();
@@ -1104,7 +1111,7 @@ export class Mesh {
     return Effect.suspend(() => {
       this.#dialing++;
       return Effect.flatMap(this.#pinnedEndpoint(relay), (endpoint) =>
-        endpoint === null ? Effect.fail(meshError(t("core-logic.mesh.unreachable", { error: relayHost(relay) }))) : open(this.#env, endpoint, [relay], stationId(addr), credentials, fresh, relay, ctx),
+        endpoint === null ? Effect.fail(unreached({ message: `no endpoint for ${relayHost(relay)}` })) : open(this.#env, endpoint, [relay], stationId(addr), credentials, fresh, relay, ctx),
       ).pipe(Effect.ensuring(Effect.sync(() => this.#dialing--)));
     });
   }
@@ -1730,7 +1737,7 @@ function open(
       Effect.gen(function* () {
         const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
         if (r._tag === "Success" && late) r.success.close(0, "too late");
-        else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(meshError(t("core-logic.mesh.unreachable", { error: r.failure.message }))));
+        else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(unreached(r.failure)));
       }),
     );
     const connecting = Effect.raceFirst(
@@ -1748,7 +1755,7 @@ function open(
       conn.close(0, "no credential");
       return yield* Effect.fail(credential.failure);
     }
-    const stream = yield* Effect.mapError(conn.openBi(), (e) => meshError(t("core-logic.mesh.unreachable", { error: e.message })));
+    const stream = yield* Effect.mapError(conn.openBi(), unreached);
     const control = new Control(stream);
     yield* control.send(credential.success.credential, credential.success.lock);
     const link = new Link(conn, control, credential.success.credential, credentials, pinned);
