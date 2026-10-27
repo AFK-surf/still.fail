@@ -312,13 +312,12 @@ fn chat_bar(
               }
             }
             jobs_trigger(c, src, r)
-            if view.thread is Some(_) {
-              let info = fn() { chat_own.info_open = !chat_own.info_open }
-              // (its people's faces its bubble in the system's bars: rail_native.mbt bar_people)
-              if !bar_people(view.people, info) &&
-                @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
-                info()
-              }
+            // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
+            let info = fn() { chat_own.info_open = !chat_own.info_open }
+            // (its people's faces its bubble in the system's bars: rail_native.mbt bar_people)
+            if !bar_people(view.people, info) &&
+              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
+              info()
             }
             // the side panel's switch while it is closed: the first agent's history in it (none where the agents are in
             // the system's bars: each its own switch there)
@@ -673,8 +672,8 @@ let jobs_pop_w : Double = 360.0
 /// and other chats' wrote each other, relaying it, it in Slack or Feishu; sharing it, publishing it.
 fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let thread = field(chat, "thread")
+  // (a chat of a Slack or Feishu thread alone has none here: where it is, its agents and the way there, no more)
   let th = opt_number(thread, "id")
-  guard th is Some(id) else { return }
   // (its labels in a column 80 wide, or as wide as the widest of them in this language: words of a length known,
   // whole)
   let labels = ["from", "started", "people", "created", "lastMessage"].map(fn(k) { @sf.t("web-pages.chat.info." + k) })
@@ -694,7 +693,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       match text(chat, "place") {
         "" => c.text(@sf.t("web-pages.chat.info.native", args=[("name", "still.fail")]), style=info_words) |> ignore
         place => {
-          let feishu = text(thread, "surface").has_prefix("feishu:")
+          let feishu = text(thread, "surface").has_prefix("feishu:") || text(chat, "feishuUrl") != ""
           c.box(style=info_inline, fn() {
             if feishu {
               @sf.feishu_mark(c, 13.0) |> ignore
@@ -708,6 +707,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         }
       }
     })
+    guard th is Some(_) else { return }
     let creator = match text(field(field(thread, "creator"), "shown"), "display") {
       "" => text(field(thread, "creator"), "name")
       d => d
@@ -788,7 +788,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   }
   // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive)
   let files = dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive })
-  let relayable = !v.archived && !v.offline && v.agents.length() > 0
+  let relayable = th is Some(_) && !v.archived && !v.offline && v.agents.length() > 0
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
   let share = field(chat, "xshare")
@@ -796,7 +796,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
     _ => None
   }
-  let shares = share is Some(Object(_)) || publish is Some(_)
+  let shares = th is Some(_) && (share is Some(Object(_)) || publish is Some(_))
   if files || v.letters > 0 || relayable || slack != "" || feishu != "" {
     c.box(style=info_tools(!shares), fn() {
       if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
@@ -815,7 +815,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         letters_to_list(r)
         side_toggle(src, r, "letters")
       }
-      if relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
+      if th is Some(id) && relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
         chat_own.info_open = false
         @sfpages.open_relay(src, r, id, from=Unanchored)
       }
@@ -830,6 +830,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     })
     |> ignore
   }
+  guard th is Some(id) else { return }
   if shares {
     c.box(style=info_tools(true), fn() {
       if share is Some(Object(_)) &&

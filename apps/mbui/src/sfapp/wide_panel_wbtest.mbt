@@ -295,3 +295,39 @@ test "wide: an agent's history asked as a page (a link's ?history=…&entry=…)
   t.run_for(@sfdesk.side_in_ms)
   assert_true(t.find("只看收发") is Some(_))
 }
+
+///|
+/// The chat as a Slack thread alone shows it (the core's page of an agent with no chat here: no thread, where its
+/// Slack thread is and the way there).
+fn slack_only(base : Source) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      guard name == "chat" && got.value is Some(Object(v)) else { return got }
+      let v = v.copy()
+      v["thread"] = Json::null()
+      v["place"] = Json::string("#ops")
+      v["slackUrl"] = Json::string("https://afk.slack.com/archives/C1/p12")
+      v.remove("xshare")
+      v.remove("publish")
+      @sfbase.topic_as_read(name, params, { ..got, value: Some(Json::object(v)) })
+    },
+  }
+}
+
+///|
+test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its agents, the way to it in Slack" {
+  reset()
+  let src = slack_only(fixture("chat"))
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="对话信息")
+  t.frame()
+  t.frame()
+  assert_true(t.find("Slack · #ops") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("在 Slack 中打开") is Some(_))
+  // (what only a chat of its own here has: who started it, when)
+  assert_true(t.find("发起") is None)
+}

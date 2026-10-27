@@ -344,7 +344,8 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           |> ignore
         }
       },
-      v.thread is Some(_),
+      // (a chat of a Slack or Feishu thread alone too: where it is, its agents, the way there: chat_info_body)
+      true,
       on_more=fn() { open_info(src, r) },
     )
   })

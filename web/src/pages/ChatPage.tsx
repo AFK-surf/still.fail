@@ -346,8 +346,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
           {/* The rest of what is done with the chat, in one place: its own panel (its files, what its agents and other
               chats' wrote each other, relaying it, where it is in Slack, sharing and publishing it). */}
-          {chat.thread && <ChatInfo station={station.address} session={chatSession} onLetters={toggleLetters} onFiles={drive ? toggleFiles : undefined}
-            onRelay={relayable ? relay : undefined} />}
+          {/* A chat of a Slack or Feishu thread alone too: where it is, its agents and the way there. */}
+          <ChatInfo station={station.address} session={chatSession} onLetters={toggleLetters} onFiles={drive ? toggleFiles : undefined}
+            onRelay={relayable ? relay : undefined} />
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
@@ -699,9 +700,10 @@ function ShareOf({ station, session, onClose }: { station: string; session: stri
 function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetters, onFiles, onRelay }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void; onLetters(): void; onFiles?: (() => void) | undefined; onRelay?: (() => void) | undefined }) {
   const chat = useChat(station, { session }).value;
   const link = useLink();
-  if (!chat?.thread) return null;
+  if (!chat) return null;
+  // (none here for a chat of a Slack or Feishu thread alone: who started it and when are its thread's)
   const thread = chat.thread;
-  const feishu = thread.surface.startsWith("feishu:");
+  const feishu = thread ? thread.surface.startsWith("feishu:") : !!chat.feishuUrl;
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
@@ -714,10 +716,12 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
         {row(t("web-pages.chat.info.from"), where
           ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
           : t("web-pages.chat.info.native", { name: NAME }))}
-        {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
-        {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
-        {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
-        {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
+        {thread && <>
+          {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
+          {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
+          {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
+          {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
+        </>}
       </dl>
       {chat.agents.length > 0 && (
         <ul className={css.detailsList}>
@@ -732,7 +736,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
         {chat.slackUrl && <PanelRow icon={<SlackLogo size={14} />} label={t("web-pages.chat.openInSlack")} onClick={() => window.open(chat.slackUrl!, "_blank", "noopener")} />}
         {chat.feishuUrl && <PanelRow icon={<FeishuLogo size={14} />} label={t("web-pages.chat.openInFeishu")} onClick={() => window.open(chat.feishuUrl!, "_blank", "noopener")} />}
       </div>}
-      {(share || publish) && (
+      {thread && (share || publish) && (
         <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
           {share && <ShareRow share={share} onOpen={onShare} />}
           {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
