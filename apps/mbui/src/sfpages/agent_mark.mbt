@@ -7,7 +7,8 @@
 /// history's details), 20 (the chat's bar) or 28 (an agent's card); `badge` (run, block, failed, or none) at its
 /// corner, said as `said` to a screen reader, ringed in `ground`, what the mark stands on (the page's; a small
 /// panel's in one). Its tile's corner .3 of its side, or `corner` where it stands in a corner it is concentric with
-/// (an agent's card's top left, on its words' line: the ladder's small block's 10, all four alike).
+/// (an agent's card's top left, on its words' line: the ladder's small block's 10, all four alike). When `joined`,
+/// its enclosing tile paints the ground and hover: the mark adds no round ground over the straight seam.
 pub fn agent_mark(
   c : @ui.Ctx,
   maker : String,
@@ -17,12 +18,13 @@ pub fn agent_mark(
   said? : String = "",
   ground? : Int64 = @sf.theme().p.bg,
   corner? : @ui.Radius,
+  joined? : Bool = false,
 ) -> Unit {
   let round = match corner {
     Some(k) => k
     None => @sf.agent_mark_corner(side)
   }
-  let tile = agent_tile.then(@ui.style(w=Fixed(side), h=Fixed(side), radius=round))
+  let tile = (if joined { agent_contents } else { agent_tile }).then(@ui.style(w=Fixed(side), h=Fixed(side), radius=round))
   c.box(style=tile, label=said, fn() {
     @sf.maker_mark(c, maker, runtime, (side * agent_logo_of).round()) |> ignore
     agent_badge(c, badge, side, ground)
@@ -93,6 +95,10 @@ let agent_spokes_past : Double = 2.0
 /// A tile of the neutral ground, what is on it in its middle (its side and corner the mark's).
 // kept across runs: a value (no field of it changes)
 let agent_tile : @ui.Style = @ui.css("bg=Neutral align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_contents : @ui.Style = @ui.css("align=ACenter justify=JCenter")
 
 ///|
 /// The badge round; red within its ring.

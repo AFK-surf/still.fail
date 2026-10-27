@@ -3,6 +3,28 @@
 // its history's, a hold both cards in one (the user, 2026-10-27: 它们是一体的).
 
 ///|
+test "the joined maker's hover ground is uncovered and square at the seam" {
+  reset()
+  let src = fixture("chat-info")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=900.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  t.frame()
+  let tiles = t.all(Button).filter(fn(s) { s.label.has_suffix("的执行历史") })
+  assert_true(tiles.length() == 1)
+  let (x, y, w, h) = tiles[0].rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  let grounds = t.drawn_rect_corners().filter(fn(r) {
+    r.0 == x && r.1 == y && r.2 == w && r.3 == h
+  })
+  assert_true(grounds.length() == 1, msg="the maker paints no second ground over its hover")
+  let (_, _, _, _, _, corners) = grounds[0]
+  assert_true(corners.0 > 0.0 && corners.3 > 0.0)
+  assert_true(corners.1 == 0.0 && corners.2 == 0.0, msg="both corners at the seam are square")
+}
+
+///|
 /// The fixture's chat open in a tablet's wide frame (touch), and its agent's tile: the one button saying its history.
 fn tile_on_tablet() -> (@ui.Tester, @ui.SemNode) raise {
   reset()
