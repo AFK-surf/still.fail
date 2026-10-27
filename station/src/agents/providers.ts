@@ -118,6 +118,10 @@ export function cleanEndpoint(text: string): string | undefined {
   return rest !== undefined && rest !== "" && !/\s/.test(rest) ? trimmed : undefined;
 }
 
+/// Anthropic's protocol is spoken at the root above `/v1` (clients add `/v1/messages`), so an address given with it is
+/// taken without it.
+export const anthropicRoot = (base: string): string => (base.endsWith("/v1") ? base.slice(0, -3) : base);
+
 export type Endpoints = { chat?: string; responses?: string; anthropic?: string; decision?: string };
 
 /// The endpoints of a source; for one at the person's own address, derived from it and the protocol chosen for it (none
@@ -148,10 +152,10 @@ export function endpoints(source: Source, endpoint: string | undefined, protocol
   } else if (chosen === "responses") {
     at = { responses: base };
   } else if (chosen === "anthropic") {
-    at = { anthropic: base };
+    at = { anthropic: anthropicRoot(base) };
   } else {
     // Before the choice existed an address was taken for every protocol (Anthropic's at the root above a /v1).
-    at = { anthropic: base.endsWith("/v1") ? base.slice(0, -3) : undefined, chat: base, responses: base };
+    at = { anthropic: base.endsWith("/v1") ? anthropicRoot(base) : undefined, chat: base, responses: base };
   }
   return at;
 }

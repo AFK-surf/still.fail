@@ -192,6 +192,8 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "custom", endpoint: "http://127.0.0.1:4000/v1", protocol: "anthropic" } }))[0], 200);
     const custom = t.profile("custom")!;
     assert.deepEqual([(custom.access as any).key, (custom.access as any).endpoint, custom.runtimes], [undefined, "http://127.0.0.1:4000/v1", ["claude", "dsh"]]);
+    // Claude Code adds /v1/messages itself: the address is taken at the root above the /v1 given.
+    assert.equal(profileEnv(custom, "claude").ANTHROPIC_BASE_URL, "http://127.0.0.1:4000");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq" } }))[0], 400, "a key is needed");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "nope", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "anthropic", key: "k" } }))[0], 400, "Anthropic is its own kind");

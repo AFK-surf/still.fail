@@ -153,6 +153,9 @@ test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoin
   assert.deepEqual(runs("deepseek"), ["dsh"]);
   assert.deepEqual(runs("jev"), []);
   assert.deepEqual(runs("cloudflare-ai-gateway", "https://gateway.ai.cloudflare.com/v1/a/b/compat", "chat_completions"), ["dsh"]);
+  // Anthropic's protocol at an address given with /v1: clients add /v1/messages to the root above it.
+  assert.equal(providers.endpoints(providers.find("custom")!, "http://127.0.0.1:4000/v1/", "anthropic")!.anthropic, "http://127.0.0.1:4000");
+  assert.equal(providers.endpoints(providers.find("custom")!, "http://127.0.0.1:4000", "anthropic")!.anthropic, "http://127.0.0.1:4000");
 });
 
 test("grok_build_is_named_thinks_up_to_max_and_runs_on_xais_own_api_alone", () => {

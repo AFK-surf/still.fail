@@ -1290,7 +1290,7 @@ function ConnectForm({ d, edit, busy, onSubmit }: { d: ProfileFlowView; edit(inp
       {d.showEndpoint && (
         <>
           <b className={sheetsCss.mFormLabel}>{t("common.provider.endpoint")}</b>
-          <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} autoCapitalize="none" disabled={d.pending} value={endpoint} placeholder={d.tile?.endpointExample ?? "https://"}
+          <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} autoCapitalize="none" disabled={d.pending} value={endpoint} placeholder={d.endpointExample ?? "https://"}
             onChange={(e) => { setEndpoint(e.target.value); edit({ endpoint: e.target.value }); }} />
           {d.endpointHint && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.endpointHint}</p>}
         </>

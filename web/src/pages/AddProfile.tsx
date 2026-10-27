@@ -179,7 +179,7 @@ function ConnectForm({ d, edit, submitting, onSubmit }: { d: ProfileFlowView; ed
       {d.showEndpoint && (
         <Field label={t("common.provider.endpoint")} htmlFor="add-endpoint" hint={d.endpointHint}>
           <input id="add-endpoint" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" disabled={d.pending} value={endpoint}
-            onChange={(e) => { setEndpoint(e.target.value); edit({ endpoint: e.target.value }); }} placeholder={d.tile?.endpointExample ?? "https://"} />
+            onChange={(e) => { setEndpoint(e.target.value); edit({ endpoint: e.target.value }); }} placeholder={d.endpointExample ?? "https://"} />
         </Field>
       )}
       {(d.regions?.length ?? 0) > 1 && (
