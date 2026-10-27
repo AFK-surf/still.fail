@@ -179,7 +179,7 @@ pub fn Media::new(
   speeds? : Array[Double] = [1.0, 1.25, 1.5, 2.0, 0.5, 0.75],
   nudge_ms? : Double = 15000.0,
   rest_ms? : Double = media_rest_ms,
-  double_tap_ms? : Double = 300.0,
+  double_tap_ms? : Double = @ui.double_tap_ms,
   note_ms? : Double = media_note_ms,
   wake_ms? : Double = media_wake_ms,
   sleep_ms? : Double = media_sleep_ms,

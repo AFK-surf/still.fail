@@ -221,6 +221,28 @@ test "a phone's song: its mark and name in the middle, on the page's colours, th
 }
 
 ///|
+test "a desktop's: a double click in the middle of the film plays it, as a phone's double tap; a click alone does not" {
+  let t = player_tester(false, "E1.mp4", [], [], [])
+  t.draw()
+  // (what the player has been told to do: a play is op 1, a pause op 2)
+  let plays = fn() {
+    t.views().filter(fn(s) {
+      let w = s.split(" ").to_array()
+      w.length() > 2 && w[0] == "control" && (w[2] == "1" || w[2] == "2")
+    }).length()
+  }
+  let before = plays()
+  t.tap(640.0, 400.0)
+  t.run_for(@kit.media_note_ms)
+  assert_eq(plays(), before)
+  t.tap(640.0, 400.0)
+  t.advance(@ui.double_tap_ms / 2.0)
+  t.tap(640.0, 400.0)
+  t.draw()
+  assert_eq(plays(), before + 1)
+}
+
+///|
 test "a desktop's keys: Space plays, paused ← → step a frame, J L 15 s, ↑ the sound, M mutes, ⇧N the next one" {
   let gone = []
   let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4"], gone, [])

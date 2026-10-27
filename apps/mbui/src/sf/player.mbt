@@ -10,9 +10,9 @@
 // native view, its bytes asked a part at a time of the file's `stream`).
 //
 // On a desktop's layout (`player_view` in the wide frame): the bar every file opened has along the top
-// (viewer_bar.mbt), the controls floating over the foot (media.mbt), both gone as the pointer rests while it plays (a
-// finger there, a tablet's, taps them on and off and double taps as on a phone). A click plays or pauses,
-// a double click fills the screen; the wheel with ⌘ or ⌃ (a trackpad's pinch) zooms round the pointer, the wheel
+// (viewer_bar.mbt), the controls floating over the foot (media.mbt), both there till a click or a finger's tap takes
+// them away and another brings them back, or while the pointer is over where they are. A double click or tap as on a
+// phone: in the middle it plays or pauses, on the left or right third it jumps 15 s; the wheel with ⌘ or ⌃ (a trackpad's pinch) zooms round the pointer, the wheel
 // alone moves what is zoomed in. Keys: Space or K plays or pauses; paused, ← → and , . step a frame, playing ← → jump
 // 15 s; J L jump 15 s; ↑ ↓ the sound; M mutes; F fills the screen; C the subtitle; ⇧N ⇧P the next one and the one
 // before; + − 0 1 zoom as a picture's. 选集 docks the others at the right.
@@ -996,18 +996,12 @@ fn desk_player(
     }
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
-    // the picture, in the window less the list beside it: a click shows or hides the controls (the user, 2026-10-28;
-    // Space plays or pauses), a double click fills the screen (showing them again); a finger's tap shows or
-    // hides them too, its double tap nudges or plays (Media::stage, the phone's)
+    // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
+    // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
+    // user, 2026-10-28); the screen filled by F or its key
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
-    if finger {
-      p.stage(c, stage, c.width - panel)
-    } else if picture && mac && c.double_clicked(stage) {
-      full()
-    } else if c.clicked(stage) {
-      p.toggle()
-    }
+    p.stage(c, stage, c.width - panel)
     // the wheel: with ⌃ or ⌘ held (or a trackpad's pinch) it zooms round the pointer, alone it moves what is zoomed in
     let (wx, wy, mods) = @ui.wheel_of(c, stage)
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
