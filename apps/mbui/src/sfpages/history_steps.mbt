@@ -10,16 +10,17 @@
 ///|
 /// What the steps keep of their own (the rest is the core's): what the reader opened (folds, lines, groups, calls), by
 /// their keys; the entries read whole (by the step's key: when they came, -1 asked, -2 failed and why); what the core
-/// said each opened call is (`history.tool`, by its key); the first item the pages before were last asked above.
+/// said each opened call is (`history.tool`, by its key); the first item the pages before were last asked above. What
+/// a row shows of them it reads, followed (a row is kept while nothing it read changed: history_steps).
 priv struct StepsOwn {
-  opened : Map[String, Bool]
-  detail : Map[String, (Double, String)]
-  tools : Map[String, Json]
+  opened : @sf.LiveMap[String, Bool]
+  detail : @sf.LiveMap[String, (Double, String)]
+  tools : @sf.LiveMap[String, Json]
   older : @signals.Signal[String]
   /// an entry asked to be brought into view, by history (`<station>\u{1}<key>`); the item gone to, marked a moment
   /// (its history's list, its key), and the histories gone to an entry, not following their newest since
   focus : @sf.LiveMap[String, Int]
-  mut marked : (String, String)
+  marked : @signals.Signal[(String, String)]
   went : Map[String, Bool]
   /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
   only_io : @signals.Signal[Bool]
@@ -27,12 +28,12 @@ priv struct StepsOwn {
 
 ///|
 let steps_own : StepsOwn = {
-  opened: {},
-  detail: {},
-  tools: {},
+  opened: @sf.LiveMap::new(),
+  detail: @sf.LiveMap::new(),
+  tools: @sf.LiveMap::new(),
   older: @signals.signal("", same=fn(a, b) { a == b }),
   focus: @sf.LiveMap::new(),
-  marked: ("", ""),
+  marked: @signals.signal(("", ""), same=fn(a, b) { a == b }),
   went: {},
   only_io: @signals.signal(false, same=fn(a, b) { a == b }),
 }
@@ -44,7 +45,7 @@ fn steps_reset() -> Unit {
   steps_own.tools.clear()
   steps_own.older.set("")
   steps_own.focus.clear()
-  steps_own.marked = ("", "")
+  steps_own.marked.set(("", ""))
   steps_own.went.clear()
   steps_own.only_io.set(false)
 }
@@ -88,13 +89,17 @@ priv enum StepsRow {
 }
 
 ///|
-/// Agent `key`'s history on `station`: its steps under its head (history.mbt agent_history).
+/// Agent `key`'s history on `station`: its steps under its head (history.mbt agent_history). What builds them reads
+/// only how they stand (steps_head_of); each row reads its own (steps_row_of) and shows nothing else, so the list keeps
+/// its rows however the page is built again (Ctx::list's `rows_read`): what streams in as the agent works (its words
+/// being written, the phase it is in, what it used) builds only the row that shows it.
 pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let h = (src.topic)("history", params).value
-  if !(h is Some(Object(_))) || (flag(h, "empty") && !flag(h, "loaded")) {
+  let lkey = "history-steps/" + station + "/" + key
+  let head = steps_head_of(src, params, lkey)
+  if head.waiting {
     c.box(style=steps_waiting, fn() {
-      @sf.waiting(c, fn() { steps_sample(c, station, key) }, text=match text(h, "edge") {
+      @sf.waiting(c, fn() { steps_sample(c, station, key) }, text=match head.edge {
         "" => @sf.t("web-main.history.reading")
         e => e
       })
@@ -102,19 +107,18 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     |> ignore
     return
   }
-  if flag(h, "empty") {
-    c.box(style=steps_box, fn() { c.text(text(h, "edge"), style=steps_edge) |> ignore }) |> ignore
+  if head.empty {
+    c.box(style=steps_box, fn() { c.text(head.edge, style=steps_edge) |> ignore }) |> ignore
     return
   }
-  let lkey = "history-steps/" + station + "/" + key
-  let more = flag(h, "more")
-  let loaded = items(h, "items")
+  let more = head.more
   // opened at an entry: the item that draws it to the pane's middle, marked a moment; one before what is loaded, the
-  // pages before first; one 只看收发 leaves out, all of it shown again first
+  // pages before first; one 只看收发 leaves out, all of it shown again first (what is loaded read only while one is asked)
   let fk = station + "\u{1}" + key
-  let mut go_to = -1
+  let mut go_to = ""
   match steps_own.focus.get(fk) {
-    Some(e) =>
+    Some(e) => {
+      let loaded = items((src.topic)("history", params).value, "items")
       match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
         Some(at) => {
           if steps_own.only_io.get() && flag(loaded.get(at), "work") {
@@ -122,8 +126,8 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
           }
           steps_own.focus.remove(fk)
           steps_own.went[lkey] = true
-          steps_own.marked = (lkey, text(loaded.get(at), "key"))
-          go_to = at
+          go_to = text(loaded.get(at), "key")
+          steps_own.marked.set((lkey, go_to))
         }
         None =>
           match loaded.get(0) {
@@ -133,18 +137,12 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
             _ => steps_own.focus.remove(fk)
           }
       }
+    }
     None => ()
   }
-  let (all, rows) = steps_rows.read(lkey, fn(_) {
-    let h = (src.topic)("history", params).value
-    steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
-  })
-  let first = match all.get(0) {
-    Some(i) => text(Some(i), "key")
-    None => ""
-  }
+  let first = head.first
   // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each (read back
-  // by that alone: not built again as it scrolls, its rows with it)
+  // by that alone: not built again as it scrolls)
   let near = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.first >= 0 && i.first <= 2 }) }) {
     Some(info) => info.first >= 0 && info.first <= 2
     None => false
@@ -167,9 +165,9 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     _ => ()
   }
   // gone to an entry: its item in the pane's middle (the edge's row before the items)
-  if go_to >= 0 {
-    let gk = text(loaded.get(go_to), "key")
-    match all.search_by(fn(i) { text(Some(i), "key") == gk }) {
+  if go_to != "" {
+    let (all, _) = steps_rows_of_topic(src, params, lkey)
+    match all.search_by(fn(i) { text(Some(i), "key") == go_to }) {
       Some(at) => {
         let half = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.height }) }) {
           Some(info) => info.height / 2.0
@@ -183,24 +181,26 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
   c.box(style=steps_box, fn() {
     c.list(
       lkey,
-      rows.length() + 1,
+      head.rows + 1,
       steps_est,
       fn(i) {
-        guard rows.get(i) is Some(row) else {
+        guard steps_row_of(src, params, lkey, i) is Some(row) else {
           // the room under the last (historyBody: 40)
           c.box(style=steps_foot, fn() {  }) |> ignore
           return
         }
         c.box(style=if i == 0 { steps_row_first } else { steps_row }, fn() {
           match row {
-            Edge =>
-              if more {
-                c.box(style=steps_edge_wait, fn() { @sf.wait_line(c, text(h, "edge"), key=lkey) }) |> ignore
+            Edge => {
+              let head = steps_head_of(src, params, lkey)
+              if head.more {
+                c.box(style=steps_edge_wait, fn() { @sf.wait_line(c, head.edge, key=lkey) }) |> ignore
               } else {
-                c.text(text(h, "edge"), style=steps_edge) |> ignore
+                c.text(head.edge, style=steps_edge) |> ignore
               }
+            }
             Item(item, rail) => {
-              let marked = steps_own.marked == (lkey, text(Some(item), "key")) &&
+              let marked = steps_own.marked.get() == (lkey, text(Some(item), "key")) &&
                 !@kit.after(c, "history-marked/" + lkey, true, steps_marked_ms)
               history_row(c, src, station, key, Some(item), rail, marked~)
             }
@@ -215,10 +215,90 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
       },
       // (followed at its newest; not once gone to an entry)
       stick_end=!steps_own.went.contains(lkey),
+      rows_read=true,
     )
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// How an agent's history's steps stand (what builds them reads of it): read yet, none, what its top says, whether
+/// there are pages before, how many rows and its first item's key.
+priv struct StepsHead {
+  waiting : Bool
+  empty : Bool
+  edge : String
+  more : Bool
+  rows : Int
+  first : String
+} derive(Eq)
+
+///|
+/// Each history's StepsHead, by its list's key: told only as it comes out otherwise.
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_head : @sfbase.Kept[StepsHead] = @sfbase.Kept::new()
+
+///|
+fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> StepsHead {
+  steps_head.read(
+    lkey,
+    fn(_) {
+      let h = (src.topic)("history", params).value
+      let empty = flag(h, "empty")
+      let waiting = !(h is Some(Object(_))) || (empty && !flag(h, "loaded"))
+      let (all, rows) = if waiting || empty { ([], []) } else { steps_rows_of_topic(src, params, lkey) }
+      {
+        waiting,
+        empty,
+        edge: text(h, "edge"),
+        more: flag(h, "more"),
+        rows: rows.length(),
+        first: match all.get(0) {
+          Some(i) => text(Some(i), "key")
+          None => ""
+        },
+      }
+    },
+    same=fn(a, b) { a == b },
+  )
+}
+
+///|
+/// Agent `key`'s history's rows (steps_rows).
+fn steps_rows_of_topic(src : Source, params : Map[String, Json], lkey : String) -> (Array[Json], Array[StepsRow]) {
+  steps_rows.read(lkey, fn(_) {
+    let h = (src.topic)("history", params).value
+    steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
+  })
+}
+
+///|
+/// Each history's rows one at a time, by its list's key and the row: None past them (the room under the last). Told only
+/// as the row comes out otherwise (steps_row_same), not as another one does.
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_row_kept : @sfbase.Kept[StepsRow?] = @sfbase.Kept::new()
+
+///|
+fn steps_row_of(src : Source, params : Map[String, Json], lkey : String, i : Int) -> StepsRow? {
+  steps_row_kept.read(
+    lkey + "\u{1}" + i.to_string(),
+    fn(_) { steps_rows_of_topic(src, params, lkey).1.get(i) },
+    same=steps_row_same,
+  )
+}
+
+///|
+/// A row the same as before: the same of it, its item the same JSON (the core's deltas keep what they do not touch),
+/// its rail running on as it did.
+fn steps_row_same(a : StepsRow?, b : StepsRow?) -> Bool {
+  match (a, b) {
+    (None, None) | (Some(Edge), Some(Edge)) => true
+    (Some(Item(x, r)), Some(Item(y, s))) => physical_equal(x, y) && r == s
+    (Some(Live(x, r)), Some(Live(y, s))) => physical_equal(x, y) && r == s
+    (Some(Phase(x)), Some(Phase(y))) => physical_equal(x, y)
+    _ => false
+  }
 }
 
 ///|
@@ -1198,7 +1278,7 @@ pub fn history_open(keys : Array[String]) -> Unit {
 ///|
 /// The item last gone to (a link's entry), its history's list and its key.
 pub fn history_marked() -> (String, String) {
-  steps_own.marked
+  @signals.untracked(fn() { steps_own.marked.get() })
 }
 
 ///|
@@ -1641,3 +1721,44 @@ let tool_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full
 ///|
 // kept across runs: a value (no field of it changes)
 let tool_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
+
+///|
+/// What agent `key`'s history on `station` says it used, in a line (its `usageLine`): what reads it is told only as the
+/// line changes, not as the rest of the history does (what streams in as the agent works: history_steps).
+pub fn history_usage_line(src : Source, station : String, key : String) -> String {
+  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  steps_usage_line.read(
+    station + "\u{1}" + key,
+    fn(_) { text((src.topic)("history", params).value, "usageLine") },
+    same=fn(a, b) { a == b },
+  )
+}
+
+///|
+/// What agent `key`'s history on `station` says it used, each figure (its `usage`): told only as they change.
+pub fn history_usage(src : Source, station : String, key : String) -> Array[Json] {
+  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  let usage = steps_usage.read(
+    station + "\u{1}" + key,
+    fn(_) { field((src.topic)("history", params).value, "usage") },
+    same=fn(a, b) {
+      match (a, b) {
+        (Some(x), Some(y)) => physical_equal(x, y)
+        (None, None) => true
+        _ => false
+      }
+    },
+  )
+  match usage {
+    Some(Array(a)) => a
+    _ => []
+  }
+}
+
+///|
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_usage_line : @sfbase.Kept[String] = @sfbase.Kept::new()
+
+///|
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_usage : @sfbase.Kept[Json?] = @sfbase.Kept::new()

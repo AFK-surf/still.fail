@@ -48,6 +48,8 @@ priv struct RowNodes {
   mut scale : Double
   mut reads_out : Bool
   mut lit_all : Bool
+  /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`)
+  mut reads_all : Bool
   mut ok : Bool
   mut why : String
   /// what its build said of the frame: said.mbt's build lists; what is read out of it, what is hidden from that; its
@@ -116,6 +118,9 @@ let spare_nodes : Array[Node] = []
 /// kept at all (`on`: a Tester's frame built whole after one that kept rows keeps none).
 priv struct NodesRun {
   mut fresh : Bool
+  /// built keeping none at all (a run's start, a Tester's build to compare with): a list whose rows show only what
+  /// they read builds them anew too
+  mut whole : Bool
   /// a part being built for what it read, or as it is new (Ctx::part_nodes): its lists' rows built anew
   mut part_fresh : Bool
   mut told : Bool
@@ -128,6 +133,9 @@ priv struct NodesRun {
   mut aside : Int
   mut kept : Int
   mut built : Int
+  /// how many rows of lists that show only what they read were built since the run began (a test's:
+  /// Tester::rows_read_built)
+  mut built_read : Int
   kept_at : Array[(Int, Int)]
   mut on : Bool
 }
@@ -136,6 +144,7 @@ priv struct NodesRun {
 // kept across runs: put back as a run begins (nodes_forget), its counts as each frame does
 let nodes_run : NodesRun = {
   fresh: true,
+  whole: true,
   part_fresh: false,
   told: false,
   told_by: (0, 0),
@@ -144,6 +153,7 @@ let nodes_run : NodesRun = {
   aside: 0,
   kept: 0,
   built: 0,
+  built_read: 0,
   kept_at: [],
   on: true,
 }
@@ -196,20 +206,16 @@ pub fn built_again(f : (Int) -> Unit) -> Unit {
 fn Ctx::rows_detach(self : Ctx) -> Unit {
   nodes_run.building = None
   nodes_run.pass = nodes_run.pass + 1
-  // (built anew, none kept: each row's nodes left where they are, for its build to make again in the same nodes, as
-  // laid out before where it is the same)
-  if nodes_run.fresh {
-    for _, rn in kept_nodes {
-      if rn.in_pool {
-        rn.in_pool = false
-        rn.n = 0
-        rn.ok = false
-      }
-    }
-    return
-  }
   for _, rn in kept_nodes {
     if !rn.in_pool {
+      continue
+    }
+    // (built anew, none kept: its nodes left where they are, for its build to make again in the same nodes, as laid
+    // out before where it is the same; but a row that shows only what it read, unless none is kept at all)
+    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all) {
+      rn.in_pool = false
+      rn.n = 0
+      rn.ok = false
       continue
     }
     for j in 0..<rn.n {
@@ -267,10 +273,12 @@ fn nodes_forget() -> Unit {
   kept_nodes.clear()
   spare_nodes.clear()
   nodes_run.fresh = true
+  nodes_run.whole = true
   nodes_run.told = false
   nodes_run.building = None
   nodes_run.kept = 0
   nodes_run.built = 0
+  nodes_run.built_read = 0
   nodes_run.kept_at.clear()
   nodes_run.on = true
 }
@@ -324,6 +332,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     scale: 0.0,
     reads_out: false,
     lit_all: false,
+    reads_all: false,
     ok: false,
     why: "",
     said: [],
@@ -442,7 +451,8 @@ fn Ctx::row_laid(
     rn.n > 0 &&
     !rn.watch.is_stale() &&
     rn.iw == iw &&
-    rn.count == st.count &&
+    rn.reads_all == st.rows_read &&
+    (st.rows_read || rn.count == st.count) &&
     rn.seed == st.seed &&
     rn.owner == st.owner &&
     rn.bones == st.bones &&
@@ -468,6 +478,7 @@ fn Ctx::row_laid(
   rn.h = h
   rn.iw = iw
   rn.count = st.count
+  rn.reads_all = st.rows_read
   rn.seed = st.seed
   rn.owner = st.owner
   rn.bones = st.bones
@@ -534,6 +545,9 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
 /// nodes all its own and none of a kind built each frame; a part may hold lists, laid out each frame).
 fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bool) -> Unit {
   nodes_run.built = nodes_run.built + 1
+  if !part && rn.reads_all {
+    nodes_run.built_read = nodes_run.built_read + 1
+  }
   rn.fit_rows = self.fit_rows - b.fit
   rn.built_frame = self.frame_no
   rn.built_at = self.clock
@@ -905,6 +919,15 @@ pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
 }
 
 ///|
+/// How many rows of lists that show only what they read (Ctx::list's `rows_read`) were built since the run began,
+/// every frame's added up: those built again keeping none to hold a frame that kept some among them, where the Tester
+/// checks so (check_looks).
+pub fn Tester::rows_read_built(self : Tester) -> Int {
+  ignore(self)
+  nodes_run.built_read
+}
+
+///|
 /// Why the rows and the parts of the last frame that may not be kept may not (a part's said so), each reason once with
 /// how many (a test's, a bench's).
 pub fn rows_unkept() -> Array[(String, Int)] {
@@ -963,6 +986,7 @@ fn Ctx::rows_check_begin(self : Ctx, kept0 : Int) -> Bool {
   }
   rows_checking.val = Some({ lines: self.frame_said_lines(), rows, whole: None, at: -1 })
   nodes_run.fresh = true
+  nodes_run.whole = true
   // (one pass of the frame, as a host builds it: not counted, FramePerf's `passes`)
   perf_at[3] = perf_at[3] - 1
   true

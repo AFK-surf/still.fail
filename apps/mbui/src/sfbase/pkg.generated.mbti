@@ -2223,7 +2223,7 @@ pub struct Kept[T] {
 }
 pub fn[T] Kept::new() -> Self[T]
 pub fn[T] Kept::peek(Self[T], String) -> T?
-pub fn[T] Kept::read(Self[T], String, (T?) -> T) -> T
+pub fn[T] Kept::read(Self[T], String, (T?) -> T, same? : (T, T) -> Bool) -> T
 
 type KeptOne[T]
 

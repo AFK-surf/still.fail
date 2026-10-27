@@ -224,7 +224,7 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
   let t = @sf.theme()
   let s = field(a, "session")
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
-  let usage = items((src.topic)("history", history_params(r, key)).value, "usage")
+  let usage = @sfpages.history_usage(src, r.station, key)
   let host = (src.topic)("host", { "station": Json::string(r.station) }).value
   let detail = fn(label : String, value : String) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {

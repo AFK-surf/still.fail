@@ -268,9 +268,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   while true {
     pass = pass + 1
     // (built again in the frame, from what changed as it was built or laid out: what built its lists' rows may build
-    // them otherwise, none kept, kept_nodes.mbt)
+    // them otherwise, none kept, kept_nodes.mbt; a row that shows only what it read too, as what it read of the layout
+    // is no signal of its own: its words measured, a row that cuts them so built again)
     if pass > 1 {
       nodes_run.fresh = true
+      nodes_run.whole = true
     }
     let kept0 = nodes_run.kept
     layout_coming.val = true

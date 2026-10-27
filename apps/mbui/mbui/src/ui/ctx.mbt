@@ -63,6 +63,9 @@ struct ListState {
   /// whether what built it last may have built its rows otherwise (the frame built anew, or the part it is in built
   /// for what it read: kept_nodes.mbt): its rows built again, none kept
   mut fresh : Bool
+  /// whether its rows show only what they read (Ctx::list's `rows_read`): kept as what builds it is built again,
+  /// built again only where what they read changed
+  mut rows_read : Bool
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
   // its scroll bar (scroll_bar.mbt)
