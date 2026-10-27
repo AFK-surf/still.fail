@@ -30,12 +30,12 @@ test "关于's version rows, at each width and with either hand: this build alon
     t.draw()
     let at = "\{w} platform \{platform}"
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
-    @sfbase.update.available = Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" })
+    @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" }))
     t.draw()
     assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
     // pressed: still.fail cloud asked again before it is downloaded, said under the row's words, its words kept; the
     // row pressed again opens the dialog saying how it goes
-    @sfbase.update.installing = true
+    @sfbase.update.installing.set(true)
     t.draw()
     assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
     assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
@@ -44,8 +44,8 @@ test "关于's version rows, at each width and with either hand: this build alon
     let (_, uy, _, uh) = t.rect_of("更新到 0.1.1").unwrap()
     assert_true(ny >= uy + uh, msg=at)
     assert_true(t.beside_faults().length() == 0, msg="\{at}: \{t.beside_faults()}")
-    @sfbase.update.installing = false
-    @sfbase.update.available = None
+    @sfbase.update.installing.set(false)
+    @sfbase.update.available.set(None)
   }
 }
 

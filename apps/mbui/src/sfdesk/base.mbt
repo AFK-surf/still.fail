@@ -118,6 +118,8 @@ using @sfbase {
   update_install,
   update_progress,
   update_phase,
+  update_percent,
+  update_why,
   relaying,
   relay_open,
   relay_reset,

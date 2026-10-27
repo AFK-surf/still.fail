@@ -72,12 +72,12 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
   let asked : Array[(Result[Json, String]) -> Unit] = []
   update_version.val = 2
   set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
-  update.available = Some({
+  update.available.set(Some({
     "versionCode": 3,
     "versionName": "0.1.3",
     "file": "mac/stillfail-3.zip",
     "news": ["修复：一", "修复：二", "修复：三", "改进：四", "改进：五", "新增：六", "新增：七"],
-  })
+  }))
   t.draw()
   t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
   t.draw()
@@ -92,7 +92,7 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
   t.click(Button, label="更新")
   t.draw()
   assert_eq(asked.length(), 1)
-  assert_true(update.installing)
+  assert_true(update.installing.get())
   assert_true(t.find("正在检查最新版本") is Some(_))
   assert_true(t.find("关闭") is Some(_))
   // none newer by now: said in the dialog, no toast

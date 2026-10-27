@@ -1104,7 +1104,7 @@ test "on the tape 更新 is in the sidebar's first row before the filter, as lar
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
   t.run_for(@sfdesk.side_move_ms)
   let (_, ny, _, _) = t.rect_of("新建对话").unwrap()
-  update.available = Some({ "versionName": "0.1.9999" })
+  update.available.set(Some({ "versionName": "0.1.9999" }))
   t.run_for(@sfdesk.side_move_ms)
   let (_, ny2, _, _) = t.rect_of("新建对话").unwrap()
   assert_eq(ny2, ny)
@@ -1113,7 +1113,7 @@ test "on the tape 更新 is in the sidebar's first row before the filter, as lar
   assert_eq(uh, fh)
   assert_eq(uy, fy)
   assert_true(ux + uw <= fx, msg="更新 to \{ux + uw}, the filter from \{fx}")
-  update.available = None
+  update.available.set(None)
 }
 
 ///|

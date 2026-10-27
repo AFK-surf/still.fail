@@ -230,7 +230,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   // usage statistics and error reports: its rows at their fullest
   if mode == "settings-about" {
     @sffixture.fixture_update("0.1.5283")
-    update.installing = true
+    update.installing.set(true)
     reporting_host.val = Some({ get: fn() { true }, set: fn(_) {  } })
   }
   // the search open over Home, words typed (search_fixture.mbt)

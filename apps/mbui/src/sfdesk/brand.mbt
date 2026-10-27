@@ -5,7 +5,7 @@
 /// Whether the desktop app has a newer build to offer, or one on its way in (brand.tsx UpdateButton: the app's update
 /// state, none while there is none).
 fn update_shown() -> Bool {
-  update.available is Some(_) || update_under_way() || update_phase() == "failed"
+  update.available.get() is Some(_) || update_under_way() || update_phase() == "failed"
 }
 
 ///|
@@ -42,19 +42,19 @@ let update_key_mark : Double = 16.0
 ///|
 /// What 更新 says, its tip, and whether it is under way.
 fn update_said() -> (String, String, Bool) {
-  let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
   let busy = update_under_way()
+  let percent = update_percent()
   let label = match update_phase() {
     "downloading" | "retrying" =>
-      @sf.t("web-main.appUpdate.downloading", args=[("percent", dmax(0.0, number(v, "percent")).to_int().to_string())])
+      @sf.t("web-main.appUpdate.downloading", args=[("percent", (if percent < 0 { 0 } else { percent }).to_string())])
     "installing" => @sf.t("web-main.appUpdate.restarting")
     "failed" => @sf.t("web-main.appUpdate.failed")
     _ => @sf.t("web-main.versions.update")
   }
   let tip = if update_phase() == "failed" {
-    update_error(text(v, "error"))
+    update_why()
   } else {
-    @sf.t("web-main.appUpdate.title", args=[("version", text(update.available, "versionName")), ("app", "still.fail")])
+    @sf.t("web-main.appUpdate.title", args=[("version", text(update.available.get(), "versionName")), ("app", "still.fail")])
   }
   (label, tip, busy)
 }
