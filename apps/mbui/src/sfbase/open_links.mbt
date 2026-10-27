@@ -161,7 +161,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
             open_item(src, ws, address, t.chat, None, None)
           } else {
             (shell.val.close_overlays)()
-            open_page(Chat(r))
+            open_page_over(Chat(r))
           }
       }
       if t.history != "" {
@@ -189,7 +189,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         open_item(src, ws, address, t.session, service, None)
       } else {
         (shell.val.close_overlays)()
-        open_page(Chat(chat_ref(address, t.session)))
+        open_page_over(Chat(chat_ref(address, t.session)))
         match service {
           Some(job) => open_page(Service(address, job))
           None => ()
