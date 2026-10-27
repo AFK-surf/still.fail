@@ -3,10 +3,12 @@
 // all it is built from: the core's data and the app's state, the frames' clock (frame_clock: Ctx::now), the host's
 // settings it is drawn by (frame_env), what came from outside that is no signal yet (outside_said: what
 // docs/determinism.md records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
-// and the hand's input (inputs_said). So the next frame is built anew where any of it changed (the watch is stale),
-// where a moment it read the clock as came (a wake: Ctx::wake_in, Ctx::every, a cycle's step), or where it asked for
-// another itself (a frame asked for, a motion going, a fiber stepping a frame at a time, a layout read back that
-// moved). Nothing is listed: what was not read changes nothing, what was read is followed by the read itself.
+// and the hand as what reads it reads it (hand.mbt: what the pointer is over, what is pressed, clicked, focused, the
+// hand's events; a pointer moved over what lights nothing changes none of it). So the next frame is built anew where
+// any of it changed (the watch is stale), where a moment it read the clock as came (a wake: Ctx::wake_in, Ctx::every,
+// a cycle's step), or where it asked for another itself (a frame asked for, a motion going, a fiber stepping a frame at
+// a time, a layout read back that moved). Nothing is listed: what was not read changes nothing, what was read is
+// followed by the read itself.
 //
 // Its paint runs under a watch of its own (paint_watch): what is read only as the frame is painted (where a node is
 // placed by the clock, Ctx::moved_by: a page sliding; a look worked out there, Ctx::look_by: a fade, a move; a picture
@@ -31,11 +33,6 @@ let frame_clock : @signals.Signal[Double] = @signals.signal(0.0)
 /// again as it comes.
 // kept across runs: only counts on
 let outside_said : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// The hand's inputs, counted (input_came): what the frame takes of them it reads as it begins.
-// kept across runs: only counts on
-let inputs_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// What of the host the frame is drawn by and reads as it is built (looks_env), as each frame begins.
@@ -215,16 +212,10 @@ fn outside_counted() -> Unit {
 }
 
 ///|
-/// An input of the hand's came: what each frame reads of the hand (inputs_said) built again.
-fn inputs_told() -> Unit {
-  inputs_said.set(@signals.untracked(fn() { inputs_said.get() }) + 1)
-}
-
-///|
-/// What the frame reads of what came from outside and of the hand, as it has taken them (frame_body): followed.
+/// What the frame reads of what came from outside and of the host's settings, as it has taken them (frame_body):
+/// followed. (Of the hand, what reads it reads it: hand.mbt.)
 fn frame_inputs_read() -> Unit {
   outside_said.get() |> ignore
-  inputs_said.get() |> ignore
   frame_env.get() |> ignore
 }
 ///|
@@ -628,6 +619,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
+  hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed)
   frame_clock.set(t)
   frame_env.set(looks_env(c, w, h, scale))

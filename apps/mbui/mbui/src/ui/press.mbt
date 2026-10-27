@@ -46,6 +46,13 @@ pub let press_slop : Double = 8.0
 /// and up between two frames (no frame saw it down) is a press of its own: not moved, not long. While the finger is
 /// down and still, the frame at which it will have been held long is woken.
 pub fn Ctx::press(self : Ctx) -> Press {
+  // (read so: what reads it is built again as the press goes down, moves while it is down, is let go, or a tap comes:
+  // hand.mbt)
+  hand.down.get() |> ignore
+  hand_events_read()
+  if self.down {
+    hand.pointer.get() |> ignore
+  }
   if self.press_seen_frame == self.frame_no {
     return self.press_seen
   }
@@ -73,7 +80,8 @@ pub fn Ctx::press(self : Ctx) -> Press {
     p = { ..p, moved: true }
   }
   if down && !p.moved && !p.long {
-    let held = self.now() - self.press_seen_at
+    // (a moment: the frame at it woken, wake_in)
+    let held = self.clock - self.press_seen_at
     if held >= long_press_ms - held_slack_ms {
       p = { ..p, long: true }
     } else {

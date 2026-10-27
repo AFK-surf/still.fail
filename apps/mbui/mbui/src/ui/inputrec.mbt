@@ -22,12 +22,22 @@ fn draw_logging() -> Bool {
 let inputs_since : Ref[Bool] = Ref::new(false)
 
 ///|
+/// An input came between two frames that what is built takes (a press, a key, words typed, a drag, a wheel): the
+/// frame after the next is built, for what it changed late in it that is no signal yet (what the build itself keeps of
+/// a press: a pager turned, a menu shut). Not a pointer moved with nothing down: what changes of where it is, what
+/// reads it reads (hand.mbt).
+let inputs_taken : Ref[Bool] = Ref::new(false)
+
+///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
   input_came()
   // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
   // to take, an event from outside for a part kept: kept_part.mbt; a wheel over what scrolls in a list's row kept, its
   // row's: kept_rows.mbt)
   let moved = kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)
+  if !moved {
+    inputs_taken.val = true
+  }
   if !(moved || (kind == "wheel" && !part_under(args[0], args[1]) && !row_scroller_under(args[0], args[1]))) {
     outside_came()
   }

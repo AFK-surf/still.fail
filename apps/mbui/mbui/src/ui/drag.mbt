@@ -119,8 +119,14 @@ pub fn Ctx::drag_area(
 pub fn Ctx::drag_of(self : Ctx, id : Int) -> Drag? {
   match drags.get(id) {
     Some(d) => {
+      // (read so: the press and, while it is on it, where the pointer is: hand.mbt)
+      hand.down.get() |> ignore
+      if d.down {
+        hand.pointer.get() |> ignore
+      }
       if d.down && holds_first(d) && self.down && self.press_at >= 0.0 {
-        let held = self.now() - self.press_at
+        // (a moment: the frame at it woken, wake_in)
+        let held = self.clock - self.press_at
         if held >= long_press_ms {
           d.held = true
           d.moving = true

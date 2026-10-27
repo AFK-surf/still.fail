@@ -23,6 +23,29 @@ test "the frame after an input is followed by one more, for what read it late" {
 }
 
 ///|
+test "a pointer moved with nothing down: a frame for it, built only where what it is over changed" {
+  let builds = Ref(0)
+  let t = Tester::new(fn(c) {
+      builds.val += 1
+      let id = c.id("box")
+      c.takes_presses(id)
+      c.box(w=Px(50.0), h=Px(50.0), id~, bg=if c.lit(id) { 0xFF0000FFL } else { 0x00FF00FFL }, fn() {  }) |> ignore
+    }, w=100.0, h=100.0, pointing=Mouse)
+  t.check_looks(false)
+  t.draw()
+  t.draw()
+  let built = builds.val
+  // (moved within the window, over nothing that lights: nothing built)
+  t.move(80.0, 80.0)
+  t.move(90.0, 90.0)
+  assert_eq(builds.val, built)
+  // (over the box: it lights)
+  t.move(20.0, 20.0)
+  assert_true(builds.val > built)
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0xFF0000FFL }))
+}
+
+///|
 test "a frame asked for between frames reaches the host" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
   t.draw()

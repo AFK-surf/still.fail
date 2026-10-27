@@ -1,0 +1,94 @@
+// The hand as what is built reads it (docs/incremental.md, the way there's 3): what the pointer is over, what is
+// pressed and what the press went down on, what was clicked or clicked twice since the frame before, what was held
+// long, what has the focus, the current input, where the pointer is and whether it is down, the discrete events of the
+// hand (a key, words typed, a press going down or up, a menu, what a reader asked). Each is said as each frame
+// begins, before it is decided what it does again (frame_watch.mbt), as what the next build would see of it: a key of
+// a set read by member (signals' Keyed: "is this row pointed at" changes as the pointer crosses its edge, not as it
+// moves), a value read whole otherwise. What reads them (Ctx::hovered, lit, pressed, clicked, the focus's, Ctx::press)
+// follows them, and is built again as they change for it: a pointer moved over what lights nothing builds nothing.
+
+///|
+/// What the frames read of the hand, as the frame being drawn began.
+priv struct Hand {
+  /// what the pointer is over and what holds that, as the last frame drew them (Ctx::hovered)
+  over : @signals.Keyed[Int]
+  /// what is pressed (Ctx::pressed), and what the press went down on and what holds it (Ctx::press_within)
+  pressed : @signals.Keyed[Int]
+  press_on : @signals.Keyed[Int]
+  /// what was clicked, and clicked twice, since the frame before (Ctx::clicked, double_clicked); what a press held long
+  /// was on (Ctx::long_press)
+  clicked : @signals.Keyed[Int]
+  double : @signals.Keyed[Int]
+  held : @signals.Keyed[Int]
+  /// what has the focus, as a member and as what it is (Ctx::has_focus, focused_id)
+  focus : @signals.Keyed[Int]
+  focus_id : @signals.Signal[Int]
+  /// where the pointer is, whether it is down, the current input (Ctx::pointer, Ctx::press, pointing)
+  pointer : @signals.Signal[(Double, Double)]
+  down : @signals.Signal[Bool]
+  pointing : @signals.Signal[Pointing]
+  /// the hand's discrete events so far, counted (hand_event): what reads what came (a key, a menu asked for, a reader's
+  /// action, a tap) is built again as one comes
+  events : @signals.Signal[Int]
+}
+
+///|
+// kept across runs: said anew as each frame begins (hand_arrive), from the Ctx of the run
+let hand : Hand = {
+  over: @signals.keyed(),
+  pressed: @signals.keyed(),
+  press_on: @signals.keyed(),
+  clicked: @signals.keyed(),
+  double: @signals.keyed(),
+  held: @signals.keyed(),
+  focus: @signals.keyed(),
+  focus_id: @signals.signal(0),
+  pointer: @signals.signal((0.0, 0.0), same=fn(a, b) { a.0 == b.0 && a.1 == b.1 }),
+  down: @signals.signal(false),
+  pointing: @signals.signal(Finger),
+  events: @signals.signal(0),
+}
+
+///|
+/// The hand as the frame about to be drawn sees it, said (frame_drawn, before what it does again is decided): what of
+/// it changed since the frame before tells what read it.
+fn hand_arrive(c : Ctx) -> Unit {
+  @signals.start_batch()
+  let over = c.hover_in.copy()
+  if c.hover != 0 {
+    over.push(c.hover)
+  }
+  hand.over.set(over)
+  hand.pressed.set(if c.down && c.active != 0 { [c.active] } else { [] })
+  hand.press_on.set(c.press_on)
+  hand.clicked.set(c.clicked)
+  hand.double.set(c.double_clicked)
+  hand.held.set(if c.held_on != 0 { [c.held_on] } else { [] })
+  hand.focus.set(if c.focus != 0 { [c.focus] } else { [] })
+  hand.focus_id.set(c.focus)
+  hand.pointer.set((c.px, c.py))
+  hand.down.set(c.down)
+  hand.pointing.set(pointing())
+  @signals.end_batch()
+}
+
+///|
+/// A discrete event of the hand came (a key, words typed, a press going down or up, a back, a menu, a reader's action):
+/// what reads what comes (Ctx::keys, menu_asked, action_asked, tapped_anywhere) is built again.
+fn hand_event() -> Unit {
+  hand.events.set(@signals.untracked(fn() { hand.events.get() }) + 1)
+}
+
+///|
+/// What the hand's discrete events are, read (Ctx::keys and the rest of what reads what came): followed.
+fn hand_events_read() -> Unit {
+  hand.events.get() |> ignore
+}
+
+///|
+/// Put back as a run begins (reset_globals): nothing over, pressed, clicked, held or focused.
+fn hand_reset() -> Unit {
+  for k in [hand.over, hand.pressed, hand.press_on, hand.clicked, hand.double, hand.held, hand.focus] {
+    k.set([])
+  }
+}

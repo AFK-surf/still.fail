@@ -1438,7 +1438,12 @@ let no_text_patch : TextPatch = text_patch()
 /// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
 /// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
 pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
-  id != 0 && self.double_clicked.contains(id)
+  if id == 0 {
+    return false
+  }
+  // (read so: what reads it is built again as it is clicked twice, hand.mbt)
+  hand.double.has(id) |> ignore
+  self.double_clicked.contains(id)
 }
 
 ///|
@@ -1476,6 +1481,8 @@ pub fn Ctx::clicked_on(self : Ctx, id : Int, part : Int) -> Bool {
 fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
   // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
   // a screen reader asks of it is one: semantics.mbt)
+  // (read so: what reads it is built again as it is clicked, hand.mbt)
+  hand.clicked.has(id) |> ignore
   self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
 }
 
@@ -1503,6 +1510,9 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 /// tab's ×, a row's buttons pointed at, the tab and the row are still pointed at (the web's `:hover`, which holds for
 /// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
+  // (read so: what reads it is built again as the pointer comes over it or leaves it, hand.mbt)
+  hand.over.has(id) |> ignore
+  hand.pointing.get() |> ignore
   self.hover == id || (id != 0 && (self.hover_in.contains(id) || (self.lit_every && pointing() is Mouse)))
 }
 
@@ -1584,7 +1594,12 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
 /// Whether the press (Ctx::press) went down on `id` or on what is in it, as the last frame drew them: what lies over it
 /// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place.
 pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
-  id != 0 && self.press_on.contains(id)
+  if id == 0 {
+    return false
+  }
+  // (read so: what reads it is built again as a press goes down on it or is let go, hand.mbt)
+  hand.press_on.has(id) |> ignore
+  self.press_on.contains(id)
 }
 
 ///|
@@ -1663,6 +1678,10 @@ fn Ctx::point_nowhere(self : Ctx) -> Unit {
 
 ///|
 pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
+  // (read so: what reads it is built again as it is pressed or let go, hand.mbt)
+  if id != 0 {
+    hand.pressed.has(id) |> ignore
+  }
   if self.active != id || !self.down {
     return false
   }
@@ -1795,6 +1814,7 @@ pub fn Ctx::present_ms(self : Ctx) -> Double {
 /// device, the clock as the event was handed in under a Tester. For how fast and how far apart what a finger did was
 /// (a swipe's speed, a double tap's gap), not how far apart the frames that took it are.
 pub fn Ctx::pointer_at(self : Ctx) -> Double {
+  hand.pointer.get() |> ignore
   self.pointer_t
 }
 
@@ -1804,6 +1824,7 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 /// finger lets go of moving (a picture zoomed in).
 pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
   ignore(self)
+  hand.pointer.get() |> ignore
   (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
 }
 
@@ -2118,6 +2139,9 @@ pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
 ///|
 /// The pointer, and whether it is down.
 pub fn Ctx::pointer(self : Ctx) -> (Double, Double, Bool) {
+  // (read so: what reads it is built again as the pointer moves, goes down or is let go, hand.mbt)
+  hand.pointer.get() |> ignore
+  hand.down.get() |> ignore
   (self.px, self.py, self.down)
 }
 

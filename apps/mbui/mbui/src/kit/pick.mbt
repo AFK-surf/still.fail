@@ -80,6 +80,8 @@ pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool 
       self.widening = true
       self.handle = 0
       self.press = press.frame
+      // (picked as the view is built, after what draws it read it: built again in this frame, as it is)
+      c.built_from_changed("a passage picked")
       true
     }
     _ => false
@@ -102,15 +104,25 @@ pub fn Pick::slide(self : Pick, c : @ui.Ctx) -> Unit {
     Some(w) => {
       let (s, e) = w.word_at(w.offset_at(x, y))
       if s >= self.from_a {
-        self.a = self.from_a
-        self.b = if e > self.from_b { e } else { self.from_b }
+        self.picked(c, self.from_a, if e > self.from_b { e } else { self.from_b })
       } else {
-        self.a = s
-        self.b = self.from_b
+        self.picked(c, s, self.from_b)
       }
     }
     None => ()
   }
+}
+
+///|
+/// From `a` until `b` picked now, as the view is built: where that is not what was, what drew it read it before, and
+/// the frame is built again, as it is (Ctx::built_from_changed).
+fn Pick::picked(self : Pick, c : @ui.Ctx, a : Int, b : Int) -> Unit {
+  if a == self.a && b == self.b {
+    return
+  }
+  self.a = a
+  self.b = b
+  c.built_from_changed("a passage picked widened")
 }
 
 ///|
@@ -160,9 +172,9 @@ pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[I
     } else {
       let at = words.offset_at(x + self.grab_x, y + self.grab_y)
       if self.handle == 1 {
-        self.a = if at < self.b - 1 { at } else { self.b - 1 }
+        self.picked(c, if at < self.b - 1 { at } else { self.b - 1 }, self.b)
       } else {
-        self.b = if at > self.a + 1 { at } else { self.a + 1 }
+        self.picked(c, self.a, if at > self.a + 1 { at } else { self.a + 1 })
       }
     }
   }
@@ -178,6 +190,7 @@ pub fn Pick::tapped_away(self : Pick, c : @ui.Ctx, keep : Array[Int]) -> Bool {
   match c.tapped_anywhere() {
     Some((tx, ty)) if !keep.iter().any(fn(id) { pick_in(c, id, tx, ty) }) => {
       self.clear()
+      c.built_from_changed("a passage let go")
       true
     }
     _ => false

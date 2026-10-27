@@ -119,7 +119,7 @@ pub fn Ctx::code_field(
     }
   }
   let digits = st.value.to_array()
-  let focused = self.focus == id
+  let focused = self.has_focus(id)
   let next = if digits.length() < length - 1 { digits.length() } else { length - 1 }
   self.box(align=ACenter, fn() {
     self.box(dir=Row, gap~, align=ACenter, fn() {

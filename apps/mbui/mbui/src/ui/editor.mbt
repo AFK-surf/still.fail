@@ -743,8 +743,15 @@ pub fn Ctx::editor(
   files? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
+  // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while one is down:
+  // hand.mbt)
+  hand_events_read()
+  hand.down.get() |> ignore
+  if self.down {
+    hand.pointer.get() |> ignore
+  }
   // (the focus in it: its caret and what the keys do, each frame; a part kept builds it each frame, kept_part.mbt)
-  if self.focus == id {
+  if self.has_focus(id) {
     part_live()
   }
   let st = match (self.editors.get(id), field) {
@@ -824,7 +831,8 @@ pub fn Ctx::editor(
     self.down &&
     !self.dragging &&
     self.held_told != self.press_at {
-    let held = self.now() - self.press_at
+    // (a moment: the frame at it woken, wake_in)
+    let held = self.clock - self.press_at
     if held >= long_press_ms {
       self.held_told = self.press_at
       self.take_press()
@@ -847,7 +855,7 @@ pub fn Ctx::editor(
   st.ph_color = placeholder_color
   st.caret_color = caret_color
   st.sel_color = (caret_color & 0xFFFFFF00L) | 0x40L
-  let focused = self.focus == id
+  let focused = self.has_focus(id)
   let i = self.alloc(kind_editor)
   // in Tab's order (focus.mbt); its keys are its own
   self.focusable(id, node=i, keys=0, on_press=true)
@@ -996,7 +1004,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
   // its scroll bar, where its words scroll in it (scroll_bar.mbt)
   let bar = if sideways.contains(n.id) { self.bar_at(n) } else { None }
-  let focused = self.focus == n.id
+  let focused = self.has_focus(n.id)
   let ml = st.marked.length()
   // selection
   let (a, b) = st.sel()
@@ -1388,7 +1396,7 @@ pub fn Ctx::field_files(self : Ctx, key : String) -> Array[(String, Bytes)]? {
 ///|
 /// Whether the editor `key` has the focus (the keyboard is its).
 pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
-  self.focus != 0 && self.focus == self.id(key)
+  self.has_focus(self.id(key))
 }
 
 ///|

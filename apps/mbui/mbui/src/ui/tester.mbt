@@ -35,6 +35,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
   looks_reset()
+  hand_reset()
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
@@ -60,6 +61,7 @@ fn reset_globals() -> Unit {
   faces_reset()
   text_table.val = None
   inputs_since.val = false
+  inputs_taken.val = false
   secret_copies.val = 0
   in_frame.val = false
   building.val = false

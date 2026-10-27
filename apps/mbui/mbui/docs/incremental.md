@@ -79,8 +79,13 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    changed but its looks by the clock (a spinner, the spokes, a breath: cycle_look.mbt) draws the last frame's
    instances, each look applied at its time.
 3. The view's own state into signals (the pointer, presses, the focus, what is picked, scrolling, the current input) and
-   the app's (its store's, its timers'): `outside_said` and `inputs_said` go, with `outside_events`, `held`, `pointed` and
-   `came_built`.
+   the app's (its store's, its timers'). The hand is (hand.mbt): what the pointer is over, what is pressed and what the
+   press went down on, clicked, held long, the focus, the current input, where the pointer is and whether it is down,
+   its discrete events, said as each frame begins, a set read by member where it is (signals' Keyed: a row pointed at
+   changes as the pointer crosses its edge); `inputs_said` went, and a pointer moved over what lights nothing builds
+   nothing. Left: what scrolls (a list's place, a box scrolled sideways), what a field holds, what a pager or a menu
+   keeps of a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
+   `outside_events`, `held`, `pointed` and `came_built` go.
 4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped. The frame's paint runs under a
    watch of its own (frame_watch.mbt's paint_watch): where a node is placed by the clock (Ctx::moved_by: a stack's
    slide) and a look worked out as it is painted (Ctx::look_by: a fade) read where a motion is there, so a frame where
