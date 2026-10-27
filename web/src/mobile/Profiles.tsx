@@ -215,7 +215,7 @@ function AccountBody({ e }: { e: WorkspaceProfile }) {
         {hosts(e).map((m) => (
           <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> <StationNamedAt station={m.station} name={m.stationName} /></span>
+              <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> <StationNamedAt station={m.station} name={m.title} /></span>
               <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
             </span>
             <ChevronRight size={14} className={partsCss.mSubtle} />

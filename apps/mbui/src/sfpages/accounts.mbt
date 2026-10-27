@@ -807,7 +807,7 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
         if @sf.link_row(
             c,
             "profile-station/" + station + "/" + pid,
-            text(mv, "stationName"),
+            text(mv, "title"),
             note=join([text(mv, "about"), if used > 0 { @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())]) } else { "" }], " · "),
             goes=station != here_station,
             lead=fn() { @sf.status_dot(c, if flag(mv, "online") { "online" } else { "offline" }) },

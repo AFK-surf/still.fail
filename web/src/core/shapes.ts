@@ -5450,9 +5450,13 @@ export interface ProfileMember {
 	station: string;
 	stationId: string;
 	stationName: string;
+	/** What its row is called: its station's name, and its profile's (studio · 工作) where that station has two copies. */
+	title: string;
 	online: boolean;
 	/** Its id on that station (its page there). */
 	profileId: string;
+	/** Its profile's name on that station. */
+	profileName: string;
 	/** host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own. */
 	role: string;
 	/** What it is there, in words: 借给 mini / 向 studio 借 / 自己登录. */

@@ -1084,6 +1084,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "items.*.where",
     "items.*.stations.*.name",
     "items.*.members.*.stationName",
+    "items.*.members.*.title",
+    "items.*.members.*.profileName",
     "items.*.members.*.about",
     "wait.text",
     "wait.failing.*.text",

@@ -92,6 +92,15 @@ test("the same account signed in on two stations each is one row, each station a
   assert.equal(two.items.length, 2);
 });
 
+test("a station with two profiles signed in to the same account: its rows named by their profiles too", () => {
+  const view = workspaceProfiles([
+    station(A, "default", true, [profile("工作", { email: "z@x.test", runtime: "codex" }), profile("备用", { email: "z@x.test", runtime: "codex" })]),
+    station(B, "mini", true, [profile("max", { email: "z@x.test", runtime: "codex" })]),
+  ]);
+  assert.equal(view.items.length, 1);
+  assert.deepEqual(view.items[0].members.map((m: any) => m.title), ["default · 工作", "default · 备用", "mini"]);
+});
+
 test("an account signed in on two stations, signed out on one: the row shows the one that works and names where the other needs a look", () => {
   const signedOut = shownProfile(profile("machine-claude", { email: "z@x.test", runtime: "claude", machine: true, check: { state: "login" } }));
   const fine = shownProfile(profile("machine-claude", { email: "z@x.test", runtime: "claude", machine: true, check: { state: "ok" } }));

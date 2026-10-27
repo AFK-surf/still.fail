@@ -245,7 +245,7 @@ function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: strin
             <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`} aria-current={m.station === here ? "page" : undefined}>
               <StatusDot state={m.online ? "online" : "offline"} />
               <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}><StationNamedAt station={m.station} name={m.stationName} /></span>
+                <span className={pagesCss.listRowTitle}><StationNamedAt station={m.station} name={m.title} /></span>
                 <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
               </span>
               {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}

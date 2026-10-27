@@ -123,7 +123,7 @@ export function sampleWorkspaceProfiles(): WorkspaceProfile[] {
   return [6, 8, 5].map((n, i) => ({
     key: `sample-${i}`, group: "", groupTitle: sampleWords(4), station: "sample/0", stationId: "sample-0", stationName: sampleWords(5), profile: sampleProfile(n, i),
     shared: false, host: "", hostName: "", hostOnline: true, usable: true, look: false, where: sampleWords(5), stations: [], editable: false, canShare: false,
-    members: [5, 3].map((m, j) => ({ station: `sample/${j}`, stationId: `sample-${j}`, stationName: sampleWords(m), online: true, profileId: `sample-${i}`, role: "host", about: sampleWords(m + 6), usable: true, checkText: "", checkTone: "green", usedBy: 0 })),
+    members: [5, 3].map((m, j) => ({ station: `sample/${j}`, stationId: `sample-${j}`, stationName: sampleWords(m), title: sampleWords(m), online: true, profileId: `sample-${i}`, profileName: sampleWords(m), role: "host", about: sampleWords(m + 6), usable: true, checkText: "", checkTone: "green", usedBy: 0 })),
   }));
 }
 
