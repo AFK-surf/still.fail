@@ -1822,15 +1822,6 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
-    // What is asked here and not decided yet (a card, or an agent needing a person): the page leads to each, and the
-    // post that asks says so (`asked`: it can be let go there).
-    view.asks = row !== undefined && view.archived !== true
-      ? decisions.undecided(row).filter((d) => u64(d.seq) !== null && open(d)).map((d) => decisions.askOf(row, d, view.me))
-      : [];
-    for (const ask of view.asks) {
-      const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
-      if (isObject(m)) (m as J).asked = true;
-    }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself.
@@ -1843,6 +1834,20 @@ export class Views implements Owner {
         view.stateLead = lead.kind;
         view.stateRest = lead.rest;
       }
+    }
+    // What is asked here and not decided yet (a card, or an agent needing a person): the page leads to each. A card is
+    // let go under its post (`asked`), with its options; an agent's need where the chat's end says what it needs
+    // (`stateAsk`), the reminder the viewer reads, else under the post that asks.
+    view.asks = row !== undefined && view.archived !== true
+      ? decisions.undecided(row).filter((d) => u64(d.seq) !== null && open(d)).map((d) => decisions.askOf(row, d, view.me))
+      : [];
+    for (const ask of view.asks) {
+      if (!ask.card && view.stateLead === "need") {
+        view.stateAsk = ask.seq;
+        continue;
+      }
+      const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
+      if (isObject(m)) (m as J).asked = true;
     }
     if (letters > 0) view.letters = letters;
     // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.

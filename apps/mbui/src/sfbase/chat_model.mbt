@@ -528,6 +528,9 @@ pub(all) struct ChatView {
   /// where it stands, as its row's second line says it without a card waiting (the core's `stateText`, `stateLead`,
   /// `stateRest`): said at the end of its messages
   state : (String, String, String)?
+  /// what an agent needs a person for, as `state` says it (the core's `stateAsk`): the post that asks it, let go right
+  /// under the line rather than under that post
+  state_ask : Double?
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -635,6 +638,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
       Some(words) => Some((words, text(s, "stateLead"), text(s, "stateRest")))
       None => None
     },
+    state_ask: opt_number(s, "stateAsk"),
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),

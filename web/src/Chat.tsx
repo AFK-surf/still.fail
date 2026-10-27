@@ -335,9 +335,12 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
   </div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
   // Where it stands, as its row says it (the core's `stateText`), whole: done with nothing said, its word after the check.
+  // What an agent needs a person for is let go right under the line that says it (the core's `stateAsk`).
   const state = chat.stateText;
+  const stateAsk = chat.stateAsk;
   if (state) drawn.set("state", () => <div key="state" data-vk="state">
     <WaitingText text={state} lead={chat.stateLead} rest={chat.stateRest || (chat.stateLead === "done" ? t("web-main.status.done") : chat.stateRest)} className={css.chatState} slot />
+    {stateAsk != null && thread !== null && <AskDismiss thread={thread} seq={stateAsk} asked answered={false} />}
   </div>);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {

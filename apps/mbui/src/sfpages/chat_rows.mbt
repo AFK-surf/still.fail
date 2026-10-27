@@ -31,8 +31,8 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 /// Where the chat stands, under its last message (the core's `stateText`: its row's second line, a card waiting left
 /// out as it is in the chat): led as the row's is (chat_mark.mbt: a bell, a check, the waiting arc, the radar) but
 /// whole, its words wrapping where the row cuts them to a line; done with nothing said, its word (已完成) after the
-/// check. What it needs of a person in ink, the rest quiet.
-fn chat_state(c : @ui.Ctx, words : String, lead : String, rest : String) -> Unit {
+/// check. What it needs of a person in ink, the rest quiet, and let go right under it (the core's `stateAsk`).
+fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lead : String, rest : String) -> Unit {
   let p = @sf.theme().p
   // (the row's words, the theme's lists', on their line: the icon's column, the theme's too, as high as it)
   let look = @sf.theme().chat_list
@@ -49,6 +49,10 @@ fn chat_state(c : @ui.Ctx, words : String, lead : String, rest : String) -> Unit
       })
       |> ignore
     _ => c.text(words, style=said) |> ignore
+  }
+  match here.view.state_ask {
+    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false) }) |> ignore
+    None => ()
   }
 }
 

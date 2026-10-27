@@ -334,7 +334,7 @@ fn entry_row(c : @ui.Ctx, src : Source, here : MessageHere, e : Entry) -> Unit {
     Said(m) => message_row(c, src, here, m)
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outbox_row(c, src, here, o)
-    State(words, lead, rest) => chat_state(c, words, lead, rest)
+    State(words, lead, rest) => chat_state(c, src, here, words, lead, rest)
     Working(_) | Top | Foot => ()
   }
 }
