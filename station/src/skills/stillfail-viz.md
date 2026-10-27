@@ -44,6 +44,17 @@ the file as a card that opens it, not drawn in the message. Say what the figure 
 
 ## Look
 
+The classes already look like still.fail's own app; keep what you add in the same style:
+
+- Grey by default. Colour only what must be noticed (a failure, a warning, a change) and tell chart series apart;
+  normal values, labels and states stay grey. Show a status as a small dot or a badge plus words, not a block of
+  colour.
+- Mark the current or chosen thing in ink (`.is-active`, `.is-selected`), never in orange: `--brand` and `--accent` are
+  for still.fail's own marks, not for emphasis.
+- Set things apart with room and grounds (`.card`, a node's grey ground), not frames, rules or dividers. No banners or
+  coloured callout boxes: an aside is a `.viz-note` line.
+- Numbers are already all one width; use the text sizes below as they are.
+
 Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `black`, `slate-500`): use the variables.
 
 - Surfaces and text: `--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`,
@@ -54,8 +65,10 @@ Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `b
   shape too. In SVG use `currentColor` or `var(--…)`; for a canvas or a library that needs real colours, read them
   with `getComputedStyle(document.documentElement).getPropertyValue("--chart-1")` and redraw on the
   `ember-viz:theme` event.
-- Type: `--font-sans`, `--font-mono`, `--font-size-base` (14px), `--font-size-small` (12px), `.text-muted`,
-  `.text-small`, `.tabular-nums`. Nothing smaller than 11px.
+- Type, the app's sizes (a size up on phones): `--font-size-base` (what is read), `--font-size-ui` (controls, tables),
+  `--font-size-small` (labels, notes), `--font-size-display` (a big number); h1–h3 are set. `--font-sans`,
+  `--font-mono`, `.text-muted`, `.text-small`. Weights 400, 500 to stand out, 600 for titles. Nothing smaller than
+  11px.
 - Corners: `--radius-card`, `--radius-field`, `--radius-small`.
 
 ## Classes
@@ -64,11 +77,12 @@ Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `b
 - Figures: `.viz-stat` with `.viz-stat-label` and `.viz-stat-value`; `.viz-badge` (add `.is-blue`, `.is-green`,
   `.is-orange`, `.is-red`, `.is-yellow`, `.is-purple`).
 - Diagrams: `.viz-flow` (add `.is-vertical`) of `.viz-node` boxes (`.viz-node-title`, `.viz-node-body`; `.is-active`
-  or a colour as above) with `.viz-arrow` between them (its text is the arrow's label); `.viz-note` for an aside.
+  for the current one, a colour as above only for one that is wrong or needs attention) with `.viz-arrow` between them
+  (its text is the arrow's label); `.viz-note` for an aside.
   For anything a flow of boxes cannot draw (cycles, curves), use inline SVG with the variables.
 - Controls: `.btn`, `.btn-primary`, `.btn-ghost`, `.btn-sm`, `.is-selected`; `.form-label`, `.form-control`,
   `.form-select`, `.form-check` + `.form-check-input` + `.form-check-label`, `.form-switch`, `.form-range`.
-- Tabs: `.nav.nav-pills` of `.nav-link` (mark the current one `.is-selected`).
+- Tabs: `.nav.nav-pills` of `.nav-link` (mark the current one `.is-selected`): a segmented choice.
 - Tables: `.table` (cells `.num` for numbers) inside `.table-responsive`.
 - Progress: `.progress` > `.progress-bar` with `style="width:40%"`.
 - Tooltips: any element with `data-tooltip="text"` shows it on hover and focus.

@@ -263,7 +263,8 @@ test "under a mermaid chart: the whole screen, the chart as written to pinch, it
 test "a visualization's document: a fragment in the stylesheet with its tokens and what it kept; a whole page as written" {
   let doc = viz_document("<p>hi</p>", Some({ "a": "<b>" }), true, 0xF7F6F3FFL)
   assert_true(doc.has_prefix("<!doctype html><html data-theme=\"dark\">"))
-  assert_true(doc.contains("--e-canvas:#1f2023"))
+  assert_true(doc.contains("--e-canvas:#26272b"))
+  assert_true(doc.contains("--e-line:#ececed1f"))
   assert_true(doc.contains("{\"widgetState\":{\"a\":\"\\u003cb>\"}}"))
   assert_true(doc.contains(":root:root{background:#f7f6f3}"))
   assert_true(doc.contains("mbuiHost.post"))

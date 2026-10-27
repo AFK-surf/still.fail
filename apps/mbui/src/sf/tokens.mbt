@@ -1257,6 +1257,16 @@ pub fn theme() -> Theme {
   current.val
 }
 
+///|
+/// The palette, light or dark (what a page drawn apart from the frame's own is told: a visualization's, viz_file.mbt).
+pub fn palette_of(dark : Bool) -> Palette {
+  if dark {
+    dark_palette
+  } else {
+    light_palette
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Colours mixed as the web's color-mix does
 

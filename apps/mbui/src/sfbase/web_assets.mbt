@@ -9,6 +9,10 @@ pub let viz_css : String =
   #| * Two layers, after Codex's Visualize: the page hands in ember's own tokens as --e-* (its palette, type, corners, for
   #| * the theme it shows), and what an agent writes against is the contract below — the variable and class names of
   #| * Codex's visualize.css, so an agent that knows one knows the other. Keep it in step with skills/ember-viz.md.
+  #| *
+  #| * What the classes look like is still.fail's own (docs/ui-panels.md): the app's parts (parts.css.ts, controls.css.ts),
+  #| * its six sizes of type, its numbers all one width; grey unless something is wrong; what is chosen marked in ink, never
+  #| * the accent; things set apart by grounds and room, not frames and lines.
   #| */
   #|:root {
   #|
@@ -41,15 +45,17 @@ pub let viz_css : String =
   #|  --green: var(--e-green, #1d7a55);
   #|  --orange: var(--e-accent, #e8763f);
   #|  --red: var(--e-red, #b53a2c);
-  #|  --purple: var(--e-code-inline, #7c3fa0);
+  #|  --purple: var(--e-purple, var(--e-code-inline, #6830bf));
   #|  --yellow: var(--e-amber, #8a6414);
   #|  --blue-bg: var(--e-blue-bg, #eef3fc);
   #|  --green-bg: var(--e-green-bg, #ecf7f1);
   #|  --orange-bg: var(--e-accent-bg, #fdf0ea);
   #|  --red-bg: var(--e-red-bg, #fcefed);
   #|  --yellow-bg: var(--e-amber-bg, #fcf5e6);
-  #|  /* still.fail has no purple ground of its own: its purple tinted into the page's, so it follows the theme. */
-  #|  --purple-bg: color-mix(in srgb, var(--purple) 12%, var(--background));
+  #|  /* Where the page has no purple ground of its own (the app's): its purple at an opacity, as the other tones'. */
+  #|  --purple-bg: var(--e-purple-bg, color-mix(in srgb, var(--purple) 16%, transparent));
+  #|  /* What is lifted out of a tinted track (a segmented choice's thumb). */
+  #|  --lifted: var(--e-lifted, var(--background));
   #|  /* Series colours in order, for charts: tell series apart by label or shape too, never by colour alone. */
   #|  --chart-1: var(--blue);
   #|  --chart-2: var(--orange);
@@ -60,12 +66,19 @@ pub let viz_css : String =
   #|
   #|  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
   #|  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  #|  --font-size-base: 14px;
-  #|  --font-size-small: 12px;
-  #|  --font-size-h1: 22px;
-  #|  --font-size-h2: 18px;
-  #|  --font-size-h3: 16px;
-  #|  --line-height: 1.6;
+  #|  /* The app's sizes of type by role (a phone's a size up), each with its line. */
+  #|  --font-size-base: var(--e-text-body, 14px);
+  #|  --font-size-small: var(--e-text-meta, 12px);
+  #|  --font-size-ui: var(--e-text-ui, 13px);
+  #|  --font-size-h1: var(--e-text-heading, 22px);
+  #|  --font-size-h2: var(--e-text-title, 16px);
+  #|  --font-size-h3: var(--font-size-base);
+  #|  --font-size-display: var(--e-text-display, 28px);
+  #|  --line-height: var(--e-leading-body, 22px);
+  #|  --line-height-small: var(--e-leading-meta, 18px);
+  #|  --line-height-ui: var(--e-leading-ui, 20px);
+  #|  --line-height-h1: var(--e-leading-heading, 30px);
+  #|  --line-height-h2: var(--e-leading-title, 24px);
   #|  --radius-card: var(--e-r-card, 20px);
   #|  --radius-field: var(--e-r-field, 12px);
   #|  --radius-small: calc(var(--radius-field) / 2);
@@ -76,6 +89,8 @@ pub let viz_css : String =
   #|  background: transparent;
   #|  color: var(--foreground);
   #|  font: var(--font-size-base) / var(--line-height) var(--font-sans);
+  #|  /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */
+  #|  font-variant-numeric: tabular-nums;
   #|  -webkit-font-smoothing: antialiased;
   #|}
   #|
@@ -86,10 +101,10 @@ pub let viz_css : String =
   #|html { overflow: hidden; }
   #|[hidden] { display: none !important; }
   #|body { padding: 2px; overflow-wrap: anywhere; }
-  #|h1, h2, h3, h4 { margin: 0 0 .5em; line-height: 1.3; font-weight: 600; }
-  #|h1 { font-size: var(--font-size-h1); }
-  #|h2 { font-size: var(--font-size-h2); }
-  #|h3 { font-size: var(--font-size-h3); }
+  #|h1, h2, h3, h4 { margin: 0 0 .5em; font-weight: 600; }
+  #|h1 { font-size: var(--font-size-h1); line-height: var(--line-height-h1); }
+  #|h2 { font-size: var(--font-size-h2); line-height: var(--line-height-h2); }
+  #|h3 { font-size: var(--font-size-h3); line-height: var(--line-height); }
   #|h4 { font-size: var(--font-size-base); }
   #|p { margin: 0 0 .75em; }
   #|p:last-child { margin-bottom: 0; }
@@ -105,7 +120,7 @@ pub let viz_css : String =
   #|
   #|/* Text. */
   #|.text-muted { color: var(--muted-foreground); }
-  #|.text-small { font-size: var(--font-size-small); }
+  #|.text-small { font-size: var(--font-size-small); line-height: var(--line-height-small); }
   #|.text-destructive { color: var(--destructive); }
   #|.text-warning { color: var(--yellow); }
   #|.text-success { color: var(--green); }
@@ -114,9 +129,9 @@ pub let viz_css : String =
   #|.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   #|.cursor-interaction { cursor: pointer; }
   #|
-  #|/* Surfaces. */
+  #|/* Surfaces: a card is its ground, no frame. */
   #|.card {
-  #|  padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-card); corner-shape: var(--corner-shape);
+  #|  padding: 16px; border-radius: var(--radius-card); corner-shape: var(--corner-shape);
   #|  background: var(--card); color: var(--card-foreground);
   #|}
   #|.card > :last-child { margin-bottom: 0; }
@@ -132,12 +147,12 @@ pub let viz_css : String =
   #|/* A figure: a number with its label. */
   #|.viz-stat { display: flex; flex-direction: column; gap: 2px; }
   #|.viz-stat-label { color: var(--muted-foreground); font-size: var(--font-size-small); }
-  #|.viz-stat-value { font-size: 24px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  #|.viz-stat-value { font-size: var(--font-size-display); font-weight: 600; line-height: 1.2; }
   #|
-  #|/* Badges: neutral by default, a status colour when named. */
+  #|/* Badges, as the app's pills: grey by default, a tone only for what it must say (a failure, a warning, done). */
   #|.viz-badge {
-  #|  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px;
-  #|  background: var(--muted); color: var(--foreground); font-size: var(--font-size-small); font-weight: 500; white-space: nowrap;
+  #|  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border-radius: 999px;
+  #|  background: var(--muted); color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500; white-space: nowrap;
   #|}
   #|.viz-badge.is-blue { background: var(--blue-bg); color: var(--blue); }
   #|.viz-badge.is-green { background: var(--green-bg); color: var(--green); }
@@ -146,38 +161,36 @@ pub let viz_css : String =
   #|.viz-badge.is-yellow { background: var(--yellow-bg); color: var(--yellow); }
   #|.viz-badge.is-purple { background: var(--purple-bg); color: var(--purple); }
   #|
-  #|/* Diagrams (ember's own): boxes in a flow, arrows between them, a note aside. */
+  #|/* Diagrams (ember's own): boxes in a flow, each its quiet ground (the ink at an opacity: a step off whatever it lies
+  #|   on), arrows between them, a note aside. The current one ringed in ink, as a chosen choice is. */
   #|.viz-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
   #|.viz-flow.is-vertical { flex-direction: column; align-items: flex-start; }
   #|.viz-node {
   #|  display: flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 10px 12px;
-  #|  border: 1px solid var(--border-strong); border-radius: var(--radius-field); corner-shape: var(--corner-shape);
-  #|  background: var(--background);
+  #|  border-radius: var(--radius-field); corner-shape: var(--corner-shape); background: var(--muted);
   #|}
   #|.viz-node-title { font-weight: 600; }
-  #|.viz-node-body { color: var(--muted-foreground); font-size: var(--font-size-small); }
-  #|.viz-node.is-active { border-color: var(--brand); background: var(--accent); }
-  #|.viz-node.is-blue { border-color: color-mix(in srgb, var(--blue) 40%, transparent); background: var(--blue-bg); }
-  #|.viz-node.is-green { border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); }
-  #|.viz-node.is-red { border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); }
-  #|.viz-node.is-yellow { border-color: color-mix(in srgb, var(--yellow) 40%, transparent); background: var(--yellow-bg); }
-  #|.viz-node.is-purple { border-color: color-mix(in srgb, var(--purple) 40%, transparent); background: var(--purple-bg); }
+  #|.viz-node-body { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.viz-node.is-active { box-shadow: inset 0 0 0 1.5px var(--foreground); }
+  #|.viz-node.is-blue { background: var(--blue-bg); }
+  #|.viz-node.is-green { background: var(--green-bg); }
+  #|.viz-node.is-red { background: var(--red-bg); }
+  #|.viz-node.is-yellow { background: var(--yellow-bg); }
+  #|.viz-node.is-purple { background: var(--purple-bg); }
   #|.viz-arrow {
   #|  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 40px;
   #|  color: var(--muted-foreground); font-size: var(--font-size-small); text-align: center;
   #|}
   #|.viz-arrow::after { content: "→"; font-size: 16px; line-height: 1; }
   #|.viz-flow.is-vertical .viz-arrow::after { content: "↓"; }
-  #|.viz-note {
-  #|  padding: 8px 12px; border-left: 3px solid var(--brand); border-radius: var(--radius-small);
-  #|  background: var(--accent); color: var(--foreground); font-size: var(--font-size-small);
-  #|}
+  #|/* An aside is quieter words, not a banner. */
+  #|.viz-note { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
   #|
-  #|/* Buttons. */
+  #|/* Buttons: the app's pills. */
   #|.btn {
-  #|  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px;
-  #|  border: 1px solid var(--border-strong); border-radius: var(--radius-field); corner-shape: var(--corner-shape);
-  #|  background: var(--background); color: var(--foreground); font: inherit; font-weight: 500; white-space: nowrap;
+  #|  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
+  #|  border: 1px solid var(--border-strong); border-radius: 999px;
+  #|  background: var(--background); color: var(--foreground); font: inherit; font-size: var(--font-size-ui); font-weight: 500; white-space: nowrap;
   #|  cursor: pointer; transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
   #|}
   #|.btn:hover { background: var(--hover); }
@@ -186,11 +199,11 @@ pub let viz_css : String =
   #|.btn-primary:hover { border-color: var(--e-primary-hover, var(--primary)); background: var(--e-primary-hover, var(--primary)); }
   #|.btn-ghost { border-color: transparent; background: transparent; }
   #|.btn-ghost:hover { background: var(--hover); }
-  #|.btn.is-selected { border-color: var(--brand); background: var(--accent); color: var(--accent-foreground); }
-  #|.btn-sm { height: 26px; padding: 0 8px; font-size: var(--font-size-small); }
+  #|.btn.is-selected { border-color: var(--foreground); box-shadow: inset 0 0 0 .5px var(--foreground); }
+  #|.btn-sm { height: 26px; padding: 0 10px; font-size: var(--font-size-small); }
   #|
   #|/* Forms. */
-  #|.form-label { display: block; margin-bottom: 4px; color: var(--muted-foreground); font-size: var(--font-size-small); }
+  #|.form-label { display: block; margin-bottom: 4px; color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
   #|.form-control, .form-select {
   #|  width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--radius-field);
   #|  corner-shape: var(--corner-shape); background: var(--background); color: var(--foreground); font: inherit;
@@ -205,23 +218,36 @@ pub let viz_css : String =
   #|.form-range { width: 100%; accent-color: var(--brand); }
   #|.form-control-color { width: 34px; height: 34px; padding: 2px; border: 1px solid var(--input); border-radius: var(--radius-small); background: none; }
   #|
-  #|/* Tabs as pills. */
+  #|/* Tabs: the app's segmented choice, its track a tint of whatever it sits on, the chosen one lifted out of it. */
   #|.nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  #|.nav-pills {
+  #|  display: inline-flex; width: fit-content; max-width: 100%; gap: 2px; padding: 3px; border-radius: 999px;
+  #|  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  #|}
+  #|.nav-justified { display: flex; }
   #|.nav-justified > * { flex: 1; }
   #|.nav-link {
   #|  display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 12px; border: 0;
-  #|  border-radius: 999px; background: none; color: var(--muted-foreground); font: inherit; cursor: pointer;
+  #|  border-radius: 999px; background: none; color: var(--muted-foreground); font: inherit; font-size: var(--font-size-ui);
+  #|  white-space: nowrap; cursor: pointer; transition: color var(--dur) var(--ease-out);
   #|}
-  #|.nav-link:hover { background: var(--hover); color: var(--foreground); text-decoration: none; }
-  #|.nav-pills .nav-link.is-selected, .nav-pills .nav-link.active { background: var(--primary); color: var(--primary-foreground); }
+  #|.nav-link:hover { color: var(--foreground); text-decoration: none; }
+  #|.nav-link.is-selected, .nav-link.active { color: var(--foreground); font-weight: 500; }
+  #|.nav-pills .nav-link.is-selected, .nav-pills .nav-link.active {
+  #|  background: var(--lifted); box-shadow: 0 0 2px var(--shadow), 0 0 0 .5px var(--border);
+  #|}
   #|
   #|/* Tables. */
   #|.table-responsive { max-width: 100%; overflow-x: auto; }
-  #|.table { width: 100%; border-collapse: collapse; font-size: var(--font-size-base); }
-  #|.table th, .table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-  #|.table th { color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500; }
+  #|/* Tables, as a message's Markdown has them. */
+  #|.table { width: 100%; border-collapse: collapse; font-size: var(--font-size-ui); line-height: var(--line-height-ui); }
+  #|.table th, .table td { padding: 7px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  #|.table th {
+  #|  color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500;
+  #|  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  #|}
   #|.table tr:last-child td { border-bottom: 0; }
-  #|.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #|.table td.num, .table th.num { text-align: right; }
   #|
   #|/* Progress. */
   #|.progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--muted); }

@@ -32,8 +32,9 @@ export const OpenFile = createContext<((sessionKey: string, file: Attachment) =>
 const TOKENS = [
   "canvas", "raised", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper", "accent",
   "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg", "red",
-  "red-bg", "neutral-bg", "shadow", "primary", "primary-hover", "on-primary", "field-hover", "field-focus", "r-field",
-  "r-card", "corner-shape",
+  "red-bg", "purple", "purple-bg", "neutral-bg", "lifted", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
+  "field-focus", "r-field", "r-card", "corner-shape", "text-meta", "leading-meta", "text-ui", "leading-ui", "text-body",
+  "leading-body", "text-title", "leading-title", "text-heading", "leading-heading", "text-display",
 ] as const;
 
 const CDNS = "https://cdnjs.cloudflare.com https://esm.sh https://cdn.jsdelivr.net https://unpkg.com";
