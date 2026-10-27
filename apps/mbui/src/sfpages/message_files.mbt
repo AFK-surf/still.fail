@@ -251,6 +251,10 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
     }
   }
+  // one the device holds and not decoded yet: what the app's first page waits for
+  if a.held && sent is None && (key == "" || (key != "!" && !c.image_ready(key, reveal_px(c, pw, ph)))) {
+    @sfbase.held_pictures_waiting.val = true
+  }
   // what it shows: its picture once decoded, until then its likeness (image_reveal's)
   let shows = if key == "" || key == "!" {
     likeness
@@ -334,6 +338,10 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
   let still = video_still(c, src, here.station, owner, a, thumb)
+  // its still kept on the device and not decoded yet: what the app's first page waits for
+  if a.held && (still == "" || (still != "!" && !c.image_ready(still, reveal_px(c, w, h)))) {
+    @sfbase.held_pictures_waiting.val = true
+  }
   let dl = download_of(src, here.station, owner, stored_name(a.path))
   // (downloading, else opened and let go, being brought after everything else: fill.ts)
   let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }

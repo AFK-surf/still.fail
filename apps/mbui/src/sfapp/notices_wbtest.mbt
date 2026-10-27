@@ -170,6 +170,7 @@ test "tapped while a file is open over the window, the file is put down and the 
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
   open_preview("ws1/st1", "s-c1", a)
   t.frame()

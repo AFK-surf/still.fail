@@ -16,6 +16,7 @@ fn flight_photo() -> Attachment {
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
 }
 

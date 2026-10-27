@@ -1106,7 +1106,8 @@ export class Views implements Owner {
         const draw = <V extends Value | undefined>(out: V) => {
           const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
-          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => this.#linkedChats(station, text)));
+          const held = (session: string, name: string) => this.#core.data.hasKeptFile(station, session, name, "thumb") || this.#core.data.hasKeptFile(station, session, name, "poster");
+          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => this.#linkedChats(station, text), held));
         };
         if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
@@ -2309,7 +2310,9 @@ const pinnedAt = new WeakMap<object, number>();
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
-function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore, linked?: (text: string) => J[]): V {
+/// `held`: whether a file's picture (an image's thumbnail, a video's still) is kept on the device, by its owner and
+/// name (`held: true` on it: the app's first page waits for it as for the rest of what it shows, a decode away).
+function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore, linked?: (text: string) => J[], held?: (session: string, name: string) => boolean): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
   // files, the outbox's), and writing on one of them threw and took the core down.
@@ -2327,7 +2330,9 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
       const key = owner(get(f, "path"));
       // One sent from here before it was up: its picture is still here, under its upload's id.
       const upload = uploadOf(get(f, "path"));
-      return key !== null || upload !== undefined ? { ...f, ...(key !== null ? { owner: key } : {}), ...(upload !== undefined ? { upload } : {}) } : f;
+      const path = str(get(f, "path")) ?? "";
+      const kept = key !== null && held !== undefined && path !== "" && held(key, path.slice(path.lastIndexOf("/") + 1));
+      return key !== null || upload !== undefined ? { ...f, ...(key !== null ? { owner: key } : {}), ...(upload !== undefined ? { upload } : {}), ...(kept ? { held: true } : {}) } : f;
     });
   };
   const here = (by: J): J => {

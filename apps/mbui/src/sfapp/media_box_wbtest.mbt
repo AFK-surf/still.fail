@@ -16,6 +16,7 @@ fn strip(name : String) -> Attachment {
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
 }
 
@@ -135,6 +136,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
       upload: "u1",
       duration: 0.0,
       frames: 0,
+      held: false,
     },
   }
   let faced = Ref(0)

@@ -1058,6 +1058,7 @@ fn composer_picture(
         upload: "",
         duration: 0.0,
         frames: 0,
+        held: false,
       }
       // the viewer's id of it (its station, no session, its path), its tile kept for it to fly from
       let seen = station + "//" + a.path

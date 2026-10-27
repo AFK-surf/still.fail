@@ -60,6 +60,8 @@ fn reset() -> Unit {
   splash_waited.val = false
   first_shown.val = false
   first_waiting.val = false
+  first_has.val = 0
+  @sfbase.held_pictures_waiting.val = false
   drafts.clear()
   cui.attach = false
   cui.picking = None
@@ -326,6 +328,8 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     return
   }
   first_waiting.val = false
+  // (said by this frame's build: image_item, video_item)
+  @sfbase.held_pictures_waiting.val = false
   let ground = c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
@@ -353,6 +357,13 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
         )
     }
   })
+  // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
+  // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
+  if first_waiting.val &&
+    (first_has.val == 2 || (first_has.val == 1 && !@sfbase.held_pictures_waiting.val)) {
+    first_shown.val = true
+    first_waiting.val = false
+  }
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -840,12 +851,22 @@ fn list_ready(src : Source, w : Workspace) -> Bool {
 /// Whether the app's first page shows: once the core has answered for what it shows (first_page_ready), or
 /// `first_page_ms` after the workspace came into view, from then on.
 fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  if !first_shown.val &&
-    (first_page_ready(c, src, w) || @kit.after(c, "first-page", true, first_page_ms)) {
-    first_shown.val = true
+  if !first_shown.val {
+    first_has.val = if @kit.after(c, "first-page", true, first_page_ms) {
+      2
+    } else if first_page_ready(c, src, w) {
+      1
+    } else {
+      0
+    }
   }
   first_shown.val
 }
+
+///|
+/// What the first page not shown yet has this frame (first_page_shown): 0 not what it shows, 1 what it shows (shown
+/// once the pictures the device holds in it are decoded too: view_in), 2 first_page_ms gone by (shown as it is).
+let first_has : Ref[Int] = Ref(0)
 
 ///|
 /// Whether the core has answered for what the app's first page shows, as a page opening waits for it: laid out Small

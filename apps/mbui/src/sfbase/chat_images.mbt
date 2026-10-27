@@ -120,3 +120,9 @@ pub fn file_image_id(station : String, key : String, name : String) -> String {
 pub fn poster_image_id(station : String, key : String, name : String) -> String {
   file_image_id(station, key, name) + "\u{1}poster"
 }
+
+///|
+/// Whether a message's picture the device holds (Attachment.held) was drawn this frame before it was decoded: the app's
+/// first page waits for it with the rest of what it shows (sfapp's first_page_shown, which reads and clears it each
+/// frame), not shown with a likeness in its place for the frame or two its decoding takes.
+pub let held_pictures_waiting : Ref[Bool] = Ref(false)
