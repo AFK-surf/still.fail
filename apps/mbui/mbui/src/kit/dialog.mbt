@@ -201,7 +201,7 @@ pub fn close_button(
       justify=JCenter,
       fn() {
         c.text("✕", size=size * 0.45, color=pick(r.hovered, lit, quiet), wrap=false) |> ignore
-        focus_ring(c, r.focus_shown, r.rect, size / 2.0)
+        focus_ring(c, r.focus_shown, size / 2.0)
       },
     )
     c.semantics(i, Button, id~, label~, actions=[Activate])

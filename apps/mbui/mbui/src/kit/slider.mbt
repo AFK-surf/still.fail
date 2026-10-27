@@ -12,7 +12,6 @@ pub(all) struct SliderState {
   pressed : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -54,7 +53,7 @@ pub fn slider(
     // the pointer: where it is along the track (last frame's), the value there
     match c.drag_of(id) {
       Some(d) if d.down => {
-        let (x, _, rw, _) = r.rect
+        let (x, _, rw, _) = r.rect()
         // the thumb's middle runs from half a thumb in to half a thumb from the end
         if rw > thumb_room {
           let along = dclamp((d.x - x - thumb_room / 2.0) / (rw - thumb_room), 0.0, 1.0)
@@ -107,16 +106,6 @@ pub fn slider(
     pressed: held,
     focus_shown: r.focus_shown,
     disabled,
-    // as wide as it is made (known before it is first laid out, and while disabled, when nothing tracks it)
-    rect: (
-      r.rect.0,
-      r.rect.1,
-      match w {
-        Px(x) => x
-        _ => r.rect.2
-      },
-      r.rect.3,
-    ),
   }
   let i = c.drag_area(if disabled { 0 } else { id }, axis=Horizontal, w~, fn() { look(c, st) })
   let shown = if step >= 1.0 && step.floor() == step {
@@ -170,7 +159,7 @@ pub fn slider_look_of(
           c.box(w=Px(thumb_d), h=Px(thumb_d), align=ACenter, justify=JCenter, fn() {
             c.box(w=Px(k), h=Px(k), bg=accent, radius=k / 2.0, border=3.0, border_color=ring.unwrap_or(t.bg), fn() {  })
             |> ignore
-            focus_ring(c, s.focus_shown, (0.0, 0.0, thumb_d, thumb_d), thumb_d / 2.0)
+            focus_ring(c, s.focus_shown, thumb_d / 2.0)
           })
           |> ignore
           if f < 1.0 {

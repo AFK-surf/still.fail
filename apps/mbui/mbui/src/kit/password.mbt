@@ -38,7 +38,7 @@ pub fn password_field(
     let bh = t.control_h - 2.0 * inset
     let i = c.box(id=if disabled { 0 } else { bid }, h=Px(bh), padx=10.0, justify=JCenter, radius=bh / 2.0, bg=pick(r.hovered, t.hover, 0L), fn() {
       c.text(label, size=t.font_sm, color=if r.hovered { t.fg } else { t.muted }, wrap=false) |> ignore
-      focus_ring(c, r.focus_shown, r.rect, 12.0)
+      focus_ring(c, r.focus_shown, 12.0)
     })
     c.semantics(i, Button, id=bid, label~, pressed=shows, disabled~, actions=pick(disabled, [], [Activate]))
   }, field?)

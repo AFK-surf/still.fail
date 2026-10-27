@@ -23,7 +23,8 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
    progress), small panels 6 in with rows on the hover's ground. `Theme::ios_light` and `Theme::ios_dark` keep the
    iOS colours mbui had (the demo's).
 3. **Interactive widgets return a `Response`** (egui's): clicked, long-pressed, right-clicked, hovered, pressed,
-   focused, focus shown, changed, rect. A widget with a value returns `Changed[T]`: the value and the response.
+   focused, focus shown, changed; where it was drawn last frame (`Response::rect`, worked out only where it is asked: a
+   slider's track under the finger). A widget with a value returns `Changed[T]`: the value and the response.
    Widgets that returned a Bool (`Ctx::button`) still do.
 4. **Values are the app's** (Compose's state hoisting): a component is given its value (checked, open, the slider's
    number) and returns what it became; the app keeps it. A component keeps only what is passing (focus, a press, a
@@ -54,7 +55,8 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
 
 - `Ctx::interact(id)` registers what can take the focus, in build order. Tab and Shift+Tab move among them; a press
   gives the focus only to what takes it so (a field, a slider's thumb) and otherwise lets it go from anything but a
-  field. The focus ring shows only when the focus came by the keyboard (`Response::focus_shown`).
+  field. The focus ring shows only when the focus came by the keyboard (`Response::focus_shown`), laid round
+  the box it is built last in as this frame lays it out (kit's `focus_ring`).
 - `Ctx::roving(key, orientation)` makes a group one Tab stop with the arrows (Home, End) moving inside it, mirrored
   right to left (Radix's RovingFocusGroup).
 - Keys are dealt with as the frame starts, from what the last frame built: a key a widget used is taken, and the

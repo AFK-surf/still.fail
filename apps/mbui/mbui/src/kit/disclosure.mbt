@@ -14,7 +14,6 @@ pub(all) struct TriggerState {
   hovered : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -34,7 +33,7 @@ pub fn collapsible(
   let now = if r.clicked { !open } else { open }
   c.box(fn() {
     let i = c.box(id=pick(disabled, 0, id), fn() {
-      look(c, { label, open: now, hovered: r.hovered, focus_shown: r.focus_shown, disabled, rect: r.rect })
+      look(c, { label, open: now, hovered: r.hovered, focus_shown: r.focus_shown, disabled })
     })
     c.semantics(i, Button, id~, label~, expanded=now, disabled~, actions=pick(disabled, [], [@ui.Activate]))
     unfolding(c, key, now, label, body)
@@ -103,7 +102,7 @@ pub fn trigger_look(c : @ui.Ctx, s : TriggerState) -> Unit {
     fn() {
       c.box(w=Fill(1.0), fn() { c.text(s.label, size=t.font, weight=500, wrap=false) |> ignore }) |> ignore
       chevron(c, s.open, t.muted)
-      focus_ring(c, s.focus_shown, s.rect, t.radius)
+      focus_ring(c, s.focus_shown, t.radius)
     },
   )
   |> ignore
@@ -164,7 +163,7 @@ pub fn accordion(
           c.box(h=Px(1.0), bg=t.line, fn() {  }) |> ignore
         }
         let i = c.box(id=pick(it.disabled, 0, iid), fn() {
-          look(c, { label: it.label, open: on, hovered: r.hovered, focus_shown: r.focus_shown, disabled: it.disabled, rect: r.rect })
+          look(c, { label: it.label, open: on, hovered: r.hovered, focus_shown: r.focus_shown, disabled: it.disabled })
         })
         c.semantics(i, Button, id=iid, label=it.label, expanded=on, disabled=it.disabled, actions=pick(it.disabled, [], [
           @ui.Activate,
@@ -225,7 +224,6 @@ pub fn tabs(
                   pressed: r.pressed,
                   focus_shown: r.focus_shown,
                   disabled: it.disabled,
-                  rect: r.rect,
                   first: k == 0,
                   last: k == tabs.length() - 1,
                 })

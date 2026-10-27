@@ -14,7 +14,6 @@ pub(all) struct SwitchState {
   held : Double
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -45,7 +44,6 @@ pub fn switch(
     held: switch_held(c, key, r.pressed),
     focus_shown: r.focus_shown,
     disabled,
-    rect: r.rect,
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Switch, id~, label~, check=if on { On } else { Off }, disabled~, actions=pick(
@@ -121,7 +119,7 @@ pub fn switch_look_of(
           }
           _ => ()
         }
-        focus_ring(c, s.focus_shown, s.rect, h / 2.0)
+        focus_ring(c, s.focus_shown, h / 2.0)
       },
     )
     |> ignore
