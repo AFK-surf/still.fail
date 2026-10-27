@@ -121,6 +121,17 @@ fn chat_poster(station : String, key : String, name : String) -> String {
 }
 
 ///|
+/// A draft's picture the page holds no bytes of, as the device keeps it (`composer.picture`): its key once here, ""
+/// while it comes, "!" when none is kept.
+fn draft_picture(key : String, id : String) -> String {
+  let at = "draft\u{1}" + key + "\u{1}" + id
+  let params : Map[String, Json] = { "key": Json::string(key), "id": Json::string(id) }
+  chat_images.get("", at, "mem:draft-picture/\{@ui.stable_hash(at)}/\{at.length()}", fn(_, done) {
+    @core.call_bytes("composer.picture", params=Json::object(params), on_done=done)
+  })
+}
+
+///|
 /// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept, nothing sent, no draft
 /// kept, no file put up), for runs on a real account that must change nothing in it.
 let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
@@ -130,7 +141,7 @@ let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 /// list's filter) and the faces' files it keeps for them. Anything else (sending, drafts kept, files put up, read marks, places, archiving…) is refused here,
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
-  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster",
+  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster", "composer.picture",
   "picture", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
   "fonts.keep", "fonts.preview",
 ]
@@ -262,6 +273,7 @@ let core_source : @sfapp.Source = {
   fatal: fn() { @core.fatal() },
   file: chat_file,
   poster: chat_poster,
+  draft_picture,
   images: chat_images,
   now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },

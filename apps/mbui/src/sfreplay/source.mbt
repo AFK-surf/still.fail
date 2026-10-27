@@ -165,6 +165,11 @@ pub fn source() -> @sfapp.Source {
       let id = @sfbase.poster_image_id(station, key, name)
       image(station, id, "station.poster", Json::object(params), "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
+    draft_picture: fn(key, id) {
+      let params : Map[String, Json] = { "key": Json::string(key), "id": Json::string(id) }
+      let at = "draft\u{1}" + key + "\u{1}" + id
+      image("", at, "composer.picture", Json::object(params), "mem:draft-picture/\{@ui.stable_hash(at)}/\{at.length()}")
+    },
     images,
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },

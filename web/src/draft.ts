@@ -131,6 +131,12 @@ export const NO_KEY = "new:";
 /** What the page has of each file besides what the core says: its picture, the file itself (sent again, shown whole). */
 const local = new Map<string, Pick<Pending, "preview" | "image" | "pastedFile">>();
 
+/** The files whose picture the core is asked for (`composer.picture`): each once while the page runs. */
+const asked = new Set<string>();
+
+/** A name an image goes by, drawn as its picture (FilePreview's kindOf "image"). */
+const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
+
 let nextId = 1;
 
 /** Each file shown, the quotes' pictures too, as `change` makes it. */
@@ -174,6 +180,22 @@ export function useDraft({ key: given, station, carry }: {
   const view = useTopicSelect<ComposerView, ComposerView | undefined>({ topic: "composer", key }, (s) => s.value, sameButWords);
   const now = useRef({ key, text, shown, view });
   now.current = { key, text, shown, view };
+
+  // A draft kept, read again as the page starts: its pictures as this device keeps them (`composer.picture`), the page
+  // holding none of its own; one the device keeps none of stays a card.
+  const [, pictured] = useState(0);
+  useEffect(() => {
+    for (const f of shown.files) {
+      if (local.has(f.id) || asked.has(f.id) || f.pasted || f.link || !IMAGE.test(f.name)) continue;
+      asked.add(f.id);
+      void core().callBytes("composer.picture", { key, id: f.id }).then(({ value, bytes }) => {
+        const type = (value as { type?: unknown } | null)?.type;
+        if (!bytes || typeof type !== "string" || local.has(f.id)) return;
+        local.set(f.id, { preview: URL.createObjectURL(new Blob([bytes.slice()], { type })) });
+        pictured((n) => n + 1);
+      }, () => {});
+    }
+  }, [shown.files, key]);
 
   // Another chat (or the first key, or the chat a new one made): what is written goes where it belongs, in the core.
   // (A new chat's files wait for its first message, whichever station it is to run on: the core sends them up to the

@@ -815,7 +815,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
   let id = text(v, "id")
   let key = "composer/file/" + id
   let name = text(v, "name")
-  match writing_pictures.get(id) {
+  match waiting_picture(src, w, v) {
     Some(picture) => composer_picture(c, src, w, key, id, name, picture, going_now(v), gone_up(v), text(v, "error"))
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
@@ -858,6 +858,23 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
         writing_remove(src, w, id)
       }
     }
+  }
+}
+
+///|
+/// A file waiting's picture, if it is drawn as one: the bytes picked or pasted here, else (a draft kept, read again as
+/// the app starts) an image's as the device keeps it (`composer.picture`), "" while that is read; None for any other
+/// file, and an image the device keeps none of (drawn as a file).
+fn waiting_picture(src : Source, w : Writing, v : Json?) -> String? {
+  let id = text(v, "id")
+  match writing_pictures.get(id) {
+    Some(picture) => Some(picture)
+    None if file_kind(text(v, "name")) == "image" && waiting_as(v) is AnyFile =>
+      match (src.draft_picture)(w.key, id) {
+        "!" => None
+        kept => Some(kept)
+      }
+    None => None
   }
 }
 
@@ -1375,7 +1392,7 @@ fn up_files(w : Writing) -> Array[Json] {
 /// pictures here: sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or
 /// still going up, its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or
 /// its picture is (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
-fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
+fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   w.files.filter_map(fn(f) {
     let v = Some(f)
@@ -1383,7 +1400,7 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
     let key = flying_key(v, going.contains(id))
     match c.rect_of(c.id("composer/file/" + id)) {
       Some(from) if key != "" => {
-        let picture = writing_pictures.get(id).unwrap_or("")
+        let picture = waiting_picture(src, w, v).unwrap_or("")
         let restore = restorable(w, v)
         let (_, _, wide, _) = from
         Some({
@@ -1565,7 +1582,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   // its quotes fly too, each from its card, and its files that are up, each from its tile (ChatHost.kt sending)
-  let flying = flying_quotes(c, w) + flying_files(c, w)
+  let flying = flying_quotes(c, w) + flying_files(c, src, w)
   @sfbase.flight_start(
     c,
     w.key,
