@@ -64,6 +64,8 @@ pub(all) struct SendFlight {
   /// one block
   lines : @ui.FieldLines?
   lead : Int
+  /// the composer's marks in its words (refs_sent_marks): drawn as the field drew them, and as their row does
+  marks : Array[(Int, Int)]
   /// the files sent with them, from their tiles, and their quotes, from their cards
   files : Array[FlyingFile]
   /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
@@ -144,6 +146,7 @@ pub fn flight_start(
   field~ : String,
   hold~ : (Double) -> Unit,
   desk~ : Bool,
+  marks? : Array[(Int, Int)] = [],
 ) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
@@ -168,6 +171,7 @@ pub fn flight_start(
         desk,
         lines,
         lead,
+        marks,
         files,
         key,
         placed: false,
@@ -208,6 +212,7 @@ pub fn flight_carry_start(
   field~ : String,
   hold~ : (Double) -> Unit,
   desk~ : Bool,
+  marks? : Array[(Int, Int)] = [],
 ) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
@@ -237,6 +242,7 @@ pub fn flight_carry_start(
         // (carried with the list as its chat comes up: as one block)
         lines: None,
         lead: 0,
+        marks,
         files,
         key: "",
         placed: false,
@@ -517,8 +523,9 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
         // laid out (its layer's corner, wherever the page is in the window: a pane beside the sidebar)
         let room = c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
           let words = c.box(style=@sf.full_width, fn() {
-            // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
-            c.rich([@ui.span(f.text)], key="flight/words", style=t.t.words, trim=true, w=Fill(1.0), words=true)
+            // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced), its marks
+            // as it drew them
+            c.rich(refs_runs(f.text, f.marks, t.p.accent), key="flight/words", style=t.t.words, trim=true, w=Fill(1.0), words=true)
             |> ignore
           })
           c.look(words, @ui.look(dx=f.from_x - f.field_x, dy=f.from_y - f.field_y))
@@ -683,7 +690,7 @@ fn flight_pieces_drawn(
   let flying = f.placed && f.placed_frame != c.frame_number()
   let across = if flying { flight_across_of(c, f) } else { 0.0 }
   let up = if flying { flight_up_of(c, f) } else { 0.0 }
-  let runs = message_runs(f.text, t.p.accent)
+  let runs = message_runs(f.text, t.p.accent, marks=f.marks)
   for k, p in pieces {
     let (ax, ay, aw, ah) = p.at
     let cut = c.box(style=@ui.style(w=Fixed(aw), h=Fixed(ah), clip=true), fn() {

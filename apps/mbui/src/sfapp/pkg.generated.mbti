@@ -378,7 +378,7 @@ pub fn flight_carry_into(String, String, String, String, hold~ : (Double) -> Uni
 
 pub let flight_carry_ms : Double
 
-pub fn flight_carry_start(@ui.Ctx, String, String, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool) -> Unit
+pub fn flight_carry_start(@ui.Ctx, String, String, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)]) -> Unit
 
 pub fn flight_carry_waiting(@ui.Ctx) -> Unit
 
@@ -406,7 +406,7 @@ pub fn flight_placed(@ui.Ctx, @sfbase.SendFlight) -> Unit
 
 pub fn flight_settled_of(@ui.Ctx, @sfbase.SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)]) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 
@@ -552,7 +552,7 @@ pub fn menu_bar_json(Json?, Bool) -> String
 
 pub fn message_of(Json) -> @sfbase.Message
 
-pub fn message_runs(String, Int64, chat_title? : (String) -> String?) -> Array[@ui.Run]
+pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
 
 pub fn nav_home() -> Unit
 
@@ -798,9 +798,11 @@ pub fn sending_of(String) -> Array[@sfbase.LocalSent]
 
 pub fn sent_key(String, String) -> String
 
-pub fn sent_local(String, @sfbase.ChatView?, String, Array[Json], going? : Array[Json], quotes? : Array[Json]) -> String
+pub fn sent_local(String, @sfbase.ChatView?, String, Array[Json], going? : Array[Json], quotes? : Array[Json], marks? : Array[(Int32, Int32)]) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
+
+pub fn sent_marks(@sfbase.Outgoing) -> Array[(Int32, Int32)]
 
 pub fn sent_picture(String, @sfbase.Attachment) -> String?
 

@@ -1578,7 +1578,9 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w))
+  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  let marks = @sfbase.refs_sent_marks(w.key, words)
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), marks~)
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
   // tall as it is till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
@@ -1596,6 +1598,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     field=composer_field_key,
     hold=fn(ms) { composer_hold(w.key, room, box, ms) },
     desk=true,
+    marks~,
   )
   // the chat's list to its end, where the row is (gliding there while nothing flies to it); shown short of the chat's
   // end, its latest page in place of what was read, the row at its end

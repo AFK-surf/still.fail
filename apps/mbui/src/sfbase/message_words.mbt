@@ -10,8 +10,16 @@ pub let absolute_times : Ref[Bool] = { val: false }
 /// Plain words as a message draws them (Markdown.kt withRefs, the web's ChatRef.tsx WithRefs): `[title](its link)` a
 /// reference to that chat (`@` a little lighter, its title, in `accent`), a web address written bare a link, one to a
 /// chat a reference too, reading as its title where `chat_title` says it (the message's chats, as the core says them).
-pub fn message_runs(s : String, accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
+/// What was sent from here and is not the core's yet has its references as the composer's marks, `@[title]` (`marks`:
+/// where each starts and ends): drawn as the reference the core's row will have there.
+pub fn message_runs(
+  s : String,
+  accent : Int64,
+  chat_title? : (String) -> String? = fn(_) { None },
+  marks? : Array[(Int, Int)] = [],
+) -> Array[@ui.Run] {
   let out : Array[@ui.Run] = []
+  let mut next = 0
   let words = StringBuilder()
   let flush = fn() {
     let w = words.to_string()
@@ -23,6 +31,17 @@ pub fn message_runs(s : String, accent : Int64, chat_title? : (String) -> String
   let n = s.length()
   let mut i = 0
   while i < n {
+    while next < marks.length() && marks[next].0 < i {
+      next += 1
+    }
+    if next < marks.length() && marks[next].0 == i && marks[next].1 <= n && marks[next].1 - i >= 4 {
+      let b = marks[next].1
+      flush()
+      out.push(@ui.span("@", color=@sf.alpha(accent, 0.7)))
+      out.push(@ui.span(s.view(start_offset=i + 2, end_offset=b - 1).to_string(), color=accent))
+      i = b
+      continue
+    }
     let ch = s.at(i).to_int()
     if ch == 91 {
       // [title](href) with /chats/ in it

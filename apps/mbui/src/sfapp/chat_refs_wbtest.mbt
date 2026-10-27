@@ -125,6 +125,41 @@ test "a link pasted, written after before the core makes its mark: the mark wher
 }
 
 ///|
+test "words sent with a mark draw it as the field did, as their message will: never its brackets on the way" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  let made = named(calls, "chat.ref")
+  assert_eq(made.length(), 1)
+  (made[0].done)(Ok({ "mark": "@[首页]" }))
+  t.draw()
+  t.draw()
+  let (_, words, _, _) = t.ime()
+  assert_eq(words, "@[首页] 吧")
+  tap_send(t)
+  // (what it refers to is of this workspace: nothing to share first)
+  let asked = named(calls, "chat.outsideRefs")
+  assert_eq(asked.length(), 1)
+  (asked[0].done)(Ok(Json::object({})))
+  t.draw()
+  // sent as written (the core makes the mark its link), its row drawing the mark from the frame it is sent
+  assert_eq(named(calls, "chat.send").length(), 1)
+  assert_eq(text(Some(named(calls, "chat.send")[0].params), "text"), "@[首页] 吧")
+  match sending_of("ws1/st1\u{1}s-c1") {
+    [l] => assert_eq(sent_marks(l.row), [(0, 5)])
+    _ => fail("not in the list")
+  }
+  t.draw()
+  assert_true(t.find("@[首页]") is None)
+  t.run_for(flight_ms)
+  assert_true(t.find("@[首页]") is None)
+  assert_true(t.find("首页") is Some(_))
+}
+
+///|
 test "a link to an execution history: its mark once the core keeps that link, else the link as it is" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
