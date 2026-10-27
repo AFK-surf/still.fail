@@ -108,11 +108,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     private double lastFrame;
-    // the frame before's vsync (0: none, or it had none), whether it asked for this one as it ended, and when its work
-    // ended (System.nanoTime; 0: none drawn yet)
+    // the frame before's vsync (0: none, or it had none), and whether it asked for this one (askAhead: the vsync after
+    // its own, or where its work went past that one, the first after its work)
     private long lastVsync;
     private boolean askedAtEnd;
-    private long lastEnd;
 
     // A picture at a declared moment (Host.shotAt, --ei shot_at MS: scripts/shots.sh android): the run's frames are on
     // a clock of their own, 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m) and the browser's
@@ -217,13 +216,17 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         double now = v != 0 ? v / 1e6 : began / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
-        // how late the frame before reached the screen (@hostapi.frame_late): the display's frames that passed while its
-        // work went on, past the one it was drawn for, on the vsyncs' grid; 0 where it did not ask for this one (its
-        // vsync perhaps one during that work), or either has no vsync
+        // how late the frame before reached the screen (@hostapi.frame_late): the display's frames that passed past the one
+        // after it without a frame, on the vsyncs' grid (its work over the display's frame and drawn on for the vsync it
+        // asked ahead, shown at that vsync's refresh: none passed, it was in time; past that one too, this one's vsync is
+        // the first after its work); 0 where it did not ask for this one (its vsync perhaps one during that work), or
+        // either has no vsync. (Counted from when its work ended, a frame drawn on at once for the vsync asked ahead was
+        // said late by a frame it was not: a page let go as the finger lifts, its slide held a frame and its first step
+        // shown twice.)
         double late = 0;
-        if (v != 0 && lastVsync != 0 && askedAtEnd && lastEnd > lastVsync) {
-            long frames = (lastEnd - lastVsync) / framePeriod;
-            if (frames > 0) late = frames * framePeriod / 1e6;
+        if (v != 0 && lastVsync != 0 && askedAtEnd) {
+            long frames = Math.round((double) (v - lastVsync) / framePeriod);
+            if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
         }
         // drawn at the vsync after the frame before's: the hand moving what it holds, a frame each vsync
         boolean following = v > lastVsync && lastVsync != 0 && v - lastVsync < framePeriod * 3 / 2;
@@ -245,8 +248,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
         Script.frameDrawn();
-        lastEnd = System.nanoTime();
-        frameWorked(lastEnd - began);
+        frameWorked(System.nanoTime() - began);
     }
 
     // ---- the drawing thread, as the system's own ----
