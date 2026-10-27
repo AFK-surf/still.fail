@@ -24,92 +24,62 @@ pub let viz_max_state : Int = 16 * 1024
 pub let viz_first_height : Int = 120
 
 ///|
-/// The web's tokens a page is given, as --e-<name> (web/src/styles/global.css.ts, as its root has them).
-// kept across runs: a table, never written
-pub let viz_light : Array[(String, String)] = [
-  ("canvas", "oklch(100% 0 0)"),
-  ("raised", "#e4e4e8"),
-  ("text", "oklch(27% .009 255)"),
-  ("muted", "#565b62"),
-  ("subtle", "#565b62"),
-  ("line", "rgb(50 45 36 / .141)"),
-  ("line-strong", "oklch(82% .008 255)"),
-  ("hover", "oklch(25% .02 85 / .065)"),
-  ("selected", "oklch(93% .009 85)"),
-  ("paper", "oklch(96.3% .012 88)"),
-  ("accent", "#dc5929"),
-  ("accent-text", "oklch(48% .155 38)"),
-  ("accent-bg", "oklch(96.5% .025 45)"),
-  ("blue", "oklch(49% .18 260)"),
-  ("blue-bg", "oklch(96% .02 260)"),
-  ("code-inline", "#7C3FA0"),
-  ("green", "oklch(46% .11 158)"),
-  ("green-bg", "oklch(96% .02 158)"),
-  ("amber", "oklch(48% .10 73)"),
-  ("amber-bg", "oklch(97% .028 85)"),
-  ("red", "oklch(48% .15 22)"),
-  ("red-bg", "oklch(97% .02 22)"),
-  ("neutral-bg", "rgb(36 39 43 / .075)"),
-  ("shadow", "oklch(20% .01 255 / .10)"),
-  ("primary", "#24272b"),
-  ("primary-hover", "#41464c"),
-  ("on-primary", "#fff"),
-  ("field-hover", "#9a9ea3"),
-  ("field-focus", "#646970"),
-  ("r-field", "12px"),
-  ("r-card", "20px"),
-  ("corner-shape", "round"),
-]
-
-///|
-/// The dark theme's, over the light's.
-// kept across runs: a table, never written
-pub let viz_dark : Map[String, String] = {
-  "canvas": "#1f2023",
-  "raised": "#2a2c31",
-  "text": "#e9e9ea",
-  "muted": "#a8aaae",
-  "subtle": "#a8aaae",
-  "line": "rgb(233 233 234 / .098)",
-  "line-strong": "#3d3f44",
-  "hover": "rgb(255 255 255 / .05)",
-  "selected": "#323338",
-  "paper": "#26272b",
-  "accent": "#e97342",
-  "accent-text": "oklch(78% .13 45)",
-  "accent-bg": "oklch(30% .05 40)",
-  "blue": "oklch(75% .12 260)",
-  "code-inline": "#C9A2E6",
-  "blue-bg": "oklch(30% .05 260)",
-  "green": "oklch(76% .12 158)",
-  "green-bg": "oklch(30% .04 158)",
-  "amber": "oklch(80% .12 80)",
-  "amber-bg": "oklch(32% .05 80)",
-  "red": "#fb8987",
-  "red-bg": "oklch(30% .05 22)",
-  "neutral-bg": "rgb(233 233 234 / .055)",
-  "shadow": "oklch(0% 0 0 / .45)",
-  "primary": "#eceded",
-  "primary-hover": "#d3d4d6",
-  "on-primary": "#1f2023",
-  "field-hover": "#5d6066",
-  "field-focus": "#8a8d93",
-}
-
-///|
-/// The tokens for the theme shown, as --e-<name>, in the light theme's order.
+/// The tokens a page is given, as --e-<name> (the web's names, web/src/styles/global.css.ts; Viz.tsx TOKENS), for the
+/// theme shown: the app's own palette and sizes of type, as the rest of the app draws them, not a copy of the web's.
 pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
-  viz_light.map(fn(t) {
-    let v = if dark {
-      match viz_dark.get(t.0) {
-        Some(d) => d
-        None => t.1
-      }
-    } else {
-      t.1
-    }
-    ("--e-" + t.0, v)
-  })
+  let p = @sf.palette_of(dark)
+  let t = @sf.theme().t
+  let px = fn(v : Double) { v.to_string() + "px" }
+  [
+    ("canvas", viz_css_color(p.canvas)),
+    ("raised", viz_css_color(p.raised)),
+    ("text", viz_css_color(p.text)),
+    ("muted", viz_css_color(p.muted)),
+    ("subtle", viz_css_color(p.subtle)),
+    ("line", viz_css_color(p.line)),
+    ("line-strong", viz_css_color(p.line_strong)),
+    ("hover", viz_css_color(p.hover)),
+    ("selected", viz_css_color(p.selected)),
+    // a card on the page (the web's paper: its grey card on its white page; the app's white one on its paper)
+    ("paper", viz_css_color(p.card)),
+    ("accent", viz_css_color(p.accent)),
+    ("accent-text", viz_css_color(p.accent_text)),
+    ("accent-bg", viz_css_color(p.accent_bg)),
+    ("blue", viz_css_color(p.blue)),
+    ("blue-bg", viz_css_color(p.blue_bg)),
+    ("code-inline", viz_css_color(p.code_ink)),
+    ("green", viz_css_color(p.green_ink)),
+    ("green-bg", viz_css_color(p.green_bg)),
+    ("amber", viz_css_color(p.warn_ink)),
+    ("amber-bg", viz_css_color(p.amber_bg)),
+    ("red", viz_css_color(p.red)),
+    ("red-bg", viz_css_color(p.red_bg)),
+    ("neutral-bg", viz_css_color(p.neutral_bg)),
+    // a segmented choice's thumb (the web's --lifted): the canvas, in the dark the ink at 12% (a step lighter)
+    ("lifted", viz_css_color(if dark { (p.text & 0xFFFFFF00L) | 0x1FL } else { p.canvas })),
+    ("shadow", viz_css_color(p.shadow)),
+    ("primary", viz_css_color(p.primary)),
+    ("primary-hover", viz_css_color(p.primary_hover)),
+    ("on-primary", viz_css_color(p.on_primary)),
+    ("field-hover", viz_css_color((if dark { @ui.Theme::narrow_dark() } else { @ui.Theme::narrow_light() }).field_hover)),
+    ("field-focus", viz_css_color(p.muted)),
+    ("r-field", "12px"),
+    ("r-card", "20px"),
+    ("corner-shape", "round"),
+    ("text-caption", px(t.caption)),
+    ("leading-caption", px(t.caption_line)),
+    ("text-meta", px(t.meta)),
+    ("leading-meta", px(t.meta_line)),
+    ("text-ui", px(t.ui)),
+    ("leading-ui", px(t.ui_line)),
+    ("text-body", px(t.body)),
+    ("leading-body", px(t.body_line)),
+    ("text-title", px(t.title)),
+    ("leading-title", px(t.title_line)),
+    ("text-heading", px(t.heading)),
+    ("leading-heading", px(t.heading_line)),
+    ("text-display", px(t.display)),
+  ].map(fn(e) { ("--e-" + e.0, e.1) })
 }
 
 ///|
@@ -150,12 +120,12 @@ pub fn viz_ground_style(ground : Int64) -> String {
 }
 
 ///|
-/// A colour as CSS has it (#rrggbb).
+/// A colour as CSS has it (#rrggbb, #rrggbbaa when it is not opaque).
 pub fn viz_css_color(c : Int64) -> String {
   let digits = "0123456789abcdef"
   let out = StringBuilder::new()
   out.write_char('#')
-  for k in 0..<6 {
+  for k in 0..<(if (c & 0xFFL) == 0xFFL { 6 } else { 8 }) {
     let d = ((c >> (28 - 4 * k)) & 15L).to_int()
     out.write_char(digits.get_char(d).unwrap())
   }
@@ -210,10 +180,15 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -
   "<script type=\"application/json\" id=\"ember-viz-state\">" +
   kept +
   "</script>" +
+  "<script type=\"application/json\" id=\"viz-icons\">" +
+  viz_icons +
+  "</script>" +
   "<script>" +
   viz_relay +
   "</script><script>" +
   viz_bridge +
+  "</script><script>" +
+  viz_components +
   "</script></head><body>" +
   html +
   "</body></html>"

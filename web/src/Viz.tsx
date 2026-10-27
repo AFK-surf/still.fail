@@ -11,6 +11,7 @@
 // composer for the person to send.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import bridge from "./viz/bridge.js?raw";
+import components from "./viz/components.js?raw";
 import stylesheet from "./viz/ember-viz.css?raw";
 import { useApi, type Attachment } from "./api.ts";
 import { FilePreview, useFileText } from "./FilePreview.tsx";
@@ -22,6 +23,10 @@ import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
 import { t } from "./i18n.ts";
 
+/** still.fail's own icons (design/icons, the one source), for a frame's data-icon / data-lucide marks: each SVG's inside. */
+const ICONS = JSON.stringify(Object.fromEntries(Object.entries(import.meta.glob<string>("../../design/icons/*.svg", { query: "?raw", import: "default", eager: true }))
+  .map(([path, svg]) => [path.slice(path.lastIndexOf("/") + 1, -4), (/<svg[^>]*>([^]*)<\/svg>/.exec(svg)?.[1] ?? "").replace(/\s+/g, " ").trim()]))).replace(/</g, "\\u003c");
+
 /**
  * Where a visualization opens on its own, beside its chat: the chat page's side panel (a tab of its own) on a wide
  * screen, a page over the chat on a narrow one. None: the chat is shown where nothing can open it.
@@ -32,8 +37,9 @@ export const OpenFile = createContext<((sessionKey: string, file: Attachment) =>
 const TOKENS = [
   "canvas", "raised", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper", "accent",
   "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg", "red",
-  "red-bg", "neutral-bg", "shadow", "primary", "primary-hover", "on-primary", "field-hover", "field-focus", "r-field",
-  "r-card", "corner-shape",
+  "red-bg", "purple", "purple-bg", "neutral-bg", "lifted", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
+  "field-focus", "r-field", "r-card", "corner-shape", "font-body", "text-caption", "leading-caption", "text-meta", "leading-meta", "text-ui", "leading-ui", "text-body",
+  "leading-body", "text-title", "leading-title", "text-heading", "leading-heading", "text-display",
 ] as const;
 
 const CDNS = "https://cdnjs.cloudflare.com https://esm.sh https://cdn.jsdelivr.net https://unpkg.com";
@@ -105,7 +111,7 @@ function tokens(): Record<string, string> {
 /** JSON for inside a <script> element: nothing in it can end the element. */
 const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 
-/** The frame's document: the content in the stylesheet, the bridge (and what the widget kept) ahead of it, the theme as the page shows it now. */
+/** The frame's document: the content in the stylesheet, the bridge (and what the widget kept) and the components ahead of it, the theme as the page shows it now. */
 function documentOf(html: string, state: unknown): string {
   const vars = Object.entries(tokens()).map(([k, v]) => `${k}:${v.replace(/[<>]/g, "")}`).join(";");
   const theme = scheme();
@@ -113,7 +119,8 @@ function documentOf(html: string, state: unknown): string {
     + `<meta http-equiv="Content-Security-Policy" content="${CSP}">`
     + `<style>:root{color-scheme:${theme};${vars}}</style><style>${stylesheet}</style>`
     + `<script type="application/json" id="ember-viz-state">${scriptJson({ widgetState: state })}</script>`
-    + `<script>${bridge}</script></head><body>${html}</body></html>`;
+    + `<script type="application/json" id="viz-icons">${ICONS}</script>`
+    + `<script>${bridge}</script><script>${components}</script></head><body>${html}</body></html>`;
 }
 
 /**

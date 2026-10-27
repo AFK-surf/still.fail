@@ -1038,13 +1038,13 @@ pub fn viz_chat_left(String, String) -> Unit
 
 pub fn viz_close_full() -> Unit
 
+pub let viz_components : String
+
 pub fn viz_csp() -> String
 
 pub let viz_css : String
 
 pub fn viz_css_color(Int64) -> String
-
-pub let viz_dark : Map[String, String]
 
 pub fn viz_document(String, Json?, Bool, Int64) -> String
 
@@ -1066,13 +1066,13 @@ pub let viz_ground : @ui.Style
 
 pub fn viz_ground_style(Int64) -> String
 
+pub let viz_icons : String
+
 pub fn viz_id(String, String, String) -> String
 
 pub fn viz_is_fragment(String) -> Bool
 
 pub fn viz_keep(@sfbase.Source, String, String, String, Json) -> Unit
-
-pub let viz_light : Array[(String, String)]
 
 pub fn viz_load(@ui.Ctx, @sfbase.Source, String, String, String, size? : Double) -> Result[(String, Json?), Unit]?
 

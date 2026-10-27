@@ -1186,6 +1186,8 @@ pub fn page_wide(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Un
 
 pub let page_words : @ui.Style
 
+pub fn palette_of(Bool) -> Palette
+
 pub fn pane_at_window_right() -> Bool
 
 pub let pane_bar : @ref.Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?]
