@@ -1694,7 +1694,7 @@ pub fn with_cache_cold(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
-      o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" }
+      o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊约需 $1.49" }
       Json::object(o)
     }
     _ => v

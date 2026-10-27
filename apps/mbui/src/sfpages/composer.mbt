@@ -21,9 +21,6 @@ pub(all) struct ComposerSpec {
   /// what it says before send on one line, nothing written (where a chat's messages are copied: each thread's mark,
   /// "slack" or "feishu", and its place): nothing to press; empty nothing
   note : Array[(String, String)]
-  /// what it says over what is written in it, a line of its own each (a chat's: chat_notices): where it is a capsule,
-  /// that line over its row in one ground with it; None nothing
-  notice : (() -> Unit)?
   roomy : Bool
   locked : Bool
   offline : Bool
@@ -193,7 +190,6 @@ pub fn composer(
   // words just sent from it still in it: as tall as it was then, its field where it was and its ＋ and send at its foot
   // (composer_hold), so nothing in it moves until it comes down
   let sent_box = composer_held_box(c, spec.draft)
-  let noted = spec.notice is Some(_)
   let multiline = spec.roomy ||
     focused ||
     held ||
@@ -255,8 +251,6 @@ pub fn composer(
       composer_box_open().then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
     } else if multiline {
       composer_box_open()
-    } else if noted {
-      composer_box.then(capsule_place(place)).then(capsule_noted())
     } else {
       composer_box.then(capsule_place(place))
     },
@@ -265,10 +259,6 @@ pub fn composer(
     id=cap,
     fn() {
       if multiline {
-        match spec.notice {
-          Some(f) => c.box(style=notice_open, f) |> ignore
-          None => ()
-        }
         composer_extras(c, src, spec, w)
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
         c.box(style=tools_row(), fn() {
@@ -286,22 +276,12 @@ pub fn composer(
         })
         |> ignore
       } else {
-        let capsule_row = fn() {
-          plus = attach(c, src, spec, w, no_files)
-          words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
-          if spec.note.length() > 0 {
-            c.box(style=cc_note_box, fn() { cc_places(c, spec.note) }) |> ignore
-          }
-          send_i = send_button(c, ready, w.starting, submit)
+        plus = attach(c, src, spec, w, no_files)
+        words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        if spec.note.length() > 0 {
+          c.box(style=cc_note_box, fn() { cc_places(c, spec.note) }) |> ignore
         }
-        match spec.notice {
-          // (what it says over its row, in its ground: its row as it is alone under it)
-          Some(f) => {
-            c.box(style=notice_shut(), f) |> ignore
-            c.box(style=composer_box, capsule_row) |> ignore
-          }
-          None => capsule_row()
-        }
+        send_i = send_button(c, ready, w.starting, submit)
       }
     },
   )
@@ -319,7 +299,7 @@ pub fn composer(
   let holds = if whose != composing.draft_before && !moved {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{noted}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
     w.field.text()
   }
   // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
@@ -1167,26 +1147,6 @@ let on_veil : Int64 = 0xFFFFFFFFL
 let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx radius=InnerOr(Full) align=ACenter")
 
 ///|
-/// The capsule with what is said over its row (ComposerSpec's `notice`): a column, its row at its foot as the capsule
-/// alone is, its corners concentric with its round buttons there (half as high as the capsule alone), as a capsule's
-/// ends are with a panel's foot corners it stands in.
-fn capsule_noted() -> @ui.Style {
-  @ui.style(row=false, align=AStretch, gap=S1, radius=InnerOr(Exact(capsule_h() / 2.0)))
-}
-
-///|
-/// What is said over the capsule's row: its words where the row's are (past its ＋ and the gap after it), as far from
-/// its end as the row's words are from its send, a little under its top; each line 6 apart.
-fn notice_shut() -> @ui.Style {
-  @ui.style(w=Full, pl=@sf.room_of(@sf.theme().round.side + 1.0), pr=S2, pt=S1, gap=S1_5)
-}
-
-///|
-/// What is said over what is written in it, opened: in from its sides as what is written is (text_open).
-// kept across runs: a value (no field of it changes)
-let notice_open : @ui.Style = @ui.css("w=Full px=S2 pt=S1 gap=S1_5")
-
-///|
 /// How far in the capsule's round buttons stand (the theme's: keyboard and mouse's 32, a finger's 36) alone: 8.
 let capsule_pad_alone : Double = 8.0
 
@@ -1701,10 +1661,6 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
       None => []
     },
-    notice: match v {
-      Some(v) if chat_noted(v) => Some(fn() { chat_notices(c, src, r, v) })
-      _ => None
-    },
     roomy: false,
     locked: match v {
       Some(v) => v.archived
@@ -1718,6 +1674,10 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   let width = composer_width(c.width)
   let place = if apart { composer_place(c.width) } else { composer_alone }
   let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c.width)))), fn() {
+    match v {
+      Some(v) => chat_notices(c, src, r, v, width)
+      None => ()
+    }
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
         composer(
@@ -1829,18 +1789,11 @@ fn cc_mark(c : @ui.Ctx, via : String) -> Unit {
 let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 
 ///|
-/// Whether a chat says anything over its composer (chat_notices).
-fn chat_noted(v : ChatView) -> Bool {
-  v.archived || v.offline || (v.cache_cold is Some(_) && !v.archived)
-}
-
-///|
-/// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, CacheColdNotice, offlineNotice), as lines
-/// of the composer's own (ComposerSpec's `notice`: in its ground, over what is written in it; not a box of their own
-/// over the messages): an archived chat's, with its 还原对话 (why it failed under it, till it is tried again; not while
-/// its station is down); its agent's prompt cache over, with its 换新上下文 (why it failed in a toast); its station
-/// down. Each a line of quiet words, wrapped where they do not fit, what it offers at its end.
-fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
+/// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, CacheColdNotice, offlineNotice), each a
+/// capsule of its own over it, as the composer is (`width` wide: composer_notice): an archived chat's, with its
+/// 还原对话 (why it failed under it, till it is tried again; not while its station is down); its agent's prompt cache
+/// over, with its 换新上下文 (why it failed in a toast); its station down.
+fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Double) -> Unit {
   let key = r.station + ":" + r.session
   if v.archived {
     let restore = c.id("composer/restore")
@@ -1871,17 +1824,16 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     }
     composer_notice(
       c,
+      width,
+      "archive",
       @sf.t("web-main.archived.notice"),
       Some((restore, if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }, "web-main.archived.restore", busy || v.offline)),
+      failed=composing.restore_errors.get(key),
     )
-    match composing.restore_errors.get(key) {
-      Some(e) => c.text(e, style=composer_notice_failed) |> ignore
-      None => ()
-    }
   }
   match v.cache_cold {
     // its station goes on afresh by itself: said, nothing to tap
-    Some((_, said, true)) if !v.archived => composer_notice(c, said, None)
+    Some((_, said, true)) if !v.archived => composer_notice(c, width, "wait", said, None)
     Some((session, said, _)) if !v.archived => {
       let afresh = c.id("composer/afresh")
       let doing = "session.clear/" + r.station + "/" + session
@@ -1892,6 +1844,8 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
       }
       composer_notice(
         c,
+        width,
+        "wait",
         said,
         Some((afresh, if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }, "web-main.chat.afresh", busy || v.offline)),
       )
@@ -1908,36 +1862,73 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
           @sf.t("web-main.chat.offline")
         }
     }
-    composer_notice(c, said, None)
+    composer_notice(c, width, "unplug", said, None)
   }
 }
 
 ///|
-/// A line said over a chat's composer (chat_notices): its words, quiet, wrapped beside what it offers at its end
-/// (`offer`: its target, its words' key now, its name's key for what reads the screen, whether it is out of reach), the
-/// words' colour, underlined.
-fn composer_notice(c : @ui.Ctx, said : String, offer : (Int, String, String, Bool)?) -> Unit {
-  c.box(style=composer_notice_line, fn() {
-    c.text(said, style=composer_notice_words) |> ignore
-    match offer {
-      Some((id, words, name, off)) => {
-        let b = c.box(id~, fn() {
-          c.rich([@ui.span(@sf.t(words), underline=true)], style=if off { composer_notice_quiet } else { composer_notice_button })
-          |> ignore
-        })
-        c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
+/// A notice over a chat's composer (chat_notices): a capsule as the composer is, `width` wide, on its glass, 8 over
+/// it; its mark (icon `mark`) as wide as the composer's ＋ and over it, its words quiet where the composer's are, what
+/// it offers at its end (`offer`: its target, its words' key now, its name's key for what reads the screen, whether it
+/// is out of reach) in the words' colour, a step heavier; why what it offers failed (`failed`) under its words, red.
+fn composer_notice(
+  c : @ui.Ctx,
+  width : Double,
+  mark : String,
+  said : String,
+  offer : (Int, String, String, Bool)?,
+  failed? : String?,
+) -> Unit {
+  let t = @sf.theme()
+  let side = t.round.side + 1.0
+  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+    c.box(style=composer_notice_line, fn() {
+      c.box(style=@ui.style(w=Fixed(side), align=ACenter), fn() {
+        @sf.icon(c, mark, size=composer_notice_mark, color=t.p.muted) |> ignore
+      })
+      |> ignore
+      c.text(said, style=composer_notice_words) |> ignore
+      match offer {
+        Some((id, words, name, off)) => {
+          let b = c.box(id~, style=composer_notice_offer, fn() {
+            c.text(@sf.t(words), style=if off { composer_notice_quiet } else { composer_notice_button }) |> ignore
+          })
+          c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
+        }
+        None => ()
       }
-      None => ()
+    })
+    |> ignore
+    match failed {
+      Some(Some(e)) =>
+        c.box(style=@ui.style(w=Full, pl=@sf.room_of(side)), fn() { c.text(e, style=composer_notice_failed) |> ignore })
+        |> ignore
+      _ => ()
     }
   })
-  |> ignore
+  // over a chat's messages, as the composer: their scroll bar keeps clear of it
+  c.floats_over(b)
 }
 
 ///|
-/// A line over the composer (chat_notices): its words beside what it offers, 12 apart, their tops even (one size: its
-/// words' first line and what it offers on one line).
+/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark as far in as the
+/// composer's ＋ (capsule_pad_alone), what it offers 16 from its end, 8 over and under its words, 8 over the composer.
 // kept across runs: a value (no field of it changes)
-let composer_notice_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 pl=S2 pr=S4 py=S2 radius=Full gap=S1")
+
+///|
+/// A notice's line: its mark, its words and what it offers on its middle.
+// kept across runs: a value (no field of it changes)
+let composer_notice_line : @ui.Style = @ui.css("row w=Full align=ACenter")
+
+///|
+/// How big a line's mark is.
+let composer_notice_mark : Double = 16.0
+
+///|
+/// What a line offers: 12 from its words.
+// kept across runs: a value (no field of it changes)
+let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
 
 ///|
 /// Its words: the ui size, muted, wrapped in the rest of the line.
@@ -1947,11 +1938,11 @@ let composer_notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Mute
 ///|
 /// What it offers, out of reach (busy, its station down): as quiet as its words.
 // kept across runs: a value (no field of it changes)
-let composer_notice_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
+let composer_notice_quiet : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
+let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
