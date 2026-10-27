@@ -335,6 +335,10 @@ static float *fbuf;
 static GLint u_segs;
 static GLuint segs_tex;
 static int segs_rows;
+// the pieces segs_tex holds (as they were uploaded): a frame whose pieces are the same (a part drawn again, a mark's
+// look moving on) uploads none, the texture the GPU may still be drawing the last frame from not written again
+static float *segs_had;
+static size_t segs_had_n, segs_had_cap;
 static size_t fcap;
 static int fb_w, fb_h;
 static double cur_w, cur_h, cur_scale;
@@ -380,6 +384,7 @@ static void gl_setup(void) {
   u_segs = glGetUniformLocation(prog, "u_segs");
   segs_tex = 0;
   segs_rows = 0;
+  segs_had_n = 0;
   post = glCreateProgram();
   glAttachShader(post, compile(GL_VERTEX_SHADER, PVS));
   glAttachShader(post, compile(GL_FRAGMENT_SHADER, PFS));
@@ -732,6 +737,16 @@ static void segs_upload(int32_t count) {
   while (d > 0 && (int)(fbuf[(d - 1) * MB_INST + 5] + 0.5f) == 12) d--;
   if (d == count) return;
   int rows = (int)(((size_t)(count - d) * (MB_INST / 4) + SEGS_ROW - 1) / SEGS_ROW);
+  const float *pieces = fbuf + (size_t)d * MB_INST;
+  size_t n = (size_t)(count - d) * MB_INST;
+  // (the same as the texture holds: nothing to upload)
+  if (segs_tex && rows <= segs_rows && n == segs_had_n && memcmp(segs_had, pieces, n * sizeof(float)) == 0) return;
+  if (n > segs_had_cap) {
+    segs_had_cap = n * 2;
+    segs_had = realloc(segs_had, segs_had_cap * sizeof(float));
+  }
+  memcpy(segs_had, pieces, n * sizeof(float));
+  segs_had_n = n;
   glActiveTexture(GL_TEXTURE3);
   if (!segs_tex || rows > segs_rows) {
     if (segs_tex) glDeleteTextures(1, &segs_tex);
