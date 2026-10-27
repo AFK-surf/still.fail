@@ -167,9 +167,10 @@ client, so any client that acknowledges what it drew is paced.
   (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web and by
   MediaCodec's hardware decoder on Android. A client whose decoder fails on it before its first frame opens the view
   again asking H.264 (for as long as the app or page runs).
-- **The link.** The mesh's QUIC uses BBR (station/native/mesh): random loss is not taken for a full link. Cubic,
-  before it, halved what went at each loss: at 1% loss and 40 ms, a screen fell to 24 frames a second and a file to
-  2.8 Mbit/s (BBR: 52, 31 Mbit/s).
+- **The link.** The mesh's QUIC uses Cubic (station/native/mesh), which halves what goes at each loss: at 1% loss and
+  40 ms, a screen falls to 24 frames a second and a file to 2.8 Mbit/s (noq's BBR measured there: 52, 31 Mbit/s). BBR
+  was used from #1203 until 2026-10-28, when on real ways with nothing lost it held what went to a device at 20–30
+  KB/s for hours (a 17 KB window at 80 ms) where Cubic sent 2–4 MB/s.
 
 `station/side/screen-net.ts` measures it: a view over iroh through a proxy on this machine that delays, drops and
 limits the packets (a LAN, 40 ms, 150 ms, with loss, with a narrow link), the frames from a source of an encoder's
