@@ -249,6 +249,27 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
 }
 
 ///|
+/// An agent's ask as a card says it where it is not a vault's (a station's 共享调试 asked for: @sfbase's
+/// adb_link_card), as vault_asked says one: its title the question, 14 on 20, and under it the one line the answer
+/// turns on ("" none), 12 and quiet.
+pub fn ask_words(c : @ui.Ctx, title : String, note : String) -> Unit {
+  let t = @sf.theme()
+  c.box(style=ask_what, fn() {
+    c.rich([@ui.span(title, weight=600, color=t.p.text)], style=ask_title) |> ignore
+    if note != "" {
+      c.text(note, style=ask_note) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Its answer's buttons, as vault_foot lays them: a line of them, on to a second what has not the room on the first.
+pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=ask_foot, flow=true, line_gap=ask_foot_lines, body) |> ignore
+}
+
+///|
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
 /// (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
 pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) -> Unit {

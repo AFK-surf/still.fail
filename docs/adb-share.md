@@ -48,11 +48,14 @@ or a PC's core has sockets but no adbd, and the web has neither. Elsewhere a
 chat's card of a station's 共享调试 says so (`adbCard` `lendable: false`) and
 does nothing, and the station page's row goes nowhere.
 
-In a chat, the card lends from where it is: once the phone has Developer
-options and Wi-Fi, and Wireless debugging on (or the app may turn it on
-itself), the card has the switch, and the page is only for what else is asked
-(pairing, the station's adb); before that its line says the first thing the
-phone lacks and a tap opens the page, which says how.
+In a chat, an agent's link to it alone in a paragraph is a card that asks (as
+a vault request's does): whether that station's agents may debug this device.
+Once the phone has Developer options and Wi-Fi, and Wireless debugging on (or
+the app may turn it on itself), 共享 lends it from the card; before that the
+card says the first thing the phone lacks and 查看步骤 opens the page, which
+says how. While it is lent there the card says how that stands, with 详情 and
+停止共享. On a wide frame the page opens beside the chat, as the station's own
+page does (a tab, `adb:["<station>"]`).
 
 ## On the wire
 
