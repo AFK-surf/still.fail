@@ -55,7 +55,7 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
             Some((_, y, _, h)) => {
               let mid = y + h / 2.0
               if mid > c.height * 0.8 {
-                match c.list_info(list) {
+                match c.list_info_as(list, fn(i) { i.map(fn(i) { i.first >= 0 }) }) {
                   Some(i) if i.first >= 0 => c.list_scroll_by(list, mid - c.height / 2.0)
                   _ => ()
                 }

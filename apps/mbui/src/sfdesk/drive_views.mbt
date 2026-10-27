@@ -288,7 +288,8 @@ pub fn rows_view(
       for i, l in lines {
         match l {
           Row(a, e, _, _) if row_key(a.path, e.name) == want => {
-            match c.list_info(key) {
+            // (read back by the rows in view alone)
+            match c.list_info_as(key, fn(i) { i.map(fn(i) { (i.first, i.last) }) }) {
               Some(info) if i + extra >= info.first && i + extra < info.last => ()
               Some(info) if i + extra >= info.last =>
                 c.list_scroll_to(key, dmax_int(0, i + extra - (info.last - info.first) + 2))
@@ -519,7 +520,8 @@ fn column(
           Some(want) =>
             for i, e in list {
               if row_key(at.path, e.name) == want {
-                match c.list_info(lkey) {
+                // (read back by the rows in view alone)
+                match c.list_info_as(lkey, fn(i) { i.map(fn(i) { (i.first, i.last) }) }) {
                   Some(info) if i >= info.first && i < info.last => ()
                   Some(info) if i >= info.last => c.list_scroll_to(lkey, dmax_int(0, i - (info.last - info.first) + 2))
                   _ => c.list_scroll_to(lkey, i)
