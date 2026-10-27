@@ -118,6 +118,84 @@ pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double
 }
 
 ///|
+/// Icon `name` with its lines drawn as `trace` gives them (each line's place among them, from 0, and its points in the
+/// 24 grid: the lines to draw for it, none for nothing), as `icon` draws it whole: a mark drawn on or drawn back along
+/// its strokes (sync_key's tick). Its lines only: built each frame it is asked for, for what moves.
+fn icon_traced(
+  c : @ui.Ctx,
+  name : String,
+  trace : (Int, Array[Double]) -> Array[Array[Double]],
+  size? : Double = 16.0,
+  color? : Int64,
+) -> Int {
+  let color = color.unwrap_or(theme().p.text)
+  let data : Array[Double] = []
+  match icon_numbers(name) {
+    Some(d) => {
+      let mut i = 0
+      let mut line = 0
+      while i + 2 < d.length() {
+        let w = d[i + 1]
+        let n = d[i + 2].to_int()
+        let end = i + 3 + 2 * n
+        if d[i].to_int() != 2 {
+          for pts in trace(line, d[i + 3:end].to_array()) {
+            if pts.length() >= 4 {
+              data.push(0.0)
+              data.push(w)
+              data.push((pts.length() / 2).to_double())
+              for v in pts {
+                data.push(v)
+              }
+            }
+          }
+          line = line + 1
+        }
+        i = end
+      }
+    }
+    None => ()
+  }
+  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+}
+
+///|
+/// The first `part` (0 to 1) of the line through `pts` (x y each) by its length: none where that is nothing.
+fn stroke_from_start(pts : Array[Double], part : Double) -> Array[Double] {
+  let n = pts.length() / 2
+  let mut whole = 0.0
+  for j in 1..<n {
+    whole = whole + segment_length(pts, j)
+  }
+  let mut left = whole * part
+  if left <= 0.0 || n < 2 {
+    return []
+  }
+  let out = [pts[0], pts[1]]
+  for j in 1..<n {
+    let l = segment_length(pts, j)
+    if l >= left {
+      let f = if l > 0.0 { left / l } else { 1.0 }
+      out.push(pts[2 * j - 2] + (pts[2 * j] - pts[2 * j - 2]) * f)
+      out.push(pts[2 * j - 1] + (pts[2 * j + 1] - pts[2 * j - 1]) * f)
+      return out
+    }
+    out.push(pts[2 * j])
+    out.push(pts[2 * j + 1])
+    left = left - l
+  }
+  out
+}
+
+///|
+/// How long the `j`th piece of the line through `pts` is (from point j - 1 to j).
+fn segment_length(pts : Array[Double], j : Int) -> Double {
+  let dx = pts[2 * j] - pts[2 * j - 2]
+  let dy = pts[2 * j + 1] - pts[2 * j - 1]
+  (dx * dx + dy * dy).sqrt()
+}
+
+///|
 /// The entries of an icon's data that are its parts `parts` (a fill's holes, of no width, with the fill they cut).
 fn icon_data_parts(data : Array[Double], parts : Array[Int]) -> Array[Double] {
   let out : Array[Double] = []

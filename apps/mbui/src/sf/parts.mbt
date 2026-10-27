@@ -3872,7 +3872,9 @@ pub fn update_key(
 /// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
 /// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
 /// turn each sync_turn_ms, slow at its ends (by the clock as each frame is drawn: nothing built anew for it); `text` its tip and what it is said to be. Only once it has gone on later_ms
-/// (a moment's catching up shows nothing). Once all is here, the mark goes to a tick, there sync_done_ms, then fades.
+/// (a moment's catching up shows nothing). Once all is here, the mark becomes a tick: it goes on from where it is and as
+/// fast as it turns, slowing to rest where it looks as upright (sync_rest), its arrows drawn back along their strokes,
+/// then the tick drawn as a hand ticks (no two marks fading over each other); there sync_done_ms, then it fades.
 pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown : Bool, text : String) -> Unit {
   let t = theme()
   let on = shown && waited_long(c, key)
@@ -3884,10 +3886,28 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   if on {
     sync_seen[key] = true
   }
-  // done: its tick held a while, then gone
+  // done: brought to rest, the tick drawn, held a while, then gone
   let seen = sync_seen.get(key).unwrap_or(false)
   let ticked = seen && !shown
-  let held = ticked && !@kit.after(c, key + "/done", true, sync_done_ms)
+  let rest = if ticked {
+    match sync_rests.get(key) {
+      Some(r) => Some(r)
+      None => {
+        let r = sync_rest(c.moment())
+        sync_rests[key] = r
+        Some(r)
+      }
+    }
+  } else {
+    sync_rests.remove(key)
+    None
+  }
+  // the arrows go as it is nearly at rest (its last part hardly moves)
+  let settle = match rest {
+    Some(r) => r.ms * sync_rest_gone
+    None => 0.0
+  }
+  let held = ticked && !@kit.after(c, key + "/done", true, settle + sync_back_ms + sync_tick_ms + sync_done_ms)
   if !ticked {
     @kit.after(c, key + "/done", false, sync_done_ms) |> ignore
   }
@@ -3895,30 +3915,144 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   if !p.built {
     sync_said.remove(key)
     sync_seen.remove(key)
+    sync_rests.remove(key)
     return
   }
   let words = sync_said.get(key).unwrap_or(text)
-  // the turning mark to the tick (in 200 ms, each growing from 0.6 as it comes)
-  let done = @kit.animate(c, key + "/tick", if ticked { 1.0 } else { 0.0 }, transition=@motion.tween(sync_tick_ms, ease=Out))
+  // how far on to rest it has gone (0 to 1, as SyncRest::ease)
+  let resting = @kit.animate(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, transition=match rest {
+    Some(r) => @motion.tween_to(duration=r.ms, ease=fn(s) { r.ease(s) })
+    None => @motion.tween(0.0)
+  })
+  // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest
+  let back = @kit.animate(
+    c,
+    key + "/back",
+    if ticked { 1.0 } else { 0.0 },
+    transition=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=Standard, delay=settle),
+  )
+  let drawn = @kit.animate(
+    c,
+    key + "/tick",
+    if ticked { 1.0 } else { 0.0 },
+    transition=@motion.tween(if ticked { sync_tick_ms } else { 0.0 }, ease=Out, delay=settle + sync_back_ms * 0.6),
+  )
   let id = c.id(key)
   let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
-    if done < 1.0 {
-      // (each in the whole key, in its middle: turned about it)
-      let a = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "refresh", size=mark, color=t.p.muted) |> ignore }) |> ignore })
-      c.look(a, @ui.look(alpha=1.0 - done, scale=1.0 - 0.4 * done))
-      // turned by the clock as each frame is drawn (Ctx::cycle_look), slow at a turn's ends; still once ticked
-      if !ticked {
-        c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793) })
+    if back < 1.0 {
+      // (in the whole key, in its middle: turned about it)
+      let a = c.layer(fn() {
+        c.box(style=update_ring_at, fn() {
+          ignore(
+            if back > 0.0 {
+              icon_traced(c, "refresh", fn(i, pts) { sync_drawn_back(i, pts, 1.0 - back) }, size=mark, color=t.p.muted)
+            } else {
+              icon(c, "refresh", size=mark, color=t.p.muted)
+            },
+          )
+        })
+        |> ignore
+      })
+      match rest {
+        // turned by the clock as each frame is drawn (Ctx::cycle_look), slow at a turn's ends
+        None => c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=sync_turned(k)) })
+        // going on to rest (upright again once there: it looks the same each half turn)
+        Some(r) =>
+          if back == 0.0 && resting < 1.0 {
+            c.look(a, @ui.look(rot=r.from + (r.to - r.from) * resting))
+          }
       }
     }
-    if done > 0.0 {
-      let d = c.layer(fn() { c.box(style=update_ring_at, fn() { icon(c, "check", size=mark, color=t.p.muted) |> ignore }) |> ignore })
-      c.look(d, @ui.look(alpha=done, scale=0.6 + 0.4 * done))
+    if drawn > 0.0 {
+      c.layer(fn() {
+        c.box(style=update_ring_at, fn() {
+          ignore(
+            if drawn < 1.0 {
+              icon_traced(c, "check", fn(_, pts) { [stroke_from_start(pts, drawn)] }, size=mark, color=t.p.muted)
+            } else {
+              icon(c, "check", size=mark, color=t.p.muted)
+            },
+          )
+        })
+        |> ignore
+      })
+      |> ignore
     }
   })
   c.look(b, { ..@ui.still_look, alpha: dmin(1.0, p.t) })
   c.semantics(b, Status, id~, label=words)
   tip(c, key + "/tip", id, words, side=Bottom)
+}
+
+///|
+/// How far round the mark has turned where a turn is at `k` (0 to 1): slow at its ends (smoothstep, as CSS's
+/// cubic-bezier(.45, .05, .55, .95) the web turns it by).
+fn sync_turned(k : Double) -> Double {
+  k * k * (3.0 - 2.0 * k) * 2.0 * 3.141592653589793
+}
+
+///|
+/// How fast it turns there (a turn's part per ms).
+fn sync_turning(k : Double) -> Double {
+  6.0 * k * (1.0 - k) * 2.0 * 3.141592653589793 / sync_turn_ms
+}
+
+///|
+/// The mark brought to rest once all is here: from `from`, going `speed` (per ms), to `to` in `ms`, as a cubic going on
+/// from that speed and slowing to none there.
+struct SyncRest {
+  ms : Double
+  from : Double
+  speed : Double
+  to : Double
+}
+
+///|
+/// Where it rests from a turn's state at moment `now`: the next half turn on (the mark is two arrows, the same turned
+/// half round), slowing evenly from its speed (what it has to go over half its speed: in sync_settle_least to
+/// sync_settle_most), not going back; at once where it is (nearly) at rest there already.
+fn sync_rest(now : Double) -> SyncRest {
+  let pi = 3.141592653589793
+  let p = now / sync_turn_ms
+  let k = p - p.floor()
+  let from = sync_turned(k)
+  let speed = sync_turning(k)
+  if from - (from / pi).floor() * pi <= sync_rest_near && speed * sync_settle_least <= sync_rest_near {
+    return { ms: 0.0, from, speed, to: from }
+  }
+  // a cubic from `speed` to none goes back unless what it has to go is at least a third of `speed` over its time
+  let mut to = ((from - sync_rest_near) / pi).ceil() * pi
+  while to <= from || speed * sync_settle_least > 3.0 * (to - from) {
+    to = to + pi
+  }
+  let even = if speed > 0.0 { 2.0 * (to - from) / speed } else { sync_settle_most }
+  let ms = dmin(sync_settle_most, dmax(sync_settle_least, even))
+  { ms, from, speed, to }
+}
+
+///|
+/// How far on to rest it is where its time is at `s` (0 to 1): leaving at its speed, arriving with none (a cubic
+/// Hermite, from 0 to 1).
+fn SyncRest::ease(self : SyncRest, s : Double) -> Double {
+  let lead = if self.to > self.from { self.ms * self.speed / (self.to - self.from) } else { 0.0 }
+  let s2 = s * s
+  let s3 = s2 * s
+  (s3 - 2.0 * s2 + s) * lead + (3.0 * s2 - 2.0 * s3)
+}
+
+///|
+/// The refresh mark's parts with `left` of each drawn (1 whole, 0 none): each arrow's curve from its head, the head's
+/// two strokes from their corner where the curve starts (refresh's data: curve, head, curve, head).
+fn sync_drawn_back(part : Int, pts : Array[Double], left : Double) -> Array[Array[Double]] {
+  if part % 2 == 0 {
+    [stroke_from_start(pts, left)]
+  } else {
+    // (a head: its first point, its corner, its last)
+    [
+      stroke_from_start([pts[2], pts[3], pts[0], pts[1]], left),
+      stroke_from_start([pts[2], pts[3], pts[4], pts[5]], left),
+    ]
+  }
 }
 
 ///|
@@ -3931,15 +4065,38 @@ let sync_said : LiveMap[String, String] = LiveMap::new()
 let sync_seen : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
+/// Where each mark comes to rest once all is here, by its key, from the frame it was.
+// kept across runs: put back as it goes (sync_key)
+let sync_rests : LiveMap[String, SyncRest] = LiveMap::new()
+
+///|
 /// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).
 let sync_turn_ms : Double = 1400.0
 
 ///|
-/// How long the tick stays once all is here, how long the mark takes to become it, and to fade.
+/// How long the mark takes to come to rest, at least and at most; how far on in that the arrows start to go; how near
+/// rest it may be to stop where it is (of a turn's 2π).
+let sync_settle_least : Double = 150.0
+
+///|
+let sync_settle_most : Double = 700.0
+
+///|
+let sync_rest_gone : Double = 0.8
+
+///|
+let sync_rest_near : Double = 0.03
+
+///|
+/// How long the tick stays once drawn, how long the arrows take to be drawn back and the tick to be drawn (begun as
+/// they are mostly back), and to fade.
 let sync_done_ms : Double = 1000.0
 
 ///|
-let sync_tick_ms : Double = 200.0
+let sync_back_ms : Double = 180.0
+
+///|
+let sync_tick_ms : Double = 240.0
 
 ///|
 let sync_out_ms : Double = 400.0
