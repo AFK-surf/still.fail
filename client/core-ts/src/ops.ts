@@ -68,6 +68,7 @@ export const PARAMS: Record<string, string> = {
   "station.module.set": "id:string enabled:boolean",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
+  "network.setCongestion": "congestion:string",
   "context.setAfresh": "afreshWhenCold:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
@@ -302,6 +303,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
     // Whether a person's message to an agent whose large context's cache is over starts it afresh by itself (its
     // station's routes/context.ts); set by the workspace's owners and admins.
+    case "network.setCongestion":
+      return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
     case "session.stop":

@@ -1,4 +1,5 @@
 {
+  "station.network.managersOnly": "Only owners and admins can change network settings",
   "station.adb.allowPrompt": "Tap Allow on the phone's “Allow USB debugging?” prompt",
   "station.adb.codeDigits": "The pairing code is 6 digits",
   "station.adb.grantFailed": "Couldn't grant: {said}",

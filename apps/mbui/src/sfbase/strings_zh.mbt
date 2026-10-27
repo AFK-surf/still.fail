@@ -1957,4 +1957,11 @@ let zh : Map[String, String] = {
   "web-pages.drive.viewAll": "查看所有文件",
   "web-pages.drive.pinnedFolders": "固定文件夹",
   "web-pages.screen.none": "暂无屏幕",
+  "web-pages.stations.network.advanced": "高级网络设置",
+  "web-pages.stations.network.algorithm": "拥塞控制算法",
+  "web-pages.stations.network.cubic": "CUBIC（默认）",
+  "web-pages.stations.network.bbr": "BBR（实验性）",
+  "web-pages.stations.network.note": "控制此 station 的数据发送方式，重启 station 后生效。BBR 在部分连接上可能明显变慢，通常无需修改。",
+  "web-pages.stations.network.what": "修改网络设置",
+  "web-pages.stations.network.saved": "已保存，重启 station 后生效",
 }

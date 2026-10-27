@@ -171,6 +171,11 @@ client, so any client that acknowledges what it drew is paced.
   40 ms, a screen falls to 24 frames a second and a file to 2.8 Mbit/s (noq's BBR measured there: 52, 31 Mbit/s). BBR
   was used from #1203 until 2026-10-28, when on real ways with nothing lost it held what went to a device at 20–30
   KB/s for hours (a 17 KB window at 80 ms) where Cubic sent 2–4 MB/s.
+  Station settings keep an **Advanced network settings** fold at the bottom. Its congestion controller defaults to
+  CUBIC; managers can opt into experimental BBR. The saved `network.congestion` (`cubic` or `bbr`) is read when the
+  station starts; saving does not interrupt existing transfers. BBR in noq 1.3.0 has the idle/app-limited bandwidth
+  estimation defect tracked in n0-computer/noq#852, so it stays opt-in. This changes the station's sender only.
+
 
 `station/side/screen-net.ts` measures it: a view over iroh through a proxy on this machine that delays, drops and
 limits the packets (a LAN, 40 ms, 150 ms, with loss, with a narrow link), the frames from a source of an encoder's

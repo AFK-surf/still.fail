@@ -4940,6 +4940,11 @@ export interface StationSearch {
 	personal: boolean;
 }
 
+/** The saved congestion controller: cubic (default) or experimental bbr. */
+export interface StationNetwork {
+	congestion: string;
+}
+
 /** How a station goes on with a session whose prompt cache is over (`Overview.context`). */
 export interface StationContext {
 	/**
@@ -5038,6 +5043,8 @@ export interface Overview {
 	drive?: DriveRoots;
 	/** What its search finds of the machine (docs/search.md). None from a station older than it. */
 	search?: StationSearch;
+	/** Advanced network settings, applied on station restart. Absent on older stations. */
+	network?: StationNetwork;
 	/**
 	 * How it goes on with a session whose prompt cache is over. None from a station older than it, which then
 	 * does not offer it.

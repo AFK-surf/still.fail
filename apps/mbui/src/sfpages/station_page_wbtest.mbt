@@ -75,6 +75,32 @@ test "a station's 设置 switches going on afresh once a session's cache is over
 }
 
 ///|
+test "network settings stay folded and save the selected controller" {
+  let asked : Array[Json] = []
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0,
+    over=fn(s) { { ..s, call: fn(name, params, done) {
+      if name == "network.setCongestion" { asked.push(params) }
+      (s.call)(name, params, done)
+    } } }, ready=fn() { @settings.station_parts["ws1/st1"] = "settings" })
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("BBR（实验性）") is None)
+  scrolled_to(t, 390.0, "高级网络设置")
+  match t.find("高级网络设置") {
+    Some((x, y)) => t.tap(x, y)
+    None => fail("no advanced network settings")
+  }
+  t.draw()
+  scrolled_to(t, 390.0, "BBR（实验性）")
+  match t.find("BBR（实验性）") {
+    Some((x, y)) => t.tap(x, y)
+    None => fail("no BBR choice")
+  }
+  t.draw()
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0]), "congestion"), "bbr")
+}
+
+///|
 test "a login's link opens its station's page at 设置, where its card is" {
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, ready=fn() {
     @settings.mark_login("ws1/st1", "login-2")

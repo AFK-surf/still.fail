@@ -845,6 +845,7 @@ export const SHAPES: Record<string, Shape> = {
     ["agentEnv", vec("EnvVar"), { default: true, doc: "The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value\nmasked (none from a station older than them, which then does not offer them)." }],
     ["drive", opt("DriveRoots"), { doc: "Its files: the folders pinned, and whether the viewer browses every folder (none from a station older\nthan the drive, which then is not offered)." }],
     ["search", opt("StationSearch"), { doc: "What its search finds of the machine (docs/search.md). None from a station older than it." }],
+    ["network", opt("StationNetwork"), { doc: "Advanced network settings, applied on station restart. Absent on older stations." }],
     ["context", opt("StationContext"), { doc: "How it goes on with a session whose prompt cache is over. None from a station older than it, which then\ndoes not offer it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
@@ -2135,6 +2136,9 @@ export const SHAPES: Record<string, Shape> = {
     ["words", vec("String"), { default: true, doc: "The words looked for, as a found message marks them in its chat when opened (with `messages`)." }],
     ["messages", vec("FoundMessage"), { default: true, doc: "The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats\nlisted. Empty when not asked for." }],
   ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
+  StationNetwork: struct([
+    ["congestion", "String"],
+  ], { doc: "The saved congestion controller: cubic (default) or experimental bbr." }),
   StationContext: struct([
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
   ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),

@@ -1,3 +1,4 @@
+import { NetworkSection } from "../StationNetwork.tsx";
 // The stations on a wide screen with Station in the rail: the sidebar lists them (StationsNav), the page is the one picked
 // (StationSettings), everything of it in one place: how it is, what is left of the machine, what runs on it (agents,
 // profiles, connects, folders lent), its software and the machine itself. Elsewhere (no rail, or Station not in it) the
@@ -343,6 +344,7 @@ function Settings({ s, manager, marked }: { s: StationView; manager: boolean; ma
       {/* Whether a session whose prompt cache is over goes on afresh by itself; none from a station from before it. */}
       {o?.context && <ContextSection station={s.station} context={o.context} manager={manager} />}
       {manager && <Workspaces s={s} />}
+      {o?.network && <NetworkSection station={s.station} network={o.network} manager={manager} />}
     </>
   );
 }

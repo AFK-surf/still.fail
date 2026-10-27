@@ -1987,4 +1987,11 @@ let en : Map[String, String] = {
   "web-pages.drive.viewAll": "View all files",
   "web-pages.drive.pinnedFolders": "Pinned folders",
   "web-pages.screen.none": "No screens yet",
+  "web-pages.stations.network.advanced": "Advanced network settings",
+  "web-pages.stations.network.algorithm": "Congestion control",
+  "web-pages.stations.network.cubic": "CUBIC (default)",
+  "web-pages.stations.network.bbr": "BBR (experimental)",
+  "web-pages.stations.network.note": "Controls how this station sends data. Takes effect after restarting the station. BBR can be much slower on some connections; usually no change is needed.",
+  "web-pages.stations.network.what": "change network settings",
+  "web-pages.stations.network.saved": "Saved; takes effect after restarting the station",
 }

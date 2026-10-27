@@ -1,4 +1,5 @@
 {
+  "station.network.managersOnly": "只有管理员可以修改网络设置",
   "station.adb.allowPrompt": "手机上弹出「允许 USB 调试吗？」时，点「允许」",
   "station.adb.codeDigits": "配对码应为 6 位数字",
   "station.adb.grantFailed": "授权失败：{said}",

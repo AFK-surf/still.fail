@@ -16,6 +16,7 @@ import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
 import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
+import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 
@@ -151,6 +152,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     agentEnv: agentEnvView(raw),
     // How a session whose prompt cache is over goes on (routes/context.ts): afresh, by itself, when set.
     context: contextView(raw),
+    network: networkView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
     // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and
     // whether the person's own mail, messages and the like too.

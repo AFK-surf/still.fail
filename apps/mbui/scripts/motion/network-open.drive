@@ -1,0 +1,10 @@
+timeout 20000
+until Studio
+wait 400
+wheel 1800
+wait 400
+tap 高级网络设置
+wait 400
+wheel 500
+wait 400
+exit
