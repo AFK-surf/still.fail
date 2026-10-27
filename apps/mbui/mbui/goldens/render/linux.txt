@@ -4,6 +4,8 @@
 # said. Any new: every reference made again in one PR (the render-linux workflow's artifact), said there; or, where the
 # new one draws every reference the same to the byte, a line of it beside the old. First made from #2062's own run
 # (40263201270: its a and b the same to the byte), the picture looked at beside the Windows one.
+# Made again from main 1a8b0d43 (run 40419237798), its draw list kept from then on (goldens/render/controls.dl): #2259
+# lifted the dark segmented thumb out of its track, its PR not running this check.
 image ubuntu24 20261023.334.3
 system Ubuntu 24.04.5 LTS x86_64
 mesa 25.2.8-0ubuntu0.24.04.4

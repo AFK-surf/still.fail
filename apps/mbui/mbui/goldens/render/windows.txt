@@ -9,6 +9,8 @@
 # channel off, a glyph sampled from another place in the atlas. Made again as #1987 fitted the themes' greys and accent
 # to read (WCAG's AA; run 40250099172's artifact, its a and b the same to the byte): the controls' words, marks and
 # accent drawn in those colours, the rest as before.
+# Made again from main 1a8b0d43 (run 40419238208), its draw list kept from then on (goldens/render/controls.dl): #2259
+# lifted the dark segmented thumb out of its track, its PR not running this check.
 image win25-vs2026 20261007.264.1
 system Microsoft Windows NT 10.0.26100.0
 warp 1.0.21.0.20260922.2

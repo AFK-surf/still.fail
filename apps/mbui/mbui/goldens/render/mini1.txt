@@ -3,6 +3,7 @@
 # workflow's artifact), said there. Made again on macOS 27.0.1 (2026-10-21, render run 39475789327's artifact): only
 # glyphs' edges differ from 26.5's, Core Text's rasterizing; every shape the same to the byte. controls.png made again
 # as #1987 fitted the themes' greys and accent to read (WCAG's AA; render run 40250620034's artifact): the controls'
-# words, marks and accent in those colours.
+# words, marks and accent in those colours. Made again from main 1a8b0d43 (render run 40419237817), its draw list kept from then on as goldens/render/controls.dl:
+# #2259 lifted the dark segmented thumb out of its track, its PR not running this check.
 system 27.0.1 26A434
 gpu Apple M4
