@@ -264,6 +264,18 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       m.name == "chat.archive" && text(Some(m.params), "session") == "s-a2" && field(Some(m.params), "archived") == Some(Json::boolean(false))
     }),
   )
+  // right clicked (held, by a finger: its keys never drawn for one), its menu: 恢复到列表 and 删除
+  let (x, y) = t.find("整理上个月的发票").unwrap()
+  t.right_click(x, y)
+  t.frame()
+  assert_true(t.find("删除") is Some(_))
+  t.tap_text("恢复到列表")
+  t.frame()
+  assert_true(
+    calls.iter().any(fn(m) {
+      m.name == "chat.archive" && text(Some(m.params), "session") == "s-a1" && field(Some(m.params), "archived") == Some(Json::boolean(false))
+    }),
+  )
 }
 
 ///|

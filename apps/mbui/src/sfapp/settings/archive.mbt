@@ -218,7 +218,8 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
         if busy {
           c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() { spinner(c) }) |> ignore
         } else {
-          c.box(dir=Row, align=ACenter, fn() {
+          // (恢复 and 删除 as far apart as makes each a press's room across: @sf.keys_row)
+          c.box(style=@sf.keys_row(size=round_action_side), fn() {
             if failed is Some(_) {
               c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() {
                 doing_mark(c, false, failed)
@@ -280,6 +281,9 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     (core.open_chat)(station, session, title)
   }
 }
+
+///|
+let round_action_side : Double = 34.0
 
 ///|
 /// A round action of a row (Archive.kt Action): its icon, 16 in a 34 circle. True on the frame after a tap.
