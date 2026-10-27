@@ -150,7 +150,7 @@ export const navCompose = style({ transform: "translateX(-1px)" });
 
 // ── a chat's row ──
 
-/** Archiving a chat: a button at the row's top right while it is pointed at, the title making room for it. */
+/** Archiving a chat: a button at the row's bottom right while it is pointed at, in the place of who is in it. */
 export const navSessionWrap = style({
   position: "relative", borderRadius: vars.rNav, cornerShape: vars.cornerShape,
   selectors: { "& + &": { marginTop: 2 } },
@@ -178,7 +178,6 @@ export const navSessionText = style({
 });
 export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
-  selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
 });
 /** The title's mark in a 10px column, the state line's icon (ChatMark.tsx WaitingText `slot`) centred under it; none, no column. */
 export const navMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center", selectors: { "&:empty": { display: "none" } } });
@@ -200,6 +199,8 @@ export const navSessionMeta = style({
   height: 18, lineHeight: "18px",
   // A state line's icon in the mark's column: what follows starts where the title does, the head's gap on.
   vars: { "--lead-gap": "6px" },
+  // The time making room for the archive button (rowArchive).
+  selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
 });
 export const navSessionLast = style({
   flex: 1, ...ellipsis, fontSize: vars.textMeta, color: vars.muted,
@@ -227,9 +228,13 @@ export const sessionKind = style({
 globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 // A mark has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
 globalStyle(`${sessionKind} ${kindMark}`, oversize(1));
-/** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
+/**
+ * Archive, beside a row while pointed at: centred on the second line (18px tall, 29px down the row), in the column of
+ * who is in the chat (rowAside), which it replaces meanwhile. The title line keeps its marks, the station's in the same
+ * column as every other row's.
+ */
 export const rowArchive = style({
-  position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
+  position: "absolute", top: 26, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
 });
 
