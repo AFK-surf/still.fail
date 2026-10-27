@@ -1,6 +1,6 @@
 //! The station's iroh for the station in TypeScript (docs/station-ts-native.md §3): its endpoint as
 //! mesh/station/src/main.rs `serve_mesh` makes it (the station's key, its relays, found on the LAN by mDNS and by relay
-//! through the Mainline DHT, BBR with a 256 KiB initial window), keepers on every relay (keep.rs), connections both
+//! through the Mainline DHT, Cubic with a 256 KiB initial window), keepers on every relay (keep.rs), connections both
 //! ways and their streams. Which relays, when to add iroh's public ones, who may connect and what is said: the
 //! TypeScript's. And the image codecs of the thumbnails (thumbs.rs).
 
@@ -63,15 +63,18 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     let bytes: [u8; 32] = options.secret_key.as_ref().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
     let key = SecretKey::from_bytes(&bytes);
     let relays: Vec<RelayUrl> = options.relay_urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
-    // BBR: a packet lost at random (Wi-Fi, a far link) is not taken for the link being full, as Cubic takes it (halving
-    // what goes, a remote screen's frames and a file alike: docs/remote-screens.md, "Pace").
-    let mut bbr = noq_proto::congestion::Bbr3Config::default();
-    bbr.initial_window(256 * 1024);
+    // Cubic, as the clients' (client/shell). noq's BBR (Bbr3) held what went to a device far under what its way took and
+    // never let it up again: ccvm's replies to a phone and a desktop app through Beijing's relay came at 3 KB/s each, 20–30
+    // KB/s together, for hours, with nothing lost, no congestion event, a 17 KB window at 80 ms (2026-10-28, the log's "a
+    // reply went slowly"); the same station on Cubic sent them at 2–4 MB/s at once. BBR was taken for random loss
+    // (docs/remote-screens.md, "Pace"), which Cubic answers by halving what goes.
+    let mut cubic = noq_proto::congestion::CubicConfig::default();
+    cubic.initial_window(256 * 1024);
     let mut builder = IrohEndpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
         .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
-        .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(bbr)).build());
+        .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build());
     if let Some(addr) = &options.bind_addr {
         builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(failed)?).map_err(failed)?;
     }
