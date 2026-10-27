@@ -120,7 +120,7 @@ test("a module's call that is wrong, or that its station refuses, says why", asy
   await host.settle();
   const emitted = host.takeEmitted();
   assert.equal((answers(emitted, 1)?.error as CoreError).code, "invalid_params");
-  assert.equal((answers(emitted, 2)?.error as CoreError).message, "模块没有运行");
+  assert.equal((answers(emitted, 2)?.error as CoreError).message, "模块没有运行（09:00:00）");
   assert.equal((answers(emitted, 3)?.error as CoreError).code, "unknown_call");
   core.close();
 });

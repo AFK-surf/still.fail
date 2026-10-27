@@ -232,13 +232,15 @@ One trace in order:
 | order by _time asc
 ```
 
-An error people see with an 错误编号 / error ID (`3f9a1c2e`: the network, a host or a station's own fault, CoreError
-`traced`) is the start of the trace it failed in; its spans, the failed ones with `stillfail.cause`:
+An error people see said with a time (`无法连接此 station（00:40:14）`: the network, a host or a station's own fault,
+CoreError `stamped`) failed at that second, the device's local time; its failed spans, the transport's words in
+`stillfail.cause` (the date from when it was reported, the zone from the reporter, the version from the feedback):
 
 ```kusto
 ['ember']
-| where _time > ago(7d) and trace_id startswith "3f9a1c2e"
-| project _time, ['service.name'], ['service.version'], name, duration, error, ['attributes.custom']['stillfail.cause']
+| where _time between (datetime(2026-10-27T16:40:09Z) .. datetime(2026-10-27T16:40:19Z)) and error == true
+| where ['service.version'] == "0.1.5779"
+| project _time, ['service.name'], name, duration, trace_id, ['attributes.custom']['stillfail.cause']
 | order by _time asc
 ```
 

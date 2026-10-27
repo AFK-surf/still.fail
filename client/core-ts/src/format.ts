@@ -100,6 +100,14 @@ export function clock(ms: number, offsetMin: number): string {
   return `${two(h)}:${two(m)}`;
 }
 
+/// 14:05:09, local.
+export function clockSeconds(ms: number, offsetMin: number): string {
+  const [, , , , h, m] = local(ms, offsetMin);
+  // Offsets are whole minutes: the second is the same everywhere.
+  const s = Math.floor(remEuclid(Math.floor(ms), 60_000) / 1000);
+  return `${two(h)}:${two(m)}:${two(s)}`;
+}
+
 /// 10月26日 04:12, local: a moment said whole, for what is shared of it.
 export function dateClock(ms: number, offsetMin: number): string {
   const [, month, day] = local(ms, offsetMin);
