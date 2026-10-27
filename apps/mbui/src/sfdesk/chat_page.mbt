@@ -75,7 +75,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {
-          c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) }) |> ignore
+          let bar = c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) })
+          c.stratum(bar, Bar)
           match view {
             Some(v) => bar_popovers(c, src, w, r, v, chat)
             None => ()

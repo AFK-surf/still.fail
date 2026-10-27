@@ -635,13 +635,12 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // a layer (overlay.mbt): what is over everything under it (Ctx::paint_top) stays under it, and what is so in it is
   // put over the rest of it
   let layer = self.nodes[i].portal
-  if layer || self.nodes[i].over_flying {
+  // a stratum over what flies (strata.mbt): what flies put off under it, painted now
+  if layer || self.nodes[i].mark != 0 {
+    self.land_flying()
+  }
+  if layer {
     self.raise_tops()
-    // and what flies (put_over's 2) built before it under it too, as what is over everything under it: a page's
-    // bar over the words and files sent flying under it, as over the list they land in (Ctx::over_flying)
-    if dr.mode == 0 && !dr.overlaying && !dr.raising {
-      self.paint_overlays()
-    }
   }
   let h0 = self.next_hit_ids.length()
   // (whose each instance is, where a test asks: contrast.mbt)
@@ -650,9 +649,13 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     inst_owners.painting = i
   }
   self.paint_node(i, alpha_in)
-  // a scrim: what is put over it (put_over's 3) over it, under the rest of its layer
+  // a scrim: what is put over it (Stratum's OverScrim) over it, under the rest of its layer
   if !dr.raised.is_empty() && dr.mode != mode_hits && dr.scrims.contains(i) {
     self.paint_raised()
+  }
+  // the page's cover: what is over it (strata.mbt's OverCover) over it
+  if !dr.over_cover.is_empty() && dr.mode != mode_hits && dr.covers.contains(i) {
+    self.paint_over_cover()
   }
   if inst_owners.on {
     inst_owners.painting = was

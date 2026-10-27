@@ -555,8 +555,8 @@ pub fn reshape(
 ///|
 /// Node `i` flown from (`x`, `y`, at `scale`) to where it is laid out (a shared element: Motion's `layoutId`): its
 /// top left `px` of the way across, `py` of the way down and `ps` of the way grown (the words sent from the composer
-/// to their bubble), drawn over everything (`z` 2) or over its siblings (1). Only drawn so: it is where it is laid
-/// out for anything else.
+/// to their bubble), drawn as what flies is (@ui.Stratum's Flying). Only drawn so: it is where it is laid out for
+/// anything else.
 pub fn fly(
   c : @ui.Ctx,
   i : Int,
@@ -566,14 +566,13 @@ pub fn fly(
   px~ : Double,
   py~ : Double,
   ps? : Double = 1.0,
-  z? : Int = 2,
 ) -> Unit {
   let e = moving_of(c, i)
   if e.name == "" {
     e.name = "fly"
   }
   e.fly = Some((x, y, scale, px, py, ps))
-  c.put_over(i, z~)
+  c.stratum(i, Flying)
 }
 
 ///|

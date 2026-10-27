@@ -142,7 +142,7 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
     }
     push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
     self.paint(s.layer, 1.0)
-    self.paint_overlays()
+    self.land_flying()
     pop_clip()
     self.raise_tops()
     self.cycle_looks()

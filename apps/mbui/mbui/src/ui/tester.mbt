@@ -759,7 +759,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   let found : Ref[(Double, Double)?] = Ref::new(None)
   let over : Array[Int] = []
   fn walk(i : Int, overlay : Bool) -> Unit {
-    if !overlay && c.drawn_entry(i) is Some(e) && e.z == 2 {
+    if !overlay && c.drawn_entry(i) is Some(e) && e.z == z_flying {
       over.push(i)
       return
     }

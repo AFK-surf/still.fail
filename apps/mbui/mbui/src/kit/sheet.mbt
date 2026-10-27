@@ -273,7 +273,7 @@ let sheet_give : Double = 0.55
 
 ///|
 /// Where the top of the sheet up is in the window this frame, as it is laid out (None where none is up): for what
-/// stays clear of it as it comes and goes (a row held for the menu in it, lifted over its scrim: put_over's 3), read
+/// stays clear of it as it comes and goes (a row held for the menu in it, lifted over its scrim: Stratum's OverScrim), read
 /// once this frame is laid out (@motion.placed).
 pub fn sheet_top(c : @ui.Ctx) -> Double? {
   match @motion.measured_rect(c, sheet_measured) {

@@ -1,4 +1,4 @@
-// put_over's 3: what a modal layer is of, put over that layer's scrim and under what the layer holds (a row held for
+// OverScrim (strata.mbt): what a modal layer is of, put over that layer's scrim and under what the layer holds (a row held for
 // its menu, standing out of what the menu dims); where no layer with a scrim is up, in its place among the rest.
 
 ///|
@@ -21,7 +21,7 @@ fn raised_page(menu : Bool) -> (Ctx) -> Unit {
   fn(c) {
     c.column(fn() {
       let b = c.box(w=Px(50.0), h=Px(30.0), bg=0x336699FFL, fn() {  })
-      c.put_over(b, z=3)
+      c.stratum(b, OverScrim)
       c.box(w=Px(70.0), h=Px(40.0), ty=-20.0, bg=0x993366FFL, fn() {  }) |> ignore
       if menu {
         c.overlay("menu", modal=true, scrim=0x00000040L, fn() {

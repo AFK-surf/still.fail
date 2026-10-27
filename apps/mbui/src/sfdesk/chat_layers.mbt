@@ -80,6 +80,7 @@ pub fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
     |> ignore
   })
   c.draw_only(l)
+  c.stratum(l, Cover)
 }
 
 ///|
