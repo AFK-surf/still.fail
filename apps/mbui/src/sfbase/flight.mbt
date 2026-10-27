@@ -39,7 +39,7 @@
 // ground and time coming in as they go across. The composer is held as tall as it was while they and their files are in it,
 // the new chat's and then its chat's, as for words sent in a chat, till they set out. The list is not cut at the composer's top as
 // Android's is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts
-// what it draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
+// what it draws (@ui.Stratum's Flying), and what else is in it then (its time) is all but clear there.
 
 ///|
 pub(all) struct SendFlight {
@@ -859,7 +859,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         let (fx, fy, fw, _) = ff.from
         let to = "flight/to/" + ff.key
         let x = @sf.corner_remove_face(c)
-        c.put_over(x, z=2)
+        c.stratum(x, Flying)
         c.draw_only(x)
         @motion.placed(c, x, fn() {
           // (on the card's ground as this frame draws it: flight_quote_landing's)
@@ -937,7 +937,7 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
   let up = flight_up_of(c, f)
   let own = c.node_bg(card)
   let from = if ff.ground != 0L { ff.ground } else { own }
-  c.put_over(card, z=2)
+  c.stratum(card, Flying)
   @motion.placed(c, card, fn() {
     let (x, y, w, h) = c.node_rect(card)
     let dx = (fx + sx - x) * (1.0 - across)

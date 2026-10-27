@@ -172,7 +172,7 @@ priv struct DrawState {
   mut mode : Int
   mut overlaying : Bool
   overlay : Array[(Int, Double)]
-  /// what is over the scrim of the modal layer up (put_over's 3), painted once that scrim is (Ctx::paint_raised); the
+  /// what is over the scrim of the modal layer up (Stratum's OverScrim), painted once that scrim is (Ctx::paint_raised); the
   /// scrims built this frame (overlay.mbt), and whether those are being painted
   raised : Array[(Int, Double)]
   scrims : Array[Int]
@@ -183,6 +183,15 @@ priv struct DrawState {
   /// painted after them covers them, and a layer opened over them does; drawn where they were painted (what holds them
   /// moved them with its look, as what it holds)
   tops : Array[(Int, Int)]
+  /// what is Flying (strata.mbt) painted so where it could not be put off, as `tops`: put after the rest painted so
+  /// far at the next stratum over it (a bar, a cover, a layer opened over the page) or once its layer is painted, under
+  /// the `tops` (handles are over what flies)
+  flying_tops : Array[(Int, Int)]
+  /// the page's covers built this frame (Ctx::stratum's Cover), what is over them (OverCover) waiting for one to be
+  /// painted, and whether that is being painted
+  covers : Array[Int]
+  over_cover : Array[(Int, Double)]
+  mut covering : Bool
   /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
   /// the node whose look by the clock is being painted (its instances tagged once it is: cycle_look.mbt)
@@ -204,6 +213,10 @@ let dr : DrawState = {
   scrims: [],
   raising: false,
   tops: [],
+  flying_tops: [],
+  covers: [],
+  over_cover: [],
+  covering: false,
   carry: [],
   cycling: -1,
 }
@@ -276,6 +289,10 @@ fn reset_drawing() -> Unit {
   dr.scrims.clear()
   dr.raising = false
   dr.tops.clear()
+  dr.flying_tops.clear()
+  dr.covers.clear()
+  dr.over_cover.clear()
+  dr.covering = false
   dr.carry.clear()
   dr.cycling = -1
   list_counts.clear()
@@ -295,6 +312,8 @@ fn drawing_begin() -> Unit {
   dr.overlay.clear()
   dr.raised.clear()
   dr.scrims.clear()
+  dr.covers.clear()
+  dr.over_cover.clear()
 }
 
 ///|
@@ -424,37 +443,16 @@ pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
 }
 
 ///|
-/// Node `i` drawn over its siblings (1), or over everything, the window's whole room its clip (2: what flies over
-/// the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
-/// where that moves it: drawn_paint; under what is said to be over it, Ctx::over_flying, and the layers opened over
-/// it, as what it lands in is), or over the scrim of the modal layer up this frame and under what that layer
-/// holds (3: what a menu is of, held, standing out of what the menu dims, as iOS's context menu has it; in its place
-/// where no layer with a scrim is up). Tapped where it is laid out, in its place among the rest.
-pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
-  // (over everything: painted after the rest, out of what a part kept draws, kept_part.mbt)
-  if z >= 2 {
-    part_live()
-  }
-  // what a list's row holds: the row, over the list's other rows
+/// Node `i` drawn over its siblings: what a list's row holds, the row over the list's other rows. Tapped where it is
+/// laid out. (Over more than its siblings: its stratum, Ctx::stratum.)
+pub fn Ctx::put_over(self : Ctx, i : Int) -> Unit {
   let p = self.nodes[i].parent
-  let j = if z == 1 &&
-    p >= 0 &&
-    self.nodes[p].parent >= 0 &&
-    self.nodes[self.nodes[p].parent].kind == kind_list {
+  let j = if p >= 0 && self.nodes[p].parent >= 0 && self.nodes[self.nodes[p].parent].kind == kind_list {
     p
   } else {
     i
   }
-  let e = self.drawn_of(j)
-  e.z = z
-}
-
-///|
-/// Node `i` drawn over what flies over everything (put_over's 2) built before it, as over the rest built before it:
-/// a page's bar, over the words and files sent flying from the composer to the list under it (on their way to a
-/// place under the bar they go under it, as their place is, not over it). Painted where it is, its clip theirs.
-pub fn Ctx::over_flying(self : Ctx, i : Int) -> Unit {
-  self.nodes[i].over_flying = true
+  self.drawn_of(j).z = z_siblings
 }
 
 ///|
@@ -664,18 +662,18 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     return true
   }
-  // (over a scrim where one is up; else in its place: put_over's 3)
-  if e.z == 3 && dr.scrims.is_empty() {
+  // (over a scrim, or the page's cover, where one is up; else in its place)
+  if (e.z == z_over_scrim && dr.scrims.is_empty()) || (e.z == z_over_cover && dr.covers.is_empty()) {
     e.z = 0
   }
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh)
-  if look.is_still() && e.z < 2 && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
+  if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
     return false
   }
   // (drawn otherwise than it is tapped: moved, or over everything, or cut)
-  let apart = !look.is_still() || e.z >= 2 || cutting
+  let apart = !look.is_still() || e.z >= z_flying || cutting
   if dr.mode == 0 && apart {
     if !e.only {
       // its tap rects, where it is laid out (what it would draw so is dropped)
@@ -693,12 +691,16 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       glass_paint.run_start = run_start
       glass_paint.run_len = run_len
     }
-    if e.z == 2 && !dr.overlaying {
+    if e.z == z_flying && !dr.overlaying {
       dr.overlay.push((i, alpha))
       return true
     }
-    if e.z == 3 && !dr.raising {
+    if e.z == z_over_scrim && !dr.raising {
       dr.raised.push((i, alpha))
+      return true
+    }
+    if e.z == z_over_cover && !dr.covering {
+      dr.over_cover.push((i, alpha))
       return true
     }
   }
@@ -838,8 +840,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   // over everything though it could not be put off (what holds it is drawn by a look of its own, or only drawn, or
   // cut: painted as it looks, where a look of ours is not one more pass): after the rest of its layer once that is
   // painted (raise_tops), where what holds it moved it to, as an editor's handles are
-  if e.z == 2 && !dr.overlaying {
-    self.paint_top(i0)
+  if e.z == z_flying && !dr.overlaying && dr.mode != mode_hits && self.ninst > i0 {
+    dr.flying_tops.push((i0, self.ninst))
   }
   true
 }
@@ -1014,7 +1016,7 @@ fn turn_insts(
 }
 
 ///|
-/// What flies over everything, drawn last, the window its clip (tapped already, where it is laid out).
+/// What is Flying put off (strata.mbt), drawn now, as it looks (tapped already, where it is laid out).
 fn Ctx::paint_overlays(self : Ctx) -> Unit {
   if dr.overlay.is_empty() {
     return
@@ -1032,7 +1034,7 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
 }
 
 ///|
-/// What is over a scrim (put_over's 3), once scrim `i` is painted: each as it looks, the window its clip, under what
+/// What is over a scrim (Ctx::stratum's OverScrim), once scrim `i` is painted: each as it looks, the window its clip, under what
 /// the scrim's layer holds. What no scrim painted took (its layer's scrim not painted after it), over everything.
 fn Ctx::paint_raised(self : Ctx) -> Unit {
   if dr.raised.is_empty() || dr.raising {
@@ -1061,22 +1063,67 @@ fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
 }
 
 ///|
-/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is over everything in it (`tops`) moved after all
-/// the rest painted so far, each as it was painted and in the order it was, the rest closed up in its order.
+/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is Flying that could not be put off and then what is
+/// over everything in it (`tops`: handles) moved after all the rest painted so far, each as it was painted and in the
+/// order it was, the rest closed up in its order.
 fn Ctx::raise_tops(self : Ctx) -> Unit {
+  self.raise_flying()
   if dr.tops.is_empty() {
     return
   }
+  self.raise_ranges(dr.tops)
+  dr.tops.clear()
+}
+
+///|
+/// What is Flying that could not be put off (`flying_tops`) moved after the rest painted so far; the `tops` painted
+/// before it is moved kept where they are now.
+fn Ctx::raise_flying(self : Ctx) -> Unit {
+  let r = dr.flying_tops
+  if r.is_empty() {
+    return
+  }
+  let n = self.ninst
+  let raised = r.fold(init=0, fn(s, x) { s + x.1 - x.0 })
+  // where an instance goes: one raised after the rest, in their order; one after the first raised closed up
+  fn moved(q : Int) -> Int {
+    if q < r[0].0 {
+      return q
+    }
+    let mut before = 0
+    let mut into = 0
+    for x in r {
+      if q >= x.0 && q < x.1 {
+        return n - raised + into + q - x.0
+      }
+      if x.1 <= q {
+        before = before + x.1 - x.0
+      }
+      into = into + x.1 - x.0
+    }
+    q - before
+  }
+  for k, t in dr.tops {
+    let to = moved(t.0)
+    dr.tops[k] = (to, to + t.1 - t.0)
+  }
+  self.raise_ranges(r)
+  r.clear()
+}
+
+///|
+/// Instances in `ranges` (in order, apart) moved after all the rest painted so far, the rest closed up in its order.
+fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
   let a = self.inst
   let raised : Array[Double] = []
-  for r in dr.tops {
+  for r in ranges {
     for q in (r.0 * inst_size)..<(r.1 * inst_size) {
       raised.push(a[q])
     }
   }
-  let mut to = dr.tops[0].0 * inst_size
-  for k, r in dr.tops {
-    let end = if k + 1 < dr.tops.length() { dr.tops[k + 1].0 } else { self.ninst }
+  let mut to = ranges[0].0 * inst_size
+  for k, r in ranges {
+    let end = if k + 1 < ranges.length() { ranges[k + 1].0 } else { self.ninst }
     for q in (r.1 * inst_size)..<(end * inst_size) {
       a[to] = a[q]
       to = to + 1
@@ -1087,9 +1134,8 @@ fn Ctx::raise_tops(self : Ctx) -> Unit {
     to = to + 1
   }
   if inst_owners.on {
-    inst_owners_raised(dr.tops, self.ninst)
+    inst_owners_raised(ranges, self.ninst)
   }
-  dr.tops.clear()
 }
 
 ///|

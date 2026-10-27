@@ -390,12 +390,13 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.across_seen.clear()
   c.glass_frame()
   c.paint(root, 1.0)
-  // what is over everything of the page wherever it was painted (an editor's handles), after the rest of it (a layer's
-  // after the rest of the layer: Ctx::paint); what flies over everything over them still
+  // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
+  // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
+  c.land_flying()
   c.raise_tops()
-  // (what is over a scrim no scrim painted after it took: over everything)
+  // (what is over a scrim or a cover none painted after it took: over everything)
   c.paint_raised()
-  c.paint_overlays()
+  c.paint_over_cover()
   c.raise_tops()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()

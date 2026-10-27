@@ -149,7 +149,7 @@ So:
 
 ### The library (`src/sf`)
 
-Parts, tokens, motion (its kinds, rules and presets: docs/motion.md), the viewers (Reader, Player, ViewerBar and the
+Parts, tokens, motion (its kinds, rules and presets: docs/motion.md), what is drawn over what (docs/strata.md), the viewers (Reader, Player, ViewerBar and the
 frame around them), and the **presenters**:
 
 - `@sf.menu`, `@sf.pick`, `@sf.panel` (a small panel of rows or fields), `@sf.confirm`, `@sf.ask`.

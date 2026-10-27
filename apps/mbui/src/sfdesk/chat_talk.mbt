@@ -5,7 +5,8 @@
 /// Chat `r`'s pane (ChatShown): its list running on under the composer (or, before its view is read, what waits for
 /// it), `over` it (the bar), and the composer at its foot (composer.mbt chat_composer: the room it takes the list's
 /// foot, among what is drawn over the list, with what is let go over the pane, `pane`);
-/// the words sent, as typed, till their row is in the list, and the files sent with them, over all of it.
+/// the words sent, as typed, till their row is in the list, and the files sent with them, over the composer and under
+/// the bar (@ui.Stratum).
 pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : Int, over : () -> Unit) -> Unit {
   let (view, read, error) = view_of_chat(src, r)
   let draft = r.station + ":" + r.session
@@ -32,23 +33,26 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
       flight_frame(c, draft)
     }
   }
-  over()
-  // a row of the 文件 tab carried over the pane: frosted under the composer (chat_layers.mbt)
-  if view is Some(_) {
-    drop_hint(c, pane)
-  }
-  c.layer(fn() {
+  // the composer, over the cover a row carried over the pane puts up (@ui.Stratum's OverCover: what it is let go into)
+  let composer = c.layer(fn() {
     c.spacer()
     @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape)
   })
-  |> ignore
+  c.stratum(composer, OverCover)
+  // the words sent, as typed, till their row is in the list, and the files sent with them, over the composer
+  flight_waiting(c, draft)
+  flight_files(c, draft)
+  // the bar, over what flies (its Bar)
+  over()
+  // a row of the 文件 tab carried over the pane: frosted over all of it but the composer (chat_layers.mbt)
+  if view is Some(_) {
+    drop_hint(c, pane)
+  }
   // over it, what is picked in the messages; a row let go over the pane, into the draft
   if view is Some(_) {
     chat_layers(c, src, r, draft, pane, room)
   }
   chat_drop(c, src, r.station, draft, pane)
-  flight_waiting(c, draft)
-  flight_files(c, draft)
 }
 
 ///|
