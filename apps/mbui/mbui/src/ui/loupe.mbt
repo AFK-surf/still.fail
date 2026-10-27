@@ -3,7 +3,7 @@
 // is picked in it by their handles, a long press's word slid on (app.mbt's handle_drag, word_drag), or anything that
 // asks for it this frame (Ctx::loupe). Drawn as the frame's painting ends, over everything: the frame's instances
 // under the finger copied, larger about where the finger reads (what it moves, over it), into the capsule, cut to it;
-// glass as the ground of its tint. Drawn only: nothing in it is pressed.
+// glass as the ground of its tint; a lens of liquid glass over it all. Drawn only: nothing in it is pressed.
 
 ///|
 /// Asked this frame: magnify where the finger is, `reach` over it (what a widget dragged by a finger asks while it is:
@@ -122,12 +122,38 @@ fn Ctx::paint_loupe(self : Ctx) -> Unit {
   push_clip_r(x0, y0, x0 + loupe_w, y0 + loupe_h, shape, smooth)
   self.transform_insts(i0, self.ninst, sx, sy, z, z, cx - sx, cy - sy, (x0, y0, x0 + loupe_w, y0 + loupe_h), shape, smooth)
   pop_clip()
-  // its rim
-  self.emit_rect(x0, y0, loupe_w, loupe_h, r, 0L, loupe_rim_w, loupe_rim, 1.0)
+  // over it a lens of liquid glass, as the bar's ball held is: what it shows bent at its rim, the rim lit (a capture of
+  // its own: what is under it, the copies)
+  // (glass drawn solid: none, what it shows as it is)
+  if glass_paint.solid {
+    return
+  }
+  let lens = Node::new()
+  lens.x = x0
+  lens.y = y0
+  lens.fw = loupe_w
+  lens.fh = loupe_h
+  lens.radius = r
+  glass_run_break()
+  self.emit_glass(lens, loupe_glass, 1.0)
+  glass_run_break()
 }
 
 ///|
-/// Its shadow (a floating thing's), and its rim's.
+/// The loupe's lens: clear, a touch of white, its rim bending what is under it as the bar's lens does.
+// kept across runs: a value (no field of it changes)
+let loupe_glass : Glass = Glass::liquid(
+  blur=0.0,
+  tint=0xFFFFFF0AL,
+  solid=0xFFFFFFFFL,
+  bezel=14.0,
+  refraction=10.0,
+  chroma=0.1,
+  adaptive=false,
+)
+
+///|
+/// Its shadow (a floating thing's).
 let loupe_shadow : Double = 14.0
 
 ///|
@@ -136,8 +162,3 @@ let loupe_shadow_y : Double = 4.0
 ///|
 let loupe_shadow_c : Int64 = 0x00000040L
 
-///|
-let loupe_rim_w : Double = 0.5
-
-///|
-let loupe_rim : Int64 = 0x00000033L
