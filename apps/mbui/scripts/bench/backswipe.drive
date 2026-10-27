@@ -1,0 +1,9 @@
+# 小屏, a finger: the system's back gesture from the left edge, half across, let go: the chat slides on out, the chats
+# under it.
+timeout 20000
+until 发消息
+wait 500
+log measure
+backswipe 195 400
+wait 1000
+exit

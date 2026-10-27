@@ -1,0 +1,8 @@
+# 小屏, a finger: a long chat's messages flung up once, till they stop.
+timeout 20000
+until 发消息
+wait 500
+log measure
+drag 195 640 0 -360 90
+wait 2500
+exit

@@ -1,0 +1,17 @@
+import {
+  "mbui/host",
+  "mbui/film",
+  "stillfail/sf",
+  "stillfail/sfkept",
+  "stillfail/sfapp",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+    },
+  },
+)

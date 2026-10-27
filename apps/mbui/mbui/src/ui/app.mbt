@@ -97,18 +97,19 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if fed {
     c.wants_frame = true
   }
-  let t3 = h_now()
+  let t3 = work_now()
   h_present(c.inst, c.ninst)
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
   c.trim_images()
-  let t4 = h_now()
+  let t4 = work_now()
   c.t_present = t4 - t3
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
   slow_probe(c, t, t3 - t0, t4 - t3)
+  perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
   c.motion_left = c.motion_owed()
@@ -212,12 +213,14 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }
-  let t0 = h_now()
+  // (what the frame does, for whoever measures it: perf.mbt)
+  perf_frame_start()
+  let t0 = work_now()
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
   // order it came, before anything reads it (messages.mbt)
   take_messages()
   // (the probe's: how long the messages took, slow_probe)
-  probe_msgs_ms.val = h_now() - t0
+  probe_msgs_ms.val = work_now() - t0
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
@@ -249,8 +252,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     building.val = true
     c.build_no = next_build()
     root = frame_build(c, w, h)
+    perf_at[3] = perf_at[3] + 1
     let built_layers = c.layers.length()
-    t1 = h_now()
+    t1 = work_now()
     // lists build their rows while laid out, and those see clicks too
     c.layout(root, 0.0, 0.0, w, h) |> ignore
     // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came after
@@ -321,7 +325,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   if scroll_logging() {
     c.log_scroll()
   }
-  let t2 = h_now()
+  let t2 = work_now()
   c.ninst = 0
   cycle_looks_begin()
   dr.tops.clear()
@@ -410,7 +414,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     Some(f) => f()
     None => ()
   }
-  let t3 = h_now()
+  let t3 = work_now()
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
   c.t_paint = t3 - t2

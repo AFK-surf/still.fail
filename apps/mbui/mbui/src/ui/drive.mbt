@@ -661,10 +661,12 @@ fn drive_frame(c : Ctx) -> Unit {
     soon(d.shot_at + shot_taker_ms)
   }
   if d.since >= 0.0 && d.at < d.steps.length() {
-    soon(d.since + d.timeout)
     let line = d.steps[d.at]
     if line.has_prefix("wait ") {
+      // (a pause ends at its own time, never timed out: one longer than the timeout woke at no moment past it)
       soon(d.since + number(line.unsafe_substring(start=5, end=line.length())))
+    } else {
+      soon(d.since + d.timeout)
     }
     // what it saw end wants a frame drawn after it
     if d.seen_frame >= 0 {

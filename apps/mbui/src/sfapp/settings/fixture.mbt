@@ -1862,6 +1862,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // a skill shared with the workspace's other stations, or no longer
     "skill.share" => {
       fx.skills_shared[text(p, "name")] = flag(p, "on")
+      fx_changed()
       Some(Ok(obj([])))
     }
     "cache.usage" =>
@@ -1902,10 +1903,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       )
     "drive.kept.clear" => {
       fx.drive_kept = 0.0
+      fx_changed()
       Some(Ok(Json::null()))
     }
     "cache.file.clear" => {
       fx.kept_cleared.push(text(p, "name"))
+      fx_changed()
       Some(Ok(Json::null()))
     }
     "machineSessions.list" => Some(Ok(obj([("sessions", [])])))

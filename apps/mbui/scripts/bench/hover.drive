@@ -1,0 +1,37 @@
+# 大屏, a mouse: the pointer passed down the sidebar's rows, one each 50 ms.
+timeout 20000
+until 新建对话
+wait 500
+log measure
+move 140 140
+wait 50
+move 140 170
+wait 50
+move 140 200
+wait 50
+move 140 230
+wait 50
+move 140 260
+wait 50
+move 140 290
+wait 50
+move 140 320
+wait 50
+move 140 350
+wait 50
+move 140 380
+wait 50
+move 140 410
+wait 50
+move 140 440
+wait 50
+move 140 470
+wait 50
+move 140 500
+wait 50
+move 140 530
+wait 50
+move 140 560
+wait 50
+wait 600
+exit

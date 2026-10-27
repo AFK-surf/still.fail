@@ -1,0 +1,7 @@
+# 小屏, a finger: a long chat open, nothing touched for 2 s (a phone's idle: scripts/appbench_phone.sh).
+timeout 20000
+until 发消息
+wait 500
+log measure
+wait 2000
+exit
