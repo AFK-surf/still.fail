@@ -110,8 +110,9 @@ test("station_destinations_survive_reload_and_reopening_focuses_the_existing_tab
   const other = 'drive:["ws/st2"]';
   const station = 'station:["ws/st1"]';
   const screen = 'screen:["ws/st1","desktop"]';
-  const kept = { tabs: [drive, other, station, screen], active: screen };
+  const adb = 'adb:["ws/st1"]';
+  const kept = { tabs: [drive, other, station, screen, adb], active: screen };
   assert.deepEqual(tabsOf(kept, AGENTS, false, null), { open: kept.tabs, shown: screen });
   assert.deepEqual(changed(kept, AGENTS, false, null, open(drive)), { tabs: kept.tabs, active: drive });
-  assert.deepEqual(tabsOf({ tabs: ['drive:[]', 'station:[""]', 'drive:["ws/st1", "extra"]'] }, AGENTS, false, null), { open: [] });
+  assert.deepEqual(tabsOf({ tabs: ['drive:[]', 'station:[""]', 'adb:[]', 'drive:["ws/st1", "extra"]'] }, AGENTS, false, null), { open: [] });
 });

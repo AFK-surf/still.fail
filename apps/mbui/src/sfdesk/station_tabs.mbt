@@ -10,7 +10,7 @@ fn station_tab_key(kind : String, station : String, screen? : String) -> String 
 
 ///|
 fn station_tab(tab : String) -> (String, String, String)? {
-  for kind in ["screen", "drive", "station"] {
+  for kind in ["screen", "drive", "station", "adb"] {
     let prefix = kind + ":"
     if tab.has_prefix(prefix) {
       let value = @json.parse(tab.substring(start=prefix.length())) catch { _ => return None }
@@ -45,6 +45,9 @@ pub fn station_page_beside(src : Source, r : ChatRef, p : Page) -> Bool {
       station_tab_key("drive", at.station)
     }
     Setting(Station(station)) => station_tab_key("station", station)
+    // this device's adb lent to its agents (a chat's card of it, its row on the station's page): beside the chat too,
+    // not the settings' place in its place (the sidebar and the page swapped, and swapped back after)
+    Setting(AdbShare(station)) => station_tab_key("adb", station)
     _ => return false
   }
   side_change(src, r, "open", Some(tab))
@@ -68,7 +71,12 @@ fn station_tab_name(src : Source, tab : String) -> String? {
     }
     _ => ()
   }
-  Some(name + " · " + @sf.t(if kind == "drive" { "web-pages.drive.title" } else { "android-chat.station.details" }))
+  let what = match kind {
+    "drive" => "web-pages.drive.title"
+    "adb" => "android-misc.adb.title"
+    _ => "android-chat.station.details"
+  }
+  Some(name + " · " + @sf.t(what))
 }
 
 ///|
@@ -90,6 +98,14 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
         on_close=fn() { side_change(src, r, "close", Some(tab)) })
     }
     "drive" => files_tab(c, src, w.id, tabs_key(r), station, only_station=true, scope=station_files_scope(r, station))
+    // (the settings' own page, not one for every frame yet: its head with no back, the tab is the way to close it)
+    "adb" => {
+      let core = settings_core(src, w)
+      let here = @settings.here_of(core, w.id, w.name)
+      @settings.frame(core, here)
+      @settings.wide_deep.val = false
+      @settings.page(c, core, here, AdbShare(station))
+    }
     _ => setting_route(c, src, w, Station(station), frame) |> ignore
   }
   true

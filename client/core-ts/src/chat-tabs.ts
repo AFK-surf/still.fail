@@ -43,9 +43,10 @@ function isScreen(key: string): boolean {
   }
 }
 
-/** Station pages opened beside a chat, keyed by the station rather than its current folder. */
+/** Station pages opened beside a chat, keyed by the station rather than its current folder: its files, its page, this
+ *  device's adb lent to its agents (`adb:`, the app's). */
 function isStationPage(key: string): boolean {
-  const prefix = key.startsWith("drive:") ? "drive:" : key.startsWith("station:") ? "station:" : null;
+  const prefix = ["drive:", "station:", "adb:"].find((p) => key.startsWith(p)) ?? null;
   if (prefix === null) return false;
   try {
     const v: unknown = JSON.parse(key.slice(prefix.length));
