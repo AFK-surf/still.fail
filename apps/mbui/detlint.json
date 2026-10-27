@@ -212,7 +212,7 @@
     "globals": {},
     "style-literal": {
       "src/coredemo/main.mbt": 39,
-      "src/gallery/view.mbt": 66,
+      "src/gallery/view.mbt": 62,
       "src/sf/glass.mbt": 4,
       "src/sf/markdown.mbt": 44,
       "src/sf/parts.mbt": 68,
@@ -258,7 +258,7 @@
     },
     "box-loose": {
       "src/coredemo/main.mbt": 20,
-      "src/gallery/view.mbt": 33,
+      "src/gallery/view.mbt": 32,
       "src/sf/avatar.mbt": 1,
       "src/sf/glass.mbt": 1,
       "src/sf/markdown.mbt": 31,
