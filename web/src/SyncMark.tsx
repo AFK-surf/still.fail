@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { Svg } from "@stillfail/ui/icons.tsx";
 import { Tip } from "@stillfail/ui/parts.tsx";
 import { LATER_MS } from "@stillfail/ui/waiting.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { motionMs, play } from "@stillfail/ui/motion.ts";
 import * as css from "./SyncMark.css.ts";
 
 /** A turn; how long it takes to come to rest, at least and at most; how far on in that the arrows start to go; how
@@ -87,11 +87,11 @@ export function SyncMark({ syncing, size = 32, mark = 16 }: { syncing: string | 
 
 /** The mark's turn on `el` taken over where it is and as fast as it goes, slowing evenly to rest on the next half turn
  *  on (two arrows: the same turned half round) without going back; how long that takes (none where it is at rest there
- *  already, or with motion reduced). As mbui's `sync_rest`. */
+ *  already). As mbui's `sync_rest`. */
 function settleTurn(el: HTMLElement): number {
   const turn = el.getAnimations()[0];
   const t = turn?.currentTime;
-  if (!turn || typeof t !== "number" || document.querySelector(STILL)) {
+  if (!turn || typeof t !== "number") {
     turn?.cancel();
     return 0;
   }
@@ -108,8 +108,8 @@ function settleTurn(el: HTMLElement): number {
   const ms = Math.min(SETTLE_MOST, Math.max(SETTLE_LEAST, speed > 0 ? (2 * (to - from)) / speed : SETTLE_MOST));
   // (the cubic as an ease: leaving at its speed, a third of the way along)
   const lead = (ms * speed) / (to - from) / 3;
-  el.animate([{ transform: `rotate(${from}rad)` }, { transform: `rotate(${to}rad)` }], {
+  play(el, [{ transform: `rotate(${from}rad)` }, { transform: `rotate(${to}rad)` }], {
     duration: ms, easing: `cubic-bezier(0.3333, ${lead}, 0.6667, 1)`,
   });
-  return ms;
+  return motionMs(ms);
 }
