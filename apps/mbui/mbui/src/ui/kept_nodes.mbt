@@ -48,8 +48,10 @@ priv struct RowNodes {
   mut scale : Double
   mut reads_out : Bool
   mut lit_all : Bool
-  /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`)
+  /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`), and the theme it
+  /// was built in there (its colours and sizes, what it may have taken of them as it was built)
   mut reads_all : Bool
+  mut theme : Theme?
   mut ok : Bool
   mut why : String
   /// what its build said of the frame: said.mbt's build lists; what is read out of it, what is hidden from that; its
@@ -333,6 +335,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     reads_out: false,
     lit_all: false,
     reads_all: false,
+    theme: None,
     ok: false,
     why: "",
     said: [],
@@ -452,6 +455,9 @@ fn Ctx::row_laid(
     !rn.watch.is_stale() &&
     rn.iw == iw &&
     rn.reads_all == st.rows_read &&
+    // (one that shows only what it read kept however its list is built: but not in another theme, light or dark, the
+    // one its list is built in the same while nothing of it changed: what is no signal of its own)
+    (!st.rows_read || (rn.theme is Some(th) && physical_equal(th, st.theme))) &&
     (st.rows_read || rn.count == st.count) &&
     rn.seed == st.seed &&
     rn.owner == st.owner &&
@@ -479,6 +485,7 @@ fn Ctx::row_laid(
   rn.iw = iw
   rn.count = st.count
   rn.reads_all = st.rows_read
+  rn.theme = if st.rows_read { Some(st.theme) } else { None }
   rn.seed = st.seed
   rn.owner = st.owner
   rn.bones = st.bones

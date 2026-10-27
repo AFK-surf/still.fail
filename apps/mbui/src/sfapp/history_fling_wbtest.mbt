@@ -122,11 +122,26 @@ test "touch wide: an agent's history as the agent writes builds again only the r
     }
   }
   let history = @signals.signal(with_live("在看"))
+  // (dark as chosen, from when it is)
+  let chose_dark = @signals.signal(false)
   let src : Source = {
     ..base,
     topic: fn(name, params) {
       if name == "history" {
         { value: Some(history.get()), error: None, version: 1 }
+      } else if name == "prefs" && chose_dark.get() {
+        let p = (base.topic)(name, params)
+        match p.value {
+          Some(Object(m)) => {
+            let o : Map[String, Json] = {}
+            for k, v in m {
+              o[k] = v
+            }
+            o["appearance"] = "dark"
+            { ..p, value: Some(Json::object(o)) }
+          }
+          _ => p
+        }
       } else {
         (base.topic)(name, params)
       }
@@ -149,6 +164,13 @@ test "touch wide: an agent's history as the agent writes builds again only the r
     t.run_for(history_words_step_ms)
     assert_true(t.find(w) is Some(_), msg="\{w} not shown")
   }
+  // dark chosen as they come: the rows kept built again in its colours (each frame that kept rows built again keeping
+  // none must come out the same)
+  chose_dark.set(true)
+  t.run_for(history_words_step_ms)
+  assert_true(@sf.theme().dark)
+  chose_dark.set(false)
+  t.run_for(history_words_step_ms)
   // as a host draws them (no frame built again keeping none to hold it, as a Tester does) and as the core tells them,
   // between frames (not a step of the test's, whose first frame is built anew): of the history's rows, only the one the
   // words are in built for each, the rest kept however the frame is built
