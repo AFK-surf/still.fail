@@ -236,7 +236,7 @@ fn ClipboardRead::outside_id(self : ClipboardRead) -> Int {
 ///|
 /// What the clipboard held, once read: None while it is read, and once taken (taken once: keep it).
 pub fn ClipboardRead::got(self : ClipboardRead) -> Clipboard? {
-  if self.taken.val {
+  if self.taken.val || !answer_here(outside_clip, self.outside_id()) {
     return None
   }
   let got = match self.host {
@@ -253,6 +253,7 @@ pub fn ClipboardRead::got(self : ClipboardRead) -> Clipboard? {
   }
   if got is Some(c) {
     self.taken.val = true
+    answer_taken(outside_clip, self.outside_id())
     outside_end(outside_clip, self.outside_id())
     clip_said(c)
   }

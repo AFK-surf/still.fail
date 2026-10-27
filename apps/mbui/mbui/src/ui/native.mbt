@@ -481,7 +481,7 @@ pub fn NativeView::grabbing(self : NativeView) -> Bool {
 /// A frame grabbed: None while it is grabbed (or none was asked), Some(png) once here (taken once), Some(empty) when it
 /// could not be.
 pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
-  if self.id == 0 {
+  if self.id == 0 || !answer_here(outside_grab, self.id) {
     return None
   }
   let got = match h_view_text(self.id, 2) {
@@ -490,6 +490,7 @@ pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
     _ => None
   }
   if got is Some(_) {
+    answer_taken(outside_grab, self.id)
     outside_end(outside_grab, self.id)
   }
   got

@@ -86,6 +86,7 @@ pub fn pick_photos(srcs : Array[String]) -> Pick? {
 /// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
 pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
   if self.hosts.is_empty() {
+    answer_here(outside_pick, self.fake + 1) |> ignore
     let got = self.faked()
     if got is Some(_) {
       outside_end(outside_pick, self.fake + 1)
@@ -93,10 +94,11 @@ pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
     return got
   }
   for i, h in self.hosts {
-    if self.got[i] is None {
+    if self.got[i] is None && answer_here(outside_pick, h.id()) {
       match h.files() {
         Some(files) => {
           self.got[i] = Some(files)
+          answer_taken(outside_pick, h.id())
           outside_end(outside_pick, h.id())
         }
         None => ()
@@ -376,8 +378,12 @@ fn FakeHost::gallery_read_end(self : FakeHost, id : Int) -> Unit {
 ///|
 /// Its photos once read (empty: none, or not allowed), None while it reads; taken once (@hostapi.GalleryRead::photos).
 pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? {
+  if !answer_here(outside_gallery, self.host.id()) {
+    return None
+  }
   let got = self.host.photos()
   if got is Some(_) {
+    answer_taken(outside_gallery, self.host.id())
     outside_end(outside_gallery, self.host.id())
   }
   got

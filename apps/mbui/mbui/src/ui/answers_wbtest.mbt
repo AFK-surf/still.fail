@@ -35,6 +35,29 @@ test "a pick is waited on from its ask until its answer is taken, the frame afte
 }
 
 ///|
+test "what waits on a pick follows its answer, as a signal: a computed of it worked out again as the answer comes" {
+  let t = Tester::new(fn(c) { c.text("files", wrap=false) |> ignore })
+  t.picks([("a.txt", b"hi")])
+  let p = pick(Files).unwrap()
+  let runs = Ref(0)
+  let got = @signals.computed(fn(_) {
+    runs.val += 1
+    match p.files() {
+      Some(files) => files.length()
+      None => -1
+    }
+  })
+  assert_eq(got.get(), -1)
+  // (nothing changed: not worked out again)
+  assert_eq(got.get(), -1)
+  assert_eq(runs.val, 1)
+  // the answer comes with the next frame, as a host's event brings it: the computed follows it
+  t.draw()
+  assert_eq(got.get(), 1)
+  assert_eq(runs.val, 2)
+}
+
+///|
 test "marks drawn are waited on until the PNG is taken" {
   let m : Ref[MarkedImage?] = Ref(None)
   let png : Ref[Bytes?] = Ref(None)
