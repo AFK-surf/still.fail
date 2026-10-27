@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfcore"
+
+import {
+  "stillfail/core",
+}
+
+// Values
+pub fn begin() -> Unit
+
+pub fn env_text(String) -> String
+
+pub fn frame(@core.Sub) -> Unit
+
+pub fn sign_in() -> Unit
+
+pub fn start() -> Bool
+
+pub let started_by : Array[String]
+
+pub let state : SignIn
+
+pub fn str(Json?, String) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct SignIn {
+  mut status : String
+  mut busy : Bool
+  mut auto : Bool
+  mut login : Bool
+  mut by_hand : String
+  mut account : String
+}
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/shelf"
+
+import {
+  "mbui/ui",
+}
+
+// Values
+pub fn view(@ui.Ctx, Source) -> Unit
+
+// Errors
+
+// Types and methods
+type App
+
+pub(all) struct BookInfo {
+  id : String
+  title : String
+  author : String
+  chapters : Int32
+  cover : String?
+  place : (Int32, Int32)?
+  read : Double?
+}
+
+type Prefs
+
+type Reading
+
+pub(all) struct Source {
+  books : () -> Result[Array[BookInfo], String]?
+  toc : (String) -> Array[String]?
+  chapter : (String, Int32) -> Result[Array[@ui.Block], String]?
+  save_place : (String, Int32, Int32, Double) -> Unit
+  now : () -> Double
+}
+
+// Type aliases
+
+// Traits

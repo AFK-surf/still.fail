@@ -1,0 +1,78 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/videos"
+
+import {
+  "mbui/ui",
+}
+
+// Values
+pub fn view(@ui.Ctx, Source) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct Detail {
+  kind : Kind
+  title : String
+  original : String
+  year : Int32?
+  plot : String
+  genres : Array[String]
+  duration : Double
+  place : Place?
+  seasons : Array[Season]
+}
+
+pub(all) struct Episode {
+  id : String
+  episode : Int32
+  title : String
+  duration : Double
+  place : Place?
+}
+
+pub(all) enum Kind {
+  Movie
+  Show
+} derive(Eq)
+
+pub(all) struct Library {
+  recent : Array[Title]
+  movies : Array[Title]
+  shows : Array[Title]
+}
+
+pub(all) struct Place {
+  position : Double
+  done : Bool
+}
+
+pub(all) struct Season {
+  season : Int32
+  episodes : Array[Episode]
+}
+
+pub(all) struct Source {
+  library : () -> Result[Library, String]?
+  detail : (String) -> Result[Detail, String]?
+  poster : (Title) -> String
+  play : (String, Double) -> Unit
+}
+
+type State
+
+pub(all) struct Title {
+  id : String
+  kind : Kind
+  title : String
+  year : Int32?
+  thumbhash : String
+  place : Place?
+  seasons : Int32
+  episodes : Int32
+  unwatched : Int32
+}
+
+// Type aliases
+
+// Traits

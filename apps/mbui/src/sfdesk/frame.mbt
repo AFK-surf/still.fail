@@ -632,8 +632,9 @@ pub fn frame(
   let top = bars.top
   // (the cards beside the column of the system's glass to the window's foot but the home indicator's own line: what
   // is in them keeps its padding over it; rail_native.mbt)
-  // (down the side, the cards to the column's own foot, the home indicator's line under their ground: cards_foot)
-  let foot = if @sf.native_side() { dmin(bars.bottom, cards_foot) } else { bars.bottom }
+  // (down the side, the cards to the column's own foot, the home indicator's line under their ground: cards_foot; the
+  // soft keyboard up, the window ends where it starts plus the bars' foot: the cards end on it as it rises past that)
+  let foot = if @sf.native_side() { dmin(bars.bottom, cards_foot + c.ime_inset()) } else { bars.bottom }
   let inset = @ui.window_inset()
   let peek_r = rail_left() - bar_gap_now() + (if wide.peeking.get() { s } else { 0.0 })
   // (under the window's buttons where they are the system's, at its left: macOS's)

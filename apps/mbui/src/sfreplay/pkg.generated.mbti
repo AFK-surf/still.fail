@@ -1,0 +1,92 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfreplay"
+
+import {
+  "mbui/ui",
+  "stillfail/core",
+  "stillfail/sfbase",
+}
+
+// Values
+pub fn app(@ui.Ctx) -> Unit
+
+pub fn e2e_data() -> Bytes
+
+pub fn e2e_doc() -> Bytes
+
+pub fn e2e_photo() -> Bytes
+
+pub let frame_ms : Double
+
+pub fn orders((UInt32) -> String raise) -> Unit raise
+
+pub fn read_trace(String) -> String?
+
+pub fn screen_sum(@ui.Tester) -> String
+
+pub let seeds : Array[UInt32]
+
+pub fn source() -> @sfbase.Source
+
+pub fn trace(String) -> String
+
+// Errors
+
+// Types and methods
+pub struct Flow {
+  r : @core.Replay
+  t : @ui.Tester
+  strict : Bool
+  // private fields
+}
+pub fn Flow::answer_taken(Self, String) -> Double
+pub fn Flow::answered(Self, String, Int32) -> Unit
+pub fn Flow::back(Self) -> Unit
+pub fn Flow::before(Self, String) -> Unit
+pub fn Flow::check(Self, Bool, String) -> Unit
+pub fn Flow::clear(Self) -> Unit
+pub fn Flow::compose(Self, String) -> Unit
+pub fn Flow::core(Self) -> Unit
+pub fn Flow::drag(Self, String, Double, Double, steps? : Int32) -> Unit
+pub fn Flow::drag_at(Self, Double, Double, Double, Double, steps? : Int32) -> Unit
+pub fn Flow::end(Self, unmade? : Array[String]) -> String
+pub fn Flow::enter(Self) -> Unit
+pub fn Flow::field(Self, String) -> Unit
+pub fn Flow::gone(Self, String) -> Unit
+pub fn Flow::hold(Self, String, Double) -> Unit
+pub fn Flow::hover(Self, String) -> Unit
+pub fn Flow::key(Self, String) -> Unit
+pub fn Flow::message_taken(Self, (Json) -> Bool) -> Double
+pub fn Flow::no_notice(Self, String) -> Unit
+pub fn Flow::noticed(Self, String) -> Unit
+pub fn Flow::open_page(Self, @sfbase.Page) -> Unit
+pub fn Flow::paste(Self, String) -> Unit
+pub fn Flow::paste_n(Self, Int32, String) -> Unit
+pub fn Flow::peer(Self, String) -> Unit
+pub fn Flow::peer_aside(Self, String) -> Unit
+pub fn Flow::resize(Self, Double, Double) -> Unit
+pub fn Flow::rest_passed(Self, String) -> Bool
+pub fn Flow::right_click(Self, String) -> Unit
+pub fn Flow::run_for(Self, Double) -> Unit
+pub fn Flow::run_to(Self, Double) -> Unit
+pub fn Flow::run_to_rest(Self, String) -> Unit
+pub fn Flow::see(Self, String) -> Unit
+pub fn Flow::see_n(Self, Int32, String) -> Unit
+pub fn Flow::share_files(Self, Array[String]) -> Unit raise
+pub fn Flow::share_in(Self, String, title? : String) -> Unit
+pub fn Flow::shrinks(Self, String, to~ : Double, ease~ : @ui.Ease, ms~ : Double, rest~ : Double) -> Unit
+pub fn Flow::start(String, seed? : UInt32, drop? : Array[String], w? : Double, h? : Double, env? : Array[(String, String)], platform? : Int32) -> Self
+pub fn Flow::tap(Self, String, top? : Bool) -> Unit
+pub fn Flow::tap_at(Self, Double, Double) -> Unit
+pub fn Flow::tap_notice(Self, String) -> Unit
+pub fn Flow::tap_now(Self, String, top? : Bool) -> Double
+pub fn Flow::toast_gone(Self) -> Unit
+pub fn Flow::type_text(Self, String) -> Unit
+pub fn Flow::until(Self, () -> Bool) -> Unit
+pub fn Flow::until_moving(Self, String) -> Double
+pub fn Flow::wheel(Self, Double) -> Unit
+pub fn Flow::wheel_at(Self, String, Double) -> Unit
+
+// Type aliases
+
+// Traits

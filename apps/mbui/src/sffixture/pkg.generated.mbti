@@ -1,0 +1,619 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sffixture"
+
+import {
+  "mbui/kit",
+  "mbui/ui",
+  "moonbitlang/core/ref",
+  "stillfail/sfbase",
+}
+
+// Values
+pub fn agent(String, String) -> Json
+
+pub fn ago(String, String) -> Json
+
+pub let ana : Json
+
+pub fn by_agent(String, String, String) -> Json
+
+pub fn by_person(String) -> Json
+
+pub fn decide_fixture_call(String) -> Result[Json, Json]?
+
+pub fn decide_fixture_topic(Fixture, String, Map[String, Json]) -> Json??
+
+pub fn decide_mode(String) -> Bool
+
+pub fn decided_json(String) -> Json
+
+pub let done_state : (String, String, String)
+
+pub fn file(String, Int32, Int32, Int32) -> Json
+
+pub let file_links_answer : String
+
+pub let file_links_md : Json
+
+pub fn film_file(String, Int32, Int32, Int32, Int32, Int32) -> Json
+
+pub fn fix_agent() -> Json
+
+pub let fix_answer_ms : Double
+
+pub fn fix_attention_marks() -> Json
+
+pub let fix_browse : FixBrowse
+
+pub fn fix_browse_changed() -> Unit
+
+pub fn fix_browse_do(Fixture?, String, String, Json) -> Result[Json, Json]
+
+pub fn fix_browse_folder(String, String, String) -> Json
+
+pub let fix_browse_prefs : Array[String]
+
+pub fn fix_browse_prefs_into(Map[String, Json]) -> Unit
+
+pub fn fix_browse_prefs_set(Json) -> Bool
+
+pub fn fix_browse_reset() -> Unit
+
+pub fn fix_browse_stations(Fixture, String) -> Json
+
+pub fn fix_browse_step(Fixture?, String, Json) -> Result[Json, Json]
+
+pub fn fix_browse_topic(Fixture, String, Map[String, Json]) -> Json?
+
+pub fn fix_browse_with_drive(Fixture, Json?, String) -> Json?
+
+pub fn fix_chat(String) -> FixChat
+
+pub fn fix_chat_jobs() -> Json
+
+pub let fix_chats : Map[String, FixChat]
+
+pub let fix_clock : @ref.Ref[(() -> Double)?]
+
+pub fn fix_compose_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fix_compose_view(Fixture, String) -> Json
+
+pub let fix_composers : Map[String, Array[Json]]
+
+pub fn fix_context_actions(Json) -> Json
+
+pub fn fix_crowded_frequent() -> Json
+
+pub fn fix_crowded_model(String, String, String, String, Array[String]) -> Json
+
+pub let fix_crowded_models : Array[String]
+
+pub let fix_ctx : @ref.Ref[@ui.Ctx?]
+
+pub let fix_decided : Map[Int32, Json]
+
+pub fn fix_decisions(String) -> Json
+
+pub fn fix_deliver(String, String) -> Unit
+
+pub let fix_deliver_ms : Double
+
+pub fn fix_detailed_chat(Json) -> Json
+
+pub let fix_docs : String
+
+pub fn fix_download_id(FixDownload) -> String
+
+pub fn fix_download_shown(FixDownload) -> Json
+
+pub let fix_download_step_ms : Double
+
+pub let fix_downloads : Array[FixDownload]
+
+pub fn fix_draft_ref(String, String, Bool, Double, String, Bool) -> Unit
+
+pub let fix_drafts : Map[String, Json]
+
+pub fn fix_drive_downloads(String, String) -> Unit
+
+pub let fix_due : Array[() -> Unit]
+
+pub fn fix_entry(String, Bool, Int32, String) -> Json
+
+pub fn fix_every_transfer(String, String, String) -> Unit
+
+pub fn fix_ext(String) -> String
+
+pub let fix_fetches : Array[(String, Json)]
+
+pub fn fix_fill_prefs_into(Map[String, Json]) -> Unit
+
+pub fn fix_fill_prefs_set(Json) -> Unit
+
+pub fn fix_film_entries() -> Array[Json]
+
+pub let fix_films : String
+
+pub fn fix_folder(String, String) -> Array[Json]
+
+pub fn fix_folder_json(String, String) -> Json
+
+pub let fix_folders : Map[String, Array[Json]]
+
+pub fn fix_frequent() -> Json
+
+pub fn fix_history() -> Json
+
+pub let fix_home : String
+
+pub fn fix_job(String) -> Json
+
+pub let fix_keeping : Array[FixKeeping]
+
+pub fn fix_keeping_id(FixKeeping) -> String
+
+pub fn fix_keeping_message(String, String) -> Unit
+
+pub fn fix_keeping_reset() -> Unit
+
+pub fn fix_keeping_shown(FixKeeping) -> Json
+
+pub fn fix_kind(String) -> String
+
+pub fn fix_later(Double, () -> Unit) -> Unit
+
+pub fn fix_letters() -> Json
+
+pub let fix_letters_link : String
+
+pub fn fix_letters_many() -> Json
+
+pub fn fix_meter(String, Int32, String, String, String) -> Json
+
+pub fn fix_model(String) -> Json
+
+pub fn fix_new_chat(Fixture) -> Json
+
+pub fn fix_no_agent(Json) -> Json
+
+pub let fix_novel : @ref.Ref[String?]
+
+pub let fix_outside : Array[(String, String, Bool)]
+
+pub fn fix_own(Array[Json]) -> Array[Json]
+
+pub fn fix_pick() -> Json
+
+pub let fix_places : Map[String, Json]
+
+pub fn fix_preview() -> Json
+
+pub let fix_put_up : Map[String, String]
+
+pub let fix_reads : Array[Json]
+
+pub fn fix_relay_places() -> Json
+
+pub let fix_replied : Map[Int32, String]
+
+pub fn fix_runtime_of(String) -> String
+
+pub let fix_serial : @ref.Ref[Int32]
+
+pub let fix_service_css : String
+
+pub let fix_service_html : String
+
+pub fn fix_session_pick() -> Json
+
+pub let fix_shared : (String, String?)
+
+pub fn fix_split_tabs() -> Json
+
+pub let fix_srt : String
+
+pub fn fix_station(String) -> Json
+
+pub let fix_stream_ids : @ref.Ref[Int32]
+
+pub let fix_threads : Map[Int32, String]
+
+pub fn fix_tick(Fixture) -> Unit
+
+pub let fix_timers : Array[(Double, () -> Unit)]
+
+pub fn fix_transfer(Json) -> Unit
+
+pub let fix_transfers : Array[Json]
+
+pub let fix_turn_end_ms : Double
+
+pub let fix_unsaid : Array[(Double, () -> Unit)]
+
+pub let fix_vault : @ref.Ref[String]
+
+pub fn fix_with_letters(Json) -> Json
+
+pub fn fix_with_syncing(Json) -> Json
+
+pub fn fix_with_trouble(Json, Map[String, Json]) -> Json
+
+pub fn fix_write(Fixture, String) -> FixWrite
+
+pub let fix_writes : Map[String, FixWrite]
+
+pub let fix_xshared : Map[String, Bool]
+
+pub fn fixture(String) -> @sfbase.Source
+
+pub fn fixture_browse_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_card_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_chat_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_chat_tabs(String) -> Map[String, Json]
+
+pub fn fixture_chat_topic(Fixture, String, Map[String, Json]) -> Json?
+
+pub fn fixture_chats(Fixture, Map[String, Json]) -> Json?
+
+pub let fixture_code : String
+
+pub let fixture_csv : String
+
+pub fn fixture_days(Fixture) -> Array[Json]
+
+pub fn fixture_download_read(Json, (Result[(Json, Bytes), Json]) -> Unit) -> Bool
+
+pub fn fixture_downloads_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_downloads_topic() -> Json
+
+pub fn fixture_drive_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_drive_read(String, Json) -> Result[(Json, Bytes), Json]?
+
+pub fn fixture_drive_topic(Fixture, String, Map[String, Json]) -> Json?
+
+pub fn fixture_face((String, String, Bool, Array[Int32], Double)) -> Json
+
+pub let fixture_face_gz : String
+
+pub let fixture_face_list : Array[(String, String, Bool, Array[Int32], Double)]
+
+pub let fixture_face_sha : String
+
+pub fn fixture_faces(Map[String, String]) -> Json
+
+pub fn fixture_fetch(String, Json, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
+
+pub fn fixture_file(String) -> String
+
+pub fn fixture_file_peek(String) -> Json
+
+pub fn fixture_file_png(String) -> Bytes
+
+pub fn fixture_fleet(Fixture) -> Json
+
+pub fn fixture_fonts(Map[String, String]) -> Json
+
+pub fn fixture_fonts_call(Fixture, String, Json, (Result[Json, Json]) -> Unit) -> Bool
+
+pub fn fixture_fonts_read(Fixture, String) -> Result[(Json, Bytes), Json]?
+
+pub fn fixture_fonts_topic(Fixture) -> Json
+
+pub let fixture_html : String
+
+pub fn fixture_image_near(Map[String, Json]) -> Json?
+
+pub fn fixture_kept(String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?
+
+pub fn fixture_keymap(Map[String, Array[String]]) -> Json
+
+pub fn fixture_keys(Map[String, Array[String]]) -> Json
+
+pub fn fixture_keys_set(Map[String, Array[String]], Json) -> Json
+
+pub fn fixture_link_card(String, Map[String, Json]) -> Json?
+
+pub fn fixture_link_parse(String) -> Json
+
+pub fn fixture_link_preview(String) -> Json
+
+pub fn fixture_markdown() -> String
+
+pub let fixture_md : String
+
+pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
+
+pub fn fixture_new_topic(Fixture, String) -> Json?
+
+pub fn fixture_pdf() -> Bytes
+
+pub fn fixture_peek((Json, Bytes?) -> Unit) -> Int32
+
+pub let fixture_pictures : Map[String, String]
+
+pub fn fixture_play_read(Json, (Result[(Json, Bytes), Json]) -> Unit) -> Bool
+
+pub fn fixture_png(Int32, Int32) -> Bytes
+
+pub fn fixture_preview(String) -> Unit
+
+pub fn fixture_queue(Fixture, Json?) -> Json?
+
+pub fn fixture_queue_done(Fixture, String, Json, (Result[Json, Json]) -> Unit) -> (Result[Json, Json]) -> Unit
+
+pub fn fixture_rail_card(Map[String, Json]) -> Json?
+
+pub fn fixture_reset() -> Unit
+
+pub fn fixture_search(Fixture, Map[String, Json]) -> Json?
+
+pub fn fixture_service_topic(Fixture, String, Map[String, Json]) -> Json?
+
+pub fn fixture_share_call(String, Json) -> Result[Json, Json]?
+
+pub fn fixture_share_topic(Map[String, Json]) -> Json?
+
+pub fn fixture_station_drive(Bool) -> Json
+
+pub fn fixture_station_member() -> Json
+
+pub fn fixture_station_overview() -> Json
+
+pub fn fixture_stations_way(Json?) -> Json?
+
+pub fn fixture_stream(String, Json, (Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit) -> Int32
+
+pub fn fixture_tabs_ask(Fixture, String, Json?, Json?) -> Json
+
+pub fn fixture_tabs_call(Fixture, String, Json) -> Result[Json, Json]
+
+pub fn fixture_tabs_shown(String) -> Map[String, Json]
+
+pub fn fixture_topic(Fixture, String, Map[String, Json]) -> @sfbase.Topic
+
+pub fn fixture_topic_inner(Fixture, String, Map[String, Json]) -> Json?
+
+pub fn fixture_update(String) -> Unit
+
+pub fn fixture_updates(ms? : Double) -> Unit
+
+pub let fixture_viz_html : String
+
+pub fn fixture_with_tabs(Fixture, Map[String, Json], Json?) -> Json?
+
+pub fn found_item(String, String, String, String, String, Map[String, Json]) -> Json
+
+pub fn found_mark(Int32, Int32) -> Json
+
+pub fn found_marks(String, String) -> Json
+
+pub fn found_message(Int32, String, String, String, String) -> Json
+
+pub fn found_time(String) -> Json
+
+pub let fx_key_actions : Array[(String, String, Array[String], Array[String], String)]
+
+pub fn fx_key_label(String, Bool) -> String
+
+pub fn fx_keys_of(Map[String, Array[String]], (String, String, Array[String], Array[String], String)) -> Array[String]
+
+pub let going_up_picture : Json
+
+pub fn held_topics(@sfbase.Source, Array[String]) -> @sfbase.Source
+
+pub fn kept_chat(String, () -> Json) -> Json
+
+pub let kept_chats : Map[String, Json]
+
+pub fn last(String) -> Json
+
+pub fn login_chat(String, String, Int32, station? : String, name? : String) -> Json
+
+pub fn login_job(Json, String, String, String, Int32?, Int32) -> Json
+
+pub fn login_message(Json, Int32, String, String, Int32) -> Json
+
+pub fn login_search(String) -> Json
+
+pub fn long_chat(Int32) -> Json
+
+pub fn long_job() -> Json
+
+pub let long_reply : String
+
+pub fn made_chat(String) -> Json
+
+pub let md_answer : String
+
+pub let me : Json
+
+pub fn msg(Int32, String, Json, String, String, Map[String, Json]) -> Json
+
+pub let new_fix : NewFix
+
+pub fn novel_text() -> String
+
+pub fn outgoing_json(String, Json, String, String) -> Json
+
+pub let peeks_answer : String
+
+pub fn person(String, String, Bool) -> Json
+
+pub fn play_fixture(String) -> (@sfbase.DriveAt, @kit.MediaStatus?)?
+
+pub fn preview_files() -> Array[(@sfbase.Attachment, () -> Bytes)]
+
+pub fn rich_chat(Int32) -> Json
+
+pub fn round_trip(@sfbase.Source, Double) -> @sfbase.Source
+
+pub fn row(String, String, String, String, Map[String, Json]) -> Json
+
+pub fn said_longest(String) -> String
+
+pub fn said_longest_source(@sfbase.Source) -> @sfbase.Source
+
+pub let said_more : String
+
+pub let said_paths : Map[String, Array[String]]
+
+pub let said_steps : @ref.Ref[Map[String, Array[Array[String]]]?]
+
+pub fn said_steps_of(String) -> Array[Array[String]]
+
+pub fn said_stretch(Json, ArrayView[String]) -> Json
+
+pub let screens_answer : String
+
+pub fn seeded_draft(String, String) -> Json
+
+pub fn seeded_outbox(String) -> Array[Json]
+
+pub fn seeded_pictures(String, Array[Json]) -> Unit
+
+pub fn small_chat(String, String) -> Json
+
+pub let stations_slow_ms : Double
+
+pub let table_images_answer : String
+
+pub let table_images_md : Json
+
+pub fn text_of(Json, String) -> String
+
+pub fn vault_post(Bool) -> Json
+
+pub let viz_answer : String
+
+pub fn webdemo_days() -> Array[Json]
+
+pub fn with_cache_cold(Json) -> Json
+
+pub fn with_cards(Fixture, Json, String) -> Json
+
+pub fn with_download_message(Json) -> Json
+
+pub fn with_file_links(Json) -> Json
+
+pub fn with_md_message(Json) -> Json
+
+pub fn with_message(Json, String) -> Json
+
+pub fn with_need(Json) -> Json
+
+pub fn with_sent(Json, String) -> Json
+
+pub fn with_state(Json, (String, String, String)) -> Json
+
+pub fn with_station_update(Json) -> Json
+
+pub fn with_table_images(Json) -> Json
+
+pub fn with_viz_message(Json) -> Json
+
+pub fn with_working(Json) -> Json
+
+pub let working_step : String
+
+pub let zhou : Json
+
+// Errors
+
+// Types and methods
+pub(all) struct FixBrowse {
+  mut state : Json
+  mut id : Int32
+  prefs : Map[String, Map[String, Json]]
+  shown : Map[String, Json?]
+  mut version : Int32
+  mut changes : Int32
+}
+
+pub(all) struct FixChat {
+  sent : Array[Json]
+  outbox : Array[Json]
+  mut working : Double
+  line : @ref.Ref[Int32]
+}
+
+pub(all) struct FixDownload {
+  station : String
+  key : String
+  root : String
+  path : String
+  zip : Bool
+  name : String
+  size : Double
+  mut loaded : Double
+  mut state : String
+}
+
+pub(all) struct FixKeeping {
+  station : String
+  key : String
+  root : String
+  path : String
+  name : String
+  title : String
+  size : Double
+  loaded : Double
+  state : String
+}
+
+pub(all) struct FixWrite {
+  mut text : String
+  mut rev : Int32
+  mut quotes : Array[Json]
+  mut focus : String
+  mut starting : Bool
+  mut error : String
+  mut version : Int32
+  mut taken : (String, Array[Json], Array[Json])?
+}
+
+pub(all) struct Fixture {
+  mode : String
+  mut workspace : String
+  mut appearance : String
+  mut motion : String
+  archived : Map[String, Bool]
+  filters : Map[String, String]
+  fonts : Map[String, String]
+  fonts_fetched : Map[String, Bool]
+  keys : Map[String, Array[String]]
+  mut version : Int32
+  mut older : Int32
+  mut step : Int32
+  chat_tabs : Map[String, Json]
+  tabs_shown : Map[String, Json]
+  queue_gone : Map[String, Bool]
+  queue_set_aside : Map[String, Int32]
+  mut queue_was : Json
+  sidebars : Map[String, Json]
+  mut share_look : String
+}
+pub fn Fixture::changed(Self) -> Unit
+
+pub(all) struct NewFix {
+  mut station : String
+  mut model : String
+  mut runtime : String
+  mut effort : String
+  mut d_model : String
+  mut d_runtime : String
+  mut d_effort : String
+  mut d_profile : String
+  mut made : Int32
+  mut reading : Int32
+  mut crowded : Bool
+}
+
+// Type aliases
+
+// Traits

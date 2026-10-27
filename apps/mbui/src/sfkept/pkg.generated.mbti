@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfkept"
+
+// Values
+pub fn answer(String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?
+
+pub fn has(String, Json) -> Bool
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

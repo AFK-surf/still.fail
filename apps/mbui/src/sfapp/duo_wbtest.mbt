@@ -110,3 +110,21 @@ test "a picture looked at elsewhere: its own bar, as it was" {
   assert_false(@sf.native_over.up)
   assert_true(t.find("界面草图.png") is Some(_))
 }
+
+///|
+test "an iPhone Duo on its side, the soft keyboard up: the composer whole over it, its send button too" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  // (the home indicator's room as the Duo's outer screen has it on its side: 34)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":34,\"left\":0,\"right\":84}}")
+  t.tap_text("发消息")
+  // the keyboard up: the window laid out above it plus the bars' foot, as the host lays it out (ios_app.m ime_over)
+  let kb = 280.0
+  t.set_ime_inset(kb)
+  t.resize(951.0, 669.0 - kb)
+  t.run_for(@ui.nav_push_ms)
+  let keyboard_top = 669.0 - kb - 34.0
+  let send = t.semantics().filter(fn(s) { s.label == @sf.t("web-main.composer.send") })
+  assert_eq(send.length(), 1)
+  let (_, y, _, h) = send[0].rect
+  assert_true(y + h <= keyboard_top + 0.5, msg="send at \{y}..\{y + h}, keyboard at \{keyboard_top}")
+}

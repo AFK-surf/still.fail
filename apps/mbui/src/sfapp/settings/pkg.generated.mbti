@@ -1,0 +1,493 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfapp/settings"
+
+import {
+  "mbui/signals",
+  "mbui/ui",
+  "moonbitlang/core/ref",
+  "stillfail/sf",
+}
+
+// Values
+pub fn act(Core, String, String, Json, done? : String, then? : (Json) -> Unit) -> Unit
+
+pub fn action_asked_done() -> Unit
+
+pub fn action_pressed(@ui.Ctx, Json?, String, in_field? : Bool) -> Bool
+
+pub fn adb_asking() -> Bool
+
+pub fn adb_lend(String, String) -> Unit
+
+pub fn adb_phone_said(String) -> Unit
+
+pub fn adb_ready(@ui.Ctx) -> AdbReady
+
+pub let all_places : Array[String]
+
+pub fn appearance(Json?) -> String
+
+pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, secret? : Bool) -> Unit
+
+pub fn ask_action(String) -> Unit
+
+pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
+
+pub fn ask_words(@ui.Ctx, String, String) -> Unit
+
+pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
+
+pub let bar_adding : @ref.Ref[Bool]
+
+pub let bar_moves : Map[String, Double]
+
+pub let bar_room : @ref.Ref[Double]
+
+pub let bar_size : Int32
+
+pub fn bars_value(Core) -> String
+
+pub fn binding_of(Int32, Int32) -> String?
+
+pub fn build_version() -> String
+
+pub let builtin_open : Map[String, Bool]
+
+pub fn card_answer(String, String, Bool, who? : String?) -> Answer
+
+pub fn confirm(String, String, String, () -> Unit, danger? : Bool) -> Unit
+
+pub fn confirm_borrow(Core, String, String, Json?) -> Unit
+
+pub let connects_mine : @ref.Ref[Bool]
+
+pub fn dark(Json?, Bool) -> Bool
+
+pub fn decision_form(@ui.Ctx, Core, String) -> String
+
+#callsite(autofill(loc))
+pub fn doing_mark(@ui.Ctx, Bool, String?, inline? : Bool, loc~ : SourceLoc) -> Unit
+
+pub fn drop_login(Core, String, NewProfile) -> Unit
+
+pub fn error_text(Json) -> String
+
+pub fn failed_of(Core, Array[String], Array[(String, String)]) -> String?
+
+pub fn failing_of(Json?) -> Array[String]
+
+pub fn field_of(String) -> @ui.Field
+
+pub fn first_text(Json?, Array[String], String) -> String
+
+pub fn fixture_call(String, Json) -> Result[Json, Json]?
+
+pub fn fixture_changed() -> Unit
+
+pub fn fixture_desk() -> String
+
+pub fn fixture_followed() -> Unit
+
+pub fn fixture_page(String) -> String
+
+pub fn fixture_pair_ended() -> String
+
+pub fn fixture_profiles() -> Array[Json]
+
+pub fn fixture_topic(String, String, Map[String, Json]) -> Json?
+
+pub fn fixture_version() -> Int32
+
+pub let font_places : Array[String]
+
+pub let fonts_at : @ref.Ref[Int32]
+
+pub let foot_across : @ui.Style
+
+pub fn frame(Core, Here, root? : Bool, top? : Double) -> Unit
+
+pub fn group_mark(@ui.Ctx, String) -> Unit
+
+pub fn has(Json?, String) -> Bool
+
+pub fn here_of(Core, String, String) -> Here
+
+pub fn hit(@ui.Ctx, Int32) -> Bool
+
+pub fn install_step(@ui.Ctx, Core, String, Json?) -> Unit
+
+pub fn is_doing(Core, Array[String], Array[(String, String)]) -> Bool
+
+pub fn item_opening(String) -> Bool
+
+pub fn join(Array[String], String) -> String
+
+pub fn kept_said(@ui.Ctx, Core) -> String
+
+pub fn key_actions(Json?) -> Array[Json]
+
+pub fn key_groups(Json?) -> Array[(String, Array[(String, String)])]
+
+pub fn key_label(Json?, String) -> String
+
+pub fn keys_changeable(Json?) -> Bool
+
+pub fn keys_of(Json?, String) -> Array[String]
+
+pub let keys_recording : @ref.Ref[String]
+
+pub fn keys_text(Json?, String) -> String
+
+pub fn kind_icon(String) -> String
+
+pub fn lasts_choice(String) -> String
+
+pub fn left(Route) -> Unit
+
+pub fn legal_url(String) -> String
+
+pub fn local_folder_label() -> String
+
+pub fn local_machine_pc() -> Bool
+
+pub let local_read_ms : Double
+
+pub fn local_station_addable() -> Bool
+
+pub fn local_station_managed() -> Bool
+
+pub fn lock_call(Core, String, String, String, Array[(String, String)], done? : String) -> Unit
+
+pub fn lock_prompts(Core, Bool) -> Unit
+
+pub fn lock_waiting(Core, String) -> Bool
+
+pub fn machine_sessions_offer(@ui.Ctx, Core, String, String) -> Unit
+
+pub fn mark_login(String, String) -> Unit
+
+pub let memory_chevron : Double
+
+pub fn memory_of(Core, String) -> MemoryRead
+
+pub fn meter_chips(@ui.Ctx, String, Array[Json], alerts? : Bool) -> Unit
+
+pub fn mode_name(String) -> String
+
+pub fn mono(@ui.Ctx, String, style? : @ui.TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, wrap? : Bool, center? : Bool) -> Unit
+
+pub let nav_foot : @ref.Ref[Double]
+
+pub fn new_profile_of(String) -> NewProfile
+
+pub let notify_switched : @signals.Signal[Bool?]
+
+pub fn obj(Array[(String, Json)]) -> Json
+
+pub fn open_add_people(Core, Here, Json?, from? : @sf.Anchor) -> Unit
+
+pub fn open_item(Core, String, String, (Json) -> Unit) -> Unit
+
+pub fn open_machine_sessions(Core, String, String, from? : @sf.Anchor) -> Unit
+
+pub fn open_mark_pick(Core, String, String, String, String, (String, String, (Result[Json, Json]) -> Unit) -> Unit) -> Unit
+
+pub fn open_station_peek(String, from~ : @sf.Anchor) -> Unit
+
+pub fn opened_fields(String) -> Array[Json]
+
+pub fn opened_plain(String) -> Json?
+
+pub fn opt_text(Json?, String) -> String?
+
+pub fn page(@ui.Ctx, Core, Here, Route, root? : Bool, top? : Double) -> Unit
+
+pub fn panels_frame(Core) -> Unit
+
+pub fn pending_login(Core, String, String) -> Json?
+
+pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
+
+pub let policy_forms : Map[String, String]
+
+pub fn pref(Core, String) -> String
+
+pub let profile_forms : @ref.Ref[Int32]
+
+pub fn profile_groups(Array[Json]) -> Array[(String, Array[Json])]
+
+pub let recovery_words : Map[String, Array[String]]
+
+pub fn reset() -> Unit
+
+pub fn role_label(String) -> String
+
+pub fn route_of(String) -> Route?
+
+pub fn runtime_label(String) -> String
+
+pub fn said(String, Array[(String, String)]) -> String?
+
+pub fn save_bars(Core, Array[Array[String]], Int32) -> Unit
+
+pub fn sections_of(Json?) -> Array[(String, String, String)]
+
+pub fn set_font(Core, String, String?) -> Unit
+
+pub fn set_pref(Core, String, String) -> Unit
+
+pub let settings_button_h : Double
+
+pub fn short_date_time(Double) -> String
+
+pub fn skill_tag(Json?, Map[String, String]) -> String
+
+pub fn spinner(@ui.Ctx, inline? : Bool) -> Unit
+
+pub fn stamp(Json?, String, String) -> String
+
+pub fn start_login(Core, String, NewProfile, String, String) -> Unit
+
+pub fn station_name(String) -> String
+
+pub fn station_of(Core, Here, String) -> Json?
+
+pub let station_parts : Map[String, String]
+
+pub fn station_peek_card(@ui.Ctx, String) -> Unit
+
+pub fn station_peek_part(@ui.Ctx, String) -> Unit
+
+pub fn stations_of(Core, Here) -> Read
+
+pub let status_top : @ref.Ref[Double]
+
+pub fn str(String) -> Json
+
+pub fn strings(Json?, String) -> Array[String]
+
+pub fn switch(@ui.Ctx, String, Bool) -> Unit
+
+pub fn tap_text(@ui.Ctx, String, String, color? : Int64, size? : Double, said? : String, room? : Bool) -> Bool
+
+pub fn typed_of(Json?) -> Typed?
+
+pub fn use_notify(Core, Bool) -> Unit
+
+pub fn vault_act(Core, String, String, Array[(String, Json)], String, done? : String, then? : (Json) -> Unit, failed? : (Json) -> Unit) -> Unit
+
+pub fn vault_actions(@ui.Ctx, Core, String, String, Bool, who? : String?) -> Unit
+
+pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?, said? : Array[String]) -> Unit
+
+pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
+
+pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer) -> Unit
+
+pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, extra? : (() -> Unit)?, foot? : Bool) -> Unit
+
+pub fn vault_hosts(Map[String, String]) -> Array[String]
+
+pub let vault_kinds : Array[String]
+
+pub let vault_lasts : Array[String]
+
+pub fn vault_outcome(@ui.Ctx, Asked, String, String) -> Unit
+
+pub fn vault_problem(String, Map[String, String], Bool, String) -> String
+
+pub fn vault_put_params(String, Json?, Json?, String, Map[String, String], Bool, String, String) -> Array[(String, Json)]
+
+pub fn vault_said(Json) -> String?
+
+pub let vault_scopes : Array[String]
+
+pub fn vault_scopes_up_to(String) -> Array[String]
+
+pub let vault_serial : @ref.Ref[Int32]
+
+pub fn wait_line(@ui.Ctx, String, error? : Bool, pad? : Bool) -> Unit
+
+pub fn waiting_cards(@ui.Ctx, () -> Unit, error? : String, failing? : Array[String]) -> Unit
+
+pub let wide : @ref.Ref[Bool]
+
+pub let wide_deep : @ref.Ref[Bool]
+
+pub fn wide_head(@ui.Ctx, Core, String, String, trailing? : () -> Unit, inside? : Bool, on_back? : () -> Unit, about? : String, lead? : String, deep? : Bool) -> Unit
+
+pub fn workspace_keys(Json?) -> (String, String)
+
+pub fn workspace_view(Core, Here) -> Read
+
+pub fn you(@ui.Ctx, String) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum AdbReady {
+  AdbUnknown
+  AdbLends
+  AdbLacks(String)
+  AdbCannot(String)
+} derive(Eq)
+
+pub(all) enum Answer {
+  Approve(String)
+  SetUp
+  Elsewhere
+  Decided
+  Theirs(String)
+} derive(Eq, Show)
+
+pub(all) struct Asked {
+  name : String
+  mode : String
+  command : String
+  save_kind : String
+  username : String
+  typed : Bool
+  station : String
+}
+
+pub(all) struct Core {
+  topic : (String, Map[String, Json]) -> Read
+  call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
+  push : (Route) -> Unit
+  pop : () -> Unit
+  in_place : (Route) -> Unit
+  home : () -> Unit
+  open_chat : (String, String, String) -> Unit
+  open_drive : (String) -> Unit
+  open_folder : (String, String) -> Unit
+  sign_in : () -> Unit
+  say : (String) -> Unit
+  picture : (String, Int32) -> String
+  notify_ask : () -> Unit
+  push_sync : (Bool?) -> Unit
+  under : () -> String
+  version_now : () -> VersionNow
+  version_tap : () -> Unit
+  local_install : (Bool) -> Unit
+  open_link : (String) -> Unit
+  open_screen : (String, String) -> Unit
+  pick_picture : ((Bytes?) -> Unit) -> Bool
+  bars : () -> (Array[Array[String]], Int32)
+  set_bars : (Array[Array[String]], Int32) -> Unit
+  place_icon : (@ui.Ctx, String, Int64) -> Unit
+  reporting : () -> Bool?
+  set_reporting : (Bool) -> Unit
+  login_card : (@ui.Ctx, String, String, Bool) -> Unit
+  share_card : () -> Unit
+  face_preview : (String, Int32, Bool) -> Int32
+  face_here : (String) -> Bool
+  face_failed : (String) -> String
+  own_code_face : () -> Int32
+  now : () -> Double
+  read_only : String
+}
+pub fn Core::quiet(Self) -> Self
+
+pub(all) struct Here {
+  workspace : String
+  name : String
+  sub : String
+  email : String
+  person : String
+  picture : String
+}
+
+pub(all) struct MemoryRead {
+  value : Json?
+  error : String
+}
+
+pub(all) struct NewProfile {
+  form : String
+  mut opened : Bool
+  mut dropped : Bool
+  login : @signals.Signal[String]
+  mut asked : Bool
+  error : @signals.Signal[String]
+  mut key : String
+  mut endpoint : String
+  mut filled : Bool
+}
+
+pub(all) struct Read {
+  value : Json?
+  error : Json?
+  version : Int32
+}
+
+pub(all) enum Route {
+  Home
+  Me
+  Appearance
+  Fonts
+  Workspace
+  Security
+  SecurityOpen
+  Vault
+  Stations
+  Station(String)
+  Profiles(String)
+  Profile(String, String)
+  PickModels(String, String)
+  ProfileModels(String, String)
+  Connects(String)
+  Connect(String, String)
+  Memories
+  Memory(String)
+  MemoryDoc(String, String, Int32)
+  Usage
+  Archive
+  AdbShare(String)
+  NewProfile(String)
+  ProfileAccount(String)
+  VaultItems
+  VaultItem(String, String)
+  AutoDecisions
+  AutoCompletion
+  AutoPolicy(String)
+  BarSettings
+  KeptFiles
+  KeptChat(String, Int32)
+  Changelog
+  About
+  Shortcuts
+  LocalStation
+  Notifications
+  Permissions
+  Archiving
+  StationArchiving(String)
+  UsagePrices(Int32)
+  RunSettings(String, String)
+} derive(Eq)
+
+pub(all) struct Typed {
+  kind : String
+  username : String
+}
+
+pub(all) struct VaultEditing {
+  mut kind : Int32
+  mut agent : Bool
+  mut mode : String
+  mut lasts : Int32
+  mut error : String
+  mut saving : Bool
+  reveal : Map[String, Bool]
+  serial : Int32
+}
+
+pub(all) struct VersionNow {
+  doing : String
+  part : Double?
+  newer : String
+  asks : Bool
+}
+
+// Type aliases
+
+// Traits
