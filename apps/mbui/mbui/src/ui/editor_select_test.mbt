@@ -33,6 +33,18 @@ test "a long press on a word picks it: its handles, the floating menu over it to
 }
 
 ///|
+test "a long press on an empty field: the caret there, the floating menu over it to paste" {
+  let (f, t) = android_field("")
+  t.press_at(16.0, 15.0)
+  t.run_for(@ui.long_press_ms)
+  t.release(16.0, 15.0)
+  assert_eq(f.selection(), (0, 0))
+  let (shown, _, _, _, _, can) = t.text_menu()
+  assert_true(shown)
+  assert_eq(can, @hostapi.text_menu_paste)
+}
+
+///|
 test "a second tap soon after the first picks the word there" {
   let (f, t) = android_field("hello brave world")
   t.tap(16.0, 15.0)

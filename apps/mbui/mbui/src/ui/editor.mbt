@@ -1414,7 +1414,8 @@ pub let double_tap_ms : Double = 300.0
 
 ///|
 /// The word at (`x`, `y`) in the field picked (a long press's, a double tap's): its two handles, the floating menu
-/// over it. False when there is none there (nothing under the finger but spaces: the caret put there instead).
+/// over it. False when there is none there (nothing under the finger but spaces, or no words at all: the caret put
+/// there instead, the menu over it all the same, to paste: Android's EditText offers 粘贴 in an empty field too).
 fn EditorState::pick_word(self : EditorState, x : Double, y : Double, now : Double) -> Bool {
   let tl = match self.tl {
     Some(t) => t
@@ -1432,7 +1433,7 @@ fn EditorState::pick_word(self : EditorState, x : Double, y : Double, now : Doub
     self.caret = off
     self.anchor = off
     self.sel_handles = false
-    self.menu = self.text.length() > 0
+    self.menu = true
     return false
   }
   self.anchor = a
