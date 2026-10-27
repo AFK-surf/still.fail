@@ -149,10 +149,12 @@ pub let spinner_turn_ms : Double = 800.0
 /// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
 /// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
 /// chat's mark at work: three quarters, 1.2s). Its lines drawn once (mbui's Ctx::lines), turned by the clock as each
-/// frame is drawn (Ctx::cycle_look): nothing built anew for it, nothing to make, nothing to wait for.
+/// frame is drawn (Ctx::cycle_look): nothing built anew for it, nothing to make, nothing to wait for. `stroke` its
+/// line's width (an icon's, where it is drawn as one: @sf.coming_mark).
 pub fn spinner(
   c : @ui.Ctx,
   size? : Double = 14.0,
+  stroke? : Double = spin_stroke,
   ring? : Int64,
   arc? : Int64,
   sweep? : Double = 0.25,
@@ -165,11 +167,11 @@ pub fn spinner(
   // the line's middle 1 in from the edge; the arc from a quarter before the top (the web's: a border whose top is
   // the arc), the two turned by the clock about the ring's middle
   let mid = size / 2.0
-  let r = mid - spin_stroke / 2.0
+  let r = mid - stroke / 2.0
   let node = c.lines(
     [
-      @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=ring),
-      @ui.line(@ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
+      @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=stroke, color=ring),
+      @ui.line(@ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi), width=stroke, color=arc),
     ],
     w=Px(size),
     h=Px(size),
@@ -182,22 +184,28 @@ pub fn spinner(
 /// The spinner, or how far what it waits on has come once that is known (docs/ui-panels.md 等待: a transfer in a
 /// spinner's place, a message's files going up, a picture going up, an update round its key's mark): the same ring,
 /// the accent from its top as far round as it has come (`coming`, 0 to 1), going to a part told anew as a progress
-/// bar's fill does (`key` its own); None, the spinner's quarter turning. `size` across.
-pub fn progress_spinner(c : @ui.Ctx, key : String, coming : Double?, size? : Double = 14.0) -> Int {
+/// bar's fill does (`key` its own); None, the spinner's quarter turning. `size` across, its line `stroke` wide.
+pub fn progress_spinner(
+  c : @ui.Ctx,
+  key : String,
+  coming : Double?,
+  size? : Double = 14.0,
+  stroke? : Double = spin_stroke,
+) -> Int {
   match coming {
-    None => spinner(c, size~)
+    None => spinner(c, size~, stroke~)
     Some(k) => {
       let t = theme()
       let pi = 3.141592653589793
       let mid = size / 2.0
-      let r = mid - spin_stroke / 2.0
+      let r = mid - stroke / 2.0
       let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
       let shown = @motion.animate(c, key + "/coming", k, spec=@motion.tween(@kit.progress_ms, ease=Out))
       let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
-      let lines = [@ui.line(ring, width=spin_stroke, color=t.p.line_strong)]
+      let lines = [@ui.line(ring, width=stroke, color=t.p.line_strong)]
       if shown > 0.0 {
         let arc = @ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi)
-        lines.push(@ui.line(arc, width=spin_stroke, color=t.p.accent))
+        lines.push(@ui.line(arc, width=stroke, color=t.p.accent))
       }
       c.lines(lines, w=Px(size), h=Px(size))
     }

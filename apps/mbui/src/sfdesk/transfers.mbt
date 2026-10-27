@@ -125,7 +125,7 @@ fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveA
 
 ///|
 /// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
-/// comes and goes, a ring round its mark as far as it has come, red's dot when one failed; pressed, their list beside
+/// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
 /// it. Nothing while there is none.
 fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let all = coming(src, ws)
@@ -144,15 +144,8 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     id,
     ftransfers.open.get(),
     fn(color) {
-      @sf.icon(c, "download", size=rail_icon_size, color~) |> ignore
-      // (round its mark, as the small screen's key's: @sf.progress_key)
-      c.layer(fn() {
-        c.box(style=rail_ring_at, fn() {
-          @sf.progress_spinner(c, "rail/transfers", Some(percent.to_double() / 100.0), size=rail_icon_size + rail_ring_room) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
+      // (as the small screen's key's: @sf.progress_key)
+      @sf.coming_mark(c, "rail/transfers", Some(percent.to_double() / 100.0), rail_icon_size, color)
       if failed {
         rail_tone_mark(c, "alert")
       }
@@ -161,14 +154,6 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   )
   transfers_list(c, src, ws, id, go, false)
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-/// The ring's room round the mark (2 clear, its line 2, either side).
-let rail_ring_room : Double = 8.0
 
 ///|
 /// In a small screen's home's top bar: what comes to this device and goes between the stations, a newer build of the
