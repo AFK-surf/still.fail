@@ -16,7 +16,7 @@ import type { Call } from "./core/calls.ts";
 import { handlers } from "./core/execute.ts";
 import { asCoreError, CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
-import type { Topic } from "./protocol.ts";
+import { Beside, type Topic } from "./protocol.ts";
 import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
@@ -757,6 +757,23 @@ export class Composers {
     return sent !== undefined ? { sent } : {};
   }
 
+  /// A picture of the draft the page holds no bytes of (a draft kept, read again as the app starts): as this device
+  /// keeps it, an image up as it went (`keepSent`), else one waiting or going up as it is kept for its message
+  /// (`#keepWhole`); null where none is kept here (drawn as any other file).
+  picture(key: string, id: string): Effect.Effect<Beside | null> {
+    const s = this.#state(key);
+    const f = [...s.files, ...(s.taken?.files ?? [])].find((x) => x.id === id);
+    if (!f || f.pasted || f.link) return Effect.succeed(null);
+    const inner = this.#inner;
+    const station = draftAt(key)?.[0];
+    const path = isObject(f.done) && typeof f.done.path === "string" ? f.done.path : "";
+    const sent = station && path ? inner.driveKept.held(sentKeptId(station, path.split("/").at(-1)!)) : Effect.succeed(null);
+    return Effect.map(
+      Effect.flatMap(sent, (got) => (got !== null ? Effect.succeed(got) : inner.driveKept.held(outboxKeptId(id)))),
+      (got) => (got !== null && got.type.startsWith("image/") ? new Beside({ type: got.type }, got.bytes) : null),
+    );
+  }
+
   release(files: { id: string }[]): void {
     for (const f of files) {
       this.#unkeep(f.id);
@@ -958,6 +975,8 @@ export function parseComposer(name: string, params: unknown): Call | null {
       return { kind: "composer", key, act: { restore: true, error: strOr(p, "error"), unlessWritten: p.unlessWritten === true } };
     case "carry":
       return { kind: "composer", key, act: { carry: str(p, "to") } };
+    case "picture":
+      return { kind: "composer", key, act: { picture: str(p, "id") } };
   }
   throw CoreError.invalid(`unknown call: ${name}`);
 }
@@ -966,13 +985,16 @@ export function parseComposer(name: string, params: unknown): Call | null {
 export type ComposerAct =
   | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean; attachment?: J; fileId?: string } | { comment: string; words: string }
   | { unquote: string } | { focused: true } | { error: string | null } | { starting: boolean } | { add: FileIn[]; station: string }
-  | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true; station: string | null } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string };
+  | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true; station: string | null } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string }
+  | { picture: string };
 
 export function install(): void {
   handlers.composer = (inner, call) => {
     const c = call as Extract<Call, { kind: "composer" }>;
     const all = inner.composers;
     const a = c.act;
+    // (its bytes beside the answer, read from what the device keeps)
+    if ("picture" in a) return all.picture(c.key, a.picture);
     return Effect.sync(() => {
       if ("text" in a) return { version: all.text(c.key, a.text) };
       if ("append" in a) return { version: all.append(c.key, a.append) };

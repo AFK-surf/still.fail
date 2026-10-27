@@ -44,6 +44,10 @@ pub(all) struct Source {
   /// a video of a chat's still as the station makes it (`station.poster`: its first frame, a small JPEG), by the same
   /// three; an image's key once it is here, "" while it comes, "!" when the station has none
   poster : (String, String, String) -> String
+  /// a picture of a draft's file the page holds no bytes of (a draft kept, read again as the app starts:
+  /// `composer.picture`), by the draft's key and the file's id: an image's key once here, "" while it comes, "!" when
+  /// the device keeps none
+  draft_picture : (String, String) -> String
   /// what became of those pictures, each by its id (file_image_id, poster_image_id): which failed for want of their
   /// station, to be asked again (chat_images.mbt)
   images : ChatImages
@@ -117,6 +121,7 @@ pub fn made_source(
     fatal: fn() { None },
     file: fn(_, _, _) { "" },
     poster: fn(_, _, _) { "" },
+    draft_picture: fn(_, _) { "!" },
     images: ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },

@@ -9,11 +9,13 @@ fn desk_composer_tester(
   pointing? : @ui.Pointing = Mouse,
   platform? : Int = 0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
+  kept? : ((String, String) -> String)? = None,
 ) -> (@ui.Tester, Source) {
   reset()
   let base = fixture("chat")
   let src : Source = {
     ..base,
+    draft_picture: kept.unwrap_or(base.draft_picture),
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
@@ -420,6 +422,42 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   let spun = face.drawn_lines().length() > 0
   send_flight.set(None)
   (tile, spun)
+}
+
+///|
+test "desk composer: a draft kept, read again as the app starts, shows its pictures as the device keeps them (composer.picture), any other file as its card" {
+  let calls : Array[Made] = []
+  let asked : Array[String] = []
+  let file = fn(id : String, name : String) -> Json {
+    { "id": id, "name": name, "size": 120, "done": { "name": name, "path": "/w/uploads/" + name, "size": 120 } }
+  }
+  let (t, _) = desk_composer_tester(
+    calls,
+    over=fn(name, now) {
+      if name != "composer" {
+        return now
+      }
+      let m = match now.value {
+        Some(Object(v)) => v.copy()
+        _ => {}
+      }
+      m["files"] = [file("kept-1", "照片.png"), file("kept-2", "说明.txt")]
+      { value: Some(Json::object(m)), error: now.error, version: now.version }
+    },
+    kept=Some(fn(key, id) {
+      asked.push(key + " " + id)
+      @ui.add_image("mem:test/kept", png_head())
+      "mem:test/kept"
+    }),
+  )
+  t.frame()
+  assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{asked}")
+  // (its picture, the one image drawn)
+  assert_eq(t.image_loads().length(), 1)
+  // a tile, not a card naming it; the other file a card
+  let words = t.words().map(fn(w) { w.0 })
+  assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{words}")
+  assert_true(words.iter().any(fn(w) { w.contains("说明") }), msg="\{words}")
 }
 
 ///|

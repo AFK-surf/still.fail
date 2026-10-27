@@ -501,6 +501,8 @@ pub fn with_download_message(Json) -> Json
 
 pub fn with_file_links(Json) -> Json
 
+pub fn with_flag(Json, String) -> Json
+
 pub fn with_md_message(Json) -> Json
 
 pub fn with_message(Json, String) -> Json

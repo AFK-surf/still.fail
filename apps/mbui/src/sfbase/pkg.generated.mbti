@@ -595,6 +595,8 @@ pub let highlight_limit : Int32
 
 pub fn host_notices() -> NoticeHost
 
+pub fn host_picture(String, String) -> String
+
 pub fn install_of(Json?, String) -> Install?
 
 pub fn is_viz(String) -> Bool
@@ -1633,7 +1635,7 @@ pub fn workspaces_of(Json?) -> (Array[Workspace], Bool, Bool)
 
 pub fn writing(Source, String) -> Writing
 
-pub fn writing_add(Source, Writing, String, String, Bytes, pasted? : Json, quote? : String) -> Unit
+pub fn writing_add(Source, Writing, String, String, Bytes, pasted? : Json, quote? : String, still? : String) -> Unit
 
 pub fn writing_add_held(Source, Writing, String, @hostapi.Picked) -> Unit
 
@@ -2788,6 +2790,7 @@ pub(all) struct Source {
   fatal : () -> String?
   file : (String, String, String) -> String
   poster : (String, String, String) -> String
+  draft_picture : (String, String) -> String
   images : ChatImages
   now : () -> Double
   leave : (String, Map[String, Json]) -> Unit

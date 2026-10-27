@@ -386,6 +386,45 @@ test("a_new_chats_file_waiting_as_the_app_ended_comes_back_with_its_draft_and_go
   } finally { again.close(); }
 });
 
+test("a_drafts_pictures_kept_as_the_app_ended_are_read_from_the_device_waiting_or_up", async () => {
+  const t = await setup();
+  const png = Uint8Array.from({ length: 24 }, (_, i) => i);
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) =>
+    Effect.succeed({ have: bytes.length, file: { name: q.name, path: `/data/uploads/up-${q.name}`, size: bytes.length } });
+  await t.watch(1, "new:ws");
+  await t.watch(2, "ws/st:k");
+  // A new chat's, waiting for its message; a chat's, up; a file that is no picture.
+  await t.ask("add", { key: "new:ws", station: "ws/st", files: [{ id: "w1", name: "wait.png", size: png.length, blob: new Blob([png], { type: "image/png" }) }] });
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [
+    { id: "u1", name: "up.png", size: png.length, blob: new Blob([png], { type: "image/png" }) },
+    { id: "u2", name: "notes.txt", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "text/plain" }) },
+  ] });
+  await t.settle();
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const ui = again.connect();
+    const picture = async (id: number, key: string, file: string) => {
+      call(again, ui, id, "composer.picture", { key, id: file });
+      await t.host.settle();
+      return answers(t.host.takeEmitted(), id) as { ok: { type: string } | null; bytes?: Uint8Array };
+    };
+    const waiting = (again.inner.composers.value("new:ws") as J).files[0];
+    const [up, notes] = (again.inner.composers.value("ws/st:k") as J).files;
+    const w = await picture(301, "new:ws", waiting.id);
+    assert.deepEqual([w.ok, [...w.bytes!]], [{ type: "image/png" }, [...png]]);
+    const u = await picture(302, "ws/st:k", up.id);
+    assert.deepEqual([u.ok, [...u.bytes!]], [{ type: "image/png" }, [...png]]);
+    // none for what is no picture, nor for what the draft does not have
+    assert.equal((await picture(303, "ws/st:k", notes.id)).ok, null);
+    assert.equal((await picture(304, "ws/st:k", "gone")).ok, null);
+  } finally { again.close(); }
+});
+
 test("a_made_chats_pending_draft_survives_restart_and_stays_cleared_after_sending", async () => {
   const t = await setup();
   const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });

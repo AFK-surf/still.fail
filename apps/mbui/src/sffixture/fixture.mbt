@@ -1286,6 +1286,8 @@ pub fn fixture(mode : String) -> Source {
     file: fn(_, _, name) { fixture_file(name) },
     // a video's still: its first frame as the station makes it (the made-up ones' each a picture of its own)
     poster: fn(_, _, name) { fixture_file(name) },
+    // (a made-up draft's pictures are the page's own: compose_fixture.mbt)
+    draft_picture: fn(_, _) { "!" },
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },

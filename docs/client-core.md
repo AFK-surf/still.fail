@@ -138,6 +138,11 @@ core reads it with `picked.read {file, start, end}` and lets it go with
 files go up in a composer of their own (a key no chat has), so a message sent
 before they are up names them in `uploads` and waits in the outbox, as the web's
 does. `composer.retry {key, id}` sends a failed one up again from what was kept.
+A draft read again as the app starts has no picture of its own in the page (the
+page drew the ones it picked from their bytes): `composer.picture {key, id}`
+answers an image's bytes beside `{ type }` as the device keeps them (one up, as it
+went: drive-kept's `sent`; one waiting or going up, as kept for its message:
+`outbox`), or null where none is kept (drawn as any other file).
 
 Before its first part a file is named by its content (SHA-256): by the app on a
 phone (`picked.hash`, up to 256 MB), else read here when it is at most 64 MB and
