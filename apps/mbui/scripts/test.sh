@@ -35,6 +35,9 @@ for t in ${TARGETS:-native}; do
     # app, compiled again on every change, 88 s of a branch's app part with sfapp's own 92, 2026-10-23)
     # (sfpages' own tests too: the pages moved there from sfapp brought theirs, run by nothing until 2026-10-25)
     pkgs="-p stillfail/sf -p stillfail/sfpages -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
+    # (APP_GROUP=k/n: one runner's share of the app part's runs, app_group_of below; the small packages' run is the first
+    # group's, so the others build sfapp's program alone)
+    [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP%/*}" != 1 ] && pkgs="-p stillfail/sfapp"
     # (with ThinLTO, MBC_LTO=thin: only the program of the whole app. What ThinLTO's tests are for is the code that
     # ships, built as it ships, inlined across its units; all of it is in sfapp's test, run with the whole app's tests.
     # The smaller programs are parts of the same code, each linked again with ThinLTO for its own few tests: five
@@ -130,6 +133,33 @@ for t in ${TARGETS:-native}; do
         [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
       done
     fi
+  fi
+  # Which of APP_GROUP's n runners a run is on (k of 1..n). Four (check-mbui's): each two or three of the runs that
+  # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
+  # 187 and 147, the pages' 174, contrast's 117, screens' 77, squeeze_said's 49, the packages' 10, all nine at once:
+  # the part's run 188 s). A run named nowhere here is the first's, never left out.
+  app_group_of() {
+    local n=$1
+    shift
+    if [ "$n" != 4 ]; then echo 1; return; fi
+    case "$1 $2 $3" in
+      "-p "*) echo 1 ;;
+      "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
+      "src/sfapp/screens_wbtest.mbt  ") echo 1 ;;
+      "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
+      "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
+      "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
+      "src/sfapp/contrast_wbtest.mbt  ") echo 4 ;;
+      *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
+    esac
+  }
+  if [ -n "${APP_GROUP:-}" ] && [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
+    mine=()
+    for r in "${runs[@]}"; do
+      [ -n "${r// /}" ] || continue
+      [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r")
+    done
+    runs=("${mine[@]}")
   fi
   run_name() {
     case " $* " in
