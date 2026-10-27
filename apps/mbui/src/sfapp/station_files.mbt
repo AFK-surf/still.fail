@@ -147,6 +147,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     core_id: "",
     retry: false,
     retrying: @signals.signal(false),
+    unseen: None,
   }
   r.up = Some(p)
   let failed = fn(e : Json) {

@@ -41,6 +41,33 @@ pub let writing_pictures : Map[String, String] = {}
 let writing_went : Map[String, (String, String, Bytes)] = {}
 
 ///|
+/// The videos added here, read whole, that the host has no picture of (no address for them: @hostapi.Picked.src), by
+/// their id: their picture their first frame, drawn here from their bytes (writing_went) by writing_stills.
+// kept across runs: put back by writings_reset (sfbase's reset)
+let writing_unseen : Set[String] = Set::new()
+
+///|
+/// The stills of the videos waiting here the host has no picture of, made from their bytes (bytes_first_frame), each
+/// its tile's picture and its message's once made: called as a composer is built.
+pub fn writing_stills(c : @ui.Ctx) -> Unit {
+  for id in writing_unseen.to_array() {
+    guard writing_went.get(id) is Some((_, name, bytes)) else {
+      writing_unseen.remove(id)
+      continue
+    }
+    match bytes_first_frame(c, "draft/" + id, name, bytes) {
+      "" => ()
+      "!" => writing_unseen.remove(id)
+      still => {
+        writing_unseen.remove(id)
+        writing_pictures[id] = still
+        sent_pictures["upload\u{1}" + id] = still
+      }
+    }
+  }
+}
+
+///|
 /// The station each file added here goes up to, by its id.
 // kept across runs: put back by writings_reset (sfbase's reset)
 let writing_stations : Map[String, String] = {}
@@ -65,6 +92,7 @@ pub fn writings_reset() -> Unit {
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
+  writing_unseen.clear()
   writing_n.val = 0
 }
 
@@ -209,6 +237,7 @@ pub fn writing_add(
       }
       None =>
         match host_picture(name, still) {
+          "" if preview_kind(name).0 == Some(KVideo) => writing_unseen.add(id)
           "" => ()
           picture => {
             writing_pictures[id] = picture

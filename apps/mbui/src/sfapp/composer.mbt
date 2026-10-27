@@ -197,7 +197,7 @@ priv struct Pending {
   id : Int
   name : String
   size : Int
-  image : String
+  mut image : String
   width : Int
   height : Int
   pasted : (String, Json)?
@@ -213,6 +213,9 @@ priv struct Pending {
   mut core_id : String
   /// failed going up in the core: it can go again from what the core kept (`composer.retry`)
   mut retry : Bool
+  /// a video's bytes, read whole, that the host has no picture of (no address for it: @hostapi.Picked.src): its
+  /// `image` its first frame, made from them (draft_stills), None once it is
+  mut unseen : Bytes?
   /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
   retrying : @signals.Signal[Bool]
 }
@@ -396,6 +399,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       core_id: "",
       retry: false,
       retrying: @signals.signal(false),
+      unseen: None,
     })
   }
   // links shared in (share-in.ts): each a card among the files, kept and sent as words
@@ -421,6 +425,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       core_id: "",
       retry: false,
       retrying: @signals.signal(false),
+      unseen: None,
     })
   }
 }
@@ -617,6 +622,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
       core_id: "",
       retry: false,
       retrying: @signals.signal(false),
+      unseen: None,
     })
   }
   d.focus = id
@@ -658,6 +664,29 @@ fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
+/// The stills of the draft's videos the host has no picture of (Pending.unseen), made from their bytes
+/// (bytes_first_frame), each its tile's picture and its message's once made.
+fn draft_stills(c : @ui.Ctx, station : String, d : Draft) -> Unit {
+  for f in d.files {
+    guard f.unseen is Some(bytes) else { continue }
+    match @sfbase.bytes_first_frame(c, "draft/\{f.id}", f.name, bytes) {
+      "" => ()
+      "!" => f.unseen = None
+      still => {
+        f.unseen = None
+        f.image = still
+        if f.core_id != "" {
+          sent_pictures["upload\u{1}" + f.core_id] = still
+        }
+        if f.done.get() is Some(a) {
+          sent_pictures[sent_key(station, text(Some(a), "path"))] = still
+        }
+      }
+    }
+  }
+}
+
+///|
 /// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
 /// up, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size, type}`:
 /// still.fail's Android app's PickedFiles.kt), named by its content first where the host can say it; its tile the
@@ -681,6 +710,7 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     core_id: "",
     retry: false,
     retrying: @signals.signal(false),
+    unseen: None,
   }
   d.files.push(p)
   if size > max_file.to_int64() {
@@ -771,6 +801,7 @@ fn add_file(
     core_id: "",
     retry: false,
     retrying: @signals.signal(false),
+    unseen: if image == "" && pasted is None && preview_kind(name).0 == Some(@sfbase.KVideo) { Some(bytes) } else { None },
   }
   d.files.push(p)
   if bytes.length() > max_file {
@@ -1441,6 +1472,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
+  draft_stills(c, r.station, d)
   // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
   refs_put(src, d.key, @sfbase.files_taken(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are

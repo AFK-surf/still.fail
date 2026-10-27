@@ -105,6 +105,8 @@ pub fn browse_where(String, String, String, String, String, String, write? : Boo
 
 pub fn by_of(Json?) -> By
 
+pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
+
 pub let card_head : @ui.Style
 
 pub fn chat_item(Json) -> ChatItem
@@ -1674,6 +1676,8 @@ pub fn writing_restore(Source, Writing, String, unless_written? : Bool) -> Unit
 pub fn writing_retry(Source, Writing, String) -> Unit
 
 pub fn writing_starting(Source, Writing, Bool) -> Unit
+
+pub fn writing_stills(@ui.Ctx) -> Unit
 
 pub fn writing_take(Source, Writing, station? : String, (Json?) -> Unit) -> Unit
 

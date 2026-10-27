@@ -423,6 +423,8 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
       }
     _ => ()
   }
+  // the videos waiting that the host has no picture of: their first frames, made from their bytes
+  @sfbase.writing_stills(c)
   // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
   match quoted_into.get(w.key) {
     Some(list) if !no_files => {
