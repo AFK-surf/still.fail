@@ -44,7 +44,10 @@ pub fn open_fixture(mode : String) -> Unit {
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
     "chat-letters-pop" => @sfdesk.open_info_pop()
-    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
+    "chat-jobs-pop" => {
+      @sfdesk.open_jobs_pop()
+      @sfdesk.open_job_pop("j-ci")
+    }
     "home-attention" => @sfdesk.open_attention()
     // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {

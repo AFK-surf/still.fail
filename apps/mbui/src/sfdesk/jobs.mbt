@@ -29,6 +29,12 @@ pub fn pick_job(id : String) -> Unit {
 }
 
 ///|
+/// The job opened in the popover (a screen's fixture).
+pub fn open_job_pop(id : String) -> Unit {
+  jobs_own.open = id
+}
+
+///|
 /// A job's status (JobDot): a small dot, on its name's line: up or alive green (alive breathing slowly round it),
 /// restarting amber (breathing), failed red, else the strong line's grey.
 fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
@@ -94,8 +100,9 @@ fn job_meta(c : @ui.Ctx, job : Json?) -> Unit {
 
 ///|
 /// A job's row (JobRow): its dot, its name, what it is up to; what is at its end (`end`: a service's arrow, a job's
-/// chevron); picked (`selected`), over (faded). True on the frame after a press (`press`: none for a row that does
-/// nothing).
+/// chevron); picked (`selected`), over (faded); on a ground not its own (`grounded`: a job opened in the popover, its
+/// row the top of the one piece it and its body are), no ground of its own. True on the frame after a press (`press`:
+/// none for a row that does nothing).
 fn job_row(
   c : @ui.Ctx,
   key : String,
@@ -104,10 +111,11 @@ fn job_row(
   selected? : Bool = false,
   press? : Bool = true,
   inset? : Bool = false,
+  grounded? : Bool = false,
 ) -> Bool {
   let off = text(job, "tone") == "off"
   let id = c.id(key)
-  let style = match (press, inset) {
+  let style = match (press && !grounded, inset) {
     (true, false) => job_row_style
     (true, true) => job_row_inset
     (false, false) => job_row_static
@@ -310,8 +318,16 @@ pub fn jobs_popover(
           let jv = Some(j)
           let id = text(jv, "id")
           let open = jobs_own.open == id
-          c.box(style=jobs_fold, fn() {
-            if job_row(c, "jobs-pop/" + id, jv, end=if open { "chevron-down" } else { "chevron-right" }, selected=open, inset=true) {
+          c.box(style=if open { jobs_fold_open } else { jobs_fold }, fn() {
+            if job_row(
+                c,
+                "jobs-pop/" + id,
+                jv,
+                end=if open { "chevron-down" } else { "chevron-right" },
+                selected=open,
+                inset=true,
+                grounded=open,
+              ) {
               jobs_own.open = if open { "" } else { id }
             }
             if open {
@@ -757,8 +773,8 @@ let jobs_group : @ui.Style = @ui.css("w=Full gap=S1")
 let jobs_group_after : @ui.Style = @ui.css("w=Full pt=S1_5 gap=S1")
 
 ///|
-/// The popover's groups, and a job opened in it (jobFold): its row and its body under it on the pointer's ground, 4 by
-/// 8 in, 32 at its start, its foot round as an option.
+/// The popover's groups, and a job opened in it (jobFold): its row and its body under it one piece on the pointer's
+/// ground, round as a row, 4 under it; the body 4 by 8 in, its words in the names' column (jobs_names_in).
 // kept across runs: a value (no field of it changes)
 let jobs_list : @ui.Style = @ui.css("w=Full")
 
@@ -768,7 +784,11 @@ let jobs_fold : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_fold_body : @ui.Style = @ui.css("w=Full mb=S1 pt=S1 pr=S2 pb=S2 pl=S8 bg=Hover radius=Inner")
+let jobs_fold_open : @ui.Style = @ui.css("w=Full mb=S1 bg=Hover radius=Inner")
+
+///|
+// kept across runs: a value (no field of it changes)
+let jobs_fold_body : @ui.Style = @ui.style(w=Full, pt=S1, pr=S2, pb=S2, pl=@sf.room_of(jobs_names_in))
 
 ///|
 /// Nothing now (jobsQuiet): 8 over, in the names' column (as the foot's words: jobs_all), 13 muted.

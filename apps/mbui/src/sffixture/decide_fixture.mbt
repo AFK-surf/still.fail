@@ -104,8 +104,8 @@ pub fn fix_job(id : String) -> Json {
           { "text": "第 3 步通过", "kind": "notice" },
         ],
         "notices": [
-          { "at": 2, "text": "第 3 步通过：单元测试全部通过", "clock": "14:05" },
-          { "at": 1, "text": "开始跑：构建、测试、截图", "clock": "13:58" },
+          { "at": 2, "text": "第 3 步通过：单元测试全部通过", "clock": "14:05", "ago": "3 分钟前" },
+          { "at": 1, "text": "开始跑：构建、测试、截图", "clock": "13:58", "ago": "10 分钟前" },
         ],
         "outputSaid": "最后输出 · 3 分钟前",
       }

@@ -179,6 +179,8 @@ pub fn open_entry(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, @sfbase.DvEn
 
 pub fn open_info_pop() -> Unit
 
+pub fn open_job_pop(String) -> Unit
+
 pub fn open_jobs_pop() -> Unit
 
 pub fn open_rail_menu(String) -> Unit
