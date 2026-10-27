@@ -419,6 +419,69 @@ test "desktop: words picked on down a list the wheel scrolls under the held poin
 }
 
 ///|
+test "desktop: words picked with the pointer held past a list's shown foot (onto what floats over it) scroll it on toward the pointer, picked as they come, until it comes back in or lets go" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.selectable(fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+          c.list("l", 200, 40.0, fn(i) {
+            c.box(h=Px(40.0), fn() { c.rich([@ui.plain("row \{i} words")], size=15.0) |> ignore }) |> ignore
+          })
+          |> ignore
+          // what floats over its foot (a composer)
+          c.layer(fn() {
+            c.spacer()
+            let b = c.box(w=Fill(1.0), h=Px(40.0), fn() {  })
+            c.floats_over(b)
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (x, y, _, h) = t.rect_of("row 1 words").unwrap()
+  t.press_at(x + 0.5, y + h / 2.0)
+  // held over what floats over the foot, the pointer still: the list scrolls on by itself
+  t.move(x + 20.0, 180.0)
+  let o0 = t.list_offset()
+  t.run_for(@ui.scrollbar_hold_ms)
+  let o1 = t.list_offset()
+  assert_true(o1 > o0 + 80.0, msg="\{o0} \{o1}")
+  // (row 1 gone up out of view)
+  assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{t.rect_of("row 1 words")}")
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  assert_true(lines.length() >= 5, msg=t.ctx().selected_text())
+  for k in 0..<(lines.length() - 1) {
+    assert_eq(lines[k], "row \{k + 1} words")
+  }
+  // further past it, faster
+  t.move(x + 20.0, 199.0)
+  t.run_for(@ui.scrollbar_hold_ms)
+  let o2 = t.list_offset()
+  assert_true(o2 - o1 > o1 - o0, msg="\{o0} \{o1} \{o2}")
+  // back in among the rows: it stops
+  t.move(x + 20.0, 100.0)
+  let o3 = t.list_offset()
+  t.run_for(@ui.scrollbar_hold_ms)
+  assert_eq(t.list_offset(), o3)
+  // held past its top: it scrolls back up; let go, it stops
+  t.move(x + 20.0, -20.0)
+  t.run_for(@ui.wheel_ease_ms)
+  let o4 = t.list_offset()
+  assert_true(o4 < o3, msg="\{o3} \{o4}")
+  t.release(x + 20.0, -20.0)
+  let o5 = t.list_offset()
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+  assert_eq(t.list_offset(), o5)
+  t.assert_idle()
+}
+
+///|
 test "desktop: with a field focused, words picked with the pointer are what ⌘C copies; picking them lets go of the field's" {
   let f = @ui.Field::new(text="draft words")
   let t = @ui.Tester::new(

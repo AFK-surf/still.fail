@@ -1064,6 +1064,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     c.editor_drag = false
     c.handle_drag = 0
     picked.dragging = false
+    select_edge_stop()
     second_ptr[2] = 0.0
   } else {
     // (the touch cancelled: no tap, no handle dragged)

@@ -818,6 +818,8 @@ test "a list's running sums are its rows' heights added up" {
         ease_t0: 0.0,
         ease_done: 0.0,
         ease_mover: Mover::new(),
+        edge_v: 0.0,
+        edge_t: 0.0,
         vw: 0.0,
         vh: 0.0,
         sel: false,
