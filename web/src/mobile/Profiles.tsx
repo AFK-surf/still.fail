@@ -547,15 +547,15 @@ function ProfileBody({ p }: { p: Profile }) {
           </ListCard>
         </>
       )}
-      <SectionHeader title={t("web-mobile.profiles.usedBy")} start={24} />
-      <ListCard>
-        {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.unused")}</span></ListRow>}
+      {/* The connects bound to it (Slack, Feishu): none says nothing of the station's own chats, which run on any. */}
+      {users.length > 0 && <SectionHeader title={t("web-mobile.profiles.usedBy")} start={24} />}
+      {users.length > 0 && <ListCard>
         {users.map((c) => (
           <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
             <SlackMark kind={c.kind} size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
           </ListRow>
         ))}
-      </ListCard>
+      </ListCard>}
       {/* A decision model's models are said, not picked. */}
       {!copy && p.decisionOnly && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
       {!copy && <RunRows p={p} />}

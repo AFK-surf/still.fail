@@ -92,6 +92,19 @@ test("the same account signed in on two stations each is one row, each station a
   assert.equal(two.items.length, 2);
 });
 
+test("an account signed in on two stations, signed out on one: the row shows the one that works and names where the other needs a look", () => {
+  const signedOut = shownProfile(profile("machine-claude", { email: "z@x.test", runtime: "claude", machine: true, check: { state: "login" } }));
+  const fine = shownProfile(profile("machine-claude", { email: "z@x.test", runtime: "claude", machine: true, check: { state: "ok" } }));
+  const view = workspaceProfiles([station(A, "macbook", true, [signedOut]), station(B, "mini", true, [fine])]);
+  assert.equal(view.items.length, 1);
+  const row = view.items[0];
+  assert.equal(row.stationName, "mini", "the copy that works");
+  assert.deepEqual([row.look, row.state], [true, { text: "macbook：需要登录", tone: "amber" }]);
+  // Both fine: nothing said.
+  const both = workspaceProfiles([station(A, "macbook", true, [fine]), station(B, "mini", true, [fine])]);
+  assert.deepEqual([both.items[0].look, both.items[0].state, both.items[0].stationName], [false, null, "macbook"]);
+});
+
 test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's, SuperGrok's, Kimi Code's and OpenCode Go's signed in, Cursor's, Devin's, then keys", () => {
   const view = workspaceProfiles([
     station(A, "studio", true, [

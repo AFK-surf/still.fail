@@ -703,11 +703,20 @@ test("a login not finished in time ends, its command with it; one that cannot ru
     const ended = await m.until(slow.id, (l) => l.state === "failed", "timed out");
     assert.equal(ended.error, "15 分钟内没有完成登录，已结束");
     assert.equal(m.logins.logins()[0]!.id, slow.id);
+    // The environment a line gives before its program, as a shell takes it (`~/` its home), not a program to run.
+    script(join(m.bin, "fakeenv"), `#!/bin/sh\necho "dir=$FAKE_DIR mode=$FAKE_MODE"\n`);
+    const given = await m.logins.start("FAKE_DIR=~/x FAKE_MODE='a b' fakeenv", m.by);
+    const ran = await m.until(given.id, (l) => l.endedAt !== undefined, "ended");
+    assert.equal(ran.state, "done", JSON.stringify(ran));
+    assert.equal(ran.name, "fakeenv");
+    assert.ok(m.screen(given.id).includes(`dir=${m.home}/x mode=a b`), m.screen(given.id));
     const none = await m.logins.start(["no-such-login-command"], m.by);
     const failed = await m.until(none.id, (l) => l.state === "failed", "cannot run");
     assert.ok(failed.error !== undefined && failed.error !== "", JSON.stringify(failed));
     await assert.rejects(m.logins.start("gh 'open", m.by), (e: unknown) => e instanceof Refused && e.status === 400);
     await assert.rejects(m.logins.start("  ", m.by), (e: unknown) => e instanceof Refused && e.status === 400);
+    const bare = await m.logins.start("FAKE_DIR=x", m.by);
+    assert.equal((await m.until(bare.id, (l) => l.state === "failed", "nothing to run")).error, "要一条登录命令，用工具自己的，比如 gh auth login");
   } finally {
     await m.logins.close();
   }

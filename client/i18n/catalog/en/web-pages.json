@@ -723,7 +723,7 @@
   "web-pages.profiles.useMachineTip": "Uses this machine's sign-in as is, and follows it if you switch accounts or sign out there",
   "web-pages.profiles.useThis": "Use this account",
   "web-pages.profiles.usedBy": "Used by",
-  "web-pages.profiles.usedByNone": "No connects use this profile yet",
+  "web-pages.profiles.onStation": "On {station}",
   "web-pages.profiles.usage": "Last 7 days",
   "web-pages.profiles.usageHere": "Last 7 days · on {station}",
   "web-pages.profiles.usageAll": "All usage",

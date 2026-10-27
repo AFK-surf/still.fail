@@ -14,7 +14,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, unwrapped, urlsIn } from "../ops/command-output.ts";
+import { type Loopback, asksEnter, assignmentsOf, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, unwrapped, urlsIn } from "../ops/command-output.ts";
 
 export const COLS = 200;
 export const ROWS = 40;
@@ -132,10 +132,14 @@ export class LoginRun {
 
   /// Starts the command; one that cannot be run ends failed, saying why.
   async start(): Promise<void> {
-    const [program, ...args] = this.command;
+    // `NAME=value claude auth login`: the environment it is given, as a shell takes it, not a program to run.
+    const given = assignmentsOf(this.command, platform.home(this.#o.env));
+    const [program, ...args] = given.rest;
+    if (program === undefined) return this.#fail(tr(this.#o.lang, "station.machineLogin.badCommand"));
     const env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
     const browser = `${this.#o.shims}/${platform.exe("browser")}`;
-    Object.assign(env, {
+    // What it is given, but not the stand-ins for the browser: the page it opens is the person's to open.
+    Object.assign(env, given.env, {
       TERM: "xterm-256color",
       COLUMNS: String(COLS),
       LINES: String(ROWS),
