@@ -67,6 +67,7 @@ fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
     placeholder: "发消息",
     toolbar: None,
     note: [],
+    notice: None,
     roomy: false,
     locked: false,
     offline: false,

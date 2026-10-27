@@ -434,6 +434,12 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_table_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" || f.mode == "chat-screens-pc" {
             with_message(rich_chat(f.older), screens_answer)
+          } else if f.mode == "chat-screens-cold" {
+            with_cache_cold(with_message(rich_chat(f.older), screens_answer))
+          } else if f.mode == "chat-archived" {
+            with_flag(rich_chat(f.older), "archived")
+          } else if f.mode == "chat-cold-offline" {
+            with_flag(with_cache_cold(rich_chat(f.older)), "offline")
           } else if f.mode == "chat-peeks" {
             with_message(rich_chat(f.older), peeks_answer)
           } else if f.mode == "chat-need" {
@@ -1689,6 +1695,20 @@ pub fn with_cache_cold(v : Json) -> Json {
     Object(m) => {
       let o = m.copy()
       o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// chat-archived: the chat archived; chat-cold-offline: its agent's prompt cache over and its station down (what is
+/// said over its composer, one line each: sfpages chat_notices).
+pub fn with_flag(v : Json, name : String) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o[name] = Json::boolean(true)
       Json::object(o)
     }
     _ => v

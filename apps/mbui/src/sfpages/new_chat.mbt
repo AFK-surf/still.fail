@@ -626,6 +626,7 @@ fn new_composer_place(
         placeholder: @sf.t("web-main.newChat.placeholder"),
         toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
         note: [],
+        notice: None,
         roomy: wide,
         locked: held || text(v, "runtime") == "" || field(v, "model") is None,
         offline: false,
