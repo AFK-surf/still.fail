@@ -41,7 +41,7 @@ extendDemo({
   then: (t, value) => {
     if (!value || typeof value !== "object") return undefined;
     // A computer's chat with its agent's work open beside it, as one opens it (its 执行 panel).
-    const shown = t.topic === "chat" && pane !== "phone" ? withHistory(value as ChatView) : value;
+    const shown = t.topic === "chat" && query.has("history") ? withHistory(value as ChatView) : value;
     if (t.topic !== "chats") return machine === "Studio" ? shown : renamed(shown);
     const v = value as ChatsView;
     return {

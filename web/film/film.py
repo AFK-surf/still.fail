@@ -75,14 +75,14 @@ HDR = {
 
 # A window's light from the left, soft.
 sun_data = bpy.data.lights.new('sun', 'SUN')
-sun_data.energy = 2.6
-sun_data.angle = math.radians(6)
+sun_data.energy = 6.5
+sun_data.angle = math.radians(1.5)
 sun_data.color = (1.0, 0.95, 0.88)
 sun = bpy.data.objects.new('sun', sun_data)
 scene.collection.objects.link(sun)
 # three's (x, y, z), y up, as Blender's (x, -z, y), z up.
 C = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
-sun_from = (C @ Vector((-3, 4.5, 3, 1))).to_3d()
+sun_from = (C @ Vector((-4.2, 3.0, 1.2, 1))).to_3d()
 sun.rotation_euler = (-sun_from).to_track_quat('-Z', 'Y').to_euler()
 
 # ---- The camera ----

@@ -111,7 +111,7 @@ for (const x of [-1.42, 1.42]) for (const z of [-0.66, 0.26]) {
 
 // ---- Light: a window's, from the left, and the room's (the HDR) ----
 const sun = new THREE.DirectionalLight(0xfff1de, 2.2);
-sun.position.set(-3, 4.5, 3); sun.castShadow = true;
+sun.position.set(-4.2, 3.0, 1.2); sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = 8; sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.01;
 Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 12 });
 scene.add(sun);
@@ -181,7 +181,7 @@ function machine(root, key, width, screenTest, o = {}) {
   return group;
 }
 const [laptopModel, displayModel, miniModel, monitorModel, pcModel, phoneModel, plantModel] = await Promise.all([
-  load('macbook/scene.gltf'), load('studio-display.glb'), load('mac-mini.glb'), load('monitor/scene.gltf'), load('gaming-pc/scene.gltf'), load('iphone.glb'), load('plant/plant.gltf'),
+  load('macbook/scene.gltf'), load('studio-display.glb'), load('mac-mini.glb'), load('monitor/scene.gltf'), load('gaming-pc/scene.gltf'), load('iphone.glb'), load('ph/potted_plant_02/potted_plant_02.gltf'),
 ]);
 // The Mac at home: a MacBook Pro 16, turned towards the middle of the desk.
 const laptop = machine(laptopModel, 'home', 0.356, (n) => n === 'sfCQkHOWyrsLmor', { ownUv: true, flipY: true });
@@ -196,9 +196,50 @@ const win = machine(monitorModel, 'win', 0.61, (n) => n === 'Screen' || n === 'P
 win.position.set(0.18, DESK_Y, -0.4); win.rotation.y = -0.06; scene.add(win);
 const tower = machine(pcModel, null, 0.46, null, { by: 'height' });
 tower.position.set(1.15, 0, -0.62); tower.rotation.y = -0.25; scene.add(tower);
+// Two framed photographs on the back wall (Poly Haven's, as the desktops' wallpapers).
+for (const [img, x, y, w, h, ox] of [['wall-win.jpg', -0.98, 1.6, 0.5, 0.66, 0.32], ['wall-mac.jpg', 0.25, 1.78, 0.78, 0.52, 0.55]]) {
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.05, h + 0.05, 0.03), physical({ color: 0x2a2420, roughness: 0.5 }));
+  frame.position.set(x, y, -1.285); frame.castShadow = true; frame.name = 'room'; scene.add(frame);
+  const t = tex(img); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.repeat.set(0.18 * w / h, 0.36); t.offset.set(ox, 0.36);
+  const print = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.06, h - 0.06), physical({ map: t, roughness: 0.35 }));
+  print.position.set(x, y, -1.268); print.name = 'room'; scene.add(print);
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(w, h), physical({ color: 0xf2efe9, roughness: 0.9 }));
+  mat.position.set(x, y, -1.2695); mat.name = 'room'; scene.add(mat);
+}
 // A plant at the far end of the desk: someone works here.
 const plant = machine(plantModel, null, 0.3, null);
 plant.position.set(-1.28, DESK_Y, -0.55); scene.add(plant);
+// The room around the desk: a window in the wall on the left the sun comes in by, a bookcase, pictures, small things.
+{
+  const PLASTER = physical({ map: tex('wall_diff.jpg', [2, 2]), normalMap: tex('wall_nor.jpg', [2, 2], false), color: 0xf3efe8, roughness: 0.92 });
+  const part = (w, h, d, x, y, z, mat = PLASTER) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; m.name = 'room'; scene.add(m); return m; };
+  // The left wall, x = -2.1, from the back wall forwards, with a window (z -1.0 .. 0.4, y 0.9 .. 2.3).
+  const X = -2.15, T = 0.12;
+  part(T, 0.9, 4.5, X, 0.45, 0.95);
+  part(T, 0.5, 4.5, X, 2.55, 0.95);
+  part(T, 1.4, 0.3, X, 1.6, -1.15);
+  part(T, 1.4, 2.8, X, 1.6, 1.8);
+  const FRAME = physical({ color: 0xf4f2ee, roughness: 0.5 });
+  part(0.14, 0.05, 1.4, X + 0.02, 0.92, -0.3, FRAME); part(0.14, 0.05, 1.4, X + 0.02, 2.28, -0.3, FRAME);
+  part(0.14, 1.4, 0.05, X + 0.02, 1.6, -1.0, FRAME); part(0.14, 1.4, 0.05, X + 0.02, 1.6, 0.4, FRAME); part(0.1, 1.4, 0.04, X + 0.02, 1.6, -0.3, FRAME);
+  // A ceiling, out of the shots: the light comes in by the window.
+  part(6, 0.1, 5, 0, 2.85, 0.9);
+}
+const props = await Promise.all([
+  ['Shelf_01', 1.86, 0, -1.08, -Math.PI / 2 * 0],
+  ['potted_plant_04', 0.62, DESK_Y, -0.12, 0.4],
+  ['alarm_clock_01', 1.2, DESK_Y, -0.3, -0.5],
+  ['ceramic_vase_01', -1.35, DESK_Y, -0.2, 0],
+].map(async ([id, x, y, z, ry]) => {
+  const m = await load(`ph/${id}/${id}.gltf`);
+  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // Standing on what it is put on (its lowest point there), or for a picture, its middle there.
+  const b = new THREE.Box3().setFromObject(m);
+  m.position.set(-(b.min.x + b.max.x) / 2, id.startsWith('hanging') ? -(b.min.y + b.max.y) / 2 : -b.min.y, -(b.min.z + b.max.z) / 2);
+  const g = new THREE.Group(); g.add(m); g.position.set(x, y, z); g.rotation.y = ry; g.name = id;
+  scene.add(g);
+  return g;
+}));
 // The cloud machine: far away in its machine room; what it does, seen over ssh, a window floating on the desk's right.
 const cloud = { userData: { leds: [] } };
 const ssh = new THREE.Group();
@@ -404,7 +445,7 @@ window.plan = (fps) => {
 window.exportGlb = async () => {
   const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
   pose(0);
-  const keep = [laptop, studio, mini, win, tower, plant, ssh, phone, desk, wall, floor, ...scene.children.filter((o) => o.isMesh && o.geometry?.type === 'BoxGeometry')];
+  const keep = [laptop, studio, mini, win, tower, plant, ssh, phone, desk, wall, floor, ...props, ...scene.children.filter((o) => o.isMesh && (o.geometry?.type === 'BoxGeometry' || o.name === 'room'))];
   const root = new THREE.Scene();
   for (const o of keep) root.add(o.clone());
   // The screens' pictures are Cycles' to put on: empty here.

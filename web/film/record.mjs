@@ -105,10 +105,10 @@ const step = (page, ms) => page.evaluate(async (ms) => {
 // ---- panes ----
 const PANES = {
   phone: { viewport: { width: 390, height: 844 }, scale: 2, phone: true },
-  home: { viewport: { width: 1280, height: 800 }, scale: 1.5 },
-  studio: { viewport: { width: 1280, height: 800 }, scale: 1.5 },
-  win: { viewport: { width: 1280, height: 800 }, scale: 1.5 },
-  cloud: { viewport: { width: 1280, height: 800 }, scale: 1.5 },
+  home: { viewport: { width: 760, height: 820 }, scale: 2 },
+  studio: { viewport: { width: 760, height: 820 }, scale: 2 },
+  win: { viewport: { width: 760, height: 820 }, scale: 2 },
+  cloud: { viewport: { width: 760, height: 820 }, scale: 2 },
 };
 
 async function film(name, base, browser) {
@@ -197,6 +197,8 @@ const FILES = [
   ['wall_diff.jpg', `${PH}/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_diff_2k.jpg`],
   ['wall_nor.jpg', `${PH}/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_nor_gl_2k.jpg`],
   ['floor_diff.jpg', `${PH}/Textures/jpg/2k/wood_floor_deck/wood_floor_deck_diff_2k.jpg`],
+  ['wall-mac.jpg', `${PH}/HDRIs/extra/Tonemapped%20JPG/venice_sunset.jpg`],
+  ['wall-win.jpg', `${PH}/HDRIs/extra/Tonemapped%20JPG/kloofendal_48d_partly_cloudy_puresky.jpg`],
 ];
 /** Folders (a model and its textures) taken out of a repository: [where, repository, path]. */
 const FOLDERS = [
@@ -209,13 +211,15 @@ if (doing('assets')) {
   const A = join(OUT, 'assets');
   await mkdir(A, { recursive: true });
   for (const [name, url] of FILES) if (!existsSync(join(A, name))) await run('curl', ['-fsSL', '--retry', '3', '-o', join(A, name), url]);
-  // The plant: Poly Haven's model, its glTF and the files it names.
-  if (!existsSync(join(A, 'plant'))) {
-    const info = await (await fetch('https://api.polyhaven.com/files/potted_plant_02')).json();
+  // Poly Haven's models (the room's things), each its glTF and the files it names.
+  for (const id of ['potted_plant_02', 'Shelf_01', 'hanging_picture_frame_01', 'hanging_picture_frame_02', 'potted_plant_04', 'alarm_clock_01', 'book_encyclopedia_set_01', 'ceramic_vase_01']) {
+    const dir = join(A, 'ph', id);
+    if (existsSync(join(dir, `${id}.gltf`))) continue;
+    const info = await (await fetch(`https://api.polyhaven.com/files/${id}`)).json();
     const g = info.gltf['1k'].gltf;
-    await mkdir(join(A, 'plant'), { recursive: true });
-    await run('curl', ['-fsSL', '-o', join(A, 'plant', 'plant.gltf'), g.url]);
-    for (const [path, f] of Object.entries(g.include ?? {})) { await mkdir(join(A, 'plant', path, '..'), { recursive: true }); await run('curl', ['-fsSL', '-o', join(A, 'plant', path), f.url]); }
+    await mkdir(dir, { recursive: true });
+    await run('curl', ['-fsSL', '-o', join(dir, `${id}.gltf`), g.url]);
+    for (const [path, f] of Object.entries(g.include ?? {})) { await mkdir(join(dir, path, '..'), { recursive: true }); await run('curl', ['-fsSL', '-o', join(dir, path), f.url]); }
   }
   for (const [name, repo, path] of FOLDERS) {
     if (existsSync(join(A, name))) continue;
@@ -226,9 +230,9 @@ if (doing('assets')) {
     await run('mv', [join(tmp, path), join(A, name)]);
     await rm(tmp, { recursive: true, force: true });
   }
-  if (!existsSync(join(OUT, 'vendor/node_modules/n8ao'))) {
+  if (!existsSync(join(OUT, 'vendor/node_modules/@vscode/codicons'))) {
     await mkdir(join(OUT, 'vendor'), { recursive: true });
-    await run('npm', ['install', '--no-save', '--prefix', join(OUT, 'vendor'), 'three@0.180.0', 'n8ao@^1.9.0', 'postprocessing@^6.37.0']);
+    await run('npm', ['install', '--no-save', '--prefix', join(OUT, 'vendor'), 'three@0.180.0', 'n8ao@^1.9.0', 'postprocessing@^6.37.0', '@vscode/codicons@^0.0.36']);
   }
   console.log('assets: done');
 }
@@ -249,7 +253,7 @@ if (doing('screens')) {
     await page.goto(`${base}screens.html?screen=${name}`);
     await page.waitForFunction(() => typeof window.draw === 'function');
     for (let f = 0; f < LENGTH * SCREEN_FPS; f++) {
-      await page.evaluate((s) => window.draw(s), f / SCREEN_FPS);
+      await page.evaluate(async (s) => { await window.draw(s); }, f / SCREEN_FPS);
       await page.screenshot({ path: join(dir, `${String(f).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 90 });
     }
     await page.close();

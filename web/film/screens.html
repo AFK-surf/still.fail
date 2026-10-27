@@ -3,42 +3,71 @@
 <head>
 <meta charset="utf-8">
 <!-- What each machine's screen shows as the film goes (920 × 575, drawn at twice that): ?screen=home|studio|win|cloud,
-     then draw(seconds). record.mjs films each into frames/screen-<name>/, which scene.html puts on the machines' glass.
-     The three machines work at once: the Mac at home sends them their work in one go (9.4 s), and each answers when it
-     is done, the cloud first, Windows last (the phone's story, story.ts: their answers reach its chat then). -->
+     then draw(seconds). record.mjs films each into frames/screen-<name>/, which the room puts on the machines' glass.
+     Each desktop as its system draws it (macOS's menu bar and windows, Windows 11's taskbar, a tmux over ssh), the
+     work in the tools people use for it (an editor, a terminal, the Android emulator, an installer), and still.fail
+     itself in a window of its own: the real app, as filmed (frames/<pane>/, record.mjs panes). The three machines work
+     at once: the Mac at home sends them their work in one go (9.4 s); each answers when done, the cloud first. -->
+<link rel="stylesheet" href="vendor/node_modules/@vscode/codicons/dist/codicon.css">
 <style>
   * { box-sizing: border-box; margin: 0; }
   html, body { width: 920px; height: 575px; overflow: hidden; background: #000; }
-  body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; color: #17181b; -webkit-font-smoothing: antialiased; }
+  body { font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif; color: #17181b; -webkit-font-smoothing: antialiased; }
   #screen { position: absolute; inset: 0; overflow: hidden; }
   .mono { font-family: "SF Mono", Menlo, monospace; }
-  .menubar { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13.5px; color: #111; background: rgba(246,246,248,.78); backdrop-filter: blur(20px); }
+  .abs { position: absolute; }
+  .wall { position: absolute; inset: 0; background-size: cover; }
+  /* macOS */
+  .menubar { position: absolute; left: 0; right: 0; top: 0; height: 22px; display: flex; align-items: center; gap: 15px; padding: 0 12px; font-size: 11.5px; color: #fff; background: rgba(30,30,40,.28); backdrop-filter: blur(30px) saturate(1.6); text-shadow: 0 0 1px rgba(0,0,0,.2); }
   .menubar b { font-weight: 700; }
-  .menubar .r { margin-left: auto; display: flex; gap: 14px; align-items: center; }
-  .win-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: rgba(238,241,247,.86); backdrop-filter: blur(30px); display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid rgba(255,255,255,.5); }
-  .win-bar i { width: 30px; height: 30px; border-radius: 6px; display: block; }
-  .win-bar .clock { position: absolute; right: 14px; top: 6px; text-align: right; font-size: 11.5px; line-height: 16px; color: #111; }
-  .sf { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 16px; background: rgba(252,251,249,.94); color: #3b3d42; border-radius: 12px; box-shadow: 0 8px 26px -8px rgba(0,0,0,.45); }
-  .sf b { font-weight: 650; color: #17181b; }
-  .sf .ring { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #e06d2c; border-right-color: transparent; }
-  .sf .ok { width: 15px; height: 15px; border-radius: 50%; background: #2fb36b; position: relative; }
-  .sf .ok::after { content: ""; position: absolute; left: 5px; top: 2.5px; width: 3px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-  .sf .t { margin-left: auto; color: #8b8d93; font-variant-numeric: tabular-nums; }
+  .menubar .r { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .mwin { position: absolute; border-radius: 9px; overflow: hidden; box-shadow: 0 18px 50px -8px rgba(0,0,0,.55), 0 0 0 .5px rgba(0,0,0,.5), inset 0 0 0 .5px rgba(255,255,255,.18); }
+  .lights { display: flex; gap: 7px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.18); }
+  .dock { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); height: 44px; padding: 5px 8px; display: flex; gap: 6px; border-radius: 15px; background: rgba(255,255,255,.22); backdrop-filter: blur(24px) saturate(1.6); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.35); }
+  .dock i { width: 34px; height: 34px; border-radius: 9px; display: block; }
+  /* VS Code */
+  .vsc { background: #1f1f1f; color: #cccccc; font-size: 11px; }
+  .vsc .title { height: 30px; background: #181818; display: flex; align-items: center; padding: 0 10px; border-bottom: 1px solid #2b2b2b; }
+  .vsc .search { margin: 0 auto; width: 260px; height: 20px; border-radius: 5px; background: #2a2a2a; border: 1px solid #3c3c3c; display: flex; align-items: center; justify-content: center; gap: 6px; color: #9d9d9d; font-size: 11px; }
+  .vsc .act { position: absolute; left: 0; top: 30px; bottom: 22px; width: 38px; background: #181818; border-right: 1px solid #2b2b2b; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 10px; color: #858585; font-size: 20px; }
+  .vsc .act .on { color: #d7d7d7; box-shadow: -10px 0 0 -8px #0078d4; }
+  .vsc .side { position: absolute; left: 38px; top: 30px; bottom: 22px; width: 150px; background: #181818; border-right: 1px solid #2b2b2b; font-size: 11px; }
+  .vsc .side .h { height: 28px; display: flex; align-items: center; padding: 0 12px; font-size: 10px; letter-spacing: .5px; color: #9d9d9d; }
+  .vsc .side .row { height: 20px; display: flex; align-items: center; gap: 5px; white-space: pre; color: #cccccc; }
+  .vsc .side .row.sel { background: #37373d; }
+  .vsc .tabs { position: absolute; left: 188px; right: 0; top: 30px; height: 30px; background: #181818; display: flex; border-bottom: 1px solid #2b2b2b; }
+  .vsc .tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 11px; color: #9d9d9d; border-right: 1px solid #2b2b2b; }
+  .vsc .tab.on { background: #1f1f1f; color: #fff; box-shadow: inset 0 1px 0 #0078d4; }
+  .vsc .crumbs { position: absolute; left: 188px; right: 0; top: 60px; height: 20px; display: flex; align-items: center; gap: 4px; padding-left: 12px; color: #a9a9a9; font-size: 11px; }
+  .vsc .code { position: absolute; left: 188px; top: 82px; right: 70px; font-family: "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 19px; }
+  .vsc .ln { display: inline-block; width: 40px; text-align: right; padding-right: 16px; color: #6e7681; }
+  .vsc .mini { position: absolute; right: 10px; top: 84px; width: 50px; }
+  .vsc .mini i { display: block; height: 2px; margin-bottom: 2px; border-radius: 1px; }
+  .vsc .status { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: #181818; border-top: 1px solid #2b2b2b; display: flex; align-items: center; gap: 12px; padding: 0 8px; font-size: 11px; color: #cccccc; }
+  .vsc .status .remote { background: #0078d4; color: #fff; height: 100%; display: flex; align-items: center; padding: 0 8px; margin-left: -8px; }
+  .k { color: #9cdcfe; } .p { color: #d7ba7d; } .v { color: #ce9178; } .n { color: #b5cea8; } .s { color: #ce9178; } .c { color: #6a9955; } .pu { color: #c586c0; } .cl { color: #4ec9b0; }
+  .del { background: rgba(255,0,0,.18); } .del .ln { color: #f85149; }
+  .add { background: rgba(35,134,54,.28); } .add .ln { color: #3fb950; }
+  /* still.fail's own window */
+  .sfwin img { display: block; width: 100%; }
+  /* Terminal */
+  .term { font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 17px; color: #e6e6e6; white-space: pre; }
+  .term .g { color: #4ec95b; } .term .d { color: #8b8b8b; } .term .y { color: #e5c07b; } .term .c { color: #6cb6ff; } .term .b { font-weight: 700; } .term .r { color: #ff7b72; }
+  /* Windows 11 */
+  .w11 { position: absolute; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 60px -10px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.35); }
+  .w11 .tb { height: 30px; display: flex; align-items: center; font-size: 11.5px; padding-left: 12px; }
+  .w11 .ctl { margin-left: auto; display: flex; height: 100%; }
+  .w11 .ctl span { width: 42px; display: flex; align-items: center; justify-content: center; font-family: "Segoe Fluent Icons", "SF Pro Text"; font-size: 11px; }
+  .task { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: rgba(32,32,36,.82); backdrop-filter: blur(30px) saturate(1.4); border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .task i { width: 30px; height: 30px; border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+  .task .tray { position: absolute; right: 10px; top: 5px; text-align: right; font-size: 10.5px; line-height: 15px; color: #fff; display: flex; gap: 10px; align-items: center; }
+  .login { display: flex; flex-direction: column; padding: 20px 16px; border-radius: 14px; }
+  .login .lg { width: 30px; height: 30px; border-radius: 9px; background: #5b5bd6; margin-bottom: 12px; }
+  .login h4 { font-size: 17px; margin-bottom: 3px; } .login small { font-size: 11px; opacity: .6; margin-bottom: 14px; }
+  .login .f { height: 32px; border-radius: 8px; margin-bottom: 8px; font-size: 11px; display: flex; align-items: center; padding: 0 10px; opacity: .8; }
+  .login .btn { height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 650; font-size: 13px; margin-top: 8px; }
   .flash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
-  .code { font-family: "SF Mono", Menlo, monospace; font-size: 19px; line-height: 31px; }
-  .tok-k { color: #c792ea; } .tok-p { color: #82aaff; } .tok-v { color: #f78c6c; } .tok-s { color: #c3e88d; } .tok-c { color: #6b7089; }
-  .del { background: rgba(255,90,90,.2); text-decoration: line-through; text-decoration-color: rgba(255,120,120,.8); }
-  .add { background: rgba(80,220,140,.18); }
-  .term { font-family: "SF Mono", Menlo, monospace; font-size: 18px; line-height: 27px; color: #d7dae0; white-space: pre; }
-  .term .g { color: #5fd38d; } .term .d { color: #7f8592; } .term .y { color: #e5c07b; } .term .c { color: #61afef; } .term .b { font-weight: 700; }
-  .win { position: absolute; border-radius: 10px; overflow: hidden; box-shadow: 0 22px 50px -10px rgba(0,0,0,.5), 0 0 0 .5px rgba(0,0,0,.4); }
-  .titlebar { height: 30px; display: flex; align-items: center; padding: 0 12px; gap: 7px; font-size: 13px; }
-  .titlebar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
-  .login { display: flex; flex-direction: column; padding: 22px 18px; border-radius: 16px; }
-  .login .lg { width: 34px; height: 34px; border-radius: 10px; background: #5b5bd6; margin-bottom: 14px; }
-  .login h4 { font-size: 19px; margin-bottom: 3px; } .login small { font-size: 12px; opacity: .6; margin-bottom: 16px; }
-  .login .f { height: 36px; border-radius: 9px; margin-bottom: 9px; font-size: 12px; display: flex; align-items: center; padding: 0 11px; opacity: .8; }
-  .login .btn { height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 650; font-size: 14px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -47,155 +76,173 @@
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const span = (s, a, b) => clamp((s - a) / (b - a));
-const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const latest = (list, s, none = null) => { let v = none; for (const [t, x] of list) if (s >= t) v = x; return v; };
 const lines = (list, s) => list.filter(([t]) => s >= t).map(([, l]) => l).join('\n');
 
 /** The film's moments (seconds). */
-const T = { sent: 4.8, sendOut: 9.4, done: { cloud: 20.0, studio: 19.6, win: 21.6 }, merged: 30.65 };
+const T = { done: { cloud: 20.0, studio: 19.6, win: 21.6 } };
 /** The clock as the film fast-forwards it: 8:40 as it opens, 8:53 when the last answer is in. */
-function clock(s) {
-  const m = s < 9.4 ? 40 + s / 9.4 : 41 + (s - 9.4) / (22.2 - 9.4) * 12;
-  const mm = Math.min(59, Math.floor(m));
-  return `8:${String(mm).padStart(2, '0')}`;
-}
-/** How long a step has been running, as its line says, the fast-forwarded clock's. */
-function took(s, from) { const sec = Math.max(0, Math.round((s - from) * 56)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
-
-function strip(chat, s, doing, since, done, from) {
-  if (s < from) return '';
-  const icon = done ? '<span class="ok"></span>' : `<span class="ring" style="transform:rotate(${(s * 360) % 360}deg)"></span>`;
-  return `<div class="sf">${icon}<b>still.fail</b><span>· ${chat} · ${esc(doing)}</span>${done ? '' : `<span class="t">${took(s, since)}</span>`}</div>`;
-}
-function menubar(app, items, s) {
-  return `<div class="menubar"><span style="font-size:15px"></span><b>${app}</b>${items.map((i) => `<span>${i}</span>`).join('')}<span class="r"><span>⌁</span><span>📶</span><span>周三 ${clock(s)}</span></span></div>`;
-}
-function loginCard(dark, fixed, w = 250) {
+function clock(s) { const m = s < 9.4 ? 40 + s / 9.4 : 41 + (s - 9.4) / (22.2 - 9.4) * 12; return `8:${String(Math.min(59, Math.floor(m))).padStart(2, '0')}`; }
+function took(s, from) { const sec = Math.max(0, Math.round((s - from) * 56)); return `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`; }
+/** still.fail's window: the app as filmed for this machine's chat (record.mjs panes), at this moment. */
+const LEAD = 0.6, PANE_LAST = 2008;
+function sf(pane, s) { const f = Math.min(PANE_LAST, 2 * Math.floor(Math.max(0, (s - LEAD) * 60) / 2)); return `frames/${pane}/${String(f).padStart(5, '0')}.jpg`; }
+function loginCard(dark, fixed, w = 230) {
   const bg = dark ? '#1c1d21' : '#fff', fg = dark ? '#eceef2' : '#16181d', line = dark ? '#34353b' : '#dcdfe4';
   const btn = fixed ? 'background:#5b5bd6;color:#fff' : (dark ? 'background:#202124;color:#1a1a1a' : 'background:#e9e9ec;color:#e1e1e4');
   return `<div class="login" style="width:${w}px;background:${bg};color:${fg};box-shadow:0 1px 3px rgba(0,0,0,.1)"><div class="lg"></div><h4>登录 Acme</h4><small>欢迎回来</small>
     <div class="f" style="border:1px solid ${line}">you@acme.dev</div><div class="f" style="border:1px solid ${line}">••••••••••</div><div class="btn" style="${btn}">登录</div></div>`;
 }
-const MAC_WALL = 'background:radial-gradient(1200px 700px at 20% 110%,#f5a37a,transparent 60%),radial-gradient(900px 700px at 90% -10%,#7b6cf6,transparent 60%),linear-gradient(160deg,#3f4aa8,#9b6bd3 55%,#f0a07c)';
+const MAC_WALL = 'background-image:url(assets/wall-mac.jpg);background-position:50% 55%;background-size:260% auto';
+const WIN_WALL = 'background-image:url(assets/wall-win.jpg);background-position:35% 40%;background-size:240% auto';
 
-// ---- The Mac at home: its editor, the button's colours changed, its preview beside ----
-const MAC_DOING = [[4.8, '收到你的消息'], [5.4, '思考中'], [6.7, '搜索 LoginButton'], [7.5, '读取 login.css'], [8.2, '编辑 login.css'],
-  [9.4, '把活派给 Studio、Win 台式机、云主机'], [10.6, '等 3 台机器回来'], [20.0, 'Studio 回来了'], [20.4, '云主机回来了'], [22.0, 'Win 台式机回来了'],
-  [23.0, '写回复'], [24.2, '等你决定：合进 main 吗？'], [28.0, '运行 gh pr merge'], [30.65, '已合进 main']];
-const MAC_SINCE = [[4.8, 4.8], [9.4, 9.4], [23.0, 23.0], [28.0, 28.0]];
+function menubar(app, items, s, dark = false) {
+  return `<div class="menubar"><span style="font-size:13px"></span><b>${app}</b>${items.map((i) => `<span>${i}</span>`).join('')}
+    <span class="r"><i class="codicon codicon-radio-tower" style="font-size:12px"></i><i class="codicon codicon-search" style="font-size:12px"></i><span>10月28日 周三 ${clock(s)}</span></span></div>`;
+}
+const LIGHTS = '<span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>';
+function dock(running) {
+  const apps = [['#1e88e5', 'Finder'], ['linear-gradient(#5ac8fa,#007aff)', ''], ['#2d2d2d', 'T'], ['#23a3f1', 'C'], ['#3ddc84', 'A'], ['#f2f2f2', 'S']];
+  return `<div class="dock">${apps.map(([c], i) => `<i style="background:${c};${running.includes(i) ? 'box-shadow:0 6px 0 -4px rgba(255,255,255,.9)' : ''}"></i>`).join('')}</div>`;
+}
+/** still.fail's window on a Mac. */
+function sfMac(pane, s, x, y, w) {
+  return `<div class="mwin sfwin" style="left:${x}px;top:${y}px;width:${w}px;background:#f6f5f2">
+    <div style="height:22px;display:flex;align-items:center;padding:0 9px;background:#f0efec;border-bottom:1px solid #e2e0dc">${LIGHTS}<span style="margin:0 auto;font-size:11px;color:#555;font-weight:600">still.fail</span></div>
+    <img src="${sf(pane, s)}"></div>`;
+}
+
+// ---- The Mac at home: VS Code with the change, still.fail beside it ----
 function home(s) {
-  const edited = s >= 8.2;
-  const found = s >= 6.7 && s < 8.2;
-  const code = [
-    ['<span class="tok-p">.login</span> { <span class="tok-k">display</span>: grid; <span class="tok-k">gap</span>: <span class="tok-v">12px</span>; }'],
-    ['<span class="tok-p">.field</span> { <span class="tok-k">height</span>: <span class="tok-v">44px</span>; }'],
+  const edited = s >= 8.2, found = s >= 6.7 && s < 8.2;
+  const rows = [
+    ['<span class="c">/* 登录页 */</span>'],
+    ['<span class="p">.login</span> {'],
+    ['  <span class="k">display</span>: <span class="v">grid</span>;'],
+    ['  <span class="k">gap</span>: <span class="n">12px</span>;'],
+    ['}'],
     [''],
-    ['<span class="tok-c">/* 登录按钮 */</span>'],
-    [`<span class="tok-p" style="${found ? 'background:rgba(255,210,80,.35);border-radius:3px' : ''}">.submit</span> {`],
-    ['  <span class="tok-k">height</span>: <span class="tok-v">46px</span>;'],
-    ['  <span class="tok-k">color</span>: <span class="tok-v">#1a1a1a</span>;', edited ? 'del' : ''],
-    ['  <span class="tok-k">background</span>: <span class="tok-v">#202124</span>;', edited ? 'del' : ''],
-    ...(edited ? [['  <span class="tok-k">color</span>: <span class="tok-s">var(--on-primary)</span>;', 'add'], ['  <span class="tok-k">background</span>: <span class="tok-s">var(--primary)</span>;', 'add']] : []),
+    [`<span class="p" style="${found ? 'background:rgba(234,179,8,.35);outline:1px solid #e5b800' : ''}">.submit</span> {`],
+    ['  <span class="k">height</span>: <span class="n">46px</span>;'],
+    ['  <span class="k">border-radius</span>: <span class="n">10px</span>;'],
+    ['  <span class="k">color</span>: <span class="n">#1a1a1a</span>;', edited ? 'del' : ''],
+    ['  <span class="k">background</span>: <span class="n">#202124</span>;', edited ? 'del' : ''],
+    ...(edited ? [['  <span class="k">color</span>: <span class="cl">var</span>(<span class="k">--on-primary</span>);', 'add'], ['  <span class="k">background</span>: <span class="cl">var</span>(<span class="k">--primary</span>);', 'add']] : []),
+    ['  <span class="k">font-weight</span>: <span class="n">600</span>;'],
+    ['}'],
+    [''],
+    ['<span class="pu">@media</span> (<span class="k">prefers-color-scheme</span>: <span class="v">dark</span>) {'],
+    ['  <span class="p">.login</span> { <span class="k">background</span>: <span class="n">#121316</span>; }'],
     ['}'],
   ];
-  const rows = code.map(([html, cls], i) => `<div class="${cls ?? ''}" style="display:flex;white-space:pre"><span style="width:46px;color:#4b4f63;text-align:right;padding-right:14px">${i + 18}</span><span>${html}</span></div>`).join('');
-  const tree = ['src', '  auth', '    LoginForm.tsx', '    login.css', '  pages', '  theme.css'].map((n) => `<div style="padding:3px 12px;white-space:pre;${n.trim() === 'login.css' ? 'background:#2c3040;color:#fff' : ''}">${n}</div>`).join('');
-  return `<div style="position:absolute;inset:0;${MAC_WALL}">${menubar('Code', ['文件', '编辑', '选择', '查看', '终端'], s)}
-    <div class="win" style="left:16px;top:38px;right:16px;bottom:16px;background:#1b1c22;color:#c8cad3">
-      <div class="titlebar" style="background:#24252d;color:#9a9db0"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin-left:12px">login.css — acme</span>${found ? '<span style="margin-left:auto;background:#2c3040;padding:2px 10px;border-radius:6px;color:#fff" class="mono">LoginButton · 1 处</span>' : ''}</div>
-      <div style="position:absolute;top:30px;left:0;bottom:0;width:150px;background:#202129;font-size:13px;padding-top:8px;color:#9a9db0">${tree}</div>
-      <div class="code" style="position:absolute;top:40px;left:156px;width:470px">${rows}</div>
-      <div style="position:absolute;top:30px;right:0;bottom:0;width:250px;background:#121316;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
-        <span style="font-size:12px;color:#7f8592">预览 · 深色模式</span>${loginCard(true, edited, 200)}</div></div>
-    ${strip('Acme App', s, latest(MAC_DOING, s, ''), latest(MAC_SINCE, s, s), s >= T.merged, T.sent)}</div>`;
+  const code = rows.map(([h, cls], i) => `<div class="${cls ?? ''}" style="white-space:pre"><span class="ln">${i + 14}</span>${h}</div>`).join('');
+  const mini = rows.map(([, cls], i) => `<i style="width:${20 + ((i * 37) % 28)}px;background:${cls === 'add' ? '#3fb950' : cls === 'del' ? '#f85149' : '#5a5a5a'};opacity:.8"></i>`).join('');
+  const tree = [['chevron-down', 'src', 0], ['chevron-down', 'auth', 1], ['file', 'LoginForm.tsx', 2], ['file', 'login.css', 2, true], ['chevron-right', 'pages', 1], ['chevron-right', 'theme', 1], ['file', 'package.json', 0]]
+    .map(([ic, n, d, sel]) => `<div class="row ${sel ? 'sel' : ''}" style="padding-left:${8 + d * 10}px"><i class="codicon codicon-${ic}" style="font-size:12px;color:${ic === 'file' ? '#519aba' : '#c5c5c5'}"></i>${n}${sel && edited ? '<span style="margin-left:auto;margin-right:8px;color:#e2c08d">M</span>' : ''}</div>`).join('');
+  return `<div class="wall" style="${MAC_WALL}"></div>${menubar('Code', ['文件', '编辑', '选择', '查看', '转到', '运行', '终端', '窗口'], s)}
+    <div class="mwin vsc" style="left:10px;top:30px;width:560px;height:488px">
+      <div class="title">${LIGHTS}<div class="search"><i class="codicon codicon-search" style="font-size:11px"></i>acme</div></div>
+      <div class="act"><i class="codicon codicon-files on"></i><i class="codicon codicon-search"></i><i class="codicon codicon-source-control"></i><i class="codicon codicon-debug-alt"></i><i class="codicon codicon-extensions"></i></div>
+      <div class="side"><div class="h">资源管理器</div>${tree}</div>
+      <div class="tabs"><div class="tab on"><span style="color:#519aba">#</span>login.css${edited ? ' <span style="color:#e2c08d">●</span>' : ''}</div><div class="tab"><span style="color:#519aba">⚛</span>LoginForm.tsx</div></div>
+      <div class="crumbs">src <i class="codicon codicon-chevron-right" style="font-size:10px"></i> auth <i class="codicon codicon-chevron-right" style="font-size:10px"></i> <span style="color:#519aba">#</span> login.css <i class="codicon codicon-chevron-right" style="font-size:10px"></i> .submit</div>
+      <div class="code">${code}</div><div class="mini">${mini}</div>
+      <div class="status"><span class="remote"><i class="codicon codicon-remote" style="font-size:12px"></i></span><i class="codicon codicon-git-branch" style="font-size:12px"></i>fix/login-button${edited ? '*' : ''}<i class="codicon codicon-sync" style="font-size:12px"></i>
+        <span style="margin-left:auto">行 ${edited ? 24 : 20}，列 3</span><span>空格: 2</span><span>UTF-8</span><span>CSS</span><i class="codicon codicon-bell" style="font-size:12px"></i></div></div>
+    ${sfMac('home', s, 580, 30, 330)}
+`;
 }
 
-// ---- Studio: building the Android app, onto the emulator, its screenshot ----
+// ---- Studio: a terminal building the Android app, the emulator, still.fail ----
 const STUDIO_TERM = [
-  [9.9, '<span class="c">~/acme</span> $ git switch fix/login-button'], [10.4, "Switched to branch 'fix/login-button'"],
-  [10.8, '<span class="c">~/acme</span> $ ./gradlew assembleDebug'], [11.4, '<span class="d">&gt; Task :app:preBuild</span>'], [12.1, '<span class="d">&gt; Task :app:mergeDebugResources</span>'],
-  [13.0, '<span class="d">&gt; Task :app:compileDebugKotlin</span>'], [14.3, '<span class="d">&gt; Task :app:dexBuilderDebug</span>'], [15.1, '<span class="d">&gt; Task :app:packageDebug</span>'],
-  [15.6, '<span class="g b">BUILD SUCCESSFUL</span> in 3m 12s'], [15.8, '<span class="c">~/acme</span> $ adb install -r app-debug.apk'], [16.3, 'Performing Streamed Install'], [16.4, '<span class="g">Success</span>'],
-  [16.9, '<span class="c">~/acme</span> $ adb exec-out screencap -p &gt; login.png'], [17.2, 'saved <span class="y">login.png</span>'],
+  [9.9, '<span class="g">zuo@studio</span> <span class="c">~/acme</span> % git switch fix/login-button'], [10.4, "Switched to branch 'fix/login-button'"],
+  [10.8, '<span class="g">zuo@studio</span> <span class="c">~/acme</span> % ./gradlew assembleDebug'], [11.1, '<span class="d">Starting a Gradle Daemon (subsequent builds will be faster)</span>'],
+  [11.6, '<span class="d">&gt; Configure project :app</span>'], [12.1, '<span class="d">&gt; Task :app:preBuild UP-TO-DATE</span>'], [12.6, '<span class="d">&gt; Task :app:mergeDebugResources</span>'],
+  [13.2, '<span class="d">&gt; Task :app:compileDebugKotlin</span>'], [14.2, '<span class="d">&gt; Task :app:dexBuilderDebug</span>'], [14.9, '<span class="d">&gt; Task :app:packageDebug</span>'],
+  [15.4, ''], [15.4, '<span class="g b">BUILD SUCCESSFUL</span> in 3m 12s'], [15.45, '<span class="d">41 actionable tasks: 18 executed, 23 up-to-date</span>'],
+  [15.8, '<span class="g">zuo@studio</span> <span class="c">~/acme</span> % adb install -r app/build/outputs/apk/debug/app-debug.apk'], [16.2, 'Performing Streamed Install'], [16.4, '<span class="g">Success</span>'],
+  [16.9, '<span class="g">zuo@studio</span> <span class="c">~/acme</span> % adb exec-out screencap -p &gt; login.png'],
 ];
-const STUDIO_DOING = [[9.6, '思考中'], [9.9, '运行 git switch'], [10.8, '运行 gradlew assembleDebug'], [15.8, '运行 adb install'], [16.9, '截图 登录页'], [17.5, '写回复'], [T.done.studio, '已回复 Acme App']];
-const STUDIO_SINCE = [[9.6, 9.6], [10.8, 10.8], [15.8, 15.8], [16.9, 16.9], [17.5, 17.5]];
 function studio(s) {
   const fixed = s >= 16.5;
-  const building = s >= 10.8 && s < 15.6 ? span(s, 10.8, 15.6) : null;
+  const building = s >= 10.8 && s < 15.4 ? span(s, 10.8, 15.4) : null;
   const flash = s >= 17.0 && s < 17.35 ? 1 - span(s, 17.0, 17.35) : 0;
-  const bar = building !== null ? `\n<span class="y">&lt;${'='.repeat(Math.round(building * 22)).padEnd(22, '-')}&gt; ${Math.round(building * 100)}% EXECUTING [${took(s, 10.8)}]</span>` : '';
-  const term = lines(STUDIO_TERM, s).split('\n').slice(-13).join('\n');
-  return `<div style="position:absolute;inset:0;${MAC_WALL}">${menubar('终端', ['外壳', '编辑', '显示', '窗口'], s)}
-    <div style="position:absolute;left:28px;top:40px;width:236px;height:470px;border-radius:30px;background:#0e0e10;padding:9px;box-shadow:0 18px 40px rgba(0,0,0,.4)">
-      <div style="position:relative;width:100%;height:100%;border-radius:22px;overflow:hidden;background:#121316;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;top:8px;left:16px;right:16px;display:flex;font-size:11px;color:#ccc"><span>${clock(s)}</span><span style="margin-left:auto">▾ ▴ 86%</span></div>
-        ${loginCard(true, fixed, 190)}
-        <div style="position:absolute;bottom:8px;left:50%;width:90px;height:4px;margin-left:-45px;border-radius:2px;background:#ddd;opacity:.8"></div>
-        <div class="flash" style="opacity:${flash}"></div></div></div>
-    <div class="win" style="left:284px;top:40px;right:20px;height:470px;background:#1d1f24">
-      <div class="titlebar" style="background:#2a2c33;color:#9a9db0"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin:0 auto">acme — gradle — 96×28</span></div>
-      <div class="term" style="padding:10px 16px;font-size:17px;line-height:26px">${term}${bar}</div></div>
-    ${strip('安卓上验证登录按钮', s, latest(STUDIO_DOING, s, ''), latest(STUDIO_SINCE, s, s), s >= T.done.studio, 9.6)}</div>`;
+  const bar = building !== null ? `\n<span class="y">&lt;${'='.repeat(Math.round(building * 18)).padEnd(18, '-')}&gt; ${Math.round(building * 100)}% EXECUTING [${took(s, 10.8)}]</span>\n<span class="d">&gt; :app:compileDebugKotlin</span>` : '';
+  const term = lines(STUDIO_TERM, s).split('\n').slice(-17).join('\n');
+  return `<div class="wall" style="${MAC_WALL}"></div>${menubar('终端', ['外壳', '编辑', '显示', '窗口', '帮助'], s)}
+    <div class="mwin" style="left:10px;top:30px;width:410px;height:330px;background:#1e1e1e">
+      <div style="height:26px;display:flex;align-items:center;padding:0 10px;background:#2b2b2b;border-bottom:1px solid #111">${LIGHTS}<span style="margin:0 auto;font-size:11px;color:#bbb">acme — gradle — 96×28</span></div>
+      <div class="term" style="padding:8px 10px">${term}${bar}</div></div>
+    <div class="mwin" style="left:430px;top:30px;width:170px;height:330px;background:#2b2d30">
+      <div style="height:22px;display:flex;align-items:center;padding:0 8px;background:#2b2d30;color:#bbb;font-size:10px;gap:6px">${LIGHTS}<span style="margin-left:4px">Pixel 9 API 35</span></div>
+      <div style="position:absolute;left:10px;top:30px;width:150px;height:292px;border-radius:20px;background:#0c0c0d;padding:6px">
+        <div style="position:relative;width:100%;height:100%;border-radius:15px;overflow:hidden;background:#121316;display:flex;align-items:center;justify-content:center">
+          <div style="position:absolute;top:5px;left:12px;right:12px;display:flex;font-size:8px;color:#ccc"><span>${clock(s)}</span><span style="margin-left:auto">▾▴ 86%</span></div>
+          <div style="transform:scale(.6)">${loginCard(true, fixed, 200)}</div>
+          <div style="position:absolute;bottom:5px;left:50%;width:56px;height:3px;margin-left:-28px;border-radius:2px;background:#ddd;opacity:.8"></div>
+          <div class="flash" style="opacity:${flash}"></div></div></div></div>
+    ${sfMac('studio', s, 610, 30, 300)}
+`;
 }
 
-// ---- The Windows desktop: building the installer, installing it, the new version opened ----
+// ---- The Windows desktop: Windows Terminal building, the installer, the new version; still.fail ----
 const WIN_TERM = [
-  [9.9, 'PS C:\\acme&gt; git pull'], [10.3, 'Already up to date.'], [10.9, 'PS C:\\acme&gt; pnpm build:win'], [11.6, '<span class="d">vite v7.2  building for production…</span>'],
-  [12.9, '<span class="d">✓ 1,284 modules transformed.</span>'], [13.6, '<span class="d">dist/assets/index-4f2a9c.js  812 kB</span>'], [14.3, '<span class="d">electron-builder  target=nsis arch=x64</span>'],
-  [15.2, '<span class="d">packaging  app.asar</span>'], [15.8, '<span class="d">signing  Acme-Setup-2.4.0.exe</span>'],
-  [16.2, '<span class="g">built</span> dist\\Acme-Setup-2.4.0.exe'], [16.3, 'PS C:\\acme&gt; .\\dist\\Acme-Setup-2.4.0.exe /S'],
+  [9.9, '<span class="c">PS C:\\acme&gt;</span> git pull'], [10.3, 'Already up to date.'], [10.9, '<span class="c">PS C:\\acme&gt;</span> pnpm build:win'], [11.4, '<span class="d">&gt; acme@2.4.0 build:win</span>'],
+  [11.8, '<span class="d">vite v7.2.1 building for production...</span>'], [12.9, '<span class="g">✓</span> 1284 modules transformed.'], [13.5, '<span class="d">dist/assets/index-4f2a9c.js</span>  812.41 kB'],
+  [14.3, '  • electron-builder  version=26.0.12 os=10.0.26100'], [14.9, '  • packaging       platform=win32 arch=x64'], [15.6, '  • signing         file=dist\\Acme-Setup-2.4.0.exe'],
+  [16.1, '  • building        target=nsis file=dist\\Acme-Setup-2.4.0.exe'], [16.3, '<span class="c">PS C:\\acme&gt;</span> .\\dist\\Acme-Setup-2.4.0.exe /S'],
 ];
-const WIN_DOING = [[9.6, '思考中'], [9.9, '运行 git pull'], [10.9, '运行 pnpm build:win'], [16.3, '安装 Acme 2.4.0'], [18.4, '截图 登录页'], [18.9, '写回复'], [T.done.win, '已回复 Acme App']];
-const WIN_SINCE = [[9.6, 9.6], [10.9, 10.9], [16.3, 16.3], [18.4, 18.4], [18.9, 18.9]];
 function win(s) {
-  const installing = s >= 16.4 && s < 17.7;
-  const app = s >= 17.8;
+  const installing = s >= 16.4 && s < 17.7, app = s >= 17.8;
   const flash = s >= 18.4 && s < 18.75 ? 1 - span(s, 18.4, 18.75) : 0;
   const pop = app ? ease(span(s, 17.8, 18.1)) : 0;
-  const now = clock(s);
-  return `<div style="position:absolute;inset:0;background:radial-gradient(700px 520px at 62% 48%,#a8c8ff,#3d6fd6 45%,#1a3c8c 75%,#0d2050)">
-    <div class="win" style="left:22px;top:20px;width:560px;height:440px;background:#0c0c0c;border-radius:8px">
-      <div class="titlebar" style="background:#1f1f1f;color:#ddd;gap:10px"><span>▣</span><span>Windows PowerShell</span><span style="margin-left:auto;letter-spacing:20px;color:#bbb">—☐✕</span></div>
-      <div class="term" style="padding:8px 14px;font-size:16px;line-height:25px;color:#e8e8e8">${lines(WIN_TERM, s)}${s >= 10.9 && s < 16.2 ? '\n<span class="y">' + '█'.repeat(Math.round(span(s, 10.9, 16.2) * 24)).padEnd(24, '░') + `</span> ${took(s, 10.9)}` : ''}</div></div>
-    ${installing ? `<div class="win" style="left:300px;top:150px;width:430px;height:190px;background:#f3f3f3;border-radius:8px;padding:0">
-      <div class="titlebar" style="background:#fff;color:#222">Acme 2.4.0 安装<span style="margin-left:auto;letter-spacing:20px;color:#666">—✕</span></div>
-      <div style="padding:16px 22px;font-size:15px;color:#222"><div style="font-weight:650;margin-bottom:6px">正在安装</div><div style="font-size:13px;color:#666;margin-bottom:16px">正在复制文件到 C:\\Program Files\\Acme…</div>
-      <div style="height:8px;border-radius:4px;background:#ddd;overflow:hidden"><div style="height:100%;width:${Math.round(span(s, 16.4, 17.6) * 100)}%;background:#0f6cbd"></div></div></div></div>` : ''}
-    ${app ? `<div class="win" style="left:390px;top:40px;width:470px;height:430px;background:#f4f5f7;border-radius:8px;transform:scale(${0.94 + 0.06 * pop});opacity:${pop}">
-      <div class="titlebar" style="background:#fff;color:#333;border-bottom:1px solid #e5e5e5">Acme<span style="margin-left:auto;letter-spacing:20px;color:#555">—☐✕</span></div>
-      <div style="position:absolute;top:30px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center">${loginCard(false, true, 250)}</div><div class="flash" style="opacity:${flash}"></div></div>` : ''}
-    <div class="win-bar">${['#2b88d8', '#f0b429', '#3c3c3c', '#0f6cbd', '#6c3fc4'].map((c, i) => `<i style="background:${c};${i === 2 && s >= 10.9 ? 'box-shadow:0 3px 0 -1px #0f6cbd' : ''}"></i>`).join('')}
-      <div class="clock">${now}<br>2026/10/28</div></div>
-    ${strip('Windows 上验证登录按钮', s, latest(WIN_DOING, s, ''), latest(WIN_SINCE, s, s), s >= T.done.win, 9.6).replace('bottom: 12px', 'bottom:58px').replace('class="sf"', 'class="sf" style="bottom:58px"')}</div>`;
+  const ctl = (c = '#ddd') => `<span class="ctl" style="color:${c}"><span>—</span><span>☐</span><span>✕</span></span>`;
+  return `<div class="wall" style="${WIN_WALL}"></div>
+    <div class="w11" style="left:12px;top:12px;width:470px;height:400px;background:#0c0c0c">
+      <div class="tb" style="background:#202020;color:#ddd;padding-left:0"><span style="height:100%;display:flex;align-items:center;gap:7px;padding:0 12px;background:#0c0c0c;font-size:11px"><i class="codicon codicon-terminal-powershell" style="font-size:12px;color:#5aa9ff"></i>Windows PowerShell</span><span style="padding:0 10px;color:#999">+ ⌄</span>${ctl()}</div>
+      <div class="term" style="padding:8px 10px;color:#cccccc">${lines(WIN_TERM, s)}${s >= 10.9 && s < 16.2 ? '\n<span class="y">  • ' + '█'.repeat(Math.round(span(s, 10.9, 16.2) * 22)).padEnd(22, '░') + `</span> ${took(s, 10.9)}` : ''}</div></div>
+    ${installing ? `<div class="w11" style="left:150px;top:150px;width:380px;height:170px;background:#f3f3f3">
+      <div class="tb" style="background:#f3f3f3;color:#222">Acme 2.4.0 安装${ctl('#555')}</div>
+      <div style="padding:10px 20px;font-size:12px;color:#222"><div style="font-weight:650;font-size:14px;margin-bottom:5px">正在安装</div><div style="font-size:11px;color:#666;margin-bottom:16px">正在解压文件到 C:\\Program Files\\Acme…</div>
+      <div style="height:5px;border-radius:3px;background:#d6d6d6;overflow:hidden"><div style="height:100%;width:${Math.round(span(s, 16.4, 17.6) * 100)}%;background:#0067c0"></div></div></div></div>` : ''}
+    ${app ? `<div class="w11" style="left:110px;top:40px;width:420px;height:400px;background:#f4f5f7;transform:scale(${0.95 + 0.05 * pop});opacity:${pop}">
+      <div class="tb" style="background:#fff;color:#333;border-bottom:1px solid #e5e5e5">Acme${ctl('#555')}</div>
+      <div style="position:absolute;top:30px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center">${loginCard(false, true, 230)}</div><div class="flash" style="opacity:${flash}"></div></div>` : ''}
+    <div class="w11 sfwin" style="left:545px;top:12px;width:365px;background:#f6f5f2">
+      <div class="tb" style="background:#f0efec;color:#333;border-bottom:1px solid #e2e0dc;font-weight:600">still.fail${ctl('#555')}</div><img src="${sf('win', s)}"></div>
+    <div class="task"><span style="display:grid;grid-template-columns:9px 9px;gap:1.5px;margin-right:10px"><i style="width:9px;height:9px;background:#3aa0ff;border-radius:1px"></i><i style="width:9px;height:9px;background:#3aa0ff;border-radius:1px"></i><i style="width:9px;height:9px;background:#3aa0ff;border-radius:1px"></i><i style="width:9px;height:9px;background:#3aa0ff;border-radius:1px"></i></span>
+      <span style="height:28px;width:150px;border-radius:14px;background:rgba(255,255,255,.1);display:flex;align-items:center;gap:6px;padding-left:10px;color:#ccc;font-size:11px"><i class="codicon codicon-search" style="font-size:12px"></i>搜索</span>
+      <i class="codicon codicon-folder-opened" style="font-size:20px;color:#f6c343"></i><i class="codicon codicon-globe" style="font-size:20px;color:#3aa0ff"></i><i class="codicon codicon-terminal" style="font-size:19px;color:#e8e8e8;box-shadow:0 13px 0 -11px #5aa9ff"></i><i style="font-size:15px;font-weight:800;color:#17181b;background:#f6f5f2;border-radius:6px;width:24px;height:24px;margin:3px;box-shadow:0 10px 0 -8px #5aa9ff">sf</i>
+      <span class="tray"><span>中</span><span>${clock(s)}<br>2026/10/28</span></span></div>`;
 }
 
-// ---- The cloud machine, seen over ssh: its tests, one by one green ----
+// ---- The cloud machine, over ssh, in tmux: its tests, one by one green; still.fail's agent in the status line ----
 const TESTS = ['auth/login.test.ts (18)', 'auth/session.test.ts (24)', 'theme/colors.test.ts (12)', 'orders/export.test.ts (31)', 'orders/list.test.ts (27)',
   'api/client.test.ts (40)', 'pages/home.test.ts (22)', 'pages/settings.test.ts (19)', 'ui/button.test.ts (16)', 'ui/form.test.ts (21)', 'billing/plan.test.ts (33)', 'search/query.test.ts (49)'];
-const CLOUD_DOING = [[9.6, '思考中'], [9.9, '运行 pnpm install'], [11.4, '运行 pnpm test'], [18.0, '运行 pnpm e2e login'], [19.0, '写回复'], [T.done.cloud, '已回复 Acme App']];
-const CLOUD_SINCE = [[9.6, 9.6], [9.9, 9.9], [11.4, 11.4], [18.0, 18.0], [19.0, 19.0]];
 const PROMPT = '<span class="g">ci@cloud-01</span>:<span class="c">~/acme</span>$';
 function cloud(s) {
-  const out = [[9.9, `${PROMPT} pnpm install --frozen-lockfile`], [10.6, '<span class="d">Lockfile is up to date, resolution step is skipped</span>'], [11.2, 'Done in 6.2s'], [11.4, `${PROMPT} pnpm test`], [11.6, '']];
+  const out = [[9.9, `${PROMPT} pnpm install --frozen-lockfile`], [10.6, '<span class="d">Lockfile is up to date, resolution step is skipped</span>'], [10.9, 'Packages: <span class="g">+1182</span>'], [11.2, 'Done in 6.2s'], [11.4, `${PROMPT} pnpm test`], [11.6, ''], [11.6, ' <span class="b" style="background:#2b8a3e;color:#fff"> RUN </span> <span class="c">v3.2.4</span> /home/ci/acme'], [11.7, '']];
   const per = (17.4 - 11.8) / TESTS.length;
-  TESTS.forEach((t, i) => out.push([11.8 + i * per, ` <span class="g">✓</span> ${t}  <span class="d">${(0.4 + ((i * 37) % 23) / 10).toFixed(1)}s</span>`]));
+  TESTS.forEach((t, i) => out.push([11.8 + i * per, ` <span class="g">✓</span> ${t} <span class="d">${(0.4 + ((i * 37) % 23) / 10).toFixed(1)}s</span>`]));
   const done = TESTS.filter((_, i) => s >= 11.8 + i * per).length;
-  const count = Math.min(312, Math.round((done / TESTS.length) * 312));
-  out.push([17.5, ''], [17.5, ' <span class="d">Test Files</span>  <span class="g b">41 passed</span> (41)'], [17.55, '      <span class="d">Tests</span>  <span class="g b">312 passed</span> (312)'],
-    [18.0, `${PROMPT} pnpm e2e login`], [18.8, '  <span class="g b">24 passed</span> (2 browsers)']);
-  const text = lines(out, s).split('\n').slice(-15).join('\n');
-  return `<div style="position:absolute;inset:0;background:#0f1115">
-    <div style="height:30px;background:#1a1d23;display:flex;align-items:center;padding:0 14px;font-size:13px;color:#8c93a0">ssh ci@cloud-01 — acme<span style="margin-left:auto" class="mono">${s >= 11.6 && s < 17.5 ? `<span style="color:#5fd38d">${count}</span> / 312 tests` : `load 3.2 · ${clock(s)}`}</span></div>
-    <div class="term" style="padding:10px 18px">${text}</div>
-    ${strip('跑全部测试', s, latest(CLOUD_DOING, s, ''), latest(CLOUD_SINCE, s, s), s >= T.done.cloud, 9.6)}</div>`;
+  out.push([17.5, ''], [17.5, ' <span class="d">Test Files</span>  <span class="g b">41 passed</span> (41)'], [17.55, '      <span class="d">Tests</span>  <span class="g b">312 passed</span> (312)'], [17.6, '   <span class="d">Duration</span>  4m 11s'],
+    [18.0, `${PROMPT} pnpm e2e login`], [18.6, '<span class="d">Running 24 tests using 4 workers</span>'], [18.8, '  <span class="g b">24 passed</span> (2 browsers)']);
+  const text = lines(out, s).split('\n').slice(-25).join('\n');
+  const doing = s < 9.6 ? '空闲' : s < 11.4 ? 'pnpm install' : s < 18.0 ? `pnpm test ${Math.round(done / TESTS.length * 312)}/312` : s < 19.0 ? 'pnpm e2e login' : s < T.done.cloud ? '写回复' : '已回复 Acme App';
+  return `<div style="position:absolute;inset:0;background:#101216">
+    <div class="term" style="padding:8px 12px;font-size:12px;line-height:18px">${text}</div>
+    <div class="term" style="position:absolute;left:0;right:0;bottom:0;height:18px;background:#2f9e44;color:#0b1f10;padding:0 8px;display:flex;gap:14px;font-size:11.5px;line-height:18px">
+      <span class="b">[acme]</span><span>0:zsh*</span><span style="background:#1b5e2a;color:#e8ffe8;padding:0 6px">still.fail · 跑全部测试 · ${doing}</span><span style="margin-left:auto">cloud-01  ${clock(s)} 28-Oct-26</span></div></div>`;
 }
 
 const SCREENS = { home, studio, win, cloud };
 const name = new URLSearchParams(location.search).get('screen') ?? 'home';
 const el = document.getElementById('screen');
-window.draw = (s) => { el.innerHTML = SCREENS[name](s); };
-window.draw(0);
+window.draw = async (s) => {
+  el.innerHTML = SCREENS[name](s);
+  await document.fonts.ready;
+  await Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
+};
+await window.draw(0);
 </script>
 </body>
 </html>
