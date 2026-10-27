@@ -2,15 +2,15 @@
 // through as they are), `message` for people in their language, `status` the HTTP status when it came from still.fail
 // cloud or a station.
 import { t } from "./i18n.ts";
+import { clockSeconds } from "./format.ts";
 import type { Span } from "./trace.ts";
-import { hex } from "./util.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 
 export class CoreError extends Error {
   code: string;
   status?: number;
-  /// The trace it failed in (`traced`).
-  trace?: string;
+  /// When it failed (`stamped`), ms.
+  at?: number;
   constructor(code: string, message: string, status?: number) {
     super(message);
     this.code = code;
@@ -58,14 +58,14 @@ export class CoreError extends Error {
     return this.status === undefined ? { code: this.code, message: this.message } : { code: this.code, message: this.message, status: this.status };
   }
 
-  /// Gone wrong past what people did or can mend (the network, a host, a station's own fault): said with its 错误编号,
-  /// the start of the trace it failed in, by which an agent finds its spans (docs/telemetry.md). The first trace it
-  /// failed in, the deepest: the one that has what the transport said.
-  traced(trace: string): void {
-    if (this.trace !== undefined) return;
+  /// Gone wrong past what people did or can mend (the network, a host, a station's own fault): said with the local
+  /// time it failed at, to the second, by which an agent finds its spans (docs/telemetry.md). The first time, the
+  /// deepest span's: the one that has what the transport said.
+  stamped(atMs: number, offsetMin: number): void {
+    if (this.at !== undefined) return;
     if (!(this.code === "mesh" || this.code === "host" || this.code === "timeout" || (this.status ?? 0) >= 500)) return;
-    this.trace = trace;
-    this.message = t("core-misc.error.traced", { message: this.message, id: trace.slice(0, 8) });
+    this.at = atMs;
+    this.message = t("core-misc.error.at", { message: this.message, time: clockSeconds(atMs, offsetMin) });
   }
 
   equals(other: CoreError): boolean {
@@ -84,12 +84,13 @@ export function asCoreError(error: unknown): CoreError {
 }
 
 /// `span` failed with `error`: what it was (`error.type`), what the transport said (`stillfail.cause`), and the error
-/// said with its trace where the span is recorded.
+/// said with when (`stamped`).
 export function failedIn(span: Span, error: CoreError): void {
   span.fail();
   span.set("error.type", error.code);
   if (typeof error.cause === "string") span.set("stillfail.cause", error.cause);
-  if (span.context.sampled) error.traced(hex(span.context.trace));
+  const now = span.host.nowMs();
+  error.stamped(now, span.host.utcOffsetMin(now));
 }
 
 export type Result<T> = { ok: T } | { err: CoreError };

@@ -1790,7 +1790,7 @@ test("events_reconnect_report_the_link_and_read_everything_once", async () => {
   assert.equal(linkOf(values, 1), "reconnecting");
   await host.time.pass(RECONNECT_MS + 50, 50);
   await read();
-  assert.deepEqual(v(values, 1), { state: "reconnecting", message: "连不上" });
+  assert.deepEqual(v(values, 1), { state: "reconnecting", message: "连不上（09:00:02）" });
   gate.stream = 403;
   await host.time.pass(RECONNECT_MS + 50, 50);
   await read();

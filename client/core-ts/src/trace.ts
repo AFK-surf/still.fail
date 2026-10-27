@@ -164,7 +164,7 @@ export class Tracer {
 export class Span {
   context: SpanContext;
   readonly #tracer: Tracer;
-  readonly #host: Host;
+  readonly host: Host;
   readonly #parent: Uint8Array | null;
   readonly #name: string;
   readonly #kind: Kind;
@@ -176,7 +176,7 @@ export class Span {
 
   constructor(tracer: Tracer, host: Host, context: SpanContext, parent: Uint8Array | null, name: string, kind: Kind, startMs: number) {
     this.#tracer = tracer;
-    this.#host = host;
+    this.host = host;
     this.context = context;
     this.#parent = parent;
     this.#name = name;
@@ -202,7 +202,7 @@ export class Span {
     if (this.#ended) return;
     this.#ended = true;
     if (!this.context.sampled) return;
-    const endMs = this.#host.monotonicMs();
+    const endMs = this.host.monotonicMs();
     if (this.#quiet && !this.#error && this.context.under.spans === 0 && endMs - this.#startMs < QUIET_MS) return;
     const anchor = this.context.anchor;
     const nanos = (mono: number) => {
