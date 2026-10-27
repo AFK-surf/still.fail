@@ -813,6 +813,8 @@ web-main.chatRef.update
 web-main.combos.label
 web-main.combos.short
 web-main.composer.attach
+web-main.composer.ccLabel
+web-main.composer.dropHere
 web-main.composer.expandPaste
 web-main.composer.pasteAttachment
 web-main.composer.pasteUploading
@@ -902,6 +904,7 @@ web-main.jobs.clearWhat
 web-main.jobs.inPanel
 web-main.jobs.jobs
 web-main.jobs.long
+web-main.jobs.more
 web-main.jobs.noNotices.after
 web-main.jobs.noNotices.before
 web-main.jobs.noOutput
@@ -914,6 +917,7 @@ web-main.jobs.quiet
 web-main.jobs.services
 web-main.jobs.show
 web-main.jobs.stop
+web-main.jobs.stopNamed
 web-main.jobs.stopWhat
 web-main.keymap.chat.archive
 web-main.keymap.chat.find
@@ -1018,6 +1022,7 @@ web-main.preview.binary
 web-main.preview.checks.failed
 web-main.preview.checks.passed
 web-main.preview.checks.pending
+web-main.preview.closeKey
 web-main.preview.comments
 web-main.preview.copyPath
 web-main.preview.download

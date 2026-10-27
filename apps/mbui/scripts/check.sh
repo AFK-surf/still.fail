@@ -9,6 +9,8 @@ D="$(cd "$(dirname "$0")" && pwd)"
 python3 "$D/webassets.py" --check || exit 1
 # the fonts the app carries, as the Android app's are (scripts/fontassets.py)
 python3 "$D/fontassets.py" --check || exit 1
+# every catalog key the sources say listed in its package's words.txt (scripts/words.py)
+python3 "$D/words.py" --check || exit 1
 cd "$A"
 for t in ${TARGETS:-native}; do
   echo "=== $t"
