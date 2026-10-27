@@ -68,6 +68,10 @@ let opens : Double = 24.0
 let closes : Double = 16.0
 
 ///|
+/// How long a finger held still on the bar takes the ball (its lens over it), as one sliding does.
+let bar_hold_ms : Double = 200.0
+
+///|
 /// What a place's top page keeps clear at its foot for the bar (Places.kt BAR_ROOM: the bar, its 22 from the foot, a
 /// little air, and the action standing 32 over it).
 let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
@@ -1720,6 +1724,13 @@ fn bar_gesture(
       -1.0
     }
   }
+  // held where it went down a moment (not moved past the slop), on the bar's row: the ball the finger's there, the
+  // lens over it as while it slides (iOS's tab bar), going nowhere till the finger moves; let go, a tap as any
+  let held_still = d.down && !d.moving && !m.holds && py >= row_top - 4.0
+  if c.held("bar/held-still", held_still, bar_hold_ms) {
+    m.drag = px
+    m.drag_y = -1.0
+  }
   if d.take_end() {
     m.was_down = false
     let had = m.holds
@@ -1755,6 +1766,8 @@ fn bar_gesture(
   if d.take_tap() {
     m.was_down = false
     m.holds = false
+    m.drag = -1.0
+    m.drag_y = -1.0
     // a tap: a place on the bar; with the panel open, a row (that bar) or a place in it
     if m.mode && py < row_top {
       if m.o.x > 0.6 && others.length() > 0 {
