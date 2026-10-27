@@ -422,12 +422,12 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
         // (the app's own, 待处理's, on a glass of its own, apart from the card's: the user, 2026-10-27)
         if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
 #ifdef __IPHONE_27_0
-        // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27; a page's least
-        // wanted, its people and 归档, first)
+        // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
+        // workspace's and than any page's action; a page's first)
         if (@available(iOS 27.0, *)) {
-          if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
-          else if ([ident isEqualToString:@"page/archive"] || [ident isEqualToString:@"page/who/people"])
-            b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
+          // (the bell above all: on the outer screen's short column there is room for one of the app's own)
+          if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+          else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
         }
 #endif
         b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;

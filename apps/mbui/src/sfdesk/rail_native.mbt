@@ -51,7 +51,7 @@ pub fn on_cards() -> Bool {
 /// in the system's bars; `act` what it does chosen. A page on its way out (a stack's move) hands none: the one on top
 /// does.
 fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw? : String) -> Bool {
-  if !@sf.native_on() {
+  if !@sf.native_on() || column_short.val {
     return false
   }
   if drawn_page.val is Some(p) && p != app.nav.top() {
@@ -294,7 +294,10 @@ fn rail_nav(src : Source, w : Workspace, all : Array[Workspace], card : Array[@h
   let rows = all.map(fn(x) { ("ws/" + x.id, x.name, x.id == w.id, ws_badge(x)) })
   rows.push(("-", "", false, ""))
   rows.push(("settings", @sf.t("android-settings.title"), false, @sf.icon_path("settings")))
-  tabs.push({ ..item(at + "workspaces", w.name, "user"), icon: ws_badge(w), menu: rows })
+  // (on the outer screen's short column, the navigation bar's, the bell the toolbar's: one of the app's own in each
+  // is all the system shows there, the rest folded into a menu of its own: column_short)
+  let ws_at = if column_short.val { "lead/" } else { at }
+  tabs.push({ ..item(ws_at + "workspaces", w.name, "user"), icon: ws_badge(w), menu: rows })
   // (待处理 a popover over the page, as the bell's: pressed, never chosen; in the column down the side, upright at the
   // bar's lead, left of the top, on the status bar's row: the user 2026-10-27)
   tabs.push({ ..item(at + "attention", rail_label(src, "attention"), "bell"), dot: bell_lit(src, w) })
@@ -341,6 +344,7 @@ let tabs_kept : Map[String, Array[Page]] = {}
 /// bars since the last frame done.
 fn native_frame(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   nav_want.val = Some((src, w, all))
+  column_short.val = @sf.native_side() && c.window_size().0 < column_short_below
   // (the host says the screen's corner only where it lays out the tabs, ios_nav.h mb_host_window_corner; said once the
   // window is on the screen, what was kept before it is drawn anew, its corners its own then)
   let was = @sf.native_card_corner()
@@ -451,8 +455,20 @@ fn bar_gap_now() -> Double {
 let nav_log_was : Ref[String] = { val: "" }
 
 ///|
+/// Whether the column down the side is the outer screen's, short under the status bar it holds: room in it for the
+/// bell and the workspace's button alone (the system folds the rest into a menu of its own), a page's actions its
+/// own, in its card (the user, 2026-10-27: the bell and the workspaces before any of a page's).
+// kept across runs: said again each frame (native_frame), put back by rail_native_reset
+let column_short : Ref[Bool] = { val: false }
+
+///|
+/// The outer screen's width and under (an iPhone Duo's, 466 across; its inner one on its side 951).
+let column_short_below : Double = 600.0
+
+///|
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
+  column_short.val = false
   @sf.native_bars_reset()
   nav_want.val = None
   nav_page.clear()
