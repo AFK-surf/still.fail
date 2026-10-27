@@ -13,9 +13,10 @@ code fence instead: it renders in still.fail colours without a file.
 
 Write an HTML fragment in the session workspace, e.g. `session-lifecycle.html`. Attach with
 `chat_post(files=["/abs/path/session-lifecycle.html"])` and put `[Session lifecycle](session-lifecycle.html)` on
-its own line in the text. Explain it around the link: figures are not read aloud and phone apps may show only files.
-In Slack, attach but omit the Markdown link; files upload below the text and also render in still.fail's copy.
-Say what the figure shows for people staying in Slack.
+its own line in the text. Every still.fail app (web, desktop, phones) draws it there; still say its point around the
+link: notifications and chat lists show only your words, and figures are not read aloud.
+In Slack, attach but omit the Markdown link; files upload below the text, and still.fail's copy of the thread shows
+the file as a card that opens it, not drawn in the message. Say what the figure shows for people staying in Slack.
 
 ## Write
 
