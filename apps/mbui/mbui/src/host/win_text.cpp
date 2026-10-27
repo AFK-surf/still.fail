@@ -82,12 +82,14 @@ static void init(void) {
   b->Release();
   // the font's own features, ligatures with them, as DirectWrite draws any app's text: a ligature is one
   // cluster of its letters (GetClusterMetrics), drawn whole
-  // plain coverage without hinting or contrast boost, like Core Text with
-  // smoothing off
+  // plain coverage without contrast boost, fitted to the pixel grid up and down
+  // as DirectWrite's own grayscale text is: a glyph's baseline is on a pixel
+  // row (draw_layout, and on_pixels where it is placed), so a horizontal stroke
+  // falls on whole rows, not smeared grey over two (1x-1.5x screens, Han most)
   IDWriteRenderingParams2 *p2 = NULL;
   dw->CreateCustomRenderingParams(1.0f, 0.0f, 0.0f, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
                                   DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
-                                  DWRITE_GRID_FIT_MODE_DISABLED, &p2);
+                                  DWRITE_GRID_FIT_MODE_ENABLED, &p2);
   params = p2;
   D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), NULL, (void **)&d2d);
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
