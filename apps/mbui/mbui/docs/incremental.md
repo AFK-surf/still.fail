@@ -86,8 +86,11 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    nothing. A list's place is read as it is laid out (Ctx::place_list): what the hand does to it between frames (a
    finger dragging it, a wheel) is said by its own signal (ListState's `hand_said`), and its own motions are stepped
    there (a wheel's ease, a fling, a glide, an overscroll going back), so a list scrolled lays the frame out again,
-   nothing taken by what is built. Left: a box scrolled sideways, what a field holds, what a pager or a menu keeps of
-   a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
+   nothing taken by what is built. What reads the press is built again as it goes down, past the slop or up, not as the
+   finger moves (hand.mbt's `beyond`); the system's back gesture as it goes is where the page follows it (Nav's
+   `finger`), no event; what reads where the pointer is reads it only where it uses it (a field's while a press drags in
+   it, a rail's place while it is dragged). Left: a box scrolled sideways, what a field holds, what a pager or a menu
+   keeps of a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
    `outside_events`, `held`, `pointed` and `came_built` go.
 4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped. The frame's paint runs under a
    watch of its own (frame_watch.mbt's paint_watch): where a node is placed by the clock (Ctx::moved_by: a stack's

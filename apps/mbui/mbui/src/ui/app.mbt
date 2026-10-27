@@ -254,8 +254,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
   c.focus_frame_start()
-  // the press as this frame sees it (press.mbt): every build of it the same
-  c.press() |> ignore
+  // the press as this frame sees it (press.mbt): every build of it the same; followed by what reads it, not by this
+  @signals.untracked(fn() { c.press() |> ignore })
   // each stream's events since the last frame (a frame decoded, let go, a decoder broken), the frame it shows from now
   streams_frame_start()
   // built and laid out; built again, at once, while what the view read in it changed as it was built or laid out
@@ -961,6 +961,8 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
         ((x - c.press_x).abs() > touch_slop() || (y - c.press_y).abs() > touch_slop()) {
         c.editor_tap = 0
       }
+      // (a page already following the finger back, from the edge: its moves are where it is, Nav's `finger`)
+      let edge_following = c.edge == 2
       if c.handle_drag != 0 {
         handle_move(c, x, y, t)
       } else if c.word_drag != 0 {
@@ -974,7 +976,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
           None => ()
         }
       } else if c.edge > 0 && c.edge_move(x, y, t) {
-        ()
+        quiet = edge_following
       } else if c.select_move(x, y) {
         // picking words: the press is no tap
         c.active = 0
@@ -1294,10 +1296,13 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 ///|
 /// The system's back (host_native.mbt set_back): its gesture followed (x
 /// from the edge it came from), let go to go back, called off; or a back
-/// with no gesture.
+/// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
+/// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
   took_input("back", h_now(), [kind.to_double(), x, _progress, edge.to_double()])
-  hand_event()
+  if kind != 1 {
+    hand_event()
+  }
   let c = g()
   let t = h_now()
   // from the right edge, the finger's way is mirrored

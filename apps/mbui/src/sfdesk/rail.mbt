@@ -509,16 +509,16 @@ fn rail_place(
     None => ()
   }
   // dragged up or down (past a few points) while the rail is changed or with ⌘ held as it was pressed: to another place
-  // in the rail, the others as they were until let go
-  let (_, py, _) = c.pointer()
+  // in the rail, the others as they were until let go (where the pointer is read only by the place it drags)
+  let py = fn() { c.pointer().1 }
   let dragged = match wide.rail_drag {
     Some((p, y0, _)) if p == place =>
       if c.pressed(id) {
-        wide.rail_drag = Some((p, y0, py - y0))
+        wide.rail_drag = Some((p, y0, py() - y0))
         true
       } else {
         // let go: its place by how far it went
-        let dy = py - y0
+        let dy = py() - y0
         let from = places.search_by(fn(x) { x == place }).unwrap_or(0)
         let to = dmax(0.0, dmin((places.length() - 1).to_double(), from.to_double() + (dy / rail_pitch).round())).to_int()
         wide.rail_drag = None
@@ -531,7 +531,7 @@ fn rail_place(
       }
     // (only while the rail is changed, or pressed with ⌘ held: Rail.tsx drag)
     None if c.pressed(id) && (wide.editing || (c.press().mods & @ui.mod_cmd) != 0) => {
-      wide.rail_drag = Some((place, py, 0.0))
+      wide.rail_drag = Some((place, py(), 0.0))
       false
     }
     _ => false
@@ -968,9 +968,9 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     },
   )
   // (pressing in the rail does not end it: its places are moved and taken out there)
-  if !p.value {
+  if !p.value && wide.editing {
     let (px, _, _) = c.pointer()
-    if px >= rail_w || !wide.editing {
+    if px >= rail_w {
       wide.editing = false
     }
   }

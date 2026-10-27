@@ -217,6 +217,8 @@ test "a list dragged that the view reads nothing of is built once a frame" {
     w=200.0,
     h=300.0,
   )
+  // (its builds counted: the Tester's own builds of a frame again, to check it by, left out)
+  t.check_looks(false)
   seen.clear()
   // rows come into view and leave it at every other step of the drag
   t.drag(100.0, 280.0, 100.0, 20.0, steps=13)
@@ -270,6 +272,8 @@ test "what is built from a list's end alone is built again as it gets there, not
     h=300.0,
   )
   assert_true(t.rect_of("on its way") is Some(_))
+  // (its builds counted: the Tester's own builds of a frame again, to check it by, left out)
+  t.check_looks(false)
   seen.clear()
   // to its end in a drag, rows coming and going on the way: built again only in the frame it gets there, drawn
   // there as at its end
@@ -297,6 +301,8 @@ test "words kept on a row dragged that nothing reads are built once a frame" {
     w=200.0,
     h=300.0,
   )
+  // (its builds counted: the Tester's own builds of a frame again, to check it by, left out)
+  t.check_looks(false)
   seen.clear()
   // the row moves with the list, in view all the way
   t.drag(100.0, 280.0, 100.0, 200.0, steps=4)

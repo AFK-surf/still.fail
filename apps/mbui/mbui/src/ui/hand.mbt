@@ -27,6 +27,9 @@ priv struct Hand {
   pointer : @signals.Signal[(Double, Double)]
   down : @signals.Signal[Bool]
   pointing : @signals.Signal[Pointing]
+  /// whether a finger or a button held down is past the slop of where the press was seen going down (Ctx::press's
+  /// `moved`): what reads the press is built again as it goes past, not as it moves
+  beyond : @signals.Signal[Bool]
   /// the hand's discrete events so far, counted (hand_event): what reads what came (a key, a menu asked for, a reader's
   /// action, a tap) is built again as one comes
   events : @signals.Signal[Int]
@@ -46,6 +49,7 @@ let hand : Hand = {
   pointer: @signals.signal((0.0, 0.0), same=fn(a, b) { a.0 == b.0 && a.1 == b.1 }),
   down: @signals.signal(false),
   pointing: @signals.signal(Finger),
+  beyond: @signals.signal(false),
   events: @signals.signal(0),
 }
 
@@ -68,6 +72,8 @@ fn hand_arrive(c : Ctx) -> Unit {
   hand.focus_id.set(c.focus)
   hand.pointer.set((c.px, c.py))
   hand.down.set(c.down)
+  let p = c.press_seen
+  hand.beyond.set(c.down && ((c.px - p.x).abs() > press_slop || (c.py - p.y).abs() > press_slop))
   hand.pointing.set(pointing())
   @signals.end_batch()
 }

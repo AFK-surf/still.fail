@@ -8,7 +8,8 @@
 // judged: a time is reported and compared, never a test's condition.
 //
 //   MBUI_BENCH_DRIVE=<script> MBUI_BENCH_NAME=<scene> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
-//   [MBUI_POINTING=finger|mouse] [MBUI_BENCH_FPS=120] [MBUI_BENCH_FRAMES=<file>: each of the display's frames, a line]
+//   [MBUI_POINTING=finger|mouse] [MBUI_BENCH_FPS=120] [MBUI_BENCH_FRAMES=<file>: each of the display's frames, a line,
+//   with what asked for it and why it was built or painted]
 
 ///|
 /// What one frame drawn did, as measured.
@@ -69,6 +70,8 @@ pub fn bench(
   let mut why = ""
   let logs = t.bench(script, fps~, each=fn(t, frame) {
     ticks = ticks + 1
+    // (what asked for this frame, said on its line: FRAMES)
+    let asked = why
     if frame {
       for k in why_labels(why) {
         whys[k] = whys.get(k).unwrap_or(0) + 1
@@ -123,7 +126,7 @@ pub fn bench(
     drawn.push(m)
     if frames_out != "" {
       lines.push(
-        "\{ticks} work=\{m.work_ms} build=\{perf.build_ms} layout=\{perf.layout_ms} paint=\{perf.paint_ms} encode=\{m.encode_ms} gpu=\{m.gpu_ms} nodes=\{perf.nodes} laid=\{perf.laid} insts=\{perf.insts} looks=\{perf.looks} painted=\{perf.painted} kept=\{perf.kept} rows=\{perf.rows} damage=\{m.damage} passes=\{perf.passes}",
+        "\{ticks} work=\{m.work_ms} build=\{perf.build_ms} layout=\{perf.layout_ms} paint=\{perf.paint_ms} encode=\{m.encode_ms} gpu=\{m.gpu_ms} nodes=\{perf.nodes} laid=\{perf.laid} insts=\{perf.insts} looks=\{perf.looks} painted=\{perf.painted} kept=\{perf.kept} rows=\{perf.rows} damage=\{m.damage} passes=\{perf.passes} asked=\{asked.escape()} built_why=\{t.built_why().escape()} painted_why=\{t.painted_why().escape()}",
       )
     }
   })
