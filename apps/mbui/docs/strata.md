@@ -14,6 +14,8 @@ stratum it is in by name (`@ui.Stratum`, `Ctx::stratum`), never a number. `Ctx::
    before; in each, its scrim, then what is lifted over it (`OverScrim`: a row held for its menu), then what it holds.
 5. Toasts.
 6. The loupe, the window's own buttons.
+7. What is over all of it (`OverLayers`): a chat's bar and composer while a picture flies from the chat into its viewer
+   or back, as much as it has not got away from its thumbnail (under them, where it lands).
 
 The shell builds them in this order; a layer (`Ctx::overlay`) is over everything built outside it.
 
@@ -33,8 +35,8 @@ Opening a layer over the page draws whatever flies on the page under it too.
 
 ## How it is drawn
 
-`Flying`, `OverCover` and `OverScrim` are put off as they are painted (`drawn_paint`) and painted where the stratum
+`Flying`, `OverCover`, `OverScrim` and `OverLayers` are put off as they are painted (`drawn_paint`) and painted where the stratum
 over them starts: what flies at the next `Bar` or `Cover` painted after it, a layer opened, or the frame's end;
-`OverCover` once a cover is painted; `OverScrim` once a scrim is. The instances of what flies that could not be put off
+`OverCover` once a cover is painted; `OverScrim` once a scrim is; `OverLayers` at the frame's end, after all of it. The instances of what flies that could not be put off
 (in what is drawn moved by a look of its own) are moved after the rest painted so far at the same points
 (`raise_flying`), under the handles (`raise_tops`). Tests: `mbui/src/ui/strata_wbtest.mbt`, pair by pair.

@@ -39,6 +39,8 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
     @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape)
   })
   c.stratum(composer, OverCover)
+  // (over the viewer's picture as it flies from the list or back into it)
+  over_flight(c, composer)
   // the words sent, as typed, till their row is in the list, and the files sent with them, over the composer
   flight_waiting(c, draft)
   flight_files(c, draft)

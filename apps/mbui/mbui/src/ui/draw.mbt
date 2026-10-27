@@ -192,6 +192,10 @@ priv struct DrawState {
   covers : Array[Int]
   over_cover : Array[(Int, Double)]
   mut covering : Bool
+  /// what is over everything, the layers over the page too (OverLayers), waiting for the rest to be painted, and
+  /// whether it is being painted
+  over_layers : Array[(Int, Double)]
+  mut over_all : Bool
   /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
   /// the node whose look by the clock is being painted (its instances tagged once it is: cycle_look.mbt)
@@ -217,6 +221,8 @@ let dr : DrawState = {
   covers: [],
   over_cover: [],
   covering: false,
+  over_layers: [],
+  over_all: false,
   carry: [],
   cycling: -1,
 }
@@ -293,6 +299,8 @@ fn reset_drawing() -> Unit {
   dr.covers.clear()
   dr.over_cover.clear()
   dr.covering = false
+  dr.over_layers.clear()
+  dr.over_all = false
   dr.carry.clear()
   dr.cycling = -1
   list_counts.clear()
@@ -314,6 +322,7 @@ fn drawing_begin() -> Unit {
   dr.scrims.clear()
   dr.covers.clear()
   dr.over_cover.clear()
+  dr.over_layers.clear()
 }
 
 ///|
@@ -701,6 +710,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     if e.z == z_over_cover && !dr.covering {
       dr.over_cover.push((i, alpha))
+      return true
+    }
+    if e.z == z_over_layers && !dr.over_all {
+      dr.over_layers.push((i, alpha))
       return true
     }
   }

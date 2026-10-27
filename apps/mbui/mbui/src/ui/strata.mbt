@@ -7,7 +7,8 @@
 // covers either), its bars (Bar), its cover (Cover: what is let go over it hinted over all of it) with what stays over
 // it (OverCover: the composer what is let go goes into), the handles of words picked (an editor's, over everything of
 // its layer). Over the page, the layers opened over it (overlay.mbt), each its scrim, what is lifted over the scrim
-// (OverScrim: a row held for its menu) and what it holds.
+// (OverScrim: a row held for its menu) and what it holds. Over all of it, what is OverLayers (a page's bars over its
+// picture flying back into it from a viewer's layer).
 
 ///|
 /// The stratum node `i` is drawn in (Ctx::stratum).
@@ -25,6 +26,9 @@ pub(all) enum Stratum {
   /// over the scrim of the modal layer up (what a menu is of, held, standing out of what the menu dims, as iOS's
   /// context menu has it) and under what that layer holds; in its place where no layer with a scrim is up
   OverScrim
+  /// over the layers opened over the page too, over everything: a page's bars over a picture of it its viewer's layer
+  /// flies back into it (a photo app's bars coming back over the grid as the photo goes into it)
+  OverLayers
 }
 
 ///|
@@ -41,8 +45,11 @@ let z_over_scrim : Int = 3
 let z_over_cover : Int = 4
 
 ///|
+let z_over_layers : Int = 5
+
+///|
 /// Node `i` drawn in stratum `s`. Tapped where it is laid out, in its place among the rest; drawn as its stratum is:
-/// what is put off (Flying, OverCover, OverScrim) the window its clip where it is painted at the frame's end, the
+/// what is put off (Flying, OverCover, OverScrim, OverLayers) the window its clip where it is painted at the frame's end, the
 /// clip of what it is painted over where that is painted.
 pub fn Ctx::stratum(self : Ctx, i : Int, s : Stratum) -> Unit {
   match s {
@@ -57,6 +64,10 @@ pub fn Ctx::stratum(self : Ctx, i : Int, s : Stratum) -> Unit {
     }
     // (put off only while a cover is up: what the cover is in is painted live then, Cover)
     OverCover => self.drawn_of(i).z = z_over_cover
+    OverLayers => {
+      part_live()
+      self.drawn_of(i).z = z_over_layers
+    }
     Bar => self.nodes[i].mark = 1
     Cover => {
       part_live()
@@ -69,11 +80,30 @@ pub fn Ctx::stratum(self : Ctx, i : Int, s : Stratum) -> Unit {
 ///|
 /// What flies (Flying), put off till now: painted, over what was painted before (a stratum over it about to be).
 fn Ctx::land_flying(self : Ctx) -> Unit {
-  if dr.mode != 0 || dr.overlaying || dr.raising || dr.covering {
+  if dr.mode != 0 || dr.overlaying || dr.raising || dr.covering || dr.over_all {
     return
   }
   self.raise_flying()
   self.paint_overlays()
+}
+
+///|
+/// What is OverLayers, once all the rest is painted, the layers over the page too: each as it looks, over everything.
+fn Ctx::paint_over_layers(self : Ctx) -> Unit {
+  if dr.over_layers.is_empty() || dr.over_all {
+    return
+  }
+  dr.over_all = true
+  let was = dr.mode
+  dr.mode = mode_draw
+  let todo = dr.over_layers.copy()
+  dr.over_layers.clear()
+  for p in todo {
+    let (i, alpha) = p
+    self.paint(i, alpha)
+  }
+  dr.mode = was
+  dr.over_all = false
 }
 
 ///|

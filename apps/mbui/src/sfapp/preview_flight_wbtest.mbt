@@ -24,7 +24,7 @@ fn flight_photo() -> Attachment {
 /// The photo's message `shift` down the window with the viewer over it; sent from here (its message drawing the picture
 /// picked, `sent-key`), the station's thumbnail never coming; its whole, asked of the station, held until `held` is
 /// called.
-fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], foot? : Ref[Double] = Ref(-1.0)) -> @ui.Tester {
+fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], bar? : Bool = false) -> @ui.Tester {
   reset()
   let a = flight_photo()
   @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
@@ -42,22 +42,18 @@ fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], foot? : Ref[Double
   }
   let t = @ui.Tester::new(
     fn(c) {
-      let list = c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        if foot.val >= 0.0 {
-          // (in a chat's list's rows)
-          c.list("list", 1, 400.0, fn(_) {
-            c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
-            chat_file(c, src, a)
-          })
-          |> ignore
-        } else {
-          c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
-          chat_file(c, src, a)
-        }
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
+        chat_file(c, src, a)
       })
-      // (a composer over the list's foot, `foot` of it)
-      if foot.val >= 0.0 {
-        @sfbase.list_band(c, list, "list", 0.0, foot.val)
+      |> ignore
+      // (a composer over the chat's foot, as a chat's page has it)
+      if bar {
+        let foot = c.layer(fn() {
+          c.spacer()
+          c.box(style=flight_bar, fn() {  }) |> ignore
+        })
+        over_flight(c, foot)
       }
       preview(c, src)
     },
@@ -69,6 +65,13 @@ fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], foot? : Ref[Double
   t.run_for(@ui.image_fade_ms)
   t
 }
+
+///|
+/// The composer standing in over the photo's chat's foot: how tall, its look.
+let flight_bar_h : Double = 120.0
+
+///|
+let flight_bar : @ui.Style = @ui.style(w=Full, h=Fixed(flight_bar_h), bg=Data(0x334455FFL))
 
 ///|
 /// Whether a picture shows at (x, y, w, h), to half a point.
@@ -165,34 +168,28 @@ test "the chat moved under the viewer: the picture flies back to where its thumb
 }
 
 ///|
-test "a picture partly under the composer flies back in under it: cut where the composer lies over its list, as the thumbnail is" {
-  let foot = Ref(0.0)
+test "the chat's bars over the picture flying back into it, coming back as it lands: none of it over them, landed or not" {
   let held : Ref[(() -> Unit)?] = Ref(None)
-  let t = photo_sent(Ref(0.0), held, foot~)
-  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
-  let th = thumb_of(t.ctx(), id).unwrap()
-  // the composer over the list's foot up to the thumbnail's middle
-  let line = th.y + th.h / 2.0
-  foot.val = 844.0 - line
-  t.draw()
-  let seen = thumb_of(t.ctx(), id).unwrap().seen
-  assert_true((seen.1 - th.y).abs() < 0.5 && (seen.1 + seen.3 - line).abs() < 0.5, msg="\{seen}")
+  let t = photo_sent(Ref(0.0), held, bar=true)
   let at = t.locate("img:sent-key")
   t.tap(at[0].0, at[0].1)
   t.run_for(fly_open_ms)
   t.back()
-  // nearly landed: nothing of the picture drawn over the composer, the thumbnail coming back under it
-  t.run_for(fly_close_ms * 0.9)
+  // on its way back: the bar over the picture, as much as the picture has come back
+  t.run_for(fly_close_ms / 2.0)
   let v = pv_leaving.val.unwrap()
-  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 0.2)
-  // (the thumbnail itself drawn in the list, under the composer: not the flight)
-  let flight = t.drawn_images().filter(fn(i) { i[8] > 0.5 && !((i[0] - th.x).abs() < 0.5 && (i[1] - th.y).abs() < 0.5 && (i[2] - th.w).abs() < 0.5) })
-  let over = flight.filter(fn(i) { i[1] + i[3] > line + 0.5 + v.flying() * (844.0 - line) })
-  assert_eq(over.length(), 0, msg="\{t.drawn_images()}")
-  assert_true(thumb_shows(id) > 0.8)
+  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
+  let order = t.drawn_order()
+  let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
+  let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
+  assert_true(bar is Some(b) && b > picture, msg="\{order}")
+  assert_true((order[bar.unwrap()].5 - (1.0 - v.flying())).abs() < 0.05)
+  // landed: the bar whole, in its place over the list
   t.run_for(fly_close_ms)
   assert_true(pv_leaving.val is None)
-  assert_eq(thumb_shows(id), 1.0)
+  let order = t.drawn_order()
+  let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
+  assert_true(bar is Some(b) && order[b].5 > 0.99, msg="\{order}")
 }
 
 ///|
