@@ -843,8 +843,9 @@ pub fn frame(
           tx=tape_x,
           id=page_id,
           fn() {
-            @sf.pane_round.val = Some(page_corners)
-            // (what is in it as wide as beside the system's column: `under` its ground alone)
+            // (what is in it as wide as beside the system's column: `under` its ground alone, its right corners none
+            // of what is in it, which ends where the column begins: beside_column)
+            @sf.pane_round.val = Some(beside_column(page_corners, page_w - main_w))
             c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() {
               tape_part(c, Page, "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr}", fn() {
                 page_in(panel_h)
@@ -871,7 +872,7 @@ pub fn frame(
               top=panel_top,
               tx=tape_x,
               fn() {
-                @sf.pane_round.val = Some(tape_pane_corners(Panel, true))
+                @sf.pane_round.val = Some(beside_column(tape_pane_corners(Panel, true), under))
                 c.box(style=@ui.style(w=Fixed(panel_w), h=Full), fn() {
                   tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
                     c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
@@ -1571,6 +1572,19 @@ fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[@ui.CornerOf] {
     Side => @sf.tape_side_corners()
     Page => @sf.tape_corners(left=false, right=!panel)
     Panel => @sf.tape_corners(left=false, right=true)
+  }
+}
+
+///|
+/// The corners what is in a tape's panel `k` round stands in, the panel going `under` past it on under the system's
+/// column (an iPhone Duo's): its right ones none where it does (square, what is at its foot or top there in no corner:
+/// the panel's are under the column, past what is in it), so a composer at its foot is concentric with its left foot
+/// corner alone, as the tape's panels' are with none beside them (the user, 2026-10-28: its corners did not match).
+fn beside_column(k : FixedArray[@ui.CornerOf], under : Double) -> FixedArray[@ui.CornerOf] {
+  if under > 0.0 {
+    [k[0], Own(0.0), Own(0.0), k[3]]
+  } else {
+    k
   }
 }
 
