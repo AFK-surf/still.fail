@@ -33,6 +33,9 @@ pub(all) struct ChatList {
   state_turn : @ui.TextStyle
   state_alert : @ui.TextStyle
   state_lead : @ui.TextStyle
+  /// where a chat stands at the end of its messages (sfpages' chat_state): its icon's column, 10 wide (the row's
+  /// leadSlot), as high as a line of the state's words, its icon in the middle (wrapping, the first line's)
+  state_slot : @ui.Style
   /// what stands at its end (row_picture): an agent's mark, a face across, a face's box and one after the first (3 of
   /// it over the one before), the pixel of ground round a face, who started it ringed
   agent_mark : Double
@@ -121,6 +124,7 @@ pub let mouse_chat_list : ChatList = {
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L5, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L5, wrap=false, w=Full),
   state_lead: @ui.text_style(weight=Semibold, w=Hug),
+  state_slot: @ui.css("w=S2_5 h=S4_5 justify=JCenter"),
   agent_mark: 12.0,
   face_d: mouse_face_d,
   face: @ui.css("w=S4 h=S4"),
@@ -174,6 +178,7 @@ pub let touch_chat_list : ChatList = {
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L6, wrap=false, w=Full),
   // (bold, as the phone's: Home.kt StateLine)
   state_lead: @ui.text_style(weight=Bold, w=Hug),
+  state_slot: @ui.css("w=S2_5 h=S5 justify=JCenter"),
   agent_mark: 14.0,
   face_d: touch_face_d,
   face: @ui.css("w=S4_5 h=S4_5"),
