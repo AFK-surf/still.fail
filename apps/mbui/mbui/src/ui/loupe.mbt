@@ -37,9 +37,9 @@ let loupe_side : Double = 8.0
 
 ///|
 /// Where the loupe is this frame, as a drop of liquid it moves as: where it reads, its middle, its width and height.
-/// While asked, it grows out of the finger on a spring with give (past its size and back) and follows it on another,
-/// a little behind, drawn out along the way it goes the further behind it is (as the bar's ball at speed); let go,
-/// it goes back into where the finger was. None once it is gone.
+/// While asked, it grows out of the finger on a spring with give (past its size and back) and follows it on a stiff
+/// one, drawn out along the way it goes as fast as the finger goes (as the bar's ball at speed); let go, it goes back
+/// into where the finger was. None once it is gone.
 fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double, Double, Double)? {
   let reach = if self.loupe_asked {
     self.loupe_reach
@@ -81,21 +81,22 @@ fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double, Double, Double)
 }
 
 ///|
-/// The springs it moves on: growing (some give: past its size and back) and following the finger (a little behind,
-/// a little past where it stops), and how much it is drawn out by how far behind it is, at most, and flatter for it.
+/// The springs it moves on: growing (some give: past its size and back) and following the finger (stiff: with it at
+/// once, a hair behind as it goes, a hair past where it stops), and how much it is drawn out by how far behind it is
+/// (as fast as the finger goes), at most, and flatter for it.
 let loupe_grow_k : Double = 360.0
 
 ///|
 let loupe_grow_c : Double = 20.0
 
 ///|
-let loupe_follow_k : Double = 300.0
+let loupe_follow_k : Double = 1400.0
 
 ///|
-let loupe_follow_c : Double = 24.0
+let loupe_follow_c : Double = 52.0
 
 ///|
-let loupe_stretch : Double = 0.6
+let loupe_stretch : Double = 2.4
 
 ///|
 let loupe_stretch_most : Double = 40.0
