@@ -3,6 +3,7 @@
 // (the shell keeps a page that is replaced by another, app.tsx). What the composer writes to is the page's: it says so
 // (`useHost().use`), and the composer asks it when a message goes.
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
+import { CacheColdNotice } from "../CacheColdNotice.tsx";
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
@@ -20,7 +21,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
 import { whenRowIn } from "../madeChat.ts";
-import type { ChatCcTo } from "../core/shapes.ts";
+import type { ChatCacheCold, ChatCcTo } from "../core/shapes.ts";
 
 // The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
 // list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
@@ -45,6 +46,9 @@ export interface HostComposer {
   offlineNote?: string;
   archived?: boolean;
   restore?(): Promise<unknown>;
+  /** Its agent's prompt cache over (ChatView `cacheCold`), and its context cleared to go on afresh instead. */
+  cacheCold?: ChatCacheCold;
+  afresh?(session: string): Promise<unknown>;
   /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
   send(draft: Draft): void;
   /** Typing (a chat's agent is warmed). */
@@ -72,7 +76,7 @@ export function draftKeyOf(station: string, chat: string): string {
   return `${station}:${openedAs(chat)}`;
 }
 
-type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived">;
+type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived" | "cacheCold">;
 
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const { station: id, chat } = useParams();
@@ -81,8 +85,8 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived ? was
-      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.text === spec.cacheCold?.text ? was
+      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}), ...(spec.cacheCold !== undefined ? { cacheCold: spec.cacheCold } : {}) }));
   }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
@@ -181,6 +185,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !noFiles) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!noFiles) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
+        {shown.cacheCold && <CacheColdNotice className={css.mComposerOffline} cold={shown.cacheCold} offline={shown.offline} afresh={(session) => latest.current?.afresh?.(session) ?? Promise.resolve()} />}
         {shown.offline && <p className={css.mComposerOffline}>{shown.offlineNote ?? t("web-mobile.chat.offline")}</p>}
         <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus}
           onRef={(f) => openRefSheet(app, f, {

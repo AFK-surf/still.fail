@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { card, jobsText, latestOf, recentOf, usageNow, workText } from "../src/views/brief.ts";
+import { cacheCold, card, jobsText, latestOf, recentOf, usageNow, workText } from "../src/views/brief.ts";
 
 holdLanguage();
 const MIN = 60_000;
@@ -61,6 +61,31 @@ test("what_it_used_is_its_streams_while_it_works_else_its_summarys", () => {
   assert.equal(c.cost, "$0.30");
   assert.deepEqual(c.cache, { percent: 50, text: "50%", level: "ok" });
   assert.deepEqual(c.context, { percent: 0, text: "40", level: "ok", unknown: true });
+});
+
+test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
+  const HOUR = 60 * MIN;
+  const usage = (lastCallAt: number, contextTokens: number, extra: object = {}) =>
+    ({ modelCalls: 3, inputTokens: 1, cachedTokens: 0, outputTokens: 1, contextTokens, lastCallAt, cacheMs: HOUR, rereadCost: 1.6, ...extra });
+  const agent = (key: string, u: object | null, patch: object = {}) =>
+    ({ status: "final", wait: null, session: { key, runtimeSessionId: `r-${key}`, usage: u }, ...patch });
+  // Its cache over: said with what going on reads again and what it costs.
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，接着聊将重新读入 200K token（约 $1.60）" }, Infinity]);
+  // Not yet: computed again as it is over.
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR - 5 * MIN), [null, 5 * MIN]);
+  // Unpriced: what it reads, without a cost.
+  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].text, "缓存已过期，接着聊将重新读入 200K token");
+  // Of several, the largest context.
+  assert.equal(cacheCold([agent("a", usage(0, 80_000)), agent("b", usage(0, 300_000))], 2 * HOUR)[0].session, "b");
+  // None at work, waiting on its own work, cleared already, with a small context, or not told how long its cache lasts.
+  for (const a of [
+    agent("a", usage(0, 200_000), { status: "running" }),
+    agent("a", usage(0, 200_000), { status: "queued" }),
+    agent("a", usage(0, 200_000), { wait: { since: 0, seconds: 600 } }),
+    agent("a", usage(0, 200_000), { session: { key: "a", runtimeSessionId: null, usage: usage(0, 200_000) } }),
+    agent("a", usage(0, 20_000)),
+    agent("a", usage(0, 200_000, { cacheMs: undefined })),
+  ]) assert.deepEqual(cacheCold([a], 2 * HOUR), [null, Infinity]);
 });
 
 test("the_latest_three_things_it_did_oldest_first", () => {

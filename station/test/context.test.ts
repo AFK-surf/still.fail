@@ -112,6 +112,34 @@ test("-clear ends its process; its next turn starts a new runtime session, told 
   await r.close();
 });
 
+test("cleared to go on afresh, its next runtime session reads back its work and its chats, as on another account", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  assert.equal(await r.hub.clear(key, true), null);
+  await settle();
+  assert.ok(session.disposed);
+  assert.equal(r.session(key).runtimeSessionId, null);
+  assert.equal(r.chat.lastText(), "已换新上下文，下一条消息将先读回需要的内容再接着做");
+  await r.accept(reply(m, "9999.3", "<@UBOT> go on", { addressed: true }));
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.equal(fresh.options.resume, undefined);
+  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(fresh.prompts[0]!.includes(`session_history with chat ${key}`), fresh.prompts[0]);
+  assert.ok(fresh.prompts[0]!.includes(`chat_history for C1/${m.threadTs}`), fresh.prompts[0]);
+  // A later clear by hand is told as one.
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  fresh.complete();
+  await settle();
+  assert.equal(await r.hub.clear(key), null);
+  await settle();
+  await r.accept(reply(m, "9999.4", "<@UBOT> again", { addressed: true }));
+  await settle();
+  assert.ok(r.claude.last().prompts[0]!.startsWith("People cleared your context"), r.claude.last().prompts[0]);
+  await r.close();
+});
+
 test("clear is refused while a turn runs", async () => {
   const r = new Rig();
   const m = message();

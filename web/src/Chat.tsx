@@ -8,6 +8,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
+import { CacheColdNotice } from "./CacheColdNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
@@ -163,6 +164,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
+      {chat.cacheCold && <CacheColdNotice className={css.offlineNotice} cold={chat.cacheCold} offline={chat.offline} afresh={api.afresh} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}

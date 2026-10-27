@@ -525,11 +525,12 @@ export const routes = (tools: Tools): Route[] => {
             case "evict":
               await a.hub.evict(key);
               return ok({ ok: true });
-            // Its context compacted (begun: its end is said in its chat), or cleared; refused while it runs.
+            // Its context compacted (begun: its end is said in its chat), or cleared (`readBack`: to go on afresh, its
+            // cache over); refused while it runs.
             case "compact":
             case "clear": {
               session(s, key, r);
-              const refused = await (action === "compact" ? a.hub.compact(key) : a.hub.clear(key));
+              const refused = await (action === "compact" ? a.hub.compact(key) : a.hub.clear(key, input(r).readBack === true));
               if (refused !== null) throw new Refused(409, refused);
               log.info("admin", `session ${action === "compact" ? "compacted" : "cleared"} from the admin page`, { session: key, by: r.viewer.email });
               return ok({ ok: true });

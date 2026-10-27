@@ -422,7 +422,8 @@ test("asked, a working session is read before its turn ends; its execution detai
   await time.begun(1);
   r.store.startTurn("t1", "k", "input");
   const project = join(r.data, "transcripts/claude", claudeProject(workspace));
-  append(join(project, "r.jsonl"), [claudeLine("m", r.store.now() + 1, "claude-opus-5-5", usage(10, 1000, 0, 0, 100))]);
+  const at = r.store.now() + 1;
+  append(join(project, "r.jsonl"), [claudeLine("m", at, "claude-opus-5-5", usage(10, 1000, 0, 0, 100))]);
   await time.begun(2);
   await time.adjust(20);
   await time.begun(3);
@@ -442,10 +443,26 @@ test("asked, a working session is read before its turn ends; its execution detai
   // Opus 5.5: $4 in, $0.2 read, $20 out.
   assert.deepEqual(usageNow(r.store, "k"), {
     modelCalls: 1, inputTokens: 1010, cachedTokens: 1000, outputTokens: 100, cost: (10 * 4 + 1000 * 0.2 + 100 * 20) / 1e6, unpricedCalls: 0,
-    model: "claude-opus-5-5", contextTokens: 1010, contextWindow: null,
+    model: "claude-opus-5-5", contextTokens: 1010, contextWindow: null, lastCallAt: at,
   });
   assert.deepEqual(r.store.usageOfSession("j"), [], "only the one asked of");
   await r.usage.stop();
+});
+
+test("a session's usage says how long its cache lasts after its last call, by what it last wrote, and what reading it all again costs", () => {
+  const call = (at: number, cacheWrite: number, cacheWriteLong: number, fast = false) =>
+    ({ turn: "t", profile: null, model: "claude-opus-5-5", context: 200_000, window: null, at, fast, cacheWrite, cacheWriteLong });
+  const groups: UsageGroup[] = [{ day: "", session: "k", thread: null, person: null, profile: null, runtime: "claude", model: "claude-opus-5-5", fast: false, calls: 3, input: 0, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0 }];
+  const of = (calls: ReturnType<typeof call>[]) => usageNow({ usageOfSession: () => groups, lastContexts: (_, limit) => calls.slice(-limit) }, "k")!;
+  // An hour's write, then a call that only read: an hour from the last; all of it written for an hour again at $4 ×2.
+  const long = of([call(1000, 0, 5000), call(2000, 0, 0)]);
+  assert.deepEqual([long.lastCallAt, long.cacheMs, long.rereadCost], [2000, 3_600_000, (200_000 * 4 * 2) / 1e6]);
+  // Five minutes', in fast mode: twice the price.
+  const short = of([call(1000, 0, 5000), call(2000, 300, 0, true)]);
+  assert.deepEqual([short.cacheMs, short.rereadCost], [300_000, ((200_000 * 4 * 1.25) / 1e6) * 2]);
+  // Nothing told of what was written (Codex): not said how long it lasts.
+  const none = of([call(1000, 0, 0)]);
+  assert.deepEqual([none.lastCallAt, none.cacheMs, none.rereadCost], [1000, undefined, undefined]);
 });
 
 // ── against the Rust's own count, on a copy of a real station ──

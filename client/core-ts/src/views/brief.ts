@@ -9,6 +9,7 @@ import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import { shownStatus } from "../present.ts";
 import { arr as arrU, get as getU } from "../util.ts";
+import { money } from "./usage.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -109,6 +110,39 @@ export function usageNow(session: unknown, live: unknown): J {
   const status = shownStatus(session);
   const [first, then] = status === "running" || status === "queued" ? [told, said] : [said, told];
   return has(first) ? first : has(then) ? then : null;
+}
+
+/// The context at least that is worth going on afresh with once its cache is over: about what a new conversation is
+/// given before it reads back what it needs (its instructions, its tools), and some.
+const COLD_FROM = 50_000;
+
+/// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on
+/// afresh with (the largest of those): the line over the composer that says what going on would read again
+/// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work or waiting on
+/// work of its own (it reads it again anyway), with no runtime session to go on in, or of a station that does not tell
+/// how long its cache lasts.
+export function cacheCold(agents: unknown, now: number): [J, number] {
+  let cold: { session: string; context: number; cost: number | null } | null = null;
+  let next = Infinity;
+  for (const a of arr(agents)) {
+    const status = get(a, "status");
+    if (status === "running" || status === "queued" || get(a, "wait") != null) continue;
+    const session = get(a, "session");
+    const key = get(session, "key");
+    if (typeof key !== "string" || typeof get(session, "runtimeSessionId") !== "string") continue;
+    const u = usageNow(session, null);
+    const [at, ms, context] = [get(u, "lastCallAt"), get(u, "cacheMs"), get(u, "contextTokens")];
+    if (typeof at !== "number" || typeof ms !== "number" || typeof context !== "number" || context < COLD_FROM) continue;
+    if (at + ms > now) {
+      next = Math.min(next, at + ms - now);
+      continue;
+    }
+    if (cold === null || context > cold.context) cold = { session: key, context, cost: typeof get(u, "rereadCost") === "number" ? u.rereadCost : null };
+  }
+  if (cold === null) return [null, next];
+  const tokens = format.compactNumber(cold.context);
+  const text = cold.cost !== null ? t("core-views.agent.cacheColdCost", { tokens, cost: money(cold.cost) }) : t("core-views.agent.cacheCold", { tokens });
+  return [{ session: cold.session, text }, next];
 }
 
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live view (none before it is read): each part

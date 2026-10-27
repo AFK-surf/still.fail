@@ -465,6 +465,15 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
+/** Its agent at rest, its prompt cache over (the core's `cacheCold`): said over the composer, with 换新上下文. */
+const cacheCold: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const session = chat.agents[0]?.session.key;
+    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" } } : undefined;
+  },
+};
 /** What the chat's agent and another chat's wrote each other: not in the chat (only its bar's button says how many,
  *  the core's `letters`), read in their own tab or sheet (`chatLetters`, Letters.tsx); with `open`, that tab open. */
 const letters: DemoExtension = {
@@ -815,6 +824,8 @@ export const stories: Story[] = [
   { id: "app-chat", group: "应用", title: "对话页", app: true },
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
+  { id: "app-chat-cache-cold", group: "应用", title: "对话 · 缓存已过期", app: true, demo: cacheCold },
+  { id: "phone-chat-cache-cold", group: "手机", title: "对话 · 缓存已过期", app: true, phone: true, demo: cacheCold },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
   // A chat shared as a picture: its messages as the chat's list draws them (the visitor's in their bubble, a vault
   // request as its card), its files to tick.

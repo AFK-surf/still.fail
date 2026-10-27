@@ -20,9 +20,11 @@ export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was
   return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
 }
 
-/// What a session whose context was cleared by hand is told as its new runtime session starts: its chats to read back.
-export function toldCleared(hub: Hub, key: string): string {
-  return cleared(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+/// What a session whose context was cleared by hand is told as its new runtime session starts: its chats to read back;
+/// cleared to go on afresh (`readBack`), what it needs of its work too, as on another account.
+export function toldCleared(hub: Hub, key: string, readBack = false): string {
+  const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+  return readBack ? afresh(key, threads) : cleared(key, threads);
 }
 
 /// What a session whose runtime session could not be resumed is told as its new one starts: where its earlier

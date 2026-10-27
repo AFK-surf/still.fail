@@ -175,6 +175,44 @@ test "an archived chat's restore failing says why under it, in red; tapped again
 }
 
 ///|
+test "its agent's cache over: said over the composer, 换新上下文 clears its context to go on afresh, under way meanwhile" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(v) => { ..tp, value: Some(@sffixture.with_cache_cold(v)) }
+      None => tp
+    }
+  })
+  assert_true(t.find("缓存已过期，接着聊将重新读入 186K token（约 $1.49）") is Some(_))
+  t.tap_text("换新上下文")
+  t.draw()
+  let asked = named(calls, "session.clear")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "key"), "s-c1")
+  assert_eq(field(Some(asked[0].params), "readBack"), Some(Json::boolean(true)))
+  assert_true(t.find("正在换新上下文") is Some(_), msg="under way")
+  (asked[0].done)(Ok(Json::object({})))
+  t.draw()
+  assert_true(t.find("换新上下文") is Some(_), msg="done: as the core's view says")
+}
+
+///|
+test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 clears its context to go on afresh" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  assert_true(t.find("缓存已过期，接着聊将重新读入 186K token（约 $1.49）") is Some(_))
+  t.tap_text("换新上下文")
+  t.draw()
+  let asked = named(calls, "session.clear")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "key"), "s-c1")
+  assert_eq(field(Some(asked[0].params), "readBack"), Some(Json::boolean(true)))
+}
+
+///|
 test "the composer's buttons say what they are: ＋ (发送文件), 发送" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

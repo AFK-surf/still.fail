@@ -501,6 +501,7 @@
   "station.context.cannotCompact": "{name} can't compact its context",
   "station.notice.compacted": "Context compacted",
   "station.notice.compactFailed": "Couldn't compact the context: {error}",
+  "station.notice.afresh": "Context started afresh; the next message reads back what it needs first",
   "station.notice.cleared": "Context cleared; the next message starts a new conversation",
   "station.relay.opening": "{who} relayed the still.fail chat {chat} here; it goes on in this thread.",
   "station.relay.relayed": "{who} relayed this chat to {place}",

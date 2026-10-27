@@ -511,6 +511,7 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
   useLayoutEffect(() => use({
     station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : view.cc?.some((o) => o.on) ? t("web-mobile.chat.placeholderCc", { place: view.cc.filter((o) => o.on).map((o) => o.place).join("、") }) : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
+    ...(view.cacheCold ? { cacheCold: view.cacheCold } : {}), afresh: api.afresh,
     ...(view.cc?.length && view.thread ? { cc: { to: view.cc, toggle: (o: ChatCcTo) => act(call("chat.cc", { station: here.station, thread: view.thread!.id, to: o.thread, on: !o.on }), t("web-mobile.chat.ccStart", { place: o.place })) } } : {}),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {

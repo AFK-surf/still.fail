@@ -518,6 +518,9 @@ pub(all) struct ChatView {
   offline : Bool
   /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
   offline_note : String?
+  /// its agent's prompt cache over (the core's `cacheCold`): that agent's session and what the line over the composer
+  /// says (going on reads its context again), offering a fresh context instead
+  cache_cold : (String, String)?
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -617,6 +620,10 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     }),
     offline: flag(s, "offline"),
     offline_note: opt_text(s, "offlineNote"),
+    cache_cold: match field(s, "cacheCold") {
+      Some(Object(_)) as cold => Some((text(cold, "session"), text(cold, "text")))
+      _ => None
+    },
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),

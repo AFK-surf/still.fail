@@ -71,7 +71,7 @@ export const PARAMS: Record<string, string> = {
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.compact": "key:string",
-  "session.clear": "key:string",
+  "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
   "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
@@ -312,7 +312,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.compact":
       return op("POST", () => `/sessions/${p.at("key")}/compact`, null, session("key"));
     case "session.clear":
-      return op("POST", () => `/sessions/${p.at("key")}/clear`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/clear`, p.has("readBack") ? p.pick(["readBack"]) : null, session("key"));
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":

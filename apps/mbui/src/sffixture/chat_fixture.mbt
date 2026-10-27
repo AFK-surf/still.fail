@@ -442,6 +442,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_working(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
+          } else if f.mode == "chat-cache-cold" {
+            with_cache_cold(rich_chat(f.older))
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
           } else {
@@ -1673,6 +1675,19 @@ pub fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
 
 ///|
 /// The chat with its station's update said in its bar and opened (MBUI_FIXTURE=chat-update: station_update.mbt).
+/// chat-cache-cold: its agent at rest, its prompt cache over, as the core says it (ChatView::cacheCold).
+pub fn with_cache_cold(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
 pub fn with_station_update(v : Json) -> Json {
   match v {
     Object(m) => {

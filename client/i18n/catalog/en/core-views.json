@@ -114,6 +114,8 @@
     "other": "{n} people stuck after sign-in"
   },
   "core-views.admin.todo.stuck_hint": "Grant access or see where they're stuck",
+  "core-views.agent.cacheCold": "The cache has expired; going on reads {tokens} tokens again",
+  "core-views.agent.cacheColdCost": "The cache has expired; going on reads {tokens} tokens again (about {cost})",
   "core-views.agent.context": "{used} / {window}",
   "core-views.agent.hours": "{h}h {m}m",
   "core-views.agent.minutes": "{m}m",

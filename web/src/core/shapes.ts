@@ -1486,6 +1486,14 @@ export interface ChatAsk {
 	text: string;
 }
 
+/** A chat's agent whose prompt cache is over (ChatView::cacheCold). */
+export interface ChatCacheCold {
+	/** The agent's session: `session.clear` with `readBack` gives it a fresh context. */
+	session: string;
+	/** What is said: its cache over, and the context going on reads again (缓存已过期，接着聊将重新读入 180K token（约 $1.40）). */
+	text: string;
+}
+
 /** A thread a chat's messages can be copied to (docs/relay.md "抄送"). */
 export interface ChatCcTo {
 	/** The thread's id: `chat.cc`'s `to`. */
@@ -2496,6 +2504,11 @@ export interface ChatView {
 	 * person), the oldest first, for the bar above the composer that leads to each. Empty when nothing is.
 	 */
 	asks?: ChatAsk[];
+	/**
+	 * Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what
+	 * going on would cost and offers a fresh context instead. Absent otherwise, and from a core before it.
+	 */
+	cacheCold?: ChatCacheCold;
 	/**
 	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	 * (`chat.archive`). Absent otherwise.
@@ -4208,6 +4221,18 @@ export interface TranscriptUsage {
 	/** What the calls would cost at API list prices, in dollars; those of unpriced models left out. */
 	cost?: number;
 	unpricedCalls?: number;
+	/** When its last main-thread call was made (ms). */
+	lastCallAt?: number;
+	/**
+	 * How long what that call left in the prompt cache is kept after it (5 minutes, or an hour), where its
+	 * runtime tells what it wrote (Claude's). Absent otherwise.
+	 */
+	cacheMs?: number;
+	/**
+	 * What sending its context again once its cache is over would cost at API list prices, in dollars (all of it
+	 * written to the cache again). Absent for an unpriced model.
+	 */
+	rereadCost?: number;
 }
 
 /** A step in flight; an ended one stays until the transcript entry that records it arrives. */

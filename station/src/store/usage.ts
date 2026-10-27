@@ -125,13 +125,22 @@ export function usageTurns(db: DatabaseSync, session: string, from: number, unti
 }
 
 /// A main-thread call as the pool weighs moving its session (sessions/pool.ts `cheapToLeave`) and as a session's usage
-/// says where its context stands (usage/module.ts `usageNow`): the context it left (null: not told) and the model's window.
-export type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number | null; window: number | null };
+/// says where its context stands (usage/module.ts `usageNow`): the context it left (null: not told) and the model's window,
+/// when it was made (ms), at which speed, and what it wrote to the cache for five minutes and for an hour.
+export type ContextCall = {
+  turn: string | null; profile: string | null; model: string | null; context: number | null; window: number | null;
+  at: number; fast: boolean; cacheWrite: number; cacheWriteLong: number;
+};
 
 /// A session's last `limit` main-thread calls, oldest first.
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  const rows = db.prepare("SELECT turn, profile, model, context, context_window FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2").all(session, limit) as Json[];
-  return rows.reverse().map((r) => ({ turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window }));
+  const rows = db
+    .prepare("SELECT turn, profile, model, context, context_window, at, fast, cache_write, cache_write_long FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2")
+    .all(session, limit) as Json[];
+  return rows.reverse().map((r) => ({
+    turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window,
+    at: r.at, fast: r.fast !== 0 && r.fast !== null, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long,
+  }));
 }
 
 /// Where each model's context was compacted on this station since `since`: the most a main-thread call sent before

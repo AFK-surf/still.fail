@@ -468,6 +468,8 @@ export function stationApi(t: StationCall) {
     compact: (key: string) => ops.sessionCompact<{ ok: true }>({ key }),
     /** Its context cleared by hand, between turns: its next message starts a new conversation. */
     clear: (key: string) => ops.sessionClear<{ ok: true }>({ key }),
+    /** Its context cleared to go on afresh (its cache over): its next message starts a new conversation that reads back what it needs. */
+    afresh: (key: string) => ops.sessionClear<{ ok: true }>({ key, readBack: true }),
     putConnect: (id: string, input: ConnectInput) => ops.connectPut<Overview>({ id, input }),
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
     /** A Feishu connect's App Secret replaced: verified by its station first, then it reconnects. */

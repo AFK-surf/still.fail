@@ -1095,6 +1095,9 @@ export const SHAPES: Record<string, Shape> = {
     ["contextWindow", opt("i64"), { client: opt("I54"), doc: "The model's context window, when the runtime tells it (Codex)." }],
     ["cost", opt("f64"), { doc: "What the calls would cost at API list prices, in dollars; those of unpriced models left out." }],
     ["unpricedCalls", opt("i64"), { client: opt("I54") }],
+    ["lastCallAt", opt("i64"), { client: opt("I54"), doc: "When its last main-thread call was made (ms)." }],
+    ["cacheMs", opt("i64"), { client: opt("I54"), doc: "How long what that call left in the prompt cache is kept after it (5 minutes, or an hour), where its\nruntime tells what it wrote (Claude's). Absent otherwise." }],
+    ["rereadCost", opt("f64"), { doc: "What sending its context again once its cache is over would cost at API list prices, in dollars (all of it\nwritten to the cache again). Absent for an unpriced model." }],
   ]),
   LiveStep: struct([
     ["id", "String"],
@@ -2927,11 +2930,16 @@ export const SHAPES: Record<string, Shape> = {
     ["stationUpdate", opt("StationUpdateNotice"), { doc: "Station update availability or progress, including the local outbox while reconnecting." }],
     ["decision", opt("RowDecision"), { doc: "The card it waits on, as its row has it. Absent when there is none." }],
     ["asks", vec("ChatAsk"), { default: true, doc: "What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a\nperson), the oldest first, for the bar above the composer that leads to each. Empty when nothing is." }],
+    ["cacheCold", opt("ChatCacheCold"), { doc: "Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what\ngoing on would cost and offers a fresh context instead. Absent otherwise, and from a core before it." }],
     ["archivable", opt("bool"), { doc: "Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["xshare", opt("ChatShare"), { doc: "Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or\nthe viewer is in no other workspace." }],
     ["publish", opt("ChatPublish"), { doc: "Its public snapshots (docs/public-share.md); absent while it has no chat." }],
     ["tabs", opt("ChatTabs"), { doc: "Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core\nbefore it." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
+  ChatCacheCold: struct([
+    ["session", "String", { doc: "The agent's session: `session.clear` with `readBack` gives it a fresh context." }],
+    ["text", "String", { said: true, doc: "What is said: its cache over, and the context going on reads again (缓存已过期，接着聊将重新读入 180K token（约 $1.40）)." }],
+  ], { doc: "A chat's agent whose prompt cache is over (ChatView::cacheCold)." }),
   ChatCcTo: struct([
     ["thread", "i64", { client: "I54", doc: "The thread's id: `chat.cc`'s `to`." }],
     ["place", "String", { said: true, doc: "Where it is: #channel, 私信, the Feishu group." }],

@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -117,8 +117,9 @@ export type SessionDeps = {
   /// What it is told when it goes on on `to` in a new runtime session rather than take up `id` (last run on `was`, when
   /// the store does not know); null: it takes it up (sessions/afresh.ts).
   startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
-  /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`).
-  cleared?(key: string): string;
+  /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`): to read
+  /// back what it needs of its work too when `readBack` (cleared to go on afresh, as on another account).
+  cleared?(key: string, readBack: boolean): string;
   /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
   /// `toldResumeLost`).
   resumeLost?(key: string): string;
@@ -213,6 +214,8 @@ export class SessionActor {
   /// What changed is not a model or an effort (the station's variables for its agents): no taking it in place.
   private restart = false;
   private profile: string | null = null;
+  /// Its context cleared to go on afresh (`clear`'s `readBack`): its next runtime session told to read back its work.
+  private readBack = false;
   private generation = 0;
   private phase: Phase = "idle";
   private turn: Turn | null = null;
@@ -567,16 +570,18 @@ export class SessionActor {
 
   /// Clears its context, by hand, between turns: its process ends (with what it had going in the background, and the
   /// wait for it), and its next turn starts a new runtime session, told so (`cleared`); the one before stays in its
-  /// history. Said in its chat. Why not, when it cannot now (said in its chat too when `say`); null once done.
-  clear(say = false): Promise<string | null> {
+  /// history. Said in its chat. `readBack`: to go on afresh, as it would on another account (its cache over, its
+  /// conversation would be read again at full price): told to read back what it needs of what it did, not only its
+  /// chats. Why not, when it cannot now (said in its chat too when `say`); null once done.
+  clear(say = false, readBack = false): Promise<string | null> {
     let refused: string | null = null;
     return this.enqueue(async () => {
-      refused = await this.clearNow();
+      refused = await this.clearNow(readBack);
       if (refused !== null && say) await this.notice(`⚠️ ${refused}`);
     }).then(() => refused);
   }
 
-  private async clearNow(): Promise<string | null> {
+  private async clearNow(readBack: boolean): Promise<string | null> {
     if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     const store = this.deps.store;
     const row = store.getSession(this.key);
@@ -595,8 +600,9 @@ export class SessionActor {
     this.toolsRestarts = 0;
     this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
     store.setRuntimeSessionId(this.key, null);
+    this.readBack = readBack;
     store.notify(this.key);
-    await this.notice(t("station.notice.cleared"));
+    await this.notice(t(readBack ? "station.notice.afresh" : "station.notice.cleared"));
     return null;
   }
 
@@ -1030,7 +1036,8 @@ export class SessionActor {
       }
     } else {
       agent = await driver.open(base, this.listener(generation));
-      if (wasCleared) this.afresh = this.deps.cleared?.(this.key) ?? cleared(this.key, []);
+      if (wasCleared) this.afresh = this.deps.cleared?.(this.key, this.readBack) ?? (this.readBack ? afreshNote(this.key, []) : cleared(this.key, []));
+      this.readBack = false;
     }
     if (row.runtimeSessionId !== agent.id()) {
       store.setRuntimeSessionId(this.key, agent.id());
