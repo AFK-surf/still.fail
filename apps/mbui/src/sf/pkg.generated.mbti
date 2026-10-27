@@ -1060,9 +1060,15 @@ pub let native_bars : NativeBars
 
 pub fn native_bars_reset() -> Unit
 
+pub fn native_capsule_h() -> Double?
+
 pub fn native_card_corner() -> Double
 
 pub fn native_clear() -> Double
+
+pub fn native_foot_corner() -> Double?
+
+pub fn native_foot_set(Double) -> Unit
 
 pub let native_in : Double
 
