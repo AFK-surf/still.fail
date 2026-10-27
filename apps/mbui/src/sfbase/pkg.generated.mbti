@@ -115,6 +115,8 @@ pub fn chat_keep(Map[String, Json], Double) -> Unit
 
 pub fn chat_kept(ChatRef) -> ChatView?
 
+pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
+
 pub fn chat_link(String, String) -> String
 
 pub fn chat_params(ChatRef) -> Map[String, Json]
@@ -2570,6 +2572,7 @@ pub(all) struct Reading {
   mut lined : Bool
   asked : @signals.Signal[Double]
   mut asked_newer : Double
+  mut latest_asked : Bool
   mut told : String
   mut seen_whole : Double
   mut top_seq : Double
