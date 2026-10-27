@@ -2048,6 +2048,7 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
     [1, call("mcp__stillfail__chat_post", { to: "C0OPS/1.5", text: "*看了*" }, "1970-01-01T00:00:03Z", "c1")],
     [2, { at: "1970-01-01T00:00:03Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     [3, { at: "1970-01-01T00:00:04Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="GPT-Ember (<@UB2>)" ts="4.0">也看了</message>' }],
+    [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="Mia (U9)" ts="5.0"><@UB2> 继续</message>' }],
   ]);
   await t.read(u, 1);
   const v = u.value;
@@ -2057,6 +2058,8 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
     [0, "看看项目", "#C0OPS", true, "Mia"],
     [0, "**看了**", "#C0OPS", false, v.elsewhere[1].by.name],
     [0, "也看了", "#C0OPS", true, "GPT-Ember"],
+    // Another agent's bot mentioned: by its name, as it was heard.
+    [0, "@GPT-Ember 继续", "#C0OPS", true, "Mia"],
   ]);
   // The person's picture as their Slack shows it; the agent's mark, no picture; another agent's bot, its picture.
   assert.equal(v.elsewhere[0].by.picture, mia.picture);
