@@ -122,6 +122,7 @@ final class Updates {
                 changed(0);
                 Thread.sleep(1000L << (failures - 1));
                 phase = "downloading";
+                changed(0);
             }
         }
         String got = sha256(part);

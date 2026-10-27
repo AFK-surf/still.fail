@@ -1059,7 +1059,8 @@ let views_told : Map[Int, Bool] = Map::new()
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   outside_came()
   if kind == outside_update {
-    // (how it goes changed: held while the host works at it)
+    // (how it goes changed: what it says now kept, read by the app from there; held while the host works at it)
+    update_told.val = Some(@hostapi.update_state())
     if state == 0 {
       if !outside_tickets.contains(outside_key(kind, id)) {
         outside_start(kind, id, "an update downloading")

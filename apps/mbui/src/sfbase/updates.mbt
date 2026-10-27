@@ -230,11 +230,11 @@ pub fn update_error(e : String) -> String {
 }
 
 ///|
-/// How the update goes as the host says it now (@ui.update_state's phase: idle, allow, downloading, retrying,
-/// installing, handed, failed), what went wrong said once as it comes. Every reading of the phase goes through here:
-/// one kept from an earlier read would go on saying idle while the host downloads (2026-10-27: the small screen's
-/// update row offered 更新 again after its check, the download going on unseen). Under a Tester (no host state), the
-/// phase as the test put it.
+/// How the update goes as the host last told it (@ui.update_state's phase, kept as each change comes: idle, allow,
+/// downloading, retrying, installing, handed, failed), what went wrong said once as it comes. Every reading of the
+/// phase goes through here, not a copy one reader refreshed: that copy said idle while the host downloaded
+/// (2026-10-27: the small screen's update row offered 更新 again after its check, the download going on unseen).
+/// Under a Tester (no host state), the phase as the test put it.
 pub fn update_phase() -> String {
   let st = @ui.update_state()
   if st == "" {

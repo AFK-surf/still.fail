@@ -394,11 +394,25 @@ pub fn update_install(url : String, sha256 : String, size : Double, name : Strin
 }
 
 ///|
-/// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's): read as a frame builds, each
-/// change of it bringing a frame of its own (outside_update), not looked for frame after frame.
+/// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's): as the host last told it
+/// (each change its event, hostcall.mbt's on_outside, which keeps what it says and brings a frame), asked of the host
+/// only before it has told anything. Never asked frame after frame.
 pub fn update_state() -> String {
   match fake.val {
     Some(_) => ""
-    None => @hostapi.update_state()
+    None =>
+      match update_told.val {
+        Some(st) => st
+        None => {
+          let st = @hostapi.update_state()
+          update_told.val = Some(st)
+          st
+        }
+      }
   }
 }
+
+///|
+/// How an update goes as the host last told it (None: nothing yet, asked once as it is first read).
+// kept across runs: a real host's alone (a Tester's update_state answers ""), said by the host's events
+let update_told : Ref[String?] = { val: None }
