@@ -26,6 +26,7 @@ using @sfbase {
   quoted_into,
   quote_file_into,
   attachment_json,
+  attachment_of,
   type Agent,
   type ChatDay,
   type FoundChat,

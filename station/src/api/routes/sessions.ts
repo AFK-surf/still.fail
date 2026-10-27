@@ -90,21 +90,24 @@ async function onDisk(read: Tools["read"], r: Request, key: string, name: string
 /// The most a part (GET /sessions/:key/parts) takes.
 const MAX_PART = 8 * 1024 * 1024;
 
-/// GET /sessions/:key/parts?name=&offset=&length=: `length` bytes of a file from `offset` (fewer at its end), with its
-/// whole size (`stillfail-total`): a big file is fetched a part at a time, onto the disk, never all in memory.
-async function part(read: Tools["read"], r: Request, key: string): Promise<Answer> {
+/// `offset` and `length` as a part asks them (`length` MAX_PART at most); null when they are not numbers or too long.
+function rangeOf(r: Request): { offset: number; length: number } | null {
   const num = (name: string, fallback: number) => {
     const v = param(r, name);
     return v === undefined ? fallback : /^[0-9]+$/.test(v) ? Number(v) : -1;
   };
   const offset = num("offset", 0);
   const length = num("length", MAX_PART);
-  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0 || length > MAX_PART) return error(400, "invalid offset or length");
-  const found = await onDisk(read, r, key, param(r, "name") ?? "");
-  if ("status" in found) return found;
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0 || length > MAX_PART) return null;
+  return { offset, length };
+}
+
+/// `length` bytes of the file at `path` from `offset` (fewer at its end), answered as `type` with its whole size
+/// (`stillfail-total`) and `extra`.
+async function rangeAnswer(path: string, type: string, offset: number, length: number, extra: Record<string, string> = {}): Promise<Answer> {
   let handle;
   try {
-    handle = await open(found.path, "r");
+    handle = await open(path, "r");
     const total = (await handle.stat()).size;
     const want = Math.max(0, Math.min(length, total - offset));
     const bytes = Buffer.alloc(want);
@@ -114,12 +117,22 @@ async function part(read: Tools["read"], r: Request, key: string): Promise<Answe
       if (bytesRead === 0) break;
       got += bytesRead;
     }
-    return answered(found.type, bytes.subarray(0, got), { "stillfail-total": String(total) });
+    return answered(type, bytes.subarray(0, got), { ...extra, "stillfail-total": String(total) });
   } catch (e) {
     return error(500, ioMessage(e as NodeJS.ErrnoException));
   } finally {
     await handle?.close();
   }
+}
+
+/// GET /sessions/:key/parts?name=&offset=&length=: `length` bytes of a file from `offset` (fewer at its end), with its
+/// whole size (`stillfail-total`): a big file is fetched a part at a time, onto the disk, never all in memory.
+async function part(read: Tools["read"], r: Request, key: string): Promise<Answer> {
+  const range = rangeOf(r);
+  if (range === null) return error(400, "invalid offset or length");
+  const found = await onDisk(read, r, key, param(r, "name") ?? "");
+  if ("status" in found) return found;
+  return rangeAnswer(found.path, found.type, range.offset, range.length);
 }
 
 /// GET /sessions/:key/poster?name=: a video's poster (drive/posters.ts), a JPEG; 404 when none can be made.
@@ -201,14 +214,22 @@ async function peek(read: Tools["read"], r: Request, key: string, dataDir: strin
 /// GET /sessions/:key/open?path=: a file a message names, whole (at most OPEN_MAX), for the preview over the window:
 /// `{name, type, size, bytes}` (base64); with `raw=1`, its bytes as they are, its name and path in `stillfail-name` and
 /// `stillfail-path` (URI-encoded), as a client from now asks it (base64 made it a third bigger, and slow to read back).
+/// With `raw=1` and `offset` or `length`: only that part of it (as /parts gives one, its whole size in
+/// `stillfail-total`), however big it is: a text shown as it comes, read on as it is read.
 async function openFile(read: Tools["read"], r: Request, key: string): Promise<Answer> {
   const found = await placeOf(read, r, key);
   if ("status" in found) return found;
   if (found.dir) return error(400, "a directory");
+  const named = { "stillfail-name": encodeURIComponent(found.name), "stillfail-path": encodeURIComponent(found.path) };
+  if (param(r, "raw") === "1" && (param(r, "offset") !== undefined || param(r, "length") !== undefined)) {
+    const range = rangeOf(r);
+    if (range === null) return error(400, "invalid offset or length");
+    return rangeAnswer(found.path, found.contentType, range.offset, range.length, named);
+  }
   if (found.size > OPEN_MAX) return error(413, "too big to open here");
   try {
     const bytes = await readFile(found.path);
-    if (param(r, "raw") === "1") return answered(found.contentType, bytes, { "stillfail-name": encodeURIComponent(found.name), "stillfail-path": encodeURIComponent(found.path) });
+    if (param(r, "raw") === "1") return answered(found.contentType, bytes, named);
     return jsonAnswer({ name: found.name, path: found.path, type: found.contentType, size: bytes.length, bytes: bytes.toString("base64") });
   } catch (e) {
     return error(500, ioMessage(e as NodeJS.ErrnoException));

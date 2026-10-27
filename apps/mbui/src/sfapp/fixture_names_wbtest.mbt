@@ -16,6 +16,7 @@ using @sffixture {
   fix_docs,
   fix_download_step_ms,
   fix_fetches,
+  fixture_log,
   fix_films,
   fix_history,
   fix_later,

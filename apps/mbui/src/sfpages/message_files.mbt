@@ -91,6 +91,15 @@ fn open_file(here : MessageHere, a : Attachment) -> Unit {
 }
 
 ///|
+/// A file a message of agent `agent` names by its path opened in the preview (Peeks.tsx FileRef open), read through
+/// the agent's session as it is now; not a directory.
+fn open_named(here : MessageHere, agent : String, path : String) -> Unit {
+  guard agent != "" && !path.has_suffix("/") else { return }
+  let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
+  open_preview(here.station, agent, a, named=true)
+}
+
+///|
 /// What a file is by its name (FilePreview.tsx kindOf, as the chat tells them apart): image, video, or anything else.
 pub fn file_kind(name : String) -> String {
   let lower = @sf.lower(name)

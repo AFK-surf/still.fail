@@ -171,6 +171,8 @@ pub(all) struct Viewer {
   name : String
   /// a file of a station's drive (open_file), read by `drive.read`; None: a chat's, read by `station.file`
   drive : DriveFile?
+  /// a file a message names by its path (`file.path`, as the agent wrote it), read by `file.open`, whatever it is now
+  named : Bool
   kind : PKind?
   mime : String
   /// a file of no known kind: text (its first bytes UTF-8, no NULs)? None while asked
@@ -205,6 +207,8 @@ pub(all) struct Viewer {
   mut colored : Array[Array[@ui.Run]]?
   /// whether they were coloured for the dark theme
   mut colored_dark : Bool
+  /// code and text shown as they come, a part at a time (viewer_flow.mbt), once its first part is asked
+  mut flow : Flow?
   /// the image's key once its bytes are given
   mut image : String
   /// drawn once (its way in set going), closed (only drawn going), how far it has faded in (0 … 1, a motion)
@@ -511,22 +515,30 @@ pub fn preview_rest() -> Double {
 
 ///|
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps
-/// through.
+/// through; `named`: a file a message names by its path (`a.path`), not one sent with it.
 pub fn open_preview(
   station : String,
   key : String,
   a : Attachment,
   drive? : DriveFile? = None,
   steps? : Stepping = NoSteps,
+  named? : Bool = false,
 ) -> Unit {
   close_now()
   pv_strip.leaving = None
-  viewer.val = Some(new_viewer(station, key, a, drive, steps))
+  viewer.val = Some(new_viewer(station, key, a, drive, steps, named~))
 }
 
 ///|
 /// A viewer of `a` (what it read before, kept, taken at once).
-pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?, steps : Stepping) -> Viewer {
+pub fn new_viewer(
+  station : String,
+  key : String,
+  a : Attachment,
+  drive : DriveFile?,
+  steps : Stepping,
+  named? : Bool = false,
+) -> Viewer {
   let (kind, mime, _) = preview_kind(a.name)
   let v : Viewer = {
     station,
@@ -534,6 +546,7 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     file: a,
     name: base_name(a.path),
     drive,
+    named,
     kind,
     mime,
     sniffed: @signals.signal(None),
@@ -559,6 +572,7 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     text: None,
     colored: None,
     colored_dark: false,
+    flow: None,
     image: "",
     started: false,
     closing: false,
@@ -604,8 +618,17 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     copied: 0,
     head_w: 0.0,
   }
-  v.bytes.set(kept_read(v.id()))
+  // (one named by its path read anew each time: it may have changed since)
+  if !named {
+    v.bytes.set(kept_read(v.id()))
+  }
   v
+}
+
+///|
+/// A file sent with a chat's message, kept by its name there (not a drive's, not one a message names by its path).
+pub fn Viewer::chat_file(self : Viewer) -> Bool {
+  self.drive is None && !self.named
 }
 
 ///|
@@ -760,6 +783,8 @@ pub fn Viewer::told_of(self : Viewer) -> Bool {
   match self.shown_kind() {
     Some(KVideo) | Some(KAudio) | Some(KPdf) => false
     None => self.kind is None && self.sniffed.get() is Some(_)
+    // (shown as it comes, however big)
+    Some(_) if self.flows() => false
     Some(_) => self.file.size > big_file
   }
 }
@@ -779,6 +804,16 @@ pub fn file_params(v : Viewer) -> Map[String, Json] {
     "station": Json::string(v.station),
     "key": Json::string(v.key),
     "name": Json::string(v.name),
+  }
+}
+
+///|
+/// What a file a message names is read by (`file.open`): its path as the message has it, in its agent's session.
+pub fn named_params(v : Viewer) -> Map[String, Json] {
+  {
+    "station": Json::string(v.station),
+    "key": Json::string(v.key),
+    "path": Json::string(v.file.path),
   }
 }
 
@@ -807,10 +842,13 @@ pub fn Viewer::opened_from(self : Viewer) -> Json {
 }
 
 ///|
-/// The call a part of it is read by: a chat's file `station.file.part`, a drive's `drive.read`.
+/// The call a part of it is read by: a chat's file `station.file.part`, a drive's `drive.read`, one a message names
+/// `file.open`.
 pub fn Viewer::part_call(self : Viewer) -> String {
   if self.drive is Some(_) {
     "drive.read"
+  } else if self.named {
+    "file.open"
   } else {
     "station.file.part"
   }
@@ -844,6 +882,7 @@ pub fn Viewer::part_params(self : Viewer, offset : Double, length : Int, keep : 
       drive_keep(p, keep, d.mtime, d.size)
       p
     }
+    None if self.named => named_params(self)
     None => {
       let p = file_params(self)
       if keep == "played" {
@@ -938,6 +977,7 @@ pub fn chat_keep(p : Map[String, Json], size : Double) -> Unit {
 /// Whether a chat's file read whole is kept with its chat: what Android's viewers read off the disk (a PDF, a video,
 /// a song) and a big one (FilePreview.kt: OnDisk, toDisk past BIG_FILE); others are held in memory only.
 pub fn Viewer::kept_whole(self : Viewer) -> Bool {
+  guard !self.named else { return false }
   match self.shown_kind() {
     Some(KPdf) | Some(KVideo) | Some(KAudio) => true
     _ => self.file.size > big_file
@@ -952,6 +992,14 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
     done(r)
   }
   match self.drive {
+    // one a message names: as it is now (at most 16 MB)
+    None if self.named =>
+      (src.read_bytes)("file.open", Json::object(named_params(self)), fn(r) {
+        match r {
+          Ok((_, bytes)) => done(Ok(bytes))
+          Err(e) => done(Err(e))
+        }
+      })
     // an image as it comes: grown from its thumbnail, nothing said of how far it has got (as Android's ImageStage)
     None if self.shown_kind() == Some(KImage) && self.file.size <= big_file =>
       (src.read_bytes)("station.file", Json::object(file_params(self)), fn(r) {
@@ -1061,6 +1109,21 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             mime: v.mime,
             audio: v.shown_kind() == Some(KAudio),
             read: fn(offset, length, answer) {
+              // (one a message names: each part in one piece, `file.open` streams none)
+              if v.named {
+                let gone = Ref(false)
+                v.read_part(src, offset, length, "", fn(r) {
+                  guard !gone.val else { return }
+                  match r {
+                    Ok((said, bytes)) => {
+                      answer(bytes, number(Some(said), "size"), true)
+                      answer(b"", number(Some(said), "size"), false)
+                    }
+                    Err(_) => answer(b"", -2.0, false)
+                  }
+                })
+                return fn() { gone.val = true }
+              }
               stream_part(src, v.part_call(), v.part_params(offset, length, "played"), v.listed_size(), answer, ended=fn(r) {
                 match r {
                   Ok(bytes) => {
@@ -1085,6 +1148,13 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     }
     _ => ()
   }
+  // code and text: shown as they come, a part at a time (viewer_flow.mbt), its first part asked here
+  if v.flows() && !v.asked && v.bytes.get() is None {
+    if v.flow is None {
+      v.read_on(src)
+    }
+    return
+  }
   let want = !v.told_of() || v.asked
   if want && v.bytes.get() is None && !v.fetching.get() && v.error.get() is None &&
     (v.kind is Some(_) || v.sniffed.get() is Some(_)) {
@@ -1094,10 +1164,12 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       match r {
         Ok(bytes) => {
           @ui.log(
-            "preview: \{v.name} read whole through the core (\{if v.drive is Some(_) { "drive.read" } else { "station.file" }}, \{bytes.length()} bytes)",
+            "preview: \{v.name} read whole through the core (\{if v.drive is Some(_) { "drive.read" } else if v.named { "file.open" } else { "station.file" }}, \{bytes.length()} bytes)",
           )
           v.bytes.set(Some(bytes))
-          keep_read(v.id(), bytes)
+          if !v.named {
+            keep_read(v.id(), bytes)
+          }
         }
         Err(e) =>
           v.error.set(Some(
@@ -1322,7 +1394,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
-      (Some(t), Some(KVideo), _) if self.drive is None && self.video_rect(c) is Some(_) => {
+      (Some(t), Some(KVideo), _) if self.chat_file() && self.video_rect(c) is Some(_) => {
         self.fly_from = Some(t)
         self.fly_to = match self.media {
           Some(m) => @sf.player_picture_at(m.key())
@@ -1518,7 +1590,12 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
     Some(KVideo) | Some(KAudio) => v.player_stage(c, src, stage)
     _ =>
-      if vf_reads(v) {
+      if v.flowing() {
+        match (v.flow, kind) {
+          (Some(f), Some(k)) => v.flow_stage(c, src, f, k, stage)
+          _ => ()
+        }
+      } else if vf_reads(v) {
         // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
         match v.bytes.get() {
           Some(b) => vf_read(v, c, src, b)
@@ -1674,7 +1751,7 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes.get() {
     // kept as keep_way_of says, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
-    None if self.drive is None => self.download_asked = true
+    None if self.chat_file() => self.download_asked = true
     None => {
       self.error.set(None)
       self.asked = true
@@ -1686,7 +1763,7 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
 ///|
 /// The core's download of this chat's file while it is listed (under way, ready, failed): None for a drive's.
 pub fn Viewer::download(self : Viewer, src : Source) -> Json? {
-  if self.drive is Some(_) {
+  if !self.chat_file() {
     return None
   }
   download_of(src, self.station, self.key, self.name)
@@ -1721,7 +1798,7 @@ pub fn Viewer::flying(self : Viewer) -> Double {
 ///|
 /// Where the picture is on the stage when it is still (fitted), once its size is known here.
 pub fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Double, Double, Double, Double)? {
-  if self.drive is Some(_) {
+  if !self.chat_file() {
     return None
   }
   // a video: where its picture will be, by its size as sent, else its still's (FilePreview.kt: known from the still
@@ -2098,7 +2175,7 @@ pub fn Viewer::stand_in(self : Viewer, src : Source) -> String {
     Some(l) if l.picture != "" => return l.picture
     _ => ()
   }
-  let thumb = if self.drive is Some(_) { "" } else { (src.file)(self.station, self.key, self.name) }
+  let thumb = if self.chat_file() { (src.file)(self.station, self.key, self.name) } else { "" }
   if thumb != "" && thumb != "!" {
     thumb
   } else {
@@ -2429,7 +2506,7 @@ pub fn Viewer::drag_zoomed(
 /// closed into its thumbnail, else what its thumbnail shows, else the station's poster (its first frame); an image's
 /// key, "" while it comes or where there is none (a drive's file).
 pub fn Viewer::still(self : Viewer, src : Source) -> String {
-  if self.drive is Some(_) {
+  if !self.chat_file() {
     return ""
   }
   match pv_frames.get(self.id()) {
@@ -2741,7 +2818,6 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
     csv_table(c, v, words, @sf.lower(v.name).has_suffix(".tsv"), cut)
     return
   }
-  // in rows of 60 lines, so a long file lays out only what is in view
   let lines = words.split("\n").map(fn(s) { s.to_owned() }).to_array()
   // code in the colours the core says of its language (`code.ink`), as a whole, then cut at its lines; Markdown's
   // source, plain text and what is past HIGHLIGHT_LIMIT as they are
@@ -2770,60 +2846,102 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
       }
     }
   }
-  let chunks = (lines.length() + 59) / 60
-  let markdown = kind == KMarkdown && !v.source
-  let code = !markdown && (kind != KText && kind != KCsv)
-  let count = if markdown { 1 } else { chunks }
+  let cut = if cut {
+    Some(pv_fill("android-chat.file.cut", [("size", @sf.file_size(show_limit.to_double()))]))
+  } else {
+    None
+  }
+  v.lines_stage(
+    c,
+    kind,
+    lines.length(),
+    fn(k) { lines[k] },
+    fn(k) { colored.get(k) },
+    cut,
+    markdown=if kind == KMarkdown && !v.source { Some(words) } else { None },
+  )
+  |> ignore
+}
+
+///|
+/// Code and text in the code face, `count` lines (`line(k)`, coloured as `colored(k)` says, else plain), in rows of 60
+/// lines so a long file lays out only what is in view; or `markdown` rendered; `cut`: what it says over them of a file
+/// shown only in part. Whether its last rows are in view (flow_ahead of them: a text shown as it comes reads on).
+pub fn Viewer::lines_stage(
+  self : Viewer,
+  c : @ui.Ctx,
+  kind : PKind,
+  count : Int,
+  line : (Int) -> String,
+  colored : (Int) -> Array[@ui.Run]?,
+  cut : String?,
+  markdown? : String? = None,
+) -> Bool {
+  let v = self
+  let t = @sf.theme()
+  let chunks = if markdown is Some(_) { 1 } else { (count + 59) / 60 }
+  let code = markdown is None && kind != KText && kind != KCsv
   // as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down, 32 in, 12
   // on 1.65; under 640, 60 down, 16 in, 48 under)
-  let small = c.width <= @sf.viewer_small_w && !code && !markdown
-  let top = if small { page_small_top } else { viewer_top(c) + (if markdown { 64.0 } else if code { 80.0 } else { desk_page_top }) }
-  let foot = if markdown { 64.0 } else if small { plain_small_foot } else { desk_text_foot }
+  let small = c.width <= @sf.viewer_small_w && !code && markdown is None
+  let top = if small {
+    page_small_top
+  } else {
+    viewer_top(c) + (if markdown is Some(_) { 64.0 } else if code { 80.0 } else { desk_page_top })
+  }
+  let foot = if markdown is Some(_) { 64.0 } else if small { plain_small_foot } else { desk_text_foot }
   let size = desk_code_size
-  let line = if code { desk_code_line } else { desk_plain_line }
+  let height = if code { desk_code_line } else { desk_plain_line }
   let side = if small { plain_small_side } else { desk_text_side }
-  c.list("preview/text/" + v.file.path + (if v.source { "/source" } else { "" }), count + 3, 400.0, fn(i) {
+  let key = "preview/text/" + v.file.path + (if v.source { "/source" } else { "" })
+  c.list(key, chunks + 3, 400.0, fn(i) {
     if i == 0 {
-      if cut {
+      if cut is Some(_) {
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=8.0, bg=@sf.alpha(t.p.red, 0.0), fn() {  })
         |> ignore
       }
       c.box(w=Fill(1.0), h=Px(top), fn() {  })
       |> ignore
-      if cut {
-        cut_line(c, pv_fill("android-chat.file.cut", [("size", @sf.file_size(show_limit.to_double()))]))
+      match cut {
+        Some(words) => cut_line(c, words)
+        None => ()
       }
-    } else if i == count + 1 {
+    } else if i == chunks + 1 {
       c.box(w=Fill(1.0), h=Px(foot), fn() {  }) |> ignore
-    } else if i == count + 2 {
+    } else if i == chunks + 2 {
       ()
-    } else if markdown {
+    } else if markdown is Some(words) {
       c.box(w=Fill(1.0), pl=18.0, pr=18.0, fn() {
         @sf.markdown(c, words, key="preview-md") |> ignore
       })
       |> ignore
     } else {
       let from = (i - 1) * 60
-      let to = if from + 60 < lines.length() { from + 60 } else { lines.length() }
+      let to = if from + 60 < count { from + 60 } else { count }
       let sb = StringBuilder()
       let runs : Array[@ui.Run] = []
+      let mut inked = true
       for k in from..<to {
         if k > from {
           sb.write_char('\n')
           runs.push(@ui.span("\n", mono=true))
         }
-        sb.write_string(lines[k])
-        match colored.get(k) {
-          Some(line) => runs.push_iter(line.iter())
-          None => ()
+        let words = line(k)
+        sb.write_string(words)
+        match colored(k) {
+          Some(l) => runs.push_iter(l.iter())
+          None => {
+            inked = inked && words == ""
+            runs.push(@ui.span(words, mono=true))
+          }
         }
       }
       let words = fn() {
         c.rich(
-          if colored.length() > 0 { runs } else { [@ui.span(sb.to_string(), mono=true)] },
+          if inked { runs } else { [@ui.span(sb.to_string(), mono=true)] },
           size~,
           color=t.p.text,
-          line~,
+          line=height,
           wrap=!code,
           breaks=code,
         )
@@ -2838,6 +2956,14 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
     }
   })
   |> ignore
+  // (built again only as that changes, not at each step of a scroll)
+  let at_end = fn(i : @ui.ListInfo?) {
+    match i {
+      Some(i) => i.last >= chunks - flow_ahead
+      None => false
+    }
+  }
+  at_end(c.list_info_as(key, at_end))
 }
 
 ///|

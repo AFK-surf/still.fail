@@ -96,6 +96,10 @@ pub fn fixture_fetch(
 ) -> Unit {
   fix_fetches.push((name, params))
   let p = Some(params)
+  if name == "file.open" {
+    fixture_named(text(p, "path"), p, done)
+    return
+  }
   let file = text(p, "name")
   let mut found : Bytes? = None
   for f in preview_files() {
@@ -125,6 +129,43 @@ pub fn fixture_fetch(
     }
     _ => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
   }
+}
+
+///|
+/// A file a message names by its path (`file.open`), as the made-up station reads it: the rich chat's place.mbt, and
+/// a long log (`logs/build.log`: a line a step, 600 KB and more); a part of it with `offset`, its whole size `size`.
+pub fn fixture_named(path : String, p : Json?, done : (Result[(Json, Bytes), Json]) -> Unit) -> Unit {
+  let bytes = match path {
+    "src/list/place.mbt" =>
+      @utf8.encode(
+        "///|\n/// Rows put in before the anchor move it with them.\nfn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {\n  if self.anchor >= at {\n    self.anchor = self.anchor + n\n  }\n}\n",
+      )
+    "logs/build.log" => fixture_log()
+    _ => {
+      done(Err({ "code": "http_404", "message": "No such file or directory" }))
+      return
+    }
+  }
+  let said : Json = { "name": Json::string(base_name(path)), "path": Json::string(path), "type": "text/plain", "size": Json::number(bytes.length().to_double()) }
+  if field(p, "offset") is None && field(p, "length") is None {
+    done(Ok((said, bytes)))
+    return
+  }
+  let from = number(p, "offset").to_int()
+  let n = number(p, "length").to_int()
+  let from = if from > bytes.length() { bytes.length() } else { from }
+  let to = if from + n > bytes.length() { bytes.length() } else { from + n }
+  done(Ok((said, Bytes::makei(to - from, fn(i) { bytes[from + i] }))))
+}
+
+///|
+/// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends).
+pub fn fixture_log() -> Bytes {
+  let sb = StringBuilder()
+  for i in 1..=12000 {
+    sb.write_string("[build] 第 \{i} 行：编译 src/module_\{i % 97}.mbt 完成，用时 \{i % 13} ms\n")
+  }
+  @utf8.encode(sb.to_string())
 }
 
 ///|

@@ -537,6 +537,70 @@ test "Markdown rendered; code as it is; a table" {
 }
 
 ///|
+/// A file a message names by its path (`path`, the made-up station's: fixture_named) open in the preview, the window
+/// 390 wide.
+fn named_tester(path : String) -> @ui.Tester {
+  reset()
+  let src = fixture("chat-preview-named")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  open_preview("ws1/st1", "s-c1", attachment_of({ "name": Json::string(base_name(path)), "path": Json::string(path) }), named=true)
+  t.frame()
+  t.run_for(fly_open_ms)
+  t
+}
+
+///|
+test "a long log a message names: its first part shown at once, the next read as its end comes near, never all of it first" {
+  let t = named_tester("logs/build.log")
+  let reads = fn() { fix_fetches.filter(fn(f) { f.0 == "file.open" }) }
+  // read by its path, a part from its start, shown
+  assert_eq(reads().length(), 1)
+  assert_eq(text(Some(reads()[0].1), "path"), "logs/build.log")
+  assert_eq(number(Some(reads()[0].1), "offset"), 0.0)
+  assert_eq(number(Some(reads()[0].1), "length"), @sfbase.flow_part.to_double())
+  assert_true(t.find("[build] 第 1 行：编译 src/module_1.mbt 完成，用时 1 ms") is Some(_))
+  // scrolled on towards the end of what has come: the next part read
+  for _ in 0..<80 {
+    if reads().length() > 1 {
+      break
+    }
+    t.wheel(195.0, 400.0, 3000.0)
+  }
+  assert_eq(reads().length(), 2)
+  assert_eq(number(Some(reads()[1].1), "offset"), @sfbase.flow_part.to_double())
+}
+
+///|
+test "a text shown as it comes: its lines whole however its parts cut them, a character cut at a part's end and all" {
+  let log = fixture_log()
+  let f = @sfbase.Flow::new()
+  f.total = log.length().to_double()
+  // in parts of 1000 bytes: each cuts a line, and most a character of three bytes
+  let mut at = 0
+  while at < log.length() {
+    let to = if at + 1000 < log.length() { at + 1000 } else { log.length() }
+    f.got = to.to_double()
+    f.take(log[at:to].to_bytes())
+    at = to
+  }
+  assert_eq(f.lines.length(), 12000)
+  assert_eq(f.lines[0], "[build] 第 1 行：编译 src/module_1.mbt 完成，用时 1 ms")
+  assert_eq(f.lines[11999], "[build] 第 12000 行：编译 src/module_69.mbt 完成，用时 1 ms")
+  assert_eq(f.tail, "")
+  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_bytes()), 0)
+  assert_eq(@sfbase.utf8_whole(@utf8.encode("a行")), 4)
+}
+
+///|
+test "a file a message names that comes whole in its first part: shown as any file read whole, its code coloured" {
+  let t = named_tester("src/list/place.mbt")
+  assert_true(viewer.val.unwrap().bytes.get() is Some(_))
+  assert_true(t.find("self.anchor = self.anchor + n") is Some(_) || t.locate("self.anchor = self.anchor + n").length() > 0)
+}
+
+///|
 test "two fingers pinch an image round the point between them; no tap comes of it" {
   let t = preview_tester("image")
   let v = viewer.val.unwrap()
@@ -714,7 +778,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
 ///|
 test "a picture of the chat grows from its thumbnail; back closes it at once and it flies back into the thumbnail, then nothing moves" {
   reset()
-  let src = fixture("chat")
+  let src = fixture("chat-preview-named")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   nav_rested(t)

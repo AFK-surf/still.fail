@@ -620,7 +620,7 @@ pub fn open_mode(String) -> Unit
 
 pub fn open_page(@sfbase.Page) -> Unit
 
-pub fn open_preview(String, String, @sfbase.Attachment, drive? : @sfbase.DriveFile?, steps? : @sfbase.Stepping) -> Unit
+pub fn open_preview(String, String, @sfbase.Attachment, drive? : @sfbase.DriveFile?, steps? : @sfbase.Stepping, named? : Bool) -> Unit
 
 pub fn open_screen(String, String, String?) -> Unit
 

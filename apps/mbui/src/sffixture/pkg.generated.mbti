@@ -323,9 +323,13 @@ pub fn fixture_link_parse(String) -> Json
 
 pub fn fixture_link_preview(String) -> Json
 
+pub fn fixture_log() -> Bytes
+
 pub fn fixture_markdown() -> String
 
 pub let fixture_md : String
+
+pub fn fixture_named(String, Json?, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 
 pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
 

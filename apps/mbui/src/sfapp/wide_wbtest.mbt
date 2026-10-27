@@ -2143,6 +2143,19 @@ test "wide: a file an agent names by its path is a chip in its words, its card a
 }
 
 ///|
+test "wide: a file an agent names by its path opens itself in the preview as its chip is clicked, read by its path (FileRef open)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
+  t.tap(x, y)
+  t.run_for(fly_open_ms)
+  let v = viewer.val.unwrap()
+  assert_true(v.named)
+  assert_eq(v.file.path, "src/list/place.mbt")
+  assert_true(v.bytes.get() is Some(_), msg="read by its path, whole in its first part")
+}
+
+///|
 test "wide: a reference to a chat in a message has the chat's card while the pointer rests on it, as the list has it (RefPreview)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")

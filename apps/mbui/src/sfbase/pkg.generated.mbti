@@ -555,6 +555,10 @@ pub let flight_words_key : String
 
 pub fn floor_of(@ui.Ctx, Reading, String, Array[String]) -> Double
 
+pub let flow_ahead : Int32
+
+pub let flow_part : Int32
+
 pub let fly_close_ms : Double
 
 pub let fly_open_ms : Double
@@ -817,6 +821,8 @@ pub let monitor_mark : LinkMark
 
 pub fn mouse_picks() -> Bool
 
+pub fn named_params(Viewer) -> Map[String, Json]
+
 pub fn nav_home() -> Unit
 
 pub let nav_tapped : Array[String]
@@ -843,7 +849,7 @@ pub let new_leave_ms : Double
 
 pub fn new_nav() -> @ui.Nav[Page]
 
-pub fn new_viewer(String, String, Attachment, DriveFile?, Stepping) -> Viewer
+pub fn new_viewer(String, String, Attachment, DriveFile?, Stepping, named? : Bool) -> Viewer
 
 pub fn no_fragment(String) -> String
 
@@ -907,7 +913,7 @@ pub fn open_page(Page) -> Unit
 
 pub fn open_page_over(Page) -> Unit
 
-pub fn open_preview(String, String, Attachment, drive? : DriveFile?, steps? : Stepping) -> Unit
+pub fn open_preview(String, String, Attachment, drive? : DriveFile?, steps? : Stepping, named? : Bool) -> Unit
 
 pub fn open_screen(String, String, String?) -> Unit
 
@@ -1482,6 +1488,8 @@ pub fn upper(String) -> String
 pub let ups : DriveUploads
 
 pub fn use_core_markdown(Source) -> Unit
+
+pub fn utf8_whole(Bytes) -> Int32
 
 pub fn vf_bar(Viewer, @ui.Ctx, Source, Double) -> Unit
 
@@ -2113,6 +2121,31 @@ pub(all) struct FlightPiece {
   b : Int32
   from : (Double, Double)
   at : (Double, Double, Double, Double)
+}
+
+pub(all) struct Flow {
+  lines : Array[String]
+  mut tail : String
+  mut carry : Bytes
+  mut got : Double
+  mut total : Double
+  mut reading : Bool
+  parts : @signals.Signal[Int32]
+  failed : @signals.Signal[String?]
+  pieces : Array[FlowPiece]
+  colored : Array[Array[@ui.Run]?]
+  mut colored_dark : Bool
+}
+pub fn Flow::ink(Self, @ui.Ctx, String) -> Unit
+pub fn Flow::new() -> Self
+pub fn Flow::take(Self, Bytes) -> Unit
+pub fn Flow::whole(Self) -> Bool
+
+pub(all) struct FlowPiece {
+  from : Int32
+  to : Int32
+  mut words : String
+  mut done : Bool
 }
 
 pub(all) struct FlyingFile {
@@ -2975,6 +3008,7 @@ pub(all) struct Viewer {
   file : Attachment
   name : String
   drive : DriveFile?
+  named : Bool
   kind : PKind?
   mime : String
   sniffed : @signals.Signal[Bool?]
@@ -2999,6 +3033,7 @@ pub(all) struct Viewer {
   mut text : String?
   mut colored : Array[Array[@ui.Run]]?
   mut colored_dark : Bool
+  mut flow : Flow?
   mut image : String
   mut started : Bool
   mut closing : Bool
@@ -3045,6 +3080,7 @@ pub fn Viewer::ask_install(Self, @ui.Ctx) -> Unit
 pub fn Viewer::ask_save(Self, @ui.Ctx) -> Unit
 pub fn Viewer::bars_shown(Self) -> Bool
 pub fn Viewer::cancel_download(Self, @ui.Ctx, Source, Json?) -> Unit
+pub fn Viewer::chat_file(Self) -> Bool
 pub fn Viewer::coming(Self) -> Bool
 pub fn Viewer::content(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::dark(Self) -> Bool
@@ -3056,6 +3092,9 @@ pub fn Viewer::draw_flight(Self, @ui.Ctx, String, (Double, Double, Double, Doubl
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
 pub fn Viewer::flight_target(Self, @ui.Ctx, Source) -> (Double, Double, Double, Double)?
+pub fn Viewer::flow_stage(Self, @ui.Ctx, Source, Flow, PKind, Int32) -> Unit
+pub fn Viewer::flowing(Self) -> Bool
+pub fn Viewer::flows(Self) -> Bool
 pub fn Viewer::fly_home(Self, String) -> Unit
 pub fn Viewer::flying(Self) -> Double
 pub fn Viewer::gestures(Self, @ui.Ctx, Source, Int32, @kit.Zoom, Bool, Bool) -> Unit
@@ -3065,6 +3104,7 @@ pub fn Viewer::image_stage(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
+pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@ui.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
 pub fn Viewer::marks_frame(Self, @ui.Ctx) -> Unit
 pub fn Viewer::natural_size(Self, Source) -> (Double, Double)
@@ -3077,6 +3117,7 @@ pub fn Viewer::pdf_stage(Self, @ui.Ctx, Bytes, Int32) -> Unit
 pub fn Viewer::picture(Self, Source) -> String
 pub fn Viewer::player_stage(Self, @ui.Ctx, Source, Int32) -> Unit
 pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
+pub fn Viewer::read_on(Self, Source) -> Unit
 pub fn Viewer::read_part(Self, Source, Double, Int32, String, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 pub fn Viewer::read_whole(Self, Source, (Result[Bytes, Json]) -> Unit) -> Unit
 pub fn Viewer::shown_kind(Self) -> PKind?

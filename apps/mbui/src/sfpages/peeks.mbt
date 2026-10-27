@@ -386,7 +386,8 @@ fn file_peek(
   if c.hovered(id) {
     ignore((src.topic)("filePeek", params))
   }
-  hover(c, "file-peek/" + id.to_string(), id, tap=true, fn() { file_card(c, src, params, path) }) |> ignore
+  // (a tap opens the file itself: message.mbt open_named)
+  hover(c, "file-peek/" + id.to_string(), id, fn() { file_card(c, src, params, path) }) |> ignore
 }
 
 ///|
@@ -459,7 +460,7 @@ fn file_shown(c : @ui.Ctx, v : Json?) -> Unit {
       })
     file_head(c, name, dir, text(v, "path"), text(field(field(v, "time"), "mtime"), "ago"))
     match kind {
-      "text" if items(lines, "text").length() > 0 => file_lines(c, lines, at)
+      "text" if items(lines, "text").length() > 0 => file_lines(c, lines, at, text(v, "name"))
       "image" =>
         match @sf.data_image("data:" + text(field(v, "image"), "type") + ";base64," + text(field(v, "image"), "data")) {
           "" => ()
@@ -532,24 +533,38 @@ fn shown_path(path : String) -> String {
 
 ///|
 /// Its lines (lines): numbered (34 wide, muted, to their right 8 before the line), the one named on the accent's pale
-/// ground, each one line; in the code face at the caption's size on the hover's ground, 8 round.
-fn file_lines(c : @ui.Ctx, lines : Json?, at : Int?) -> Unit {
+/// ground, each one line; in the code face at the caption's size, coloured as its language is (`name`'s), on the
+/// hover's ground, 8 round.
+fn file_lines(c : @ui.Ctx, lines : Json?, at : Int?, name : String) -> Unit {
   let start = count(lines, "start")
+  let words = items(lines, "text").map(fn(l) {
+    match l {
+      String(t) => t
+      _ => ""
+    }
+  })
+  // in the colours the core says of the file's language (`code.ink`, as the preview colours it), plain until it has
+  let (_, _, lang) = @sfbase.preview_kind(name)
+  let colored = if lang == "" {
+    []
+  } else {
+    let all = words.join("\n")
+    match @sf.code_ink(c, all, lang) {
+      Some(Some(ink)) => @sfbase.runs_by_line(@sf.ink_runs(all, ink, @sf.theme().dark))
+      _ => []
+    }
+  }
   c.box(style=peek_file_lines, fn() {
-    for k, l in items(lines, "text") {
+    for k, t in words {
       let n = start + k
       let marked = at == Some(n)
       c.box(style=if marked { peek_file_line_at } else { peek_file_line }, fn() {
         c.box(style=peek_file_line_no, fn() { mono(c, n.to_string(), peek_file_no) }) |> ignore
         c.box(style=peek_ref, fn() {
-          mono(
-            c,
-            match l {
-              String(t) if t != "" => t
-              _ => " "
-            },
-            peek_file_code,
-          )
+          match colored.get(k) {
+            Some(runs) if runs.length() > 0 => c.rich(runs, style=peek_file_code) |> ignore
+            _ => mono(c, if t != "" { t } else { " " }, peek_file_code)
+          }
         })
         |> ignore
       })
