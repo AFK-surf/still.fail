@@ -2015,7 +2015,9 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
   const t = setup();
   const u = ui();
   t.subscribe(1, agentPage("ws/a", "k"));
-  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  // Who wrote to it in Slack, with their Slack picture (the station's names book).
+  const mia = { id: "slack:ember:U9", name: "Mia", email: null, via: "slack", picture: "https://avatars.slack-edge.com/mia_72.jpg" };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", participants: [mia] })]);
   t.set(rows("ws/a"), [{ id: "k", session: "k", thread: null, title: "看看项目", agents: [] }]);
   const call = (tool: string, args: J, at: string, callId: string) => ({ at, kind: "tool_call", tool, text: JSON.stringify(args), callId });
   t.data.putItems("transcript", "ws/a", "k", [
@@ -2031,6 +2033,9 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
     [0, "看看项目", "#C0OPS", true, "Mia"],
     [0, "**看了**", "#C0OPS", false, v.elsewhere[1].by.name],
   ]);
+  // The person's picture as their Slack shows it; the agent's mark, no picture.
+  assert.equal(v.elsewhere[0].by.picture, mia.picture);
+  assert.equal(v.elsewhere[1].by.picture, undefined);
 });
 
 // ── What is shared is never written on (docs/core-ts.md「谁能改什么」) ──
