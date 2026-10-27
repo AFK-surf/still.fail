@@ -327,10 +327,10 @@ fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit 
 
 ///|
 /// How long a picture waits before how far it has come shows, and how long that takes to fade in.
-let coming_after_ms : Double = 300.0
+pub let coming_after_ms : Double = 300.0
 
 ///|
-let coming_in_ms : Double = 200.0
+pub let coming_in_ms : Double = 200.0
 
 ///|
 /// The pill's ring (14 across), the spinner in its place (12, as in a line of small text) on white at 25%.
