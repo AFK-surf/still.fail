@@ -38,8 +38,11 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
   can't have an accessibility service turned on until 允许受限设置 in its app
   info. The station runs `adb pair` through the pairing port (`adb.pair`).
 - **While it is shared** a foreground service holds the app up and says so in a
-  notification, with 停止. Sharing ends after an hour, when it is stopped, or when
-  the app goes; nothing is kept for a next run.
+  notification, with 停止. Sharing ends after an hour or when it is stopped. An
+  app whose process goes while it is shared (updated, killed by Android, a
+  crash) lends it again to the same station as it next starts, for what is left
+  of the hour (mbui's AdbShare.java `resume`: what it is lent to and until when
+  kept on the device from the tap on, let go as the share ends).
 
 The core (`client/core-ts/src/adb.ts`) holds the offer: the `adbShare` topic and the
 calls `adb.share`, `adb.stop`, `adb.pair`, `adb.grant`. Only a phone lends: a
