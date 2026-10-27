@@ -29,6 +29,19 @@ pub let leave_scale : Double = 0.9
 pub let leave : @motion.Trans = @motion.trans(fade=0.0, scale=leave_scale, spec=@motion.tween(leave_ms, ease=CssOut))
 
 ///|
+/// What is put in the composer to go with the message, a file's card, a picture's tile, a quote's card (Chat.css.ts
+/// fileCard, composerQuote; Jobs.css.ts composerThumb: enterUpKeyframes): up from 6 below as it fades in, over 180 ms
+/// on the ease-out.
+// kept across runs: a value (no field of it changes)
+pub let waiting_in : @motion.Trans = @motion.trans(fade=0.0, dy=enter_rise, spec=@motion.tween(180.0, ease=Out))
+
+///|
+/// A page over the whole window, a picture to share (FilePreview.css.ts fp: fadeInKeyframes): faded in over 140 ms on
+/// the ease-out; gone by kit's pop_out, as a dialog.
+// kept across runs: a value (no field of it changes)
+pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out))
+
+///|
 /// A row new to a list (listMotion.ts): grown in where it is from 0.9 and clear over 240 ms on the ease-out, 100 ms
 /// after the list changed (what makes way for it moves first).
 // kept across runs: a value (no field of it changes)

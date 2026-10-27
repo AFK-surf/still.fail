@@ -44,6 +44,9 @@ priv struct Composing {
   mut roomy_before : Bool?
   mut draft_before : String
   mut frame : Int
+  /// whether what waits in it now was in it as the frame before drew it (the same draft): what is put in since comes in
+  /// (held_coming), what a draft opened with is there at once
+  mut same_draft : Bool
   /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
   /// from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -86,6 +89,7 @@ let composing : Composing = {
   roomy_before: None,
   draft_before: "",
   frame: -1,
+  same_draft: false,
   toolbar: None,
   toolbar_before: None,
   toolbar_leaving: None,
@@ -116,6 +120,7 @@ fn composing_reset() -> Unit {
   composing.toolbar_leaving = None
   composing.draft_before = ""
   composing.frame = -1
+  composing.same_draft = false
   composing.restoring.clear()
   composing.restore_errors.clear()
   composing.outside = false
@@ -158,6 +163,7 @@ pub fn composer(
     composing.draft_before = composing.draft
     composing.toolbar_before = composing.toolbar
   }
+  composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
@@ -759,6 +765,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
             }
           },
         )
+        held_coming(c, done.card, key)
         // (where it is and its colour: what flies from it as it is sent, flying_quotes)
         @motion.measure(c, done.card, quote_card_key(id))
         composing.grounds[id] = c.node_bg(done.card)
@@ -773,10 +780,22 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
   if w.files.length() > 0 {
     c.box(style=files_flow(), flow=true, line_gap=files_lines(), fn() {
       for f in w.files {
-        composer_file(c, src, spec, w, f)
+        let i = c.box(fn() { composer_file(c, src, spec, w, f) })
+        held_coming(c, i, "composer/file/" + text(Some(f), "id"))
       }
     })
     |> ignore
+  }
+}
+
+///|
+/// What waits in it (a quote's card, a file's: node `i`, keyed `key`) put in while it shows comes in (`@sf.waiting_in`, the
+/// web's enterUp on composerQuote, fileCard and composerThumb), the first frame it is built; what a draft opened with,
+/// or the composer gone to another page with, is there at once (docs/motion.md: what is on a page does not move of its
+/// own as it comes).
+fn held_coming(c : @ui.Ctx, i : Int, key : String) -> Unit {
+  if composing.same_draft {
+    @motion.entering(c, i, key + "/in", @sf.waiting_in)
   }
 }
 

@@ -412,6 +412,8 @@ pub fn profile_models_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFram
 
 pub fn profile_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
+pub fn publish_close() -> Unit
+
 pub fn publish_layer(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn publish_left_out(String) -> Bool

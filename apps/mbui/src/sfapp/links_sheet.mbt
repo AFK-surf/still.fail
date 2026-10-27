@@ -336,5 +336,5 @@ fn close_overlays() -> Unit {
   app.menu = false
   @sf.close_all_presented()
   @sfbase.close_now()
-  @sfpages.publish_reset()
+  @sfpages.publish_close()
 }
