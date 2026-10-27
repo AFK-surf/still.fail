@@ -587,6 +587,15 @@ final class Streams {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
                 format.setInteger(MediaFormat.KEY_PRIORITY, 0);
                 made = avcDecoder(width, height);
+                // A Snapdragon's decoder, low-latency one or not, gives a picture back only once the next frame is
+                // queued, whatever KEY_LOW_LATENCY and the SPS say (traced on an SM8850, 2026-10-28): the last frame of
+                // a screen gone still is never shown nor acknowledged, and the station sends nothing more. Its own keys
+                // have it give each back in decode order as soon as decoded (a screen's encoders never reorder).
+                String named = made.getName();
+                if (named.startsWith("c2.qti.") || named.startsWith("OMX.qcom.")) {
+                    format.setInteger("vendor.qti-ext-dec-picture-order.enable", 1);
+                    format.setInteger("vendor.qti-ext-dec-low-latency.enable", 1);
+                }
                 if (failStart != null && failStart.equals(String.valueOf(++startCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_START: start " + startCalls);
                 made.setCallback(callback(g), handler);
                 made.configure(format, surface, null, 0);
