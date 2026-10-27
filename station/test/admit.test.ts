@@ -361,7 +361,9 @@ test("a command that holds the screen long while another waits has its agent tol
   const vm = r.jobs.start("s1", "vm", FOREVER, join(r.dir, "work"), null, false);
   const pics = r.jobs.start("s2", "pictures", FOREVER, join(r.dir, "work"), null, false);
   const [p1, p2] = [aShell(), aShell()];
+  // (the clock said, not read: the screen given at t0 itself, held HELD_LONG_MS to the millisecond below)
   const t0 = r.store.now();
+  r.store.now = () => t0;
   assert.deepEqual(r.jobs.screenAsked(vm.token, "take", p1.pid!), { screen: "yours" });
   r.store.now = () => t0 + HELD_LONG_MS;
   r.jobs.screenAsked(pics.token, "take", p2.pid!);

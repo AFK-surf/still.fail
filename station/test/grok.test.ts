@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { GrokDriver, classifyFailure, grokArgs, sessionDir, usageLine, USAGE } from "../src/agents/grok.ts";
 import { profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
+import { allLeft } from "../src/agents/runner.ts";
 import { checkProfile, grokModels, loginCommand } from "../src/accounts/profiles.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { grokQuotaOf } from "../src/accounts/quota.ts";
@@ -313,6 +314,8 @@ describe("the Grok Build driver", { concurrency: true }, () => {
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner with nobody reading.
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       const next = driver();
       const b = listen();
       const taken: AgentSession = await next.adopt(o, snapshot, b.push);

@@ -11,7 +11,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
-import { existingRunners } from "../src/agents/runner.ts";
+import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 
@@ -403,6 +403,8 @@ describe("the Codex driver", { concurrency: true }, () => {
       let snapshots: unknown[] = [null, null];
       if (!crashed) snapshots = JSON.parse(JSON.stringify([one.snapshot(), two.snapshot()]));
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       assert.equal(await steering, false, "its reply is the next station's");
       // The app-server has the steer; the first turn says the rest of its reply with nobody reading.
       await eventually(() => stdin(p.dump).some((m) => m.method === "turn/steer"));

@@ -11,7 +11,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
-import { existingRunners } from "../src/agents/runner.ts";
+import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -401,6 +401,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner, saying the rest of its reply with nobody reading.
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       await gate.open("a");
       await eventually(gate.said);
       const next = driver();

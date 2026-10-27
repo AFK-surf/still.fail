@@ -16,6 +16,7 @@ import { modelOf } from "../src/agents/cursor-bridge.mjs";
 import { CursorDriver, classifyFailure, cursorHome, outcomeOf, rulesFolder } from "../src/agents/cursor.ts";
 import { cursorCall, cursorOutput } from "../src/agents/live.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
+import { allLeft } from "../src/agents/runner.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 import { callsOf } from "../src/usage/counter.ts";
 
@@ -271,6 +272,8 @@ describe("the Cursor driver", { concurrency: true }, () => {
       let snapshot: unknown = null;
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       const b = listen();
       const taken: AgentSession = await driver().adopt(o, snapshot, b.push);
       assert.equal(taken.id(), session.id());
