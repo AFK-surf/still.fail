@@ -132,16 +132,58 @@ static UIImage *nav_badge(NSString *spec, CGFloat size) {
   return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
+// A workspace's mark (`badge:rrggbbaa,letter`) as a bar's button has it: its colour, the glass's tint (the system's
+// prominent glass, filled with it), and its letter (or emoji) in white, alone (the user, 2026-10-27: filling its glass,
+// still glass).
+static UIColor *nav_badge_tint(NSString *spec) {
+  NSArray<NSString *> *p = [[spec substringFromIndex:6] componentsSeparatedByString:@","];
+  if (p.count < 2) return nil;
+  unsigned long long c = strtoull(p[0].UTF8String, NULL, 16);
+  return [UIColor colorWithRed:((c >> 24) & 0xFF) / 255.0 green:((c >> 16) & 0xFF) / 255.0 blue:((c >> 8) & 0xFF) / 255.0 alpha:1];
+}
+
+static UIImage *nav_badge_glyph(NSString *spec, CGFloat size) {
+  NSArray<NSString *> *p = [[spec substringFromIndex:6] componentsSeparatedByString:@","];
+  if (p.count < 2) return nil;
+  NSString *letter = [[p subarrayWithRange:NSMakeRange(1, p.count - 1)] componentsJoinedByString:@","];
+  UIFont *font = [UIFont systemFontOfSize:size * 0.75 weight:UIFontWeightSemibold];
+  NSDictionary *attrs = @{NSFontAttributeName : font, NSForegroundColorAttributeName : UIColor.whiteColor};
+  CGSize s = [letter sizeWithAttributes:attrs];
+  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
+  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+    [letter drawAtPoint:CGPointMake((size - s.width) / 2, (size - s.height) / 2) withAttributes:attrs];
+  }];
+  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+}
+
+// The side of a workspace's picture on the bar's button, a disc on its glass: as large as the bar draws an image (the
+// glass larger round it, tinted as the picture is).
+static const CGFloat nav_mark_picture = 34;
+
+// A picture's colour, all of it as one (its glass's tint).
+static UIColor *nav_mean(UIImage *img) {
+  unsigned char px[4] = {0};
+  CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
+  CGContextRef c = CGBitmapContextCreate(px, 1, 1, 8, 4, rgb, kCGImageAlphaPremultipliedLast);
+  CGColorSpaceRelease(rgb);
+  if (!c) return nil;
+  CGContextSetInterpolationQuality(c, kCGInterpolationMedium);
+  CGContextDrawImage(c, CGRectMake(0, 0, 1, 1), img.CGImage);
+  CGContextRelease(c);
+  if (!px[3]) return nil;
+  return [UIColor colorWithRed:px[0] / (CGFloat)px[3] green:px[1] / (CGFloat)px[3] blue:px[2] / (CGFloat)px[3] alpha:1];
+}
+
 // A picture by its address (an https link, a data: URL) as a mark: rounded, in its own colours; loaded once, kept by
 // its address (nil while it comes: `then` is told once it is here).
 static NSMutableDictionary<NSString *, UIImage *> *nav_pictures;
 static NSMutableSet<NSString *> *nav_loading;
-static UIImage *nav_picture(NSString *url, CGFloat size, void (^then)(void)) {
+static UIImage *nav_picture(NSString *url, CGFloat size, BOOL round, void (^then)(void)) {
   if (!nav_pictures) {
     nav_pictures = [NSMutableDictionary dictionary];
     nav_loading = [NSMutableSet set];
   }
-  NSString *key = [NSString stringWithFormat:@"%@\x1f%.0f", url, size];
+  NSString *key = [NSString stringWithFormat:@"%@\x1f%.0f%@", url, size, round ? @"o" : @""];
   UIImage *had = nav_pictures[key];
   if (had) return had;
   void (^made)(NSData *) = ^(NSData *data) {
@@ -149,8 +191,8 @@ static UIImage *nav_picture(NSString *url, CGFloat size, void (^then)(void)) {
     if (!raw) return;
     UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
     UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-      CGRect box = CGRectInset(CGRectMake(0, 0, size, size), 1, 1);
-      [[UIBezierPath bezierPathWithRoundedRect:box cornerRadius:size * 0.24] addClip];
+      CGRect box = round ? CGRectMake(0, 0, size, size) : CGRectInset(CGRectMake(0, 0, size, size), 1, 1);
+      [(round ? [UIBezierPath bezierPathWithOvalInRect:box] : [UIBezierPath bezierPathWithRoundedRect:box cornerRadius:size * 0.24]) addClip];
       // (covering the square, as the app's marks are: FitCover)
       CGFloat k = MAX(box.size.width / raw.size.width, box.size.height / raw.size.height);
       CGSize s = CGSizeMake(raw.size.width * k, raw.size.height * k);
@@ -183,7 +225,7 @@ static UIImage *nav_picture(NSString *url, CGFloat size, void (^then)(void)) {
 static UIImage *nav_any_then(NSString *icon, CGFloat size, void (^then)(void)) {
   NSRange pic = [icon rangeOfString:@"\x1e"];
   if (pic.location != NSNotFound) {
-    UIImage *got = nav_picture([icon substringFromIndex:pic.location + 1], size, then);
+    UIImage *got = nav_picture([icon substringFromIndex:pic.location + 1], size, NO, then);
     if (got) return got;
     icon = [icon substringToIndex:pic.location];
   }
@@ -358,10 +400,25 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       // (a picture the host loads: drawn in once it is here, on the item made, while it is shown)
       __block __weak UIBarButtonItem *drawn = nil;
       NSString *spec = d[@"icon"];
-      UIImage *icon = [spec length] ? nav_any_then(spec, 24, ^{
-        drawn.image = nav_any(spec, 24);
-      })
-                                    : nav_letter(d[@"title"], 24);
+      // (a workspace's mark filling its glass, still glass: with no picture, the glass in its colour and its letter on
+      // it; with one, the picture a disc as large as the bar draws one, on a glass of its colour: the user, 2026-10-27)
+      UIColor *tint = nil;
+      NSString *picture = nil;
+      if ([spec hasPrefix:@"badge:"]) {
+        NSRange pic = [spec rangeOfString:@"\x1e"];
+        if (pic.location == NSNotFound) tint = nav_badge_tint(spec);
+        else picture = [spec substringFromIndex:pic.location + 1];
+      }
+      UIImage *icon = tint ? nav_badge_glyph(spec, 24)
+                      : picture ? nav_picture(picture, nav_mark_picture, YES, ^{
+                          UIImage *got = nav_picture(picture, nav_mark_picture, YES, nil);
+                          drawn.image = got;
+                          drawn.tintColor = nav_mean(got) ?: drawn.tintColor;
+                        }) ?: nav_badge(spec, nav_mark_picture)
+                      : [spec length] ? nav_any_then(spec, 24, ^{
+                          drawn.image = nav_any(spec, 24);
+                        })
+                                      : nav_letter(d[@"title"], 24);
       BOOL prominent = [d[@"prominent"] boolValue];
       NSString *ident = d[@"id"];
       // (said with where the item is in the app's view, for what opens from it: a popover at it)
@@ -413,9 +470,9 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       }
 #ifdef __IPHONE_26_0
       if (@available(iOS 26.0, *)) {
-        if (prominent) {
+        if (prominent || tint || picture) {
           b.style = UIBarButtonItemStyleProminent;
-          b.tintColor = accent;
+          b.tintColor = tint ?: picture ? (nav_mean(icon) ?: nav_badge_tint(spec)) : accent;
         } else {
           b.tintColor = ink;
         }
