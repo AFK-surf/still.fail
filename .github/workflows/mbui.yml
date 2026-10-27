@@ -478,10 +478,13 @@ jobs:
         run: |
           # (the packages' scripts in bash, not cmd: the station's build is sh)
           export npm_config_script_shell="$(cygpath -w "$(command -v bash)")"
-          pnpm install --frozen-lockfile --prefer-offline --ignore-scripts > /dev/null
-          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
+          # (each quiet unless it fails, then all it said: pnpm says its errors on stdout, and a run that ended 127
+          # with nothing said could not be told why, fix-update-jitter 40539668024)
+          quiet() { "$@" > "$RUNNER_TEMP/packages.log" 2>&1 || { c=$?; cat "$RUNNER_TEMP/packages.log"; echo "packages: $* in $PWD: exit $c"; return $c; }; }
+          quiet pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+          (cd client/core-ts && quiet pnpm install --frozen-lockfile --prefer-offline)
+          (cd cloud && quiet pnpm install --frozen-lockfile --prefer-offline)
+          (cd station && quiet pnpm install --frozen-lockfile --prefer-offline && quiet pnpm run build)
       # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
       - name: The order of names (win.sh collate)
         run: bash apps/mbui/scripts/win.sh collate
