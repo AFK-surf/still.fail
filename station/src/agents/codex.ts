@@ -449,9 +449,13 @@ export class CodexDriver implements AgentDriver {
     return "codex";
   }
 
-  /// Whether an app-server runs on a profile now (its login is not renewed from outside meanwhile).
-  running(profileId: string): boolean {
-    return [...this.hosts.values()].some((h) => h.profile === profileId && h.alive());
+  /// Has the app-server running on a profile renew its login now (its login is not renewed from outside meanwhile: it
+  /// holds the refresh token); false: none runs on it.
+  async renewLogin(profileId: string): Promise<boolean> {
+    const host = [...this.hosts.values()].find((h) => h.profile === profileId && h.alive());
+    if (!host) return false;
+    await host.request("account/read", { refreshToken: true });
+    return true;
   }
 
   /// Which app-server a session's threads go to: its profile's, shared by the profile's sessions; while the station runs
