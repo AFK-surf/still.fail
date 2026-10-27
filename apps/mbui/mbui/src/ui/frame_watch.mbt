@@ -45,6 +45,74 @@ let frame_env : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a 
 let frame_watch : Ref[@signals.Watch?] = Ref(None)
 
 ///|
+/// The watch the frames' layout runs under (made with the run: layout_watch_of), within the frame's: what only the
+/// layout reads (a list's place, what the hand did to it, its motions by the clock; what is worked out once laid out)
+/// is followed by it alone, and lays the next frame out again with the lists' rows kept (kept_nodes.mbt).
+// kept across runs: let go and made anew as a run begins (looks_reset)
+let layout_watch : Ref[@signals.Watch?] = Ref(None)
+
+///|
+/// What the layout's watch said asks for the next frame, told as a frame was drawn ("" none: put back as each frame is
+/// built); where the last frame's layout first read the clock followed ("" none).
+// kept across runs: written as the watch is told, put back as each frame is built
+let layout_said : Ref[String] = Ref("")
+
+///|
+// kept across runs: put back as each frame is built
+let layout_clock_at : Ref[String] = Ref("")
+
+///|
+/// Whether the frame is being laid out (frame_body, under layout_watch): where the clock is read then is said so.
+// kept across runs: set and let go within a frame
+let laying : Ref[Bool] = Ref(false)
+
+///|
+/// Whether the pass of the frame's build under way is still to be laid out (frame_body): what its layout read told
+/// meanwhile is read anew as it is.
+// kept across runs: set and let go within a frame
+let layout_coming : Ref[Bool] = Ref(false)
+
+///|
+/// The run's layout watch: as what its last layout read changes, the frame is laid out again (in a frame, by its end:
+/// the next; between frames, a frame asked of the host now).
+fn layout_watch_of() -> @signals.Watch {
+  match layout_watch.val {
+    Some(w) => w
+    None => {
+      let w = @signals.watch(fn() {
+        if frame_running.val && !frame_built.val {
+          ()
+        } else if frame_running.val && layout_coming.val && !laying.val {
+          // (told as the frame is built, before it is laid out: laid out after it, it reads it anew)
+          ()
+        } else if frame_running.val {
+          let by = match layout_watch.val {
+            Some(w) => w.set_as_read()
+            None => []
+          }
+          layout_said.val = if by.is_empty() {
+            "a value its layout read changed as it was laid out, set at \{@signals.last_set_at()}"
+          } else {
+            "a value its layout read set again as it was laid out, at " + by.join(", ")
+          }
+        } else {
+          h_frame_owed()
+        }
+      })
+      layout_watch.val = Some(w)
+      w
+    }
+  }
+}
+
+///|
+/// Whether the frame left its layout or a list's row kept something to come (what they read changed as it was drawn):
+/// the next frame is asked for, to lay it out.
+fn layout_left() -> Bool {
+  layout_said.val != "" || nodes_run.told
+}
+
+///|
 /// The watch the frames' paint runs under (made with the run: paint_watch_of).
 // kept across runs: let go and made anew as a run begins (looks_reset)
 let paint_watch : Ref[@signals.Watch?] = Ref(None)
@@ -181,7 +249,13 @@ fn clock_read_here() -> Unit {
 ///|
 /// Where the clock was read followed (`at`), kept as the first such read of the frame's build or of its paint.
 fn clock_read_by(at : String) -> Unit {
-  let first = if paint_phase.val == 1 { paint_clock_at } else { clock_read_at }
+  let first = if paint_phase.val == 1 {
+    paint_clock_at
+  } else if laying.val {
+    layout_clock_at
+  } else {
+    clock_read_at
+  }
   if first.val == "" {
     first.val = at
   }
@@ -228,6 +302,9 @@ priv struct LooksBase {
   mut n : Int
   mut looks : Bool
   mut ok : Bool
+  /// of `ok`: it left nothing to come of its own (`left`), it told outside what the one before it told (`told_same`)
+  mut left : Bool
+  mut told_same : Bool
   mut wake : Double
   /// when the frame was last built whole (ms)
   mut built_at : Double
@@ -244,6 +321,8 @@ let looks_base : LooksBase = {
   n: 0,
   looks: false,
   ok: false,
+  left: false,
+  told_same: false,
   wake: -1.0,
   built_at: -1.0,
   built: false,
@@ -312,7 +391,10 @@ let paints_alone : Ref[Int] = Ref(0)
 ///|
 /// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
 fn looks_reset() -> Unit {
-  for w in [frame_watch, paint_watch] {
+  nodes_forget()
+  layout_said.val = ""
+  layout_clock_at.val = ""
+  for w in [frame_watch, layout_watch, paint_watch] {
     match w.val {
       Some(w) => w.stop()
       None => ()
@@ -322,6 +404,8 @@ fn looks_reset() -> Unit {
   looks_base.n = 0
   looks_base.looks = false
   looks_base.ok = false
+  looks_base.left = false
+  looks_base.told_same = false
   looks_base.wake = -1.0
   looks_base.built = false
   looks_base.settled = false
@@ -531,12 +615,14 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
     // (a host that tells no events of its own (a picture decoded, a view ready) is read each build: every frame
     // built whole there)
     (fake.val is Some(_) || outside_told.val)
+  looks_base.left = left
   if looks_drawn.val || painted_alone.val {
     looks_base.ok = looks_base.ok && left
   } else {
     // (and it laid out what the one before it laid out, and told outside what that one told: built whole again, it
     // would lay out the same)
-    looks_base.ok = left && paint_base.laid_same && looks_tells.now == looks_tells.before
+    looks_base.told_same = looks_tells.now == looks_tells.before
+    looks_base.ok = left && paint_base.laid_same && looks_base.told_same
     looks_base.built_at = c.clock
   }
 }
@@ -561,6 +647,8 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   if paint_base.wake >= 0.0 && (c.wake_at < 0.0 || paint_base.wake < c.wake_at) {
     c.wake_at = paint_base.wake
   }
+  // (and the moments the rows kept wait for: kept_part.mbt's KeptClock)
+  dues_wake(c)
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
@@ -589,6 +677,7 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
   c.frame_by = None
   c.wake_by = None
   c.wake_at = looks_base.wake
+  dues_wake(c)
   paint_watch_of().read(fn() { frame_paint(c, paint_base.root, alone=true) })
   c.t_build = 0.0
   c.t_layout = 0.0
@@ -621,9 +710,16 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   views_arrive()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
-  // (what reads the clock and the host's settings read so: what read them is stale where they changed)
+  // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
+  // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
   frame_env.set(looks_env(c, w, h, scale))
+  clock_frame_start(t)
+  // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
+  // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
+  let events = @signals.untracked(fn() { hand.events.get() })
+  let evented = events != events_seen.val
+  events_seen.val = events
   let why = if said != "" {
     said
   } else if watch.is_stale() {
@@ -632,23 +728,45 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     } else {
       "what it read changed"
     }
-  } else if !looks_base.ok {
-    if paint_base.laid_same {
-      "it left more to come"
-    } else {
-      "the one before it laid out otherwise"
-    }
+  } else if !looks_base.left {
+    "it left more to come"
+  } else if !looks_base.told_same {
+    "it told outside otherwise"
   } else if looks_base.wake >= 0.0 && t >= looks_base.wake {
     "a moment it waits for came"
   } else {
     ""
   }
-  built_why.val = why
+  // (else laid out again, built as it was built, its lists' rows kept where nothing they show changed: what its layout
+  // read changed, what a row read, or the one before it laid out otherwise, what built may read)
+  let laid_why = if why != "" {
+    ""
+  } else if layout_said.val != "" {
+    layout_said.val
+  } else if layout_watch_of().is_stale() {
+    if layout_clock_at.val != "" {
+      "the clock read as it was laid out at \{layout_clock_at.val}"
+    } else {
+      "what its layout read changed"
+    }
+  } else if nodes_run.told {
+    "what a list's row read changed"
+  } else if !paint_base.laid_same {
+    "the one before it laid out otherwise"
+  } else {
+    ""
+  }
+  built_why.val = if why != "" { why } else { laid_why }
   frame_built.val = true
-  if why != "" {
+  if why != "" || laid_why != "" {
     looks_drawn.val = false
     painted_alone.val = false
     painted_why.val = ""
+    layout_said.val = ""
+    // (to be laid out: what its layout read told before, as what came for the frame is taken, it reads anew)
+    layout_coming.val = true
+    nodes_run.told = false
+    nodes_run.fresh = why != "" || evented
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
   let paint_why = if paint_told != "" {
@@ -678,14 +796,20 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let cycling = looks_own.cycling
   let then = looks_nodes.copy()
   let painted = painted_alone.val
-  // (built whole as a frame begins: what the paint alone read, read anew by its paint)
+  // (built whole as a frame begins: what the paint alone read, read anew by its paint; no row kept)
   paint_phase.val = 0
+  nodes_run.fresh = true
   watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore
   looks_drawn.val = false
   painted_alone.val = false
   looks_compare(c, alone, n, wake, cycling, t, then, painted~)
   t0
 }
+
+///|
+/// How many of the hand's discrete events the frame before had seen (hand.mbt's `events`).
+// kept across runs: only counts on with them
+let events_seen : Ref[Int] = Ref(0)
 
 ///|
 /// The frame painted alone or of the looks alone (`painted`; `alone`, `n` instances; its looks asking to be woken at

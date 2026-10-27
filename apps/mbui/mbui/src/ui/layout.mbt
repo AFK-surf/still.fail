@@ -778,11 +778,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         up = 2
       }
       if j < kids.length() {
-        // another slot here only when one before it holds more or fewer
-        // than it did (slots are taken in order): that one changed
-        // already, and this one says so if it differs
+        // another node in this slot (one before it holds more or fewer than it did, or the slot holds another node
+        // than it did: a list's row kept as its nodes put back elsewhere, kept_nodes.mbt): what it lays out changed
         if !physical_equal(kids[j], cn.fl) {
           kids[j] = cn.fl
+          ch = true
         }
       } else {
         kids.push(cn.fl)

@@ -138,6 +138,11 @@ pub fn ripple(
       r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
     }
   }
+  // those faded away let go, before what is drawn of the rest (built again in the frame, it builds the same)
+  list.retain(fn(r) { !r.leaving || r.progress.get() < 1.0 })
+  if list.length() == 0 {
+    ripples.remove(id)
+  }
   // a finger on it (its ripple not let go): sunk a little, back as it lifts
   let on = list.iter().any(fn(r) { !r.lifted })
   // (none asked of what no finger has been on: nothing to keep for every box that ripples)
@@ -201,9 +206,4 @@ pub fn ripple(
     |> ignore
   })
   |> ignore
-  // those faded away let go
-  list.retain(fn(r) { !r.leaving || r.progress.get() < 1.0 })
-  if list.length() == 0 {
-    ripples.remove(id)
-  }
 }

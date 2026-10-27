@@ -37,6 +37,9 @@ pub(all) struct FramePerf {
   looks : Bool
   /// a frame painted alone, from the last build's tree (frame_watch.mbt): nothing built or laid out
   painted : Bool
+  /// the lists' rows it kept as their nodes and those it built (kept_nodes.mbt)
+  kept : Int
+  rows : Int
   build_ms : Double
   layout_ms : Double
   paint_ms : Double
@@ -75,6 +78,8 @@ fn frame_perf() -> FramePerf {
     insts: c.ninst,
     looks: looks_drawn.val,
     painted: painted_alone.val,
+    kept: if looks_drawn.val || painted_alone.val { 0 } else { nodes_run.kept },
+    rows: if looks_drawn.val || painted_alone.val { 0 } else { nodes_run.built },
     build_ms: c.t_build,
     layout_ms: c.t_layout,
     paint_ms: c.t_paint,
@@ -92,6 +97,7 @@ pub fn Tester::wanted_after(self : Tester) -> Double {
     c.wants_frame ||
     c.took_input ||
     paint_left() ||
+    layout_left() ||
     c.motion_left ||
     c.cycling ||
     c.fiber_frame ||
@@ -123,6 +129,12 @@ pub fn Tester::wanted_why(self : Tester) -> String {
   }
   if paint_left() {
     why.push("a frame asked for to paint: " + paint_said.val)
+  }
+  if layout_left() {
+    why.push(
+      "a frame asked for to lay out: " +
+      (if layout_said.val != "" { layout_said.val } else { "what a list's row read changed" }),
+    )
   }
   if c.took_input && !c.wants_frame {
     why.push("an input's frame after")

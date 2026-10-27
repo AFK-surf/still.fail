@@ -338,6 +338,13 @@ fn unrubber(y : Double, d : Double) -> Double {
 let rubber_omega : Double = 0.0157
 
 ///|
+/// The hand moved the list between frames (a finger dragging it, a wheel): what lays it out (Ctx::place_list) is told,
+/// so that the next frame lays it out again, nothing built for it.
+fn ListState::hand_moved(self : ListState) -> Unit {
+  self.hand_said.set(@signals.untracked(fn() { self.hand_said.get() }) + 1)
+}
+
+///|
 /// Ends the list's fling at once.
 fn ListState::stop(self : ListState) -> Unit {
   self.vel = 0.0

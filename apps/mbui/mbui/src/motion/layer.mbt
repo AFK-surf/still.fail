@@ -345,6 +345,8 @@ fn install() -> Unit {
 ///|
 fn reset() -> Unit {
   mo.entries.clear()
+  measure_at.clear()
+  measure_size.clear()
   mo.at.clear()
   mo.stamp.clear()
   mo.build = -1
@@ -437,7 +439,27 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
   mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
   mo.entries.push(e)
+  // (a list's row kept as its nodes says it again of its node where it is put back, as built: @ui.built_again)
+  @ui.built_again(fn(by) { moving_again(e, i + by) })
   e
+}
+
+///|
+/// Entry `e`, as its build said it, said again of node `i` in this build (a list's row kept as its nodes, put back
+/// there: @ui.built_again).
+fn moving_again(e : Moving, i : Int) -> Unit {
+  let build = @ui.current().build_number()
+  if mo.build != build {
+    mo.entries.clear()
+    mo.build = build
+  }
+  while mo.at.length() <= i {
+    mo.at.push(-1)
+    mo.stamp.push(-1)
+  }
+  mo.stamp[i] = build
+  mo.at[i] = mo.entries.length()
+  mo.entries.push({ ..e, node: i })
 }
 
 ///|
@@ -694,6 +716,7 @@ fn kept_drawn_again(c : @ui.Ctx, which : (Int, Int), dx : Double, dy : Double, r
 /// How tall the node kept as `key` was when last laid out (measure).
 pub fn measured(c : @ui.Ctx, key : String) -> Double? {
   ignore(c)
+  measure_read(measure_size, motion_key("measure\u{1}" + key))
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) => Some(r.h)
     None => None
@@ -723,8 +746,21 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once it
 /// has not been for a frame).
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
+  measure_read(measure_at, motion_key("measure\u{1}" + key))
+  measure_read(measure_size, motion_key("measure\u{1}" + key))
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) if r.seen >= c.frame_number() - 1 => Some((r.x, r.y, r.w, r.h))
+    _ => None
+  }
+}
+
+///|
+/// How big the node kept as `key` (measure) was when last laid out: w, h (None before it was, or once it has not been
+/// for a frame); what reads it is not told as it moves (a page it is on sliding in), as measured_rect's is.
+pub fn measured_size(c : @ui.Ctx, key : String) -> (Double, Double)? {
+  measure_read(measure_size, motion_key("measure\u{1}" + key))
+  match mo.recs.get(motion_key("measure\u{1}" + key)) {
+    Some(r) if r.seen >= c.frame_number() - 1 => Some((r.w, r.h))
     _ => None
   }
 }
@@ -1183,6 +1219,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     // its own move (for the log: what it is drawn from beside its scope's)
     let mut flip_dy = 0.0
     if e.kept != 0 {
+      let made = !mo.recs.contains(e.kept)
       let r = match mo.recs.get(e.kept) {
         Some(r) => r
         None => {
@@ -1190,6 +1227,14 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           mo.recs[e.kept] = r
           r
         }
+      }
+      // (what reads it told as what it reads of it changes: how big it is or whether it is laid out, measured, measured_size;
+      // where it lies, measured_rect)
+      if made || r.w != nw || r.h != nh || r.seen < frame - 1 {
+        measure_changed(measure_size, e.kept)
+      }
+      if r.x != nx || r.y != ny {
+        measure_changed(measure_at, e.kept)
       }
       r.x = nx
       r.y = ny
@@ -1544,6 +1589,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
 /// Forgets the places of what has not been built for a while.
 fn forget_recs(c : @ui.Ctx) -> Unit {
   let frame = c.frame_number()
+  // (what reads a measure laid out last frame and not this one: none from the next frame, measured_rect)
+  measures_lapsed(frame)
   if frame % 30 != 0 || mo.recs.is_empty() {
     return
   }
@@ -1555,6 +1602,8 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
   })
   for k in old {
     mo.recs.remove(k)
+    // (a measure forgotten: none from now on, what read it told)
+    measure_changed(measure_size, k)
   }
   // (the rows and parts none of whose records is kept any more: gone)
   let gone : Array[(Int, Int)] = []
@@ -1599,5 +1648,71 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
   while j >= 0 {
     mo.ghosts.remove(done[j]) |> ignore
     j = j - 1
+  }
+}
+
+// ── a measure read as it is built ───────────────────────────────────────
+
+///|
+/// What reads where a node kept by its key lies (measured_rect: where a flight lands) as it is built, told as it moves:
+/// a signal by the key, made as it is first read.
+// kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
+let measure_at : Map[Int, @signals.Signal[Int]] = {}
+
+///|
+/// What reads how big a node kept by its key is, or whether it is laid out (measured, measured_size, measured_rect: a
+/// measure, a reveal's content) as it is built, told as that changes, not as it moves (a page it is on sliding in): a
+/// signal by the key, made as it is first read.
+// kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
+let measure_size : Map[Int, @signals.Signal[Int]] = {}
+
+///|
+/// Measure `key` read of `said` as what is built is built: built again as what it reads of it changes.
+fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int) -> Unit {
+  let s = match said.get(key) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      said[key] = s
+      s
+    }
+  }
+  s.get() |> ignore
+}
+
+///|
+/// Measure `key` laid out other than `said`'s readers read it (or for the first time, or no longer): they are told.
+fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int) -> Unit {
+  match said.get(key) {
+    Some(s) => s.set(@signals.untracked(fn() { s.get() }) + 1)
+    None => ()
+  }
+}
+
+///|
+/// The frame `frame` is laid out: the measures read that were laid out the frame before and not in this one are
+/// nowhere from the next frame on (measured_size, measured_rect), what read them told; those nothing reads let go.
+fn measures_lapsed(frame : Int) -> Unit {
+  let unread : Array[Int] = []
+  measure_at.each(fn(k, s) { if !s.watched() { unread.push(k) } })
+  for k in unread {
+    measure_at.remove(k)
+  }
+  if measure_size.is_empty() {
+    return
+  }
+  let gone : Array[Int] = []
+  measure_size.each(fn(k, s) {
+    if !s.watched() {
+      gone.push(k)
+    } else {
+      match mo.recs.get(k) {
+        Some(r) if r.seen == frame - 1 => s.set(@signals.untracked(fn() { s.get() }) + 1)
+        _ => ()
+      }
+    }
+  })
+  for k in gone {
+    measure_size.remove(k)
   }
 }

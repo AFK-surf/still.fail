@@ -2049,7 +2049,10 @@ pub(all) struct Emits {
   mut held_until : Double
   mut out_key : String
   mut taken : Array[Message]
+  said : @signals.Signal[Int32]
 }
+pub fn Emits::changed(Self) -> Unit
+pub fn Emits::read(Self) -> Unit
 
 pub(all) enum Entry {
   Top

@@ -204,9 +204,28 @@ fn ease_end(total : Double, v0 : Double) -> Double {
 /// its scroll bar gone (the frames' clock; before now: it is).
 pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
   match self.lists.get(self.id(key)) {
-    Some(st) => st.rest_at(self.clock, self.frame_no)
+    Some(st) => {
+      // (where its own motions have it at the frame's time, what that leaves to come: read so)
+      self.list_step(st)
+      st.rest_at(self.clock, self.frame_no)
+    }
     None => -1.0
   }
+}
+
+///|
+/// List `st`'s own motions (a wheel's ease, a fling, a glide to its end, an overscroll going back, what scrolls toward
+/// the pointer) where they have it at the frame's time: worked out once a frame, where it is first asked (its layout,
+/// Ctx::place_list; what is built asking when it rests, Ctx::list_rest), from what was said as each set out.
+fn Ctx::list_step(self : Ctx, st : ListState) -> Unit {
+  if st.stepped == self.frame_no {
+    return
+  }
+  st.stepped = self.frame_no
+  self.step_ease(st)
+  self.step_edge(st)
+  self.step_glide(st)
+  self.step_scroll(st)
 }
 
 ///|
@@ -428,6 +447,7 @@ pub fn Ctx::list(
         follow_item: -1,
         follow_margin: 0.0,
         built: -1,
+        stepped: -1,
         glide_shows: false,
         bar: Bar::new(),
         laid: -1,
@@ -454,6 +474,8 @@ pub fn Ctx::list(
         ease_mover: Mover::new(),
         learned: 0,
         heights_learned: @signals.signal(0),
+        hand_said: @signals.signal(0),
+        moving_said: @signals.signal(false),
         edge_v: 0.0,
         edge_t: 0.0,
         vw: 0.0,
@@ -487,19 +509,16 @@ pub fn Ctx::list(
   st.direction = self.direction
   st.layer = self.layer_cur
   st.part = part_now.part
-  // shown again (not built the frame before): what of it still moves says so again
+  // shown again (not built the frame before): what of it still moves says so again (where it is at the frame's time
+  // is its layout's to work out: Ctx::place_list)
   let back = st.built >= 0 && st.built < self.frame_no - 1
-  // (built again in the same frame: its motion stepped once a frame, at the first)
-  let again = st.built == self.frame_no
   st.built = self.frame_no
   if back && st.rest_at(self.clock, self.frame_no) > self.clock {
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
-  if !again {
-    self.step_ease(st)
-    self.step_edge(st)
-    self.step_glide(st)
-    self.step_scroll(st)
+  // (where parts are kept as drawn, kept_part.mbt: stepped as it is built, as what builds it reads it)
+  if parts_on.val {
+    self.list_step(st)
   }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
   // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same
@@ -511,11 +530,10 @@ pub fn Ctx::list(
       self.app_scrolled(id, st)
     }
   }
-  // (where its own motions have it, read by what is built round it, a part or a row kept: built again as it is told
-  // anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion; and the heights its rows came out
-  // at as they were laid out, what its bar and its rows' places are drawn from)
-  self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
+  // (where its own motions have it and the heights its rows came out at as they were laid out, what its bar and its
+  // rows' places are drawn from, read by a part kept as drawn that builds it: kept_part.mbt)
   if part_building() {
+    self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
     st.heights_learned.get() |> ignore
   }
   let i = self.alloc_part(kind_list, true, false)
@@ -595,6 +613,12 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
+  // where its own motions have it at the frame's time (a wheel's ease, a fling, a glide to its end, an overscroll going
+  // back), stepped at its first layout in a frame, and what the hand did to it between frames: read as it is laid out,
+  // so that what is laid out again as they go is its layout, nothing built for them (frame_watch.mbt's layout watch)
+  st.hand_said.get() |> ignore
+  self.list_step(st)
+  self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
   // laid out again in the same frame (built again from what its layout read: readback.mbt), from where it stood as
   // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
   // time may have been laid at a height it does not keep (a fold's words whole until it knows how tall they are), and
@@ -620,6 +644,7 @@ fn Ctx::place_list(
     st.vis_first = -1
     st.vis_last = -1
     st.drag_pending = 0.0
+    st.moving_said.set(st.held || st.moving() || st.glide)
     return
   }
   let nan = 0.0 / 0.0
@@ -628,9 +653,14 @@ fn Ctx::place_list(
   // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
   let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
-    // (kept as its last build drew it where nothing it shows changed: kept_rows.mbt)
-    let r = self.row_of(li, st, k, iw)
-    let h = self.row_slot(r, self.layout(r, ix, y, iw, nan))
+    // (kept as its nodes where nothing it shows changed: kept_nodes.mbt; as its last build drew it where parts are
+    // kept so: kept_rows.mbt)
+    let (r, h) = if self.rows_on() {
+      let r = self.row_of(li, st, k, iw)
+      (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
+    } else {
+      self.row_laid(li, st, k, ix, y, iw)
+    }
     st.set_height(k, h)
     (r, h)
   }
@@ -844,6 +874,8 @@ fn Ctx::place_list(
     n.last = prev
   }
   self.stick_in(li, stuck_from, iy)
+  // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
+  st.moving_said.set(st.held || st.moving() || st.glide)
 }
 
 ///|
@@ -1268,10 +1300,12 @@ fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {
 }
 
 ///|
-/// Whether list `key` (in this scope) moves: a finger on it, flung, gliding or springing back from an end.
+/// Whether list `key` (in this scope) moved as it was last laid out: a finger on it, flung, gliding or springing back from
+/// an end. Its motions are worked out as it is laid out (Ctx::place_list), after what is built round it: what is built
+/// from this is built again as it changes (a signal), as what reads a list as it was laid out is (Ctx::list_info).
 pub fn Ctx::list_moving(self : Ctx, key : String) -> Bool {
   match self.lists.get(self.id(key)) {
-    Some(st) => st.held || st.moving() || st.glide
+    Some(st) => st.moving_said.get()
     None => false
   }
 }

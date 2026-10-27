@@ -20,7 +20,8 @@
 /// put in the clip it is drawn in (`cut`, its place in clip_stack: a row's list's, a part's), what of a clip was its
 /// recording's band (its own clip as recorded, band_l to band_r across and band_t to band_b down: kept_rows.mbt,
 /// kept_part.mbt) left as far off as nothing cuts. `cut` -1: as it was said. What its build said of a node, said of
-/// `node` (its box's now: what it built is not built; -1, as it was said).
+/// `node` (its box's now: what it built is not built; -1, as it was said), or of the node `by` on from it (a list's row
+/// kept as its nodes, put back elsewhere among the frame's: kept_nodes.mbt).
 priv struct Moved {
   dx : Double
   dy : Double
@@ -30,12 +31,23 @@ priv struct Moved {
   band_r : Double
   band_b : Double
   node : Int
+  by : Int
 }
 
 ///|
 /// What is said again where it was said.
 // kept across runs: never written
-let unmoved : Moved = { dx: 0.0, dy: 0.0, cut: -1, band_l: 0.0, band_t: 0.0, band_r: 0.0, band_b: 0.0, node: -1 }
+let unmoved : Moved = {
+  dx: 0.0,
+  dy: 0.0,
+  cut: -1,
+  band_l: 0.0,
+  band_t: 0.0,
+  band_r: 0.0,
+  band_b: 0.0,
+  node: -1,
+  by: 0,
+}
 
 ///|
 /// What a build said said again of node `node` (a part's or a row's box drawn again).
@@ -314,7 +326,15 @@ impl SaidList for FocusSaid with said_cut(_, c, len) {
 ///|
 impl SaidAgain for FocusTaken with said_again(self, c, m) {
   for f in self.all {
-    c.focusables.push(if m.node >= 0 { { ..f, node: m.node } } else { f })
+    c.focusables.push(
+      if m.node >= 0 {
+        { ..f, node: m.node }
+      } else if m.by != 0 {
+        { ..f, node: f.node + m.by }
+      } else {
+        f
+      },
+    )
   }
 }
 

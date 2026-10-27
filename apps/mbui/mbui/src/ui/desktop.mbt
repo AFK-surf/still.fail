@@ -363,6 +363,8 @@ fn desk_frame_start() -> Unit {
 /// As the view is built (each time a frame builds it: frame_body): the shapes, drag areas and selections it says
 /// begin from none.
 fn desk_build_start() -> Unit {
+  // (what asks for a menu, as the frame's last build said it: Ctx::menu_asked)
+  desk.next_askers.clear()
   desk.next_cursors.clear()
   desk.next_takers.clear()
   desk.next_drags.clear()

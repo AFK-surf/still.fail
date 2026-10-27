@@ -11,6 +11,12 @@ struct ListState {
   /// same as a signal: what its build drew from what it had (its bar, where its rows are) is built again
   mut learned : Int
   heights_learned : @signals.Signal[Int]
+  /// how many times the hand moved it between frames (a finger dragging it, letting it go or catching it, a wheel):
+  /// what lays it out reads it (Ctx::place_list), laid out again as it moves (ListState::hand_moved)
+  hand_said : @signals.Signal[Int]
+  /// whether it moved (a finger on it, flung, gliding, springing back) as it was last laid out, as a signal: what is built
+  /// from it (Ctx::list_moving) is built again as that changes
+  moving_said : @signals.Signal[Bool]
   // the rows' heights (est for those not measured) summed as a Fenwick
   // tree (1-based: sums[i] holds rows i - lowbit(i) until i): what is
   // above a row and the whole, without adding every row up (list.mbt)
@@ -48,8 +54,10 @@ struct ListState {
   // Follow.kt's anchor), `follow_margin` under the view's top; -1 none. The reader's scroll lets it go
   mut follow_item : Int
   mut follow_margin : Double
-  // the frame it was last built in (one not built is shown by nothing: at rest)
+  // the frame it was last built in (one not built is shown by nothing: at rest), and the frame its own motions were
+  // last stepped to (Ctx::list_step)
   mut built : Int
+  mut stepped : Int
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
   // its scroll bar (scroll_bar.mbt)
@@ -956,6 +964,7 @@ pub fn Ctx::box(
   let n = self.nodes[i]
   if selected && id != 0 {
     self.lit_asked.add(id)
+    built_used(fn() { g().lit_asked.add(id) })
   }
   // the style's look in this node's states, the tokens looked up in the theme in force
   let st : Patch = match style {
@@ -1552,6 +1561,7 @@ pub fn Ctx::hand_lit(self : Ctx, lit : Bool) -> Bool {
 pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     self.lit_asked.add(id)
+    built_used(fn() { g().lit_asked.add(id) })
   }
   self.hand_at(id)
 }
@@ -1563,6 +1573,7 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
 pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     self.hand_chooses.add(id)
+    built_used(fn() { g().hand_chooses.add(id) })
   }
   self.hand_at(id)
 }
@@ -2102,7 +2113,11 @@ pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
 ///|
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
   part_wake(self.clock, t, later)
-  looks_wake(t)
+  // (asked as a list's row is built: the row's, built again as it comes by what it read of it, kept_part.mbt's
+  // KeptClock; not the frame's own, frame_watch.mbt)
+  if nodes_run.building is None {
+    looks_wake(t)
+  }
   if self.wake_at < 0.0 || t < self.wake_at {
     self.wake_at = t
   }
@@ -2118,6 +2133,11 @@ fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
 /// layout, read back). A link in words, drawn in pieces one after another (its runs, its lines), is the box round
 /// them all, as a page's inline element is (what hangs by it lines up with its start).
 pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
+  // (read as a list's row is built: where the last frame drew it, read back by nothing; the row built every frame,
+  // kept_nodes.mbt)
+  if nodes_run.building is Some(_) {
+    built_aside()
+  }
   let mut k = self.hit_ids.length() - 1
   while k >= 0 && self.hit_ids[k] != id {
     k = k - 1

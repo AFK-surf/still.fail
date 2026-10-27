@@ -85,6 +85,13 @@ pub fn bench(
         let k = "painted: " + painted
         whys[k] = whys.get(k).unwrap_or(0) + 1
       }
+      // (and of the lists' rows built, why they may not be kept: kept_nodes.mbt)
+      if built != "" {
+        for u in @ui.rows_unkept() {
+          let k = "rows built each frame: " + u.0
+          whys[k] = whys.get(k).unwrap_or(0) + u.1
+        }
+      }
     }
     why = t.wanted_why()
     if !frame {
@@ -116,7 +123,7 @@ pub fn bench(
     drawn.push(m)
     if frames_out != "" {
       lines.push(
-        "\{ticks} work=\{m.work_ms} build=\{perf.build_ms} layout=\{perf.layout_ms} paint=\{perf.paint_ms} encode=\{m.encode_ms} gpu=\{m.gpu_ms} nodes=\{perf.nodes} laid=\{perf.laid} insts=\{perf.insts} looks=\{perf.looks} painted=\{perf.painted} damage=\{m.damage} passes=\{perf.passes}",
+        "\{ticks} work=\{m.work_ms} build=\{perf.build_ms} layout=\{perf.layout_ms} paint=\{perf.paint_ms} encode=\{m.encode_ms} gpu=\{m.gpu_ms} nodes=\{perf.nodes} laid=\{perf.laid} insts=\{perf.insts} looks=\{perf.looks} painted=\{perf.painted} kept=\{perf.kept} rows=\{perf.rows} damage=\{m.damage} passes=\{perf.passes}",
       )
     }
   })
@@ -143,6 +150,9 @@ pub fn bench(
     "frames": drawn.length().to_json(),
     "looks": drawn.filter(fn(m) { m.perf.looks }).length().to_json(),
     "painted": drawn.filter(fn(m) { m.perf.painted }).length().to_json(),
+    "kept": drawn.filter(fn(m) { m.perf.kept > 0 }).length().to_json(),
+    "rows_kept": stat(d(fn(m) { m.perf.kept.to_double() })),
+    "rows_built": stat(d(fn(m) { m.perf.rows.to_double() })),
     "work_ms": stat(d(fn(m) { m.work_ms })),
     "build_ms": stat(d(fn(m) { m.perf.build_ms })),
     "layout_ms": stat(d(fn(m) { m.perf.layout_ms })),
@@ -162,7 +172,7 @@ pub fn bench(
   // (and a row of the table scripts/appbench.sh prints)
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
   say(
-    "APPROW | \{name} | \{drawn.length()}/\{ticks} (\{drawn.filter(fn(m) { m.perf.looks }).length()} looks, \{drawn.filter(fn(m) { m.perf.painted }).length()} painted) | \{ms(d(fn(m) { m.work_ms }))} | \{ms(d(fn(m) { m.perf.build_ms }))} | \{ms(d(fn(m) { m.perf.layout_ms }))} | \{ms(d(fn(m) { m.perf.paint_ms }))} | \{ms(d(fn(m) { m.encode_ms }))} | \{ms(d(fn(m) { m.gpu_ms }))} | \{centile(d(fn(m) { m.perf.nodes.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.laid.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.insts.to_double() }), 50)} | \{round2(centile(d(fn(m) { m.damage * 100.0 }), 50))}% | \{round2(centile(d(fn(m) { m.bytes.to_double() / 1024.0 }), 50))} |",
+    "APPROW | \{name} | \{drawn.length()}/\{ticks} (\{drawn.filter(fn(m) { m.perf.looks }).length()} looks, \{drawn.filter(fn(m) { m.perf.painted }).length()} painted, \{drawn.filter(fn(m) { m.perf.kept > 0 }).length()} kept rows) | \{ms(d(fn(m) { m.work_ms }))} | \{ms(d(fn(m) { m.perf.build_ms }))} | \{ms(d(fn(m) { m.perf.layout_ms }))} | \{ms(d(fn(m) { m.perf.paint_ms }))} | \{ms(d(fn(m) { m.encode_ms }))} | \{ms(d(fn(m) { m.gpu_ms }))} | \{centile(d(fn(m) { m.perf.nodes.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.laid.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.insts.to_double() }), 50)} | \{round2(centile(d(fn(m) { m.damage * 100.0 }), 50))}% | \{round2(centile(d(fn(m) { m.bytes.to_double() / 1024.0 }), 50))} |",
   )
   passed
 }

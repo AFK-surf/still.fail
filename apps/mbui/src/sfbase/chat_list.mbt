@@ -447,7 +447,11 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       None => -1.0
     })
     let playing = em.current is Some(_) || em.queue.length() > 0
-    em.watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
+    let watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
+    if watched != em.watched {
+      em.watched = watched
+      em.changed()
+    }
     let showing : Map[String, Bool] = {}
     for k, _ in running {
       showing[k] = true
@@ -1291,7 +1295,11 @@ pub fn list_frame(
     }
     i = i - 1
   }
-  em.out_key = if out_at >= 0 { keys[out_at] } else { "" }
+  let out_key = if out_at >= 0 { keys[out_at] } else { "" }
+  if out_key != em.out_key {
+    em.out_key = out_key
+    em.changed()
+  }
   // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
   // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
   let glides = rd.came_frame == c.frame_number()

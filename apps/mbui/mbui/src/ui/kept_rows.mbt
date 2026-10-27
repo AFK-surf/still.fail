@@ -590,7 +590,17 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
 ///|
 /// Where what row `self`'s paint said is said: `dy` below where it was built, in the clip at `k` (its list's).
 fn RowKept::moved(self : RowKept, dy : Double, k : Int) -> Moved {
-  { dx: 0.0, dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1, node: -1 }
+  {
+    dx: 0.0,
+    dy,
+    cut: k,
+    band_l: self.band_l,
+    band_t: self.band0,
+    band_r: self.band_r,
+    band_b: self.band1,
+    node: -1,
+    by: 0,
+  }
 }
 
 ///|

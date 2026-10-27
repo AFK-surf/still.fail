@@ -70,8 +70,8 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
 
 1. **No motion from a layout's difference.** A place or a size moves only when its cause says so, from the frame of
    its cause. No node moves because its laid-out box differs from last frame's, and no measured size (`measured`,
-   `measured_rect`, `laid_size`, `laid_rect`, `rect_of`) is the target of a follow. What follows another's layout is
-   placed in the same layout (docs/determinism.md in the framework: `Ctx::cover`, `place_by_size`).
+   `measured_size`, `measured_rect`, `laid_size`, `laid_rect`, `rect_of`) is the target of a follow. What follows
+   another's layout is placed in the same layout (docs/determinism.md in the framework: `Ctx::cover`, `place_by_size`).
 2. **No time window as a cause.** "Moves within 150 ms of a list's change are the list's", "half a second after it
    is put in place it may glide": a window lets through whatever falls into it and holds back what falls outside. A
    cause is an event, or a state that changed.

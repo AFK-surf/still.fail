@@ -35,10 +35,12 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   // to take, an event from outside for a part kept: kept_part.mbt; a wheel over what scrolls in a list's row kept, its
   // row's: kept_rows.mbt)
   let moved = kind == "pointer" && (args[0] == 1.0 || args[0] == 7.0)
-  if !moved {
+  // (a wheel: what it turned says whether it is taken, on_wheel; a list's place a signal of its own)
+  let wheel = kind == "wheel"
+  if !moved && !wheel {
     inputs_taken.val = true
   }
-  if !(moved || (kind == "wheel" && !part_under(args[0], args[1]) && !row_scroller_under(args[0], args[1]))) {
+  if !(moved || wheel) {
     outside_came()
   }
   if taping() {
