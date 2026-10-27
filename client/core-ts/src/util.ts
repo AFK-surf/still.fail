@@ -109,15 +109,17 @@ export function sha256(data: Uint8Array): Uint8Array {
   for (let off = 0; off < padded.length; off += 64) {
     for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
     for (let i = 16; i < 64; i++) {
-      const s0 = ((w[i - 15] >>> 7) | (w[i - 15] << 25)) ^ ((w[i - 15] >>> 18) | (w[i - 15] << 14)) ^ (w[i - 15] >>> 3);
-      const s1 = ((w[i - 2] >>> 17) | (w[i - 2] << 15)) ^ ((w[i - 2] >>> 19) | (w[i - 2] << 13)) ^ (w[i - 2] >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      const x = w[i - 15]!, y = w[i - 2]!;
+      const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      w[i] = (w[i - 16]! + s0 + w[i - 7]! + s1) >>> 0;
     }
-    let [a, b, c, d, e, f, g, hh] = h;
+    // (a Uint32Array's eight: read as numbers, not `number | undefined`, the web's `noUncheckedIndexedAccess` too)
+    let [a, b, c, d, e, f, g, hh] = h as unknown as [number, number, number, number, number, number, number, number];
     for (let i = 0; i < 64; i++) {
       const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
       const ch = (e & f) ^ (~e & g);
-      const t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0;
+      const t1 = (hh + S1 + ch + K[i]! + w[i]!) >>> 0;
       const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
       const maj = (a & b) ^ (a & c) ^ (b & c);
       const t2 = (S0 + maj) >>> 0;
@@ -130,18 +132,18 @@ export function sha256(data: Uint8Array): Uint8Array {
       b = a;
       a = (t1 + t2) >>> 0;
     }
-    h[0] = (h[0] + a) >>> 0;
-    h[1] = (h[1] + b) >>> 0;
-    h[2] = (h[2] + c) >>> 0;
-    h[3] = (h[3] + d) >>> 0;
-    h[4] = (h[4] + e) >>> 0;
-    h[5] = (h[5] + f) >>> 0;
-    h[6] = (h[6] + g) >>> 0;
-    h[7] = (h[7] + hh) >>> 0;
+    h[0] = (h[0]! + a) >>> 0;
+    h[1] = (h[1]! + b) >>> 0;
+    h[2] = (h[2]! + c) >>> 0;
+    h[3] = (h[3]! + d) >>> 0;
+    h[4] = (h[4]! + e) >>> 0;
+    h[5] = (h[5]! + f) >>> 0;
+    h[6] = (h[6]! + g) >>> 0;
+    h[7] = (h[7]! + hh) >>> 0;
   }
   const out = new Uint8Array(32);
   const ov = new DataView(out.buffer);
-  for (let i = 0; i < 8; i++) ov.setUint32(i * 4, h[i]);
+  for (let i = 0; i < 8; i++) ov.setUint32(i * 4, h[i]!);
   return out;
 }
 
