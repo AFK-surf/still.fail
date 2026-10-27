@@ -1,6 +1,6 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
 // device shows still.fail, its settings (@sf.settings: wide, rows of one list card, each choice at its row's end;
-// narrow, a block each): 主题, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 语言; with
+// narrow, a block each): 主题, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 震动, 语言; with
 // keyboard and mouse the files dragged into a chat too, and laid out wide the rail changed in place (as the web's,
 // `wideOnly`). Each choice is the core's prefs (`prefs.set`), shown at once. When a done chat is offered to archive is
 // 归档's (archiving.mbt), as the web's.
@@ -52,6 +52,17 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           [("", "web-pages.appearance.motion.system"), ("reduce", "web-pages.appearance.motion.reduce"), ("full", "web-pages.appearance.motion.full")],
           @settings.pref(core, "motion"),
         )
+      })
+    },
+    // haptics, all of them (on unless turned off: @ui.set_haptics, app_frame.mbt)
+    fn() {
+      let title = @sf.t("web-pages.appearance.haptics.title")
+      @sf.setting(c, title, note=@sf.t("web-pages.appearance.haptics.description"), fn() {
+        let on = @settings.pref(core, "haptics") != "off"
+        let now = @sf.switch(c, "appearance/haptics", on, label=title)
+        if now != on {
+          c.tell("appearance/haptics", fn() { @settings.set_pref(core, "haptics", if now { "" } else { "off" }) })
+        }
       })
     },
     fn() {

@@ -341,6 +341,8 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
             return
           }
           zou_leave(c, x, 3)
+          // sent, felt as something done (a no as something refused)
+          @ui.haptic(Confirm)
           writing_take(src, wr, fn(taken) {
             guard taken is Some(_) else { return }
             let params : Map[String, Json] = {
@@ -361,6 +363,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
                   if text(Some(e), "code") == "invalid_params" {
                     writing_restore(src, wr, "", unless_written=true)
                   }
+                  @ui.haptic(Reject)
                   toast_later(
                     @sf.t("android-misc.act.failed", args=[
                       ("what", @sf.t("web-main.decisions.replyWhat")),

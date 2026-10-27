@@ -320,8 +320,8 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   assert_eq(named(calls, "chat.archive").length(), 0)
   t.run_for(@sfpages.swipe_off_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
-  // its line felt as it was passed, once (Home.kt: TextHandleMove)
-  assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
+  // its line felt as it was passed, once (Home.kt: TextHandleMove); archived, as something done (act's 已归档)
+  assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove, @ui.Haptic::Confirm])
 }
 
 ///|

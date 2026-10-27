@@ -400,7 +400,10 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
   let vk = Some(item)
   // (what could not be done: the core puts it back in its place)
   let say_failed = fn(what : String) {
-    fn(e : Json) { toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))])) }
+    fn(e : Json) {
+      @ui.haptic(Reject)
+      toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))]))
+    }
   }
   let call = fn(name : String, what : String, extra : Map[String, Json]) {
     if src.read_only {
@@ -429,7 +432,9 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
   let dismiss = fn() {
     go_decision(c, 1, item, fn() { call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {}) })
   }
+  // an option picked, felt as something done
   let answer = fn(o : Choice) {
+    @ui.haptic(Confirm)
     go_decision(c, 2, item, fn() {
       call("decision.answer", tr("android-misc.decisions.answerWhat"), { "option": Json::string(o.label) })
     })
@@ -485,6 +490,8 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
     None => false
   }
   let swiped = dui.swiping
+  // past the line letting go sets it aside or lets it go at: felt as it is passed (as a chat row's swipe to archive)
+  @sfbase.felt_change(c, "deck-past/" + key, swiped && down && dabs(dui.drag) > width * 0.35, TextHandleMove)
   if !down {
     dui.swiping = false
   }
@@ -807,6 +814,8 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   sent_draft(d, taken_files.length())
   save_draft(src, d)
   c.blur()
+  // sent, felt as something done (a no as something refused)
+  @ui.haptic(Confirm)
   go_decision(c, 2, item, fn() {  })
   let reply : Map[String, Json] = {
     "station": Json::string(text(v, "station")),
@@ -840,6 +849,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
             }
             save_draft(src, d)
           }
+          @ui.haptic(Reject)
           toast_later(fill("android-misc.decisions.replyFailed", [("error", error_words(e))]))
         }
         Ok(_) => ()
