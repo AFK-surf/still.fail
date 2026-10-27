@@ -128,7 +128,7 @@ export function stationHost(answers: Answers) {
   const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean } = { stream: "open", resumes: false, marks: false, follows: false };
   let marked = 0;
   // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
-  // what is offered on them (`tell`); any other is answered whole, as a station from before answers it.
+  // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
   const told = new Map<string, { queues: Set<Queue.Queue<Uint8Array | null>>; asked: number }>();
   const tell = (path: string, name: string, data: unknown) => {
     for (const q of told.get(path)?.queues ?? []) Queue.offerUnsafe(q, new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
@@ -136,8 +136,8 @@ export function stationHost(answers: Answers) {
   host.onFetchStream((req) =>
     Effect.gen(function* () {
       const asked = req.url.replace("https://stillfail.test/admin/api", "");
-      if (!asked.startsWith("/events")) {
-        const feed = told.get(asked);
+      const feed = told.get(asked);
+      if (feed || `GET ${asked}` in answers) {
         if (!feed) {
           const whole = answer(req);
           let given = false;
