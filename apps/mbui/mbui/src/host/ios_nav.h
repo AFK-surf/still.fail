@@ -175,13 +175,14 @@ static UIColor *nav_mean(UIImage *img) {
 }
 
 // A picture by its address (an https link, a data: URL) as a mark: rounded, in its own colours; loaded once, kept by
-// its address (nil while it comes: `then` is told once it is here).
+// its address (nil while it comes: `then` is told once it is here, each asker's, not the first's alone: the bars are
+// made again while it comes, and only the items made last are shown).
 static NSMutableDictionary<NSString *, UIImage *> *nav_pictures;
-static NSMutableSet<NSString *> *nav_loading;
+static NSMutableDictionary<NSString *, NSMutableArray *> *nav_loading;
 static UIImage *nav_picture(NSString *url, CGFloat size, BOOL round, void (^then)(void)) {
   if (!nav_pictures) {
     nav_pictures = [NSMutableDictionary dictionary];
-    nav_loading = [NSMutableSet set];
+    nav_loading = [NSMutableDictionary dictionary];
   }
   NSString *key = [NSString stringWithFormat:@"%@\x1f%.0f%@", url, size, round ? @"o" : @""];
   UIImage *had = nav_pictures[key];
@@ -199,7 +200,6 @@ static UIImage *nav_picture(NSString *url, CGFloat size, BOOL round, void (^then
       [raw drawInRect:CGRectMake(CGRectGetMidX(box) - s.width / 2, CGRectGetMidY(box) - s.height / 2, s.width, s.height)];
     }];
     nav_pictures[key] = [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
-    if (then) then();
   };
   if ([url hasPrefix:@"data:"]) {
     NSRange comma = [url rangeOfString:@","];
@@ -209,12 +209,21 @@ static UIImage *nav_picture(NSString *url, CGFloat size, BOOL round, void (^then
     return nav_pictures[key];
   }
   NSURL *u = [NSURL URLWithString:url];
-  if (!u || [nav_loading containsObject:key]) return nil;
-  [nav_loading addObject:key];
+  if (!u) return nil;
+  NSMutableArray *waiting = nav_loading[key];
+  if (waiting) {
+    if (then) [waiting addObject:then];
+    return nil;
+  }
+  nav_loading[key] = waiting = [NSMutableArray array];
+  if (then) [waiting addObject:then];
   [[NSURLSession.sharedSession dataTaskWithURL:u completionHandler:^(NSData *data, NSURLResponse *res, NSError *err) {
     dispatch_async(dispatch_get_main_queue(), ^{
-      [nav_loading removeObject:key];
+      NSArray *told = nav_loading[key];
+      [nav_loading removeObjectForKey:key];
       made(err ? nil : data);
+      if (nav_pictures[key])
+        for (void (^t)(void) in told) t();
     });
   }] resume];
   return nil;
@@ -403,18 +412,21 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       // (a workspace's mark filling its glass, still glass: with no picture, the glass in its colour and its letter on
       // it; with one, the picture a disc as large as the bar draws one, on a glass of its colour: the user, 2026-10-27)
       UIColor *tint = nil;
-      NSString *picture = nil;
+      NSString *picture = nil, *mark = spec;
       if ([spec hasPrefix:@"badge:"]) {
         NSRange pic = [spec rangeOfString:@"\x1e"];
         if (pic.location == NSNotFound) tint = nav_badge_tint(spec);
-        else picture = [spec substringFromIndex:pic.location + 1];
+        else {
+          picture = [spec substringFromIndex:pic.location + 1];
+          mark = [spec substringToIndex:pic.location];
+        }
       }
       UIImage *icon = tint ? nav_badge_glyph(spec, 24)
                       : picture ? nav_picture(picture, nav_mark_picture, YES, ^{
                           UIImage *got = nav_picture(picture, nav_mark_picture, YES, nil);
                           drawn.image = got;
                           drawn.tintColor = nav_mean(got) ?: drawn.tintColor;
-                        }) ?: nav_badge(spec, nav_mark_picture)
+                        }) ?: nav_badge(mark, nav_mark_picture)
                       : [spec length] ? nav_any_then(spec, 24, ^{
                           drawn.image = nav_any(spec, 24);
                         })
@@ -472,7 +484,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       if (@available(iOS 26.0, *)) {
         if (prominent || tint || picture) {
           b.style = UIBarButtonItemStyleProminent;
-          b.tintColor = tint ?: picture ? (nav_mean(icon) ?: nav_badge_tint(spec)) : accent;
+          b.tintColor = tint ?: picture ? (nav_mean(icon) ?: nav_badge_tint(mark)) : accent;
         } else {
           b.tintColor = ink;
         }
@@ -511,7 +523,10 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
     // (the chosen tab's alone: shown on two, the column shows its items twice; didSelectTab)
     [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:NO];
     nav_title(slot.navigationItem, bare ? title : @"", ink);
-    [nav setNavigationBarHidden:(made.count + lead.count == 0) animated:bare];
+    // (put away only when something is up over the whole window, its title alone: hidden with its items gone, the system's
+    // column keeps showing the views of those it had, a page's actions on the next tab, the outer screen's workspace
+    // button on the inner one; the user, 2026-10-27. Shown with none it takes no room: there, its items are the column's)
+    [nav setNavigationBarHidden:(bare && made.count + lead.count == 0) animated:bare];
   }
 }
 - (UINavigationController *)navFor:(NSString *)ident {
