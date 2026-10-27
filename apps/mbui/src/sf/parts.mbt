@@ -105,6 +105,8 @@ pub fn button(
     w~,
     h=Px(height),
     padx=button_padx,
+    // (an icon before its words sits in by less than they do from the other end: button_icon_in)
+    pl=if icon != "" { button_icon_in } else { button_padx },
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
@@ -152,6 +154,11 @@ pub fn button(
 ///|
 /// How far a button's words are in from its sides.
 let button_padx : Double = 16.0
+
+///|
+/// How far in from its end a button's icon sits (controls.css.ts BUTTON_ICON_IN): 4 less than its words', the drawing
+/// stopping short of its box and lighter than words, so the even padding left it looking farther from its edge.
+let button_icon_in : Double = 12.0
 
 ///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
