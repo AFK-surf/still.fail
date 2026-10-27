@@ -166,17 +166,23 @@ fn holds_first(d : Drag) -> Bool {
 }
 
 ///|
-/// The finger moved past the slop from where it went down before it held a drag area that is to be held first: the
+/// The finger moved past hold_slop from where it went down before it held a drag area that is to be held first: the
 /// press is not that area's (no tap of it, no drag).
 fn hold_moved_off(id : Int, x : Double, y : Double) -> Unit {
   match drags.get(id) {
     Some(d) if d.down && holds_first(d) =>
-      if ((x - d.x0) * (x - d.x0) + (y - d.y0) * (y - d.y0)).sqrt() > touch_slop() {
+      if ((x - d.x0) * (x - d.x0) + (y - d.y0) * (y - d.y0)).sqrt() > hold_slop {
         drag_cancel(id)
       }
     _ => ()
   }
 }
+
+///|
+/// How far a finger may wander while it holds a drag area still before it drags it (UILongPressGestureRecognizer's
+/// allowableMovement, 10): a finger held still is never quite still, and one about to drag sets off a little early;
+/// past it the press is what else is under it.
+pub let hold_slop : Double = 10.0
 
 ///|
 /// How far the finger moved it since this was last asked (dx, dy), then none until it moves again.
