@@ -866,6 +866,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
           ],
         },
       })
+    // (chat-screens-pc: the same chat on a device with no adb to lend, a Mac's or a PC's)
+    "adbCard" if f.mode == "chat-screens-pc" =>
+      Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
