@@ -391,6 +391,11 @@ pub fn fixture_file(name : String) -> String {
 ///|
 /// A made-up file's picture as PNG bytes: the same one its thumbnail in the chat shows and the preview opens.
 pub fn fixture_file_png(name : String) -> Bytes {
+  // a told story's own (story_fixture.mbt)
+  match story_picture(name) {
+    Some(b) => return b
+    None => ()
+  }
   let (w, h, a, b) = match name {
     "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
     "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
@@ -428,6 +433,9 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         None
       } else if f.mode == "chat-long" {
         Some(kept_chat("long", fn() { long_chat(3000) }))
+      } else if session == "s-c1" && f.mode == "chat-story" && fix_story.val is Some(story) {
+        // a told story's chat (story_fixture.mbt)
+        Some(with_cards(f, with_sent(story_chat(story), session), session))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
           let v = if f.mode == "chat-md" {
@@ -652,6 +660,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
+    // a told story's: what its agent does now (story_fixture.mbt)
+    "live" if f.mode == "chat-story" && text(Some(Json::object(params)), "key") == "s-c1" => Some(story_live())
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
       Some({ "loaded": true, "activity": { "now": { "key": "call:1", "text": working_step } } })
@@ -912,6 +922,11 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
   )
+  // a told story's agent does as the story says (story_fixture.mbt)
+  if fix_story.val is Some(_) && session == "s-c1" {
+    story_on_sent()
+    return
+  }
   // its agent sets to work at once (its activity comes in), answers a moment later (its answer said while the chat
   // shows: out of the activity's avatar), and its turn ends a moment after that
   // (at work from its source's now: the fixture's is 0, fixture.mbt)
@@ -1367,6 +1382,10 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       let label = text(p, "option")
       if label.contains("失败") {
         return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
+      }
+      if fix_story.val is Some(_) {
+        story_on_answer(f, seq, label)
+        return Some(Ok(Json::object({})))
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label

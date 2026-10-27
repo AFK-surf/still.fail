@@ -1293,7 +1293,8 @@ pub fn fixture(mode : String) -> Source {
     // (a made-up draft's pictures are the page's own: compose_fixture.mbt)
     draft_picture: fn(_, _) { "!" },
     images: @sfbase.ChatImages::new(),
-    now: fn() { 0.0 },
+    // (a told story's on the window's clock: its agent's time at work goes on)
+    now: fn() { if fix_story.val is Some(_) { @ui.now() } else { 0.0 } },
     leave: fn(_, _) {  },
     read_only: false,
   }

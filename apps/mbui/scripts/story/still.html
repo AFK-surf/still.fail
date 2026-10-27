@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0}
+html,body{width:1920px;height:1080px;overflow:hidden}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:radial-gradient(1400px 900px at 70% 40%,#f7efe6,#eadfd3 60%,#e2d5c7);color:#2a2420}
+#stage{position:absolute;inset:0;transform-origin:0 0}
+.phone{position:absolute;left:var(--px);top:90px;width:414px;height:868px;border-radius:58px;background:#111;padding:12px;
+  box-shadow:0 40px 80px rgba(70,45,20,.28),0 8px 20px rgba(70,45,20,.18),inset 0 0 0 2px #2b2b2b;transform:scale(1.04);transform-origin:top left}
+.screen{position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:#f4f1ee}
+.status{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 30px;font-size:15px;font-weight:600;color:#1d1a17}
+.status .r{display:flex;gap:6px;align-items:center;font-size:13px}
+.cam{position:absolute;left:50%;top:13px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#0b0b0b;z-index:3}
+.app{width:390px;height:800px;display:block}
+.kb{position:absolute;left:0;right:0;bottom:0;height:300px;background:#e9e5e1;transform:translateY(calc((1 - var(--kb)) * 100%));padding:6px 4px 0}
+.cands{height:40px;display:flex;align-items:center;gap:22px;padding:0 14px;font-size:17px;color:#2a2420}
+.cands b{font-weight:500}
+.row{display:flex;justify-content:center;gap:5px;margin:7px 0}
+.k{width:33px;height:44px;border-radius:7px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;color:#222;box-shadow:0 1px 0 rgba(0,0,0,.18)}
+.k.w{width:50px;background:#d6d0ca;font-size:15px}.k.sp{width:176px;font-size:14px;color:#666}
+.home{position:absolute;left:50%;bottom:8px;width:120px;height:4px;margin-left:-60px;border-radius:2px;background:#1d1a17;opacity:.8}
+.tap{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(40,30,20,.22);border:2px solid rgba(255,255,255,.7);z-index:5}
+.cap{position:absolute;left:var(--cx);top:50%;transform:translateY(-50%);width:640px}
+.cap h2{font-size:64px;line-height:1.2;font-weight:700;letter-spacing:1px}
+.cap p{margin-top:22px;font-size:28px;line-height:1.5;color:#7a6d62}
+.mark{position:absolute;right:64px;bottom:52px;font-size:26px;font-weight:700;color:#8a7a6c;letter-spacing:.5px}
+</style></head><body><div id="stage">
+<div class="phone"><div class="screen">
+  <div class="cam"></div>
+  <div class="status"><span id="clock">9:41</span><span class="r">5G <span>▮▮▮▮</span> <span>87%</span></span></div>
+  <img class="app" id="app">
+  <div class="kb" id="kb"><div class="cands" id="cands"></div>
+    <div class="row">${'qwertyuiop'}</div><div class="row">${'asdfghjkl'}</div>
+    <div class="row"><div class="k w">⇧</div>${'zxcvbnm'}<div class="k w">⌫</div></div>
+    <div class="row"><div class="k w">123</div><div class="k w">，</div><div class="k sp">拼音</div><div class="k w">。</div><div class="k w">发送</div></div>
+  </div>
+  <div class="home"></div>
+</div></div>
+<div class="tap" id="tap" style="display:none"></div>
+</div>
+<div class="cap"><h2 id="h"></h2><p id="p"></p></div>
+<div class="mark">still.fail</div>
+<script>
+const q = new URLSearchParams(location.search);
+document.querySelectorAll('.row').forEach(r => r.innerHTML = r.innerHTML.replace(/\$\{'(\w+)'\}/, (_, s) => [...s].map(c => `<div class="k">${c}</div>`).join('')));
+document.getElementById('app').src = q.get('frame');
+document.documentElement.style.setProperty('--kb', q.get('kb') || 0);
+document.getElementById('cands').innerHTML = (q.get('cands') || '').split('|').filter(Boolean).map((c, i) => i ? `<span>${c}</span>` : `<b>${c}</b>`).join('');
+document.getElementById('h').innerHTML = q.get('h') || '';
+document.getElementById('p').innerHTML = q.get('p') || '';
+const side = q.get('side') || 'right';
+document.documentElement.style.setProperty('--px', side === 'right' ? '300px' : '1180px');
+document.documentElement.style.setProperty('--cx', side === 'right' ? '880px' : '200px');
+// a tap at app point x,y (points of the app's window)
+if (q.get('tap')) { const [x, y] = q.get('tap').split(',').map(Number); const t = document.getElementById('tap');
+  const px = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px'));
+  t.style.display = 'block'; t.style.left = (px + 1.04 * (12 + x)) + 'px'; t.style.top = (90 + 1.04 * (12 + 44 + y)) + 'px'; }
+// a push in: zoom z about point (x, y) of the stage
+if (q.get('zoom')) { document.documentElement.style.setProperty('--cx', '1060px'); const [z, x, y] = q.get('zoom').split(',').map(Number); document.getElementById('stage').style.transform = `translate(${600 - x * z}px, ${540 - y * z}px) scale(${z})`; }
+</script></body></html>

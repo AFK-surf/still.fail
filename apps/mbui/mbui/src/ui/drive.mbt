@@ -56,6 +56,7 @@
 //                               title or words, within the timeout       nonotice TEXT   none does
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
+//   at TEXT                     DRIVE AT <ms on the run's clock> TEXT on the log (when the run got there: a film's marks)
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
@@ -1077,6 +1078,18 @@ fn drive_steps(c : Ctx) -> Unit {
         on_back(0, if d.bedge == 1 { c.width } else { 0.0 }, 0.0, d.bedge)
         return
       }
+      // the soft keyboard reaching `arg` points over the window's foot from the next frame (0: down), as a host says
+      // it while it moves (Tester::set_ime_inset): a film's keyboard, drawn over it afterwards
+      "ime" => {
+        match fake.val {
+          Some(f) => {
+            f.dev.ime_inset = number(arg)
+            f.wants = true
+          }
+          None => ()
+        }
+        next()
+      }
       "type" => {
         if !h_drive(0, arg) {
           on_text(0, arg, 0, 0)
@@ -1256,6 +1269,12 @@ fn drive_steps(c : Ctx) -> Unit {
         d.takes_state = true
         h_log("DRIVE ok hosted: the host's word on the app taken (\{d.said_state})")
         app_state_taken(d.said_state)
+        next()
+      }
+      // DRIVE AT <ms on the run's clock> TEXT on the log: when the run got here (a film's marks, for what is drawn
+      // over it afterwards)
+      "at" => {
+        h_log("DRIVE AT \{now} " + arg)
         next()
       }
       "log" => {

@@ -1,0 +1,72 @@
+# Film 1 of still.fail in use on the iPhone Duo simulator (made by scripts/story/drive_ios.py; story scripts/story/iduo.json).
+timeout 45000
+at start
+until 发消息
+wait 1500
+log SHOT start
+wait 700
+drag 400 330 -260 0 350
+wait 1200
+log SHOT chat
+wait 700
+at tap=发消息
+tap 发消息
+wait 900
+log SHOT kb
+wait 700
+at type=登录页
+type 登录页
+wait 420
+at type=暗色模式下
+type 暗色模式下
+wait 480
+at type=按钮看不清
+type 按钮看不清
+wait 380
+at type=，修一下
+type ，修一下
+wait 650
+log SHOT typed
+wait 700
+at tap=send
+tap icon:arrow-up
+wait 500
+at kb-down
+tapxy 250 140
+wait 600
+at working
+wait 2000
+log SHOT working
+wait 700
+until 退出登录
+at answer
+wait 1500
+log SHOT answer
+wait 700
+at unfold
+log UNFOLD
+wait 2500
+log SHOT open
+wait 700
+at pic
+tap img:改后
+wait 2000
+log SHOT pic
+wait 700
+at back
+back
+wait 900
+at scroll
+dragon 0 -320 450 退出登录
+wait 900
+log SHOT scrolled
+wait 700
+at tap=合并
+tap =合并
+until 4f2a9c1
+at merged
+wait 3200
+log SHOT merged
+wait 700
+at end
+exit

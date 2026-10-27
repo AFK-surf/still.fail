@@ -5,6 +5,7 @@ import {
   "stillfail/sfkept",
   "stillfail/sfapp",
   "stillfail/sffixture",
+  "moonbitlang/core/json",
   "stillfail/sfkept",
 }
 

@@ -1,0 +1,48 @@
+DRIVE start: 53 lines
+ios: thermal state 0
+ios: size classes compact wide, regular high
+ios: launched
+ios: inactive
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+ios: active
+DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
+ios: hinge closed, 0 division(s)
+ios: the screen's corner 59.0
+theme: light
+ios: hinge none, 0 division(s)
+ios: hinge closed, 0 division(s)
+DRIVE AT 623520961.8550417 start
+DRIVE ok until 发消息 (0 ms)
+ios: first frame 466x678 @3x in 211 ms
+DRIVE drag 400 330 -260 0 350 from 400,330
+DRIVE AT 623524068.6803751 tap=发消息
+DRIVE tap 发消息 at 215,630
+DRIVE AT 623525071.4612918 type=登录页
+DRIVE AT 623525521.6114585 type=暗色模式下
+DRIVE AT 623526022.2576251 type=按钮看不清
+DRIVE AT 623526421.8716251 type=，修一下
+DRIVE AT 623527105.1771251 tap=send
+DRIVE tap icon:arrow-up at 350,341
+SAID sent row in the list o:out1
+DRIVE AT 623527669.4695418 kb-down
+DRIVE AT 623528337.7688751 working
+DRIVE ok until 退出登录 (4918 ms)
+DRIVE AT 623535258.4855834 answer
+DRIVE AT 623536772.2789584 unfold
+DRIVE LOG UNFOLD
+ios: hinge half, 0 division(s)
+ios: size classes expanded wide, regular high
+ios: the screen's corner 55.0
+ios: hinge open, 0 division(s)
+DRIVE AT 623541273.8505418 pic
+DRIVE tap img:改后 at 511,536
+DRIVE AT 623543290.4071668 back
+DRIVE AT 623544239.5939168 scroll
+DRIVE dragon 0 -320 450 退出登录 from 395,330
+DRIVE AT 623545623.0230001 tap=合并
+DRIVE tap =合并 at 524,450
+DRIVE ok until 4f2a9c1 (1900 ms)
+DRIVE AT 623547544.0779167 merged
+DRIVE AT 623550755.9290001 end
+DRIVE PASS

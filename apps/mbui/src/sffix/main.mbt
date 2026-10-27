@@ -32,6 +32,12 @@ fn main {
     _ => ()
   }
   let mode = @ui.env("MBUI_FIXTURE")
+  // MBUI_STORY (or _B64): a told story over the first row's chat, as sffilm's (MBUI_FIXTURE=chat-story: sffixture's
+  // story_fixture.mbt), on a real host's screen
+  let story = @hostapi.env_text("MBUI_STORY")
+  if story != "" {
+    @sffixture.fix_story.val = Some(@json.parse(story) catch { _ => abort("MBUI_STORY does not parse") })
+  }
   // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
   // as it says
   let src = if mode == "json" {

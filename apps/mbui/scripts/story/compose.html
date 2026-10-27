@@ -1,0 +1,345 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+/* A story's film laid in a Pixel 10 Pro Fold (Android Studio's device art), with its keyboard, taps, camera and
+   spotlight drawn over it: render(t) draws the moment t (s) of the film. compose.mjs films it frame by frame. */
+*{box-sizing:border-box;margin:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#e9e6e1}
+body>.scr{position:absolute}
+body{font-family:"Google Sans","Roboto","PingFang SC",-apple-system,sans-serif}
+#bg{position:absolute;inset:0;background:radial-gradient(1500px 1000px at 50% 42%,#f6f4f0,#e7e3dd 62%,#dcd7cf)}
+#world{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+.dev{position:absolute;transform-origin:50% 50%;backface-visibility:hidden}
+.dev>img.back{position:absolute;left:0;top:0;display:block}
+.dev>.shadow{position:absolute;inset:3% 4%;border-radius:8%;box-shadow:0 60px 120px rgba(40,30,20,.30),0 18px 40px rgba(40,30,20,.20)}
+.scr{position:absolute;overflow:hidden;background:#f4f1ee}
+.scr>img.app{position:absolute;left:0;top:0;transform-origin:0 0}
+.bar{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;color:#1f1b17;font-weight:500;z-index:4}
+.bar .r{display:flex;align-items:center;gap:.35em}
+.kb{position:absolute;left:0;right:0;bottom:0;background:#e9ebf1;z-index:5}
+.kb .cands{display:flex;align-items:center;color:#2a2a30}
+.kb .cands .py{color:#5f6270}
+.kb .row{display:flex;justify-content:center}
+.kb .k{background:#fff;color:#1d1d22;display:flex;align-items:center;justify-content:center;transition:none}
+.kb .k.f{background:#d7dbe6}
+.kb .k.on{background:#c9cfe0}
+.kb .gest{position:absolute;left:50%;transform:translateX(-50%);background:#1d1d22;opacity:.75}
+.spot{position:absolute;z-index:6;pointer-events:none;border-radius:0}
+.tap{position:absolute;z-index:7;border-radius:50%;background:rgba(30,25,20,.20);border:3px solid rgba(255,255,255,.85);box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.cam{position:absolute;border-radius:50%;background:radial-gradient(circle at 40% 38%,#2a2d3a,#050507 60%);z-index:8}
+#end{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;flex-direction:column;gap:26px}
+#end img{width:120px;height:120px}
+#end b{font-size:64px;font-weight:600;color:#1f1b17;letter-spacing:.5px}
+</style></head><body><div id="bg"></div><div id="world"></div><div id="end"><img src="mark.svg"><b>still.fail</b></div>
+<script>
+// ---- what the run was (compose.mjs: window.STORY = {marks: {name: s}, taps: [{t, x, y}], frames, fps}) ----
+const S = window.STORY;
+const M = S.marks;
+// the devices (STORY.device): their pictures, where each screen is in them, its window in points and its bars; `over`:
+// the picture over the screen (a hole where it shows, Apple's bezels) rather than under it (Android Studio's device art)
+const DEVICES = {
+  pixel: {
+    dp: 2.625, kb: 290, hinge: 1100, ck: 0.89, cy: 24, look: 'gboard',
+    closed: { back: 'device/closed-back.png', w: 1236, h: 2495, sx: 84, sy: 66, sw: 1080, sh: 2364, r: 112, win: [411, 900], top: 36, cam: [541, 77, 30], pad: [24, 22] },
+    open: { back: 'device/default-back.png', w: 2201, h: 2268, sx: 62, sy: 58, sw: 2076, sh: 2152, r: 150, win: [791, 820], top: 32, cam: [1942, 81, 32], pad: [26, 74] },
+  },
+  iduo: {
+    dp: 3, kb: 300, hinge: 1546, ck: 0.982, cy: 46, look: 'ios',
+    closed: { back: 'device/iduo-outer.png', over: true, w: 1574, h: 2194, sx: 86, sy: 78, sw: 1402, sh: 2038, r: 0, win: [466, 678], top: 0, side: 44, pad: [0, 0] },
+    open: { back: 'device/iduo-inner.png', over: true, w: 3093, h: 2247, sx: 118, sy: 118, sw: 2857, sh: 2011, r: 0, win: [890, 626], top: 24, pad: [34, 34] },
+  },
+};
+const D = DEVICES[S.device || 'pixel'];
+const DP = D.dp;
+const DEV = { closed: D.closed, open: D.open };
+// the book: the open device, its left half a leaf on the hinge (x = HINGE) whose back is the closed one (its outer
+// screen, the hinge on its left edge, as Pixel Fold's and iPhone Duo's are), scaled CK into the right half's place:
+// closed, the leaf lies over the right half; unfolding, it swings out to the left, toward the viewer, and the right
+// half stays where it was
+const HINGE = D.hinge, CK = D.ck, CY = D.cy;
+const KB = D.kb, NAV = 24;
+const world = document.getElementById('world');
+world.style.perspective = '3600px';
+const el = (tag, cls, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; parent.appendChild(e); return e; };
+function device(d, parent) {
+  const dev = el('div', 'dev', parent);
+  dev.style.width = d.w + 'px'; dev.style.height = d.h + 'px';
+  el('div', 'shadow', dev);
+  const back = d.over ? null : el('img', 'back', dev);
+  if (back) back.src = d.back;
+  const scr = el('div', 'scr', dev);
+  Object.assign(scr.style, { left: d.sx + 'px', top: d.sy + 'px', width: d.sw + 'px', height: d.sh + 'px', borderRadius: d.r + 'px' });
+  const app = el('img', 'app', scr);
+  app.style.transform = `scale(${d.sw / (d.win[0] * DP)})`;
+  const bar = el('div', 'bar', scr);
+  Object.assign(bar.style, { height: d.top * DP + 'px', padding: `0 ${d.pad[1] * DP}px 0 ${d.pad[0] * DP}px`, fontSize: (D.look === 'ios' ? 15 : 14) * DP + 'px', fontWeight: D.look === 'ios' ? 600 : 500 });
+  // (iPhone Duo's outer screen: its status bar down its right side, the time at its top)
+  if (d.side) Object.assign(bar.style, { left: 'auto', right: 0, width: d.side * DP + 'px', height: 'auto', flexDirection: 'column', justifyContent: 'flex-start', gap: 10 * DP + 'px', paddingTop: 80 * DP + 'px', fontSize: 13 * DP + 'px' });
+  bar.innerHTML = `<span>9:41</span><span class="r"><svg width="${16 * DP}" height="${16 * DP}" viewBox="0 0 16 16"><path d="M1 13h2v-2H1zm4 0h2V9H5zm4 0h2V6H9zm4 0h2V3h-2z" fill="#1f1b17"/></svg><svg width="${22 * DP}" height="${14 * DP}" viewBox="0 0 22 12"><rect x=".75" y=".75" width="18" height="10.5" rx="2.6" fill="none" stroke="#1f1b17" stroke-width="1.4"/><rect x="2.6" y="2.6" width="12" height="6.8" rx="1.3" fill="#1f1b17"/><rect x="19.8" y="3.8" width="1.6" height="4.4" rx=".8" fill="#1f1b17"/></svg></span>`;
+  const spot = el('div', 'spot', scr);
+  const tap = el('div', 'tap', scr);
+  if (d.over) { const over = el('img', 'back', dev); over.src = d.back; over.style.zIndex = 9; }
+  const cam = d.cam ? el('div', 'cam', dev) : { style: {} };
+  if (d.cam) Object.assign(cam.style, { left: d.sx + d.cam[0] - d.cam[2] + 'px', top: d.sy + d.cam[1] - d.cam[2] + 'px', width: 2 * d.cam[2] + 'px', height: 2 * d.cam[2] + 'px' });
+  return { dev, scr, app, bar, spot, tap, d };
+}
+const book = el('div', '', world);
+Object.assign(book.style, { position: 'absolute', left: 0, top: 0, width: DEV.open.w + 'px', height: DEV.open.h + 'px', transformStyle: 'preserve-3d' });
+const leftHalf = el('div', '', book);
+Object.assign(leftHalf.style, { position: 'absolute', left: HINGE - 2 + 'px', top: 0, width: DEV.open.w - HINGE + 2 + 'px', height: DEV.open.h + 'px', overflow: 'hidden' });
+const leaf = el('div', '', book);
+Object.assign(leaf.style, { position: 'absolute', left: 0, top: 0, width: HINGE + 'px', height: DEV.open.h + 'px', transformOrigin: '100% 50%', transformStyle: 'preserve-3d' });
+const front = el('div', '', leaf);
+Object.assign(front.style, { position: 'absolute', inset: 0, overflow: 'hidden', backfaceVisibility: 'hidden' });
+const backFace = el('div', '', leaf);
+Object.assign(backFace.style, { position: 'absolute', left: 0, top: 0, width: HINGE + 'px', height: DEV.open.h + 'px', transform: 'rotateY(180deg)', backfaceVisibility: 'hidden' });
+const openL = device(DEV.open, leftHalf), openR = device(DEV.open, front);
+// the light on each face as it turns: darker the more it faces away
+
+openL.dev.style.left = -(HINGE - 2) + 'px';
+const closed = device(DEV.closed, backFace);
+Object.assign(closed.dev.style, { transformOrigin: '0 0', transform: `translate(0px, ${CY}px) scale(${CK})` });
+const parts = { closed, open: openL };
+const opens = [openL, openR];
+// the closed screen's keyboard (Gboard's look: its rows, the pinyin being composed and its candidates)
+const kb = el('div', 'kb', closed.scr);
+kb.style.height = KB * DP + 'px';
+const kp = (v) => v * DP + 'px';
+kb.innerHTML = `<div class="cands" style="height:${kp(44)};padding:0 ${kp(14)};gap:${kp(22)};font-size:${kp(17)}"></div>` +
+  [[...'qwertyuiop'], [...'asdfghjkl'], [...'⇧zxcvbnm⌫'], ['?', ',', '␣', '。', '↵']].map((r, i) => `<div class="row" style="gap:${kp(6)};margin:${kp(i ? 9 : 2)} 0 0">` +
+    r.map((c) => { const f = '⇧⌫?,。↵'.includes(c) || (i === 3 && c !== '␣'); const w = c === '␣' ? 180 : i === 3 ? (c === '?' ? 52 : 34) : f ? 48 : 33;
+      const label = c === '␣' ? '拼音' : c === '?' ? '?123' : c === '↵' ? '➜' : c;
+      return `<div class="k${f ? ' f' : ''}" data-k="${c}" style="width:${kp(i === 3 && c === '↵' ? 52 : w)};height:${kp(46)};border-radius:${kp(c === '↵' ? 23 : 7)};font-size:${kp(c === '␣' ? 14 : 21)}">${label}</div>`; }).join('') + '</div>').join('') +
+  `<div class="gest" style="bottom:${kp(9)};width:${kp(108)};height:${kp(4)};border-radius:${kp(2)}"></div>`;
+// (iOS's keyboard: its grey, its keys less round, its return key 换行)
+if (D.look === 'ios') {
+  kb.style.background = '#d1d3d9';
+  kb.querySelectorAll('.k').forEach((k) => { k.style.borderRadius = kp(5); k.style.boxShadow = '0 1px 0 rgba(0,0,0,.3)'; if (k.dataset.k === '↵') { k.textContent = '换行'; k.style.fontSize = kp(15); k.style.width = kp(70); } if (k.dataset.k === '␣') k.textContent = '空格'; });
+  kb.querySelectorAll('.k.f').forEach((k) => { k.style.background = '#abb0ba'; });
+}
+const cands = kb.querySelector('.cands');
+const keys = {}; kb.querySelectorAll('.k').forEach((k) => { keys[k.dataset.k] = k; });
+const TYPED = [['登录页', 'dengluye', '登录|登陆|灯'], ['暗色模式下', 'anse moshi xia', '暗色|按|案'], ['按钮看不清', 'anniu kan bu qing', '按钮|安妞|暗'], ['，修一下', 'xiuyixia', '修一下|休息下|修']];
+
+// ---- easing and keyframes ----
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const outc = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+/** The value of keyframes [[t, v…]] at t: eased from each to the next. */
+function keyed(frames, t) {
+  if (t <= frames[0][0]) return frames[0].slice(1);
+  for (let i = 1; i < frames.length; i++) {
+    const [t1] = frames[i];
+    if (t <= t1) { const a = frames[i - 1], b = frames[i]; const k = ease((t - a[0]) / (t1 - a[0])); return a.slice(1).map((v, j) => typeof v === 'number' ? lerp(v, b[j + 1], k) : (k < .5 ? v : b[j + 1])); }
+  }
+  return frames[frames.length - 1].slice(1);
+}
+window.KEYS = { keyed, M };
+// the shots (compose.mjs: window.SHOTS, made from the story's shots with its marks): camera [t, zoom, x, y] in the
+// device's screen points, spotlight [t, x, y, w, h, alpha] in screen points
+const CAM = window.SHOTS.cam, SPOT = window.SHOTS.spot;
+const U = M.unfold, FLIP = 1.1, END = M.end - 1.6;
+
+window.render = async function (t, frameUrl, closedUrl) {
+  // (the glass, iyinchao/liquid-glass-studio's: glass.js, a module)
+  if (NAVS.length && !window.GLASS) window.GLASS = await import('./glass.js');
+  const [zoom, X, Y] = keyed(CAM, t);
+  const s = 0.42 * zoom;
+  book.style.transformOrigin = `${X}px ${Y}px`;
+  book.style.transform = `translate(${960 - X}px, ${540 - Y}px) scale(${s})`;
+  world.style.perspectiveOrigin = '960px 540px';
+  // the fold: the leaf (its back the closed phone) turned from lying over the left half to open
+  const f = ease((t - U) / FLIP);
+  const theta = t < U ? 180 : 180 * (1 - f);
+  leaf.style.transform = `rotateY(${theta}deg)`;
+  leftHalf.style.visibility = theta < 179.5 ? 'visible' : 'hidden';
+  // open flat: the whole of it in one piece (no seam on the hinge)
+  const flat = theta < 0.5;
+  leftHalf.style.width = (flat ? DEV.open.w : DEV.open.w - HINGE + 2) + 'px';
+  leftHalf.style.left = (flat ? 0 : HINGE - 2) + 'px';
+  openL.dev.style.left = (flat ? 0 : -(HINGE - 2)) + 'px';
+  leaf.style.visibility = flat ? 'hidden' : 'visible';
+  const away = Math.sin(theta * Math.PI / 180);
+  front.style.filter = theta > 0.5 && theta < 90 ? `brightness(${1 - .18 * away})` : '';
+  backFace.style.filter = theta > 90 && theta < 179.5 ? `brightness(${1 - .18 * away})` : '';
+  front.style.visibility = theta < 179.5 && !flat ? 'visible' : 'hidden';
+  // the run's frame in each screen (the closed one held at its last before the fold)
+  const set = async (img, src) => { if (img.getAttribute('src') !== src) { img.src = src; await img.decode().catch(() => {}); } };
+  await set(closed.app, t >= U ? closedUrl : frameUrl);
+  if (t >= U) for (const o of opens) await set(o.app, frameUrl);
+  const open = t >= U;
+  // the keyboard: as high as the app was last told it (DRIVE AT … kb=H), in the same frame (as the app draws it)
+  let kh = 0;
+  for (const [at, h] of S.kbs) if (at <= t + 1e-6) kh = h;
+  const up = kh / KB;
+  kb.style.transform = `translateY(${(1 - clamp(up)) * 100}%)`;
+  kb.style.display = up > 0 ? 'block' : 'none';
+  // what is being typed: each word's pinyin pressed key by key in the pause before it is put in, its candidates
+  for (const k of Object.values(keys)) k.classList.remove('on');
+  let shown = '';
+  for (let i = 0; i < TYPED.length; i++) {
+    const [word, py, cs] = TYPED[i];
+    const at = M['type=' + word], from = (i ? M['type=' + TYPED[i - 1][0]] : M['kb-up'] + .4) + .08;
+    if (t >= from && t < at) {
+      const letters = py.replace(/ /g, '');
+      const n = Math.floor(clamp((t - from) / (at - from - .06)) * letters.length);
+      const k = keys[letters[Math.min(n, letters.length - 1)]]; if (k && n < letters.length) k.classList.add('on');
+      shown = `<span class="py">${py.split(' ').join("'").slice(0, n + py.split(' ').length)}</span>` + cs.split('|').map((c, j) => j ? `<span>${c}</span>` : `<b style="font-weight:500">${c}</b>`).join('');
+    } else if (t >= at && t < at + .5) shown = '<span>的</span><span>了</span><span>吗</span><span>，</span>';
+  }
+  if (t >= M['tap=send'] - .12 && t < M['tap=send']) keys['↵'].classList.add('on');
+  cands.innerHTML = shown;
+  // the system's column of its glass, where it takes the app's tabs
+  if (NAVS.length) {
+    const nav = navAt(t);
+    navColumn(closed, nav, true);
+    for (const o of opens) navColumn(o, nav, false);
+    for (const q of [closed, ...opens]) q.bar.style.display = 'none';
+  }
+  // the spotlight: all but its rect dimmed
+  for (const q of [closed, ...opens]) {
+    const [x, y, w, h, a] = keyed(SPOT, t);
+    Object.assign(q.spot.style, { left: x * DP + 'px', top: y * DP + 'px', width: w * DP + 'px', height: h * DP + 'px', borderRadius: 16 * DP + 'px',
+      boxShadow: `0 0 0 ${4000}px rgba(20,16,12,${a})` });
+    q.spot.style.display = a > 0.002 ? 'block' : 'none';
+  }
+  // the taps: a press coming and going
+  for (const q of [closed, ...opens]) q.tap.style.display = 'none';
+  for (const tp of S.taps) {
+    // a press: down, (dragged), up; its ring where the finger is
+    const d = (tp.ms || 0) / 1000;
+    const k = (t - tp.t + .12) / (.5 + d);
+    if (k < 0 || k > 1) continue;
+    const m = clamp((t - tp.t) / Math.max(d, 1e-3));
+    const x = tp.x + (tp.dx || 0) * (d ? ease(m) : 0), y = tp.y + (tp.dy || 0) * (d ? ease(m) : 0);
+    const r = lerp(18, 28, outc(k)) * DP;
+    const fade = k < .2 ? k / .2 : t < tp.t + d ? 1 : 1 - clamp((t - tp.t - d) / .35);
+    // (a point of the screen where its picture has it: a bezel's hole may be drawn at another scale than the app's)
+    for (const q of tp.t >= U ? opens : [closed]) Object.assign(q.tap.style, { display: 'block', left: x * q.d.sw / q.d.win[0] - r + 'px', top: y * q.d.sh / q.d.win[1] - r + 'px', width: 2 * r + 'px', height: 2 * r + 'px', opacity: fade });
+  }
+  // the end: the device away, the mark
+  const e = clamp((t - END) / .9);
+  world.style.opacity = 1 - ease(e);
+  document.getElementById('end').style.opacity = ease(clamp((t - END - .5) / .8));
+};
+// ---- the system's bars where it lays out the app's tabs (an iPhone Duo's: STORY.nav, what the app handed it frame by
+// frame, FILM NAV): a column of its glass down each screen's trailing edge, its status at the top, the page's actions,
+// the app's places (the chosen one in its ink), the prominent one at the foot; their icons drawn as the host draws them
+// (mbui/src/host/ios_nav.h nav_icon: lines, shapes, fills and cut-outs on a 24 grid)
+const NAVS = (S.nav || []).map(([f, json]) => [f, JSON.parse(json)]);
+const navAt = (t) => { let n = null; for (const [f, v] of NAVS) if (f / 60 <= t + 1e-6) n = v; return n; };
+const rgba = (u) => `rgba(${(u >>> 24) & 255},${(u >>> 16) & 255},${(u >>> 8) & 255},${((u & 255) / 255).toFixed(3)})`;
+function navIcon(g, data, x, y, size, color) {
+  if (data.startsWith('badge:') || data.startsWith('avatars:')) {
+    const [hex, letter] = data.slice(data.indexOf(':') + 1).split(';')[0].split(',');
+    g.save(); g.fillStyle = '#' + hex.slice(0, 6); g.beginPath(); g.arc(x + size / 2, y + size / 2, size * .46, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.font = `600 ${size * .5}px -apple-system,"PingFang SC"`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(letter || '', x + size / 2, y + size / 2 + size * .03); g.restore();
+    return;
+  }
+  const n = data.split(' ').filter(Boolean).map(Number);
+  g.save(); g.translate(x, y); g.scale(size / 24, size / 24);
+  g.strokeStyle = color; g.fillStyle = color; g.lineCap = 'round'; g.lineJoin = 'round';
+  let i = 0, compound = null, evenOdd = false;
+  const flush = () => { if (compound) { g.fill(compound, evenOdd ? 'evenodd' : 'nonzero'); compound = null; } };
+  while (i + 2 < n.length) {
+    const kind = n[i], width = n[i + 1], k = n[i + 2];
+    i += 3;
+    if (i + 2 * k > n.length) break;
+    if (kind !== 7) flush();
+    if (kind === 7) {
+      if (!compound) { compound = new Path2D(); evenOdd = width > .5; }
+      for (let j = 0; j < k; j++) (j ? compound.lineTo : compound.moveTo).call(compound, n[i + 2 * j], n[i + 2 * j + 1]);
+      compound.closePath(); i += 2 * k; continue;
+    }
+    if (kind === 4) { g.globalAlpha = width; continue; }
+    const p = new Path2D();
+    for (let j = 0; j < k; j++) (j ? p.lineTo : p.moveTo).call(p, n[i + 2 * j], n[i + 2 * j + 1]);
+    i += 2 * k;
+    if (kind >= 1) p.closePath();
+    if (kind === 5) { g.save(); g.globalCompositeOperation = 'destination-out'; g.fill(p); g.restore(); }
+    else if (kind === 2) g.fill(p);
+    else { g.lineWidth = width; g.stroke(p); }
+  }
+  flush(); g.restore();
+}
+const COL = 92;
+// iOS's glass as an iPhone Duo shows the app's tabs (its column down the trailing edge, as a colleague's recording of
+// the app on one has it): a capsule of it a little lighter than what is under it, a hairline edge, no shine of its own;
+// the chosen tab on a disc of its own; the prominent one a disc of the chosen ink under it, at the foot
+function glass(g, x, y, w, h, k) {
+  const shape = new Path2D(); shape.roundRect(x, y, w, h, Math.min(w, h) / 2);
+  g.save(); g.shadowColor = 'rgba(0,0,0,.06)'; g.shadowBlur = 8 * k; g.shadowOffsetY = 1 * k;
+  g.fillStyle = 'rgba(255,255,255,.62)'; g.fill(shape); g.restore();
+  g.save(); g.lineWidth = .8 * k; g.strokeStyle = 'rgba(0,0,0,.07)'; g.stroke(shape); g.restore();
+}
+function navColumn(q, nav, outer) {
+  if (!q.navCanvas) {
+    q.navCanvas = el('canvas', '', q.scr);
+    Object.assign(q.navCanvas.style, { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', zIndex: 4, pointerEvents: 'none' });
+    q.navCanvas.width = q.d.sw; q.navCanvas.height = q.d.sh;
+  }
+  const c = q.navCanvas, g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  if (!nav) return;
+  const k = q.d.sw / q.d.win[0], W = q.d.win[0], H = q.d.win[1];
+  const cx = (W - 49) * k;
+  const dark = '#1f1b17';
+  // its status (under the camera): the time, the network in the battery's ring
+  let y = (outer ? 92 : 120) * k;
+  g.fillStyle = dark; g.font = `600 ${15 * k}px -apple-system,"SF Pro Text","PingFang SC"`; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText('9:41', cx, y);
+  const wy = y + 40 * k;
+  g.strokeStyle = 'rgba(31,27,23,.25)'; g.lineWidth = 2 * k; g.beginPath(); g.arc(cx, wy, 15 * k, Math.PI * .75, Math.PI * 2.25); g.stroke();
+  g.strokeStyle = dark; g.beginPath(); g.arc(cx, wy, 15 * k, Math.PI * .75, Math.PI * (.75 + 1.5 * .99)); g.stroke();
+  g.lineWidth = 2 * k; g.lineCap = 'round';
+  for (const r of [8, 5]) { g.beginPath(); g.arc(cx, wy + 4 * k, r * k, Math.PI * 1.25, Math.PI * 1.75); g.stroke(); }
+  g.beginPath(); g.arc(cx, wy + 4 * k, 1.5 * k, 0, Math.PI * 2); g.fillStyle = dark; g.fill();
+  g.font = `600 ${8 * k}px -apple-system,"SF Pro Text"`; g.fillText('99', cx, wy - 15 * k - 4 * k);
+  const ink = rgba(nav.ink >>> 0), chosen = rgba(nav.chosen_ink >>> 0);
+  const places = nav.groups.find((x) => !x.foot && x.items.some((i) => i.id.startsWith('place/')))?.items || [];
+  const foot = nav.groups.find((x) => x.foot)?.items || [];
+  const ITEM = 43, CAP = 41, ICON = 22, D = 40;
+  // the prominent one at the foot; the tabs' capsule over it
+  const footY = H - 26 - D;
+  const ph = places.length * ITEM + 4;
+  const top = footY - 6 - ph;
+  // the glass, over what is under it (the app's frame at the screen's size): the tabs' capsule
+  if (places.length && window.GLASS) {
+    if (!q.under) { q.under = document.createElement('canvas'); q.under.width = c.width; q.under.height = c.height; }
+    q.under.getContext('2d').drawImage(q.app, 0, 0, c.width, c.height);
+    const shapes = [{ x: cx - CAP / 2 * k, y: top * k, w: CAP * k, h: ph * k, r: CAP / 2 * k }];
+    if (!q.glassLayer) {
+      q.glassLayer = el('canvas', '', q.scr);
+      Object.assign(q.glassLayer.style, { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', zIndex: 3, pointerEvents: 'none' });
+      q.glassLayer.width = c.width; q.glassLayer.height = c.height;
+    }
+    q.glassLayer.getContext('2d').drawImage(window.GLASS.glassOver(q.under, shapes, k), 0, 0);
+  }
+  if (places.length) {
+    places.forEach((it, i) => {
+      const iy = top + 2 + i * ITEM + (ITEM - ICON) / 2;
+      const on = it.id === nav.selected;
+      if (on) { g.fillStyle = 'rgba(31,27,23,.07)'; g.beginPath(); g.arc(cx, (top + 2 + i * ITEM + ITEM / 2) * k, 18 * k, 0, Math.PI * 2); g.fill(); }
+      navIcon(g, it.icon, cx - ICON / 2 * k, iy * k, ICON * k, on ? chosen : ink);
+      if (it.dot) { g.fillStyle = '#e5484d'; g.beginPath(); g.arc(cx + 9 * k, (iy + 2) * k, 3.5 * k, 0, Math.PI * 2); g.fill(); }
+    });
+  }
+  foot.forEach((it) => {
+    g.fillStyle = chosen; g.beginPath(); g.arc(cx, (footY + D / 2) * k, D / 2 * k, 0, Math.PI * 2); g.fill();
+    g.lineWidth = .8 * k; g.strokeStyle = 'rgba(255,255,255,.35)'; g.stroke();
+    navIcon(g, it.icon, cx - 10 * k, (footY + D / 2 - 10) * k, 20 * k, '#fff');
+  });
+}
+// screens alone (STORY.screens: compose.mjs's 3D films, duo3d): each screen as drawn here (the app's frame, its bars,
+// keyboard and taps) at its own size at the page's top left, the outer one over the inner one, for a model to show
+if (S.screens) {
+  for (const id of ['bg', 'world', 'end']) document.getElementById(id).style.display = 'none';
+  document.body.style.background = '#000';
+  for (const e of [document.documentElement, document.body]) Object.assign(e.style, { width: DEV.open.sw + 'px', height: DEV.closed.sh + DEV.open.sh + 'px' });
+  document.body.appendChild(closed.scr);
+  Object.assign(closed.scr.style, { left: '0px', top: '0px', borderRadius: '0px' });
+  document.body.appendChild(openL.scr);
+  Object.assign(openL.scr.style, { left: '0px', top: DEV.closed.sh + 'px', borderRadius: '0px' });
+  window.SCREENS = { outer: [0, 0, DEV.closed.sw, DEV.closed.sh], inner: [0, DEV.closed.sh, DEV.open.sw, DEV.open.sh] };
+}
+window.ready = true;
+</script></body></html>

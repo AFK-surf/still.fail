@@ -7,6 +7,7 @@ import {
   "stillfail/sfapp",
   "stillfail/sffixture",
   "stillfail/sfdesk",
+  "moonbitlang/core/json",
 }
 
 options(

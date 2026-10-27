@@ -1,0 +1,162 @@
+// Film 1 as the iPhone Duo simulator showed it (scripts/story/film_ios.sh): its two screens' recordings
+// (rec/ios-outer.mp4 till the unfold, rec/ios-inner.mp4 from just before it, the inner one recorded on its side) put on
+// one time line by rec/ios-times.txt and the app's log (rec/ios-app.txt: where the drive touched), on Apple's model
+// folded and unfolded (duo3d/film.html), from a camera on the drive's marks (iduo-sim.cam3d.js), into
+// out/film/promo3d-sim.mp4; `node compose_sim.mjs [still times…]` only those, as out/stills/promo3d-sim-N.png (a time:
+// seconds, or a mark ± seconds: answer+0.8).
+import { execFileSync, spawn } from 'node:child_process';
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
+import { dirname, extname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { filmSound } from './sound.mjs';
+const here = dirname(fileURLToPath(import.meta.url));
+const app = join(here, '../..');
+const rec = join(here, 'rec');
+const stills = process.argv.slice(2);
+const FFMPEG = '/opt/homebrew/bin/ffmpeg', FPS = 60;
+const ASSETS = process.env.DUO_ASSETS || join(app, 'out/duo3d-assets');
+
+// ---- one time line: the film's 0 the drive's start; each recording's frames at this Mac's clock ----
+const times = readFileSync(join(rec, 'ios-times.txt'), 'utf8').trim().split('\n').map((l) => l.split(' '));
+const at = times.filter((l) => l[0] === 'at').map(([, wall, ms, ...name]) => ({ wall: +wall, app: +ms / 1000, name: name.join(' ') }));
+// (the app's clock to this Mac's: as soon as a line was seen, the least of how late each was)
+const off = Math.min(...at.map((a) => a.wall - a.app));
+const start = at.find((a) => a.name === 'start').app;
+const wallOf = (t) => start + off + t;
+const marks = Object.fromEntries(at.map((a) => [a.name, a.app - start]));
+const recStart = Object.fromEntries(times.filter((l) => l[0] === 'rec').map(([, k, w]) => [k, +w]));
+const foldDone = +times.find((l) => l[0] === 'fold')[1] - (start + off);
+// the phone opened on the model as SpringBoard opened it (its swap 0.64 s, answered as it ended), flat FLIP later
+const FLIP = 1.1, U = foldDone - 0.64 - 0.15;
+marks.unfold3d = U;
+// (the end: the last of the recording held a while, the phone going away after it)
+const END = marks.end - 0.2;
+
+// where the drive touched: its taps (a tap's place on the log after its mark) and drags, in points of the screen in use
+const log = readFileSync(join(rec, 'ios-app.txt'), 'utf8').split('\n');
+const touches = [];
+let lastAt = null;
+for (const line of log) {
+  let m = line.match(/^DRIVE AT ([\d.]+) /);
+  if (m) { lastAt = +m[1] / 1000 - start; continue; }
+  m = line.match(/^DRIVE tap .* at ([\d.]+),([\d.]+)$/);
+  if (m && lastAt !== null) touches.push({ t: lastAt, x: +m[1], y: +m[2], dx: 0, dy: 0, ms: 90 });
+  m = line.match(/^DRIVE (?:drag|dragon) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)?.* from ([\d.]+),([\d.]+)$/);
+  if (m) {
+    const drag = line.startsWith('DRIVE drag ');
+    const [dx, dy, ms] = drag ? [+m[3], +m[4], 350] : [+m[1], +m[2], +m[3]];
+    touches.push({ t: lastAt ?? 0, x: +m[5], y: +m[6], dx, dy, ms });
+  }
+}
+const OUTER = [466, 678], INNER = [951, 669];
+// the touches on the screen in use at t, as a recording with its touches shown has them, a little more marked: a disc
+// where the finger is (in over 60 ms, held at least 180 ms, out over 300 ms as a ring opens round it), and behind a
+// drag the way it came, fading: [x, y] of the screen's width and height, how far down (0 to 1), how far lifted (0 to 1)
+// and the way behind it
+const HOLD = 0.18, LIFT = 0.3;
+function touchesAt(t, size) {
+  const out = [];
+  for (const k of touches) {
+    const t0 = k.t + 0.08, t1 = t0 + Math.max(HOLD, k.ms / 1000), tm = t0 + k.ms / 1000;
+    if (t < t0 - 0.06 || t > t1 + LIFT) continue;
+    const down = Math.min(1, Math.max(0, (t - t0 + 0.06) / 0.06));
+    const lift = t > t1 ? Math.min(1, (t - t1) / LIFT) : 0;
+    const at = (u) => { const p = Math.min(1, Math.max(0, (u - t0) / Math.max(1e-3, tm - t0))); const e = 1 - (1 - p) ** 2; return [(k.x + k.dx * e) / size[0], (k.y + k.dy * e) / size[1]]; };
+    const trail = [];
+    if (k.dx || k.dy) for (let u = Math.max(t0, Math.min(t, tm) - 0.25); u <= Math.min(t, tm); u += 1 / 120) trail.push(at(u));
+    out.push({ at: at(t), down, lift, trail });
+  }
+  return out;
+}
+const taps = touches.map((k) => k.t + 0.08);
+
+// ---- the recordings' frames at 60 a second, the inner one turned upright (as the screen is held: landscape) ----
+const frames = join(app, 'out/sim-frames');
+const need = (k) => !existsSync(join(frames, k, '1.jpg'));
+for (const [k, vf] of [['outer', `fps=${FPS}`], ['inner', `transpose=1,fps=${FPS}`]]) {
+  if (!need(k)) continue;
+  rmSync(join(frames, k), { recursive: true, force: true });
+  mkdirSync(join(frames, k), { recursive: true });
+  execFileSync(FFMPEG, ['-loglevel', 'error', '-i', join(rec, `ios-${k}.mp4`), '-vf', vf, '-q:v', '2', '-start_number', '0', join(frames, k, '%d.jpg')]);
+}
+const count = (k) => readdirSync(join(frames, k)).length;
+const nOuter = count('outer'), nInner = count('inner');
+const frameOf = (k, t, n) => Math.min(n - 1, Math.max(0, Math.round((wallOf(t) - recStart[k]) * FPS)));
+// (the outer screen held at its last before the unfold; the inner one, while the phone opens, at the swap's end)
+const outerAt = (t) => frameOf('outer', Math.min(t, U), nOuter);
+const innerAt = (t) => frameOf('inner', Math.max(t, foldDone + 0.05), nInner);
+
+const cams = (await import(pathToFileURL(join(here, 'iduo-sim.cam3d.js')))).default(marks);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const keyed = (fr, t) => {
+  if (t <= fr[0][0]) return fr[0].slice(1);
+  for (let i = 1; i < fr.length; i++) {
+    if (t <= fr[i][0]) { const a = fr[i - 1], b = fr[i], k = ease((t - a[0]) / (b[0] - a[0])); return a.slice(1).map((v, j) => v + (b[j + 1] - v) * k); }
+  }
+  return fr[fr.length - 1].slice(1);
+};
+const angleAt = (t) => 180 * ease((t - U) / FLIP);
+
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.usdc': 'application/octet-stream', '.avif': 'image/avif' };
+const server = createServer((req, res) => {
+  const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  const file = p.startsWith('/duo3d/assets/') ? join(ASSETS, p.slice('/duo3d/assets/'.length))
+    : p.startsWith('/frames/') ? join(frames, p.slice(8)) : join(here, p);
+  if (!existsSync(file) || statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+  res.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' });
+  createReadStream(file).pipe(res);
+});
+await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const base = `http://127.0.0.1:${server.address().port}/`;
+const require = createRequire(join(process.env.PW_FROM || app, 'x.js'));
+const { chromium } = require('playwright-core');
+const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+page.on('pageerror', (e) => console.error('3d:', e.message));
+await page.goto(`${base}duo3d/film.html`);
+await page.waitForFunction(() => window.ready3d === true, null, { timeout: 120000 });
+async function draw(t) {
+  const a = angleAt(t);
+  const s = {
+    outer: a < 180 ? `${base}frames/outer/${outerAt(t)}.jpg` : null,
+    inner: a > 0 ? `${base}frames/inner/${innerAt(t)}.jpg` : null,
+  };
+  const tc = { outer: t < U ? touchesAt(t, OUTER) : [], inner: t > U ? touchesAt(t, INNER) : [] };
+  await page.evaluate(async ([s, angle, cam, endT, tc]) => {
+    await window.frame3d({ outer: s.outer, inner: s.inner, angle, cam, touches: tc });
+    const e = Math.min(1, Math.max(0, endT));
+    document.getElementById('viewport').style.opacity = String(1 - e);
+    document.getElementById('end').style.opacity = String(Math.min(1, Math.max(0, (endT - .55) / .9)));
+  }, [s, a, keyed(cams, t), (t - END) / .9, tc]);
+}
+const when = (a) => { const m = a.match(/^(.*?)([+-][\d.]+)?$/); return isNaN(Number(a)) ? marks[m[1]] + Number(m[2] || 0) : Number(a); };
+if (stills.length) {
+  mkdirSync(join(app, 'out/stills'), { recursive: true });
+  for (const [i, a] of stills.entries()) {
+    await draw(when(a));
+    await page.screenshot({ path: join(app, `out/stills/promo3d-sim-${i + 1}.png`) });
+    console.log('still', i + 1, a, when(a).toFixed(2));
+  }
+} else {
+  const n = Math.round((END + 1.5) * FPS);
+  // its sound, on the same marks (sound.mjs)
+  const wav = join(app, 'out/film/promo3d-sim.wav');
+  filmSound({ seconds: n / FPS, marks, taps, unfold: U, flip: FLIP, end: END, out: wav });
+  const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-i', wav,
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'aac', '-b:a', '192k', '-shortest',
+    '-movflags', '+faststart', join(app, 'out/film/promo3d-sim.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
+  for (let f = 0; f < n; f++) {
+    await draw(f / FPS);
+    const jpg = await page.screenshot({ type: 'jpeg', quality: 93 });
+    if (!ff.stdin.write(jpg)) await new Promise((ok) => ff.stdin.once('drain', ok));
+    if (f % 300 === 0) console.log(`compose_sim: ${f}/${n}`);
+  }
+  ff.stdin.end();
+  await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
+}
+await browser.close();
+server.close();
+console.log(JSON.stringify(Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, +v.toFixed(2)]))));

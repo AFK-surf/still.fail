@@ -4,6 +4,8 @@ import {
   "stillfail/sf",
   "stillfail/sfkept",
   "stillfail/sfapp",
+  "stillfail/sffixture",
+  "moonbitlang/core/json",
 }
 
 options(

@@ -16,6 +16,12 @@ fn main {
     let s = match src.val {
       Some(s) => s
       None => {
+        // MBUI_STORY=<story.json>: a told story over the first row's chat (MBUI_FIXTURE=chat-story), as sffilm's
+        if @film.arg("MBUI_STORY") != "" {
+          @sffixture.fix_story.val = Some(
+            @json.parse(@film.read_text(@film.arg("MBUI_STORY"))) catch { _ => abort("MBUI_STORY does not parse") },
+          )
+        }
         let s = @sfapp.fixture_app(mode)
         if dark {
           @sf.set_dark(Some(true))

@@ -1,0 +1,168 @@
+# Film 1 of still.fail in use on an iPhone Duo (made by scripts/story/drive_iduo.py; story scripts/story/iduo.json).
+timeout 45000
+at start
+resize 466 678
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}, "size_class": {"width": "compact", "height": "regular"}, "fold": {"hinge": "none", "divisions": []}}
+until 发消息
+wait 1000
+at tap@390,250
+tapxy 390 250
+wait 900
+at tap=发消息
+tap 发消息
+at kb-up
+at kb=47.3
+ime 47.3
+system {"bars": {"top": 0, "bottom": 47.3, "left": 0, "right": 80}}
+at kb=89.3
+ime 89.3
+system {"bars": {"top": 0, "bottom": 89.3, "left": 0, "right": 80}}
+at kb=126.4
+ime 126.4
+system {"bars": {"top": 0, "bottom": 126.4, "left": 0, "right": 80}}
+at kb=158.8
+ime 158.8
+system {"bars": {"top": 0, "bottom": 158.8, "left": 0, "right": 80}}
+at kb=187.0
+ime 187.0
+system {"bars": {"top": 0, "bottom": 187.0, "left": 0, "right": 80}}
+at kb=211.1
+ime 211.1
+system {"bars": {"top": 0, "bottom": 211.1, "left": 0, "right": 80}}
+at kb=231.5
+ime 231.5
+system {"bars": {"top": 0, "bottom": 231.5, "left": 0, "right": 80}}
+at kb=248.6
+ime 248.6
+system {"bars": {"top": 0, "bottom": 248.6, "left": 0, "right": 80}}
+at kb=262.5
+ime 262.5
+system {"bars": {"top": 0, "bottom": 262.5, "left": 0, "right": 80}}
+at kb=273.7
+ime 273.7
+system {"bars": {"top": 0, "bottom": 273.7, "left": 0, "right": 80}}
+at kb=282.4
+ime 282.4
+system {"bars": {"top": 0, "bottom": 282.4, "left": 0, "right": 80}}
+at kb=288.9
+ime 288.9
+system {"bars": {"top": 0, "bottom": 288.9, "left": 0, "right": 80}}
+at kb=293.6
+ime 293.6
+system {"bars": {"top": 0, "bottom": 293.6, "left": 0, "right": 80}}
+at kb=296.7
+ime 296.7
+system {"bars": {"top": 0, "bottom": 296.7, "left": 0, "right": 80}}
+at kb=298.6
+ime 298.6
+system {"bars": {"top": 0, "bottom": 298.6, "left": 0, "right": 80}}
+at kb=299.6
+ime 299.6
+system {"bars": {"top": 0, "bottom": 299.6, "left": 0, "right": 80}}
+at kb=299.9
+ime 299.9
+system {"bars": {"top": 0, "bottom": 299.9, "left": 0, "right": 80}}
+at kb=300.0
+ime 300.0
+system {"bars": {"top": 0, "bottom": 300.0, "left": 0, "right": 80}}
+wait 450
+at type=登录页
+type 登录页
+wait 420
+at type=暗色模式下
+type 暗色模式下
+wait 480
+at type=按钮看不清
+type 按钮看不清
+wait 380
+at type=，修一下
+type ，修一下
+wait 650
+at tap=send
+tap icon:arrow-up
+wait 150
+at kb-down
+at kb=252.7
+ime 252.7
+system {"bars": {"top": 0, "bottom": 252.7, "left": 0, "right": 80}}
+at kb=210.7
+ime 210.7
+system {"bars": {"top": 0, "bottom": 210.7, "left": 0, "right": 80}}
+at kb=173.6
+ime 173.6
+system {"bars": {"top": 0, "bottom": 173.6, "left": 0, "right": 80}}
+at kb=141.2
+ime 141.2
+system {"bars": {"top": 0, "bottom": 141.2, "left": 0, "right": 80}}
+at kb=113.0
+ime 113.0
+system {"bars": {"top": 0, "bottom": 113.0, "left": 0, "right": 80}}
+at kb=88.9
+ime 88.9
+system {"bars": {"top": 0, "bottom": 88.9, "left": 0, "right": 80}}
+at kb=68.5
+ime 68.5
+system {"bars": {"top": 0, "bottom": 68.5, "left": 0, "right": 80}}
+at kb=51.4
+ime 51.4
+system {"bars": {"top": 0, "bottom": 51.4, "left": 0, "right": 80}}
+at kb=37.5
+ime 37.5
+system {"bars": {"top": 0, "bottom": 37.5, "left": 0, "right": 80}}
+at kb=26.3
+ime 26.3
+system {"bars": {"top": 0, "bottom": 26.3, "left": 0, "right": 80}}
+at kb=17.6
+ime 17.6
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=11.1
+ime 11.1
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=6.4
+ime 6.4
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=3.3
+ime 3.3
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=1.4
+ime 1.4
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=0.4
+ime 0.4
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=0.1
+ime 0.1
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at kb=0.0
+ime 0.0
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}}
+at working
+until 4.5 以上
+at answer
+wait 1500
+at swipe
+at drag@220,290,-180,0,450
+drag 220 290 -180 0 450
+wait 1100
+at unfold
+resize 890 626
+system {"bars": {"top": 0, "bottom": 20, "left": 0, "right": 80}, "size_class": {"width": "regular", "height": "regular"}, "fold": {"hinge": "open", "divisions": [{"x": 445, "y": 0, "w": 0, "h": 626}]}}
+wait 1300
+wait 1200
+at pic
+at tap@514,476
+tapxy 514 476
+wait 2000
+at back
+back
+wait 800
+at scroll
+at drag@560,487,0,-320,420
+drag 560 487 0 -320 420
+wait 900
+at tap=合并
+tap =合并
+until 4f2a9c1
+at merged
+wait 3200
+at end

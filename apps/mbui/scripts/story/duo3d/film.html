@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- A film's iPhone Duo in 3D (film.js), on the films' ground, its end card over it (compose3d.mjs). -->
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
+<style>
+*{margin:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden}
+body{font-family:"SF Pro Display","PingFang SC",-apple-system,sans-serif;background:radial-gradient(1500px 1000px at 50% 42%,#f6f4f0,#e7e3dd 62%,#dcd7cf)}
+#viewport{position:absolute;inset:0}
+#end{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;flex-direction:column;gap:26px;background:radial-gradient(1500px 1000px at 50% 42%,#f6f4f0,#e7e3dd 62%,#dcd7cf)}
+#end img{width:120px;height:120px}
+#end b{font-size:64px;font-weight:600;color:#1f1b17;letter-spacing:.5px}
+</style></head><body><div id="viewport"></div><div id="end"><img src="../mark.svg"><b>still.fail</b></div>
+<script type="module" src="./film.js"></script></body></html>

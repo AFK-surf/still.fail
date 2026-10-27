@@ -13,6 +13,8 @@
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
 //   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
 //   [MBUI_FILM_COPIED=<copied.png.b64>: the picture the app last put on the clipboard, a PNG in base64]
+//   [MBUI_NAV_ABLE=1: the system lays out the app's tabs itself, an iPhone Duo's] [MBUI_FILM_START=WxH: the window at the
+//   start, smaller than the film]
 // The film is H.264, lossy: each frame's pixels are the encoder's guess of them, and a guess that leans on the frames
 // before it and on how the encoder spends its bits. A picture compared to the byte (before and after a change) is the
 // last frame as drawn (MBUI_FILM_LAST), never one taken out of the film.
@@ -85,6 +87,16 @@ pub fn film(
   if inset {
     t.set_window_inset(true)
   }
+  // (MBUI_FILM_START=WxH: the window that size at the start, the film the size of the most it gets: a fold's outer
+  // screen first, its inner one bigger later)
+  match arg("MBUI_FILM_START").split("x").map(fn(p) { number(p.to_owned()) }).to_array() {
+    [Some(sw), Some(sh)] if sw > 0.0 && sh > 0.0 => t.resize(sw, sh)
+    _ => ()
+  }
+  // (MBUI_NAV_ABLE=1: the system lays out the app's tabs itself, as an iPhone Duo's does: Tester::set_nav_able)
+  if arg("MBUI_NAV_ABLE") == "1" {
+    t.set_nav_able(true)
+  }
   match number(arg("MBUI_FONT_SCALE")) {
     Some(f) if f > 0.0 => t.set_font_scale(f)
     _ => ()
@@ -104,6 +116,9 @@ pub fn film(
   let drawn = Ref::new(0)
   let put = Ref::new(0)
   let lost = Ref::new(0)
+  // (what the app handed the system's bars, said as it changes with the frame it came in: FILM NAV <frame> <json>,
+  // for what draws the system's bars over the film afterwards)
+  let nav = Ref::new("")
   let logs = t.film(
     script,
     fps=film_fps.to_double(),
@@ -111,6 +126,10 @@ pub fn film(
     draw=fn(t) {
       draw_frame(t, buf)
       drawn.val = drawn.val + 1
+      if t.nav_said() != nav.val {
+        nav.val = t.nav_said()
+        say("FILM NAV \{put.val} " + nav.val)
+      }
     },
     put=fn(k) {
       if put_frame(k) {

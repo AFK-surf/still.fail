@@ -23,6 +23,13 @@ fn main {
     let s = match src.val {
       Some(s) => s
       None => {
+        // MBUI_STORY=<story.json>: a told story over the first row's chat (MBUI_FIXTURE=chat-story: sffixture's
+        // story_fixture.mbt)
+        if @film.arg("MBUI_STORY") != "" {
+          @sffixture.fix_story.val = Some(
+            @json.parse(@film.read_text(@film.arg("MBUI_STORY"))) catch { _ => abort("MBUI_STORY does not parse") },
+          )
+        }
         let s = @sfapp.fixture_app(mode)
         // MBUI_UPDATES_MS=<ms>: a made-up source of newer builds answering that late (none newer unless offered);
         // MBUI_UPDATE=<version>: a newer build offered
