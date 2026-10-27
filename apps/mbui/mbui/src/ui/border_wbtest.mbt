@@ -17,7 +17,7 @@ fn grounds() -> Array[(Double, Double, Double, Double, Double, Double)] {
 }
 
 ///|
-test "a box's border is drawn over what it holds, its ground under it" {
+test "a box's border is drawn over what it holds, its ground inside it" {
   let t = Tester::new(
     fn(c) {
       c.box(w=Px(100.0), h=Px(40.0), bg=0xFFFFFFFFL, border=1.0, border_color=0xD2D2D7FFL, radius=8.0, clip=true, fn() {
@@ -31,9 +31,13 @@ test "a box's border is drawn over what it holds, its ground under it" {
   )
   ignore(t)
   let gs = grounds()
-  // its ground (no border), what it holds, then its border alone (no ground)
+  // its ground (stopping at the border's inside: its band as wide, in no colour), what it holds, then its border alone
+  // (no ground), over what is behind the box rather than over its ground (a see-through border reads so)
   assert_eq(gs.length(), 3)
-  assert_eq(gs[0], (0.0, 0.0, 100.0, 40.0, 1.0, 0.0))
+  assert_eq(gs[0], (0.0, 0.0, 100.0, 40.0, 1.0, 1.0))
+  let c = g()
+  let first = (0).until(c.ninst).iter().find_first(fn(k) { c.inst[k * inst_size + 5] == 0.0 }).unwrap()
+  assert_eq(c.inst[first * inst_size + 15], 0.0)
   assert_eq(gs[1], (0.0, 0.0, 100.0, 40.0, 1.0, 0.0))
   assert_eq(gs[2].5, 1.0)
   assert_eq(gs[2].4, 0.0)

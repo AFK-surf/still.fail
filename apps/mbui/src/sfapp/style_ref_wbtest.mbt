@@ -54,41 +54,41 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 28262:a45192a9
-    #|waiting wide 58592:8aba9219
+    #|waiting wide 58539:340a605d
     #|waiting-dark narrow 28178:b2c72701
-    #|waiting-dark wide 58416:997b60e1
+    #|waiting-dark wide 58365:d1a23b21
     #|finding narrow 33121:8a02ba54
-    #|finding wide 64129:ccc990b0
+    #|finding wide 64076:9e991152
     #|finding-dark narrow 33234:ec97182f
-    #|finding-dark wide 64150:2d273bab
+    #|finding-dark wide 64099:bcd71357
     #|code narrow 25068:61af9ae1
-    #|code wide 55438:f37c789f
+    #|code wide 55385:44c45693
     #|code-dark narrow 24982:c8ccca51
-    #|code-dark wide 55260:6916b9e9
+    #|code-dark wide 55209:963a50a9
     #|wrong narrow 26277:91929809
-    #|wrong wide 56667:5d5e85d8
+    #|wrong wide 56614:77e8645a
     #|wrong-dark narrow 26401:2f3e5965
-    #|wrong-dark wide 56699:3d4dde04
+    #|wrong-dark wide 56648:5c6179de
     #|checking narrow 35333:22401792
-    #|checking wide 66376:358674e3
+    #|checking wide 66323:674bc6c7
     #|checking-dark narrow 35425:b14aad
-    #|checking-dark wide 66376:ab371f00
+    #|checking-dark wide 66325:97237e42
     #|none narrow 27730:74bfcc56
-    #|none wide 58068:2ed25167
+    #|none wide 58015:5c5a9ffb
     #|none-dark narrow 27650:2336e7e0
-    #|none-dark wide 57896:e39e5dd5
+    #|none-dark wide 57845:fb1cb7ed
     #|failed narrow 23489:e02b43ce
-    #|failed wide 53820:f7a18333
+    #|failed wide 53767:e8c46ab7
     #|failed-dark narrow 23489:bdccacda
-    #|failed-dark wide 53728:c8b7490d
+    #|failed-dark wide 53677:a1ff55a5
     #|refused narrow 25594:de9ddfb6
-    #|refused wide 55926:cb328798
+    #|refused wide 55873:8b8039a
     #|refused-dark narrow 25792:11a40c52
-    #|refused-dark wide 56032:e85e2aba
+    #|refused-dark wide 55981:8d106f08
     #|nocode narrow 28262:a45192a9
-    #|nocode wide 58592:8aba9219
+    #|nocode wide 58539:340a605d
     #|nocode-dark narrow 28178:b2c72701
-    #|nocode-dark wide 58416:997b60e1
+    #|nocode-dark wide 58365:d1a23b21
     #|
 
 
@@ -143,15 +143,15 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     #|settings narrow 100925:fe568792
     #|station narrow 91340:3e6ef941
     #|me-reading narrow 15728:84abb5eb
-    #|settings wide 154784:22390fbb
-    #|station wide 201624:a06bbd2d
-    #|me-reading wide 149440:e41fa248
+    #|settings wide 154731:aef76021
+    #|station wide 201571:ade87131
+    #|me-reading wide 149387:b32329fc
     #|settings-dark narrow 101286:3bb8335a
     #|station-dark narrow 91128:5f04e45e
     #|me-reading-dark narrow 15808:23578321
-    #|settings-dark wide 154722:e42c3d09
-    #|station-dark wide 201316:d2955514
-    #|me-reading-dark wide 149444:a03e03de
+    #|settings-dark wide 154671:a673faf3
+    #|station-dark wide 201265:4447c742
+    #|me-reading-dark wide 149393:9839dc32
     #|
 
 

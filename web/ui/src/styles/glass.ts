@@ -10,6 +10,9 @@ export const panelGround = `light-dark(${vars.canvas}, ${vars.raised})`;
 export const panel = {
   background: panelGround,
   border: `1px solid ${vars.line}`,
+  // (the line over what is behind the panel, not over its own ground: on a dimmed page a line over the white was a
+  // pale ring round it)
+  backgroundClip: "padding-box",
   WebkitBackdropFilter: "none",
   backdropFilter: "none",
 } as const;
