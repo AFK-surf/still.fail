@@ -71,6 +71,8 @@ test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
     ({ status: "final", wait: null, session: { key, runtimeSessionId: `r-${key}`, usage: u }, ...patch });
   // Its cache over: said with what going on reads again and what it costs.
   assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，接着聊将重新读入 200K token（约 $1.60）" }, Infinity]);
+  // Its station going on afresh by itself: said so, nothing to tap.
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", text: "缓存已过期，下一条消息将先换新上下文", auto: true }, Infinity]);
   // Not yet: computed again as it is over.
   assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR - 5 * MIN), [null, 5 * MIN]);
   // Unpriced: what it reads, without a cost.

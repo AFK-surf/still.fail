@@ -91,6 +91,7 @@
   "core-views.admin.todo.stuck": "{n} 人已登录但尚未加入",
   "core-views.admin.todo.stuck_hint": "开通资格，或查看卡在哪一步",
   "core-views.agent.cacheCold": "缓存已过期，接着聊将重新读入 {tokens} token",
+  "core-views.agent.cacheColdAuto": "缓存已过期，下一条消息将先换新上下文",
   "core-views.agent.cacheColdCost": "缓存已过期，接着聊将重新读入 {tokens} token（约 {cost}）",
   "core-views.agent.context": "{used} / {window}",
   "core-views.agent.hours": "{h} 小时 {m} 分",

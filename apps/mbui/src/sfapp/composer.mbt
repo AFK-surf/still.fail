@@ -1609,6 +1609,11 @@ let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 let notice_wrapped : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true, w=Full)
 
 ///|
+/// (beside what is at its line's end: the rest of the line)
+// kept across runs: a value (no field of it changes)
+let notice_grown : @ui.TextStyle = notice_wrapped.then(@ui.text_style(w=@sf.grow))
+
+///|
 // kept across runs: a value (no field of it changes)
 let restore_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
@@ -1676,7 +1681,10 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
     |> ignore
   }
   match v.cache_cold {
-    Some((session, said)) if !v.archived => {
+    Some((_, said, true)) if !v.archived =>
+      // its station goes on afresh by itself: said, nothing to tap
+      c.box(style=notice_box, fn() { c.text(said, style=notice_wrapped) |> ignore }) |> ignore
+    Some((session, said, _)) if !v.archived => {
       let afresh = c.id("composer/afresh")
       let doing = "session.clear/" + r.station + "/" + session
       let busy = @sfbase.doing(doing)
@@ -1687,7 +1695,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
       c.box(style=notice_box, fn() {
         // (its words wrapped beside it where they do not fit, 换新上下文 at the line's end)
         c.box(style=notice_line.then(@ui.style(gap=S3)), fn() {
-          c.box(style=@ui.style(w=Grow(1.0)), fn() { c.text(said, style=notice_wrapped) |> ignore }) |> ignore
+          c.text(said, style=notice_grown) |> ignore
           c.box(id=afresh, fn() {
             c.rich(
               [@ui.span(tr(if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }), underline=true)],

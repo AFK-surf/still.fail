@@ -1843,7 +1843,14 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     c.floats_over(archived_box)
   }
   match v.cache_cold {
-    Some((session, said)) if !v.archived => {
+    Some((_, said, true)) if !v.archived => {
+      // its station goes on afresh by itself: said, nothing to tap
+      let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+        c.text(said, style=composer_notice_wrapped) |> ignore
+      })
+      c.floats_over(cold_box)
+    }
+    Some((session, said, _)) if !v.archived => {
       let afresh = c.id("composer/afresh")
       let doing = "session.clear/" + r.station + "/" + session
       let busy = @sfbase.doing(doing)
@@ -1854,7 +1861,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
       let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
         // (its words wrapped beside it where they do not fit, 换新上下文 at the line's end)
         c.box(style=composer_notice_line.then(@ui.style(gap=S3)), fn() {
-          c.box(style=@ui.style(w=Grow(1.0)), fn() { c.text(said, style=composer_notice_wrapped) |> ignore }) |> ignore
+          c.text(said, style=composer_notice_grown) |> ignore
           let b = c.box(id=afresh, fn() {
             c.rich(
               [@ui.span(@sf.t(if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }), underline=true)],
@@ -1910,6 +1917,11 @@ let composer_notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Mute
 ///|
 // kept across runs: a value (no field of it changes)
 let composer_notice_wrapped : @ui.TextStyle = composer_notice_words.then(@ui.text_style(wrap=true, w=Full))
+
+///|
+/// (beside what is at its line's end: the rest of the line)
+// kept across runs: a value (no field of it changes)
+let composer_notice_grown : @ui.TextStyle = composer_notice_words.then(@ui.text_style(wrap=true, w=@sf.grow))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -140,6 +140,47 @@ test("cleared to go on afresh, its next runtime session reads back its work and 
   await r.close();
 });
 
+test("set to, a message to an agent whose large context's cache is over starts it afresh by itself; one still cached goes on", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  // Its last call wrote an hour's cache of 200K: `at` ago.
+  let n = 0;
+  const called = (at: number) =>
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: ++n, model: "claude-opus-5-5" }, "claude", [[
+      { id: `c${n}`, at, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+      { turn: null, person: null, thread: null, profile: null },
+    ]]);
+  // Not set: it goes on in the same runtime session.
+  called(Date.now() - 3 * 3_600_000);
+  await r.accept(reply(m, "9999.2", "<@UBOT> and the docs", { addressed: true }));
+  await settle();
+  assert.equal(r.claude.last(), session);
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  session.complete();
+  await settle();
+  r.edit((raw) => (raw.afreshWhenCold = true));
+  // Set, its cache over: a new runtime session, told to read back what it needs, and said in its chat.
+  await r.accept(reply(m, "9999.3", "<@UBOT> now the release", { addressed: true }));
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.ok(session.disposed);
+  assert.equal(fresh.options.resume, undefined);
+  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(fresh.prompts[0]!.includes("now the release"));
+  assert.ok(r.chat.texts().includes("缓存已过期，已自动换新上下文，先读回需要的内容再接着做"), r.chat.texts().join("\n"));
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  fresh.complete();
+  await settle();
+  // Its cache kept (its last call ten minutes ago): it goes on.
+  called(Date.now() - 10 * 60_000);
+  await r.accept(reply(m, "9999.4", "<@UBOT> and the tests", { addressed: true }));
+  await settle();
+  assert.equal(r.claude.last(), fresh);
+  assert.equal(fresh.prompts.length, 2);
+  await r.close();
+});
+
 test("clear is refused while a turn runs", async () => {
   const r = new Rig();
   const m = message();

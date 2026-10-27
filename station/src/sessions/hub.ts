@@ -44,7 +44,7 @@ import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
-import { carrySubagents, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
+import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { shownFacts } from "./image-size.ts";
@@ -1030,6 +1030,7 @@ export class Hub {
       live: this.live,
       startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
       cleared: (key, readBack) => toldCleared(this, key, readBack),
+      coldAfresh: (key, now) => goesAfresh(this, key, now),
       resumeLost: (key) => toldResumeLost(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),

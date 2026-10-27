@@ -1490,8 +1490,13 @@ export interface ChatAsk {
 export interface ChatCacheCold {
 	/** The agent's session: `session.clear` with `readBack` gives it a fresh context. */
 	session: string;
-	/** What is said: its cache over, and the context going on reads again (缓存已过期，接着聊将重新读入 180K token（约 $1.40）). */
+	/**
+	 * What is said: its cache over, and the context going on reads again (缓存已过期，接着聊将重新读入 180K token（约 $1.40）);
+	 * its station set to go on afresh by itself, that the next message does.
+	 */
 	text: string;
+	/** Its station goes on afresh by itself (`StationContext::afreshWhenCold`): nothing to tap. Absent otherwise. */
+	auto?: boolean;
 }
 
 /** A thread a chat's messages can be copied to (docs/relay.md "抄送"). */
@@ -4884,6 +4889,15 @@ export interface StationSearch {
 	personal: boolean;
 }
 
+/** How a station goes on with a session whose prompt cache is over (`Overview.context`). */
+export interface StationContext {
+	/**
+	 * A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its
+	 * context cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`).
+	 */
+	afreshWhenCold: boolean;
+}
+
 /** One of a station's grants. */
 export interface StationGrant {
 	/**
@@ -4973,6 +4987,11 @@ export interface Overview {
 	drive?: DriveRoots;
 	/** What its search finds of the machine (docs/search.md). None from a station older than it. */
 	search?: StationSearch;
+	/**
+	 * How it goes on with a session whose prompt cache is over. None from a station older than it, which then
+	 * does not offer it.
+	 */
+	context?: StationContext;
 	/**
 	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
 	 * shows nothing).

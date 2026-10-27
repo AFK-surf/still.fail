@@ -1057,7 +1057,7 @@ export class Views implements Owner {
       if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
     }
     // Its agent's prompt cache over: said over the composer, computed again as the next one's is over.
-    const [cold, coldIn] = v.archived === true ? [null, Infinity] : brief.cacheCold(v.agents, this.#core.host.nowMs());
+    const [cold, coldIn] = v.archived === true ? [null, Infinity] : brief.cacheCold(v.agents, this.#core.host.nowMs(), get(get(overview, "context"), "afreshWhenCold") === true);
     if (cold !== null) v.cacheCold = cold;
     this.#againIn(view, coldIn);
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.

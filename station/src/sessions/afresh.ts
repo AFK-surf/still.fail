@@ -9,6 +9,7 @@ import { afresh, cleared, resumeLost, threadAddress } from "../agents/instructio
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
 import { find as findMachineSession } from "../read/machine.ts";
+import { usageNow } from "../read/usage.ts";
 import { homesFirst, transcriptPaths } from "../read/transcript.ts";
 import type { Hub } from "./hub.ts";
 
@@ -25,6 +26,20 @@ export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was
 export function toldCleared(hub: Hub, key: string, readBack = false): string {
   const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
   return readBack ? afresh(key, threads) : cleared(key, threads);
+}
+
+/// The context at least that is worth going on afresh with once its cache is over (the core's views/brief.ts
+/// `COLD_FROM`, which says so over its composer): about what a new conversation is given before it reads back what it
+/// needs, and some.
+const COLD_FROM = 50_000;
+
+/// Whether a person's message to session `key` is to start it afresh, at `now`: the station set to (`afreshWhenCold`),
+/// its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told what it wrote) and its context
+/// worth it.
+export function goesAfresh(hub: Hub, key: string, now: number): boolean {
+  if (!hub.config().afreshWhenCold || hub.store.getSession(key)?.runtimeSessionId == null) return false;
+  const u = usageNow(hub.store, key);
+  return u?.lastCallAt !== undefined && u.cacheMs !== undefined && u.lastCallAt + u.cacheMs <= now && (u.contextTokens ?? 0) >= COLD_FROM;
 }
 
 /// What a session whose runtime session could not be resumed is told as its new one starts: where its earlier

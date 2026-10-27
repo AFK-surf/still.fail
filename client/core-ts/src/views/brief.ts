@@ -120,8 +120,8 @@ const COLD_FROM = 50_000;
 /// afresh with (the largest of those): the line over the composer that says what going on would read again
 /// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work or waiting on
 /// work of its own (it reads it again anyway), with no runtime session to go on in, or of a station that does not tell
-/// how long its cache lasts.
-export function cacheCold(agents: unknown, now: number): [J, number] {
+/// how long its cache lasts. `auto`: its station goes on afresh by itself (the line says the next message does).
+export function cacheCold(agents: unknown, now: number, auto = false): [J, number] {
   let cold: { session: string; context: number; cost: number | null } | null = null;
   let next = Infinity;
   for (const a of arr(agents)) {
@@ -140,6 +140,7 @@ export function cacheCold(agents: unknown, now: number): [J, number] {
     if (cold === null || context > cold.context) cold = { session: key, context, cost: typeof get(u, "rereadCost") === "number" ? u.rereadCost : null };
   }
   if (cold === null) return [null, next];
+  if (auto) return [{ session: cold.session, text: t("core-views.agent.cacheColdAuto"), auto: true }, next];
   const tokens = format.compactNumber(cold.context);
   const text = cold.cost !== null ? t("core-views.agent.cacheColdCost", { tokens, cost: money(cold.cost) }) : t("core-views.agent.cacheCold", { tokens });
   return [{ session: cold.session, text }, next];

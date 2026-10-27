@@ -120,6 +120,9 @@ export type SessionDeps = {
   /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`): to read
   /// back what it needs of its work too when `readBack` (cleared to go on afresh, as on another account).
   cleared?(key: string, readBack: boolean): string;
+  /// Whether its next message is to start it afresh, at `now` (sessions/afresh.ts `goesAfresh`): the station set to, and
+  /// its large context's prompt cache over.
+  coldAfresh?(key: string, now: number): boolean;
   /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
   /// `toldResumeLost`).
   resumeLost?(key: string): string;
@@ -581,7 +584,8 @@ export class SessionActor {
     }).then(() => refused);
   }
 
-  private async clearNow(readBack: boolean): Promise<string | null> {
+  /// Clears it (`clear`), saying `said` in its chat; `by`: who asked, for the log.
+  private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand"): Promise<string | null> {
     if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     const store = this.deps.store;
     const row = store.getSession(this.key);
@@ -589,7 +593,7 @@ export class SessionActor {
     await this.stopWaiting(false);
     const agent = this.agent;
     this.agent = null;
-    log.info("session", "clearing its context, asked by hand", { session: this.key, left: row.runtimeSessionId, background: agent?.session.background?.().length ?? 0 });
+    log.info("session", `clearing its context, asked ${by}`, { session: this.key, left: row.runtimeSessionId, readBack, background: agent?.session.background?.().length ?? 0 });
     await agent?.session.dispose();
     // Nothing of the conversation left is carried to the next.
     this.stopped = [];
@@ -602,7 +606,7 @@ export class SessionActor {
     store.setRuntimeSessionId(this.key, null);
     this.readBack = readBack;
     store.notify(this.key);
-    await this.notice(t(readBack ? "station.notice.afresh" : "station.notice.cleared"));
+    await this.notice(t(said));
     return null;
   }
 
@@ -868,6 +872,12 @@ export class SessionActor {
     try {
       // Until the runtime says it has sent its request, the turn is starting.
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
+      // A person's message to it at rest, its large context's cache over, where the station is set to (config.json
+      // `afreshWhenCold`): it goes on afresh, as 换新上下文 has it by hand, not with all of it sent again. Not while it
+      // waits on work of its own or has work going in the background (which would end with its process).
+      if (kind === "input" && this.waiting === null && !this.holding() && !this.agent?.session.busy() && this.deps.coldAfresh?.(this.key, this.now()) === true) {
+        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
+      }
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.

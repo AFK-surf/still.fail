@@ -34,6 +34,7 @@ import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
 import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { useSetPersonal } from "../StationSearch.tsx";
+import { useSetAfresh } from "../StationContext.tsx";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -316,6 +317,7 @@ function StationPage({ s, manager, login }: { s: StationView; manager: boolean; 
       {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
       {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
       {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
+      {s.overview?.context && <ContextCard station={s.station} on={s.overview.context.afreshWhenCold} manager={manager} />}
       <Logins station={s.station} marked={login} />
       {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
       {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
@@ -551,6 +553,23 @@ function StationMenu({ s }: { s: StationView }) {
           run: () => { app.pop(); return cloud.removeStation(me.sub, app.entry.id, s.id).then(() => app.toast(t("web-mobile.stations.removed"))); },
         })} />
       </div>
+    </>
+  );
+}
+
+/** Whether a session whose prompt cache is over goes on afresh by itself (the wide page's StationContext.tsx): its
+ *  managers switch it, others read it. */
+function ContextCard({ station, on, manager }: { station: string; on: boolean; manager: boolean }) {
+  const { busy, set } = useSetAfresh(station);
+  return (
+    <>
+      <SectionHeader title={t("web-pages.stations.context.section")} start={24} />
+      <ListCard>
+        <button type="button" className={connectsCss.mSwitchRow} disabled={!manager || busy} onClick={() => void set(!on)}>
+          <span className={partsCss.mGrow}><b>{t("web-pages.stations.context.afresh")}</b><span>{t("web-pages.stations.context.afreshLine")}</span></span>
+          {busy ? <Spinner /> : <span className={connectsCss.mSwitch} data-on={on || undefined} />}
+        </button>
+      </ListCard>
     </>
   );
 }

@@ -373,11 +373,11 @@ const together = (...all: DemoExtension[]): DemoExtension => ({
   call: (name, params) => { for (const e of all) { const v = e.call?.(name, params); if (v !== undefined) return v; } return undefined; },
   stream: (name, params, emit, signal) => { for (const e of all) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; } return undefined; },
 });
-/** A Mac station with everything its page shows: screens, grants missing, logins, variables, search, two workspaces. */
+/** A Mac station with everything its page shows: screens, grants missing, logins, variables, search, its context, two workspaces. */
 const fullStation = (): DemoExtension => together(
   permissionsDemo("missing", screensDemo()), agentEnvDemo("set"), logins(), memberships(),
   { then: (t, value) => (t.topic === "stations" && Array.isArray(value)
-    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false } } } : s))
+    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false } } } : s))
     : undefined) },
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in

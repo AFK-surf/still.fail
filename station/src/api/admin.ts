@@ -21,6 +21,7 @@ import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as sandboxRoutes } from "./routes/sandbox.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
+import { routes as contextSettings } from "./routes/context.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
@@ -316,6 +317,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
+    ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),
     ...(agents.accounts
       ? accounts({
