@@ -946,6 +946,10 @@ test("the_slack_people_a_stations_agents_heard_from_are_named_by_their_slack_id_
   data.putItems("transcript", "w/a", "k2", [], 3);
   await flush();
   assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
+  // A bot is said as its mention: named by the id in it, as a mention of it is written.
+  data.putItems("transcript", "w/a", "k3", [heard(6, "GPT-Ember (<@UB2>)", "1970-01-01T00:00:06Z")]);
+  await flush();
+  assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"], ["UB2", "GPT-Ember"]]);
   runner.shutdown();
 });
 

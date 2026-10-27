@@ -325,9 +325,16 @@ export { noticeOf };
 const brandName = () => brand.name();
 
 /// The pictures of the Slack people a session heard, by their Slack id, as the station gives them: those who wrote in its
-/// threads (`participants`), and its threads' people and starters.
-function slackPictures(session: J, threads: J[]): Map<string, string> {
+/// threads (`participants`), and its threads' people and starters; and of its station's bots (`connects`), another
+/// agent's words it was given.
+function slackPictures(session: J, threads: J[], connects: J[]): Map<string, string> {
   const pictures = new Map<string, string>();
+  for (const c of connects) {
+    const conn = get(c, "connection");
+    const bot = str(get(conn, "botUserId")) ?? str(get(get(conn, "workspace"), "botUserId"));
+    const picture = str(get(c, "botImage")) || str(get(get(conn, "workspace"), "botImage"));
+    if (bot !== null && picture) pictures.set(bot, picture);
+  }
   const people = [...arr(get(session, "participants")), ...threads.flatMap((th) => [...arr(get(th, "people")), get(th, "creator")])];
   for (const p of people) {
     const id = str(get(p, "id"));
@@ -1985,7 +1992,9 @@ export class Views implements Owner {
     const first = u64(messages[0]?.createdAt);
     const last = u64(messages.at(-1)?.createdAt);
     if ((more || newer) && (first === null || last === null)) return [];
-    const workspaces = slackWorkspaces(this.ok({ topic: "overview", station }));
+    const overview = this.ok({ topic: "overview", station });
+    const workspaces = slackWorkspaces(overview);
+    const connects = arr(get(overview, "connects"));
     const offsetMin = this.#core.host.utcOffsetMin(this.#core.host.nowMs());
     const out: J[] = [];
     const heard = new Set<string>();
@@ -1996,7 +2005,7 @@ export class Views implements Owner {
       if (said.length === 0) continue;
       const threads = arr(get(this.ok({ topic: "session", station, key }), "threads"));
       const agent = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
-      const pictures = slackPictures(a.session, threads);
+      const pictures = slackPictures(a.session, threads, connects);
       for (const s of said) {
         if (!s.out) {
           const id = `${s.user ?? ""} ${s.to} ${s.at}`;
@@ -2017,7 +2026,8 @@ export class Views implements Owner {
             ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
             : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
-        const picture = s.out || s.user === null ? undefined : pictures.get(s.user);
+        // (a bot is said as its mention, `<@U…>`)
+        const picture = s.out || s.user === null ? undefined : pictures.get(s.user.replace(/^<@(.+)>$/, "$1"));
         const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack", ...(picture !== undefined ? { picture } : {}) };
         const text = present.mentions(s.text, people.bots, people.members);
         const item: J = { key: `${key}/${s.i}/${s.k}`, after, createdAt: s.at, text, place, failed: s.failed, by };

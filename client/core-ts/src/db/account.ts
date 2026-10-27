@@ -1600,15 +1600,15 @@ export class AccountDb {
       }));
   }
 
-  /// The Slack people a station's agents were given messages from, by Slack id: their names as last heard. Kept until
-  /// `slack_said` changes.
+  /// The Slack people a station's agents were given messages from, by Slack id: their names as last heard (a bot is said
+  /// as its mention, `<@U…>`: its id out of it). Kept until `slack_said` changes.
   #slackNames = new Map<string, [string, string][]>();
   slackNames(station: string): [string, string][] {
     if (!this.#hasSlackSaid()) return [];
     let names = this.#slackNames.get(station);
     if (names === undefined) {
       const rows = this.sql.all("SELECT user, who FROM slack_said WHERE station = ? AND out = 0 AND user IS NOT NULL AND who IS NOT NULL AND who != '' ORDER BY at", [station]);
-      names = [...new Map(rows.map((r) => [String(r[0]), String(r[1])])).entries()];
+      names = [...new Map(rows.map((r) => [String(r[0]).replace(/^<@(.+)>$/, "$1"), String(r[1])])).entries()];
       this.#slackNames.set(station, names);
     }
     return names;
