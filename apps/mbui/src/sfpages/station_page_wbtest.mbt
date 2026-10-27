@@ -90,6 +90,11 @@ test "network settings stay folded and save the selected controller" {
     None => fail("no advanced network settings")
   }
   t.draw()
+  assert_true(t.find("BBR（实验性）") is None, msg="choices only in the select's popup")
+  scrolled_to(t, 390.0, "CUBIC（默认）")
+  t.tap_text("CUBIC（默认）")
+  t.draw()
+  presented_in(t)
   scrolled_to(t, 390.0, "BBR（实验性）")
   match t.find("BBR（实验性）") {
     Some((x, y)) => t.tap(x, y)

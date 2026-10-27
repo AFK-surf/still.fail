@@ -1285,6 +1285,7 @@ export const stories: Story[] = [
   { id: "app-station-full", group: "应用", title: "station · 什么都有的 Mac", app: true, demo: fullStation(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-full-settings", group: "应用", title: "station · 什么都有的 Mac · 设置", app: true, demo: fullStation(), steps: toStation("设置") },
   { id: "app-station-network", group: "应用", title: "station · 高级网络设置", app: true, demo: fullStation(), steps: [...toStation("设置"), { click: 'button:has-text("高级网络设置")' }] },
+  { id: "app-station-network-select", group: "应用", title: "station · 算法选择", app: true, demo: fullStation(), steps: [...toStation("设置"), { click: 'button:has-text("高级网络设置")' }, { click: '[role="combobox"][aria-label="拥塞控制算法"]' }] },
   { id: "app-station-full-machine", group: "应用", title: "station · 什么都有的 Mac · 软件与设备", app: true, demo: fullStation(), steps: toStation("软件与设备") },
   { id: "app-station-software", group: "设置", title: "station · 软件与更新 · 都能安装", app: true, demo: softwareDemo("installable"), steps: toStation("软件与设备") },
   { id: "app-station-software-no-npm", group: "设置", title: "station · 软件与更新 · 没有 npm、无法安装 Node", app: true, demo: softwareDemo("noNpm"), steps: toStation("软件与设备") },

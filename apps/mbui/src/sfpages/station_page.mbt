@@ -944,13 +944,12 @@ fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, 
     if open {
       st_section(c, @sf.t("web-pages.stations.network.algorithm"), description=@sf.t("web-pages.stations.network.note"), fn() {
         let busy = is_doing(core, ["network.setCongestion"], [("station", address)])
-        for algorithm in ["cubic", "bbr"] {
-          if @sf.choice_row(c, "network-" + algorithm + "/" + address, text(network, "congestion") == algorithm,
-              @sf.t("web-pages.stations.network." + algorithm), disabled=!manager, busy~) {
+        @sf.select(c, "network-select/" + address, text(network, "congestion"),
+          ["cubic", "bbr"].map(fn(algorithm) { (algorithm, @sf.t("web-pages.stations.network." + algorithm)) }),
+          fn(algorithm) {
             @settings.act(core, @sf.t("web-pages.stations.network.what"), "network.setCongestion",
               obj([("station", str(address)), ("congestion", str(algorithm))]), done=@sf.t("web-pages.stations.network.saved"))
-          }
-        }
+          }, label=@sf.t("web-pages.stations.network.algorithm"), disabled=!manager || busy, whole=true)
       })
     }
   })
