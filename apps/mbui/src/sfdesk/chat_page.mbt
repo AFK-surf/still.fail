@@ -1057,12 +1057,29 @@ let agent_station : @ui.Style = @ui.css("row h=S5 radius=Md bg=Neutral")
 let agent_station_on : @ui.Style = agent_station.then(@ui.css("border=B2 border_color=Accent"))
 
 ///|
-// kept across runs: a value (no field of it changes)
-let agent_station_agent : @ui.Style = @ui.css("w=S5 h=S5 radius=Md")
+/// The tile's corner (radius=Md's, 6): the two parts' outer ends are round by it, where they meet square (ui.css.ts
+/// agentMarkJoined: the hover's ground meets the other part at a straight edge, not a notch).
+let agent_station_round : Double = 6.0
+
+///|
+let agent_station_seam : Double = 0.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station_agent_hot : @ui.Style = @ui.css("w=S5 h=S5 radius=Md bg=Hover")
+let agent_station_agent : @ui.Style = @ui.style(
+  w=S5,
+  h=S5,
+  // det-ok(corners-each): one tile of two parts; only its outer ends are round, where they meet square (the user, 2026-10-27)
+  radius=Corners(
+    agent_station_round, agent_station_seam, agent_station_seam, agent_station_round,
+  ),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_station_agent_hot : @ui.Style = agent_station_agent.then(
+  @ui.css("bg=Hover"),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1072,7 +1089,10 @@ let agent_station_part : @ui.Style = @ui.style(
   max_w=@sf.agent_station_most,
   px=@sf.agent_station_in,
   align=ACenter,
-  radius=Md,
+  // det-ok(corners-each): the tile's other part, square where it meets the agent's (agent_station_agent)
+  radius=Corners(
+    agent_station_seam, agent_station_round, agent_station_round, agent_station_seam,
+  ),
   clip=true,
 )
 
