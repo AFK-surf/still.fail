@@ -15,6 +15,9 @@ priv struct KitState {
   /// a tooltip a finger held open on its trigger, until a moment after it is lifted or the next press: whether it has
   /// been lifted
   held_tips : Map[Int, Bool]
+  /// where what a popover, a hover card or a tooltip hangs on was drawn, by the panel's id, and the frame it was last
+  /// put by it (beside): kept on while it is shown, for the frames its trigger is drawn nowhere (gone as it goes out)
+  anchors : Map[Int, ((Double, Double, Double, Double), Int)]
   /// toasts as drawn (toast.mbt), by their viewport's id; when the next of a viewport's goes (toast_due), by its key
   toasts : Map[Int, Kept]
   toast_dues : Map[String, Double]
@@ -42,6 +45,7 @@ fn KitState::new() -> KitState {
     opens: {},
     shut: {},
     held_tips: {},
+    anchors: {},
     toasts: {},
     toast_dues: {},
     subs: {},

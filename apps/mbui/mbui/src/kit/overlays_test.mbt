@@ -129,7 +129,7 @@ test "popover: it comes from 97% and clear, the first time it opens too; it goes
   // closed by its trigger: going (half way out: smaller and fainter, pop_out_ms), then gone
   t.click(@ui.Button, label="Filters")
   assert_false(open.val)
-  t.run_for(pop_out_ms / 2.0)
+  t.run_for(@kit.pop_out_ms / 2.0)
   let (sx, _, alpha) = t.look_of("Unread only").unwrap()
   assert_true(sx > 0.97 && sx < 1.0, msg="\{sx}")
   assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
@@ -290,6 +290,44 @@ test "hover card: to a finger, opened as it holds the trigger, or by a tap with 
   // tapped again: closed
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   assert_false(tapped.val)
+}
+
+///|
+test "tooltip: by its trigger from the first frame it is drawn, the trigger come with the keyboard's focus on it; and as it goes, its trigger gone with it" {
+  let shows = Ref(false)
+  let trigger = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=200.0, fn() {
+      if shows.val {
+        let r = button(c, "Bold", key="bold")
+        trigger.val = r.id
+        if !c.has_focus(r.id) {
+          c.focus_on(r.id, visible=true)
+        }
+      }
+      tooltip(c, "tip", trigger.val, "Bold (⌘B)") |> ignore
+    })
+    |> ignore
+  })
+  // where the tip's words are drawn, if anywhere: never by the window's corner (the trigger is 200 in)
+  let by_trigger = fn() raise {
+    match t.drawn_of("Bold (⌘B)") {
+      Some((x, y)) => assert_true(x > 100.0 && y > 100.0, msg="the tip drawn at (\{x}, \{y})")
+      None => ()
+    }
+  }
+  shows.val = true
+  t.draw()
+  by_trigger()
+  t.draw()
+  assert_true(t.drawn_of("Bold (⌘B)") is Some(_))
+  by_trigger()
+  // the trigger gone, its focus with it: the tip goes out where it was
+  shows.val = false
+  t.draw()
+  by_trigger()
+  t.run_for(@kit.pop_out_ms / 2.0)
+  by_trigger()
 }
 
 ///|
