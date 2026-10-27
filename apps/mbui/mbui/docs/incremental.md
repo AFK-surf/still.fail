@@ -105,8 +105,9 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    changed is built again as it was built (what built the lists read nothing that changed, so it builds them the same)
    and each row nothing it read changed is put back where its list lays it, neither built nor laid out; one built anew
    (what its build read changed, an event of the hand) builds them all. What a row says of the frame that is said again
-   in no way (a layer opened over the page, how a list stands, a list or a field of its own: kept_census) builds it
-   every frame; what it read of the layout is read back as it read it. What a row or the layout read that changes before
+   in no way (a layer opened over the page, a list of its own, a native view: kept_census, row_nodes_why) builds it
+   every frame; what it read of the layout is read back as it read it, and what it holds at its list's top, what
+   scrolls in it (sideways.mbt) and a field are said again where it is put back. What a row or the layout read that changes before
    it is read in the frame (what came for the frame, taken as it begins) it reads as it is, no frame after it asked for;
    what reads a measure for its size (`measured`, `measured_size`) is told as its size changes, not as it moves (a page
    it is on sliding in). A Tester builds each pass that kept a row once more keeping none, and the two must build and

@@ -115,7 +115,18 @@ pub fn Ctx::sideways(
     st.show_last = show
     st.show_want = show
   }
-  if across && st.frame == self.build_no {
+  self.sideways_built(st, b, inner)
+  row_said_sideways(id, b, inner)
+  b
+}
+
+///|
+/// Box `b` scrolling what `inner` holds, its state `st`, built this build (or put back as built: a list's row or a part
+/// kept as its nodes, kept_nodes.mbt): where it is for what works out how far it can go once laid out; one of several
+/// scrolled as one, with the others built this build.
+fn Ctx::sideways_built(self : Ctx, st : Sideways, b : Int, inner : Int) -> Unit {
+  st.built_frame = self.frame_no
+  if st.across && st.frame == self.build_no {
     st.others.push((b, inner))
   } else {
     st.box = b
@@ -123,7 +134,6 @@ pub fn Ctx::sideways(
     st.others.clear()
     st.frame = self.build_no
   }
-  b
 }
 
 ///|
@@ -307,9 +317,8 @@ pub fn Ctx::capped(
   self.nodes[b].sideways = true
   self.nodes[b].shrinks = shrinks
   self.nodes[b].hit = false
-  st.box = b
-  st.inner = inner
-  st.frame = self.build_no
+  self.sideways_built(st, b, inner)
+  row_said_sideways(id, b, inner)
   b
 }
 
