@@ -165,6 +165,8 @@ Yoga's 539 cases (`scripts/flextest.sh`), and the screenshots
 (`scripts/shots.sh mac kit home web web-kit web-home`: 0 px). The ASCII
 path was checked against Core Text on every string of the bench and of the
 demo's and Home's screenshot runs (`MBUI_SHAPE_CHECK=1`): no differences.
+(Given up since: on macOS 27 Core Text kerns a letter by what is on both
+sides of it, which pairs cannot say; every string is Core Text's again.)
 Memory stays flat (text scene: 49.3 MB after 300 frames, 49.6 after 3000).
 
 ### Where mbui is still slower, and why

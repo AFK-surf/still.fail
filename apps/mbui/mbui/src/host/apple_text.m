@@ -376,99 +376,12 @@ static int ascii_key(unichar c, double size, int weight, int style) {
   return ids[c];
 }
 
-// The fast path for printable ASCII (after nanoui's shaper.zig): each
-// character's advance and each pair's kerning learned once from Core Text,
-// so a string of them is laid out with lookups instead of a CTLine. A pair
-// Core Text makes something else of (a ligature, an alternate that changes
-// an advance) sends the string down the slow path. MBUI_SHAPE_CHECK=1
-// compares the two on every string and reports where they differ.
-enum { ascii_first = 0x20, ascii_n = 0x7f - 0x20 };
-typedef struct {
-  double size;
-  int weight, style;
-  double adv[ascii_n];
-  unsigned char adv_known[ascii_n];
-  // per pair: 0 not asked yet, 1 kerned by kern[], 2 Core Text's own
-  unsigned char pair[ascii_n * ascii_n];
-  double kern[ascii_n * ascii_n];
-} ascii_metrics;
-static ascii_metrics **metrics;
-static int n_metrics, last_metrics = -1;
-
-static ascii_metrics *metrics_for(double size, int weight, int style) {
-  if (last_metrics >= 0) {
-    ascii_metrics *m = metrics[last_metrics];
-    if (m->size == size && m->weight == weight && m->style == style) return m;
-  }
-  for (int i = 0; i < n_metrics; i++) {
-    ascii_metrics *m = metrics[i];
-    if (m->size == size && m->weight == weight && m->style == style) {
-      last_metrics = i;
-      return m;
-    }
-  }
-  ascii_metrics *m = calloc(1, sizeof(ascii_metrics));
-  m->size = size;
-  m->weight = weight;
-  m->style = style;
-  metrics = realloc(metrics, sizeof(ascii_metrics *) * (n_metrics + 1));
-  metrics[n_metrics] = m;
-  last_metrics = n_metrics++;
-  return m;
-}
-
-static CFIndex glyph_count(CTLineRef line) {
-  CFArrayRef runs = CTLineGetGlyphRuns(line);
-  CFIndex n = 0, k = CFArrayGetCount(runs);
-  for (CFIndex i = 0; i < k; i++) n += CTRunGetGlyphCount(CFArrayGetValueAtIndex(runs, i));
-  return k == 1 ? n : -1;
-}
-
-static double ascii_adv(ascii_metrics *m, CTFontRef f, unichar c) {
-  int a = c - ascii_first;
-  if (!m->adv_known[a]) {
-    CTLineRef line = make_line([NSString stringWithCharacters:&c length:1], f, m->style);
-    m->adv[a] = CTLineGetOffsetForStringIndex(line, 1, NULL);
-    m->adv_known[a] = 1;
-    CFRelease(line);
-  }
-  return m->adv[a];
-}
-
-// What a pair adds to its first character's advance; 0 for a pair Core
-// Text has to lay out itself (*ok cleared).
-static double ascii_kern(ascii_metrics *m, CTFontRef f, unichar c1, unichar c2, int *ok) {
-  int k = (c1 - ascii_first) * ascii_n + (c2 - ascii_first);
-  if (!m->pair[k]) {
-    double a1 = ascii_adv(m, f, c1), a2 = ascii_adv(m, f, c2);
-    unichar both[2] = {c1, c2};
-    CTLineRef line = make_line([NSString stringWithCharacters:both length:2], f, m->style);
-    double o1 = CTLineGetOffsetForStringIndex(line, 1, NULL);
-    double o2 = CTLineGetOffsetForStringIndex(line, 2, NULL);
-    m->pair[k] = glyph_count(line) == 2 && fabs(o2 - o1 - a2) < 1e-9 ? 1 : 2;
-    m->kern[k] = o1 - a1;
-    CFRelease(line);
-  }
-  if (m->pair[k] != 1) *ok = 0;
-  return m->kern[k];
-}
-
-static int32_t shape_ascii(const unichar *t, int32_t len, double size, int weight, int style, double *out) {
-  CTFontRef f = font_for(size, weight, style);
-  ascii_metrics *m = metrics_for(size, weight, style);
-  int ok = 1;
-  for (int32_t i = 0; i < len && ok; i++) {
-    double adv = ascii_adv(m, f, t[i]);
-    if (i + 1 < len) adv += ascii_kern(m, f, t[i], t[i + 1], &ok);
-    out[i * 4] = i;
-    out[i * 4 + 1] = 1;
-    out[i * 4 + 2] = adv < 0 ? 0 : adv;
-    out[i * 4 + 3] = t[i] == ' ' ? -1 : ascii_key(t[i], size, weight, style);
-  }
-  return ok ? len : -1;
-}
-
-static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32_t weight, int32_t style,
+// Every string is shaped by Core Text as a whole line. A fast path for printable ASCII (each character's advance and
+// each pair's kerning learned once) was given up: Core Text kerns a letter by what is on both sides of it (macOS 27's
+// system font: the "a" of "fail" 0.09 narrower than of "ail", the "v" of "hover" than of "ver"), so words laid out by
+// pairs moved by up to half a point along a line from where Core Text has them, and words that were cut with an
+// ellipsis (no longer ASCII) were laid out the other way: their letters shifted the moment they were cut.
+static int32_t shape_line(moonbit_string_t text, int32_t len, double size, int32_t weight, int32_t style,
                           double *out, int32_t cap) {
   NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
   CTFontRef f = font_for(size, weight, style);
@@ -570,36 +483,11 @@ int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t weight, int
   }
 }
 
-static int shape_check = -1;
-
 int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
   @autoreleasepool {
     int32_t len = Moonbit_array_length(text);
     int32_t cap = Moonbit_array_length(out) / 4;
-    const unichar *t = (const unichar *)text;
-    int ascii = len > 0 && len <= cap;
-    for (int32_t i = 0; i < len && ascii; i++) ascii = t[i] >= ascii_first && t[i] < 0x7f;
-    if (ascii) {
-      int32_t n = shape_ascii(t, len, size, weight, style, out);
-      if (n >= 0) {
-        if (shape_check < 0) shape_check = getenv("MBUI_SHAPE_CHECK") != NULL;
-        if (shape_check) {
-          double *ref = malloc(sizeof(double) * 4 * len);
-          shape_slow(text, len, size, weight, style, ref, len);
-          for (int32_t i = 0; i < len; i++) {
-            if (fabs(ref[i * 4 + 2] - out[i * 4 + 2]) > 1e-9 || ref[i * 4 + 3] != out[i * 4 + 3]) {
-              NSLog(@"shape check: \"%@\" at %g/%d/%d: cluster %d %.6f, Core Text %.6f",
-                    [NSString stringWithCharacters:t length:len], size, weight, style, i,
-                    out[i * 4 + 2], ref[i * 4 + 2]);
-              break;
-            }
-          }
-          free(ref);
-        }
-        return n;
-      }
-    }
-    return shape_slow(text, len, size, weight, style, out, cap);
+    return shape_line(text, len, size, weight, style, out, cap);
   }
 }
 
