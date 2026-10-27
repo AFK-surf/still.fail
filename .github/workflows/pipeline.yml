@@ -299,7 +299,7 @@ jobs:
       STILLFAIL_CHECK_PART: ts
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       # (MoonBit for the icons' tool, apps/mbui/tools/icons, when design/icons or what it writes changed)
       - uses: ./.github/actions/mbui-moonbit
@@ -339,7 +339,7 @@ jobs:
       STILLFAIL_BROWSER: ${{ matrix.share }}
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: Full check (browser, ${{ matrix.share }})
@@ -373,7 +373,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: The TypeScript station's bundle (darwin-arm64)
@@ -622,7 +622,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # its version is the build of the last commit that changed what it packs
+        with: { fetch-depth: 0, filter: "blob:none" } # its version is the build of the last commit that changed what it packs
       - uses: ./.github/actions/setup
       - name: Pack and sign the modules' packages
         env:
@@ -647,7 +647,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # the changelog's entries are numbered by the commits up to them
+        with: { fetch-depth: 0, filter: "blob:none" } # the changelog's entries are numbered by the commits up to them
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { pattern: "release-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
@@ -685,7 +685,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # each entry's version is the commits up to it
+        with: { fetch-depth: 0, filter: "blob:none" } # each entry's version is the commits up to it
       - uses: ./.github/actions/setup
       - name: Put changelog.json
         env:
