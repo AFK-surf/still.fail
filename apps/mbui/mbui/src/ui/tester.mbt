@@ -1071,7 +1071,7 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
       while p >= 0 {
         alpha = alpha * c.nodes[p].opacity
         match c.drawn_entry(p) {
-          Some(e) => alpha = alpha * e.look.alpha
+          Some(e) => alpha = alpha * e.look_now().alpha
           None => ()
         }
         p = c.nodes[p].parent
@@ -1743,9 +1743,10 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
   while p >= 0 {
     match c.drawn_entry(p) {
       Some(e) => {
-        sx = sx * e.look.sx
-        sy = sy * e.look.sy
-        alpha = alpha * e.look.alpha
+        let l = e.look_now()
+        sx = sx * l.sx
+        sy = sy * l.sy
+        alpha = alpha * l.alpha
       }
       None => ()
     }
@@ -1765,7 +1766,7 @@ pub fn Tester::turn_of(self : Tester, what : String) -> Double? {
   let mut p = found
   while p >= 0 {
     match c.drawn_entry(p) {
-      Some(e) => rot = rot + e.look.rot
+      Some(e) => rot = rot + e.look_now().rot
       None => ()
     }
     p = c.nodes[p].parent

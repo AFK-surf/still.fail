@@ -25,8 +25,10 @@ pub struct Anim {
   mut dur : Double
   /// whether it goes, read outside this package only so (Anim::moving)
   priv mut running : Bool
-  /// the frame it was last stepped in, and last used in
+  /// the frame it was last stepped in and the moment (a frame painted alone is at another moment of the same frame
+  /// number: frame_watch.mbt), and the frame it was last used in
   mut stepped : Int
+  mut stepped_at : Double
   mut used : Int
   /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
   id : @ui.Mover
@@ -51,6 +53,7 @@ pub fn Anim::new(v : Double) -> Anim {
     dur: 0.0,
     running: false,
     stepped: -1,
+    stepped_at: -1.0,
     used: -1,
     id: @ui.Mover::new(),
     name: "",
@@ -59,13 +62,14 @@ pub fn Anim::new(v : Double) -> Anim {
 }
 
 ///|
-/// Steps it to this frame (once a frame).
+/// Steps it to this frame (once a frame, at its moment).
 fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   let frame = c.frame_number()
-  if self.stepped == frame {
+  if self.stepped == frame && self.stepped_at == c.moment() {
     return
   }
   self.stepped = frame
+  self.stepped_at = c.moment()
   if !self.running {
     return
   }
@@ -259,6 +263,7 @@ pub fn Anim::animate(
   self.asked = c.frame_number()
   // (started earlier: stepped this frame to where it is by now, as get() asks)
   self.stepped = if start_at is Some(_) { -1 } else { c.frame_number() }
+  self.stepped_at = c.moment()
   // motion reduced: its length none (Motion.kt), there at once, its end the moment it was told, so a chain goes on
   // from it in the same build, all of it there at once
   if c.still() {
@@ -313,6 +318,7 @@ pub fn Anim::snap(self : Anim, v : Double) -> Unit {
   self.velocity = 0.0
   self.running = false
   self.stepped = @ui.current().frame_number()
+  self.stepped_at = @ui.current().moment()
 }
 
 ///|

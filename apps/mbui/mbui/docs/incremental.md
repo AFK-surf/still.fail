@@ -81,8 +81,12 @@ only with all of them green (frame_watch.mbt, `looks_check`).
 3. The view's own state into signals (the pointer, presses, the focus, what is picked, scrolling, the current input) and
    the app's (its store's, its timers'): `outside_said` and `inputs_said` go, with `outside_events`, `held`, `pointed` and
    `came_built`.
-4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped: a move, a slide, a fade read
-   as it is drawn, so their frames are of the looks alone too; the motion package's told moves and the movers go.
+4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped. The frame's paint runs under a
+   watch of its own (frame_watch.mbt's paint_watch): where a node is placed by the clock (Ctx::moved_by: a stack's
+   slide) and a look worked out as it is painted (Ctx::look_by: a fade) read where a motion is there, so a frame where
+   only that changed is painted again from the last build's tree, nothing built or laid out (a picture's fade too); a
+   motion going that nothing reads asks for frames that do nothing. Then the rest read so: the motion package's moves
+   and reshapes, the bar's springs, a hover's fade; its told moves and the movers go.
 5. What is built as a value, a list's row first (in place of kept_rows.mbt), then a pane and a page (in place of
    kept_part.mbt).
 6. The replay, said.mbt's recording and src/damage's comparing go; only the instances that changed are sent.

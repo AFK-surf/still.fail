@@ -13,6 +13,7 @@
 pub(open) trait Moving {
   rest_at(Self, now : Double, frame : Int) -> Double
   sample(Self, now : Double) -> Unit = _
+  keeps_time(Self) -> Bool = _
 }
 
 ///|
@@ -24,6 +25,16 @@ pub(open) trait Moving {
 impl Moving with sample(self, now) {
   ignore(self)
   ignore(now)
+}
+
+///|
+/// Whether what moves keeps the time it is handed (Moving::sample) for the view to read where it is as it builds (a bar
+/// whose springs are read so): then the time it is handed is the clock read followed (Ctx::now), and what is built is
+/// built again each frame it moves (frame_watch.mbt); else it is handed the time as it stands, and only what reads
+/// where it is, as it reads it, follows the clock. By default it keeps none.
+impl Moving with keeps_time(self) {
+  ignore(self)
+  false
 }
 
 ///|
@@ -120,7 +131,8 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
   // (what a sample sets out anew is handed the time from the next frame)
   let n = self.movers.length()
   for i in 0..<n {
-    self.movers[i].m.sample(self.now())
+    let m = self.movers[i].m
+    m.sample(if m.keeps_time() { self.now() } else { self.clock })
   }
 }
 

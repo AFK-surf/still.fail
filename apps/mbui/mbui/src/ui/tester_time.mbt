@@ -220,6 +220,9 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   } else if self.fake.wants && !c.wants_frame {
     why.push("a frame asked for between frames")
   }
+  if paint_left() {
+    why.push("a frame asked for to paint (\{paint_said.val})")
+  }
   if c.wake_waited >= 0.0 {
     why.push("a wake in \{(c.wake_waited - c.clock).ceil().to_int()} ms" + by_of(c.wake_by))
   }
@@ -254,6 +257,7 @@ fn Ctx::at_rest(self : Ctx) -> Bool {
   self.frame_by is None &&
   !self.motion_left &&
   !self.wants_frame &&
+  !paint_left() &&
   self.wake_waited < 0.0 &&
   fx.val.unsettled() == ""
 }
@@ -276,6 +280,9 @@ fn Ctx::rest_why(self : Ctx) -> String {
         ""
       }),
     )
+  }
+  if paint_left() {
+    why.push("a frame asked for to paint (\{paint_said.val})")
   }
   if self.motion_left {
     why.push("a motion said is not at rest: " + self.moving_now().join("; "))

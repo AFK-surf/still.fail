@@ -572,19 +572,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
 ///|
 /// Moves a laid-out subtree down by `dy`.
 fn Ctx::shift(self : Ctx, i : Int, dy : Double) -> Unit {
-  let n = self.nodes[i]
-  n.y = n.y + dy
-  if n.kind == kind_editor {
-    match self.editors.get(n.id) {
-      Some(st) => st.oy = st.oy + dy
-      None => ()
-    }
-  }
-  let mut c = n.first
-  while c >= 0 {
-    self.shift(c, dy)
-    c = self.nodes[c].next
-  }
+  self.moved_shift(i, 0.0, dy)
 }
 
 ///|

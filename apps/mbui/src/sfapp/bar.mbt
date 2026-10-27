@@ -152,6 +152,13 @@ impl @ui.Moving for BarClock with sample(self, now) {
 }
 
 ///|
+/// The bar reads where its springs are from the time it keeps, as it is built.
+impl @ui.Moving for BarClock with keeps_time(self) {
+  ignore(self)
+  true
+}
+
+///|
 /// A spring of the bar sets out: when (this frame's time; told between frames, the last frame's, where the bar last
 /// was), the bar's springs said to move from it on.
 fn bar_set_out() -> Double {

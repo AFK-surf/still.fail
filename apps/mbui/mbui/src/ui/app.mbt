@@ -87,11 +87,13 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_since.val = false
   in_frame.val = true
   frame_running.val = true
+  paint_phase.val = 0
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
-  // (built whole where what it read changed, or of its looks by the clock alone: frame_watch.mbt)
+  // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
+  // clock alone: frame_watch.mbt)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
@@ -128,7 +130,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || bench.mode > 0 || held {
+  if c.wants_frame || bench.mode > 0 || held || paint_left() {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
@@ -339,7 +341,35 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   if scroll_logging() {
     c.log_scroll()
   }
+  // (what it laid out, said as one number: whether the next frame may paint it again alone, frame_watch.mbt)
+  laid_kept(c, root)
   let t2 = work_now()
+  // painted under a watch of its own: what only its paint reads (a look worked out as it is painted) paints the next
+  // frame again, nothing built (frame_watch.mbt)
+  match paint_watch.val {
+    Some(p) => p.read(fn() { frame_paint(c, root) })
+    None => frame_paint(c, root)
+  }
+  // the runtime's fibers as the frame ends: what is ready runs at the next frame, a timer's wakes it (fx.mbt)
+  fx_frame_end(c)
+  let t3 = work_now()
+  c.t_build = t1 - t0
+  c.t_layout = t2 - t1
+  c.t_paint = t3 - t2
+  t0
+}
+
+///|
+/// The frame's tree from `root`, as it is laid out, painted: its instances, what is tapped and scrolled where, what is
+/// read out, the native views placed, what the host is told of the field with the keys. `alone`: painted again, its
+/// build the last one's (frame_watch.mbt): what that build made for the frames after it (its layers, what takes the
+/// focus) is as it left it.
+fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
+  paint_phase.val = 1
+  paint_base.wake = -1.0
+  paint_clock_at.val = ""
+  // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
+  c.moved_place()
   c.ninst = 0
   cycle_looks_begin()
   dr.tops.clear()
@@ -418,23 +448,22 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let bs = c.bars
   c.bars = c.next_bars
   c.next_bars = bs
-  c.layers_frame_end()
-  c.focus_frame_end()
+  // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
+  // alone, it stands)
+  if !alone {
+    c.layers_frame_end()
+    c.focus_frame_end()
+  }
   c.desk_frame_end()
   c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()
-  fx_frame_end(c)
   match frame_hook.val {
     Some(f) => f()
     None => ()
   }
-  let t3 = work_now()
-  c.t_build = t1 - t0
-  c.t_layout = t2 - t1
-  c.t_paint = t3 - t2
-  t0
+  paint_phase.val = 2
 }
 
 ///|
@@ -498,6 +527,11 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   parts_build_start()
   drawing_begin()
   desk_build_start()
+  // (where the build says streams, native views and pictures at a rect of their own are drawn, by node: kept till the
+  // next build, a frame painted again alone drawing them where its build said: frame_watch.mbt)
+  stream_nodes.clear()
+  native_nodes.clear()
+  picture_at.clear()
   c.layers.clear()
   c.focusables.clear()
   c.sems.clear()
@@ -1587,6 +1621,11 @@ let probe_cpu : Ref[Double] = { val: -1.0 }
 let probe_steps : Ref[Int] = { val: 0 }
 
 ///|
+/// The frames painted alone (frame_watch.mbt) as the probe's 2 s began.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_paints : Ref[Int] = { val: 0 }
+
+///|
 let probe_slow_ms : Double = 24.0
 
 ///|
@@ -1630,8 +1669,10 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
     probe_cpu.val = cpu_now
     let stepped = looks_frames.val - probe_steps.val
     probe_steps.val = looks_frames.val
+    let painted = paints_alone.val - probe_paints.val
+    probe_paints.val = paints_alone.val
     h_log(
-      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% looks_alone=\{stepped} (built: \{built_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
+      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (built: \{built_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
       "work_avg=\{(probe_work.val / probe_frames.val.to_double() * 10.0).round() / 10.0}ms " +
       "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / probe_frames.val.to_double() * 10.0).round() / 10.0 })} nodes=\{c.count} " +
       "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / probe_frames.val.to_double() * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / probe_frames.val.to_double()).round()}% " +

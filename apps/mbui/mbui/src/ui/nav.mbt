@@ -622,30 +622,11 @@ pub fn[P] Ctx::nav(
       nav.t0 = self.clock
       self.moving(nav.mover, nav as &Moving, what="a stack's slide")
     }
-    // (over at the end it says, t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding, and a
-    // frame drawn at the very end it declared would leave it a hair short of it, still sliding)
-    // a page brought in: its first frame drawn from where it starts (any built again at its moment with it); the next
-    // told how late that one was to the screen
-    if nav.waits_late {
-      if nav.late_at < 0.0 {
-        nav.late_at = self.clock
-      } else if self.now() > nav.late_at {
-        nav.waits_late = false
-        let late = dmin(h_frame_late(), nav_late_most)
-        if late > 0.0 {
-          nav.t0 = nav.t0 + late
-          self.moving(nav.mover, nav as &Moving, what="a stack's slide")
-        }
-      }
-    }
-    // (from where it starts until its start: a start moved on by how late its first frame was)
-    let t = if nav.dur <= 0.0 || self.clock >= nav.t0 + nav.dur {
-      1.0
-    } else {
-      dmax((self.now() - nav.t0) / nav.dur, 0.0)
-    }
-    nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
-    if t >= 1.0 {
+    // where its pages are is worked out as they are laid out and painted (Nav::at, Ctx::nav_layer): its frames are
+    // painted alone (frame_watch.mbt). Its end is a moment, the frame at it built again (over at the end it says,
+    // t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding)
+    nav.late_check(self)
+    if nav.dur <= 0.0 || self.clock >= nav.t0 + nav.dur {
       nav.settle()
       // the page that slid away forgotten in the frame its slide ends (`on_leave` told), not the next
       for e in nav.gone {
@@ -653,6 +634,8 @@ pub fn[P] Ctx::nav(
         (nav.on_leave)(e.page)
       }
       nav.gone.clear()
+    } else {
+      self.wake_at_time(nav.t0 + nav.dur)
     }
     let r = nav.rest_at(self.clock, self.frame_no)
     if r > self.nav_rest {
@@ -668,7 +651,6 @@ pub fn[P] Ctx::nav(
     Some(_) => Some(nav.pages[n - 1])
     None => if nav.mode != 0 && n > 1 { Some(nav.pages[n - 2]) } else { None }
   }
-  let p = nav.p
   // a page that rose goes up and down over the one under it, which stays
   let rising = top.rise
   // the side the top page is off to (one from the left goes back left, the page under it coming from the right)
@@ -681,7 +663,7 @@ pub fn[P] Ctx::nav(
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     // (pushed: the page it covers takes nothing from the moment it is pushed)
     match under {
-      Some(e) => self.nav_layer(nav, e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page, inert=nav.mode == 1)
+      Some(e) => self.nav_layer(nav, e, true, rising, way, bg, page, inert=nav.mode == 1)
       None => ()
     }
     // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
@@ -689,7 +671,7 @@ pub fn[P] Ctx::nav(
     self.back_next = None
     self.back_node_next = -1
     // (going back: the page leaving takes nothing)
-    self.nav_layer(nav, top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
+    self.nav_layer(nav, top, false, rising, way, bg, page, inert=leaving)
   })
   if self.back_next is Some(_) && !leaving && takes_back {
     ()
@@ -727,18 +709,22 @@ pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
 }
 
 ///|
+/// Page `e` of the stack, the top or the one `under` it, built over its whole room on a ground of `bg`, placed where
+/// its slide has it at the frame's time (Nav::at: the page beside the top edge to edge with it, one that rose going up
+/// and down over the one under it, which stays): laid out there, and placed there again as each frame is painted,
+/// nothing built (Ctx::moved_by).
 fn[P] Ctx::nav_layer(
   self : Ctx,
   nav : Nav[P],
   e : NavPage[P],
-  slide : Double,
-  drop : Double,
+  under : Bool,
+  rising : Bool,
+  way : Double,
   bg : Int64,
   page : (P) -> Unit,
   inert? : Bool = false,
 ) -> Unit {
-  // (its drop on the device's pixels, as its slide is laid: Ctx::slid)
-  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=on_pixels(drop, self.scale), fn() {
+  let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, fn() {
     let saved = self.owner
     let saved_stint = self.stint
     self.owner = e.serial
@@ -748,9 +734,55 @@ fn[P] Ctx::nav_layer(
     self.stint = saved_stint
   })
   self.nodes[i].layer = true
-  self.nodes[i].slide = slide
+  if nav.mode != 0 {
+    let height = self.height
+    self.moved_by(i, fn(w, _) {
+      let p = nav.at(self)
+      if rising {
+        (0.0, if under { 0.0 } else { p * height })
+      } else {
+        (way * (if under { p - 1.0 } else { p }) * w, 0.0)
+      }
+    })
+  }
   if inert {
     self.draw_only(i)
+  }
+}
+
+///|
+/// Where the top page is, in its widths off to its side (0 in place: Nav's `p`), as its slide has it at the frame's
+/// time, from where it set out, by when and how (the clock read followed while it slides: what reads it, as it is
+/// painted, painted again each frame till its end); followed by a finger, where the finger has it.
+fn[P] Nav::at(self : Nav[P], c : Ctx) -> Double {
+  if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
+    self.late_check(c)
+    let t = if self.dur <= 0.0 || c.clock >= self.t0 + self.dur {
+      1.0
+    } else {
+      dmax((c.now() - self.t0) / self.dur, 0.0)
+    }
+    self.p = self.p0 + (self.p1 - self.p0) * self.curve.at(dmin(t, 1.0))
+  }
+  self.p
+}
+
+///|
+/// A page brought in: its first frame drawn from where it starts; the next (built or painted alone) told how late that
+/// one was to the screen, its slide's start moved on by that (nav_late_most at most), from its cause's frame, once.
+fn[P] Nav::late_check(self : Nav[P], c : Ctx) -> Unit {
+  if !self.waits_late {
+    return
+  }
+  if self.late_at < 0.0 {
+    self.late_at = c.clock
+  } else if c.clock > self.late_at {
+    self.waits_late = false
+    let late = dmin(h_frame_late(), nav_late_most)
+    if late > 0.0 {
+      self.t0 = self.t0 + late
+      c.moving(self.mover, self as &Moving, what="a stack's slide")
+    }
   }
 }
 

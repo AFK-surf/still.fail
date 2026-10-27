@@ -319,6 +319,19 @@ fn parts_forget() -> Unit {
 /// row kept, semantics.mbt), built each frame while it holds what is built each frame wherever it is (a native view, the
 /// field that takes the keys).
 pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
+  // parts off (parts_on): built as the rest of the frame is, in its box, what it reads read by what builds the frame
+  // (frame_watch.mbt), not by a computed of its own none of that follows
+  if !parts_on.val {
+    self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
+      if read_out {
+        body()
+      } else {
+        self.hidden_from_semantics(body)
+      }
+    })
+    |> ignore
+    return
+  }
   let st = match kept_parts.get(id) {
     Some(st) => st
     None => {
@@ -715,9 +728,14 @@ pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
 
 ///|
 /// What is being built changes at `t` (the frames' clock: a motion's declared end, read as whether it is over): built
-/// again in the first frame at or past it, kept as it was drawn or not.
+/// again in the first frame at or past it (painted again, where it is read as it is painted: frame_watch.mbt), kept as
+/// it was drawn or not.
 pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
-  part_wake(self.clock, t, true)
+  if t > self.clock && t < @double.infinity {
+    self.wake_at_time(t, later=true)
+  } else {
+    part_wake(self.clock, t, true)
+  }
 }
 
 ///|
@@ -1058,7 +1076,7 @@ fn Ctx::part_words(self : Ctx, root : Int) -> Array[KeptWord] {
         while p >= 0 {
           alpha = alpha * self.nodes[p].opacity
           match self.drawn_entry(p) {
-            Some(e) => alpha = alpha * e.look.alpha
+            Some(e) => alpha = alpha * e.look_now().alpha
             None => ()
           }
           p = self.nodes[p].parent

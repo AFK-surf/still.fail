@@ -121,8 +121,11 @@ struct Node {
   mut ty : Double
   // its offset (as tx, ty) worked out as it is laid out, from its own size (Ctx::place_by_size): in place of tx, ty
   mut place : ((Double, Double) -> (Double, Double))?
-  // moved sideways by this share of its own width (a page sliding in)
-  mut slide : Double
+  // moved off where its parent lays it by what this gives at the frame's time, from its own size (Ctx::moved_by: a page
+  // sliding in), and where that had it as it was last placed, on the device's pixels (what it holds placed with it)
+  mut moved_by : ((Double, Double) -> (Double, Double))?
+  mut moved_x : Double
+  mut moved_y : Double
   mut opacity : Double
   // its ground made of what is under it (glass.mbt), and whether the liquid
   // glass inside it is one group (drawn first, merging)
@@ -290,10 +293,9 @@ struct Node {
   mut lk_iw : Double
   mut lk_ih : Double
   mut lk_epoch : Int
-  // its offsets (tx, ty, slide) when last placed
+  // its offsets (tx, ty) when last placed
   mut otx : Double
   mut oty : Double
-  mut oslide : Double
   // this frame: nothing in its subtree changed since it was last placed
   // but where it is (Ctx::commit moves it as a whole)
   mut same : Bool
@@ -341,7 +343,9 @@ fn Node::new() -> Node {
     tx: 0.0,
     ty: 0.0,
     place: None,
-    slide: 0.0,
+    moved_by: None,
+    moved_x: 0.0,
+    moved_y: 0.0,
     opacity: 1.0,
     glass: None,
     glass_group: false,
@@ -435,7 +439,6 @@ fn Node::new() -> Node {
     lk_epoch: -1,
     otx: 0.0,
     oty: 0.0,
-    oslide: 0.0,
     same: false,
   }
   n.leaf = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
@@ -454,7 +457,9 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.first = -1
   self.last = -1
   self.next = -1
-  self.slide = 0.0
+  self.moved_by = None
+  self.moved_x = 0.0
+  self.moved_y = 0.0
   self.fit = FitCover
   self.fade = true
   self.still = false
