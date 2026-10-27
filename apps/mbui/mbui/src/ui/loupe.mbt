@@ -71,19 +71,25 @@ fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double, Double, Double)
   let y = self.spring("\u{2}loupe/y", ty, stiffness=loupe_follow_k, damping=loupe_follow_c)
   let (fx, fy) = self.loupe_foot
   let (sx, sy) = self.loupe_src
-  // drawn out along its way as far behind as it is, flatter for it; grown out of the finger
-  let behind = ((x - tx) * (x - tx) + (y - ty) * (y - ty)).sqrt()
-  let stretch = dmin(loupe_stretch_most, behind * loupe_stretch)
+  // a jelly, not a block: drawn out along its way as fast as it goes (its follow's speed), on a spring of its own with
+  // much give, so that as it stops it goes past round, taller and narrower for a moment, and wobbles back; its volume
+  // kept (flatter as it is longer); grown out of the finger
+  let speed = match self.springs.get(self.id("\u{2}loupe/x")) {
+    Some(sp) => sp.at(self.now).1.abs()
+    None => 0.0
+  }
+  let pull = dmin(loupe_stretch_most, speed * loupe_stretch)
+  let d = self.spring("\u{2}loupe/jelly", pull, from=0.0, stiffness=loupe_jelly_k, damping=loupe_jelly_c)
   let g = dmax(0.0, grow)
-  let w = (loupe_w + stretch) * g
-  let h = dmax(0.0, loupe_h - stretch * loupe_flatten) * dmin(g, 1.0 + (g - 1.0) * 0.5)
+  let w = loupe_w * (1.0 + d) * g
+  let h = loupe_h / dmax(0.2, 1.0 + d) * dmin(g, 1.0 + (g - 1.0) * 0.5)
   Some((sx, sy, fx + (x - fx) * dmin(g, 1.0), fy + (y - fy) * dmin(g, 1.0), w, h))
 }
 
 ///|
 /// The springs it moves on: growing (some give: past its size and back) and following the finger (stiff: with it at
-/// once, a hair behind as it goes, a hair past where it stops), and how much it is drawn out by how far behind it is
-/// (as fast as the finger goes), at most, and flatter for it.
+/// once, a hair behind as it goes, a hair past where it stops), how much it is drawn out (of its width) by how fast it
+/// goes (px a second) and at most, and the jelly's spring (much give: past round and back, a wobble).
 let loupe_grow_k : Double = 360.0
 
 ///|
@@ -96,13 +102,16 @@ let loupe_follow_k : Double = 1400.0
 let loupe_follow_c : Double = 52.0
 
 ///|
-let loupe_stretch : Double = 2.4
+let loupe_stretch : Double = 0.0012
 
 ///|
-let loupe_stretch_most : Double = 40.0
+let loupe_stretch_most : Double = 0.45
 
 ///|
-let loupe_flatten : Double = 0.25
+let loupe_jelly_k : Double = 260.0
+
+///|
+let loupe_jelly_c : Double = 9.0
 
 ///|
 /// The loupe painted over the frame's instances (see the file's head).
