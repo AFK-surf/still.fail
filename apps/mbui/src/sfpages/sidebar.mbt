@@ -362,12 +362,11 @@ fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
   if c.list_moving(key) {
     return true
   }
-  let (px, py, down) = c.pointer()
-  let over = match c.rect_of(pane) {
-    Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-    None => false
-  }
-  over && (down || @sf.pointer_rests())
+  // (the hand as the frame sees it, read as it comes on the list and goes off it: a press gone down on it, a mouse's
+  // pointer over it. Not where the pointer is against where the list was drawn: read every build, every move of the
+  // pointer built the list's pane again, and what it read of the frame before kept it from being kept, every frame
+  // the hand was on it)
+  c.press_within(pane) || (@sf.pointer_rests() && c.hovered(pane))
 }
 
 ///|
