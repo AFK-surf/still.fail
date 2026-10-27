@@ -138,8 +138,9 @@ for t in ${TARGETS:-native}; do
   # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
   # 187 and 147, the pages' 174, contrast's 117, screens' 77, squeeze_said's 49, the packages' 10, all nine at once:
   # the part's run 188 s). Alone on four runners (40425191188) corners in Chinese was 92 s, every other run 52 s or less:
-  # its press's room and contrast a third corners run since, on the fourth. A run named nowhere here is the first's,
-  # never left out.
+  # its press's room and contrast a third corners run since, on the first: on the fourth beside the pages and contrast,
+  # the three slowed each other to 85, 81 and 38 s while the first ran 38 (adb-card-direct, 40430050749). A run named
+  # nowhere here is the first's, never left out.
   app_group_of() {
     local n=$1
     shift
@@ -147,7 +148,7 @@ for t in ${TARGETS:-native}; do
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 4 ;;
+      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 1 ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
