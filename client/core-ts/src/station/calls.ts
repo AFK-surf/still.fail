@@ -31,6 +31,45 @@ function keptBeside(kept: { type: string; bytes: string }): Beside {
   return new Beside({ type: kept.type, held: true }, fromBase64(kept.bytes) ?? new Uint8Array());
 }
 
+/// A whole file being read from its station, and those waiting for it: each told how far it has come.
+type Going = { done: Deferred.Deferred<Beside, CoreError>; heard: Set<Progress>; last: unknown };
+const goingOf = new WeakMap<Inner, Map<string, Going>>();
+
+/// `read` once for every asker of the same file at once: one asked again while it is coming (its preview closed and
+/// opened again, its image put up anew) waits for the read going, told how far it has come, not brought again beside
+/// it. A whole file's read runs to its end whoever waits; each asked anew began another, and on a desktop app six images
+/// were coming fifteen times at once, each at a fifteenth of the line, until the app was restarted (ccvm, 2026-10-28).
+function once(inner: Inner, key: string, progress: Progress, read: (progress: Progress) => Effect.Effect<Beside, CoreError>): Effect.Effect<Beside, CoreError> {
+  return Effect.suspend(() => {
+    let all = goingOf.get(inner);
+    if (all === undefined) goingOf.set(inner, (all = new Map()));
+    const going = all;
+    let g = going.get(key);
+    if (g === undefined) {
+      const made: Going = { done: Deferred.makeUnsafe<Beside, CoreError>(), heard: new Set([progress]), last: undefined };
+      g = made;
+      going.set(key, made);
+      const tell: Progress = (value) => {
+        made.last = value;
+        for (const heard of made.heard) heard(value);
+      };
+      inner.runner.fork(
+        Effect.flatMap(Effect.exit(read(tell)), (exit) =>
+          Effect.sync(() => {
+            if (going.get(key) === made) going.delete(key);
+            Deferred.doneUnsafe(made.done, exit);
+          }),
+        ),
+      );
+    } else {
+      g.heard.add(progress);
+      if (g.last !== undefined) progress(g.last);
+    }
+    const it = g;
+    return Effect.ensuring(Deferred.await(it.done), Effect.sync(() => it.heard.delete(progress)));
+  });
+}
+
 /// Pieces one after another.
 function joined(pieces: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(pieces.reduce((n, p) => n + p.length, 0));
@@ -208,67 +247,73 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "stationUploadPart" }>;
     return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx, c.progress ? (sent) => progress({ sent }) : undefined));
   };
-  handlers.stationFile = (inner, call, progress, at_, ctx) => {
+  handlers.stationFile = (inner, call, asked, at_, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;
     // A thumbnail is kept on the device: a file sent never changes (AccountDb.keptFile).
     // Its bytes beside its answer `{ type }` (kept as base64, small).
     const kept = c.thumb ? inner.data.keptFile(c.station, c.key, c.name, "thumb") : null;
     if (kept !== null) return Effect.succeed(keptBeside(kept));
-    const read = Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(
-        inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => c.progress && progress({ loaded, total }), ctx),
-        ([type, bytes]) => {
-          if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", type, base64(bytes));
-          return [type, bytes] as const;
-        },
-      ),
-    );
-    const station = () => {
-      if (c.keep === null) return Effect.map(read, ([type, bytes]) => new Beside({ type }, bytes));
-      // With `keep`: what is kept of it answered whole without asking the station; else read a part at a time as its
-      // parts are (`station.file.part` with `keep`), each kept with its chat as it comes (drive-kept.ts `chat`), one
-      // stopped short too: let go of (a preview closed), what came is not read again, and the rest is brought all the
-      // same (fill.ts). A station from before parts, or one saying it is another size than its message did: read whole,
-      // kept once answered at that size.
-      const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
-      const whole = Effect.map(read, ([type, bytes]) => {
-        if (bytes.length === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, type, 0, bytes));
-        return new Beside({ type }, bytes);
-      });
-      return Effect.gen(function* () {
-        const held = yield* inner.driveKept.read(id, 0, size, 0, size);
-        if (held !== null) {
-          if (c.progress) progress({ loaded: size, total: size });
-          return new Beside({ type: held.type }, held.bytes);
-        }
-        const pieces: Uint8Array[] = [];
-        let type = "";
-        for (let at = 0; at < size;) {
-          const from = at;
-          const part: Extract<Call, { kind: "stationFilePart" }> = { kind: "stationFilePart", station: c.station, key: c.key, name: c.name, offset: at, length: Math.min(DOWNLOAD_PART, size - at), progress: c.progress, stream: false, keep: size, ...(c.from !== undefined ? { from: c.from } : {}) };
-          const got = yield* Effect.result(handlers.stationFilePart!(inner, part, (v) => progress({ loaded: from + ((v as { loaded: number }).loaded ?? 0), total: size }), at_, ctx));
-          if (got._tag === "Failure") {
-            if (at === 0 && got.failure.code === "unsupported") return yield* whole;
-            return yield* Effect.fail(got.failure);
-          }
-          const said = got.success as Beside;
-          const head = said.value as { type: string; total: number };
-          if (head.total !== size) return yield* whole;
-          if (said.bytes.length === 0) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
-          type = head.type;
-          pieces.push(said.bytes);
-          at += said.bytes.length;
-          if (c.progress) progress({ loaded: at, total: size });
-        }
-        return new Beside({ type }, joined(pieces));
-      });
+    // (each told how far it has come only if it asked so)
+    const heard: Progress = (v, b) => {
+      if (c.progress) asked(v, b);
     };
-    // One sent up from here is answered as it went, for its thumbnail too (drive-kept.ts `sent`): not read back from the
-    // station it went to.
-    return Effect.flatMap(inner.driveKept.held(sentKeptId(c.station, c.name)), (sent) => {
-      if (sent === null) return station();
-      if (c.progress) progress({ loaded: sent.size, total: sent.size });
-      return Effect.succeed(new Beside({ type: sent.type }, sent.bytes));
+    return once(inner, JSON.stringify([c.station, c.key, c.name, c.thumb, c.keep]), heard, (progress) => {
+      const read = Effect.flatMap(parse(c.station), (addr) =>
+        Effect.map(
+          inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => progress({ loaded, total }), ctx),
+          ([type, bytes]) => {
+            if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", type, base64(bytes));
+            return [type, bytes] as const;
+          },
+        ),
+      );
+      const station = () => {
+        if (c.keep === null) return Effect.map(read, ([type, bytes]) => new Beside({ type }, bytes));
+        // With `keep`: what is kept of it answered whole without asking the station; else read a part at a time as its
+        // parts are (`station.file.part` with `keep`), each kept with its chat as it comes (drive-kept.ts `chat`), one
+        // stopped short too: let go of (a preview closed), what came is not read again, and the rest is brought all the
+        // same (fill.ts). A station from before parts, or one saying it is another size than its message did: read whole,
+        // kept once answered at that size.
+        const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
+        const whole = Effect.map(read, ([type, bytes]) => {
+          if (bytes.length === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, type, 0, bytes));
+          return new Beside({ type }, bytes);
+        });
+        return Effect.gen(function* () {
+          const held = yield* inner.driveKept.read(id, 0, size, 0, size);
+          if (held !== null) {
+            progress({ loaded: size, total: size });
+            return new Beside({ type: held.type }, held.bytes);
+          }
+          const pieces: Uint8Array[] = [];
+          let type = "";
+          for (let at = 0; at < size;) {
+            const from = at;
+            const part: Extract<Call, { kind: "stationFilePart" }> = { kind: "stationFilePart", station: c.station, key: c.key, name: c.name, offset: at, length: Math.min(DOWNLOAD_PART, size - at), progress: true, stream: false, keep: size, ...(c.from !== undefined ? { from: c.from } : {}) };
+            const got = yield* Effect.result(handlers.stationFilePart!(inner, part, (v) => progress({ loaded: from + ((v as { loaded: number }).loaded ?? 0), total: size }), at_, ctx));
+            if (got._tag === "Failure") {
+              if (at === 0 && got.failure.code === "unsupported") return yield* whole;
+              return yield* Effect.fail(got.failure);
+            }
+            const said = got.success as Beside;
+            const head = said.value as { type: string; total: number };
+            if (head.total !== size) return yield* whole;
+            if (said.bytes.length === 0) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
+            type = head.type;
+            pieces.push(said.bytes);
+            at += said.bytes.length;
+            progress({ loaded: at, total: size });
+          }
+          return new Beside({ type }, joined(pieces));
+        });
+      };
+      // One sent up from here is answered as it went, for its thumbnail too (drive-kept.ts `sent`): not read back from the
+      // station it went to.
+      return Effect.flatMap(inner.driveKept.held(sentKeptId(c.station, c.name)), (sent) => {
+        if (sent === null) return station();
+        progress({ loaded: sent.size, total: sent.size });
+        return Effect.succeed(new Beside({ type: sent.type }, sent.bytes));
+      });
     });
   };
   // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
