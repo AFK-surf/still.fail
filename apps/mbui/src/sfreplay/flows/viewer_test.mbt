@@ -1,7 +1,7 @@
 // 96-viewer (e2e/traces/viewer.trace): the viewer over a chat's two pictures (alice's other device sends them: peer
 // createfiles): the first grows from its thumbnail; ›, the next (the core's imageNear); a swipe back to the first;
-// marking: a box drawn, its note said, 下载标注后的图片 (the host draws the marks onto the picture: a PNG kept with the
-// downloads), then 添加到对话: the marked picture and the note's quote in the composer, sent with words.
+// marking: a box drawn, its note said, 下载标注后的图片 (the host draws the marks onto the picture: a PNG kept in the
+// phone's photo album), then 添加到对话: the marked picture and the note's quote in the composer, sent with words.
 
 ///|
 test "96-viewer" {
@@ -47,9 +47,14 @@ test "96-viewer" {
     f.gone("=完成")
     f.t.marks_make(marked)
     f.tap("icon:download")
-    f.see("已保存到「下载」")
+    // (a phone's: into its photo album, said so: keep_way_of)
+    f.see("已保存到相册")
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.0.has_suffix(".png") })
     f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(
+      f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.1.to_string() == "Photos" }),
+      "kept: \{f.t.kept_ways()}",
+    )
     f.check(f.t.marks_drawn().length() >= 1, "no marks drawn onto the picture")
     f.t.marks_make(marked)
     f.tap("添加到对话")

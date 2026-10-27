@@ -1,8 +1,8 @@
 // 97-video-frames (e2e/traces/video-frames.trace): a video's frames (the library's player, @sf.player_view): alice's
 // other device sends a clip; opened, it plays, its frames' times read from the file (the host's player: 4 s at 30 a
 // second, 120 frames); paused, which frame of how many, and its ±15 s become ‹ and ›: to the one before and the very
-// next, each as the player says it is there; 保存此帧: the frame showing grabbed by the host and kept with the
-// downloads, a PNG at the video's own size, named by the frame it is.
+// next, each as the player says it is there; 保存此帧: the frame showing grabbed by the host and kept in the
+// phone's photo album, a PNG at the video's own size, named by the frame it is.
 
 ///|
 test "97-video-frames" {
@@ -39,10 +39,15 @@ test "97-video-frames" {
     // 保存此帧 takes the frame of a player paused and ready (player.mbt: the button there only then)
     f.see("icon:play")
     f.tap("icon:camera")
-    f.see("已保存到「下载」")
+    // (a phone's: into its photo album, said so: keep_way_of)
+    f.see("已保存到相册")
     // kept: the grabbed frame, a PNG of the video's size (640 × 360), named by its frame
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-clip-") && k.0.has_suffix(".png") })
     f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(
+      f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-clip-") && k.1.to_string() == "Photos" }),
+      "kept: \{f.t.kept_ways()}",
+    )
     if kept.length() == 1 {
       let b = kept[0].2
       let be32 = fn(i : Int) { (b[i].to_int() << 24) | (b[i + 1].to_int() << 16) | (b[i + 2].to_int() << 8) | b[i + 3].to_int() }

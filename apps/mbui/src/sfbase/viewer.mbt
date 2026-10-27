@@ -1641,12 +1641,13 @@ pub fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// 下载: the file into the system's downloads, once it is here. A chat's not read yet is downloaded by the core
+/// 下载: the file into the system's downloads (on a phone a picture or a film into its photo album: keep_way_of), once
+/// it is here. A chat's not read yet is downloaded by the core
 /// (downloads.mbt): on by itself whatever becomes of this viewer, how far it has come said here and on its message,
 /// kept once it is all here; a drive's is fetched first.
 pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes.get() {
-    // kept where the system keeps downloads, said once the host has answered (keep.mbt)
+    // kept as keep_way_of says, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
     None if self.drive is None => self.download_asked = true
     None => {
@@ -1817,8 +1818,6 @@ fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, D
             self.mime,
             b,
             way=Photos,
-            saved=@sf.t("web-main.stations.savedToPhotos"),
-            failed=@sf.t("web-main.stations.saveToPhotosFailed"),
           )
         } else {
           c.copy_image(b)

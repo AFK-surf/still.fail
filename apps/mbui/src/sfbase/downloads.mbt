@@ -230,6 +230,9 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
     (src.call)("download.done", Json::object(p), fn(_) {  })
   }
   let keep : Ref[@ui.Keep?] = { val: None }
+  // (a picture or a film into a phone's photo album, as keep_bytes keeps one)
+  let way = keep_way_of(name)
+  let (saved, failed_said) = keep_words(way)
   let failed = fn() {
     match keep.val {
       Some(k) => k.end()
@@ -250,7 +253,7 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
           let k = match keep.val {
             Some(k) => Some(k)
             None => {
-              keep.val = @ui.keep_begin(name, text(Some(head), "type"))
+              keep.val = @ui.keep_begin(name, text(Some(head), "type"), way~)
               keep.val
             }
           }
@@ -272,8 +275,8 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
             keepings.push({
               keep: k,
               name,
-              saved: @sf.t("android-chat.file.saved"),
-              failed: @sf.t("android-chat.file.saveFailed"),
+              saved,
+              failed: failed_said,
               then: fn(kept) {
                 match kept {
                   KeptAt(at) => done(at)

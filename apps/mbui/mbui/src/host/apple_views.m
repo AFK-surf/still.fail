@@ -1895,10 +1895,12 @@ static NSMutableSet *keep_sheets;
 }
 @end
 
-// A picture into Photos: the system asks once whether the app may add to it (NSPhotoLibraryAddUsageDescription), then
-// it is added from its part file; not allowed, or not a picture Photos takes: failed.
+// A picture or a film into Photos: the system asks once whether the app may add to it
+// (NSPhotoLibraryAddUsageDescription), then it is added from its part file (a film by its name's .mp4, .m4v or .mov);
+// not allowed, or not one Photos takes: failed.
 static void keep_photos(MBKeep *k) {
   NSURL *u = [NSURL fileURLWithPath:k.part];
+  BOOL film = [@[ @"mp4", @"m4v", @"mov" ] containsObject:k.name.pathExtension.lowercaseString];
   void (^answer)(BOOL) = ^(BOOL ok) {
     dispatch_async(dispatch_get_main_queue(), ^{ keep_answer(k, ok ? 1 : -1, ok ? @"Photos" : nil); });
   };
@@ -1909,7 +1911,10 @@ static void keep_photos(MBKeep *k) {
       return;
     }
     [PHPhotoLibrary.sharedPhotoLibrary
-        performChanges:^{ [PHAssetChangeRequest creationRequestForAssetFromImageAtFileURL:u]; }
+        performChanges:^{
+          if (film) [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:u];
+          else [PHAssetChangeRequest creationRequestForAssetFromImageAtFileURL:u];
+        }
      completionHandler:^(BOOL ok, NSError *e) {
        if (ok) vlog(@"keep %@: into Photos", k.name);
        else vlog(@"keep %@ into Photos: %@", k.name, e.localizedDescription);

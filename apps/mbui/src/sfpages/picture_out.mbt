@@ -19,8 +19,6 @@ pub fn picture_out(c : @ui.Ctx, png : Bytes?, copy_said? : Bool = false) -> Bool
         "image/png",
         png,
         way=Photos,
-        saved=@sf.t("web-main.stations.savedToPhotos"),
-        failed=@sf.t("web-main.stations.saveToPhotosFailed"),
       )
       true
     }
