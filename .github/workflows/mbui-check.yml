@@ -29,16 +29,25 @@ jobs:
   # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, mbui.yml). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
-    name: native (${{ matrix.part }})
+    name: native (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        part: [app, replay]
+        # (the app part on four runners, APP_GROUP: its runs on one runner's four cores were 188 s, each of its sweeps
+        # slowed by the eight beside it, and the job 250-330 s with its build; scripts/test.sh app_group_of says which is
+        # where. Each builds sfapp's program itself; the first the small packages' too, its units kept apart from the other three's,
+        # which take its when they have none of their own yet)
+        include:
+          - { part: app, group: 1/4, store: app }
+          - { part: app, group: 2/4, store: app-sfapp }
+          - { part: app, group: 3/4, store: app-sfapp }
+          - { part: app, group: 4/4, store: app-sfapp }
+          - { part: replay, group: "", store: replay }
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
-      CACHE_PREFIX: mbui-linux-store-${{ matrix.part }}-
+      CACHE_PREFIX: mbui-linux-store-${{ matrix.store }}-
       # (main's units under m-, a branch's under b-: a branch takes main's newest and its own, below)
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps:
@@ -74,7 +83,10 @@ jobs:
           key: ${{ env.CACHE_PREFIX }}m-${{ github.sha }}
           # (m- only: GitHub looks through all the restore-keys on the branch before main's, and a fallback to any of the
           # kind took the branch's own here too, main's never: mbui-wide-workspace, 39995406305, 234 s)
-          restore-keys: ${{ env.CACHE_PREFIX }}m-
+          # (and the three app runners that build sfapp's program alone take the first's, a superset, until they have kept theirs)
+          restore-keys: |
+            ${{ env.CACHE_PREFIX }}m-
+            mbui-linux-store-${{ matrix.part }}-m-
       - if: github.ref != 'refs/heads/main'
         run: |
           mkdir -p "$MBC_STORE"
@@ -103,7 +115,7 @@ jobs:
           # on shows here, which shards' fewer files each partly hide; the run the longest of them, not their sum. The
           # pages were 162-196 s on main in one with kept_rows_kinds_wbtest.mbt's sweep among them, 70 s of their 128
           # run alone; in two by name, 207 s and 84, 2026-10-26; that sweep a process of its own now, test.sh)
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
@@ -143,9 +155,9 @@ jobs:
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
           why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
-          echo "::error title=check-mbui (${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          echo "::error title=check-mbui (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
           {
-            echo "### check-mbui (${{ matrix.part }}) failed at $subject"
+            echo "### check-mbui (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}) failed at $subject"
             echo
             echo '```'
             printf '%s\n' "${failed:-(no test named: the check or the build failed, see the log)}"
