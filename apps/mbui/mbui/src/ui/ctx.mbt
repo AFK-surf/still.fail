@@ -154,6 +154,10 @@ struct EditorState {
   /// the caret, where one line wraps into the next at it, shows at the end of the line before (a move to a line's end
   /// or the pointer past it put it there), not at the next one's start: while the caret is at this offset; -1 none
   mut upstream : Int
+  /// the keyboard's trackpad (iOS's floating cursor: a long press on the space bar) moving the caret: where in the
+  /// window the host said it began, and where the caret showed then in the field's words (from their top left, its
+  /// line's middle); none while it is not
+  mut floating : (Double, Double, Double, Double)?
   /// how far its words are scrolled up (taller than the field: scrolled by the wheel, a finger or its bar, as a box kept
   /// to a height is, sideways.mbt; the caret's line brought into view as the caret or the words change), and the caret, the
   /// anchor and how long the words were when it was last brought there

@@ -1213,6 +1213,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     submitted: None,
     pref_x: -1.0,
     upstream: -1,
+    floating: None,
     scroll: 0.0,
     followed: (-1, -1, -1),
     pasted: None,

@@ -433,6 +433,16 @@ pub fn Tester::keyboard_gone(self : Tester) -> Unit {
 }
 
 ///|
+/// The keyboard's trackpad (iOS's floating cursor) begins at (`x`, `y`), moves to (`x1`, `y1`) and is let go; the
+/// frames it causes drawn.
+pub fn Tester::ime_trackpad(self : Tester, x : Int, y : Int, x1 : Int, y1 : Int) -> Unit {
+  on_text(text_float_begin, "", x, y)
+  self.draw()
+  on_text(text_float_move, "", x1, y1)
+  self.draw()
+}
+
+///|
 /// The input method deletes `before` UTF-16 units before the caret and `after` after it (Android's
 /// deleteSurroundingText); the frames it causes drawn.
 pub fn Tester::ime_delete(self : Tester, before : Int, after : Int) -> Unit {
@@ -468,6 +478,16 @@ let text_keyboard_gone = 7
 /// The host's text event putting in the clipboard's words (a paste: ⌘V, the edit menu's): as kind 0 puts in what is
 /// typed, but a step of its own to undo, not one with the typing about it (editor_undo.mbt).
 let text_paste = 8
+
+///|
+/// The host's text event saying the keyboard's trackpad (iOS's floating cursor: a long press on the space bar) begins,
+/// at (`a`, `b`) in the window, in points.
+let text_float_begin = 9
+
+///|
+/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in points: the caret goes as
+/// far from where it was when it began as that is from where it began.
+let text_float_move = 10
 
 ///|
 fn h_ime_action(kind : Int) -> Unit {
