@@ -28,8 +28,8 @@ test "96-viewer" {
     f.tap("img:e2e-photo.jpg")
     // flown open from its thumbnail, its bars on once it is in
     f.run_to(@sfapp.preview_rest())
-    // grown from its thumbnail, how large it is said
-    f.see("%")
+    // grown from its thumbnail, its whole picture here (复制 offered)
+    f.see("icon:copy")
     f.see("icon:chevron-right")
     f.tap("icon:chevron-right")
     f.see("e2e-photo2.png")

@@ -109,7 +109,7 @@ pub fn viewer_bar(
         window_end_in(viewer_bar_in)
       }
       // (short of room, the tools kept whole: the way back and the name give way)
-      c.box(style=viewer_bar_end.then(@ui.style(pr=room(end))), keep=true, fn() {
+      c.box(style=viewer_bar_end().then(@ui.style(pr=room(end))), keep=true, fn() {
         tools_across.val = true
         tools()
         tools_across.val = false
@@ -301,8 +301,10 @@ let viewer_bar_in : Double = 12.0
 let viewer_bar_start : @ui.Style = @ui.style(row=true, w=grow, align=ACenter, clip=true)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let viewer_bar_end : @ui.Style = @ui.style(row=true, w=grow, gap=S0_5, align=ACenter, justify=JEnd)
+/// Its tools at its end, as far apart as makes each a press's room across (keys_gap).
+fn viewer_bar_end() -> @ui.Style {
+  @ui.style(row=true, w=grow, gap=keys_gap(), align=ACenter, justify=JEnd)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

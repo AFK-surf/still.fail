@@ -15,11 +15,11 @@ timeout 120000
 decoded e2e-photo.jpg
 timeout 60000
 tap img:e2e-photo.jpg
-until %
+until icon:copy
 decoded e2e-photo.jpg
 shot 1-image
 back
-gone %
+gone icon:copy
 tap e2e-doc.pdf
 ready pdf
 shot 2-pdf

@@ -641,7 +641,8 @@ pub fn player_room(width : Double) -> (Double, Double) {
     return (0.0, 0.0)
   }
   let (top, foot) = (viewer_host().room)()
-  (viewer_bar_h + top, media_bar_h + media_bar_in + foot)
+  let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
+  (viewer_bar_h + top, media_bar_h + said + media_bar_in + foot)
 }
 
 ///|
@@ -1074,7 +1075,8 @@ fn desk_player(
         c.box(style=desk_play_row_end, fn() {
           c.box(style=desk_grow_middle, fn() {
             let most = dmin(media_bar_most, dmax(desk_none, c.width - panel - 2.0 * media_bar_in))
-            let n = c.box(style=media_bar_box.then(@ui.style(w=Fixed(most), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
+            let over = if desk_narrow(c.width) { desk_time_over } else { media_bar_top }
+            let n = c.box(style=media_bar_box.then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
               desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, picture, ink)
             })
             c.look(n, @ui.look(alpha=f.shown))
@@ -1132,9 +1134,15 @@ fn desk_play_controls(
   let on = f.on
   let playing = plays(p, f)
   let ready = s.duration > 0.0
+  // (under 640 where it is said a line of its own over the timeline, as a phone's: the row is the keys')
+  let said = where_runs(p, fr, s, playing, picture, ink)
+  let narrow = desk_narrow(c.width)
+  if narrow {
+    c.box(style=desk_time_line, fn() { c.rich(said, style=desk_time_words) |> ignore }) |> ignore
+  }
   desk_play_timeline(c, p, s, fr, on, ink)
   c.box(style=media_row, fn() {
-    c.box(style=media_group, fn() {
+    c.box(style=media_group(), fn() {
       if many && media_key(c, key + "/prev", "skip-back", t("web-pages.drive.player.prev"), on && prev is Some(_), small=true, ink~) {
         match prev {
           Some(other) => go(other)
@@ -1168,29 +1176,83 @@ fn desk_play_controls(
     })
     |> ignore
     c.box(style=desk_grow_clip, fn() {
-      c.rich(where_runs(p, fr, s, playing, picture, ink), style=media_time_words) |> ignore
+      if !narrow {
+        c.rich(said, style=media_time_words) |> ignore
+      }
     })
     |> ignore
-    c.box(style=media_group, fn() {
+    c.box(style=media_group(), fn() {
       desk_volume(c, p, on, ink)
+      // short of room (a narrow page, a finger's keys far apart), what is used least leaves the row for its ⋯, the
+      // least first: 保存此帧, the subtitle, the speed (player_drop_grab)
+      let gone : Array[MenuItem?] = []
       // the speed, as a figure: its menu of speeds
       let sid = c.id(key + "/speed")
-      if media_rate(c, key + "/speed", speed_label(p.speed()), t("web-pages.drive.player.rate"), on, ink~) {
-        v.rates = !v.rates
-        p.wake()
-      }
+      let speed_slot = c.id(key + "/speed-slot")
+      c.box(id=speed_slot, taps=false, drop=player_drop_speed, fn() {
+        if media_rate(c, key + "/speed", speed_label(p.speed()), t("web-pages.drive.player.rate"), on, ink~) {
+          v.rates = !v.rates
+          p.wake()
+        }
+      })
+      |> ignore
       speed_menu(c, v, p, sid)
       let (subtitle, subs_on) = p.subtitle()
-      if subtitle &&
-        media_key(c, key + "/captions", "captions", t(if subs_on { "web-pages.drive.player.captionsOff" } else { "web-pages.drive.player.captionsOn" }), on, small=true, lit=subs_on, ink~) {
+      let subs_label = t(if subs_on { "web-pages.drive.player.captionsOff" } else { "web-pages.drive.player.captionsOn" })
+      let subs_flip = fn() {
         p.toggle_subtitle()
         p.wake()
       }
+      if subtitle {
+        let slot = c.id(key + "/captions-slot")
+        c.box(id=slot, taps=false, drop=player_drop_subtitle, fn() {
+          if media_key(c, key + "/captions", "captions", subs_label, on, small=true, lit=subs_on, ink~) {
+            subs_flip()
+          }
+        })
+        |> ignore
+        if c.left_out(slot) {
+          gone.push(Some(more_line(subs_label, "captions", disabled=!on, on_press=subs_flip)))
+        }
+      }
       // 保存此帧: paused, the frame shown at its own size
-      if picture &&
-        media_key(c, key + "/save-frame", "camera", t("android-chat.video.saveFrame"), on && !playing && ready && !v.grabbing, small=true, ink~) {
-        grab(v, p, fr)
-        p.wake()
+      let grabs = on && !playing && ready && !v.grabbing
+      if picture {
+        let slot = c.id(key + "/save-frame-slot")
+        c.box(id=slot, taps=false, drop=player_drop_grab, fn() {
+          if media_key(c, key + "/save-frame", "camera", t("android-chat.video.saveFrame"), grabs, small=true, ink~) {
+            grab(v, p, fr)
+            p.wake()
+          }
+        })
+        |> ignore
+        if c.left_out(slot) {
+          gone.push(
+            Some(
+              more_line(t("android-chat.video.saveFrame"), "camera", disabled=!grabs, on_press=fn() {
+                grab(v, p, fr)
+                p.wake()
+              }),
+            ),
+          )
+        }
+      }
+      // (the speeds in it under their name, the one it plays at chosen)
+      if c.left_out(speed_slot) {
+        if !gone.is_empty() {
+          gone.push(None)
+        }
+        gone.push(Some(menu_item_of(t("web-pages.drive.player.rate"), fn() {  }, heading=true)))
+        for sp in player_speeds {
+          gone.push(
+            Some(
+              menu_item_of(speed_label(sp), fn() {
+                  p.set_speed(sp)
+                  p.wake()
+                }, chosen=sp == p.speed(), disabled=!on),
+            ),
+          )
+        }
       }
       // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left)
       if picture && @ui.platform() == 0 {
@@ -1199,6 +1261,17 @@ fn desk_play_controls(
           full()
         }
       }
+      // what left the row, in its ⋯ (there only while something did), opened over it as the speeds are
+      let more = key + "/more"
+      let open = menu_open.val == more
+      c.box(more=true, fn() {
+        if media_key(c, more, "more", t("web-main.menu.more"), on, small=true, lit=open, ink~) {
+          menu_open.val = if open { "" } else { more }
+          p.wake()
+        }
+      })
+      |> ignore
+      menu_items(c, more, c.id(more), gone, side=Top, along=End) |> ignore
     })
     |> ignore
   })
@@ -1648,7 +1721,7 @@ fn phone_controls(
     })
     |> ignore
     phone_timeline(c, v, p, s, fr, on, ink)
-    c.box(style=phone_keys_row, fn() {
+    c.box(style=phone_keys_row(), fn() {
       if many &&
         phone_key(c, key + "/prev", "skip-back", on && prev is Some(_), t("android-misc.drive.player.prev"), ink, drop=phone_drop_steps) {
         match prev {
@@ -2025,16 +2098,25 @@ pub let player_track_inset : Double = @ui.Space::S2_5.px()
 let phone_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(phone_timeline_h), px=S2_5, justify=JCenter)
 
 ///|
-/// The keys' row: 2 apart (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the one
-/// pressed; 40 high, the keys as wide where it has the room (phone_key_box).
-// kept across runs: a value (no field of it changes)
-let phone_keys_row : @ui.Style = @ui.css("row w=Full h=S10 gap=S0_5 align=ACenter")
+/// The keys' row: 2 apart at least (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the
+/// one pressed, as far as makes each a press's room across (keys_gap); 40 high.
+fn phone_keys_row() -> @ui.Style {
+  phone_keys_look.then(@ui.style(gap=keys_gap(size=phone_key_side)))
+}
 
 ///|
-/// A key: 40 across where the row has the room, down to 32 where it has less (the web's phone's keys: nine of them, a
-/// frame's keys and the speed's, in a phone's 332), round (as high as wide).
 // kept across runs: a value (no field of it changes)
-let phone_key_box : @ui.Style = @ui.css("w=S10 min_w=S8 radius=Full align=ACenter justify=JCenter")
+let phone_keys_look : @ui.Style = @ui.css("row w=Full h=S10 align=ACenter")
+
+///|
+/// A key: 40 across, round; where the row has not the room for them all, some leave it (phone_drop_grab), none
+/// squeezed narrower (its press's room is its side and the room beside it: keys_gap).
+// kept across runs: a value (no field of it changes)
+let phone_key_box : @ui.Style = @ui.css("w=S10 radius=Full align=ACenter justify=JCenter")
+
+///|
+/// A key's side (phone_key_box's S10).
+let phone_key_side : Double = 40.0
 
 ///|
 /// Where the row has not the room for all its keys (a phone's narrowest with a paused picture's: its frames' steps, its
@@ -2044,6 +2126,17 @@ let phone_drop_grab : Int = 1
 
 ///|
 let phone_drop_steps : Int = 2
+
+///|
+/// Where the controls' row on a wider page has not the room for its keys (a finger's far apart on a narrow one), what
+/// leaves it for its ⋯ first: 保存此帧, then the subtitle, then the speed (its speeds in the ⋯ under its name).
+let player_drop_grab : Int = 1
+
+///|
+let player_drop_subtitle : Int = 2
+
+///|
+let player_drop_speed : Int = 3
 
 ///|
 /// The speed: a capsule at least as wide as it is high (its ends 20 round: at the row's end in the controls' foot corner,
@@ -2162,3 +2255,31 @@ let desk_list_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false, narrow
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_list_now : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, wrap=false, narrow=@ui.text_patch(size=Lg))
+
+///|
+/// Whether a desktop's controls are laid out as the web's phone sizes are (under 640: viewer_small_w): where it is said
+/// on a line of its own over the timeline (as a phone's), the row under it the keys' alone.
+fn desk_narrow(width : Double) -> Bool {
+  width <= viewer_small_w
+}
+
+///|
+/// That line: the bar 8 over it (a phone's, clear of its corner), 16 high, in from its side as the timeline's track is.
+let desk_time_over : Double = 8.0
+
+///|
+let desk_time_h : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_time_line : @ui.Style = @ui.style(h=Fixed(desk_time_h), pl=S2_5, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, wrap=false)
+
+///|
+/// A line of the controls' ⋯ (desk_play_controls): what a key that left their row does, `on_press` once it is chosen.
+fn more_line(label : String, icon : String, disabled~ : Bool, on_press~ : () -> Unit) -> MenuItem {
+  menu_item_of(label, on_press, icon~, disabled~)
+}
