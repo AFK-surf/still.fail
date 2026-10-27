@@ -1902,7 +1902,7 @@ pub fn Viewer::draw_flight(
   let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
   let (cw, ch) = (along(sx + sw, c.width) - cx, along(sy + sh, c.height) - cy)
   c.layer(fn() {
-    c.box(w=Px(cw), h=Px(ch), tx=cx, ty=cy, clip=true, fn() {
+    c.box(style=@ui.style(w=Fixed(cw), h=Fixed(ch), clip=true), tx=cx, ty=cy, fn() {
       c.box(w=Px(bw), h=Px(bh), tx=bx - cx, ty=by - cy, radius=r, clip=true, bg=ground, fn() {
         if picture != "" {
           c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
@@ -3094,6 +3094,7 @@ pub fn file_viewer_reset() -> Unit {
   marking.write_field.set("")
   marking.note_field.set("")
   pv_thumbs.clear()
+  pv_bands.clear()
   pv_frames.clear()
   pv_frames_n.val = 0
   pv_first.clear()
