@@ -28,6 +28,37 @@ test "a chat whose agent is done says so under its last message, its words whole
 }
 
 ///|
+test "where a chat stands gone from its end (a person wrote): what is over it stays where it is, nothing drops onto it as it leaves" {
+  let need = "Stripe 的测试 key，放进 vault 后告诉我名字"
+  let said = Ref(true)
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !said.val {
+      return tp
+    }
+    match tp.value {
+      Some(v) =>
+        { ..tp, value: Some(@sffixture.with_state(v, ("需要你处理：" + need, "need", need))), version: tp.version + 1 }
+      None => tp
+    }
+  })
+  t.keep_parts(true)
+  t.run_for(100.0)
+  let (_, need_y) = t.find(need).unwrap()
+  let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  assert_true(need_y > last_y)
+  // the core no longer says it: its room stays as a floor (as an agent's line's), the last message where it was, its
+  // copy fading under nothing
+  said.val = false
+  t.draw()
+  for _ in 0..<6 {
+    t.run_for(50.0)
+    let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+    assert_true((y - last_y).abs() < 0.5, msg="\{y} \{last_y}")
+  }
+}
+
+///|
 test "what a chat's agent needs is said under its last message" {
   let need = "Stripe 的测试 key，放进 vault 后告诉我名字"
   let calls : Array[Made] = []

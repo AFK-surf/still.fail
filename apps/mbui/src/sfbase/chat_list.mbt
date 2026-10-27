@@ -32,7 +32,7 @@ pub fn Entry::id(self : Entry) -> String {
     Sent(e) => "s:" + e.key
     Newer => "newer"
     Out(o) => "o:" + o.id
-    State(_, _, _) => "state"
+    State(_, _, _) => state_key
     Working(a) => "act:" + a.key
     Foot => "foot"
   }
@@ -83,7 +83,8 @@ pub(all) struct Reading {
   /// drawn; the rows new to it since, until they show
   known : Map[String, Bool]
   mut drawn : Bool
-  /// the agents' lines among them (by key): one gone from the chat's end is forgotten (row_keys)
+  /// the rows at its end that go from it as its turns go (by key): its agents' lines, where it stands. One gone leaves
+  /// its room as a floor; an agent's line gone is forgotten (row_keys)
   acts : Map[String, Bool]
   /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
   /// played on, its activities' lingering)
@@ -259,6 +260,10 @@ pub(all) struct KeptPlace {
 ///|
 pub let kept_places : Map[String, KeptPlace] = {}
 
+
+///|
+/// The key of where a chat stands among its list's rows (Entry::id): one at a time, at its end.
+let state_key : String = "state"
 
 ///|
 /// The list's entries (Chat.kt Messages → all): the page before's spinner, the messages with the unread line over the
@@ -898,16 +903,19 @@ pub fn row_keys(
       all_keys.insert(at + j, "o:" + l.row.id)
     }
   }
-  // an agent's line gone from the chat's end (its turn over, its moment stayed) is new to the list again: its next
-  // turn comes in as its first did, its room opening, not there at once (its key is its agent's, the same each turn)
+  // a row gone from the chat's end as its turns go: an agent's line (its turn over, its moment stayed), where the chat
+  // stands (a person wrote, an agent took it up). An agent's line is new to the list again: its next turn comes in as
+  // its first did, its room opening, not there at once (its key is its agent's, the same each turn)
   if !v.newer && !rd.acts.is_empty() {
     let gone = rd.acts.keys().filter(fn(k) { !all_keys.contains(k) }).collect()
     for k in gone {
       rd.acts.remove(k)
-      rd.known.remove(k)
-      rd.admitted.remove(k)
+      if k != state_key {
+        rd.known.remove(k)
+        rd.admitted.remove(k)
+      }
       // its room stays as a floor, taken in the build it goes in (Chat.kt floor: a frame without either would have
-      // the list shorter by it, its end pulled up, everything over it dropped at once)
+      // the list shorter by it, its end pulled up, everything over it dropped at once onto the copy of it leaving)
       match rd.act_room.get(k) {
         Some(h) => rd.floor += h
         None => ()
@@ -1023,7 +1031,7 @@ pub fn row_keys(
       None => ()
     }
     rd.known[k] = true
-    if list[i] is Working(_) {
+    if list[i] is (Working(_) | State(_, _, _)) {
       rd.acts[k] = true
     }
   }
