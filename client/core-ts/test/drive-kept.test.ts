@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../src/core.ts";
-import { DriveKept, chatKeptId, keptId } from "../src/drive-kept.ts";
+import { DriveKept, chatKeptId, keptId, outboxKeptId, sentKeptId } from "../src/drive-kept.ts";
 import { keptFirst } from "../src/station/calls.ts";
 import { FakeHost } from "../src/testing.ts";
 import { answers, call } from "./helpers.ts";
@@ -265,6 +265,21 @@ test("past their bound the least lately read go, never the one just read nor one
   await run(kept.keep(keptId(ST, ROOT, "film"), "played", 1, 400, "video/mp4", 0, bytesOf(50)));
   assert.notEqual(await run(kept.read(keptId(ST, ROOT, "film"), 1, 400, 0, 50)), null);
   assert.equal([...host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).length, 2, "the bytes of those let go, gone");
+});
+
+test("a file kept whole is kept on under another name, its bytes where they are; one kept in part is not", async () => {
+  const host = new FakeHost();
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100, outbox: Number.POSITIVE_INFINITY });
+  const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
+  const [going, sent] = [outboxKeptId("clip"), sentKeptId(ST, "clip.mp4")];
+  await run(kept.keep(going, "outbox", 0, 8, "video/mp4", 0, bytesOf(4)));
+  assert.equal(await run(kept.rename(going, sent, "sent", 8)), false, "half of it kept");
+  await run(kept.keep(going, "outbox", 0, 8, "video/mp4", 4, bytesOf(4, 4)));
+  const before = [...host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).sort();
+  assert.equal(await run(kept.rename(going, sent, "sent", 8)), true);
+  assert.equal(await run(kept.has(going)), false);
+  assert.deepEqual(await run(kept.held(sent)), { type: "video/mp4", size: 8, bytes: bytesOf(8) });
+  assert.deepEqual([...host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).sort(), before, "nothing written again");
 });
 
 test("what is left of those kept in part: the first of each not kept, the most lately read first, but one whose rest its kind has no room for", async () => {

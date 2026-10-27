@@ -11,9 +11,9 @@
 // song, a PDF, a big file; `station.file`, `station.file.part` with `keep`): `chat`, by the station, the session and
 // the name (a file sent never changes), its size as the message says; none let go by itself, but by the person, a
 // file at a time (`cache.file.clear`), a chat's with it (`cache.clear`), and listed with its chat (`cache.usage`).
-// An image sent up from this device is kept too, as it went (`sent`, composer.ts): by its station and the name the
-// station keeps it under, its chat shows it and opens it from here, not read back from the station it went to; the
-// least lately read go past SENT_MAX, and it is counted and let go with the drives' files.
+// A file sent up from this device is kept too, as it went (`sent`, composer.ts), whatever it is: by its station and
+// the name the station keeps it under, its chat shows it, opens it and plays it from here, not read back from the
+// station it went to; the least lately read go past SENT_MAX, and it is counted and let go with the drives' files.
 // A file going up with a message (`outbox`, composer.ts) is kept too as it goes, with what it is and, once up, what
 // its station said of it (`noteUpload`): a message whose file had not gone, or whose own sending had not come, when the
 // app ended goes on from here as it starts again, not failed for a source the app no longer has. It goes as its message
@@ -35,8 +35,8 @@ export type KeepKind = "file" | "played" | "chat" | "sent" | "outbox";
 export const FILES_MAX = 512 * 1024 * 1024;
 /// Videos and songs, by the ranges played (DriveCache.kt PLAYED_MAX).
 export const PLAYED_MAX = 1536 * 1024 * 1024;
-/// Images sent up from here: the least lately read go past this.
-export const SENT_MAX = 256 * 1024 * 1024;
+/// Files sent up from here: the least lately read go past this (a phone's video alone can be a few hundred MB).
+export const SENT_MAX = 1024 * 1024 * 1024;
 /// How long a file going up with a message is kept for it at most: one left behind (its message gone some other way).
 export const OUTBOX_KEPT_MS = 7 * 24 * 3600_000;
 /// How seldom a file's last reading is written down: a video read a part a second is not a write a second.
@@ -304,6 +304,22 @@ export class DriveKept {
   /// What is kept of the file `id` let go (found changed on the station), unless a part of it is being written.
   forget(id: string): Effect.Effect<void> {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));
+  }
+
+  /// The file `from`, kept whole at its `size`, kept on as `to` of `kind` instead (its bytes where they are, nothing
+  /// read or written again), what was kept as `to` before let go; then the least lately read of `kind` past its bound.
+  /// False, and nothing changes, when it is not whole or a part of it is being written.
+  rename(from: string, to: string, kind: KeepKind, size: number): Effect.Effect<boolean> {
+    return Effect.gen({ self: this }, function* () {
+      const sql = yield* this.#db();
+      if (sql === null || this.#writing.has(from) || this.#writing.has(to) || !(yield* this.whole(from, size))) return false;
+      if (this.#kept(sql, to) !== null) yield* this.#drop(sql, to);
+      sql.run("UPDATE kept SET id = ?, kind = ?, used = ? WHERE id = ?", [to, kind, this.#host.nowMs(), from]);
+      sql.run("UPDATE part SET id = ? WHERE id = ?", [to, from]);
+      sql.run("DELETE FROM origin WHERE id = ?", [from]);
+      yield* this.#trim(sql, kind, to);
+      return true;
+    });
   }
 
   /// Whether anything of the file `id` is kept (or it was saved where it can be read back).
