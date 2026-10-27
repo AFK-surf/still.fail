@@ -1992,6 +1992,25 @@ test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_r
   assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["需要你处理：Stripe 的测试 key", "need", "Stripe 的测试 key"]);
 });
 
+test("a_chats_page_says_what_its_agent_waits_on_once_in_its_activity_not_again_at_the_end", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const waits = { kind: "message", declared: "waiting", ending: "waiting", waitFor: "CI 跑完", waitSeconds: 600, outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", process: "warm", lastTurn: waits })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "合一下"), { ...entry(2, "等 CI"), authorKind: "agent", author: "k" }], thread: null });
+  const waiting = { ...row("k", now), thread: 7 };
+  waiting.agents[0].lastTurn = waits;
+  waiting.agents[0].process = "warm";
+  t.set(rows("ws/a"), [waiting]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual(v.agents.map((a: J) => [a.status, a.wait?.text]), [["running", "等待：CI 跑完"]]);
+  assert.deepEqual([v.stateText, v.stateLead, v.stateRest], [undefined, undefined, undefined]);
+});
+
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {
   const t = setup();
   const u = ui();

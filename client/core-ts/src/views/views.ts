@@ -1824,10 +1824,11 @@ export class Views implements Owner {
     if (card !== null && open(card)) view.decision = decisions.shown(card);
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
-    // said at the end of its messages too. A card waiting is not: it shows in the chat itself.
+    // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
+    // on: its activity under the messages says it, with how long it has waited.
     const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false) : null;
-    if (line !== null) {
+    if (line !== null && line[3]?.kind !== "wait") {
       view.stateText = line[0];
       const lead = line[3];
       if (lead !== null) {
