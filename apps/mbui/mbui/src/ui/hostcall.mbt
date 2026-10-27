@@ -83,6 +83,10 @@ struct FakeHost {
   mut zoomed : Bool
   mut snap : (Double, Double, Double, Double)
   mut snap_state : Int
+  /// whether the app can open a window of its own (Tester::set_window_opens), and what it opened them for, oldest first
+  /// (@hostapi.window_open)
+  mut window_opens : Bool
+  windows_opened : Array[String]
   /// the number on the app's icon as last told (@ui.set_badge)
   mut badge : Int
   /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
@@ -2152,6 +2156,19 @@ fn h_window_act(what : Int) -> Unit {
   match fake.val {
     Some(f) => f.window_acts.push(what)
     None => @hostapi.window_act(what)
+  }
+}
+
+///|
+fn h_window_open(what : String) -> Bool {
+  match fake.val {
+    Some(f) => {
+      if f.window_opens {
+        f.windows_opened.push(what)
+      }
+      f.window_opens
+    }
+    None => @hostapi.window_open(what)
   }
 }
 

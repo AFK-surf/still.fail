@@ -1806,6 +1806,7 @@ web-pages.screen.stat.software
 web-pages.screen.stat.system
 web-pages.screen.stats
 web-pages.screen.takeOverTip
+web-pages.screen.window
 web-pages.security.devicesWhich
 web-pages.security.peopleCount
 web-pages.security.title

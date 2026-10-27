@@ -1855,6 +1855,7 @@ let en : Map[String, String] = {
   "web-pages.screen.stat.system": "Remote system",
   "web-pages.screen.stats": "Connection",
   "web-pages.screen.takeOverTip": "Pause {names} and take control",
+  "web-pages.screen.window": "Open in new window",
   "web-pages.security.devicesWhich": "Signed in within the last 30 days",
   "web-pages.security.peopleCount": "{n} people",
   "web-pages.security.peopleCount.one": "{n} person",

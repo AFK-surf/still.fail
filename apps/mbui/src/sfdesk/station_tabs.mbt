@@ -80,6 +80,15 @@ fn station_tab_name(src : Source, tab : String) -> String? {
 }
 
 ///|
+/// The page tab `tab` beside chat `r` shows, where it is one that may go to a window of its own: a station's screen
+/// (as it was opened, its title the one it was opened with).
+fn station_tab_page(r : ChatRef, tab : String) -> Page? {
+  guard station_tab(tab) is Some(("screen", station, screen)) else { return None }
+  let at = panel_screen_pages.get(tabs_key(r) + "/" + tab).unwrap_or({ station, screen, title: "", until_gone: false })
+  Some(Screen(at))
+}
+
+///|
 /// Keep the opening intent per chat: login browsers close their tab when gone.
 let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
 

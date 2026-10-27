@@ -369,6 +369,16 @@ impl @hostapi.Host for FakeHost with window_snap_state(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with window_opens(_) {
+  window_opens()
+}
+
+///|
+impl @hostapi.Host for FakeHost with window_open(_, what) {
+  h_window_open(what)
+}
+
+///|
 impl @hostapi.Host for FakeHost with shared_in(_) {
   shared_in()
 }

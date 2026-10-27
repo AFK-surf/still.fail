@@ -395,7 +395,7 @@ fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
 ///|
 /// What 控制中心 holds, the most used first (as UU 远程's control bar has it): the combos as tiles (while driving: their
 /// names, a tap sends their keys), how the view goes (live: its round trip, pressed its figures), 画质 and 缩放 (where
-/// the station changes it) a row each, then sending files, 全屏, and 断开.
+/// the station changes it) a row each, then sending files, 在新窗口打开 (a desktop's), 全屏, and 断开.
 fn center_panel(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -468,6 +468,15 @@ fn center_panel(
       @sf.menu_item(c, @sf.t("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload") {
       done()
       send_asked(c, s, u)
+    }
+    // in a window of its own (a desktop's), as the web's ScreenPage: it leaves this one, so it is not open twice
+    let alone : @sfbase.Page = Screen({ station: s.station, screen: s.screen, title: "", until_gone: false })
+    if @sfbase.window_opens_for(alone) &&
+      @sf.menu_item(c, @sf.t("web-pages.screen.window"), key="screen-center-window", panel=true, icon="external") {
+      done()
+      if @sfbase.open_window(alone) {
+        close()
+      }
     }
     if s.open_now() {
       let full = full_now(u)
