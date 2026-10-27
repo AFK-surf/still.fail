@@ -207,6 +207,8 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
     assert_true(near(at.0, at.1), msg="\{size}: the composer \{at} from the page's side and foot")
     assert_true(near(at.1, @sf.capsule_in(p.radii.3, b.h)), msg="\{size}: not concentric with \{p.radii.3}")
+    // (the list's card beside it as round at its foot, the gap between them even)
+    assert_true(near(@sf.tape_side_corners()[2].radius(), p.radii.3), msg="\{size}: the list's foot corner")
     assert_eq(t.corner_faults(), [])
   }
 }

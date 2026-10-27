@@ -74,19 +74,29 @@ pub fn native_capsule_h() -> Double? {
 }
 
 ///|
-/// The foot left corner of a card whose foot is at `foot` in the window, beside the system's action at the column's
-/// foot: the corner a capsule as high as the action (native_capsule_h), its foot on the action's, stands concentric in
-/// (as far in from the card's side as from its foot); None where there is none, or the action is not over the card's
-/// foot (the keyboard up: under it).
-pub fn native_foot_corner(foot : Double) -> Double? {
-  guard native_capsule_h() is Some(h) && @ui.system_nav_action() is Some((_, y, _, _)) else { return None }
-  let d = foot - (y + h)
-  if d < corner_fit.near || d > h {
-    return None
+/// The cards' foot corners away from the screen's edges, their feet at `foot` in the window, beside the system's action
+/// at the column's foot: the corner a capsule as high as the action (native_capsule_h), its foot on the action's,
+/// stands concentric in (as far in from a card's side as from its foot), each card's the same so the gaps between them
+/// run even (the user, 2026-10-28: 左边圆角也对齐); none where there is no action, or it is not over their feet (the
+/// keyboard up: under it). Said by the frame once a frame, before its cards; tape_corners reads it (native_foot_corner).
+pub fn native_foot_set(foot : Double) -> Unit {
+  native_foot_made.val = match (native_capsule_h(), @ui.system_nav_action()) {
+    (Some(h), Some((_, y, _, _))) => {
+      let d = foot - (y + h)
+      if d < corner_fit.near || d > h {
+        None
+      } else {
+        Some(@ui.round_like_out(h / 2.0 + d))
+      }
+    }
+    _ => None
   }
-  let r = @ui.round_like_out(h / 2.0 + d)
-  native_foot_made.val = Some(r)
-  Some(r)
+}
+
+///|
+/// The cards' foot corners away from the screen's edges as native_foot_set said them this frame (None: the tape's own).
+pub fn native_foot_corner() -> Double? {
+  native_foot_made.val
 }
 
 ///|
@@ -96,8 +106,7 @@ fn native_foot_corner_now(r : Double) -> Bool {
 }
 
 ///|
-// kept across runs: said by native_foot_corner as the frame lays out the card beside the action, None as the app
-// begins anew
+// kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew
 let native_foot_made : Ref[Double?] = Ref(None)
 
 ///|

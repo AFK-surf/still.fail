@@ -760,6 +760,9 @@ pub fn frame(
   // on the tape the page's panel 6 in from the bars' edges too
   let panel_top = top + bar_in_now()
   let panel_h = dmax(0.0, page_h - 2.0 * bar_in_now())
+  // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric
+  // in on its line: said before any of them is built)
+  @sf.native_foot_set(panel_top + panel_h)
   // the page in its pane, `ph` high
   // (its top row, a bar's height, the window's title bar under the page, whether the page has a bar there or not: a
   // new chat, settings, 奏: title_row)
@@ -828,9 +831,7 @@ pub fn frame(
       c.box(style=frame_tape, fn() {
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
-        // (its foot left corner, beside the system's action at the column's foot, the one the composer there stands
-        // concentric in as high as that action and on its line: @sf.native_foot_corner)
-        let page_corners = native_foot(tape_pane_corners(Page, panel_of is Some(_)), panel_top + panel_h)
+        let page_corners = tape_pane_corners(Page, panel_of is Some(_))
         let page_w = if panel_of is None { main_w + under } else { main_w }
         let pane = tape_behind(c, Page, fn() { c.box(
           style=page_apart.then(
@@ -1574,17 +1575,6 @@ fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[@ui.CornerOf] {
     Side => @sf.tape_side_corners()
     Page => @sf.tape_corners(left=false, right=!panel)
     Panel => @sf.tape_corners(left=false, right=true)
-  }
-}
-
-///|
-/// A tape's panel `k`'s corners with its foot left one beside the system's action (@sf.native_foot_corner) where its
-/// foot is at `foot` in the window: what stands across its foot (the composer) on the action's line and as high,
-/// concentric with it there.
-fn native_foot(k : FixedArray[@ui.CornerOf], foot : Double) -> FixedArray[@ui.CornerOf] {
-  match @sf.native_foot_corner(foot) {
-    Some(r) => [k[0], k[1], k[2], Own(r)]
-    None => k
   }
 }
 

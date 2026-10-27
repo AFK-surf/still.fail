@@ -284,7 +284,13 @@ pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
   let edge : @ui.CornerOf = if screen > 0.0 { Own(screen) } else { tape_edge }
   let l = if left { edge } else { Own(tape_corner) }
   let r = if right { edge } else { Own(tape_corner) }
-  [l, r, r, l]
+  // (their foot corners away from the screen's edges, beside the system's action at the column's foot: the one the
+  // composer stands concentric in on its line, native_foot_set)
+  let foot : @ui.CornerOf = match native_foot_corner() {
+    Some(k) => Own(k)
+    None => Own(tape_corner)
+  }
+  [l, r, if right { edge } else { foot }, if left { edge } else { foot }]
 }
 
 ///|
