@@ -23,7 +23,7 @@
 /// 32 high one after another: 4617 room fewer. A ground no control (Ctx::cursor's Arrow: a message's words a hold
 /// picks in, a stage, the room round a list's rows): a message's name and time no more parted with its words, 1957
 /// room fewer.)
-let rooms_known : Map[String, Int] = { "room": 2524, "apart": 0, "hover": 28 }
+let rooms_known : Map[String, Int] = { "room": 1720, "apart": 0, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

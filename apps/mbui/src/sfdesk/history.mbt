@@ -64,7 +64,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       }
     })
     |> ignore
-    c.box(style=wh_tools, fn() {
+    c.box(style=@sf.keys_row(), fn() {
       let io = c.id("history/only-io")
       if c.clicked(io) {
         @sfpages.history_only_io_flip()
@@ -415,10 +415,6 @@ let wh_head : @ui.Style = @ui.css("row w=Full h=S11 pl=S4 pr=S2 pb=SPx gap=S2 al
 /// stood out by (its words on the line of the details' under it).
 // kept across runs: a value (no field of it changes)
 let wh_identity : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2, align=ACenter, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wh_tools : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -293,7 +293,7 @@ fn chat_bar(
         // ⌘F's bar, in place of the buttons while it is open: it covers none of the chat
         Some(view) if find_chat() == chat_key(r) && view.thread is Some(th) => find_bar(c, src, r, th, list)
         Some(view) =>
-          c.box(style=chat_bar_buttons, fn() {
+          c.box(style=@sf.keys_row(), fn() {
             // nothing left in it (the core's `archivable`): archived with one press
             if view.archivable && !view.archived {
               if @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
@@ -862,11 +862,6 @@ let chat_title_part : Double = 0.42
 let chat_title_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
-/// What is done in its bar, at its end, 2 apart (pageBarActions).
-// kept across runs: a value (no field of it changes)
-let chat_bar_buttons : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
-
-///|
 /// The station's tag (chatStation): 1 by 7 in, a line round it, round as a pill, its dot, mark and name 4 apart, 12,
 /// muted (the words' ink and the strong line on hover); 160 wide at most.
 // kept across runs: a value (no field of it changes)
@@ -891,7 +886,6 @@ let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.css("border_color=B
 /// The tag's height (its words' 18 line, 1 over and under) and its dot's side (via_direct's S2): its dot in its round
 /// end (chat_station).
 let chat_station_h : Double = 20.0
-
 
 ///|
 let via_dot_side : Double = 8.0

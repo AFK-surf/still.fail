@@ -70,7 +70,7 @@ fn pane_bar(
         })
         |> ignore
         match actions {
-          Some(f) => c.box(style=chat_bar_buttons, id=acts, taps=false, fn() { f() }) |> ignore
+          Some(f) => c.box(style=@sf.keys_row(), id=acts, taps=false, fn() { f() }) |> ignore
           None => ()
         }
       })

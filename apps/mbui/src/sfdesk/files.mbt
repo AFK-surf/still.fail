@@ -336,7 +336,7 @@ let bar_box : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S1 align=ACenter j
 /// The same in a window's whole: its last button at the window's top right corner following it where the bar's buttons
 /// do (@sf.window_end_in).
 fn bar_box_wide() -> @ui.Style {
-  bar_box.then(@ui.style(pr=@sf.room_of(@sf.window_end_in(bar_in))))
+  bar_box.then(@ui.style(pr=@sf.room_of(@sf.window_end_in(bar_in)), gap=@sf.keys_gap()))
 }
 
 ///|
@@ -351,6 +351,7 @@ fn bar_box_tape() -> @ui.Style {
       pt=@sf.room_of(over),
       pl=@sf.room_of(@sf.tape_bar_clear_start(bar_in)),
       pr=@sf.room_of(@sf.tape_bar_end(bar_in)),
+      gap=@sf.keys_gap(),
     ),
   )
 }
@@ -376,12 +377,12 @@ let bar_apart : @ui.Style = @ui.css("w=S2")
 let tabs_groove : @ui.Style = @ui.style(row=true, w=@sf.grow, p=S0_5, gap=S0_5, radius=Full, bg=Tint)
 
 ///|
-/// A tab: an equal share of the groove, at most 280, 28 high; the one shown on the page's ground.
+/// A tab: an equal share of the groove (as Safari's: the groove is its tabs', none of it left empty after them), 28
+/// high; the one shown on the page's ground.
 // kept across runs: a value (no field of it changes)
 let tab_off : @ui.Style = @ui.style(
   row=true,
   w=@sf.grow,
-  max_w=Fixed(tab_most),
   h=S7,
   px=S1_5,
   align=ACenter,
@@ -392,9 +393,6 @@ let tab_off : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let tab_on : @ui.Style = tab_off.then(@ui.css("bg=Bg shadow=Sm hovered{bg=Bg}"))
-
-///|
-let tab_most : Double = 280.0
 
 ///|
 /// Its close (tabClose): a circle 16 across, 6 in from its end.
