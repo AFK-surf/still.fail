@@ -1,0 +1,42 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/gallery"
+
+import {
+  "mbui/ui",
+}
+
+// Values
+pub fn thumbhash_image(String) -> String?
+
+pub fn view(@ui.Ctx, Source) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct Day {
+  day : String
+  items : Array[Item]
+}
+
+pub(all) struct Item {
+  id : String
+  video : Bool
+  time : String
+  w : Double
+  h : Double
+  thumbhash : String
+  duration : Double?
+}
+
+pub(all) struct Source {
+  days : () -> Result[Array[Day], String]?
+  thumb : (Item) -> String
+  large : (Item) -> String
+  older : () -> Unit
+}
+
+type State
+
+// Type aliases
+
+// Traits

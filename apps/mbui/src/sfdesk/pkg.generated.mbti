@@ -1,0 +1,614 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sfdesk"
+
+import {
+  "mbui/signals",
+  "mbui/ui",
+  "moonbitlang/core/debug",
+  "stillfail/sf",
+  "stillfail/sfapp/settings",
+  "stillfail/sfbase",
+}
+
+// Values
+pub fn act_done(@ui.Ctx, String, done? : String) -> (Result[Json, Json]) -> Unit
+
+pub fn add_folder(@sfbase.Source, String, Array[@sfbase.DvStation]) -> Unit
+
+pub fn apart_ground() -> Int64
+
+pub let archive_side : ArchiveSide
+
+pub let archive_side_page : Int32
+
+pub fn ask_unpin(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, @sfbase.DvRoot) -> Unit
+
+pub let bar_in : Double
+
+pub let bar_update_in : Double
+
+pub let bar_update_inset : Double
+
+pub fn bell_lit(@sfbase.Source, @sfbase.Workspace) -> Bool
+
+pub fn bring_page() -> Unit
+
+pub fn browse(@ui.Ctx, @sfbase.Source, String, String, String, @sfbase.DriveAt, Bool, BrowseDoes) -> Browse
+
+pub fn chat_drop(@ui.Ctx, @sfbase.Source, String, String, Int32) -> Unit
+
+pub fn chat_find_open(@ui.Ctx, @sfbase.ChatRef) -> Unit
+
+pub fn chat_talk(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, Int32, () -> Unit) -> Unit
+
+pub let closed_bar_in : Double
+
+pub let closed_edge : Double
+
+pub fn closed_ground() -> Int64
+
+pub let column_gap : Double
+
+pub let column_w : Double
+
+pub fn columns_view(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, String, Shown, Double, halves? : Bool, empty? : () -> Unit) -> Unit
+
+pub let context : ContextMenu
+
+pub fn context_image(@ui.Ctx, Int32, String) -> Unit
+
+pub fn context_link(@ui.Ctx, String) -> Unit
+
+pub fn context_menu(@ui.Ctx) -> Unit
+
+pub fn context_page(@ui.Ctx, Int32) -> Unit
+
+pub fn copy_path(@ui.Ctx, String) -> Unit
+
+pub fn drag_ask(Asking) -> Unit
+
+pub fn drag_frame(@ui.Ctx, @sfbase.Source, String, outside? : Bool) -> Unit
+
+pub fn dragged() -> @sfbase.Dragged?
+
+pub fn drive_folder(@sfbase.Source, String, String, String) -> (Json?, String?)
+
+pub fn drive_pane(@ui.Ctx, @sfbase.Source, Previewed, String, () -> Unit, () -> Unit, (String) -> Unit, below? : Bool) -> Unit
+
+pub fn drive_row(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry, RowProps, Shown, compact? : Bool, depth? : Int32, expanded? : Bool, on_toggle? : () -> Unit, column? : Bool, along? : Bool) -> Unit
+
+pub fn drive_start(@sfbase.DvStation) -> String?
+
+pub fn drive_stations(@sfbase.Source, String) -> (Array[@sfbase.DvStation]?, String?)
+
+pub fn drive_view(@sfbase.Source, String) -> String
+
+pub fn drop_hint(@ui.Ctx, Int32) -> Unit
+
+pub let edge_half : Double
+
+pub fn favorite_add(@sfbase.Source, String, Favorite) -> Unit
+
+pub fn favorite_has(Array[Favorite], String, String, String) -> Bool
+
+pub fn favorite_remove(@sfbase.Source, String, String, String, String) -> Unit
+
+pub fn favorites(@sfbase.Source, String) -> Array[Favorite]
+
+pub fn file_tab(String, String, String) -> String
+
+pub fn files_go(@sfbase.DriveAt) -> Unit
+
+pub fn files_nav(@ui.Ctx, @sfbase.Source, String) -> Unit
+
+pub fn files_places(@ui.Ctx, @sfbase.Source, String, top? : Double, foot? : Double, go? : (@sfbase.DriveAt) -> Unit) -> Unit
+
+pub fn files_shell(@ui.Ctx, @sfbase.Source, String, Array[@sfbase.DvStation], @sfbase.DriveAt, Double) -> Unit
+
+pub fn files_station(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @settings.Core, @sfbase.DriveAt, Double, narrow? : NarrowOf, go? : (@sfbase.DriveAt) -> Unit) -> Unit
+
+pub fn files_tab(@ui.Ctx, @sfbase.Source, String, String, String, only_station? : Bool, scope? : String) -> Unit
+
+pub fn folder_actions(@ui.Ctx, @sfbase.Source, FolderOf, style? : @ui.Style) -> Unit
+
+pub fn folder_empty(@ui.Ctx, String, (() -> Unit)?) -> Unit
+
+pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String
+
+pub fn folder_page(@ui.Ctx, @sfbase.Source, FolderOf, NarrowOf?, front_it? : () -> Unit) -> Unit
+
+pub fn frame(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace], Bool) -> Unit
+
+pub fn go_to(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, (@sfbase.DriveAt) -> Unit) -> Unit
+
+pub fn go_to_open() -> Unit
+
+pub fn goes_over(@sfbase.Page) -> Bool
+
+pub fn is_wide(@ui.Ctx) -> Bool
+
+pub fn jobs_popover(@ui.Ctx, @sfbase.Source, String, Json?, (String) -> Unit, (String) -> Unit) -> Unit
+
+pub fn jobs_tab(@ui.Ctx, @sfbase.Source, String, String, Json?, (String) -> Unit) -> Unit
+
+pub fn keep_files_page(String, @sfbase.DriveAt) -> Unit
+
+pub fn keep_opened(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, String) -> Unit
+
+pub fn keep_tab(String, @sfbase.DriveAt?) -> Unit
+
+pub fn kept_tab(String) -> @sfbase.DriveAt??
+
+pub fn keys(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+
+pub fn keys_dialog(@ui.Ctx, @sfbase.Source) -> Unit
+
+pub fn landing(@sfbase.Workspace) -> Bool
+
+pub fn last_files_page(String) -> @sfbase.DriveAt?
+
+pub fn letters_to_list(@sfbase.ChatRef) -> Unit
+
+pub fn list_head(@ui.Ctx, @sfbase.Arrangement, (String) -> Unit) -> Unit
+
+pub fn list_mode(@sfbase.Source, @sfbase.Workspace) -> Int32
+
+pub fn lit_place() -> String
+
+pub fn manage_roots(@sfbase.Source, String, String) -> Unit
+
+pub fn narrow_bare() -> NarrowOf
+
+pub fn nav_frame(() -> Unit) -> Unit
+
+pub fn nav_open(String) -> Unit
+
+pub fn neighbour(@sfbase.Source, @sfbase.Workspace, Int32) -> Unit
+
+pub fn new_chat() -> Unit
+
+pub fn new_chat_after(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef) -> Unit
+
+pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+
+pub fn on_cards() -> Bool
+
+pub fn open_attention() -> Unit
+
+pub fn open_entry(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, @sfbase.DvEntry, Array[@sfbase.DvEntry], (@sfbase.DriveAt) -> Unit) -> Unit
+
+pub fn open_info_pop() -> Unit
+
+pub fn open_jobs_pop() -> Unit
+
+pub fn open_rail_menu(String) -> Unit
+
+pub fn open_settings() -> Unit
+
+pub fn open_settings_at(@settings.Route) -> Unit
+
+pub fn open_transfers() -> Unit
+
+pub fn opener_of(String) -> String
+
+pub fn overlays(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+
+pub fn page_bar_end(@ui.Ctx) -> Unit
+
+pub fn page_bar_room() -> (Double, Double, Double, Double)
+
+pub fn page_bar_row(@ui.Ctx, @ui.Style, (Double, Double) -> Unit) -> Int32
+
+pub let page_beside_least : Double
+
+pub fn page_goes_on() -> Bool
+
+pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
+
+pub let pane_w : Double
+
+pub let peek_gap : Double
+
+pub let peek_leave_ms : Double
+
+pub fn pick_job(String) -> Unit
+
+pub fn pin_folder(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, String, Bool) -> Unit
+
+pub fn pin_stations(@sfbase.Source, String) -> Array[@sfbase.DvStation]
+
+pub fn place_bare(String) -> Bool
+
+pub fn place_name(String) -> String
+
+pub fn preview_shown(@sfbase.Source, String) -> Bool
+
+pub let rail_closed_w : Double
+
+pub fn rail_go(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, String) -> Unit
+
+pub fn rail_items(@sfbase.Source, String) -> Array[String]
+
+pub fn rail_overlays(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+
+pub let rail_pitch : Double
+
+pub fn rail_stations_label(@sfbase.Source, String) -> String
+
+pub let rail_w : Double
+
+pub fn refresh_folder(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
+
+pub fn refreshing(@sfbase.DriveAt) -> Bool
+
+pub fn remove_entries(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, Array[(@sfbase.DriveAt, @sfbase.DvEntry)]) -> Unit
+
+pub fn reset() -> Unit
+
+pub fn roots_page(@ui.Ctx, @sfbase.Source, String, @sfbase.DvStation?, Bool, String?, Bool, NarrowOf, (@sfbase.DriveAt) -> Unit) -> Unit
+
+pub fn row_key(String, String) -> String
+
+pub fn row_took(@ui.Ctx) -> Bool
+
+pub fn rows_sample(@ui.Ctx, @sfbase.DriveAt, Shown, Int32, compact? : Bool) -> Unit
+
+pub fn rows_view(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, Shown, Bool, compact? : Bool, head? : () -> Unit, empty? : () -> Unit, foot? : Double) -> Unit
+
+pub fn save_entry(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry) -> Unit
+
+pub fn set_drive_view(@sfbase.Source, String, String) -> Unit
+
+pub fn set_preview_shown(@sfbase.Source, String, Bool) -> Unit
+
+pub fn set_this_machine(String) -> Unit
+
+pub fn setting_route(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @settings.Route, @sf.PageFrame) -> Bool
+
+pub fn settings_beside(@settings.Route) -> Unit
+
+pub let settings_landing : @settings.Route
+
+pub fn share_entry(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry) -> Unit
+
+pub fn show_page() -> Unit
+
+pub fn shown_in_page(@sfbase.Page) -> Bool
+
+pub fn side_ask(@sfbase.Source, @sfbase.ChatRef, String, String?) -> Unit
+
+pub fn side_bar() -> @ui.Style
+
+pub fn side_bar_tape() -> @ui.Style
+
+pub fn side_beside(@ui.Ctx, String, Bool, Double, () -> Unit, () -> Unit) -> Unit
+
+pub fn side_change(@sfbase.Source, @sfbase.ChatRef, String, String?) -> Unit
+
+pub fn side_changing(String, Array[String], String, Bool) -> Unit
+
+pub fn side_folded() -> Bool
+
+pub let side_in_ms : Double
+
+pub let side_max : Double
+
+pub let side_min : Double
+
+pub let side_move_ms : Double
+
+pub fn side_now(@sfbase.Source, @sfbase.ChatRef) -> (Array[String], String)
+
+pub fn side_of(@sfbase.ChatView) -> (Array[String], String)
+
+pub fn side_open_for(@sfbase.Source, @sfbase.Workspace, @sfbase.Page) -> SideOf?
+
+pub let side_out_ms : Double
+
+pub let side_pane : @ui.Style
+
+pub let side_panel_style : @ui.Style
+
+pub fn side_place() -> String
+
+pub fn side_slide_reset() -> Unit
+
+pub let side_tab : @ui.Style
+
+pub let side_tab_close : @ui.Style
+
+pub let side_tab_front : @ui.TextStyle
+
+pub let side_tab_in_front : @ui.Style
+
+pub let side_tab_list : @ui.Style
+
+pub let side_tab_words : @ui.TextStyle
+
+pub fn side_toggle(@sfbase.Source, @sfbase.ChatRef, String) -> Unit
+
+pub fn side_top(@ui.Ctx) -> Unit
+
+pub fn side_top_h() -> Double
+
+pub fn side_width(Double) -> Double
+
+pub fn sidebar_toggle() -> Unit
+
+pub fn station_files_pick(@sfbase.Source, String) -> Unit
+
+pub fn station_name(@sfbase.Source, String) -> String
+
+pub fn station_page_beside(@sfbase.Source, @sfbase.ChatRef, @sfbase.Page) -> Bool
+
+pub fn station_pick_set(PickAt, Array[@sfbase.Dragged]) -> Unit
+
+pub fn station_tabs_sweep(@ui.Ctx, @sfbase.Source) -> Unit
+
+pub fn sv_sweep(@ui.Ctx, @sfbase.Source) -> Unit
+
+pub fn switcher(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+
+pub fn switcher_escape(@ui.Ctx) -> Bool
+
+pub fn switcher_open() -> Bool
+
+pub fn switcher_open_with(String) -> Unit
+
+pub fn switcher_toggle(@ui.Ctx) -> Unit
+
+pub fn tab_building() -> Bool
+
+pub fn tab_file(String) -> (String, String, String)?
+
+pub fn tab_go(@sfbase.DriveAt) -> Unit
+
+pub fn tab_place(String) -> @sfbase.DriveAt??
+
+pub fn tab_place_set(String, @sfbase.DriveAt?) -> Unit
+
+pub fn tab_service(String) -> String?
+
+pub fn tab_take_drop(@ui.Ctx) -> (@sfbase.Dragged, Double, Double)?
+
+pub let tape_shows : Double
+
+pub fn tape_shows_left() -> Double
+
+pub fn tape_shows_right() -> Double
+
+pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf) -> Unit
+
+pub fn tip_keys(@sfbase.Source) -> (String) -> String
+
+pub fn toggle_jobs_pop() -> Unit
+
+pub fn transfers_key(@ui.Ctx, @sfbase.Source, String, Double, Double) -> Unit
+
+pub fn transfers_key_shown(@sfbase.Source, String) -> Bool
+
+pub fn transfers_open() -> Unit
+
+pub fn transfers_shown(@sfbase.Source, String) -> Bool
+
+pub let update_closed_in : Double
+
+pub let update_top : Double
+
+pub fn upload_row(@ui.Ctx, @sfbase.Source, @sfbase.DvUpload) -> Unit
+
+pub let view_icons : Array[(String, String)]
+
+pub fn view_in(@sfbase.Source, String, Double) -> String
+
+pub fn view_switch(@ui.Ctx, String, String, (String) -> Unit, ways? : Array[String]) -> Unit
+
+pub fn views_for(Double) -> Array[String]
+
+pub let wide : Wide
+
+pub fn wide_back() -> (() -> Unit)?
+
+pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, () -> Unit) -> Unit
+
+pub let zou_rise_ms : Double
+
+// Errors
+
+// Types and methods
+pub(all) struct ArchiveSide {
+  mut q : String
+  mut limit : Int32
+  mut last : Json?
+  mut landed : Bool
+}
+
+pub(all) struct Asking {
+  into : @sfbase.DriveAt
+  into_name : String
+  total : Int32
+  clashes : Array[Clash]
+  answers : Map[String, String]
+  mut all : Bool
+  done : (Map[String, String]) -> Unit
+}
+
+pub(all) struct Browse {
+  key : String
+  owner : String
+  view : String
+  at : @sfbase.DriveAt
+  root : String
+  write : Bool
+  does : BrowseDoes
+  shown : @sfbase.BrowseView?
+}
+pub fn Browse::arrange_as(Self, @ui.Ctx, @sfbase.Source, by? : String, down? : Bool, hidden? : Bool) -> Unit
+pub fn Browse::arranged(Self, String, Array[@sfbase.DvEntry]) -> Array[@sfbase.DvEntry]?
+pub fn Browse::arrangement(Self) -> @sfbase.Arrangement
+pub fn Browse::choose(Self, @ui.Ctx, @sfbase.Source, String, String) -> Unit
+pub fn Browse::chosen(Self) -> @sfbase.Chosen
+pub fn Browse::chosen_with(Self, @sfbase.Source, String, @sfbase.DvEntry) -> Array[(@sfbase.DriveAt, @sfbase.DvEntry)]
+pub fn Browse::clear(Self, @ui.Ctx, @sfbase.Source) -> Unit
+pub fn Browse::forget_widths(Self, @ui.Ctx, @sfbase.Source) -> Unit
+pub fn Browse::is_chosen(Self, String, String) -> Bool
+pub fn Browse::is_open(Self, String) -> Bool
+pub fn Browse::keep_width(Self, @ui.Ctx, @sfbase.Source, String, Double) -> Unit
+pub fn Browse::keys(Self, @ui.Ctx, @sfbase.Source) -> Unit
+pub fn Browse::new_folder(Self, @ui.Ctx, @sfbase.Source, String) -> Unit
+pub fn Browse::press(Self, @ui.Ctx, @sfbase.Source, String, String) -> Unit
+pub fn Browse::rename(Self, @ui.Ctx, @sfbase.Source, String, @sfbase.DvEntry, String?) -> Unit
+pub fn Browse::rename_field(Self) -> @ui.Field
+pub fn Browse::renaming(Self) -> String?
+pub fn Browse::start_rename(Self, @ui.Ctx, @sfbase.Source, String, @sfbase.DvEntry) -> Unit
+pub fn Browse::take_show(Self) -> String?
+pub fn Browse::toggle(Self, @ui.Ctx, @sfbase.Source, String) -> Unit
+pub fn Browse::width_of(Self, String) -> Double?
+
+pub(all) struct BrowseDoes {
+  open : (@sfbase.DriveAt, @sfbase.DvEntry) -> Unit
+  go : (String, Bool) -> Unit
+  preview : (@sfbase.DriveAt, @sfbase.DvEntry) -> Unit
+  remove : (Array[(@sfbase.DriveAt, @sfbase.DvEntry)]) -> Unit
+}
+
+pub(all) struct Clash {
+  name : String
+  dir : Bool
+  size : Double
+  station : String
+  there : @sfbase.DvEntry
+}
+
+pub struct ContextMenu {
+  mut open : Bool
+  mut x : Double
+  mut y : Double
+  mut link : String
+  mut image : String
+  mut field : Int32
+  mut words : String
+  mut frame : Int32
+  mut copying : String
+}
+
+pub(all) struct Favorite {
+  station : String
+  root : String
+  path : String
+  name : String
+} derive(Eq)
+
+pub(all) struct FolderOf {
+  key : String
+  ws : String
+  st : @sfbase.DvStation
+  rights : @sfbase.DvRights
+  at : @sfbase.DriveAt
+  front : Bool
+  room : Double
+  go : (@sfbase.DriveAt, Bool) -> Unit
+  open_in : ((@sfbase.DriveAt, Bool) -> Unit)?
+  go_to : (() -> Unit)?
+  manage : (() -> Unit)?
+}
+
+pub(all) struct NarrowOf {
+  frame : @sf.PageFrame
+  back : () -> Unit
+}
+
+pub(all) struct PickAt {
+  station : String
+  station_name : String
+  root : String
+  root_name : String
+  path : String
+}
+
+pub(all) enum Previewed {
+  One(@sfbase.DriveAt, @sfbase.DvEntry)
+  Many(Int32)
+  Nothing
+}
+
+pub(all) struct RowProps {
+  items : () -> Array[@sf.MenuItem?]
+  open : () -> Unit
+  press : () -> Unit
+  menu : () -> Unit
+  chosen : Bool
+  renaming : Bool
+  rename : (String?) -> Unit
+  drop : @sfbase.DriveAt?
+}
+
+pub(all) struct Shown {
+  b : Browse
+  row_of : (@sfbase.DriveAt, @sfbase.DvEntry) -> RowProps
+  drop_on : (@sfbase.DriveAt) -> @sfbase.DriveAt?
+  clear : () -> Unit
+  write : Bool
+  transfers : Bool
+}
+
+pub(all) enum SideOf {
+  ChatSide(@sfbase.ChatRef)
+  NewSide(String)
+} derive(Eq)
+pub fn SideOf::key(Self) -> String
+
+pub(all) enum TapePane {
+  Side
+  Page
+  Panel
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) struct Wide {
+  mut side_w : Double
+  mut folded : Bool
+  mut edge_held : Bool
+  peeking : @signals.Signal[Bool]
+  mut crowded : Bool
+  mut peek_next : Bool
+  mut peek_top : @sfbase.Page?
+  mut side_place : String
+  mut side_key : String
+  mut kept_w : Double
+  mut kept_folded : Bool
+  mut in_bar : Bool
+  mut closed : Bool
+  mut moved_as : (Bool, Bool, Bool, String)?
+  mut brand_h : Double
+  mut band : Double
+  mut mark : Double
+  mut bar_pl : Double
+  mut bar_ml : Double
+  mut bar_mr : Double
+  mut peek_shift : Double
+  mut page_from : Double
+  mut landed : String
+  mut rail_menu : (String, Double, Double)?
+  mut rail_drag : (String, Double, Double)?
+  mut editing : Bool
+  mut attention_open : Bool
+  mut jobs_open : Bool
+  mut keys_open : Bool
+  mut tape : Bool
+  mut tape_at : TapePane
+  mut tape_ask : TapePane?
+  mut tape_chat : String
+  mut tape_panel : String
+  mut tape_pull : TapePane?
+  mut tape_drag : Double
+  mut tape_backing : Bool
+  mut tape_back_x0 : Double
+  mut tape_back_last : (Double, Double)
+  mut tape_back_v : Double
+  mut tape_back_end : @ui.BackStep?
+  mut tape_pick : String
+}
+
+// Type aliases
+
+// Traits

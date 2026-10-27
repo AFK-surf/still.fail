@@ -1,0 +1,152 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/core"
+
+import {
+  "mbui/signals",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub fn apply_delta(Json, Array[Json]) -> Json
+
+pub fn call(String, params? : Json, bytes? : Bytes?, on_done? : (Result[Json, Json]) -> Unit) -> Unit
+
+pub fn call_bytes(String, params? : Json, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Unit
+
+pub fn cancel(Int32) -> Unit
+
+pub let client : Client
+
+pub fn fatal() -> String?
+
+pub fn has_browser_session() -> Bool
+
+pub let on_failed : @ref.Ref[((String) -> Unit)?]
+
+pub fn own_clock(ClockRuntime) -> Unit
+
+pub fn query_of(String) -> String
+
+pub fn receive(String, Bytes?) -> Unit
+
+pub let restarted_text : @ref.Ref[String]
+
+pub fn sign_in((Result[Json, Json]) -> Unit) -> Unit
+
+pub fn start(data_dir? : String, cloud? : String, beta? : Bool) -> Bool
+
+pub fn step_of(String) -> String?
+
+pub fn stop() -> Unit
+
+pub fn stream(String, params? : Json, bytes? : Bytes?, on_value~ : (Json, Bytes?) -> Unit, on_done? : (Result[Json, Json]) -> Unit) -> Int32
+
+pub fn stream_bytes(String, params? : Json, on_value~ : (Json, Bytes?) -> Unit, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Int32
+
+pub fn subscribe(String, params? : Map[String, Json]) -> Sub
+
+pub fn time_topics(((Int32, String, Json?, Bool) -> Unit)?) -> Unit
+
+pub fn trace_note(Map[String, Json]) -> Unit
+
+pub fn trace_stop() -> Unit
+
+pub fn trace_to((String) -> Unit, bytes_max? : Int32) -> Unit
+
+pub fn track((String) -> Int32, (Int32) -> Unit) -> Unit
+
+pub fn unsubscribe(Sub) -> Unit
+
+pub fn wall_ms() -> Double
+
+// Errors
+
+// Types and methods
+pub struct Client {
+  mut version : Int32
+  mut fatal : String?
+  // private fields
+}
+pub fn Client::call(Self, String, params? : Json, bytes? : Bytes?, on_done? : (Result[Json, Json]) -> Unit) -> Int32
+pub fn Client::call_bytes(Self, String, params? : Json, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Int32
+pub fn Client::cancel(Self, Int32) -> Unit
+pub fn Client::new((String) -> Unit, send_bytes? : (String, Bytes) -> Unit) -> Self
+pub fn Client::receive(Self, String) -> Bool
+pub fn Client::receive_json(Self, Json, bytes? : Bytes?) -> Unit
+pub fn Client::reset(Self) -> Unit
+pub fn Client::restarted(Self) -> Unit
+pub fn Client::stream(Self, String, params? : Json, bytes? : Bytes?, on_value~ : (Json, Bytes?) -> Unit, on_done? : (Result[Json, Json]) -> Unit) -> Int32
+pub fn Client::stream_bytes(Self, String, params? : Json, on_value~ : (Json, Bytes?) -> Unit, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Int32
+pub fn Client::subscribe(Self, String, params? : Map[String, Json]) -> Sub
+pub fn Client::time_topics(Self, ((Int32, String, Json?, Bool) -> Unit)?) -> Unit
+pub fn Client::track(Self, (String) -> Int32, (Int32) -> Unit) -> Unit
+pub fn Client::unsubscribe(Self, Sub) -> Unit
+
+pub(all) struct ClockRuntime {
+  now : () -> Double
+  wait : (Int32, Bool, () -> Unit) -> () -> Unit
+  start : (String) -> Int32
+  end : (Int32) -> Unit
+  log : ((String) -> Unit)?
+}
+
+pub(all) enum Pace {
+  AtOnce
+  AsRun(Double)
+} derive(Eq, Show)
+
+pub struct Replay {
+  // private fields
+}
+pub fn Replay::answers_given(Self, String) -> Int32
+pub fn Replay::attach(Self) -> Unit
+pub fn Replay::client(Self) -> Client
+pub fn Replay::clock(Self, () -> Double) -> Unit
+pub fn Replay::deliver(Self, at_most? : Int32, now? : Double, host_by? : Double, taken_at? : Double, to? : (String, Bytes?) -> Unit) -> Int32
+pub fn Replay::detach() -> Unit
+pub fn Replay::diverged(Self) -> Array[String]
+pub fn Replay::drop(Self, String) -> Int32
+pub fn Replay::due(Self) -> Bool
+pub fn Replay::env(Self) -> Array[(String, String)]
+pub fn Replay::first_happened(Self) -> (Double, Double)?
+pub fn Replay::frame_period(Self) -> Double?
+pub fn Replay::fuzzy(Self) -> Array[String]
+pub fn Replay::given_at(Self, String) -> Double?
+pub fn Replay::given_at_where(Self, (Json) -> Bool) -> Double?
+pub fn Replay::host(Self, (String) -> Unit) -> Unit
+pub fn Replay::host_frames(Self) -> Array[Double]
+pub fn Replay::host_given(Self) -> (Double, Double)?
+pub fn Replay::left(Self) -> Int32
+pub fn Replay::local_station(Self) -> String
+pub fn Replay::next_due(Self) -> Double?
+pub fn Replay::next_step(Self) -> String?
+pub fn Replay::pace(Self, Pace, strict? : Bool) -> Unit
+pub fn Replay::parse(String) -> Self
+pub fn Replay::sent_bytes(Self, String, String, String) -> Bytes?
+pub fn Replay::sent_bytes_from(Self, String, String, String) -> Bytes?
+pub fn Replay::shuffle(Self, UInt32) -> Unit
+pub fn Replay::skip(Self, String) -> Unit
+pub fn Replay::skip_where(Self, (String, Json) -> Bool) -> Unit
+pub fn Replay::step_at(Self, String) -> Double?
+pub fn Replay::step_taken(Self, String) -> Bool
+pub fn Replay::step_wall(Self, String) -> Double?
+pub fn Replay::take_asked(Self) -> Array[String]
+pub fn Replay::text(Self) -> String?
+pub fn Replay::unanswered(Self) -> Int32
+pub fn Replay::unmade(Self) -> Array[String]
+pub fn Replay::waiting(Self) -> String?
+
+pub struct Sub {
+  id : Int32
+  topic : Json
+  mut value : Json?
+  mut error : Json?
+  mut version : Int32
+  changes : @signals.Signal[Int32]
+  // private fields
+}
+pub fn Sub::followed(Self) -> Self
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/sflayout"
+
+// Values
+
+// Errors
+
+// Types and methods
+type El
+
+type Pair
+
+type Rect
+
+type Report
+
+type Tape
+
+// Type aliases
+
+// Traits
