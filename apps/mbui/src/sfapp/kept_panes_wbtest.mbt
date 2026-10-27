@@ -54,8 +54,9 @@ test "the panes kept on 中屏's tape, the one in use too: drawn, said and read 
 ///|
 /// On 小屏, the pages kept (sfapp's view: each as a part, read out): chat "chat" opened, back to the chats, another
 /// opened from them, back again, the list dragged: what is drawn, said and read out at moments after each, drawn again
-/// where they can be (`again`) or built every frame; how many pages were drawn again over it all.
-fn kept_pages_run(again : Bool) -> (Array[Array[String]], Int) {
+/// where they can be (`again`) or built every frame, and at each frame of their slides; how many pages were drawn again
+/// over it all, those drawn again as they slid counted in `slid` too.
+fn kept_pages_run(again : Bool, slid : Ref[Int]) -> (Array[Array[String]], Int) {
   let (w, h) = (390.0, 844.0)
   let t = kept_rows_open("chat", w, h)
   t.keep_parts(true)
@@ -71,24 +72,39 @@ fn kept_pages_run(again : Bool) -> (Array[Array[String]], Int) {
       kept = kept + t.parts_kept()
     }
   }
+  // (each frame of a page sliding in or out, a display's frame apart: what is drawn)
+  let slide = fn() {
+    for _ in 0..<24 {
+      t.run_for(kept_slide_ms)
+      out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
+      kept = kept + t.parts_kept()
+      slid.val = slid.val + t.parts_kept()
+    }
+  }
   look()
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  slide()
   look()
   t.tap_text("夜里的构建又失败了")
-  t.run_for(@ui.nav_push_ms)
+  slide()
   look()
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  slide()
   t.drag(w * 0.5, h * 0.7, w * 0.5, h * 0.4, steps=6)
   look()
   (out, kept)
 }
 
 ///|
-test "the pages kept on 小屏: drawn, said and read out as building them each frame, as chats are opened and left" {
-  let (kept, n) = kept_pages_run(true)
-  let (built, _) = kept_pages_run(false)
+/// How far apart the frames of a page sliding are looked at (a display's at 60 Hz).
+let kept_slide_ms : Double = 16.0
+
+///|
+test "the pages kept on 小屏: drawn, said and read out as building them each frame, as chats are opened and left, each frame of their slides too, the page left drawn again as it slides out" {
+  let slid = Ref(0)
+  let (kept, n) = kept_pages_run(true, slid)
+  let (built, _) = kept_pages_run(false, Ref(0))
   assert_true(n > 0, msg="pages drawn again: \{n}")
+  assert_true(slid.val > 0, msg="pages drawn again as they slid: \{slid.val}")
   kept_rows_same(kept, built)
 }

@@ -436,3 +436,57 @@ test "a part kept drawn again: what takes the focus in it is in Tab's order, as 
   assert_eq(went_kept, ids)
   assert_eq(went_built, went_kept)
 }
+
+///|
+/// A part kept in a box `at` across (its margin, set between frames: what holds the part moved, not the part), in a
+/// box that clips, its builds counted; what it draws reaching past its box.
+fn moved_part_view(at : Ref[Double], builds : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+      c.box(w=Px(200.0), h=Px(120.0), ml=at.val, fn() {
+        c.kept_part(c.id("part"), "k", fn() {
+          builds.val = builds.val + 1
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x3366CCFFL, radius=8.0, fn() {
+            c.text("moved with its box", size=12.0) |> ignore
+            c.box(w=Px(260.0), h=Px(20.0), min_w=260.0, bg=0xCC6633FFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a part kept whose box moves: drawn again where its box is, as building it there draws it; built there past what its build drew, or moved by less than whole pixels" {
+  let run = fn(keep : Bool) {
+    let at = Ref(0.0)
+    let builds = Ref(0)
+    let t = Tester::new(moved_part_view(at, builds), w=400.0, h=300.0)
+    t.keep_parts(true)
+    t.drawn_again(keep)
+    t.draw()
+    let frames : Array[Array[Double]] = []
+    let again = []
+    for x in moved_part_at {
+      at.val = x
+      t.frame()
+      let c = g()
+      frames.push(Array::makei(c.ninst * inst_size, fn(v) { c.inst[v] }))
+      again.push(t.parts_kept())
+    }
+    (frames, again)
+  }
+  let (kept, again) = run(true)
+  let (built, _) = run(false)
+  kept_same(kept, built)
+  // (its band the clip it is in as far past it every way: 400 across; drawn first at 0, built again at 410 and at
+  // -190, at 0.3 and back at 0 moved by less than whole pixels)
+  assert_eq(again, [1, 1, 1, 0, 1, 0, 0, 0])
+}
+
+///|
+/// Where the box holding the part is put, frame by frame (moved_part_view).
+let moved_part_at : Array[Double] = [30.0, 90.0, 150.0, 410.0, 380.0, -190.0, 0.3, 0.0]

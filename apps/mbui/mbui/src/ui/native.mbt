@@ -671,12 +671,12 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     Some((cx, cy, cw, ch)) => (n.x + cx, n.y + cy, cw, ch)
     None => (n.x, n.y, n.fw, n.fh)
   }
-  // seen within the node and the clip it is painted in
-  let k = clip_top()
-  let x0 = dmax(n.x, clip_stack[k])
-  let y0 = dmax(n.y, clip_stack[k + 1])
-  let x1 = dmin(n.x + n.fw, clip_stack[k + 2])
-  let y1 = dmin(n.y + n.fh, clip_stack[k + 3])
+  // seen within the node and the clip it is painted in, as that shows (not a recording's band: clip_shown)
+  let ((cx0, cy0, cx1, cy1), _) = clip_shown()
+  let x0 = dmax(n.x, cx0)
+  let y0 = dmax(n.y, cy0)
+  let x1 = dmin(n.x + n.fw, cx1)
+  let y1 = dmin(n.y + n.fh, cy1)
   if x1 <= x0 || y1 <= y0 {
     return
   }

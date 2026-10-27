@@ -16,12 +16,13 @@
 // each given again: `reuse_prepaint`, `reuse_paint`.)
 
 ///|
-/// Where what a part's or a row's paint said is said again: `dy` down the window from where it was said. A list's row's
-/// is put in its list's clip (`cut`, its place in clip_stack), what of a clip was its recording's band (its own clip as
-/// recorded, band_l to band_r across and band_t to band_b down: kept_rows.mbt) left as far off as nothing cuts. `cut`
-/// -1: as it was said (a part's: nothing round it moved). What its build said of a node, said of `node` (its box's now:
-/// what it built is not built; -1, as it was said).
+/// Where what a part's or a row's paint said is said again: `dx` across and `dy` down the window from where it was said,
+/// put in the clip it is drawn in (`cut`, its place in clip_stack: a row's list's, a part's), what of a clip was its
+/// recording's band (its own clip as recorded, band_l to band_r across and band_t to band_b down: kept_rows.mbt,
+/// kept_part.mbt) left as far off as nothing cuts. `cut` -1: as it was said. What its build said of a node, said of
+/// `node` (its box's now: what it built is not built; -1, as it was said).
 priv struct Moved {
+  dx : Double
   dy : Double
   cut : Int
   band_l : Double
@@ -34,7 +35,7 @@ priv struct Moved {
 ///|
 /// What is said again where it was said.
 // kept across runs: never written
-let unmoved : Moved = { dy: 0.0, cut: -1, band_l: 0.0, band_t: 0.0, band_r: 0.0, band_b: 0.0, node: -1 }
+let unmoved : Moved = { dx: 0.0, dy: 0.0, cut: -1, band_l: 0.0, band_t: 0.0, band_r: 0.0, band_b: 0.0, node: -1 }
 
 ///|
 /// What a build said said again of node `node` (a part's or a row's box drawn again).
@@ -57,9 +58,9 @@ fn Moved::rect(
   let s = clip_stack
   let k = self.cut
   (
-    dmax(x0, s[k]),
+    dmax(x0 + self.dx, s[k]),
     dmax(y0 + self.dy, s[k + 1]),
-    dmin(x1, s[k + 2]),
+    dmin(x1 + self.dx, s[k + 2]),
     dmin(y1 + self.dy, s[k + 3]),
   )
 }
@@ -75,7 +76,7 @@ fn Moved::shows(self : Moved, x0 : Double, y0 : Double, x1 : Double, y1 : Double
 ///|
 /// A clip's 24 numbers (from `at` in `a`: its rect, its corners' radii and how smooth they are, its outer's 12) moved,
 /// in the clip it is put in (clip_into): what of its rect is the band's left as far off as nothing cuts, its rect's
-/// edges down and its outer's moved.
+/// other edges and its outer's moved.
 fn Moved::clip(self : Moved, a : Array[Double], at : Int) -> Unit {
   if self.cut < 0 {
     return
@@ -84,23 +85,15 @@ fn Moved::clip(self : Moved, a : Array[Double], at : Int) -> Unit {
   for m in 0..<24 {
     c[m] = a[at + m]
   }
-  if c[0] == self.band_l {
-    c[0] = -1.0e9
-  }
-  if c[1] == self.band_t {
-    c[1] = -1.0e9
-  }
-  if c[2] == self.band_r {
-    c[2] = 1.0e9
-  }
-  if c[3] == self.band_b {
-    c[3] = 1.0e9
-  }
-  c[1] = c[1] + self.dy
-  c[3] = c[3] + self.dy
+  c[0] = if c[0] == self.band_l { -1.0e9 } else { c[0] + self.dx }
+  c[1] = if c[1] == self.band_t { -1.0e9 } else { c[1] + self.dy }
+  c[2] = if c[2] == self.band_r { 1.0e9 } else { c[2] + self.dx }
+  c[3] = if c[3] == self.band_b { 1.0e9 } else { c[3] + self.dy }
   // (its outer, where it has one)
   if c[16] > 0.0 || c[17] > 0.0 || c[18] > 0.0 || c[19] > 0.0 {
+    c[12] = c[12] + self.dx
     c[13] = c[13] + self.dy
+    c[14] = c[14] + self.dx
     c[15] = c[15] + self.dy
   }
   clip_into(self.cut, c)
@@ -788,7 +781,7 @@ impl SaidAgain for SelsTaken with said_again(self, c, m) {
     if !m.shows(x0, y0, x1, y1) {
       continue
     }
-    selectable_painted(t.base, t.at, t.lay, t.text, t.ox, t.oy + m.dy, x0, y0, x1, y1)
+    selectable_painted(t.base, t.at, t.lay, t.text, t.ox + m.dx, t.oy + m.dy, x0, y0, x1, y1)
   }
 }
 
@@ -823,11 +816,26 @@ impl SaidList for BarsSaid with said_cut(_, c, len) {
 ///|
 impl SaidAgain for BarsTaken with said_again(self, c, m) {
   for b in self.bars {
-    let b = { ..b, y0: b.y0 + m.dy, y1: b.y1 + m.dy, ty: b.ty + m.dy }
+    let b = {
+      ..b,
+      x0: b.x0 + m.dx,
+      y0: b.y0 + m.dy,
+      x1: b.x1 + m.dx,
+      y1: b.y1 + m.dy,
+      tx: b.tx + m.dx,
+      ty: b.ty + m.dy,
+    }
     let b = if m.cut < 0 {
       b
     } else {
-      { ..b, y0: dmax(b.y0, clip_stack[m.cut + 1]), y1: dmin(b.y1, clip_stack[m.cut + 3]) }
+      let k = m.cut
+      {
+        ..b,
+        x0: dmax(b.x0, clip_stack[k]),
+        y0: dmax(b.y0, clip_stack[k + 1]),
+        x1: dmin(b.x1, clip_stack[k + 2]),
+        y1: dmin(b.y1, clip_stack[k + 3]),
+      }
     }
     if !m.shows(b.x0, b.y0, b.x1, b.y1) {
       continue
@@ -871,7 +879,14 @@ impl SaidList for RunsSaid with said_cut(_, c, len) {
 impl SaidAgain for RunsTaken with said_again(self, c, m) {
   ignore(c)
   for t in self.runs {
-    let t = { ..t, base: t.base + m.dy, top: t.top + m.dy, bottom: t.bottom + m.dy }
+    let t = {
+      ..t,
+      x0: t.x0 + m.dx,
+      x1: t.x1 + m.dx,
+      base: t.base + m.dy,
+      top: t.top + m.dy,
+      bottom: t.bottom + m.dy,
+    }
     // (as keep_text_runs keeps those inside the clip alone)
     if m.cut >= 0 && (t.top > clip_stack[m.cut + 3] || t.bottom < clip_stack[m.cut + 1]) {
       continue

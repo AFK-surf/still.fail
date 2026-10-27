@@ -658,9 +658,9 @@ fn kept_recs_taken(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A part or a row drawn again (@ui.on_drawn_again), `dy` down the window from where its build laid it out, `rel` down
-/// its list's rows: what its build said is kept, seen there.
-fn kept_drawn_again(c : @ui.Ctx, which : (Int, Int), dy : Double, rel : Double) -> Unit {
+/// A part or a row drawn again (@ui.on_drawn_again), `dx` across and `dy` down the window from where its build laid it
+/// out, `rel` down its list's rows: what its build said is kept, seen there.
+fn kept_drawn_again(c : @ui.Ctx, which : (Int, Int), dx : Double, dy : Double, rel : Double) -> Unit {
   match kept_recs.get(which) {
     Some(k) => {
       let frame = c.frame_number()
@@ -669,7 +669,7 @@ fn kept_drawn_again(c : @ui.Ctx, which : (Int, Int), dy : Double, rel : Double) 
         match mo.recs.get(key) {
           Some(r) => {
             r.seen = frame
-            r.x = x
+            r.x = x + dx
             if window {
               r.y = y + dy
             } else {

@@ -231,16 +231,17 @@ pub fn on_after_layout(f : (Ctx) -> Unit) -> Unit {
 
 ///|
 /// `f` told of each part and list's row kept that a frame draws again, its build not run (kept_part.mbt,
-/// kept_rows.mbt): which (Ctx::kept_building's), how far down the window from where its build laid it out it is drawn,
-/// and how far down its list's rows (what came above it grown or shrunk); a part's, the rows its drawing holds too. What
-/// a package keeps of the nodes a build laid out keeps them for it so, as it would were it built.
-pub fn on_drawn_again(f : (Ctx, (Int, Int), Double, Double) -> Unit) -> Unit {
+/// kept_rows.mbt), once the frame is laid out: which (Ctx::kept_building's), how far across and down the window from
+/// where its build laid it out it is drawn, and how far down its list's rows (what came above it grown or shrunk); a
+/// part's, the rows its drawing holds too. What a package keeps of the nodes a build laid out keeps them for it so, as it
+/// would were it built.
+pub fn on_drawn_again(f : (Ctx, (Int, Int), Double, Double, Double) -> Unit) -> Unit {
   drawn_again_hooks.push(f)
 }
 
 ///|
 // kept across runs: the packages over ui install theirs once in the process
-let drawn_again_hooks : Array[(Ctx, (Int, Int), Double, Double) -> Unit] = []
+let drawn_again_hooks : Array[(Ctx, (Int, Int), Double, Double, Double) -> Unit] = []
 
 ///|
 /// `f` runs as each list is painted, before its rows, with the list's node: what it draws is under them.
@@ -593,19 +594,16 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     _ => ()
   }
-  // a part kept, drawn again as its build drew it, what its build's paint said of the frame said again where it said
-  // it (kept_part.mbt, said.mbt), as its build's paint says it here: its drawing not where only targets are taken; a
-  // list's row, where it is now (kept_rows.mbt)
+  // a part kept or a list's row, drawn again as its build drew it where it is now, what its build's paint said of the
+  // frame said again there (kept_part.mbt, kept_rows.mbt, said.mbt), as its build's paint says it here: its drawing not
+  // where only targets are taken
   match e.again {
     Some({ row: Some(_), .. } as st) => {
       self.row_paint_again(i, st)
       return true
     }
     Some(st) => {
-      if dr.mode != mode_hits {
-        self.part_paint_again(st)
-      }
-      self.say_again(st.said, unmoved)
+      self.part_paint_again(i, st)
       return true
     }
     None => ()
@@ -715,13 +713,14 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     dr.mode = mode_draw
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
-  let painting = if e.part != 0 { self.part_paint_begin(e.part) } else { 0 }
+  let painting = if e.part != 0 { Some(self.part_paint_begin(e.part)) } else { None }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
   dr.mode = was
-  if e.part != 0 {
-    self.part_paint_end(e.part, i, i0, painting)
+  match painting {
+    Some(p) => self.part_paint_end(e.part, i, i0, p)
+    None => ()
   }
   if cutting {
     pop_clip()

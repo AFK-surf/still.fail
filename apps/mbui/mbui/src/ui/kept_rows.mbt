@@ -20,7 +20,7 @@
 // targets (where presses, the wheel and the pointer go) and the rest of the frame's lists; and its words. A list's rows
 // say what their builds said in their order, built or drawn again (Ctx::row_build_said). Its instances are recorded in
 // the band (its list's clip as built, row_reach past it) unclipped by its list, and put in its list's clip as it is
-// drawn (row_clip_into), built or drawn again alike, what its paint said too (only what shows there): a row drawn again
+// drawn (kept_clip_into), built or drawn again alike, what its paint said too (only what shows there): a row drawn again
 // is drawn as its build would draw it there. A part drawn again holds the rows it drew (kept_part.mbt).
 
 ///|
@@ -491,7 +491,7 @@ fn Ctx::rows_placed(
       rk.dy = dy
       rk.rel = st.above(n.item) - rk.above
       self.row_build_said(kp, r)
-      self.drawn_again_told((1, kp.id), dy, rk.rel)
+      self.drawn_again_told((1, kp.id), 0.0, dy, rk.rel)
       continue
     }
     // built where it is
@@ -560,12 +560,14 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
   for _ in 0..<20 {
     clip_stack.push(0.0)
   }
+  kept_cuts.push(k)
   let was = part_now.painting_row
   part_now.painting_row = id
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
   part_now.painting_row = was
+  kept_cuts.pop() |> ignore
   pop_clip()
   let n = self.nodes[i]
   kp.take_insts(self, i0)
@@ -605,7 +607,7 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
     !kp.holds_native() &&
     !self.holds_built(i)
   // in its list's clip
-  self.row_clip_into(k, i0, g0, drops=dr.tops.length() == t0 && dr.overlay.length() + dr.raised.length() == o0)
+  self.kept_clip_into(k, i0, g0, drops=dr.tops.length() == t0 && dr.overlay.length() + dr.raised.length() == o0)
   rk.last = (n.x, n.y, n.fw, n.fh)
   kp.lit = self.part_lit(kp)
 }
@@ -613,7 +615,13 @@ fn Ctx::row_paint_record(self : Ctx, i : Int, id : Int, alpha : Double) -> Unit 
 ///|
 /// Where what row `self`'s paint said is said: `dy` below where it was built, in the clip at `k` (its list's).
 fn RowKept::moved(self : RowKept, dy : Double, k : Int) -> Moved {
-  { dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1, node: -1 }
+  { dx: 0.0, dy, cut: k, band_l: self.band_l, band_t: self.band0, band_r: self.band_r, band_b: self.band1, node: -1 }
+}
+
+///|
+/// What of row `self` was recorded (its band: left, top, right, bottom).
+fn RowKept::band(self : RowKept) -> (Double, Double, Double, Double) {
+  (self.band_l, self.band0, self.band_r, self.band1)
 }
 
 ///|
@@ -627,36 +635,21 @@ fn Ctx::row_paint_again(self : Ctx, i : Int, kp : KeptPart) -> Unit {
   let i0 = self.ninst
   let g0 = self.segs.length()
   if dr.mode != mode_hits {
-    self.part_paint_again(kp)
-    let a = self.inst
-    for q in i0..<self.ninst {
-      let b = q * inst_size
-      rk.unband(a, b + 16)
-      a[b + 1] = a[b + 1] + dy
-      a[b + 17] = a[b + 17] + dy
-      a[b + 19] = a[b + 19] + dy
-      // (its outer, where it has one)
-      if a[b + 44] > 0.0 || a[b + 45] > 0.0 || a[b + 46] > 0.0 || a[b + 47] > 0.0 {
-        a[b + 41] = a[b + 41] + dy
-        a[b + 43] = a[b + 43] + dy
-      }
-      if a[b + 32] != 0.0 {
-        a[b + 34] = a[b + 34] + dy
-      }
-    }
+    self.insts_again(kp)
+    self.insts_moved(i0, rk.band(), 0.0, dy)
   }
   self.say_again(kp.said, rk.moved(dy, k))
-  self.row_clip_into(k, i0, g0, drops=true)
+  self.kept_clip_into(k, i0, g0, drops=true)
   let n = self.nodes[i]
   rk.last = (n.x, n.y, n.fw, n.fh)
 }
 
 ///|
-/// What a row drew from instance `i0` (its shapes' pieces from `g0`, in the frame's `segs`) put in the clip at `k` (its
-/// list's): each cut by it where they meet (clip_into); with `drops` (nothing of it put off to be drawn over
-/// everything), what it leaves nothing of dropped (row_drop). (What it said of the frame is put there as it is said:
-/// said.mbt's Moved.)
-fn Ctx::row_clip_into(self : Ctx, k : Int, i0 : Int, g0 : Int, drops~ : Bool) -> Unit {
+/// What a row or a part drew from instance `i0`, in its band (its shapes' pieces from `g0`, in the frame's `segs`), put
+/// in the clip at `k` (its list's, the part's): each cut by it where they meet (clip_into); with `drops` (nothing of it
+/// put off to be drawn over everything), what it leaves nothing of dropped (kept_drop). (What it said of the frame is
+/// put there as it is said: said.mbt's Moved.)
+fn Ctx::kept_clip_into(self : Ctx, k : Int, i0 : Int, g0 : Int, drops~ : Bool) -> Unit {
   let c = clip_scratch
   let a = self.inst
   for q in i0..<self.ninst {
@@ -680,12 +673,39 @@ fn Ctx::row_clip_into(self : Ctx, k : Int, i0 : Int, g0 : Int, drops~ : Bool) ->
     }
   }
   if drops {
-    self.row_drop(i0, g0)
+    self.kept_drop(i0, g0)
   }
 }
 
 ///|
-/// A clip's 24 numbers, worked on in place (row_clip_into).
+/// The clips what is being recorded in its band is put in (Ctx::kept_clip_into), the innermost last: a part's, a list's
+/// row's, as it is painted.
+// kept across runs: pushed and popped round each recording's paint
+let kept_cuts : Array[Int] = []
+
+///|
+/// The clip being painted in, as what is drawn in it shows (put in each clip what is recorded is put in: kept_cuts): its
+/// rect, its corners' radii. Not what is recorded (that is drawn as wherever it is put), but what is put outside the
+/// drawing where it shows (a native view, put in the window by the host) reads this.
+fn clip_shown() -> ((Double, Double, Double, Double), (Double, Double, Double, Double)) {
+  let k = clip_top()
+  let c = shown_scratch
+  for m in 0..<24 {
+    c[m] = clip_stack[k + m]
+  }
+  for j = kept_cuts.length() - 1; j >= 0; j = j - 1 {
+    clip_into(kept_cuts[j], c)
+  }
+  ((c[0], c[1], c[2], c[3]), (c[4], c[5], c[6], c[7]))
+}
+
+///|
+/// A clip's 24 numbers, worked on in place (clip_shown).
+// kept across runs: scratch, written before it is read
+let shown_scratch : FixedArray[Double] = FixedArray::make(24, 0.0)
+
+///|
+/// A clip's 24 numbers, worked on in place (Ctx::kept_clip_into).
 // kept across runs: scratch, written before it is read
 let clip_scratch : FixedArray[Double] = FixedArray::make(24, 0.0)
 
@@ -852,21 +872,45 @@ pub fn Tester::drawn_again(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
-/// The edges of a clip (its rect from `at` in `a`: x0 y0 x1 y1) that are the band's, the row's recording's own and not
-/// what cuts it: as far off as nothing cuts, so that its list's clip where it is drawn again cuts it there as it would
-/// have cut its build there.
-fn RowKept::unband(self : RowKept, a : FixedArray[Double], at : Int) -> Unit {
-  if a[at] == self.band_l {
-    a[at] = -1.0e9
-  }
-  if a[at + 1] == self.band0 {
-    a[at + 1] = -1.0e9
-  }
-  if a[at + 2] == self.band_r {
-    a[at + 2] = 1.0e9
-  }
-  if a[at + 3] == self.band1 {
-    a[at + 3] = 1.0e9
+/// A clip's rect (from `at` in `a`: x0 y0 x1 y1) moved `dx` across and `dy` down, but for its edges that are `band`'s
+/// (left, top, right, bottom), a recording's own and not what cuts it: those as far off as nothing cuts, so that the
+/// clip it is drawn again in cuts it there as it would have cut its build there.
+fn unband(
+  a : FixedArray[Double],
+  at : Int,
+  band : (Double, Double, Double, Double),
+  dx : Double,
+  dy : Double,
+) -> Unit {
+  let (l, t, r, b) = band
+  a[at] = if a[at] == l { -1.0e9 } else { a[at] + dx }
+  a[at + 1] = if a[at + 1] == t { -1.0e9 } else { a[at + 1] + dy }
+  a[at + 2] = if a[at + 2] == r { 1.0e9 } else { a[at + 2] + dx }
+  a[at + 3] = if a[at + 3] == b { 1.0e9 } else { a[at + 3] + dy }
+}
+
+///|
+/// What a row or a part drew again from instance `i0` to the frame's last, as recorded in `band`: moved `dx` across and
+/// `dy` down, its rects, its clips (what of them was the band's let go of: unband), their outers and the points they
+/// turn about with it.
+fn Ctx::insts_moved(self : Ctx, i0 : Int, band : (Double, Double, Double, Double), dx : Double, dy : Double) -> Unit {
+  let a = self.inst
+  for q in i0..<self.ninst {
+    let b = q * inst_size
+    a[b] = a[b] + dx
+    a[b + 1] = a[b + 1] + dy
+    unband(a, b + 16, band, dx, dy)
+    // (its outer, where it has one)
+    if inst_has_outer(a, b) {
+      a[b + 40] = a[b + 40] + dx
+      a[b + 41] = a[b + 41] + dy
+      a[b + 42] = a[b + 42] + dx
+      a[b + 43] = a[b + 43] + dy
+    }
+    if a[b + 32] != 0.0 {
+      a[b + 33] = a[b + 33] + dx
+      a[b + 34] = a[b + 34] + dy
+    }
   }
 }
 
@@ -887,10 +931,11 @@ fn Ctx::row_stuck(self : Ctx, s : Int, y : Double, stick : Double, room : Double
 }
 
 ///|
-/// What a row drew from instance `i0` (its shapes' pieces from `g0`), each in its clip, of which it leaves nothing:
-/// dropped, the pieces of the shapes kept alone kept, in order (where none of glass is among them: their runs are the
-/// frame's). What of a row is drawn is what shows in its list, built (in the band past it, or plainly) or drawn again.
-fn Ctx::row_drop(self : Ctx, i0 : Int, g0 : Int) -> Unit {
+/// What a row or a part drew from instance `i0` (its shapes' pieces from `g0`), each in its clip, of which it leaves
+/// nothing: dropped, the pieces of the shapes kept alone kept, in order (where none of glass is among them: their runs
+/// are the frame's). What of a row is drawn is what shows in its list, built (in the band past it, or plainly) or drawn
+/// again; of a part, what shows where it is drawn.
+fn Ctx::kept_drop(self : Ctx, i0 : Int, g0 : Int) -> Unit {
   let a = self.inst
   for q in i0..<self.ninst {
     let kind = a[q * inst_size + 5]
@@ -955,7 +1000,7 @@ fn Ctx::row_drop(self : Ctx, i0 : Int, g0 : Int) -> Unit {
 
 ///|
 /// A list's row built where none can be drawn again (Ctx::row_of: what moves round them, a press held), painted as it is
-/// (node `i`): what its list's clip leaves nothing of dropped, as of a row built in its band (row_drop).
+/// (node `i`): what its list's clip leaves nothing of dropped, as of a row built in its band (Ctx::kept_drop).
 fn Ctx::row_paint_plain(self : Ctx, i : Int, alpha : Double) -> Unit {
   let i0 = self.ninst
   let g0 = self.segs.length()
@@ -965,6 +1010,6 @@ fn Ctx::row_paint_plain(self : Ctx, i : Int, alpha : Double) -> Unit {
   self.paint(i, alpha)
   dr.bypass = -1
   if dr.tops.length() == t0 && dr.overlay.length() + dr.raised.length() == o0 {
-    self.row_drop(i0, g0)
+    self.kept_drop(i0, g0)
   }
 }

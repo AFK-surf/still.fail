@@ -260,8 +260,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
       late = late + 1
     }
-    // what the rows of the parts drawn again said, where their boxes were not laid out anew (kept_part.mbt)
+    // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where its
+    // box is, or built there where it cannot be (kept_part.mbt)
     c.parts_rows_left()
+    c.parts_placed()
     // what rows left out where they had not the room, drawn nowhere (readback.mbt)
     c.left_out_after_layout()
     // what covers an item, over it as laid out now (cover.mbt)

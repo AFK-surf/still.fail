@@ -999,13 +999,25 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 }
 
 ///|
+/// How far node `n` is moved sideways by its slide (a page sliding in), `width` across: on the device's pixels, so that
+/// what it holds moves by whole pixels (its words as crisp as at rest, as a look's move is: draw.mbt), and a part kept in
+/// it is drawn again there as building it there draws it (kept_part.mbt).
+fn Ctx::slid(self : Ctx, n : Node, width : Double) -> Double {
+  if n.slide == 0.0 {
+    0.0
+  } else {
+    on_pixels(n.slide * width, self.scale)
+  }
+}
+
+///|
 /// Places a subtree laid out as before under its parent's new origin
 /// (px, py): what commit would make of it, without its leaves' layouts.
 fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let n = self.nodes[i]
   let f = n.fl
   n.by_size(f.width, f.height)
-  n.x = px + f.left + n.tx + n.slide * f.width
+  n.x = px + f.left + n.tx + self.slid(n, f.width)
   n.y = py + f.top + n.ty
   let mut c = n.first
   while c >= 0 {
@@ -1031,7 +1043,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   let f = n.fl
   if n.same && f.laid_out_at() != gen {
     n.by_size(f.width, f.height)
-    let x = px + f.left + n.tx + n.slide * f.width
+    let x = px + f.left + n.tx + self.slid(n, f.width)
     let y = py + f.top + n.ty
     n.otx = n.tx
     n.oty = n.ty
@@ -1053,7 +1065,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   n.otx = n.tx
   n.oty = n.ty
   n.oslide = n.slide
-  n.x = px + f.left + n.tx + n.slide * f.width
+  n.x = px + f.left + n.tx + self.slid(n, f.width)
   n.y = py + f.top + n.ty
   n.fw = f.width
   n.fh = f.height

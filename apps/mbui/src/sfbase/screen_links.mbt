@@ -388,8 +388,8 @@ let peeks_hooked : Ref[Bool] = Ref(false)
 
 ///|
 /// A part or a list's row drawn again as it was built (@ui.on_drawn_again): the cards it holds held, as built.
-fn peeks_drawn_again(c : @ui.Ctx, which : (Int, Int), dy : Double, rel : Double) -> Unit {
-  ignore((c, dy, rel))
+fn peeks_drawn_again(c : @ui.Ctx, which : (Int, Int), dx : Double, dy : Double, rel : Double) -> Unit {
+  ignore((c, dx, dy, rel))
   for key, p in peeks {
     if p.held_by == which {
       peeks_built[key] = true
