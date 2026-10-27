@@ -83,8 +83,8 @@ let picture : (String, Int) -> String = @sfapp.core_pictures(fn(url, done) {
 })
 
 ///|
-/// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
-/// and videos' stills (`station.poster`): "" while one comes, "!" when it could not be had (@sfbase.ChatImages: one
+/// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one,
+/// how far it has come said as it comes), and videos' stills (`station.poster`): "" while one comes, "!" when it could not be had (@sfbase.ChatImages: one
 /// whose station could not be reached asked again).
 let chat_images : @sfbase.ChatImages = @sfbase.ChatImages::new()
 
@@ -96,10 +96,12 @@ fn chat_file(station : String, key : String, name : String) -> String {
     "key": Json::string(key),
     "name": Json::string(name),
     "thumb": Json::boolean(true),
+    "progress": Json::boolean(true),
   }
   // its name at the end: a scripted run finds it by it (`tap img:NAME`)
-  chat_images.get(station, id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
-    @core.call_bytes("station.file", params=Json::object(params), on_done=done)
+  chat_images.get(station, id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(heard, done) {
+    @core.stream_bytes("station.file", params=Json::object(params), on_value=fn(v, _) { heard(v) }, on_done=done)
+    |> ignore
   })
 }
 
@@ -113,7 +115,7 @@ fn chat_poster(station : String, key : String, name : String) -> String {
     "key": Json::string(key),
     "name": Json::string(name),
   }
-  chat_images.get(station, id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
+  chat_images.get(station, id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(_, done) {
     @core.call_bytes("station.poster", params=Json::object(params), on_done=done)
   })
 }
