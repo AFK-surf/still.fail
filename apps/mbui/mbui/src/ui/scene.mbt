@@ -114,7 +114,8 @@ fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
 /// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise); its
 /// outer the clip it is in's where that has one, else the clip it is in where it cuts through a rounded corner of it
 /// (clip_cuts), else none. `outer_kept`: the clip it is in's outer, whatever it cuts (a clip pushed where what it
-/// holds is laid out, not where it is drawn: a look's, draw.mbt).
+/// holds is laid out, not where it is drawn: a look's, draw.mbt). `outer_whole`: the clip it is in, whole, its outer
+/// (a circle reaching past it: push_circle_clip).
 fn push_clip_r(
   x0 : Double,
   y0 : Double,
@@ -123,10 +124,13 @@ fn push_clip_r(
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
   outer_kept? : Bool = false,
+  outer_whole? : Bool = false,
 ) -> Unit {
   let k = clip_top()
   let has_outer = clip_has_outer(k)
-  let from = if has_outer || outer_kept || !clip_cuts(k, x0, y0, x1, y1, r) {
+  let from = if outer_whole {
+    k
+  } else if has_outer || outer_kept || !clip_cuts(k, x0, y0, x1, y1, r) {
     // (its outer's numbers, or none)
     k + 12
   } else {
@@ -203,6 +207,27 @@ fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (D
     return true
   }
   false
+}
+
+///|
+/// A clip of a circle about (`cx`, `cy`), `r` across (a look's: draw.mbt), within the clip it is in: that clip its
+/// outer, so that it is cut round where it reaches past that clip's edges too (cut to that clip's rect, its curve
+/// would be lost there); where that clip has an outer of its own, cut to the clip's rect.
+fn push_circle_clip(cx : Double, cy : Double, r : Double) -> Unit {
+  let k = clip_top()
+  let s = clip_stack
+  if clip_has_outer(k) {
+    push_clip_r(
+      dmax(cx - r, s[k]),
+      dmax(cy - r, s[k + 1]),
+      dmin(cx + r, s[k + 2]),
+      dmin(cy + r, s[k + 3]),
+      (r, r, r, r),
+      (0.0, 0.0, 0.0, 0.0),
+    )
+  } else {
+    push_clip_r(cx - r, cy - r, cx + r, cy + r, (r, r, r, r), (0.0, 0.0, 0.0, 0.0), outer_whole=true)
+  }
 }
 
 ///|
@@ -866,7 +891,10 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // adaptive liquid glass inked by what is under it
   let group = n.glass_group && !glass_paint.solid
   if group {
+    // (a run of its own: what is before it and after it merges with none of it)
+    glass_run_break()
     self.emit_group_glass(i, alpha)
+    glass_run_break()
     glass_paint.in_group = glass_paint.in_group + 1
   }
   let ink = (glass_paint.ink_x, glass_paint.ink_y, glass_paint.ink_r)

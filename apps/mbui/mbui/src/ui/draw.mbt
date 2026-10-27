@@ -22,6 +22,8 @@ pub(all) struct Look {
   oy : Double
   /// turned by this, in radians (clockwise on the screen), about (ox, oy) as it scales
   rot : Double
+  /// drawn cut to a circle this far about (ox, oy), moved with it (0: not cut; a change of theme spreading: reveal.mbt)
+  circle : Double
 } derive(Show, Eq, Debug)
 
 ///|
@@ -36,6 +38,7 @@ pub let still_look : Look = {
   ox: 0.5,
   oy: 0.5,
   rot: 0.0,
+  circle: 0.0,
 }
 
 ///|
@@ -50,8 +53,9 @@ pub fn look(
   ox? : Double = 0.5,
   oy? : Double = 0.5,
   rot? : Double = 0.0,
+  circle? : Double = 0.0,
 ) -> Look {
-  { alpha, dx, dy, sx, sy, ox, oy, rot }
+  { alpha, dx, dy, sx, sy, ox, oy, rot, circle }
 }
 
 ///|
@@ -68,6 +72,7 @@ pub fn Look::then(self : Look, o : Look) -> Look {
     ox: if scales { self.ox } else { o.ox },
     oy: if scales { self.oy } else { o.oy },
     rot: self.rot + o.rot,
+    circle: if self.circle > 0.0 { self.circle } else { o.circle },
   }
 }
 
@@ -79,7 +84,8 @@ pub fn Look::is_still(self : Look) -> Bool {
   self.dy == 0.0 &&
   self.sx == 1.0 &&
   self.sy == 1.0 &&
-  self.rot == 0.0
+  self.rot == 0.0 &&
+  self.circle == 0.0
 }
 
 ///|
@@ -633,6 +639,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       // its tap rects, where it is laid out (what it would draw so is dropped)
       let i0 = self.ninst
       let (run, run_start, run_len) = (glass_paint.run, glass_paint.run_start, glass_paint.run_len)
+      let frost_run = glass_paint.frost_run
       dr.mode = mode_hits
       dr.bypass = i
       self.paint(i, alpha)
@@ -640,6 +647,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       dr.mode = 0
       self.ninst = i0
       glass_paint.run = run
+      glass_paint.frost_run = frost_run
       glass_paint.run_start = run_start
       glass_paint.run_len = run_len
     }
@@ -686,6 +694,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       outer_kept=true,
     )
   }
+  if look.circle > 0.0 {
+    // (about its point as it is drawn)
+    push_circle_clip(ox + dx, oy + dy, look.circle)
+  }
   if cutting {
     // as laid out (a look moves the cut with what it cuts)
     let k = clip_top()
@@ -714,6 +726,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if cutting {
     pop_clip()
   }
+  if look.circle > 0.0 {
+    pop_clip()
+  }
   if moved {
     pop_clip()
   }
@@ -724,7 +739,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.next_scroll_rects.truncate(s0 * 4)
     self.next_bars.truncate(b0)
   }
-  if !look.is_still() {
+  // (only cut, or faded: where it is drawn is where it was painted, its clips as pushed)
+  if dx != 0.0 || dy != 0.0 || look.sx != 1.0 || look.sy != 1.0 || look.rot != 0.0 {
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
     if look.rot != 0.0 {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)

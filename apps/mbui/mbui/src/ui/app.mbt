@@ -493,7 +493,8 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   let root = c.alloc(kind_box)
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
-  c.with_parent(root, fn() { (g_view.val)(c) })
+  // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
+  c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
   root

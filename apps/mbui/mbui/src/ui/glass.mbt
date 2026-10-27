@@ -138,6 +138,8 @@ pub fn Glass::liquid(
 /// text is in.
 priv struct GlassPaint {
   mut run : Int
+  // the last capture of frosted glass (0 none): what glass `shares_capture` takes
+  mut frost_run : Int
   mut run_start : Int
   mut run_len : Int
   mut solid : Bool
@@ -153,6 +155,7 @@ priv struct GlassPaint {
 ///|
 let glass_paint : GlassPaint = {
   run: 0,
+  frost_run: 0,
   run_start: -1,
   run_len: 0,
   solid: false,
@@ -167,6 +170,7 @@ let glass_paint : GlassPaint = {
 ///|
 fn reset_glass() -> Unit {
   glass_paint.run = 0
+  glass_paint.frost_run = 0
   glass_paint.run_start = -1
   glass_paint.run_len = 0
   glass_paint.solid = false
@@ -201,6 +205,7 @@ pub fn Ctx::glass_solid(self : Ctx) -> Bool {
 /// changed).
 fn Ctx::glass_frame(self : Ctx) -> Unit {
   glass_paint.run = 0
+  glass_paint.frost_run = 0
   glass_paint.run_start = -1
   glass_paint.run_len = 0
   glass_paint.in_group = 0
@@ -254,9 +259,9 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
   a[b + 21] = gl.refraction
   a[b + 22] = gl.chroma
   a[b + 23] = gl.merge
-  if gl.shares_capture && !gl.liquid && glass_paint.run != 0 {
-    // the last capture's, the run as it was
-    a[b + 20] = -glass_paint.run.to_double()
+  if gl.shares_capture && !gl.liquid && glass_paint.frost_run != 0 {
+    // the last frosted capture's (liquid glass's is no frost, and only of what is under its shapes), the run as it was
+    a[b + 20] = -glass_paint.frost_run.to_double()
     return
   }
   // one capture with the glass just before it: right after it, as it is,
@@ -281,8 +286,18 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
     glass_paint.run = glass_paint.run + 1
     glass_paint.run_start = k
     glass_paint.run_len = 1
+    if !gl.liquid {
+      glass_paint.frost_run = glass_paint.run
+    }
   }
   a[b + 20] = -glass_paint.run.to_double()
+}
+
+///|
+/// The glass next drawn starts a capture of its own, whatever was drawn just before it.
+fn glass_run_break() -> Unit {
+  glass_paint.run_start = -1
+  glass_paint.run_len = 0
 }
 
 ///|

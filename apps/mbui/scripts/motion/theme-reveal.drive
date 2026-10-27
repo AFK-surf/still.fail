@@ -1,0 +1,10 @@
+# 外观's theme picked (MBUI_FIXTURE=settings-appearance): the new theme spreading from where it was picked over the
+# window as it was (mbui reveal.mbt); then back.
+timeout 20000
+until 主题
+wait 800
+tap =深色
+wait 1500
+tap =浅色
+wait 1500
+exit

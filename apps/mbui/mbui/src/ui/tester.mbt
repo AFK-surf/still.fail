@@ -47,6 +47,7 @@ fn reset_globals() -> Unit {
   track_x.reset()
   track_y.reset()
   reset_glass()
+  reveal_reset()
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()

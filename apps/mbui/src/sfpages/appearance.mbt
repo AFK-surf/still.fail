@@ -15,6 +15,11 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)
     let picked = @sf.page_choice(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
     if picked != at {
+      // another theme picked: it spreads from where it was picked (mbui reveal.mbt)
+      if key == "appearance" {
+        let (x, y, _) = c.pointer()
+        c.tell("appearance/reveal", fn() { c.reveal_from(x, y, dark=fn() { @sf.theme().dark }) })
+      }
       c.after_build("appearance/" + key, fn() { @settings.set_pref(core, key, options[picked].0) })
     }
   }
