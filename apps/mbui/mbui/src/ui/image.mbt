@@ -477,6 +477,10 @@ fn Ctx::draw_image(
     e.fade_told = true
     self.moving(e.mover, e, what="image \"\{src}\" fading in")
   }
+  if fade < 1.0 {
+    // (what is painted changes each frame while it fades in: the part or the row whose build is painted reads so)
+    painted_live()
+  }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
     FitCover => {

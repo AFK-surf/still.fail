@@ -164,6 +164,20 @@ export const prompts = (line: string) => /(\?|:|>|\)|\]|＞|：|？)\s*$/.test(l
 /// Whether a prompt asks for a secret (its input is then not echoed).
 export const secretAsked = (line: string) => /password|passphrase|token|secret|密码/i.test(line);
 
+/// A command's words split where a shell would: the environment it is given before its program (`NAME=value`, a value
+/// starting `~/` taken from `home` as a shell expands it) and the program with its arguments.
+export function assignmentsOf(words: string[], home: string | undefined): { env: Record<string, string>; rest: string[] } {
+  const env: Record<string, string> = {};
+  let i = 0;
+  for (; i < words.length; i++) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(words[i]!);
+    if (!m) break;
+    const value = m[2]!;
+    env[m[1]!] = home !== undefined && (value === "~" || value.startsWith("~/")) ? home + value.slice(1) : value;
+  }
+  return { env, rest: words.slice(i) };
+}
+
 /// What a command runs, by its program's name (devin, not env or /x/bin/devin): past the environment it is given (`env`,
 /// its options, `VAR=value`) and what only runs it (sudo, npx, uvx, pnpm dlx…), a package without its version.
 export function programOf(words: string[]): string {

@@ -463,7 +463,6 @@
   "web-mobile.profiles.signedInAdded": "Signed in; profile added",
   "web-mobile.profiles.startLoginFailed": "Couldn't start sign-in: {error}",
   "web-mobile.profiles.stationOffline": "{station} offline; available once it reconnects",
-  "web-mobile.profiles.unused": "No connects use this profile",
   "web-mobile.profiles.useThis": "Use this account",
   "web-mobile.profiles.usedBy": "Used by",
   "web-mobile.profiles.value": "Value",

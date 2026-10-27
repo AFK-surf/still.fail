@@ -276,7 +276,20 @@ export class Accounts {
       }),
     );
     if (this.machine) {
-      this.stops.push(this.machine.changes(() => this.changed()));
+      // A profile on the machine's login is as that login is: one signed in, out or to another account in a terminal is
+      // checked again, so its last check (signed out, say) does not outlive the login it was of. The first reading
+      // after start is the start's checks'.
+      const said = (runtime: string) => JSON.stringify(this.machine!.get().filter((l) => l.runtime === runtime).map((l) => [l.loggedIn, l.email, l.usable]));
+      let last: Map<string, string> | null = null;
+      this.stops.push(
+        this.machine.changes(() => {
+          this.changed();
+          const before = last;
+          last = new Map(["claude", "codex"].map((r) => [r, said(r)]));
+          if (before === null) return;
+          for (const p of this.profiles()) if (p.machine === true && before.get(p.runtime) !== last.get(p.runtime)) this.afterSignIn(p.id);
+        }),
+      );
       this.background.spawn(() => this.machine!.refresh());
     }
     if (this.deps.checkOnStart !== false) {
@@ -1263,7 +1276,7 @@ export class Accounts {
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
-        loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home) : "",
+        loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home, p.machine === true) : "",
         machine: p.machine === true,
         backgroundOnMessage: p.backgroundOnMessage,
         fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,

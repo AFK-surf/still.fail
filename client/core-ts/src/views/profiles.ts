@@ -66,9 +66,12 @@ export function workspaceProfiles(stations: J[]): J {
   const items: J[] = [];
   for (const [key, list] of groups) {
     const members = list.map(([s, p]) => member(s, p, name, byId));
-    // What the row shows of it: the copy that has the login (a host, one signed in on its own) on a station that is up.
+    // What the row shows of it: the copy that has the login (a host, one signed in on its own) on a station that is up,
+    // one that works before one in trouble (which the row then names by its station).
     const owns = (m: J) => m.role !== "user";
-    const at = members.findIndex((m) => owns(m) && m.online) >= 0 ? members.findIndex((m) => owns(m) && m.online) : members.findIndex(owns) >= 0 ? members.findIndex(owns) : 0;
+    const troubled = (i: number) => isObject(list[i]![1].trouble);
+    const first = (ok: (m: J, i: number) => boolean) => members.findIndex(ok);
+    const at = [first((m, i) => owns(m) && m.online && !troubled(i)), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription";
     const share = list.map(([, x]) => x.share).find((x) => isObject(x)) ?? null;
@@ -98,7 +101,7 @@ export function workspaceProfiles(stations: J[]): J {
       hostOnline: byId.get(host)?.online === true,
       // Usable where any of its copies is.
       usable,
-      ...stateOf(usable, name(host), p),
+      ...stateOf(usable, name(host), p, signedIn.length > 1 ? troubleOn(list, members) : null),
       where: parts.join(" · "),
       allow,
       stations: stations.map(
@@ -121,11 +124,25 @@ export function workspaceProfiles(stations: J[]): J {
 /// host away, red); else its trouble (present.ts profileTrouble: stopped by its provider, its check failed or wants a
 /// sign-in, its allowance not read), in its check's words where the check did not pass, else the trouble's; else a check
 /// not made (未检查, neutral), which needs none.
-function stateOf(usable: boolean, hostName: string, p: J): { state: J; look: boolean } {
+/// `on`: of an account signed in on several stations, the trouble of those of its copies that have one, said with
+/// where (the row's own copy may be one that works).
+function stateOf(usable: boolean, hostName: string, p: J, on: { stations: string[]; p: J } | null): { state: J; look: boolean } {
   if (!usable) return { state: { text: t("core-views.profiles.away", { station: hostName }), tone: "red" }, look: true };
+  if (on !== null) {
+    const { state, look } = stateOf(true, hostName, on.p, null);
+    return { state: state === null ? null : { ...state, text: t("core-views.profiles.troubleOn", { station: on.stations.join(t("core-views.list_separator")), trouble: state.text }) }, look };
+  }
   const green = p.checkTone === "green";
   if (isObject(p.trouble)) return { state: green ? { text: String(p.trouble.title ?? ""), tone: "amber" } : { text: String(p.checkText ?? ""), tone: String(p.checkTone) }, look: true };
   return { state: green || !p.checkText ? null : { text: String(p.checkText), tone: String(p.checkTone ?? "neutral") }, look: false };
+}
+
+/// Of an account's copies, those signed in on a station that is up and in trouble: their stations, and the first's profile
+/// (null: none).
+function troubleOn(list: [J, J][], members: J[]): { stations: string[]; p: J } | null {
+  const found = members.flatMap((m, i) => (m.role !== "user" && m.online && isObject(list[i]![1].trouble) ? [i] : []));
+  if (found.length === 0) return null;
+  return { stations: [...new Set(found.map((i) => String(members[i]!.stationName)))], p: list[found[0]!]![1] };
 }
 
 /// One station's copy of an account: what it is there and how it is doing.

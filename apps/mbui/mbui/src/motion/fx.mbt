@@ -636,23 +636,8 @@ fn LayoutFx::shown(self : LayoutFx) -> Box {
 }
 
 ///|
-/// After layout: each animated node's new box against its last; a change starts the progress from the box it showed
-/// in; its look this frame is the projection from where it is laid out to where it shows.
-fn layouts_after(c : @ui.Ctx) -> Unit {
-  sweep_values(c)
-  sweep_presences(c)
-  if layouts.is_empty() {
-    return
-  }
-  let frame = c.frame_number()
-  let build = c.build_number()
-  let gone : Array[Int] = []
-  layouts.each(fn(id, l) {
-    // (not asked in this build: not built in it, its node another's)
-    if l.build != build {
-      gone.push(id)
-      return
-    }
+/// Layout `l` laid out this frame (layouts_after): from where it showed to where it is, the look it is drawn by.
+fn layout_moved(c : @ui.Ctx, l : LayoutFx, frame : Int) -> Unit {
     if l.frame_at != frame {
       l.frame_at = frame
       copy_box_into(l.was_from, l.from)
@@ -715,6 +700,28 @@ fn layouts_after(c : @ui.Ctx) -> Unit {
         ).then(c.look_of(l.node)),
       )
     }
+}
+
+///|
+/// After layout: each animated node's new box against its last; a change starts the progress from the box it showed
+/// in; its look this frame is the projection from where it is laid out to where it shows.
+fn layouts_after(c : @ui.Ctx) -> Unit {
+  sweep_values(c)
+  sweep_presences(c)
+  if layouts.is_empty() {
+    return
+  }
+  let frame = c.frame_number()
+  let build = c.build_number()
+  let gone : Array[Int] = []
+  layouts.each(fn(id, l) {
+    // (not asked in this build: not built in it, its node another's)
+    if l.build != build {
+      gone.push(id)
+      return
+    }
+    // (what its move reads, read for what draws its node: the part's or the row's kept, Ctx::reads_for)
+    c.reads_for(l.node, fn() { layout_moved(c, l, frame) })
   })
   for id in gone {
     match layouts.get(id) {

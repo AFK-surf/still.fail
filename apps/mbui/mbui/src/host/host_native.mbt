@@ -233,6 +233,12 @@ extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : D
 extern "C" fn ffi_window_inset() -> Int = "mb_host_window_inset"
 
 ///|
+extern "C" fn ffi_window_hold() -> Unit = "mb_host_window_hold"
+
+///|
+extern "C" fn ffi_window_show() -> Unit = "mb_host_window_show"
+
+///|
 extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
 
 ///|
@@ -273,6 +279,16 @@ extern "C" fn ffi_menu_setup(json : String) -> Unit = "mb_host_menu_setup"
 /// it, Ctx::window_drag). Nothing where there is no window to size (iOS, Android, a browser's page).
 fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
   ffi_window_setup(min_w, min_h, w, h, if inset { 1 } else { 0 })
+}
+
+///|
+fn window_hold() -> Unit {
+  ffi_window_hold()
+}
+
+///|
+fn window_show() -> Unit {
+  ffi_window_show()
 }
 
 ///|

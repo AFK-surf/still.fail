@@ -53,10 +53,13 @@ test "the panes kept on 中屏's tape, the one in use too: drawn, said and read 
 
 ///|
 /// On 小屏, the pages kept (sfapp's view: each as a part, read out): chat "chat" opened, back to the chats, another
-/// opened from them, back again, the list dragged: what is drawn, said and read out at moments after each, drawn again
+/// opened from them, back again by the system's gesture, a new chat risen, its composer opened and let go of, the new
+/// chat sunk back, the list dragged: what is
+/// drawn, said and read out at moments after each, drawn again
 /// where they can be (`again`) or built every frame, and at each frame of their slides; how many pages were drawn again
-/// over it all, those drawn again as they slid counted in `slid` too.
-fn kept_pages_run(again : Bool, slid : Ref[Int]) -> (Array[Array[String]], Int) {
+/// over it all, and in `slid` how many as each slide went (back, opened, back by the gesture, risen, its composer opened
+/// and let go of, sunk).
+fn kept_pages_run(again : Bool, slid : Array[Int]) -> (Array[Array[String]], Int) {
   let (w, h) = (390.0, 844.0)
   let t = kept_rows_open("chat", w, h)
   t.keep_parts(true)
@@ -74,18 +77,34 @@ fn kept_pages_run(again : Bool, slid : Ref[Int]) -> (Array[Array[String]], Int) 
   }
   // (each frame of a page sliding in or out, a display's frame apart: what is drawn)
   let slide = fn() {
+    let mut n = 0
     for _ in 0..<24 {
       t.run_for(kept_slide_ms)
       out.push(drawn_from(t, -1000.0).map(kept_rows_inst))
       kept = kept + t.parts_kept()
-      slid.val = slid.val + t.parts_kept()
+      n = n + t.parts_kept()
     }
+    slid.push(n)
   }
   look()
   t.back()
   slide()
   look()
   t.tap_text("夜里的构建又失败了")
+  slide()
+  look()
+  // (the system's back gesture, let go: the page goes on from where it was let go)
+  t.back_gesture(w * 0.3, true)
+  slide()
+  look()
+  // (a new chat rises from the foot over the chats; its composer opened and let go of, reshaping, what stands round it
+  // with it; and it sinks back)
+  open_page(NewChat)
+  slide()
+  look()
+  t.tap_text("做任何事")
+  slide()
+  t.tap(w * 0.5, h * 0.45)
   slide()
   look()
   t.back()
@@ -100,11 +119,14 @@ fn kept_pages_run(again : Bool, slid : Ref[Int]) -> (Array[Array[String]], Int) 
 let kept_slide_ms : Double = 16.0
 
 ///|
-test "the pages kept on 小屏: drawn, said and read out as building them each frame, as chats are opened and left, each frame of their slides too, the page left drawn again as it slides out" {
-  let slid = Ref(0)
+test "the pages kept on 小屏: drawn, said and read out as building them each frame, as chats are opened and left, each frame of their slides too, the page left drawn again as it slides or sinks out" {
+  let slid = []
   let (kept, n) = kept_pages_run(true, slid)
-  let (built, _) = kept_pages_run(false, Ref(0))
+  let (built, _) = kept_pages_run(false, [])
   assert_true(n > 0, msg="pages drawn again: \{n}")
-  assert_true(slid.val > 0, msg="pages drawn again as they slid: \{slid.val}")
+  // (the page left, at each frame of its way out: back, back by the gesture let go, a new chat sunk back)
+  for j in [0, 2, 6] {
+    assert_true(slid[j] >= 20, msg="pages drawn again as they slid: \{slid}")
+  }
   kept_rows_same(kept, built)
 }

@@ -27,10 +27,8 @@ test "a key's profile's page, wide: its key masked, a new one asked for from its
   assert_true(t.find("备用 key") is Some(_))
   scrolled_to(t, 1280.0, "sk-…a41f")
   assert_true(t.find("sk-…a41f") is Some(_), msg="its key masked")
-  match t.find("更换") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no 更换")
-  }
+  // (the row's own: its trouble's 更换 key may be drawn above, out of sight)
+  tap_words(t, "更换")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("新的 API key") is Some(_), msg="a new key asked for")
 }

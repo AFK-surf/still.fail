@@ -211,35 +211,111 @@ pub fn Ctx::floats_over(self : Ctx, i : Int) -> Unit {
 ///|
 /// How much of the top and of the foot of what scrolls, `n`, in (x0 y0 x1 y1) what floats over it takes
 /// (Ctx::floats_over; not what it holds itself, which scrolls with it), with scroll_bar_clear more each, and the
-/// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does.
+/// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does. In a part kept
+/// being painted, what of it comes from outside the part (the system's bars, what floats from elsewhere: where the
+/// part shows among them) is read so, for the part, and read again where it is drawn again (Ctx::parts_placed).
 fn Ctx::floated(self : Ctx, n : Node, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> (Double, Double) {
+  let part = part_now.painting_node
+  let (out_top, out_foot) = self.floats_round(x0, y0, x1, y1, part, Some(n))
+  let mut top = out_top
+  let mut foot = out_foot
+  if part >= 0 {
+    // (what floats over it within the part, which moves with it)
+    for i in self.floating {
+      if self.under(i, part) {
+        let (t, f) = self.float_takes(i, x0, y0, x1, y1, Some(n))
+        top = dmax(top, t)
+        foot = dmax(foot, f)
+      }
+    }
+    match kept_parts.get(part_now.painting) {
+      Some(st) => {
+        let b = self.nodes[part]
+        st.floats_read.push((x0 - b.x, y0 - b.y, x1 - b.x, y1 - b.y, out_top, out_foot))
+      }
+      None => ()
+    }
+  }
+  (top, foot)
+}
+
+///|
+/// Of what floats over (x0 y0 x1 y1) (Ctx::floated): what the system's bars take, and what floats from outside node
+/// `part` (-1: all of it) takes, at the top and at the foot.
+fn Ctx::floats_round(
+  self : Ctx,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  part : Int,
+  n : Node?,
+) -> (Double, Double) {
   let bars = system_bars()
   let mut top = dmax(0.0, bars.top - y0)
   let mut foot = dmax(0.0, y1 - (self.height - bars.bottom))
   for i in self.floating {
-    let f = self.nodes[i]
-    if f.fw <= 0.0 ||
-      f.fh <= 0.0 ||
-      f.x < x0 - 0.5 ||
-      f.x + f.fw > x1 + 0.5 ||
-      f.y >= y1 ||
-      f.y + f.fh <= y0 {
+    if part >= 0 && self.under(i, part) {
       continue
     }
-    let mut p = f.parent
-    while p >= 0 && !physical_equal(self.nodes[p], n) {
-      p = self.nodes[p].parent
-    }
-    if p >= 0 {
-      continue
-    }
-    if f.y + f.fh / 2.0 < (y0 + y1) / 2.0 {
-      top = dmax(top, f.y + f.fh - y0 + scroll_bar_clear)
-    } else {
-      foot = dmax(foot, y1 - f.y + scroll_bar_clear)
-    }
+    let (t, f) = self.float_takes(i, x0, y0, x1, y1, n)
+    top = dmax(top, t)
+    foot = dmax(foot, f)
   }
   (top, foot)
+}
+
+///|
+/// What node `i`, floating, takes of the top and of the foot of (x0 y0 x1 y1), with scroll_bar_clear more: none where
+/// it lies past its sides or ends, or is in `n` (what scrolls there: it scrolls with it).
+fn Ctx::float_takes(
+  self : Ctx,
+  i : Int,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  n : Node?,
+) -> (Double, Double) {
+  let f = self.nodes[i]
+  if f.fw <= 0.0 ||
+    f.fh <= 0.0 ||
+    f.x < x0 - 0.5 ||
+    f.x + f.fw > x1 + 0.5 ||
+    f.y >= y1 ||
+    f.y + f.fh <= y0 {
+    return (0.0, 0.0)
+  }
+  match n {
+    Some(n) => {
+      let mut p = f.parent
+      while p >= 0 && !physical_equal(self.nodes[p], n) {
+        p = self.nodes[p].parent
+      }
+      if p >= 0 {
+        return (0.0, 0.0)
+      }
+    }
+    None => ()
+  }
+  if f.y + f.fh / 2.0 < (y0 + y1) / 2.0 {
+    (f.y + f.fh - y0 + scroll_bar_clear, 0.0)
+  } else {
+    (0.0, y1 - f.y + scroll_bar_clear)
+  }
+}
+
+///|
+/// Whether node `i` is node `root` or in it.
+fn Ctx::under(self : Ctx, i : Int, root : Int) -> Bool {
+  let mut p = i
+  while p >= 0 {
+    if p == root {
+      return true
+    }
+    p = self.nodes[p].parent
+  }
+  false
 }
 
 ///|

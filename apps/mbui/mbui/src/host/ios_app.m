@@ -1657,6 +1657,10 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
 
 // The desktop's window and pointer (@hostapi.window_setup, window_inset, window_drag, set_cursor): no window to size
 // or move here, no pointer to shape.
+// The window held till the app shows it (@hostapi.window_hold): the system shows the app's own here, as it opens.
+void mb_host_window_hold(void) {}
+void mb_host_window_show(void) {}
+
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }

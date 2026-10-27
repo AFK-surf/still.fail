@@ -13,6 +13,8 @@
 pub(open) trait Host {
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  window_hold(Self) -> Unit = _
+  window_show(Self) -> Unit = _
   full_screen(Self) -> Bool = _
   set_full_screen(Self, Bool) -> Unit = _
   window_corner(Self) -> Double = _
@@ -207,6 +209,16 @@ impl Host with window_setup(_, _, _, _, _, _) {
 ///|
 impl Host with window_inset(_) {
   false
+}
+
+///|
+impl Host with window_hold(_) {
+  ()
+}
+
+///|
+impl Host with window_show(_) {
+  ()
 }
 
 ///|
@@ -1162,6 +1174,21 @@ pub fn host() -> &Host {
 /// it, Ctx::window_drag). Nothing where there is no window to size (iOS, Android, a browser's page).
 pub fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
   current.val.window_setup(min_w, min_h, w, h, inset)
+}
+
+///|
+/// The desktop's window kept out of sight as it opens, till the app shows it (window_show), said before `run`: its
+/// frames drawn meanwhile, it comes up with what the app has drawn by then, not its ground before that. Nothing where
+/// the system shows the app's window itself (iOS, Android, a browser's page) or a host keeps it as it was (Windows,
+/// Linux: shown at once).
+pub fn window_hold() -> Unit {
+  current.val.window_hold()
+}
+
+///|
+/// The window held (window_hold) shown now; nothing once it is.
+pub fn window_show() -> Unit {
+  current.val.window_show()
 }
 
 ///|
