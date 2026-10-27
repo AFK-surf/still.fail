@@ -1209,6 +1209,11 @@ export interface Profile {
 	/** On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login. */
 	machine?: boolean;
 	/**
+	 * Billed per use (an API key, a gateway): the station runs a chat on it only when no account paid for already
+	 * (a subscription, a membership) can; None from a station of before it.
+	 */
+	perUse?: boolean;
+	/**
 	 * Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a
 	 * station older than the setting.
 	 */
