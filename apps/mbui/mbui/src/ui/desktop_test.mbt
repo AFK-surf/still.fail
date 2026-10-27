@@ -387,7 +387,7 @@ test "desktop: a drag from one paragraph into another picks the rest of the firs
 }
 
 ///|
-test "desktop: words picked in a layer over the page stay in it: a drag out of its panel picks none of the page's, nor does a press on its panel over them" {
+test "desktop: words picked in a layer over the page stay in it: a drag out of its panel picks none of the page's, nor does a press on its panel over them; a layer's empty room over the page leaves them" {
   let t = @ui.Tester::new(
     fn(c) {
       c.mouse_drags_lists(false)
@@ -405,6 +405,9 @@ test "desktop: words picked in a layer over the page stay in it: a drag out of i
           })
           |> ignore
         })
+        |> ignore
+        // a layer laid out over the whole window that shows nothing there (a toast's room): the page's words under it
+        c.overlay("room", escape=false, outside=false, fn() { c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore })
         |> ignore
       })
     },

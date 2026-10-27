@@ -751,21 +751,45 @@ fn Ctx::layer_of(self : Ctx, i : Int) -> Int {
 }
 
 ///|
-/// The layer a press at (x, y) goes to, as last laid out (0 the page): the topmost whose content is there, or a modal
-/// one, whose ground takes it (Ctx::layer_keys's way).
+/// The layer whose words a press at (x, y) picks, as last laid out (0 the page): the topmost that shows something
+/// there (Ctx::shows_at: a card's panel, not the room a toast's layer is laid out in), or a modal one, whose ground
+/// takes it.
 fn Ctx::layer_at(self : Ctx, x : Double, y : Double) -> Int {
   let mut k = self.last_layers.length() - 1
   while k >= 0 {
     let l = self.last_layers[k]
     k = k - 1
-    if l.inert {
+    if l.inert || l.node >= self.count {
       continue
     }
-    if l.modal || self.in_layer(l, x, y) {
+    if l.modal || self.shows_at(l.node, x, y) {
       return l.id
     }
   }
   0
+}
+
+///|
+/// Whether what node `i` holds shows something at (x, y) or takes a press there: a node with a ground, a border, glass
+/// or an id, or one that is not a box (words, a picture), under it; a modal layer's ground left out.
+fn Ctx::shows_at(self : Ctx, i : Int, x : Double, y : Double) -> Bool {
+  let mut ch = self.nodes[i].first
+  while ch >= 0 {
+    let n = self.nodes[ch]
+    if !n.blocks && n.opacity > 0.002 {
+      let inside = x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh
+      if inside &&
+        (n.kind != kind_box || n.id != 0 || n.bg != 0L || n.border_w > 0.0 || n.glass is Some(_)) {
+        return true
+      }
+      // (what is placed out of its parent's box is looked for there too)
+      if self.shows_at(ch, x, y) {
+        return true
+      }
+    }
+    ch = n.next
+  }
+  false
 }
 
 ///|
