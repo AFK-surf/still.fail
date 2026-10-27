@@ -55,7 +55,7 @@ test "words sent from a window short of the chat's end: its latest page asked fo
     }
   })
   t.tap_text("发消息")
-  t.type_text("先回到最新")
+  t.type_text("先上屏")
   tap_send(t)
   assert_eq(named(calls, "chat.latest").length(), 1)
   // read up there meanwhile; the latest page comes: the list at its end
