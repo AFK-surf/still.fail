@@ -1496,7 +1496,7 @@ export interface ChatCacheCold {
 	/** The agent's session: `session.clear` with `readBack` gives it a fresh context. */
 	session: string;
 	/**
-	 * What is said: its cache over, and the context going on reads again (缓存已过期，接着聊将重新读入 180K token（约 $1.40）);
+	 * What is said: its cache over, and the context going on reads again (缓存已过期，接着聊约需 $1.40);
 	 * its station set to go on afresh by itself, that the next message does.
 	 */
 	text: string;

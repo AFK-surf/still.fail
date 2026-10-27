@@ -186,7 +186,7 @@ test "its agent's cache over: said over the composer, 换新上下文 clears its
       None => tp
     }
   })
-  assert_true(t.find("缓存已过期，接着聊将重新读入 186K token（约 $1.49）") is Some(_))
+  assert_true(t.find("缓存已过期，接着聊约需 $1.49") is Some(_))
   t.tap_text("换新上下文")
   t.draw()
   let asked = named(calls, "session.clear")
@@ -209,13 +209,13 @@ test "its agent's cache over, its station going on afresh by itself: said, nothi
     match tp.value {
       Some(Object(o)) => {
         let o2 = o.copy()
-        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，下一条消息将先换新上下文", "auto": true }
+        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，下一条消息将换新上下文", "auto": true }
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
     }
   })
-  assert_true(t.find("缓存已过期，下一条消息将先换新上下文") is Some(_))
+  assert_true(t.find("缓存已过期，下一条消息将换新上下文") is Some(_))
   assert_true(!t.words().iter().any(fn(w) { w.0 == "换新上下文" }), msg="no 换新上下文 to tap")
 }
 
@@ -223,7 +223,7 @@ test "its agent's cache over, its station going on afresh by itself: said, nothi
 test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 clears its context to go on afresh" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-cache-cold", wide=true)
-  assert_true(t.find("缓存已过期，接着聊将重新读入 186K token（约 $1.49）") is Some(_))
+  assert_true(t.find("缓存已过期，接着聊约需 $1.49") is Some(_))
   t.tap_text("换新上下文")
   t.draw()
   let asked = named(calls, "session.clear")

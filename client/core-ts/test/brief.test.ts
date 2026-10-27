@@ -70,13 +70,13 @@ test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
   const agent = (key: string, u: object | null, patch: object = {}) =>
     ({ status: "final", wait: null, session: { key, runtimeSessionId: `r-${key}`, usage: u }, ...patch });
   // Its cache over: said with what going on reads again and what it costs.
-  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，接着聊将重新读入 200K token（约 $1.60）" }, Infinity]);
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，接着聊约需 $1.60" }, Infinity]);
   // Its station going on afresh by itself: said so, nothing to tap.
-  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", text: "缓存已过期，下一条消息将先换新上下文", auto: true }, Infinity]);
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", text: "缓存已过期，下一条消息将换新上下文", auto: true }, Infinity]);
   // Not yet: computed again as it is over.
   assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR - 5 * MIN), [null, 5 * MIN]);
   // Unpriced: what it reads, without a cost.
-  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].text, "缓存已过期，接着聊将重新读入 200K token");
+  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].text, "缓存已过期，接着聊要重读 200K token");
   // Of several, the largest context.
   assert.equal(cacheCold([agent("a", usage(0, 80_000)), agent("b", usage(0, 300_000))], 2 * HOUR)[0].session, "b");
   // None at work, waiting on its own work, cleared already, with a small context, or not told how long its cache lasts.

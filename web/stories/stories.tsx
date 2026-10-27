@@ -471,7 +471,7 @@ const cacheCold: DemoExtension = {
     if (t.topic !== "chat" || !value) return undefined;
     const chat = value as ChatView;
     const session = chat.agents[0]?.session.key;
-    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" } } : undefined;
+    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊约需 $1.49" } } : undefined;
   },
 };
 /** What the chat's agent and another chat's wrote each other: not in the chat (only its bar's button says how many,

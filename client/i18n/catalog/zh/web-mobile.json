@@ -35,7 +35,7 @@
   "web-mobile.chat.noOutput": "（暂无输出）",
   "web-mobile.chat.noStationUpload": "无 station",
   "web-mobile.chat.notices": "通知",
-  "web-mobile.chat.offline": "暂时连不上此 station：当前显示的是之前读取的内容，发出的消息会在连上后送达",
+  "web-mobile.chat.offline": "无法连接此 station，消息将在连接后送达",
   "web-mobile.chat.openSlack": "在 Slack 中打开",
   "web-mobile.chat.output": "输出",
   "web-mobile.chat.peopleCount": "{n} 人",

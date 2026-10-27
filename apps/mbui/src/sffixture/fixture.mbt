@@ -1055,7 +1055,7 @@ pub fn fixture(mode : String) -> Source {
   }
   // the phone's word on 共享调试 said already (the app's Android: AdbShare.java), as a chat's card of it goes by: all it
   // takes, the card lending from where it is
-  if f.mode == "chat-screens" {
+  if f.mode == "chat-screens" || f.mode == "chat-screens-cold" {
     @settings.adb_phone_said(
       "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
     )

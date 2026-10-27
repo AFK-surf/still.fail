@@ -38,7 +38,7 @@
   "web-mobile.chat.noOutput": "(No output yet)",
   "web-mobile.chat.noStationUpload": "No station",
   "web-mobile.chat.notices": "Notices",
-  "web-mobile.chat.offline": "Can't reach the station right now. Showing previously loaded content; messages you send are delivered once it is reached.",
+  "web-mobile.chat.offline": "Can't reach the station. Messages are delivered once it's back.",
   "web-mobile.chat.openSlack": "Open in Slack",
   "web-mobile.chat.output": "Output",
   "web-mobile.chat.peopleCount": {
