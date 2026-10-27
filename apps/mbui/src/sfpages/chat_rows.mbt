@@ -1,8 +1,8 @@
 // What a chat's list holds on the desktop besides its messages (ember web/src/Chat.tsx ChatRows, OutboxRow, Activity,
 // useSteady; Chat.css.ts chatUnreadLine, chatOlder, chatNewer, chatEmpty, msgUnsent, msgUnsentBtn, agentActivity,
 // activityLine, activityAvatar, activityRing, activityTail, activityNowText, activityElapsed, activityStop): the line
-// over what is new, the pages being brought in, what was sent from here and is not in the chat yet, and its agents at
-// work.
+// over what is new, the pages being brought in, what was sent from here and is not in the chat yet, where it stands,
+// and its agents at work.
 
 ///|
 /// Over the first message unread when the chat opened (chatUnreadLine): its words in the accent, a rule each side.
@@ -25,6 +25,31 @@ fn pages_coming(c : @ui.Ctx, older : Bool) -> Unit {
 /// A chat with nothing in it yet (chatEmpty).
 fn chat_empty(c : @ui.Ctx) -> Unit {
   c.box(style=empty_row, fn() { c.text(@sf.t("web-main.chat.empty"), style=chat_empty_words) |> ignore }) |> ignore
+}
+
+///|
+/// Where the chat stands, under its last message (the core's `stateText`: its row's second line, a card waiting left
+/// out as it is in the chat): led as the row's is (chat_mark.mbt: a bell, a check, the waiting arc, the radar) but
+/// whole, its words wrapping where the row cuts them to a line; done with nothing said, its word (已完成) after the
+/// check. What it needs of a person in ink, the rest quiet.
+fn chat_state(c : @ui.Ctx, words : String, lead : String, rest : String) -> Unit {
+  let p = @sf.theme().p
+  // (the row's words, the theme's lists', on 20 either way: as high as the icon's column)
+  let look = @sf.theme().chat_list
+  let turn = lead == "need"
+  let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
+  match lead {
+    "need" | "done" | "wait" | "watch" =>
+      c.box(style=chat_state_row, label=words, fn() {
+        c.box(style=chat_state_slot, fn() { lead_icon(c, lead, if turn { p.text } else { p.muted }) }) |> ignore
+        let after = if rest == "" && lead == "done" { @sf.t("web-main.status.done") } else { rest }
+        if after != "" {
+          c.text(after, style=said) |> ignore
+        }
+      })
+      |> ignore
+    _ => c.text(words, style=said) |> ignore
+  }
 }
 
 ///|
@@ -554,3 +579,17 @@ let activity_stop : @ui.Style = @ui.css("w=S6 h=S6 radius=Md align=ACenter justi
 ///|
 // kept across runs: a value (no field of it changes)
 let activity_stop_hot : @ui.Style = activity_stop.then(@ui.css("bg=Hover"))
+
+///|
+/// Where it stands (chat_state): its icon's column 10 wide (the row's leadSlot) as high as a line of its words, 6
+/// before them; its words wrapping, 20 a line.
+// kept across runs: a value (no field of it changes)
+let chat_state_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let chat_state_slot : @ui.Style = @ui.css("w=S2_5 h=S5 justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let chat_state_wraps : @ui.TextStyle = @ui.text_style(wrap=true, leading=L5)

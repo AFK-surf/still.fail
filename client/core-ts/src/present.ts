@@ -294,10 +294,11 @@ export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text
 
 /// Where a chat stands, in words, and the message that is about; the line without its lead (what the dot before it does
 /// not say); what leads it, if anything does. A line that asks for a decision (奏 · …, 要你帮忙：…) is about none: the
-/// line only says so, and the chat leads to what it asks (`ChatView.asks`).
-export function rowStateLine(row: J): [string, number | null, string, Lead | null] | null {
+/// line only says so, and the chat leads to what it asks (`ChatView.asks`). `cards` false: a card waiting is not said
+/// (the chat's page, which shows the card itself).
+export function rowStateLine(row: J, cards = true): [string, number | null, string, Lead | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
-  const p = decisions.pending(row);
+  const p = cards ? decisions.pending(row) : null;
   const lead = t("core-logic.decisions.line", { text: "" });
   const given = str(p?.text);
   const cardLine = p ? (given ?? decisions.line(str(get(p.message, "text")) ?? "")) : "";

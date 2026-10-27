@@ -15,6 +15,8 @@ pub(all) enum Entry {
   Sent(Elsewhere)
   Newer
   Out(Outgoing)
+  /// where the chat stands (ChatView's `state`): its words, what leads them, what follows the lead
+  State(String, String, String)
   Working(Agent)
   Foot
 }
@@ -30,6 +32,7 @@ pub fn Entry::id(self : Entry) -> String {
     Sent(e) => "s:" + e.key
     Newer => "newer"
     Out(o) => "o:" + o.id
+    State(_, _, _) => "state"
     Working(a) => "act:" + a.key
     Foot => "foot"
   }
@@ -259,7 +262,8 @@ pub let kept_places : Map[String, KeptPlace] = {}
 
 ///|
 /// The list's entries (Chat.kt Messages → all): the page before's spinner, the messages with the unread line over the
-/// first unread and what went to Slack after each, the page after's spinner, the outbox, its agents at work.
+/// first unread and what went to Slack after each, the page after's spinner, the outbox, where it stands (said only at
+/// its end: none while an agent works), its agents at work.
 pub fn entries_of(v : ChatView) -> Array[Entry] {
   let out : Array[Entry] = [Top]
   if v.more {
@@ -286,6 +290,12 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
   }
   for o in v.outbox {
     out.push(Out(o))
+  }
+  if !v.newer {
+    match v.state {
+      Some((words, lead, rest)) => out.push(State(words, lead, rest))
+      None => ()
+    }
   }
   if !v.newer {
     for a in v.agents {
@@ -870,7 +880,7 @@ pub fn row_keys(
   if still.length() > 0 {
     let mut at = all.length()
     for i, e in all {
-      if e is (Working(_) | Foot) {
+      if e is (State(_, _, _) | Working(_) | Foot) {
         at = i
         break
       }
@@ -1027,7 +1037,7 @@ pub fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Arra
   let mut at = -1
   for i = list.length() - 1; i >= 0; i = i - 1 {
     match list[i] {
-      Working(_) | Foot | Newer => ()
+      State(_, _, _) | Working(_) | Foot | Newer => ()
       _ => {
         at = i
         break
@@ -1265,14 +1275,14 @@ pub fn list_frame(
   flight_frame(c, draft)
   let flight = flight_of(draft)
   // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt;
-  // the outbox lies at the list's end, before its agents at work and its foot (entries_of): looked for from there, not
-  // through a long chat's thousands of messages each frame)
+  // the outbox lies at the list's end, before where it stands, its agents at work and its foot (entries_of): looked for
+  // from there, not through a long chat's thousands of messages each frame)
   let mut out_at = -1
   let mut i = list.length() - 1
   while i >= 0 {
     match list[i] {
       Out(_) => out_at = i
-      Working(_) | Foot => ()
+      State(_, _, _) | Working(_) | Foot => ()
       _ => break
     }
     i = i - 1

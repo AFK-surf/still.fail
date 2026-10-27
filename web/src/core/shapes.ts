@@ -2510,6 +2510,19 @@ export interface ChatView {
 	 */
 	asks?: ChatAsk[];
 	/**
+	 * Where it stands, in words, as its row's second line (`ChatItem.stateText`) without a card waiting (the
+	 * card is in the chat): what an agent needs, why it stopped, what it waits on, done; drawn at the end of its messages.
+	 * Absent while it is at work, or with nothing to say.
+	 */
+	stateText?: string;
+	/**
+	 * What leads `stateText` (need, done, wait, watch), for a client to say as a mark of its own. Absent when
+	 * nothing does (an agent's failure).
+	 */
+	stateLead?: StateLead;
+	/** What follows the lead in `stateText` (watching: the whole line). Absent without `stateLead`. */
+	stateRest?: string;
+	/**
 	 * Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what
 	 * going on would cost and offers a fresh context instead. Absent otherwise, and from a core before it.
 	 */

@@ -444,6 +444,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_station_update(rich_chat(f.older))
           } else if f.mode == "chat-cache-cold" {
             with_cache_cold(rich_chat(f.older))
+          } else if f.mode == "chat-done" {
+            with_state(rich_chat(f.older), done_state)
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
           } else {
@@ -1692,6 +1694,30 @@ pub fn with_cache_cold(v : Json) -> Json {
     _ => v
   }
 }
+
+///|
+/// chat-done: its agent's turn over, where it stands said at the end of its messages as its row says it (ChatView's
+/// `stateText`, `stateLead`, `stateRest`): `state` its words, what leads them, what follows the lead.
+pub fn with_state(v : Json, state : (String, String, String)) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["stateText"] = Json::string(state.0)
+      o["stateLead"] = Json::string(state.1)
+      o["stateRest"] = Json::string(state.2)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// What chat-done's agent said of its turn when it ended.
+pub let done_state : (String, String, String) = (
+  "已完成：问题已答复，用户确认先不改，没有改动",
+  "done",
+  "问题已答复，用户确认先不改，没有改动",
+)
 
 ///|
 pub fn with_station_update(v : Json) -> Json {

@@ -1,0 +1,44 @@
+// Where a chat stands, said at the end of its messages as its row says it (the core's ChatView `stateText`): whole,
+// under its last message, on either frame.
+
+///|
+/// The last of chat-done's messages (rich_chat's), and where it stands.
+let state_last_said : String = "列表、跳到最新的按钮、加载更早的消息都好了"
+
+///|
+fn state_under_last(t : @ui.Tester, words : String, width : Double) -> Unit raise {
+  let (_, last_y, _, last_h) = t.rect_of(state_last_said).unwrap()
+  let (x, y, w, _) = t.rect_of(words).unwrap()
+  assert_true(y >= last_y + last_h, msg="under the last message")
+  assert_true(x >= 0.0 && x + w <= width, msg="whole on the page")
+}
+
+///|
+test "a chat whose agent is done says so under its last message, its words whole: the wide frame" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-done", wide=true)
+  state_under_last(t, @sffixture.done_state.2, 1280.0)
+}
+
+///|
+test "a chat whose agent is done says so under its last message, its words whole: the phone's frame" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-done")
+  state_under_last(t, @sffixture.done_state.2, 390.0)
+}
+
+///|
+test "what a chat's agent needs is said under its last message" {
+  let need = "Stripe 的测试 key，放进 vault 后告诉我名字"
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(v) => { ..tp, value: Some(@sffixture.with_state(v, ("需要你处理：" + need, "need", need))) }
+      None => tp
+    }
+  })
+  assert_true(t.find(need) is Some(_))
+}
