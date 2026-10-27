@@ -264,9 +264,10 @@ pub fn ask_words(c : @ui.Ctx, title : String, note : String) -> Unit {
 }
 
 ///|
-/// Its answer's buttons, as vault_foot lays them: a line of them, on to a second what has not the room on the first.
+/// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
+/// on the first, out in the card's foot corners.
 pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot, flow=true, line_gap=ask_foot_lines, body) |> ignore
+  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height())), flow=true, line_gap=ask_foot_lines, body) |> ignore
 }
 
 ///|
