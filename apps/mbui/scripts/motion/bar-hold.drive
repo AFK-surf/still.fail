@@ -1,0 +1,6 @@
+# The bar's ball held still a moment by a finger: its lens of liquid glass over it, let go, the ball again.
+timeout 20000
+until 整理发布清单
+wait 600
+drag 50 -50 0 0 1200
+wait 1000

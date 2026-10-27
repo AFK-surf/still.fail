@@ -7,6 +7,26 @@ fn bar_places_at() -> (Array[Double], Double) {
 }
 
 ///|
+test "the bar: a finger held still on it a moment has the ball a lens of liquid glass; a tap none; let go, the ball" {
+  let t = tester("home")
+  let (xs, y) = bar_places_at()
+  let lensed = fn() { t.drawn_glass().iter().any(fn(g) { g.4 == 6 }) }
+  t.tap(xs[0], y)
+  t.run_for(bar_hold_ms)
+  assert_false(lensed())
+  t.press_at(xs[0], y)
+  t.run_for(bar_hold_ms)
+  // (the frame at its time takes the ball; its lens grows from there)
+  t.frame()
+  to_bar_rest(t)
+  assert_true(lensed())
+  t.release(xs[0], y)
+  to_bar_rest(t)
+  assert_false(lensed())
+  assert_true(t.find("整理发布清单") is Some(_))
+}
+
+///|
 test "the bar: 文件 tapped is its page in place of the chats', back is the chats again" {
   let t = tester("home")
   let (xs, y) = bar_places_at()
