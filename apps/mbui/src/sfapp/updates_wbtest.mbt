@@ -52,6 +52,24 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 }
 
 ///|
+test "a newer build installed from the list of what comes: the list stays open, to watch it download" {
+  let asked = []
+  let t = updates_tester(release(["列表滑得更顺"]), asked)
+  t.run_for(@ui.nav_push_ms)
+  let open = fn(label : String) raise {
+    let (x, y, w, h) = t.query(Button, label~).unwrap().rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.run_for(@ui.nav_push_ms)
+  }
+  open("传输")
+  let list = @sf.last_presented()
+  assert_true(list > 0 && @sf.presented_open_of(list), msg="the list opened")
+  open("更新到 0.1.1")
+  assert_eq(asked, ["1 false", "1 true"])
+  assert_true(@sf.presented_open_of(list), msg="the list still open once the build is asked for")
+}
+
+///|
 test "no source: nothing is asked; asked now, it says why" {
   reset()
   update_version.val = 1
