@@ -276,6 +276,9 @@ pub(all) struct Thumb {
   letterbox : Bool
   /// the picture it shows (its image's key), what the viewer shows of it until it has the whole: "" none of its own
   picture : String
+  /// the part of its box seen clear of what lies over its list (the chat's bar over the list's top, the composer over
+  /// its foot: list_band), where the flight sets out from and lands, the rest of it going in under what lies over it
+  seen : (Double, Double, Double, Double)
 }
 
 ///|
@@ -284,6 +287,8 @@ pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
   picture : String
+  /// in a list's rows (a chat's, under its bar and composer: list_band), not on what lies over it (the composer's)
+  listed : Bool
 }
 
 ///|
@@ -410,6 +415,37 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
 pub let pv_hidden : Ref[String] = { val: "" }
 
 ///|
+/// The chats' lists that run on under what lies over them (the chat's bar over the top, the composer over the foot),
+/// by the key their box is measured by: how much of the box's top and foot that takes (list_band).
+pub let pv_bands : Map[String, (Double, Double)] = Map([])
+
+///|
+/// A chat's list built this frame as node `node` (`key` its list's), `top` of its top under the chat's bar and `foot`
+/// of its foot under the composer: its thumbnails are seen only between (thumb_of's `seen`).
+pub fn list_band(c : @ui.Ctx, node : Int, key : String, top : Double, foot : Double) -> Unit {
+  @motion.measure(c, node, "pv-band/" + key)
+  pv_bands[key] = (top, foot)
+}
+
+///|
+/// Thumbnail box (x, y, w, h)'s part seen clear of what lies over the list it is in (list_band): the whole of it where
+/// it is in none.
+fn seen_of(c : @ui.Ctx, x : Double, y : Double, w : Double, h : Double) -> (Double, Double, Double, Double) {
+  let (mx, my) = (x + w / 2.0, y + h / 2.0)
+  for key, b in pv_bands {
+    match @motion.measured_rect(c, "pv-band/" + key) {
+      Some((lx, ly, lw, lh)) if mx >= lx && mx < lx + lw && my >= ly && my < ly + lh => {
+        let top = dmax(y, ly + b.0)
+        let foot = dmin(y + h, ly + lh - b.1)
+        return (x, top, w, dmax(0.0, foot - top))
+      }
+      _ => ()
+    }
+  }
+  (x, y, w, h)
+}
+
+///|
 /// A thumbnail of the chat built this frame as node `node`, showing `picture` (FilePreview.kt viewerThumb): where it is
 /// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into.
 pub fn note_thumb(
@@ -421,16 +457,24 @@ pub fn note_thumb(
   letterbox? : Bool = false,
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, picture }
+  pv_thumbs[id] = { radius, letterbox, picture, listed: c.list_above(node) >= 0 }
 }
 
 ///|
-/// How much of the chat's thumbnail `id` shows: none while the viewer is its picture, else all of it.
+/// How much of the chat's thumbnail `id` shows: none while the viewer is its picture, else all of it; while the picture
+/// flies, as much as it has not got away from the thumbnail (what of the thumbnail lies under the composer comes and
+/// goes so, as the flight is cut at the composer: draw_flight).
 pub fn thumb_shows(id : String) -> Double {
-  if pv_hidden.val == id {
-    0.0
-  } else {
-    1.0
+  if pv_hidden.val != id {
+    return 1.0
+  }
+  let v = match viewer.val {
+    Some(v) => Some(v)
+    None => pv_leaving.val
+  }
+  match v {
+    Some(v) if v.flies && v.id() == id => dmax(0.0, 1.0 - v.flying())
+    _ => 0.0
   }
 }
 
@@ -438,8 +482,14 @@ pub fn thumb_shows(id : String) -> Double {
 /// The thumbnail of `id` where it was last laid out, while some of it is on the screen.
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
-    (Some(l), Some((x, y, w, h))) if w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 =>
-      Some({ x, y, w, h, radius: l.radius, letterbox: l.letterbox, picture: l.picture })
+    (Some(l), Some((x, y, w, h))) if w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 => {
+      let seen = if l.listed { seen_of(c, x, y, w, h) } else { (x, y, w, h) }
+      // (all of it under what lies over its list: none seen to fly from)
+      if seen.3 <= 0.0 {
+        return None
+      }
+      Some({ x, y, w, h, radius: l.radius, letterbox: l.letterbox, picture: l.picture, seen })
+    }
     _ => None
   }
 }
@@ -1846,11 +1896,19 @@ pub fn Viewer::draw_flight(
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
+  // cut, at the thumbnail, where the chat's bar and composer lie over it (its seen part), opening to the whole stage:
+  // it goes in under them as the thumbnail does, not over them
+  let (sx, sy, sw, sh) = from.seen
+  let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
+  let (cw, ch) = (along(sx + sw, c.width) - cx, along(sy + sh, c.height) - cy)
   c.layer(fn() {
-    c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, bg=ground, fn() {
-      if picture != "" {
-        c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
-      }
+    c.box(style=@ui.style(w=Fixed(cw), h=Fixed(ch), clip=true), tx=cx, ty=cy, fn() {
+      c.box(w=Px(bw), h=Px(bh), tx=bx - cx, ty=by - cy, radius=r, clip=true, bg=ground, fn() {
+        if picture != "" {
+          c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -3036,6 +3094,7 @@ pub fn file_viewer_reset() -> Unit {
   marking.write_field.set("")
   marking.note_field.set("")
   pv_thumbs.clear()
+  pv_bands.clear()
   pv_frames.clear()
   pv_frames_n.val = 0
   pv_first.clear()
