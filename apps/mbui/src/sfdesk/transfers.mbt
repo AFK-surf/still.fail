@@ -195,8 +195,8 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
     None
   }
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
-  let offered = build && !updating && @sfbase.update.phase != "failed"
-  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update.phase == "failed") {
+  let offered = build && !updating && @sfbase.update_phase() != "failed"
+  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update_phase() == "failed") {
     ftransfers.open = !ftransfers.open
   }
   transfers_list(c, src, ws, id, go, false)
@@ -210,7 +210,7 @@ fn update_coming() -> Bool {
     Some(v) => items(Some(v), "news").length() > 0
     None => false
   }
-  offered || @sfbase.update_under_way() || @sfbase.update.phase == "failed"
+  offered || @sfbase.update_under_way() || @sfbase.update_phase() == "failed"
 }
 
 ///|
@@ -219,7 +219,7 @@ fn update_coming() -> Bool {
 /// red, its key to try again.
 fn update_row(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
-  let failed = @sfbase.update.phase == "failed"
+  let failed = @sfbase.update_phase() == "failed"
   let going = @sfbase.update_under_way()
   let version = text(@sfbase.update.available, "versionName")
   let first = match items(@sfbase.update.available, "news").get(0) {

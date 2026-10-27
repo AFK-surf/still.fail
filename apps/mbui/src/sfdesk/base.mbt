@@ -117,6 +117,7 @@ using @sfbase {
   update_error,
   update_install,
   update_progress,
+  update_phase,
   relaying,
   relay_open,
   relay_reset,

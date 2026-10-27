@@ -47,7 +47,7 @@ pub(all) enum UpdateSaid {
 
 ///|
 /// How an update stands: the newer build found, a check under way (the person's, or one before installing), the
-/// host's phase last seen, the source; what the last check asked now answered, the update dialog (its presenter's
+/// host's phase last seen (read through update_phase, never as it is), the source; what the last check asked now answered, the update dialog (its presenter's
 /// serial, 0 none yet).
 pub(all) struct Update {
   mut available : Json?
@@ -230,14 +230,15 @@ pub fn update_error(e : String) -> String {
 }
 
 ///|
-/// What an update under way is doing ("下载中 40%"), "" when none is; what went wrong said once.
-pub fn update_progress() -> String {
-  if update.installing {
-    return @sf.t("android-misc.updates.checking")
-  }
+/// How the update goes as the host says it now (@ui.update_state's phase: idle, allow, downloading, retrying,
+/// installing, handed, failed), what went wrong said once as it comes. Every reading of the phase goes through here:
+/// one kept from an earlier read would go on saying idle while the host downloads (2026-10-27: the small screen's
+/// update row offered 更新 again after its check, the download going on unseen). Under a Tester (no host state), the
+/// phase as the test put it.
+pub fn update_phase() -> String {
   let st = @ui.update_state()
   if st == "" {
-    return ""
+    return update.phase
   }
   let v = try Some(@json.parse(st)) catch { _ => None }
   let phase = text(v, "phase")
@@ -254,8 +255,18 @@ pub fn update_progress() -> String {
       _ => ()
     }
   }
-  match phase {
+  phase
+}
+
+///|
+/// What an update under way is doing ("下载中 40%"), "" when none is.
+pub fn update_progress() -> String {
+  if update.installing {
+    return @sf.t("android-misc.updates.checking")
+  }
+  match update_phase() {
     "downloading" => {
+      let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
       let p = number(v, "percent").to_int()
       if p >= 0 {
         @sf.t("android-misc.updates.downloadingPercent", args=[("percent", p.to_string())])
@@ -271,7 +282,7 @@ pub fn update_progress() -> String {
 
 ///|
 pub fn update_busy() -> Bool {
-  match update.phase {
+  match update_phase() {
     "downloading" | "retrying" | "installing" => true
     _ => false
   }
@@ -288,7 +299,7 @@ pub fn update_under_way() -> Bool {
 /// How far the update under way has come (0 to 1) while it downloads and the host says how far; None otherwise (asked
 /// again first, going on after the network came back, being installed: how far is not known).
 pub fn update_part() -> Double? {
-  if update.phase != "downloading" {
+  if update_phase() != "downloading" {
     return None
   }
   let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
@@ -503,7 +514,7 @@ fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
 /// What went wrong with the update as the host says it (无法更新：…, red), or what it waits for (Android's leave to
 /// install apps); "" while nothing has.
 fn update_trouble() -> (String, Bool) {
-  match update.phase {
+  match update_phase() {
     "failed" => {
       let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
       (@sf.t("android-misc.updates.failed", args=[("error", update_error(text(v, "error")))]), true)
