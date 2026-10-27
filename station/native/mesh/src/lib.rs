@@ -286,6 +286,9 @@ pub struct PathState {
     pub rtt_ms: f64,
     pub tx_packets: f64,
     pub lost_packets: f64,
+    /// How much its sender may have unacknowledged on it now (bytes), and how many times it was cut for loss.
+    pub cwnd: f64,
+    pub congestion_events: f64,
 }
 
 /// What went over a connection since it opened, both ways: bytes, packets, and of the frames in them those that
@@ -410,6 +413,8 @@ impl Connection {
                 rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
                 tx_packets: stats.udp_tx.datagrams as f64,
                 lost_packets: stats.lost_packets as f64,
+                cwnd: stats.cwnd as f64,
+                congestion_events: stats.congestion_events as f64,
             }
         }).collect()
     }
@@ -549,12 +554,13 @@ impl Stream {
         self.send.lock().await.finish().map_err(failed)
     }
 
-    /// Resolves when the other end stops reading (or the stream is gone).
+    /// Resolves once what was sent is acknowledged: null; or the code the other end stopped reading with; or null once
+    /// the stream is gone.
     #[napi]
-    pub async fn stopped(&self) {
+    pub async fn stopped(&self) -> Option<u32> {
         // The future owns what it waits on: taken under the lock and awaited without it, so writes go on meanwhile.
         let stopped = self.send.lock().await.stopped();
-        let _ = stopped.await;
+        stopped.await.ok().flatten().map(|c| u32::try_from(c.into_inner()).unwrap_or(u32::MAX))
     }
 
     /// Ends it at once, both ways: a read waiting gives up first, so the receiving half can be stopped.
