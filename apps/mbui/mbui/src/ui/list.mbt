@@ -402,7 +402,12 @@ fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
 /// built, while the list is laid out, so it knows their real heights;
 /// rows not built yet count as `est` pixels (for the scroll bar). With
 /// `stick_end` it starts at its end and stays there as rows come, until
-/// scrolled away.
+/// scrolled away. With `rows_read`, `row(i)` shows only what it reads (signals,
+/// the core's topics, row i's own of them) and nothing else it is given: a row
+/// is kept as its nodes while nothing it read changed, however what builds the
+/// list is built again (kept_nodes.mbt); without, what builds the list built
+/// again builds its rows anew. A Tester holds it: each frame that kept a row is
+/// built again keeping none and must come out the same.
 pub fn Ctx::list(
   self : Ctx,
   key : String,
@@ -414,6 +419,7 @@ pub fn Ctx::list(
   stick_end? : Bool = false,
   bg? : Int64 = 0L,
   glide_on_growth? : Bool = false,
+  rows_read? : Bool = false,
 ) -> Int {
   let id = self.id(key)
   let st = match self.lists.get(id) {
@@ -450,6 +456,7 @@ pub fn Ctx::list(
         built: -1,
         stepped: -1,
         fresh: true,
+        rows_read: false,
         glide_shows: false,
         bar: Bar::new(),
         laid: -1,
@@ -511,7 +518,10 @@ pub fn Ctx::list(
   st.direction = self.direction
   st.layer = self.layer_cur
   st.part = part_now.part
-  st.fresh = nodes_run.fresh || nodes_run.part_fresh
+  // (rows that show only what they read are kept however what builds them was built: their own watches say when
+  // they change; only a build keeping none builds them anew)
+  st.rows_read = rows_read
+  st.fresh = if rows_read { nodes_run.whole } else { nodes_run.fresh || nodes_run.part_fresh }
   // shown again (not built the frame before): what of it still moves says so again (where it is at the frame's time
   // is its layout's to work out: Ctx::place_list)
   let back = st.built >= 0 && st.built < self.frame_no - 1

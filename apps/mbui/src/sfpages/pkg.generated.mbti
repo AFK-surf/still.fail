@@ -228,6 +228,10 @@ pub fn history_open(Array[String]) -> Unit
 
 pub fn history_steps(@ui.Ctx, @sfbase.Source, String, String) -> Unit
 
+pub fn history_usage(@sfbase.Source, String, String) -> Array[Json]
+
+pub fn history_usage_line(@sfbase.Source, String, String) -> String
+
 pub let hold_ms : Double
 
 pub fn hover(@ui.Ctx, String, Int32, tile? : Bool, tap? : Bool, side? : @ui.Side, along? : @ui.Along, padded? : Bool, () -> Unit) -> Bool

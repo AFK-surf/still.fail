@@ -31,13 +31,14 @@ pub fn[T] Kept::new() -> Kept[T] {
 
 ///|
 /// What `getter` makes for `key` (given what it made last): worked out the first time, and again only once what it
-/// read changed since.
-pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T) -> T {
+/// read changed since; what reads it told only where that comes out otherwise than before, by `same` where given (else
+/// as signals compare).
+pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
   let frame = kept_frame()
   let one = match self.kept.get(key) {
     Some(k) => k
     None => {
-      let k = { value: @signals.computed(getter), read: frame }
+      let k = { value: @signals.computed(getter, same?), read: frame }
       self.kept[key] = k
       if !self.listed {
         self.listed = true

@@ -159,7 +159,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
     let quiet = if tiles {
       [text(card, "work"), text(card, "tokens")].filter(fn(x) { x != "" }).join(" · ")
     } else {
-      text((src.topic)("history", params).value, "usageLine")
+      @sfpages.history_usage_line(src, station, key)
     }
     if quiet != "" {
       c.box(style=wh_quiet_box, fn() { c.text(quiet, style=wh_quiet) |> ignore }) |> ignore

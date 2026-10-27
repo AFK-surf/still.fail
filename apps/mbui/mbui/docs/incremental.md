@@ -104,7 +104,11 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    runs under a watch of its own too (frame_watch.mbt's layout watch). A frame where only what its layout or a row read
    changed is built again as it was built (what built the lists read nothing that changed, so it builds them the same)
    and each row nothing it read changed is put back where its list lays it, neither built nor laid out; one built anew
-   (what its build read changed, an event of the hand) builds them all. What a row says of the frame that is said again
+   (what its build read changed, an event of the hand) builds them all, but a list whose rows show only what they read
+   (Ctx::list's `rows_read`: each reads its own of what the list shows, as the history's steps read theirs by the row,
+   history_steps.mbt): its rows are kept however what builds it is built, each built again only for what it read; a
+   pass of the frame built again in it (what was read changed as it was built or laid out, a row's words measured)
+   builds them anew. What a row says of the frame that is said again
    in no way (a layer opened over the page, a list of its own, a native view: kept_census, row_nodes_why) builds it
    every frame; what it read of the layout is read back as it read it, and what it holds at its list's top, what
    scrolls in it (sideways.mbt) and a field are said again where it is put back. What a row or the layout read that changes before

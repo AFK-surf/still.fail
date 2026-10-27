@@ -89,3 +89,89 @@ test "touch wide: an agent's history flung toward its start rests further that w
     None => ()
   }
 }
+
+///|
+/// A step of the agent writing, as its words come.
+let history_words_step_ms : Double = 16.0
+
+///|
+/// How far apart the agent's words come, told by the core.
+let history_words_gap_ms : Int = 100
+
+///|
+/// A phone's display's frames, each drawn as a host draws them.
+let history_frame_ms : Double = 1000.0 / 120.0
+
+
+///|
+test "touch wide: an agent's history as the agent writes builds again only the row its words are written in" {
+  reset()
+  let base = fixture("chat")
+  let was = fling_history(12)
+  let with_live = fn(words : String) -> Json {
+    match was {
+      Object(m) => {
+        let o : Map[String, Json] = {}
+        for k, v in m {
+          o[k] = v
+        }
+        o["live"] = [{ "text": Json::string(words) }]
+        Json::object(o)
+      }
+      _ => was
+    }
+  }
+  let history = @signals.signal(with_live("在看"))
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "history" {
+        { value: Some(history.get()), error: None, version: 1 }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=752.0, h=830.0, platform=2)
+  let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  side_change(r, "open", Some("s-c1"))
+  t.run_for(@sfdesk.side_in_ms)
+  // (the panel come and the tape at rest: nothing moving builds the frame)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(t.find("在看") is Some(_))
+  // its words coming, a few at a time: the items before them, the same JSON, kept as they were built
+  let words = ["在看 CI", "在看 CI 的日志", "在看 CI 的日志，慢在安装"]
+  for w in words {
+    history.set(with_live(w))
+    t.run_for(history_words_step_ms)
+    assert_true(t.find(w) is Some(_), msg="\{w} not shown")
+  }
+  // as a host draws them (no frame built again keeping none to hold it, as a Tester does) and as the core tells them,
+  // between frames (not a step of the test's, whose first frame is built anew): of the history's rows, only the one the
+  // words are in built for each, the rest kept however the frame is built
+  t.check_looks(false)
+  t.set_frame_period(history_frame_ms)
+  let built_at : Array[Int] = []
+  let more = ["读完了日志", "读完了日志，在改"]
+  let whys : Array[String] = []
+  for k, w in more {
+    @ui.runtime().after((k + 1) * history_words_gap_ms, fn() {
+      built_at.push(t.rows_read_built())
+      history.set(with_live(w))
+    })
+    // (and why the frame after it was built, if it was: said where it fails)
+    @ui.runtime().after((k + 1) * history_words_gap_ms + history_words_step_ms.to_int(), fn() {
+      whys.push(t.built_why())
+    })
+  }
+  @ui.runtime().after((more.length() + 1) * history_words_gap_ms, fn() { built_at.push(t.rows_read_built()) })
+  t.run_for(((more.length() + 2) * history_words_gap_ms).to_double())
+  assert_true(t.find(more[more.length() - 1]) is Some(_))
+  for k in 0..<more.length() {
+    let built = built_at[k + 1] - built_at[k]
+    assert_true(built == 1, msg="\{more[k]}: \{built} built (\{whys})")
+  }
+}

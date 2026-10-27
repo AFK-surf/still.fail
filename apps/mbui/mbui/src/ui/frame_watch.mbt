@@ -784,6 +784,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_coming.val = true
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
+    nodes_run.whole = false
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
   let paint_why = if paint_told != "" {
@@ -816,6 +817,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (built whole as a frame begins: what the paint alone read, read anew by its paint; no row kept)
   paint_phase.val = 0
   nodes_run.fresh = true
+  nodes_run.whole = true
   watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore
   looks_drawn.val = false
   painted_alone.val = false
