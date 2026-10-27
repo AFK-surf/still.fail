@@ -14,7 +14,7 @@ fn loupe_drawn() -> Bool {
 }
 
 ///|
-test "a finger on what asks for the loupe: what is under it larger over it, cut to the capsule; let go, none" {
+test "a finger on what asks for the loupe: it grows out of it, what is under it larger in it; let go, gone back into it" {
   let t = Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() {
@@ -33,6 +33,9 @@ test "a finger on what asks for the loupe: what is under it larger over it, cut 
   assert_false(loupe_drawn())
   t.press_at(200.0, 305.0)
   t.frame()
+  // (grown out of the finger on its spring, to its end)
+  t.run_for(g().spring_rest("\u{2}loupe/grow") - t.time())
+  t.frame()
   assert_true(loupe_drawn())
   // the box under the finger (30 over it, as asked), copied larger into the capsule over it
   let c = g()
@@ -46,6 +49,9 @@ test "a finger on what asks for the loupe: what is under it larger over it, cut 
   }
   assert_true(copied)
   t.release(200.0, 305.0)
+  t.frame()
+  // (gone back into where the finger was)
+  t.run_for(g().spring_rest("\u{2}loupe/grow") - t.time())
   t.frame()
   assert_false(loupe_drawn())
 }

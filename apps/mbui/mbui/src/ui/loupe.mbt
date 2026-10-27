@@ -1,9 +1,10 @@
 // The loupe (iOS's text loupe, Android's Magnifier): what a finger holds hidden under it shown larger over it, in a
-// capsule above the finger, while the finger drags what needs seeing where it is: a field's caret or the ends of what
-// is picked in it by their handles, a long press's word slid on (app.mbt's handle_drag, word_drag), or anything that
-// asks for it this frame (Ctx::loupe). Drawn as the frame's painting ends, over everything: the frame's instances
-// under the finger copied, larger about where the finger reads (what it moves, over it), into the capsule, cut to it;
-// glass as the ground of its tint; a lens of liquid glass over it all. Drawn only: nothing in it is pressed.
+// capsule above the finger, a drop of liquid glass growing out of it and following it, while the finger drags what
+// needs seeing where it is: a field's caret or the ends of what is picked in it by their handles, a long press's word
+// slid on (app.mbt's handle_drag, word_drag), or anything that asks for it this frame (Ctx::loupe). Drawn as the
+// frame's painting ends, over everything: the frame's instances under the finger copied, larger about where the finger
+// reads (what it moves, over it), into the capsule, cut to it; glass as the ground of its tint; a thin lens of liquid
+// glass over it all. Drawn only: nothing in it is pressed.
 
 ///|
 /// Asked this frame: magnify where the finger is, `reach` over it (what a widget dragged by a finger asks while it is:
@@ -35,8 +36,11 @@ pub let loupe_lift : Double = 92.0
 let loupe_side : Double = 8.0
 
 ///|
-/// Where the loupe is this frame: (the finger's x, where it reads, its middle's x and y), None while nothing asks.
-fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double)? {
+/// Where the loupe is this frame, as a drop of liquid it moves as: where it reads, its middle, its width and height.
+/// While asked, it grows out of the finger on a spring with give (past its size and back) and follows it on another,
+/// a little behind, drawn out along the way it goes the further behind it is (as the bar's ball at speed); let go,
+/// it goes back into where the finger was. None once it is gone.
+fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double, Double, Double)? {
   let reach = if self.loupe_asked {
     self.loupe_reach
   } else if self.down && pointing() is Finger && self.handle_drag != 0 {
@@ -48,30 +52,74 @@ fn Ctx::loupe_at(self : Ctx) -> (Double, Double, Double, Double)? {
     -1.0
   }
   self.loupe_asked = false
-  if reach < 0.0 || !self.down {
+  let asked = reach >= 0.0 && self.down
+  if asked {
+    let half = loupe_w / 2.0
+    self.loupe_src = (self.px, self.py - reach)
+    self.loupe_to = (
+      dclamp(self.px, half + loupe_side, dmax(half + loupe_side, self.width - half - loupe_side)),
+      dmax(loupe_h / 2.0 + loupe_side, self.py - loupe_lift),
+    )
+    self.loupe_foot = (self.px, self.py)
+  }
+  let grow = self.spring("\u{2}loupe/grow", if asked { 1.0 } else { 0.0 }, from=0.0, stiffness=loupe_grow_k, damping=loupe_grow_c)
+  if !asked && grow <= 0.01 {
     return None
   }
-  let (px, py) = (self.px, self.py)
-  let half = loupe_w / 2.0
-  let cx = dclamp(px, half + loupe_side, dmax(half + loupe_side, self.width - half - loupe_side))
-  let cy = dmax(loupe_h / 2.0 + loupe_side, py - loupe_lift)
-  Some((px, py - reach, cx, cy))
+  let (tx, ty) = self.loupe_to
+  let x = self.spring("\u{2}loupe/x", tx, stiffness=loupe_follow_k, damping=loupe_follow_c)
+  let y = self.spring("\u{2}loupe/y", ty, stiffness=loupe_follow_k, damping=loupe_follow_c)
+  let (fx, fy) = self.loupe_foot
+  let (sx, sy) = self.loupe_src
+  // drawn out along its way as far behind as it is, flatter for it; grown out of the finger
+  let behind = ((x - tx) * (x - tx) + (y - ty) * (y - ty)).sqrt()
+  let stretch = dmin(loupe_stretch_most, behind * loupe_stretch)
+  let g = dmax(0.0, grow)
+  let w = (loupe_w + stretch) * g
+  let h = dmax(0.0, loupe_h - stretch * loupe_flatten) * dmin(g, 1.0 + (g - 1.0) * 0.5)
+  Some((sx, sy, fx + (x - fx) * dmin(g, 1.0), fy + (y - fy) * dmin(g, 1.0), w, h))
 }
+
+///|
+/// The springs it moves on: growing (some give: past its size and back) and following the finger (a little behind,
+/// a little past where it stops), and how much it is drawn out by how far behind it is, at most, and flatter for it.
+let loupe_grow_k : Double = 360.0
+
+///|
+let loupe_grow_c : Double = 20.0
+
+///|
+let loupe_follow_k : Double = 300.0
+
+///|
+let loupe_follow_c : Double = 24.0
+
+///|
+let loupe_stretch : Double = 0.6
+
+///|
+let loupe_stretch_most : Double = 40.0
+
+///|
+let loupe_flatten : Double = 0.25
 
 ///|
 /// The loupe painted over the frame's instances (see the file's head).
 fn Ctx::paint_loupe(self : Ctx) -> Unit {
-  let (sx, sy, cx, cy) = match self.loupe_at() {
+  let (sx, sy, cx, cy, lw, lh) = match self.loupe_at() {
     Some(at) => at
     None => return
   }
+  if lw < 1.0 || lh < 1.0 {
+    return
+  }
   let z = loupe_zoom
-  let x0 = cx - loupe_w / 2.0
-  let y0 = cy - loupe_h / 2.0
-  let r = loupe_h / 2.0
+  let x0 = cx - lw / 2.0
+  let y0 = cy - lh / 2.0
+  let r = lh / 2.0
   // what it shows: the frame round where the finger reads, as far as the capsule holds at its zoom
-  let (qx0, qy0) = (sx - loupe_w / 2.0 / z, sy - loupe_h / 2.0 / z)
-  let (qx1, qy1) = (sx + loupe_w / 2.0 / z, sy + loupe_h / 2.0 / z)
+  let (qx0, qy0) = (sx - lw / 2.0 / z, sy - lh / 2.0 / z)
+  let (qx1, qy1) = (sx + lw / 2.0 / z, sy + lh / 2.0 / z)
   let n = self.ninst
   let (cr, cg, cb) = self.clear
   let ground = (((cr * 255.0).round().to_int64() & 0xFFL) << 24) |
@@ -79,9 +127,9 @@ fn Ctx::paint_loupe(self : Ctx) -> Unit {
     (((cb * 255.0).round().to_int64() & 0xFFL) << 8) |
     0xFFL
   // its shadow, outside it, and its ground (the window's, under what it shows)
-  self.push_inst(x0, y0 + loupe_shadow_y, loupe_w, loupe_h, r, 2.0, 0.0, loupe_shadow, loupe_shadow_c, 1.0, 1.0,
+  self.push_inst(x0, y0 + loupe_shadow_y, lw, lh, r, 2.0, 0.0, loupe_shadow, loupe_shadow_c, 1.0, 1.0,
     loupe_shadow_y, 0.0, 0.0)
-  self.emit_rect(x0, y0, loupe_w, loupe_h, r, ground, 0.0, 0L, 1.0)
+  self.emit_rect(x0, y0, lw, lh, r, ground, 0.0, 0L, 1.0)
   // what it shows, copied from under the finger
   let i0 = self.ninst
   for k in 0..<n {
@@ -119,8 +167,8 @@ fn Ctx::paint_loupe(self : Ctx) -> Unit {
   // larger about where the finger reads, in the capsule, cut to it
   let shape = (r, r, r, r)
   let smooth = (0.0, 0.0, 0.0, 0.0)
-  push_clip_r(x0, y0, x0 + loupe_w, y0 + loupe_h, shape, smooth)
-  self.transform_insts(i0, self.ninst, sx, sy, z, z, cx - sx, cy - sy, (x0, y0, x0 + loupe_w, y0 + loupe_h), shape, smooth)
+  push_clip_r(x0, y0, x0 + lw, y0 + lh, shape, smooth)
+  self.transform_insts(i0, self.ninst, sx, sy, z, z, cx - sx, cy - sy, (x0, y0, x0 + lw, y0 + lh), shape, smooth)
   pop_clip()
   // over it a lens of liquid glass, as the bar's ball held is: what it shows bent at its rim, the rim lit (a capture of
   // its own: what is under it, the copies)
@@ -131,8 +179,8 @@ fn Ctx::paint_loupe(self : Ctx) -> Unit {
   let lens = Node::new()
   lens.x = x0
   lens.y = y0
-  lens.fw = loupe_w
-  lens.fh = loupe_h
+  lens.fw = lw
+  lens.fh = lh
   lens.radius = r
   glass_run_break()
   self.emit_glass(lens, loupe_glass, 1.0)
@@ -140,15 +188,15 @@ fn Ctx::paint_loupe(self : Ctx) -> Unit {
 }
 
 ///|
-/// The loupe's lens: clear, a touch of white, its rim bending what is under it as the bar's lens does.
+/// The loupe's lens: clear, a touch of white, thin: its rim bending what is under it a little, the colours split less.
 // kept across runs: a value (no field of it changes)
 let loupe_glass : Glass = Glass::liquid(
   blur=0.0,
   tint=0xFFFFFF0AL,
   solid=0xFFFFFFFFL,
-  bezel=14.0,
-  refraction=10.0,
-  chroma=0.1,
+  bezel=7.0,
+  refraction=4.0,
+  chroma=0.04,
   adaptive=false,
 )
 
