@@ -138,7 +138,7 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     hand.pressed.has(id) |> ignore
   }
-  if !(self.down && self.active == id && !self.dragging) || self.press_at < 0.0 {
+  if !(self.down && self.active == id && !self.dragging && !self.press_strayed) || self.press_at < 0.0 {
     return false
   }
   if self.held_told == self.press_at {
