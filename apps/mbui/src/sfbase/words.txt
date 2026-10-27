@@ -521,6 +521,8 @@ android-misc.screen.ended
 android-misc.screen.failed
 android-misc.screen.full
 android-misc.screen.gone
+android-misc.screen.here
+android-misc.screen.hereWhy
 android-misc.screen.imageTooLarge
 android-misc.screen.imageUnread
 android-misc.screen.key.command

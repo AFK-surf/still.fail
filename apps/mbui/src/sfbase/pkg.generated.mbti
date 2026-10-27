@@ -937,6 +937,8 @@ pub fn outside_yes(Source, OutsideAsk) -> Unit
 
 pub let own_code_face : Int32
 
+pub fn own_screen(String, String) -> Bool
+
 pub let page_bridge_js : String
 
 pub fn page_glass() -> @ui.Glass

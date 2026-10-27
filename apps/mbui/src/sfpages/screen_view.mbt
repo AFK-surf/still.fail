@@ -119,9 +119,10 @@ fn screen_ui(key : String) -> ScreenUi {
 }
 
 ///|
-/// The phases a view is over in (said in the screen's place, gone dark).
+/// The phases a view is over in (said in the screen's place, gone dark); `here`: this machine's own display, never
+/// opened.
 fn phase_over(p : String) -> Bool {
-  p == "ended" || p == "outdated" || p == "gone" || p == "denied" || p == "failed"
+  p == "ended" || p == "outdated" || p == "gone" || p == "denied" || p == "failed" || p == "here"
 }
 
 ///|

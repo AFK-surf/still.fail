@@ -169,6 +169,10 @@ fn screen_ack(src : Source, s : ScreenSess, ts : Double) -> Unit {
 ///|
 /// What the phase is as the viewer shows it: the call's own failure and end over what the state last said.
 fn ScreenSess::phase(self : ScreenSess) -> String {
+  // this machine's own display: never opened (own_screen), said so in its place
+  if own_screen(self.station, self.screen) {
+    return "here"
+  }
   if self.failure.get() is Some(_) {
     return "failed"
   }
@@ -186,6 +190,9 @@ fn ScreenSess::phase(self : ScreenSess) -> String {
 ///|
 /// Why, in the viewer's words, for a phase that needs saying.
 fn ScreenSess::message(self : ScreenSess) -> String? {
+  if own_screen(self.station, self.screen) {
+    return Some(@sf.t("android-misc.screen.hereWhy"))
+  }
   match self.failure.get() {
     Some(f) => Some(f)
     None => opt_text(self.state, "message")
@@ -375,7 +382,7 @@ fn quality_bounds(quality : String) -> (Int, Int) {
 /// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.264 where the
 /// host decodes it), as large as 画质 asks.
 fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
-  if self.call != 0 {
+  if self.call != 0 || own_screen(self.station, self.screen) {
     return
   }
   // again after it ended (重新打开): on its way, not still saying how the last one ended

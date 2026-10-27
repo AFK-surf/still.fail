@@ -400,13 +400,16 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                 let sv = Some(sc)
                 let access = field(sv, "access")
                 let lacks = access is Some(Object(_)) && (!flag(access, "capture") || !flag(access, "control"))
+                // this machine's own display: said so, not opened (own_screen)
+                let own = own_screen(address, text(sv, "id"))
                 if @sf.link_row(
                     c,
                     "station-screen/" + address + "/" + text(sv, "id"),
                     text(sv, "title"),
                     // what it lacks says so in its line (the core's: what cannot be done now)
-                    note=text(sv, "line"),
-                    lacks~,
+                    note=if own { @sf.t("android-misc.screen.here") } else { text(sv, "line") },
+                    lacks=lacks && !own,
+                    goes=!own,
                     lead=fn() { st_row_mark(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }) },
                   ) {
                   @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))

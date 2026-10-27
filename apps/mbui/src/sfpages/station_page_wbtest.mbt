@@ -288,3 +288,19 @@ test "the variables' field follows the core's text that comes after the page ope
   // (the field's words: the drawn tree's editor holds them)
   assert_true(t.dump().contains("\"E2E_A=1\""), msg="the core's text, come after the page opened, in the field")
 }
+
+///|
+test "on this machine's own page its display says so and opens nothing; its browser's tab opens" {
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=0, h=2400.0, ready=fn() {
+    @sfbase.machine_here.val = Some("ws1/st1")
+  })
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("这是本机的屏幕") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("3024 × 1964 · 无人在看") is None)
+  t.tap_text("Studio 的屏幕")
+  t.draw()
+  assert_true(!(@sfbase.app.nav.top() is Screen(_)))
+  t.tap_text("发布清单 - 文档")
+  t.draw()
+  assert_true(@sfbase.app.nav.top() is Screen(_))
+}
