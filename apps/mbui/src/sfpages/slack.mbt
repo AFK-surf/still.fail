@@ -13,7 +13,7 @@ priv struct SlackTokens {
   bot : @ui.Field
   mut app_sent : String
   mut bot_sent : String
-  mut error : String
+  error : @signals.Signal[String]
 }
 
 ///|
@@ -57,7 +57,7 @@ fn slack_tokens(
         bot: @ui.Field::new(),
         app_sent: "",
         bot_sent: "",
-        error: "",
+        error: @signals.signal(""),
       }
       slack_token_forms[key] = tk
       c.tell("tokens-open/" + tk.form, fn() {
@@ -88,7 +88,7 @@ fn tokens_send(core : Core, tk : SlackTokens, action : String, input : Json?, th
   (core.call)("slack.tokens." + action, obj(p), fn(r) {
     match r {
       Ok(v) => then(v)
-      Err(e) => tk.error = error_text(e)
+      Err(e) => tk.error.set(error_text(e))
     }
   })
 }
@@ -129,7 +129,7 @@ fn tokens_check(core : Core, tk : SlackTokens, go : () -> Unit) -> Unit {
   if tokens_busy(core, tk) {
     return
   }
-  tk.error = ""
+  tk.error.set("")
   tokens_send(core, tk, "verify", None, then=fn(ok) {
     if ok == Json::boolean(true) {
       go()
@@ -203,8 +203,8 @@ fn token_fields(c : @ui.Ctx, core : Core, tk : SlackTokens, masked? : (String, S
       })
       |> ignore
     }
-    if tk.error != "" {
-      c.text(tk.error, style=sk_error) |> ignore
+    if tk.error.get() != "" {
+      c.text(tk.error.get(), style=sk_error) |> ignore
     }
   })
   |> ignore

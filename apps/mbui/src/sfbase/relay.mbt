@@ -8,17 +8,17 @@
 /// picked ("" the chat's own), all the places asked for, the place picked (a row of the view), what the core showed
 /// for what was asked last (kept while the next is on its way) and what that was.
 pub(all) struct Relaying {
-  mut station : String
-  mut thread : Double
-  mut read : Int
-  mut connects : Array[Json]
-  mut error : String
-  mut bot : String
-  mut all : Bool
-  mut picked : Json?
-  mut view : Json?
-  mut asked : String
-  mut busy : Bool
+  station : @signals.Signal[String]
+  thread : @signals.Signal[Double]
+  read : @signals.Signal[Int]
+  connects : @signals.Signal[Array[Json]]
+  error : @signals.Signal[String]
+  bot : @signals.Signal[String]
+  all : @signals.Signal[Bool]
+  picked : @signals.Signal[Json?]
+  view : @signals.Signal[Json?]
+  asked : @signals.Signal[String]
+  busy : @signals.Signal[Bool]
   /// what is typed to find a place (or a Slack message's link), and the note said with the chat where it goes
   query : @ui.Field
   note : @ui.Field
@@ -26,17 +26,17 @@ pub(all) struct Relaying {
 
 ///|
 pub let relaying : Relaying = {
-  station: "",
-  thread: -1.0,
-  read: 0,
-  connects: [],
-  error: "",
-  bot: "",
-  all: false,
-  picked: None,
-  view: None,
-  asked: "",
-  busy: false,
+  station: @signals.signal("", same=fn(a, b) { a == b }),
+  thread: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+  read: @signals.signal(0, same=fn(a, b) { a == b }),
+  connects: @signals.signal([]),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  bot: @signals.signal("", same=fn(a, b) { a == b }),
+  all: @signals.signal(false, same=fn(a, b) { a == b }),
+  picked: @signals.signal(None),
+  view: @signals.signal(None),
+  asked: @signals.signal("", same=fn(a, b) { a == b }),
+  busy: @signals.signal(false, same=fn(a, b) { a == b }),
   query: @ui.Field::new(),
   note: @ui.Field::new(),
 }
@@ -44,17 +44,17 @@ pub let relaying : Relaying = {
 ///|
 /// As before it was ever opened (the app's reset), and as it is closed.
 pub fn relay_reset() -> Unit {
-  relaying.station = ""
-  relaying.thread = -1.0
-  relaying.read = 0
-  relaying.connects = []
-  relaying.error = ""
-  relaying.bot = ""
-  relaying.all = false
-  relaying.picked = None
-  relaying.view = None
-  relaying.asked = ""
-  relaying.busy = false
+  relaying.station.set("")
+  relaying.thread.set(-1.0)
+  relaying.read.set(0)
+  relaying.connects.set([])
+  relaying.error.set("")
+  relaying.bot.set("")
+  relaying.all.set(false)
+  relaying.picked.set(None)
+  relaying.view.set(None)
+  relaying.asked.set("")
+  relaying.busy.set(false)
   relaying.query.set("")
   relaying.note.set("")
 }
@@ -63,20 +63,20 @@ pub fn relay_reset() -> Unit {
 /// The picker opened for the chat `thread` of `station`: its places asked for (Relay.tsx useRelay's effect).
 pub fn relay_open(src : Source, station : String, thread : Double) -> Unit {
   relay_reset()
-  relaying.station = station
-  relaying.thread = thread
+  relaying.station.set(station)
+  relaying.thread.set(thread)
   (src.call)("chat.relayPlaces", { "station": Json::string(station), "thread": Json::number(thread) }, fn(res) {
-    if relaying.thread != thread || relaying.station != station {
+    if relaying.thread.get() != thread || relaying.station.get() != station {
       return
     }
     match res {
       Ok(v) => {
-        relaying.connects = items(Some(v), "connects")
-        relaying.read = 1
+        relaying.connects.set(items(Some(v), "connects"))
+        relaying.read.set(1)
       }
       Err(e) => {
-        relaying.error = error_words(e)
-        relaying.read = 2
+        relaying.error.set(error_words(e))
+        relaying.read.set(2)
       }
     }
   })
@@ -87,51 +87,51 @@ pub fn relay_open(src : Source, station : String, thread : Double) -> Unit {
 /// `unread`), asked of the core once the frame is built when what is typed, the bot or all changed; what it showed for
 /// what was asked before until it answers (None before its first answer).
 pub fn relay_view(c : @ui.Ctx, src : Source) -> Json? {
-  if relaying.read != 1 {
+  if relaying.read.get() != 1 {
     return None
   }
   let params : Map[String, Json] = {
-    "connects": Json::array(relaying.connects),
+    "connects": Json::array(relaying.connects.get()),
     "query": Json::string(relaying.query.text()),
   }
-  if relaying.all {
+  if relaying.all.get() {
     params["all"] = Json::boolean(true)
   }
-  if relaying.bot != "" {
-    params["bot"] = Json::string(relaying.bot)
+  if relaying.bot.get() != "" {
+    params["bot"] = Json::string(relaying.bot.get())
   }
   let params = Json::object(params)
   let asked = params.stringify()
-  if asked != relaying.asked {
-    let thread = relaying.thread
+  if asked != relaying.asked.get() {
+    let thread = relaying.thread.get()
     // (asked once the frame's builds are over: the last build's ask is the one kept)
     c.after_build("relay/chat.relayView", fn() {
-      if relaying.asked != asked && relaying.thread == thread {
-        relaying.asked = asked
+      if relaying.asked.get() != asked && relaying.thread.get() == thread {
+        relaying.asked.set(asked)
         (src.call)("chat.relayView", params, fn(res) {
           match res {
-            Ok(v) if relaying.thread == thread && relaying.asked == asked => relaying.view = Some(v)
+            Ok(v) if relaying.thread.get() == thread && relaying.asked.get() == asked => relaying.view.set(Some(v))
             _ => ()
           }
         })
       }
     })
   }
-  relaying.view
+  relaying.view.get()
 }
 
 ///|
 /// The connect of id `id` as read (its name, kind, picture).
 pub fn relay_connect(id : String) -> Json? {
-  relaying.connects.iter().find_first(fn(c) { text(Some(c), "id") == id })
+  relaying.connects.get().iter().find_first(fn(c) { text(Some(c), "id") == id })
 }
 
 ///|
 /// The chat relayed to the place picked, or to the thread of the Slack message's link typed (through the bot gone on
 /// through), with the note: said where it went when done (Relay.tsx go), why not when not; `done` told once it went.
 pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> Unit {
-  let p : Map[String, Json] = { "station": Json::string(relaying.station), "thread": Json::number(relaying.thread) }
-  match (opt_text(view, "link"), relaying.picked) {
+  let p : Map[String, Json] = { "station": Json::string(relaying.station.get()), "thread": Json::number(relaying.thread.get()) }
+  match (opt_text(view, "link"), relaying.picked.get()) {
     (Some(link), _) => {
       p["link"] = Json::string(link)
       match opt_text(view, "bot") {
@@ -149,13 +149,13 @@ pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> U
   if note.trim(chars=" \n\t").to_owned() != "" {
     p["note"] = Json::string(note)
   }
-  relaying.busy = true
-  let thread = relaying.thread
+  relaying.busy.set(true)
+  let thread = relaying.thread.get()
   act(src, @sf.t("web-main.relay.verb"), "", "chat.relay", Json::object(p), ok=fn(v) {
     toast_later(@sf.t("web-main.relay.done", args=[("place", text(Some(v), "place"))]))
-    if relaying.thread == thread {
+    if relaying.thread.get() == thread {
       relay_reset()
     }
     done()
-  }, failed=fn() { relaying.busy = false })
+  }, failed=fn() { relaying.busy.set(false)})
 }

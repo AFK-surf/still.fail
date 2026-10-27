@@ -502,9 +502,9 @@ test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
 /// The toast saying `words` (with a button of `action`'s words, "" none) as it rests in tester `t`: its rect, its
 /// button's.
 fn rested_toast(t : @ui.Tester, words : String, action : String) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)?) raise {
-  app.toast = words
+  app.toast.set(words)
   app.toast_action = action
-  app.toast_n += 1
+  app.toast_n.set(app.toast_n.get() + 1)
   t.frame()
   t.run_for(@kit.presence_in_ms)
   let toast = match t.query(Status, label=words) {
@@ -558,7 +558,7 @@ test "a chat archived from its row: said at once by its title, its station not a
   // no: why, in its place
   (named(calls, "chat.archive")[0].done)(Err({ "message": "坏了" }))
   t.draw()
-  assert_true(app.toast.contains("坏了"), msg=app.toast)
+  assert_true(app.toast.get().contains("坏了"), msg=app.toast.get())
 }
 
 ///|

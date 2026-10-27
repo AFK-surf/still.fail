@@ -96,42 +96,42 @@ pub let bar_moves : Map[String, Double] = {}
 /// What the core keeps of each chat (its messages, the files opened in it) and of the drives' files, and the files of
 /// no chat known (`cache.usage`), read as the page opens and again after a deletion.
 priv struct Kept {
-  mut chats : Array[Json]?
+  chats : @signals.Signal[Array[Json]?]
   /// the bytes of the drives' files kept (drive.read's `keep`)
-  mut drive : Double
+  drive : @signals.Signal[Double]
   /// the files of no chat known (`loose`)
-  mut loose : Array[Json]
-  mut asked : Int
-  mut read : Int
+  loose : @signals.Signal[Array[Json]]
+  asked : @signals.Signal[Int]
+  read : @signals.Signal[Int]
 }
 
 ///|
-let kept : Kept = { chats: None, drive: 0.0, loose: [], asked: 0, read: -1 }
+let kept : Kept = { chats: @signals.signal(None), drive: @signals.signal(0.0, same=fn(a, b) { a == b }), loose: @signals.signal([]), asked: @signals.signal(0, same=fn(a, b) { a == b }), read: @signals.signal(-1, same=fn(a, b) { a == b })}
 
 ///|
 /// The chats' kept data asked of the core again.
 fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
-  if kept.read == kept.asked {
+  if kept.read.get() == kept.asked.get() {
     return
   }
-  kept.read = kept.asked
+  kept.read.set(kept.asked.get())
   // (asked once the frame's builds are over: the build that first comes to it alone)
   c.tell("cache.usage", fn() {
     (core.call)("cache.usage", obj([]), fn(r) {
-      kept.chats = Some(
+      kept.chats.set(Some(
         match r {
           Ok(v) => items(Some(v), "chats")
           Err(_) => []
         },
-      )
-      kept.drive = match r {
+      ))
+      kept.drive.set(match r {
         Ok(v) => number(Some(v), "drive")
         Err(_) => 0.0
-      }
-      kept.loose = match r {
+      })
+      kept.loose.set(match r {
         Ok(v) => items(Some(v), "loose")
         Err(_) => []
-      }
+      })
     })
   })
 }
@@ -141,7 +141,7 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
 /// all, once the core has said it ("" until then).
 pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
   kept_read(c, core)
-  match kept.chats {
+  match kept.chats.get() {
     Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
     None => ""
   }
@@ -242,11 +242,11 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { page_note(c, tr("android-settings.files.note")) },
   ]
   fill_blocks(c, core, blocks)
-  match kept.chats {
+  match kept.chats.get() {
     None => blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, true) }) })
     Some(chats) => {
-      let loose = kept.loose
-      let total = chats.fold(init=kept.drive + files_bytes(loose), fn(s, x) { s + chat_bytes(x) })
+      let loose = kept.loose.get()
+      let total = chats.fold(init=kept.drive.get() + files_bytes(loose), fn(s, x) { s + chat_bytes(x) })
       blocks.push(fn() {
         section_header(c, tr("android-settings.files.byChat"), trailing=fill("android-settings.files.total", [("size", size_words(total))]), start=S6)
       })
@@ -304,10 +304,10 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
             ) {
             (core.push)(KeptChat("", -1))
           }
-          let drive = kept.drive
+          let drive = kept.drive.get()
           if size_row(c, if drive > 0.0 { "kept-drive" } else { "" }, tr("android-settings.files.drive"), tr("android-settings.files.drive.sub"), drive) {
             confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
-              (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
+              (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
             })
           }
         })
@@ -324,12 +324,12 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
                 fn() {
                   for x in chats {
                     (core.call)("cache.clear", obj([("station", str(text(Some(x), "station"))), ("thread", Json::number(number(Some(x), "thread")))]), fn(_) {
-                      kept.asked += 1
+                      kept.asked.set(kept.asked.get() + 1)
                     })
                   }
                   kept_files_clear(core, loose)
-                  if kept.drive > 0.0 {
-                    (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
+                  if kept.drive.get() > 0.0 {
+                    (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
                   }
                 },
               )
@@ -444,7 +444,7 @@ fn kept_files_clear(core : Core, files : Array[Json]) -> Unit {
 fn kept_file_clear(core : Core, station : String, f : Json) -> Unit {
   let fv = Some(f)
   (core.call)("cache.file.clear", obj([("station", str(station)), ("key", str(text(fv, "key"))), ("name", str(text(fv, "name")))]), fn(_) {
-    kept.asked += 1
+    kept.asked.set(kept.asked.get() + 1)
   })
 }
 
@@ -492,11 +492,11 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
   let t = @sf.theme()
   kept_read(c, core)
   let loose = station == ""
-  let chat = match kept.chats {
+  let chat = match kept.chats.get() {
     Some(a) if !loose => a.iter().find_first(fn(x) { text(Some(x), "station") == station && count(Some(x), "thread") == thread })
     _ => None
   }
-  let files = if loose { kept.loose } else { items(chat, "files") }
+  let files = if loose { kept.loose.get() } else { items(chat, "files") }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.files.title")) },
     fn() { large_title(c, if loose { tr("android-settings.files.loose") } else { text(chat, "title") }) },
@@ -505,12 +505,12 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     match chat {
       Some(_) =>
         (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
-          kept.asked += 1
+          kept.asked.set(kept.asked.get() + 1)
         })
       None => kept_files_clear(core, files)
     }
   }
-  if kept.chats is None {
+  if kept.chats.get() is None {
     blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, false) }) })
   } else {
     let messages = number(chat, "bytes")
@@ -520,7 +520,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
           if size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages) {
             confirm(tr("android-settings.files.messages"), tr("android-settings.files.messages.clear"), tr("android-settings.files.clear.action"), danger=true, fn() {
               (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
-                kept.asked += 1
+                kept.asked.set(kept.asked.get() + 1)
               })
             })
           }

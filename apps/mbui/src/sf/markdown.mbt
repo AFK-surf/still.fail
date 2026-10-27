@@ -1164,7 +1164,7 @@ let code_key_h : Double = 24.0
 
 ///|
 /// The code blocks saying they were copied, by their id (for copied_ms, on @kit.after's clock).
-let copied_at : Map[Int, Bool] = {}
+let copied_at : LiveMap[Int, Bool] = LiveMap::new()
 
 ///|
 /// A code block as the web phone draws it (Markdown.kt CodeBlock): a quiet

@@ -29,12 +29,12 @@ pub(all) struct OutsideAsk {
   words : String
   /// sends it (the composer's send, as it was pressed)
   send : () -> Unit
-  mut chats : Array[OutsideRef]
-  mut checking : Bool
-  mut go : Bool
-  mut open : Bool
-  mut busy : Bool
-  mut error : String
+  chats : @sf.LiveArray[OutsideRef]
+  checking : @signals.Signal[Bool]
+  go : @signals.Signal[Bool]
+  open : @signals.Signal[Bool]
+  busy : @signals.Signal[Bool]
+  error : @signals.Signal[String]
 }
 
 ///|
@@ -56,7 +56,7 @@ pub fn send_sharing(src : Source, key : String, station : String, words : String
   }
   match outside_ask.val {
     // asked already, or asking: a second send does nothing meanwhile
-    Some(s) if s.key == key && (s.checking || s.open || s.go) => return
+    Some(s) if s.key == key && (s.checking.get() || s.open.get() || s.go.get()) => return
     _ => ()
   }
   let s : OutsideAsk = {
@@ -64,26 +64,26 @@ pub fn send_sharing(src : Source, key : String, station : String, words : String
     station,
     words,
     send,
-    chats: [],
-    checking: true,
-    go: false,
-    open: false,
-    busy: false,
-    error: "",
+    chats: @sf.LiveArray::from([]),
+    checking: @signals.signal(true),
+    go: @signals.signal(false),
+    open: @signals.signal(false),
+    busy: @signals.signal(false),
+    error: @signals.signal(""),
   }
   outside_ask.val = Some(s)
   (src.call)("chat.outsideRefs", { "station": Json::string(station), "text": Json::string(words) }, fn(res) {
-    s.checking = false
+    s.checking.set(false)
     // a core that cannot say (one before sharing) leaves it as before: sent as it is
     let chats = match res {
       Ok(v) => outside_refs_of(v)
       Err(_) => []
     }
     if chats.length() == 0 {
-      s.go = true
+      s.go.set(true)
     } else {
-      s.chats = chats
-      s.open = true
+      s.chats.replace(chats)
+      s.open.set(true)
     }
   })
 }
@@ -109,8 +109,8 @@ fn outside_refs_of(v : Json) -> Array[OutsideRef] {
 /// bring this frame), as it would have when pressed.
 pub fn sharing_go(key : String) -> Unit {
   match outside_ask.val {
-    Some(s) if s.key == key && s.go => {
-      s.go = false
+    Some(s) if s.key == key && s.go.get() => {
+      s.go.set(false)
       // (one asked about lets go as its page's asking has gone: outside_gone)
       if s.chats.is_empty() {
         outside_ask.val = None
@@ -126,7 +126,7 @@ pub fn sharing_go(key : String) -> Unit {
 /// once it has).
 pub fn outside_asking(key : String) -> OutsideAsk? {
   match outside_ask.val {
-    Some(s) if s.key == key && (s.open || !s.chats.is_empty()) => Some(s)
+    Some(s) if s.key == key && (s.open.get() || !s.chats.is_empty()) => Some(s)
     _ => None
   }
 }
@@ -142,24 +142,24 @@ pub fn outside_sharable(s : OutsideAsk) -> Bool {
 /// by the core (`chat.outsideShare`), then it goes with the composer's next build; failing, why is said and nothing
 /// goes. With none to share, it goes as it is.
 pub fn outside_yes(src : Source, s : OutsideAsk) -> Unit {
-  if s.busy {
+  if s.busy.get() {
     return
   }
   if !outside_sharable(s) {
-    s.open = false
-    s.go = true
+    s.open.set(false)
+    s.go.set(true)
     return
   }
-  s.busy = true
-  s.error = ""
+  s.busy.set(true)
+  s.error.set("")
   (src.call)("chat.outsideShare", { "station": Json::string(s.station), "text": Json::string(s.words) }, fn(res) {
-    s.busy = false
+    s.busy.set(false)
     match res {
       Ok(_) => {
-        s.open = false
-        s.go = true
+        s.open.set(false)
+        s.go.set(true)
       }
-      Err(e) => s.error = @sf.t("web-main.outside.failed", args=[("error", error_words(e))])
+      Err(e) => s.error.set(@sf.t("web-main.outside.failed", args=[("error", error_words(e))]))
     }
   })
 }
@@ -167,14 +167,14 @@ pub fn outside_yes(src : Source, s : OutsideAsk) -> Unit {
 ///|
 /// The asking's no (取消, or closed): nothing goes, the words as they were.
 pub fn outside_no(s : OutsideAsk) -> Unit {
-  s.open = false
+  s.open.set(false)
 }
 
 ///|
 /// Its page's asking has gone (closed and shown no more): let go of it.
 pub fn outside_gone(s : OutsideAsk) -> Unit {
   match outside_ask.val {
-    Some(now) if physical_equal(now, s) && !s.open && !s.go => outside_ask.val = None
+    Some(now) if physical_equal(now, s) && !s.open.get() && !s.go.get() => outside_ask.val = None
     _ => ()
   }
 }

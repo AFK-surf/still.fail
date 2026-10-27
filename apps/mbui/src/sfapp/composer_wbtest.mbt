@@ -346,7 +346,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.draw()
   t.tap_text("重试")
   t.draw()
-  assert_eq(app.toast, "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
+  assert_eq(app.toast.get(), "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
   fix_clock.val = None
 }
 
@@ -596,7 +596,7 @@ test "words sent fly to their own row though an older page with the viewer's mes
   (src.call)("chat.older", { "station": "ws1/st1", "session": "s-c1" }, fn(_) {  })
   t.draw()
   t.draw()
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) => assert_true(f.placed, msg="flying to \{f.key}")
     None => fail("nothing flies")
   }

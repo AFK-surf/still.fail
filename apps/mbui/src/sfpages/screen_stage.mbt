@@ -262,7 +262,7 @@ fn drops(c : @ui.Ctx, s : ScreenSess) -> Unit {
 ///|
 fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
   c.box(style=drop_row_box, fn() {
-    let (icon, tone) : (String, @ui.Color) = match d.state {
+    let (icon, tone) : (String, @ui.Color) = match d.state.get() {
       "done" => ("check-circle", Accent)
       "failed" => ("info", Danger)
       _ => ("upload", Muted)
@@ -272,11 +272,11 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
     // its name and its keys on its first line; where it is, what is done with it there, how far it has got or why it
     // failed under them, as wide as its words (lines of their own)
     @sf.row_lines(c, fn() {
-      c.box(style=drop_words, fn() { c.text(d.name, style=drop_name) |> ignore }) |> ignore
-      if d.state == "failed" && screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry")) {
+      c.box(style=drop_words, fn() { c.text(d.name.get(), style=drop_name) |> ignore }) |> ignore
+      if d.state.get() == "failed" && screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry")) {
         s.retry(d)
       }
-      let close = if d.state == "done" || d.state == "failed" {
+      let close = if d.state.get() == "done" || d.state.get() == "failed" {
         @sf.t("common.close")
       } else {
         @sf.t("common.cancel")
@@ -285,7 +285,7 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
         s.dismiss(d)
       }
     }, fn() {
-      match d.state {
+      match d.state.get() {
         "done" => {
           c.text(d.path(), style=drop_path_words) |> ignore
           // what is done with it there goes through the view: while driving it
@@ -314,18 +314,18 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
           let size = d.bytes.length()
           // (its size known once it goes, as Android's provider says it then)
           c.text(
-            if d.state == "waiting" {
+            if d.state.get() == "waiting" {
               @sf.t("android-misc.screen.sendWaiting")
             } else {
               @sf.t("android-misc.drive.upload.going", args=[
-                ("sent", @sf.file_size(d.sent.to_double())),
+                ("sent", @sf.file_size(d.sent.get().to_double())),
                 ("size", @sf.file_size(size.to_double())),
               ])
             },
             style=drop_going_words,
           )
           |> ignore
-          let share = if size > 0 { clamp01(d.sent.to_double() / size.to_double()) } else { 0.0 }
+          let share = if size > 0 { clamp01(d.sent.get().to_double() / size.to_double()) } else { 0.0 }
           let rest = 1.0 - share
           c.box(style=drop_track_place, fn() {
             c.box(style=drop_track, fn() {

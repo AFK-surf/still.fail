@@ -10,12 +10,12 @@ pub(all) struct DvUpload {
   station : String
   root : String
   dir : String
-  mut name : String
+  name : @signals.Signal[String]
   bytes : Bytes
-  mut sent : Int
+  sent : @signals.Signal[Int]
   /// waiting | going | taken (asked: 替换 or 保留两者) | naming (kept beside: its name asked of the core) | failed
-  mut state : String
-  mut error : String
+  state : @signals.Signal[String]
+  error : @signals.Signal[String]
   mut replace : Bool
   mut id : String
 }
@@ -24,18 +24,18 @@ pub(all) struct DvUpload {
 ///|
 /// The files going up, the serial of the last, whether one is going now; a file being picked to go up, and where to.
 pub(all) struct DriveUploads {
-  uploads : Array[DvUpload]
+  uploads : @sf.LiveArray[DvUpload]
   mut serial : Int
-  mut pumping : Bool
+  pumping : @signals.Signal[Bool]
   mut picking : @ui.Pick?
   mut picking_for : DriveAt
 }
 
 ///|
 pub let ups : DriveUploads = {
-  uploads: [],
+  uploads: @sf.LiveArray::new(),
   serial: 0,
-  pumping: false,
+  pumping: @signals.signal(false, same=fn(a, b) { a == b }),
   picking: None,
   picking_for: { station: "", root: None, path: "" },
 }
@@ -44,7 +44,7 @@ pub let ups : DriveUploads = {
 fn ups_reset() -> Unit {
   ups.uploads.clear()
   ups.serial = 0
-  ups.pumping = false
+  ups.pumping.set(false)
   ups.picking = None
   ups.picking_for = { station: "", root: None, path: "" }
 }
@@ -87,11 +87,11 @@ pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> U
               station: at.station,
               root,
               dir: at.path,
-              name: f.name,
+              name: @signals.signal(f.name),
               bytes: f.bytes,
-              sent: 0,
-              state: "waiting",
-              error: "",
+              sent: @signals.signal(0),
+              state: @signals.signal("waiting"),
+              error: @signals.signal(""),
               replace: false,
               id: "",
             })
@@ -107,22 +107,22 @@ pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> U
 ///|
 /// The next file waiting, up (one at a time, whatever page is shown).
 pub fn dv_pump(src : Source) -> Unit {
-  if ups.pumping {
+  if ups.pumping.get() {
     return
   }
   // (the next file waiting, sent once: its bytes are what was picked, whichever build sends it)
-  match ups.uploads.iter().find_first(fn(u) { u.state == "waiting" }) {
+  match ups.uploads.iter().find_first(fn(u) { u.state.get() == "waiting" }) {
     Some(u) => {
       if src.read_only {
-        u.state = "failed"
-        u.error = read_only_words
+        u.state.set("failed")
+        u.error.set(read_only_words)
         dv_pump(src)
         return
       }
-      ups.pumping = true
-      u.state = "going"
-      u.sent = 0
-      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name, u.bytes), u.serial)
+      ups.pumping.set(true)
+      u.state.set("going")
+      u.sent.set(0)
+      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name.get(), u.bytes), u.serial)
       dv_up_part(src, u, 0, dv_part_first)
     }
     None => ()
@@ -132,7 +132,7 @@ pub fn dv_pump(src : Source) -> Unit {
 ///|
 pub fn dv_up_done(src : Source, u : DvUpload) -> Unit {
   ups.uploads.retain(fn(x) { x.serial != u.serial })
-  ups.pumping = false
+  ups.pumping.set(false)
   dv_pump(src)
 }
 
@@ -141,7 +141,7 @@ pub fn dv_up_done(src : Source, u : DvUpload) -> Unit {
 /// part in with the entry it now has; a name taken refuses the first part (409), asked in its row.
 pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit {
   if !ups.uploads.iter().any(fn(x) { x.serial == u.serial }) {
-    ups.pumping = false
+    ups.pumping.set(false)
     dv_pump(src)
     return
   }
@@ -151,7 +151,7 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
   let params : Map[String, Json] = {
     "station": Json::string(u.station),
     "root": Json::string(u.root),
-    "path": Json::string(dv_join(u.dir, u.name)),
+    "path": Json::string(dv_join(u.dir, u.name.get())),
     "id": Json::string(u.id),
     "offset": Json::number(have.to_double()),
     "total": Json::number(size.to_double()),
@@ -171,15 +171,15 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
           _ => have + len
         }
         if entry || next >= size {
-          u.sent = size
+          u.sent.set(size)
           dv_up_done(src, u)
         } else if next <= have {
-          u.state = "failed"
-          u.error = @sf.t("android-chat.file.uploadFailed")
-          ups.pumping = false
+          u.state.set("failed")
+          u.error.set(@sf.t("android-chat.file.uploadFailed"))
+          ups.pumping.set(false)
           dv_pump(src)
         } else {
-          u.sent = next
+          u.sent.set(next)
           let more = if next == have + len {
             if planned * 2 > dv_part_max {
               dv_part_max
@@ -195,12 +195,12 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
       Err(e) => {
         let taken = number(Some(e), "status") == 409.0 || text(Some(e), "code") == "exists"
         if taken && !u.replace {
-          u.state = "taken"
+          u.state.set("taken")
         } else {
-          u.state = "failed"
-          u.error = dv_error(e)
+          u.state.set("failed")
+          u.error.set(dv_error(e))
         }
-        ups.pumping = false
+        ups.pumping.set(false)
         dv_pump(src)
       }
     }

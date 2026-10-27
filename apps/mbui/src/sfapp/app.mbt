@@ -45,19 +45,19 @@ fn reset() -> Unit {
   bar_timed.val = None
   home_sheet_at_start.val = false
   peeks_reset()
-  share_in.shared = None
-  share_in.files = []
-  share_in.raised = false
+  share_in.shared.set(None)
+  share_in.files.set([])
+  share_in.raised.set(false)
   // (taken: a Tester never reads the machine's MBUI_SHARE_TEXT)
-  share_in.env_taken = true
-  share_in.searching = false
-  share_in.choosing = false
-  share_in.opening = None
-  share_in.error = ""
-  share_in.query = ""
+  share_in.env_taken.set(true)
+  share_in.searching.set(false)
+  share_in.choosing.set(false)
+  share_in.opening.set(None)
+  share_in.error.set("")
+  share_in.query.set("")
   share_in.find.set("")
   share_closing.val = false
-  splash_waited.val = false
+  splash_waited.set(false)
   first_shown.val = false
   first_waiting.val = false
   first_has.val = 0
@@ -778,10 +778,10 @@ pub let toast_action_ms : Double = @sf.toast_action_ms
 fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   let t = @sf.theme()
   // a second after the app's first splash, it is said that it waits, and for what, from then on
-  if !splash_waited.val && @kit.after(c, "splash-label", true, splash_label_ms) {
-    splash_waited.val = true
+  if !splash_waited.get() && @kit.after(c, "splash-label", true, splash_label_ms) {
+    splash_waited.set(true)
   }
-  if !now && !splash_waited.val {
+  if !now && !splash_waited.get() {
     // (the ground alone: the window held is not shown for it, view_in)
     frame_bare.val = true
     return
@@ -813,7 +813,7 @@ let splash_label_ms : Double = 1000.0
 ///|
 /// Whether the app's first splash has waited its second (splash_label_ms): its mark and what it waits for shown from
 /// then on.
-let splash_waited : Ref[Bool] = { val: false }
+let splash_waited : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 fn dmin(a : Double, b : Double) -> Double {

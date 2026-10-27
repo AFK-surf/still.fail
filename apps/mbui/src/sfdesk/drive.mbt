@@ -43,9 +43,9 @@ pub(all) struct FolderOf {
 /// The name being changed in place and whether its field had the focus (it is done once it leaves); the row whose menu
 /// is presented (its key, the presenter's serial: @sf.last_presented), marked while it is drawn.
 priv struct DriveHeld {
-  mut naming : String
+  naming : @signals.Signal[String]
   mut naming_had : Bool
-  refreshing : Map[String, Bool]
+  refreshing : @sf.LiveMap[String, Bool]
   mut row_frame : Int
   mut menu_row : String
   mut menu_serial : Int
@@ -54,9 +54,9 @@ priv struct DriveHeld {
 
 ///|
 let held : DriveHeld = {
-  naming: "",
+  naming: @signals.signal("", same=fn(a, b) { a == b }),
   naming_had: false,
-  refreshing: {},
+  refreshing: @sf.LiveMap::new(),
   row_frame: -1,
   menu_row: "",
   menu_serial: 0,
@@ -65,7 +65,7 @@ let held : DriveHeld = {
 
 ///|
 fn drive_reset() -> Unit {
-  held.naming = ""
+  held.naming.set("")
   held.naming_had = false
   held.refreshing.clear()
   held.row_frame = -1
@@ -1084,8 +1084,8 @@ pub fn drive_row(
 /// it was.
 fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps) -> Unit {
   let t = @sf.theme()
-  if held.naming != key {
-    held.naming = key
+  if held.naming.get() != key {
+    held.naming.set(key)
     held.naming_had = false
   }
   c.box(style=name_field_box, fn() {
@@ -1104,12 +1104,12 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
       c.focus_editor(key)
     }
     if c.key_pressed(@ui.key_escape, in_field=true) {
-      held.naming = ""
+      held.naming.set("")
       (row.rename)(None)
     } else {
       match r.submitted {
         Some(words) => {
-          held.naming = ""
+          held.naming.set("")
           (row.rename)(Some(words))
         }
         None =>
@@ -1117,7 +1117,7 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
             held.naming_had = true
           } else if held.naming_had {
             // left: kept
-            held.naming = ""
+            held.naming.set("")
             (row.rename)(Some(r.text))
           }
       }
@@ -1166,24 +1166,24 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
   let k = "files/up/\{u.serial}"
   let stacked = c.width < row_stack_below
   let size = u.bytes.length()
-  let part = if size > 0 { dmin(u.sent.to_double() / size.to_double(), all) } else { none }
-  let how_far = @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))])
+  let part = if size > 0 { dmin(u.sent.get().to_double() / size.to_double(), all) } else { none }
+  let how_far = @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.get().to_double())), ("size", @sf.file_size(size.to_double()))])
   let replace = fn() {
     u.replace = true
-    u.state = "waiting"
+    u.state.set("waiting")
     dv_pump(src)
   }
   let keys = fn() {
-    if u.state == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
-      u.state = "waiting"
-      u.error = ""
-      u.sent = 0
+    if u.state.get() == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
+      u.state.set("waiting")
+      u.error.set("")
+      u.sent.set(0)
       dv_pump(src)
     }
     if @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel")) {
       ups.uploads.retain(fn(x) { x.serial != u.serial })
-      if u.state == "going" {
-        ups.pumping = false
+      if u.state.get() == "going" {
+        ups.pumping.set(false)
         dv_pump(src)
       }
     }
@@ -1197,12 +1197,12 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
           // failed
           c.box(style=upload_first, fn() {
             @sf.icon(c, "upload", size=items.mark, color=t.p.muted) |> ignore
-            c.box(style=name_stack, fn() { c.text(u.name, style=items.name.then(file_name_cut)) |> ignore }) |> ignore
+            c.box(style=name_stack, fn() { c.text(u.name.get(), style=items.name.then(file_name_cut)) |> ignore }) |> ignore
             c.box(style=upload_keys, fn() { keys() }) |> ignore
           })
           |> ignore
           c.box(style=upload_under.then(@ui.style(pl=@sf.room_of(upload_under_in + items.mark))), fn() {
-            match u.state {
+            match u.state.get() {
               "taken" =>
                 c.box(style=upload_ask_line, flow=true, line_gap=0.0, fn() {
                   c.text(@sf.t("web-pages.drive.taken"), style=items.meta.then(@sf.one_line)) |> ignore
@@ -1214,7 +1214,7 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
                 })
                 |> ignore
               "failed" =>
-                c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=items.meta.then(upload_failed_under))
+                c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error.get())]), style=items.meta.then(upload_failed_under))
                 |> ignore
               _ => {
                 c.text(how_far, style=items.meta) |> ignore
@@ -1228,8 +1228,8 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
           // (its name, and beside it how far, what is asked or why it failed: its name keeps a few words, what is
           // asked its two answers alone)
           c.box(style=upload_words, flow=true, line_gap=0.0, fn() {
-            c.box(style=upload_name, fn() { c.text(u.name, style=items.name.then(file_name_cut)) |> ignore }) |> ignore
-            match u.state {
+            c.box(style=upload_name, fn() { c.text(u.name.get(), style=items.name.then(file_name_cut)) |> ignore }) |> ignore
+            match u.state.get() {
               "taken" =>
                 c.box(style=upload_ask, fn() {
                   c.box(drop=upload_drop_note, fn() { c.text(@sf.t("web-pages.drive.taken"), style=items.meta) |> ignore })
@@ -1244,7 +1244,7 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
                 |> ignore
               "failed" =>
                 c.box(style=upload_why, fn() {
-                  c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error)]), style=upload_failed) |> ignore
+                  c.text(@sf.t("web-pages.drive.uploadFailed", args=[("error", u.error.get())]), style=upload_failed) |> ignore
                 })
                 |> ignore
               _ => {

@@ -15,7 +15,7 @@ pub let drive_part : Int = 4 * 1024 * 1024
 ///|
 /// A drive's files being fetched to keep or hand to another app: how far each has come (0–100), by dv_fetch_key
 /// (DriveScreen.kt DriveFetches).
-pub let dv_fetches : Map[String, Int] = Map([])
+pub let dv_fetches : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 pub fn dv_fetch_key(station : String, root : String, path : String) -> String {
@@ -44,7 +44,7 @@ priv struct Keeping {
 }
 
 ///|
-let keepings : Array[Keeping] = []
+let keepings : @sf.LiveArray[Keeping] = @sf.LiveArray::new()
 
 ///|
 /// Each frame (app.mbt): the keeps the host has answered, said in a toast.

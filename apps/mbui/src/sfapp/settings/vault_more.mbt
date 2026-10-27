@@ -83,16 +83,16 @@ pub let recovery_words : Map[String, Array[String]] = Map([])
 ///|
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
 priv struct Opened {
-  plain : Map[String, Json]
+  plain : @sf.LiveMap[String, Json]
   /// its fields as its page shows them (the core's `shown`: each its key, what it is called, its value, whether secret)
-  fields : Map[String, Array[Json]]
-  opening : Map[String, Bool]
+  fields : @sf.LiveMap[String, Array[Json]]
+  opening : @sf.LiveMap[String, Bool]
   /// the fields shown (by item and field)
   shown : Map[String, Bool]
 }
 
 ///|
-let opened : Opened = { plain: {}, fields: {}, opening: {}, shown: {} }
+let opened : Opened = { plain: @sf.LiveMap::new(), fields: @sf.LiveMap::new(), opening: @sf.LiveMap::new(), shown: {} }
 
 ///|
 /// The item opened (`vault.open`: the system's prompt first where its vault is locked here), then `then` with what it

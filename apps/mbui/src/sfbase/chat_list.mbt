@@ -48,7 +48,7 @@ pub(all) struct Reading {
   /// read from the station after it)
   mut lined : Bool
   /// the first message when the page before was asked for (once per page)
-  mut asked : Double
+  asked : @signals.Signal[Double]
   mut asked_newer : Double
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
@@ -177,7 +177,7 @@ pub fn reading_of(key : String) -> Reading {
         placed: false,
         put: false,
         lined: false,
-        asked: -1.0,
+        asked: @signals.signal(-1.0),
         asked_newer: -1.0,
         told: "",
         seen_whole: -1.0,
@@ -448,7 +448,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     emit_take(c, em, v, showing)
     // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
     // (emit_step)
-    let sending = match send_flight.val {
+    let sending = match send_flight.get() {
       Some(f) if f.turns == rk && !f.placed => -2.0
       Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
       _ => -1.0
@@ -1492,8 +1492,8 @@ pub fn list_after(
                 })
               }
             Some(thread) if v.more && first > target =>
-              if rd.asked != first {
-                rd.asked = first
+              if rd.asked.get() != first {
+                rd.asked.set(first)
                 // (asked once the frame's builds are over)
                 c.tell("chat.older/" + gk, fn() {
                   (src.call)(
@@ -1525,19 +1525,19 @@ pub fn list_after(
             }
         }
         // (asked once the frame's builds are over, from where the last laid the list out)
-        if rd.asked != first {
+        if rd.asked.get() != first {
           c.after_build("older", fn() {
-            if rd.asked == first {
+            if rd.asked.get() == first {
               return
             }
-            rd.asked = first
+            rd.asked.set(first)
             (src.call)(
               "chat.older",
               { "station": Json::string(r.station), "thread": Json::number(thread) },
               fn(res) {
                 match res {
                   Err(e) => {
-                    rd.asked = -1.0
+                    rd.asked.set(-1.0)
                     @hostapi.log("chat.older failed: " + text(Some(e), "message"))
                   }
                   _ => ()

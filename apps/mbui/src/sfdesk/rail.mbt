@@ -230,7 +230,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
       if lit == "settings" && wide.crowded {
-        wide.peeking = !wide.peeking
+        wide.peeking.set(!wide.peeking.get())
       } else if lit == "settings" {
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
@@ -546,10 +546,10 @@ fn rail_place(
     if on && place != "attention" && !place_bare(lit_place()) {
       // (folded for the page's room: shown over it, or folded again)
       if wide.crowded {
-        wide.peeking = !wide.peeking
+        wide.peeking.set(!wide.peeking.get())
       } else {
         sidebar_toggle()
-        wide.peeking = side_folded()
+        wide.peeking.set(side_folded())
       }
     } else {
       rail_go(c, src, w, place)
@@ -1071,7 +1071,7 @@ pub fn rail_stations_label(src : Source, ws : String) -> String {
 fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
   let id = c.id("sidebar-edge")
   // its width dragged open, and shown a while (the same width as open); folded, only pressed (any way it moves)
-  let sized = !wide.folded || wide.peeking
+  let sized = !wide.folded || wide.peeking.get()
   // (folded, it is pressed alone: the hand, as what takes presses)
   if !wide.folded {
     c.cursor(id, ResizeX)

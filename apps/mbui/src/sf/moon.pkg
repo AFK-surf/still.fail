@@ -2,6 +2,7 @@ import {
   "mbui/pixels",
   "mbui/codec",
   "mbui/ui",
+  "mbui/signals",
   "mbui/hostapi",
   "mbui/kit",
   "mbui/motion",

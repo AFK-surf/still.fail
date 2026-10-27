@@ -62,12 +62,12 @@ let vault_picked : Map[String, String] = {}
 ///|
 /// What was tapped on each request while the core has it (`true`: the yes, `false`: the no), till it answers
 /// (VaultActions' pending: the core's doing comes a frame later); put back by `reset`.
-let vault_pending : Map[String, Bool] = {}
+let vault_pending : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// What the person types in for each request whose secret is theirs to type, by request and field (`/secret`,
 /// `/username`): kept only till it went with `vault.approve`; put back by `reset`.
-let vault_typed : Map[String, @ui.Field] = {}
+let vault_typed : @sf.LiveMap[String, @ui.Field] = @sf.LiveMap::new()
 
 ///|
 fn vault_ask_reset() -> Unit {

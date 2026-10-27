@@ -8,41 +8,41 @@
 /// The invitation sheet's state: the link's token (None: one to paste), the account chosen, what each account was
 /// told of it, and its acceptance.
 priv struct Invite {
-  mut token : String?
+  token : @signals.Signal[String?]
   /// the link it was opened with (None: pasted)
-  mut given : String?
-  mut chosen : String
+  given : @signals.Signal[String?]
+  chosen : @signals.Signal[String]
   /// what `invitation.preview` answered, by token and account: Ok(the preview) or Err(why not)
-  read : Map[String, Result[Json, String]]
+  read : @sf.LiveMap[String, Result[Json, String]]
   /// asked already, by token and account
-  asked : Map[String, Bool]
-  mut accepting : Bool
-  mut error : String
+  asked : @sf.LiveMap[String, Bool]
+  accepting : @signals.Signal[Bool]
+  error : @signals.Signal[String]
   /// the link written in, the sheet's field's
   field : @ui.Field
 }
 
 ///|
 let invite : Invite = {
-  token: None,
-  given: None,
-  chosen: "",
-  read: {},
-  asked: {},
-  accepting: false,
-  error: "",
+  token: @signals.signal(None),
+  given: @signals.signal(None),
+  chosen: @signals.signal("", same=fn(a, b) { a == b }),
+  read: @sf.LiveMap::new(),
+  asked: @sf.LiveMap::new(),
+  accepting: @signals.signal(false, same=fn(a, b) { a == b }),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
   field: @ui.Field::new(),
 }
 
 ///|
 fn invite_reset() -> Unit {
-  invite.token = None
-  invite.given = None
-  invite.chosen = ""
+  invite.token.set(None)
+  invite.given.set(None)
+  invite.chosen.set("")
   invite.read.clear()
   invite.asked.clear()
-  invite.accepting = false
-  invite.error = ""
+  invite.accepting.set(false)
+  invite.error.set("")
   invite.field.set("")
 }
 
@@ -50,8 +50,8 @@ fn invite_reset() -> Unit {
 /// An invitation's link opened in the app (Workspaces.kt openInvite): what it leads to, before it is accepted.
 fn open_invite(token : String) -> Unit {
   invite_reset()
-  invite.token = Some(token)
-  invite.given = Some(token)
+  invite.token.set(Some(token))
+  invite.given.set(Some(token))
   raise_sheet(InviteLink)
 }
 
@@ -124,7 +124,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     Some(Array(a)) => a
     _ => []
   }
-  let sub = match list.iter().find_first(fn(a) { text(Some(a), "sub") == invite.chosen }) {
+  let sub = match list.iter().find_first(fn(a) { text(Some(a), "sub") == invite.chosen.get() }) {
     Some(a) => text(Some(a), "sub")
     None =>
       match list.get(0) {
@@ -133,7 +133,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
       }
   }
   // read once per account: what the link leads to depends on who looks
-  match invite.token {
+  match invite.token.get() {
     Some(tok) if sub != "" && !invite.asked.contains(tok + "\u{1}" + sub) => {
       let k = tok + "\u{1}" + sub
       invite.asked[k] = true
@@ -152,7 +152,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     }
     _ => ()
   }
-  let read = match invite.token {
+  let read = match invite.token.get() {
     Some(tok) => invite.read.get(tok + "\u{1}" + sub)
     None => None
   }
@@ -185,7 +185,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     |> ignore
     return
   }
-  let head = match (invite.token, read) {
+  let head = match (invite.token.get(), read) {
     (None, _) => tr("android-misc.invite.byLink")
     (Some(_), Some(Ok(p))) => fill("android-misc.invite.joinNamed", [("name", text(Some(p), "name"))])
     (Some(_), Some(Err(_))) => tr("android-misc.invite.unusable")
@@ -193,7 +193,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
   }
   sheet_head(c, head)
   c.box(style=invite_body, fn() {
-    match (invite.token, read) {
+    match (invite.token.get(), read) {
       (None, _) => {
         lead(fill("android-misc.invite.pasteLink", [("app", "still.fail")]))
         let key = "invite/field"
@@ -232,15 +232,15 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
               disabled=token is None,
             ) {
             invite.field.take() |> ignore
-            invite.token = token
+            invite.token.set(token)
           }
         })
       }
       (Some(_), Some(Err(why))) => {
         lead(why)
         buttons(fn() {
-          if invite.given is None && @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other") {
-            invite.token = None
+          if invite.given.get() is None && @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other") {
+            invite.token.set(None)
           }
           if @sf.button(c, tr("common.close"), key="invite/close", tone=Primary) {
             lower_sheet()
@@ -270,14 +270,14 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
             for a in list {
               let s = text(Some(a), "sub")
               if @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email")) {
-                invite.chosen = s
+                invite.chosen.set(s)
               }
             }
           })
           |> ignore
         }
-        if invite.error != "" {
-          c.text(invite.error, style=invite_error) |> ignore
+        if invite.error.get() != "" {
+          c.text(invite.error.get(), style=invite_error) |> ignore
         }
         let as_email = match list.iter().find_first(fn(a) { text(Some(a), "sub") == sub }) {
           Some(a) => text(Some(a), "email")
@@ -292,7 +292,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
               fill("android-misc.invite.joinAs", [("email", as_email)]),
               key="invite/join",
               tone=Primary,
-              busy=invite.accepting,
+              busy=invite.accepting.get(),
               disabled=sub == "",
             ) {
             accept_invite(src, tok, sub, text(Some(p), "name"))
@@ -312,17 +312,17 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
     toast_later(read_only_words)
     return
   }
-  invite.accepting = true
-  invite.error = ""
+  invite.accepting.set(true)
+  invite.error.set("")
   (src.call)("invitation.accept", { "token": Json::string(token), "account": Json::string(sub) }, fn(r) {
-    invite.accepting = false
+    invite.accepting.set(false)
     match r {
       Ok(v) => {
         pick_workspace(src, text(Some(v), "id"))
         home()
         toast_later(fill("android-misc.invite.joined", [("name", name)]))
       }
-      Err(e) => invite.error = error_words(e)
+      Err(e) => invite.error.set(error_words(e))
     }
   })
 }

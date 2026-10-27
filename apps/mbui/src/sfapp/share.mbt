@@ -37,34 +37,34 @@ priv struct SharedFile {
 /// What is being shared in, and how its sheet stands.
 priv struct ShareIn {
   /// its words and the subject the app gave with them
-  mut shared : (String, String?)?
+  shared : @signals.Signal[(String, String?)?]
   /// its files
-  mut files : Array[SharedFile]
+  files : @signals.Signal[Array[SharedFile]]
   /// its sheet raised (it closes by itself: then what is shared is let go)
-  mut raised : Bool
-  mut env_taken : Bool
-  mut searching : Bool
-  mut choosing : Bool
+  raised : @signals.Signal[Bool]
+  env_taken : @signals.Signal[Bool]
+  searching : @signals.Signal[Bool]
+  choosing : @signals.Signal[Bool]
   /// the row being opened (its station, its id; "" a new chat)
-  mut opening : (String, String)?
-  mut error : String
+  opening : @signals.Signal[(String, String)?]
+  error : @signals.Signal[String]
   /// what is typed to find a chat (its field's words, last frame)
-  mut query : String
+  query : @signals.Signal[String]
   /// the words searched for (its field shows them)
   find : @ui.Field
 }
 
 ///|
 let share_in : ShareIn = {
-  shared: None,
-  files: [],
-  raised: false,
-  env_taken: false,
-  searching: false,
-  choosing: false,
-  opening: None,
-  error: "",
-  query: "",
+  shared: @signals.signal(None),
+  files: @signals.signal([]),
+  raised: @signals.signal(false, same=fn(a, b) { a == b }),
+  env_taken: @signals.signal(false, same=fn(a, b) { a == b }),
+  searching: @signals.signal(false, same=fn(a, b) { a == b }),
+  choosing: @signals.signal(false, same=fn(a, b) { a == b }),
+  opening: @signals.signal(None),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  query: @signals.signal("", same=fn(a, b) { a == b }),
   find: @ui.Field::new(),
 }
 
@@ -98,13 +98,13 @@ fn over_view(c : @ui.Ctx, src : Source) -> Unit {
 /// app was last in (else the first); reading meanwhile; signed out, to sign in first (SignInFirst).
 fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
   let accounts = (src.topic)("accounts", {})
-  let (source, title) = match share_in.shared {
+  let (source, title) = match share_in.shared.get() {
     Some(s) => s
     None => return
   }
   let head = fn() {
-    if share_in.files.length() > 0 {
-      shared_files_head(c, share_in.files, source, title)
+    if share_in.files.get().length() > 0 {
+      shared_files_head(c, share_in.files.get(), source, title)
     } else {
       shared_head(c, source, title)
     }
@@ -163,7 +163,7 @@ let searched_from : Int = 6
 /// Each frame once signed in: what another app shared since, its sheet raised; let go once its sheet closed.
 fn share_in_frame(c : @ui.Ctx) -> Unit {
   // (what the host says was shared, taken once: the same whichever build takes it)
-  if share_in.shared is None {
+  if share_in.shared.get() is None {
     let said = @ui.shared_in()
     let mut got : (String, String?)? = None
     let files : Array[SharedFile] = []
@@ -189,9 +189,9 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
         files.push({ name, bytes, image })
       }
       // (the host's words are these: the scripted run's are not taken again)
-      share_in.env_taken = true
-    } else if !share_in.env_taken {
-      share_in.env_taken = true
+      share_in.env_taken.set(true)
+    } else if !share_in.env_taken.get() {
+      share_in.env_taken.set(true)
       let words = @ui.env("MBUI_SHARE_TEXT")
       if words != "" {
         let title = @ui.env("MBUI_SHARE_TITLE")
@@ -202,24 +202,24 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
     match got {
       Some((words, title)) if words.trim() != "" || files.length() > 0 => {
         @hostapi.log("share in: \{words.length()} characters, \{files.length()} files")
-        share_in.shared = Some((words, title))
-        share_in.files = files
-        share_in.raised = false
-        share_in.searching = false
-        share_in.choosing = false
-        share_in.opening = None
-        share_in.error = ""
+        share_in.shared.set(Some((words, title)))
+        share_in.files.set(files)
+        share_in.raised.set(false)
+        share_in.searching.set(false)
+        share_in.choosing.set(false)
+        share_in.opening.set(None)
+        share_in.error.set("")
         c.blur()
         raise_sheet(ShareSheet)
-        share_in.raised = true
+        share_in.raised.set(true)
       }
       _ => ()
     }
-  } else if share_in.raised && sheet_host.kind != ShareSheet {
+  } else if share_in.raised.get() && sheet_host.kind != ShareSheet {
     // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
-    share_in.shared = None
-    share_in.files = []
-    share_in.raised = false
+    share_in.shared.set(None)
+    share_in.files.set([])
+    share_in.raised.set(false)
     if share_over.val {
       share_closing.val = true
     }
@@ -234,20 +234,20 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
 /// The sheet (ShareSheet.kt ShareSheetContent): what is shared, 发到 the chats, 新 chat.
 fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let (source, title) = match share_in.shared {
+  let (source, title) = match share_in.shared.get() {
     Some(s) => s
     None => return
   }
-  if share_in.files.length() > 0 {
-    shared_files_head(c, share_in.files, source, title)
+  if share_in.files.get().length() > 0 {
+    shared_files_head(c, share_in.files.get(), source, title)
   } else {
     shared_head(c, source, title)
   }
-  let query = share_in.query
+  let query = share_in.query.get()
   let topic = (src.topic)("shareIn", {
     "scope": Json::string(w.id),
     "source": Json::string(source),
-    "query": Json::string(if share_in.searching { query.trim().to_owned() } else { "" }),
+    "query": Json::string(if share_in.searching.get() { query.trim().to_owned() } else { "" }),
   })
   let v = topic.value
   let rows = items(v, "items")
@@ -256,18 +256,18 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
     })
     |> ignore
-    if share_in.searching || rows.length() >= searched_from {
+    if share_in.searching.get() || rows.length() >= searched_from {
       let id = c.id("share-in/search")
       if c.clicked(id) {
-        share_in.searching = !share_in.searching
-        if !share_in.searching {
-          share_in.query = ""
+        share_in.searching.set(!share_in.searching.get())
+        if !share_in.searching.get() {
+          share_in.query.set("")
           share_in.find.set("")
         }
       }
       c.box(pt=14.0, pb=4.0, id~, fn() {
         c.text(
-          if share_in.searching { sh("common.cancel") } else { sh("android-misc.shareIn.search") },
+          if share_in.searching.get() { sh("common.cancel") } else { sh("android-misc.shareIn.search") },
           size=t.t.meta,
           color=t.p.muted,
           wrap=false,
@@ -278,7 +278,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   })
   |> ignore
-  if share_in.searching {
+  if share_in.searching.get() {
     c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=4.0, fn() {
       // (Controls.kt Field: the surface, a line round it, as the invitation's field)
       c.box(style=invite_field, h=Px(40.0), justify=JCenter, fn() {
@@ -293,13 +293,13 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           caret_color=t.p.accent,
           field=share_in.find,
         )
-        share_in.query = r.text
+        share_in.query.set(r.text)
       })
       |> ignore
     })
     |> ignore
   }
-  let opening = share_in.opening
+  let opening = share_in.opening.get()
   c.box(w=Fill(1.0), h=Fill(1.0), pb=16.0, clip=true, fn() {
     match v {
       None =>
@@ -349,7 +349,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             share_open(c, src, w, station, Some(id), session=text(it, "session"))
           }
         }
-        if rows.length() == 0 && share_in.searching && query.trim() != "" {
+        if rows.length() == 0 && share_in.searching.get() && query.trim() != "" {
           share_note(c, sh("android-chat.ref.none.match"))
         }
         let stations = items(v, "stations")
@@ -359,14 +359,14 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           None => stations.get(0)
         }
         match on {
-          Some(s) if !share_in.searching || query.trim() == "" => {
+          Some(s) if !share_in.searching.get() || query.trim() == "" => {
             let many = stations.length() > 1
             let on_station = text(Some(s), "station")
             if share_row(
                 c,
                 "share-in/new",
                 sh("android-misc.shareIn.newChat"),
-                if many && share_in.choosing {
+                if many && share_in.choosing.get() {
                   ""
                 } else {
                   sh("android-misc.shareIn.on", args=[("name", text(Some(s), "name"))])
@@ -377,12 +377,12 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 fn() { @sf.icon(c, "compose", size=16.0, color=t.p.muted) |> ignore },
               ) {
               if many {
-                share_in.choosing = !share_in.choosing
+                share_in.choosing.set(!share_in.choosing.get())
               } else {
                 share_open(c, src, w, on_station, None)
               }
             }
-            if many && share_in.choosing {
+            if many && share_in.choosing.get() {
               for st in stations {
                 let station = text(Some(st), "station")
                 if share_row(
@@ -410,9 +410,9 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   })
   |> ignore
-  if share_in.error != "" {
+  if share_in.error.get() != "" {
     c.box(w=Fill(1.0), padx=20.0, pb=16.0, fn() {
-      c.text(share_in.error, size=t.t.meta, color=t.p.red) |> ignore
+      c.text(share_in.error.get(), size=t.t.meta, color=t.p.red) |> ignore
     })
     |> ignore
   }
@@ -539,14 +539,14 @@ fn share_open(
   id : String?,
   session? : String = "",
 ) -> Unit {
-  let (source, title) = match share_in.shared {
+  let (source, title) = match share_in.shared.get() {
     Some(s) => s
     None => return
   }
-  if share_in.opening is Some(_) {
+  if share_in.opening.get() is Some(_) {
     return
   }
-  let files = share_in.files
+  let files = share_in.files.get()
   // files alone: nothing for the core to put in the composer; the chat (or a new chat on that station) opened with
   // them going up from its composer
   if source.trim() == "" {
@@ -565,8 +565,8 @@ fn share_open(
     })
     return
   }
-  share_in.opening = Some((station, id.unwrap_or("")))
-  share_in.error = ""
+  share_in.opening.set(Some((station, id.unwrap_or(""))))
+  share_in.error.set("")
   let params : Map[String, Json] = {
     "scope": Json::string(w.id),
     "source": Json::string(source),
@@ -581,7 +581,7 @@ fn share_open(
     None => ()
   }
   (src.call)("shareIn.open", Json::object(params), fn(r) {
-    share_in.opening = None
+    share_in.opening.set(None)
     match r {
       Ok(a) => {
         let key = text(Some(a), "key")
@@ -589,7 +589,7 @@ fn share_open(
         drafts.remove(key)
         share_opened(c, station, text(Some(a), "session"), text(Some(a), "title"), files, fn() {  }, key~)
       }
-      Err(e) => share_in.error = sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))])
+      Err(e) => share_in.error.set(sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))]))
     }
   })
 }
@@ -618,9 +618,9 @@ fn share_opened(
     }
     shared_into[key] = list
   }
-  share_in.shared = None
-  share_in.files = []
-  share_in.raised = false
+  share_in.shared.set(None)
+  share_in.files.set([])
+  share_in.raised.set(false)
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")
   // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)

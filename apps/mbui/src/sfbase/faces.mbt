@@ -27,7 +27,7 @@ priv enum FaceFile {
 }
 
 ///|
-let faces_had : Map[String, FaceHad] = {}
+let faces_had : @sf.LiveMap[String, FaceHad] = @sf.LiveMap::new()
 
 ///|
 /// The face each place's host face holds now, by its id ("": the app's own); index 1 ui, 2 text, 3 code.
@@ -35,7 +35,7 @@ pub let faces_in : Array[String] = ["", "", "", ""]
 
 ///|
 /// A face's preview, by its id: the host face it is given to (> 0), being asked for (0), not had (-1).
-let previews : Map[String, Int] = {}
+let previews : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 /// The host face the app's own code face is given to for the fonts page's 默认 (code's own may be another's then).

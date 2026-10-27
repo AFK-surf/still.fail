@@ -7,14 +7,14 @@
 /// one; its action (an archive's 撤销) its button, pressed done and the toast gone. `bottom`: how far over the window's
 /// foot, the frame's to say.
 pub fn toasts(c : @ui.Ctx, bottom : Double) -> Unit {
-  let action = if app.toast != "" { app.toast_action } else { "" }
+  let action = if app.toast.get() != "" { app.toast_action } else { "" }
   let duration = if action != "" { @sf.toast_action_ms } else { @sf.toast_ms }
   // its action's button the toaster's (the focus on it holds the toast)
-  let action_id = c.id("toast/t\{app.toast_n}/action")
-  let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
+  let action_id = c.id("toast/t\{app.toast_n.get()}/action")
+  let said = if app.toast.get() != "" { [@kit.toast("t\{app.toast_n.get()}", @sf.toast_said(app.toast.get()))] } else { [] }
   let mut pressed = false
   let r = @kit.toaster(c, "toast", said, duration~, bottom~, look=fn(c, s, _action, _close) {
-    let live = s.toast.id == "t\{app.toast_n}"
+    let live = s.toast.id == "t\{app.toast_n.get()}"
     if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
       pressed = true
     }
@@ -22,11 +22,11 @@ pub fn toasts(c : @ui.Ctx, bottom : Double) -> Unit {
   // pressed: done, and the toast goes
   if pressed {
     let run = app.toast_run
-    app.toast = ""
+    app.toast.set("")
     app.toast_action = ""
     app.toast_run = fn() {  }
     run()
-  } else if app.toast != "" && r.open.is_empty() {
-    app.toast = ""
+  } else if app.toast.get() != "" && r.open.is_empty() {
+    app.toast.set("")
   }
 }

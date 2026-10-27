@@ -15,12 +15,12 @@ priv struct RefField {
   mut text : String
   mut anchor : Int
   mut caret : Int
-  mut at_of : String
-  mut at : (Int, String)?
-  mut closed : Int
-  mut active : Int
-  mut marks : Array[(Int, Int)]
-  mut marks_of : String
+  at_of : @signals.Signal[String]
+  at : @signals.Signal[(Int, String)?]
+  closed : @signals.Signal[Int]
+  active : @signals.Signal[Int]
+  marks : @sf.LiveArray[(Int, Int)]
+  marks_of : @signals.Signal[String]
   mut marks_asked : String
 }
 
@@ -50,12 +50,12 @@ fn ref_field(key : String) -> RefField {
         text: "",
         anchor: 0,
         caret: 0,
-        at_of: "",
-        at: None,
-        closed: -1,
-        active: 0,
-        marks: [],
-        marks_of: "",
+        at_of: @signals.signal(""),
+        at: @signals.signal(None),
+        closed: @signals.signal(-1),
+        active: @signals.signal(0),
+        marks: @sf.LiveArray::from([]),
+        marks_of: @signals.signal(""),
         marks_asked: "",
       }
       ref_fields[key] = f
@@ -117,7 +117,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
     }
     // the marks the edit did not touch, where they are now
     let moved = put - took
-    f.marks = f.marks.filter_map(fn(m) {
+    f.marks.replace(f.marks.filter_map(fn(m) {
       if m.1 <= start {
         Some(m)
       } else if m.0 >= took {
@@ -125,7 +125,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
       } else {
         None
       }
-    })
+    }))
     // what was put in at once: the chats' links in it
     if put - start > 1 && !locked {
       let pasted = now.view(start_offset=start, end_offset=put).to_string()
@@ -147,15 +147,15 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
               _ => None
             }
             match at {
-              None => f.closed = -1
+              None => f.closed.set(-1)
               Some((_, q)) =>
-                match f.at {
+                match f.at.get() {
                   Some((_, was)) if was == q => ()
-                  _ => f.active = 0
+                  _ => f.active.set(0)
                 }
             }
-            f.at = at
-            f.at_of = asked
+            f.at.set(at)
+            f.at_of.set(asked)
           }
           Err(_) => ()
         }
@@ -169,11 +169,11 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
 fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   if !now.contains("@[") {
-    f.marks = []
-    f.marks_of = now
+    f.marks.replace([])
+    f.marks_of.set(now)
     return
   }
-  if f.marks_of == now || f.marks_asked == now {
+  if f.marks_of.get() == now || f.marks_asked == now {
     return
   }
   f.marks_asked = now
@@ -181,10 +181,10 @@ fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
     (src.call)("ref.marks", { "text": Json::string(now) }, fn(r) {
       match r {
         Ok(v) if f.text == now => {
-          f.marks = items(Some(v), "marks").map(fn(m) {
+          f.marks.replace(items(Some(v), "marks").map(fn(m) {
             (number(Some(m), "start").to_int(), number(Some(m), "end").to_int())
-          })
-          f.marks_of = now
+          }))
+          f.marks_of.set(now)
         }
         _ => ()
       }
@@ -204,7 +204,7 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
   if words != was {
     let (start, took, put) = edit_of(was, words)
     let moved = put - took
-    f.marks = f.marks.filter_map(fn(m) {
+    f.marks.replace(f.marks.filter_map(fn(m) {
       if m.1 <= start {
         Some(m)
       } else if m.0 >= took {
@@ -212,12 +212,12 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
       } else {
         None
       }
-    })
+    }))
   }
   f.text = words
   f.anchor = anchor
   f.caret = at
-  f.at = None
+  f.at.set(None)
 }
 
 ///|
@@ -255,7 +255,7 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
 /// changed since it was asked).
 pub fn refs_marked(key : String) -> Bool? {
   let f = ref_field(key)
-  if f.marks_of == f.text {
+  if f.marks_of.get() == f.text {
     Some(!f.marks.is_empty())
   } else {
     None
@@ -267,11 +267,11 @@ pub fn refs_marked(key : String) -> Bool? {
 /// is, what follows it); None in none, in one whose menu was closed, or not yet read.
 pub fn refs_at(key : String) -> (Int, String)? {
   let f = ref_field(key)
-  if f.anchor != f.caret || f.at_of != ref_key(f.text, f.caret) {
+  if f.anchor != f.caret || f.at_of.get() != ref_key(f.text, f.caret) {
     return None
   }
-  match f.at {
-    Some((start, _)) as at if start != f.closed => at
+  match f.at.get() {
+    Some((start, _)) as at if start != f.closed.get() => at
     _ => None
   }
 }
@@ -280,8 +280,8 @@ pub fn refs_at(key : String) -> (Int, String)? {
 /// The menu of draft `key` closed for the `@` it is at (Escape), till its `@words` are gone.
 pub fn refs_close(key : String) -> Unit {
   let f = ref_field(key)
-  match f.at {
-    Some((start, _)) => f.closed = start
+  match f.at.get() {
+    Some((start, _)) => f.closed.set(start)
     None => ()
   }
 }
@@ -291,14 +291,14 @@ pub fn refs_close(key : String) -> Unit {
 pub fn refs_active(key : String, n : Int, by? : Int = 0, to? : Int) -> Int {
   let f = ref_field(key)
   match to {
-    Some(i) => f.active = i
+    Some(i) => f.active.set(i)
     None => ()
   }
   if n <= 0 {
     return 0
   }
-  f.active = ((f.active + by) % n + n) % n
-  f.active
+  f.active.set(((f.active.get() + by) % n + n) % n)
+  f.active.get()
 }
 
 ///|
@@ -318,9 +318,9 @@ pub fn refs_pick(
   failed : (String) -> Unit,
 ) -> Unit {
   let f = ref_field(key)
-  guard f.at is Some((start, _)) else { return }
+  guard f.at.get() is Some((start, _)) else { return }
   let caret = f.caret
-  f.closed = start
+  f.closed.set(start)
   c.tell("refs/pick/" + key, fn() {
     (src.call)(
       "chat.ref",

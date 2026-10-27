@@ -36,7 +36,7 @@ pub(all) struct Wide {
   mut folded : Bool
   mut edge_held : Bool
   /// folded, whether it is shown a while over the page (Rail.tsx peekSidebar)
-  mut peeking : Bool
+  peeking : @signals.Signal[Bool]
   /// folded for the page's room whatever was chosen (page_beside_least), this frame; shown a while from the next as a
   /// place is pressed into; the page shown as the last build began (a row chosen while shown: another page, folded)
   mut crowded : Bool
@@ -122,7 +122,7 @@ pub let wide : Wide = {
   side_w: side_own,
   folded: false,
   edge_held: false,
-  peeking: false,
+  peeking: @signals.signal(false, same=fn(a, b) { a == b }),
   crowded: false,
   peek_next: false,
   peek_top: None,
@@ -190,7 +190,7 @@ fn wide_reset() -> Unit {
   wide.side_w = side_own
   wide.folded = false
   wide.edge_held = false
-  wide.peeking = false
+  wide.peeking.set(false)
   wide.crowded = false
   wide.peek_next = false
   wide.peek_top = None
@@ -635,11 +635,11 @@ pub fn frame(
   // (down the side, the cards to the column's own foot, the home indicator's line under their ground: cards_foot)
   let foot = if @sf.native_side() { dmin(bars.bottom, cards_foot) } else { bars.bottom }
   let inset = @ui.window_inset()
-  let peek_r = rail_left() - bar_gap_now() + (if wide.peeking { s } else { 0.0 })
+  let peek_r = rail_left() - bar_gap_now() + (if wide.peeking.get() { s } else { 0.0 })
   // (under the window's buttons where they are the system's, at its left: macOS's)
   let peek_top = if @ui.window_keys_left() { closed_bar_top } else { bar_in_now() }
   side_peek(c, bar_in_now(), top + peek_top, peek_r, c.height - foot - bar_in_now())
-  let peek = own && side_folded() && wide.peeking
+  let peek = own && side_folded() && wide.peeking.get()
   // what the page shows across as the last frame laid it out (its bars left out): what it moves aside for, shown a
   // while
   let page_id = c.id("main-page")
@@ -650,7 +650,7 @@ pub fn frame(
   // folding it (crowded), a fold's place or the tape coming or going, which put it as they have it at once, nor for its
   // edge, whose width it follows at once, held or let go (let go a little past where the last frame drew it, the rest
   // of the way is the hand's too, not a move after it)
-  let cause = (wide.folded, wide.peeking, gated || bare, wide.side_key)
+  let cause = (wide.folded, wide.peeking.get(), gated || bare, wide.side_key)
   match wide.moved_as {
     Some(was) if was != cause && !wide.edge_held => {
       // shown a while from now: how far the page moves aside, worked out once as it starts (Rail.tsx markPeek)
@@ -1813,7 +1813,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     wide.side_key = key
     wide.kept_w = wide.side_w
     wide.kept_folded = wide.folded
-    wide.peeking = false
+    wide.peeking.set(false)
     return
   }
   if wide.edge_held || (wide.side_w == wide.kept_w && wide.folded == wide.kept_folded) {
@@ -1858,7 +1858,7 @@ fn whole_of(s : String) -> Int? {
 /// off them.
 fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b : Double) -> Unit {
   if !side_folded() {
-    wide.peeking = false
+    wide.peeking.set(false)
     return
   }
   let (px, py, _) = c.pointer()
@@ -1869,23 +1869,23 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
   if @ui.pointing() is Finger {
     let on_bar = fn(x : Double, y : Double) { x >= bar_x && x < bar_r && y >= bar_y && y < bar_b }
     if !wide.crowded && on_bar(px, py) && px < bar_x + rail_closed_w {
-      wide.peeking = true
+      wide.peeking.set(true)
     }
     match c.tapped_anywhere() {
-      Some((x, y)) if wide.peeking && !held && !on_bar(x, y) && x >= bar_in_now() + rail_closed_w + wide.side_w =>
-        wide.peeking = false
+      Some((x, y)) if wide.peeking.get() && !held && !on_bar(x, y) && x >= bar_in_now() + rail_closed_w + wide.side_w =>
+        wide.peeking.set(false)
       _ => ()
     }
     return
   }
   // on it, or on its edge at its right (Rail.tsx PEEK_ON: the dock, the edge, what pops up from it)
   let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
-    (wide.peeking && px >= bar_r - 2.0 && px < bar_r + 10.0)
-  if over && !wide.peeking && px < bar_x + rail_closed_w {
-    wide.peeking = true
+    (wide.peeking.get() && px >= bar_r - 2.0 && px < bar_r + 10.0)
+  if over && !wide.peeking.get() && px < bar_x + rail_closed_w {
+    wide.peeking.set(true)
   }
-  if @kit.after(c, "side/peek-away", wide.peeking && !over && !held, peek_leave_ms) {
-    wide.peeking = false
+  if @kit.after(c, "side/peek-away", wide.peeking.get() && !over && !held, peek_leave_ms) {
+    wide.peeking.set(false)
   }
 }
 
@@ -1899,12 +1899,12 @@ fn side_crowded() -> Unit {
     wide.peek_top = None
     return
   }
-  if wide.peeking && wide.peek_top is Some(was) && was != top {
-    wide.peeking = false
+  if wide.peeking.get() && wide.peek_top is Some(was) && was != top {
+    wide.peeking.set(false)
   }
   if wide.peek_next {
     wide.peek_next = false
-    wide.peeking = true
+    wide.peeking.set(true)
   }
   wide.peek_top = Some(top)
 }

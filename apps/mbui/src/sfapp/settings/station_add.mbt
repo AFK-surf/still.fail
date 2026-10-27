@@ -8,46 +8,46 @@
 /// What the adding has come to: the sheet's (and the first station's, in its page) as they go on.
 priv struct Adding {
   /// a station of another workspace (the choice's second side)
-  mut existing : Bool
+  existing : @signals.Signal[Bool]
   /// the command made: (install, command)
-  mut made : (String, String)?
+  made : @signals.Signal[(String, String)?]
   /// why the command could not be made, or a station not joined
-  mut error : String
+  error : @signals.Signal[String]
   /// the stations of the workspace when it opened (one not among them has joined)
-  mut known : Array[String]
+  known : @signals.Signal[Array[String]]
   /// the stations of another workspace joined from the sheet: kept where they were, said so
-  took : Array[Json]
+  took : @sf.LiveArray[Json]
   /// the order the joinable ones came in
-  order : Map[String, Int]
+  order : @sf.LiveMap[String, Int]
   /// the one picked to join
-  mut picked : String
+  picked : @signals.Signal[String]
   /// a count of times opened: its field is its own
-  mut serial : Int
+  serial : @signals.Signal[Int]
 }
 
 ///|
 let adding : Adding = {
-  existing: false,
-  made: None,
-  error: "",
-  known: [],
-  took: [],
-  order: {},
-  picked: "",
-  serial: 0,
+  existing: @signals.signal(false, same=fn(a, b) { a == b }),
+  made: @signals.signal(None),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  known: @signals.signal([]),
+  took: @sf.LiveArray::new(),
+  order: @sf.LiveMap::new(),
+  picked: @signals.signal("", same=fn(a, b) { a == b }),
+  serial: @signals.signal(0, same=fn(a, b) { a == b }),
 }
 
 ///|
 /// As before anything was asked.
 fn adding_reset(known : Array[String], existing : Bool) -> Unit {
-  adding.existing = existing
-  adding.made = None
-  adding.error = ""
-  adding.known = known
+  adding.existing.set(existing)
+  adding.made.set(None)
+  adding.error.set("")
+  adding.known.set(known)
   adding.took.clear()
   adding.order.clear()
-  adding.picked = ""
-  adding.serial += 1
+  adding.picked.set("")
+  adding.serial.set(adding.serial.get() + 1)
 }
 
 ///|
@@ -106,25 +106,25 @@ fn open_add_station(
     let rows = joinable_rows(joinable)
     let offered = flag(joinable, "offered") && rows.length() > 0
     // the choice stays at the top; only what is under it scrolls
-    if offered && adding.made is None {
+    if offered && adding.made.get() is None {
       c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
         let i = @sf.segmented(
           c,
           "add-kind",
           [tr("web-pages.settings.stations.kindNew"), tr("web-pages.settings.stations.kindExisting")],
-          if adding.existing { 1 } else { 0 },
+          if adding.existing.get() { 1 } else { 0 },
         )
-        adding.existing = i == 1
+        adding.existing.set(i == 1)
       })
       |> ignore
     }
-    if offered && adding.existing && adding.made is None {
+    if offered && adding.existing.get() && adding.made.get() is None {
       join_existing(c, core, here, rows, flag(joinable, "loading"))
     } else {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         let blocks : Array[() -> Unit] = []
         // this machine, where it has none: added here, no command to run (before a command is made)
-        if adding.made is None && local_station_addable() {
+        if adding.made.get() is None && local_station_addable() {
           blocks.push(fn() {
             c.box(style=@sf.panel_words_in().then(here_room), fn() { add_this_machine(c, core, fn() { close() }) })
             |> ignore
@@ -151,7 +151,7 @@ fn open_add_station(
             |> ignore
           },
         ])
-        scroll_page(c, "add-station/" + adding.serial.to_string(), blocks)
+        scroll_page(c, "add-station/" + adding.serial.get().to_string(), blocks)
       })
       |> ignore
     }
@@ -159,7 +159,7 @@ fn open_add_station(
     // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), the step's
     let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
     let rows = joinable_rows(joinable)
-    if flag(joinable, "offered") && rows.length() > 0 && adding.existing && adding.made is None {
+    if flag(joinable, "offered") && rows.length() > 0 && adding.existing.get() && adding.made.get() is None {
       join_buttons(c, core, here, rows)
     } else {
       add_station_buttons(c, core, here, cancel=true, fn() { close() })
@@ -245,8 +245,8 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
               } else {
                 None
               }) {
-            adding.picked = id
-            adding.error = ""
+            adding.picked.set(id)
+            adding.error.set("")
           }
         })
       }
@@ -254,14 +254,14 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
         c.box(w=Fill(1.0), pt=10.0, gap=10.0, fn() {
           c.text(tr("web-pages.settings.stations.softIsolation"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
           |> ignore
-          if adding.error != "" {
-            c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+          if adding.error.get() != "" {
+            c.text(adding.error.get(), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
           }
         })
         |> ignore
       })
       // (in the sheet's column, its rows reaching out across its sides: @sf.sheet_column)
-      scroll_page(c, "join-station/" + adding.serial.to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
+      scroll_page(c, "join-station/" + adding.serial.get().to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
     })
     |> ignore
   })
@@ -273,7 +273,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
 /// out is shown, not picked) and whether it is being joined.
 fn join_chosen(core : Core, here : Here, rows : Array[Json]) -> (Json?, Bool) {
   let open = rows.filter(fn(s) { !flag(Some(s), "needsLock") && !took_it(s) })
-  let chosen = match open.iter().find_first(fn(s) { text(Some(s), "station") == adding.picked }) {
+  let chosen = match open.iter().find_first(fn(s) { text(Some(s), "station") == adding.picked.get() }) {
     Some(s) => Some(s)
     None => open.get(0)
   }
@@ -295,7 +295,7 @@ fn join_buttons(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json]) -> Un
   if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
     match chosen {
       Some(s) => {
-        adding.error = ""
+        adding.error.set("")
         let station = text(Some(s), "station")
         (core.call)("station.join", obj([("station", str(station)), ("workspace", str(ws))]), fn(r) {
           match r {
@@ -315,7 +315,7 @@ fn join_buttons(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json]) -> Un
               }
               adding.took.push(kept)
             }
-            Err(e) => adding.error = error_text(e)
+            Err(e) => adding.error.set(error_text(e))
           }
         })
       }
@@ -340,12 +340,12 @@ fn add_station_steps(
 ) -> Unit {
   let t = @sf.theme()
   c.box(w=Fill(1.0), gap=10.0, fn() {
-    match (adding.made, station_joined(core, here)) {
+    match (adding.made.get(), station_joined(core, here)) {
       (None, _) => {
         c.text(label, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
         field_box(c, station_name_key(), placeholder) |> ignore
-        if adding.error != "" {
-          c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+        if adding.error.get() != "" {
+          c.text(adding.error.get(), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
         }
         if buttons {
           c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() { add_station_buttons(c, core, here, cancel~, done) })
@@ -378,16 +378,16 @@ fn add_station_steps(
 ///|
 /// The field a new station's name is typed in, this time 添加 station opened.
 fn station_name_key() -> String {
-  "station-name/" + adding.serial.to_string()
+  "station-name/" + adding.serial.get().to_string()
 }
 
 ///|
 /// The station joined since 添加 station opened (one not among those there when it opened), once its command is made.
 fn station_joined(core : Core, here : Here) -> Json? {
-  match adding.made {
+  match adding.made.get() {
     Some(_) =>
       match stations_of(core, here).value {
-        Some(Array(a)) => a.iter().find_first(fn(s) { !adding.known.contains(text(Some(s), "id")) })
+        Some(Array(a)) => a.iter().find_first(fn(s) { !adding.known.get().contains(text(Some(s), "id")) })
         _ => None
       }
     None => None
@@ -399,7 +399,7 @@ fn station_joined(core : Core, here : Here) -> Json? {
 /// `cancel`) and 生成命令 from the name typed; joined, 完成 (`done`); while it waits for the machine, 取消 (with
 /// `cancel`).
 fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit, cancel? : Bool = false) -> Unit {
-  match (adding.made, station_joined(core, here)) {
+  match (adding.made.get(), station_joined(core, here)) {
     (None, _) => {
       let busy = is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)])
       let name = field_of(station_name_key()).text().trim(chars=" \t\n").to_owned()
@@ -409,14 +409,14 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
       }
       if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
         c.blur()
-        adding.error = ""
+        adding.error.set("")
         (core.call)(
           "workspace.enroll",
           obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]),
           fn(r) {
             match r {
-              Ok(v) => adding.made = Some((text(Some(v), "install"), text(Some(v), "command")))
-              Err(e) => adding.error = error_text(e)
+              Ok(v) => adding.made.set(Some((text(Some(v), "install"), text(Some(v), "command"))))
+              Err(e) => adding.error.set(error_text(e))
             }
           },
         )
@@ -519,7 +519,7 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           |> ignore
         Some(_) => {
           // (the page's own steps: a new start each time the page has no station)
-          if !@sf.presenting() && adding.known.length() > 0 {
+          if !@sf.presenting() && adding.known.get().length() > 0 {
             adding_reset([], false)
           }
           if local_station_addable() {

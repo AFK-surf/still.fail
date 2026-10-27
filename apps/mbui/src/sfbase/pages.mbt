@@ -76,8 +76,8 @@ pub(all) struct App {
   mut held : Int
   mut held_long : Bool
   /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
-  mut toast : String
-  mut toast_n : Int
+  toast : @signals.Signal[String]
+  toast_n : @signals.Signal[Int]
   /// what the toast offers to do (its button's words, "" none: an archive's 撤销), and what that does
   mut toast_action : String
   mut toast_run : () -> Unit
@@ -92,8 +92,8 @@ pub let app : App = {
   switch_way: 0,
   held: 0,
   held_long: false,
-  toast: "",
-  toast_n: 0,
+  toast: @signals.signal("", same=fn(a, b) { a == b }),
+  toast_n: @signals.signal(0, same=fn(a, b) { a == b }),
   toast_action: "",
   toast_run: fn() {  },
 }
@@ -208,7 +208,7 @@ pub fn reset() -> Unit {
   app.switch_way = 0
   app.held = 0
   app.held_long = false
-  app.toast = ""
+  app.toast.set("")
   app.toast_action = ""
   app.toast_run = fn() {  }
   left_pages.clear()
@@ -261,7 +261,7 @@ pub fn reset() -> Unit {
   turns_by.clear()
   emits.clear()
   // words sent flying (flight.mbt)
-  send_flight.val = None
+  send_flight.set(None)
   landing_shares.clear()
   // the chats' lists as kept while they show and where they were left (chat_list.mbt)
   readings.clear()

@@ -19,53 +19,53 @@
 /// read, 2 not: `error` says why), the attachments left out (by their `k`), its picture being taken, how many times it
 /// was copied (its button 已复制 a moment after).
 priv struct Publishing {
-  mut of : (ChatRef, Double)?
-  mut read : Int
-  mut preview : Json?
-  mut error : String
-  off : Map[String, Bool]
-  mut busy : Bool
-  mut copied : Int
+  of : @signals.Signal[(ChatRef, Double)?]
+  read : @signals.Signal[Int]
+  preview : @signals.Signal[Json?]
+  error : @signals.Signal[String]
+  off : @sf.LiveMap[String, Bool]
+  busy : @signals.Signal[Bool]
+  copied : @signals.Signal[Int]
 }
 
 ///|
 let publishing : Publishing = {
-  of: None,
-  read: 0,
-  preview: None,
-  error: "",
-  off: {},
-  busy: false,
-  copied: 0,
+  of: @signals.signal(None),
+  read: @signals.signal(0, same=fn(a, b) { a == b }),
+  preview: @signals.signal(None),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  off: @sf.LiveMap::new(),
+  busy: @signals.signal(false, same=fn(a, b) { a == b }),
+  copied: @signals.signal(0, same=fn(a, b) { a == b }),
 }
 
 ///|
 pub fn publish_reset() -> Unit {
-  publishing.of = None
-  publishing.read = 0
-  publishing.preview = None
-  publishing.error = ""
+  publishing.of.set(None)
+  publishing.read.set(0)
+  publishing.preview.set(None)
+  publishing.error.set("")
   publishing.off.clear()
-  publishing.busy = false
-  publishing.copied = 0
+  publishing.busy.set(false)
+  publishing.copied.set(0)
 }
 
 ///|
 /// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview).
 pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
   publish_reset()
-  publishing.of = Some((r, thread))
+  publishing.of.set(Some((r, thread)))
   (src.call)("chat.publishPreview", { "station": Json::string(r.station), "thread": Json::number(thread) }, fn(res) {
-    match publishing.of {
+    match publishing.of.get() {
       Some((o, th)) if o.station == r.station && th == thread =>
         match res {
           Ok(v) => {
-            publishing.preview = Some(v)
-            publishing.read = 1
+            publishing.preview.set(Some(v))
+            publishing.read.set(1)
           }
           Err(e) => {
-            publishing.error = error_words(e)
-            publishing.read = 2
+            publishing.error.set(error_words(e))
+            publishing.read.set(2)
           }
         }
       _ => ()
@@ -77,9 +77,9 @@ pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
 /// Chat `r`'s `thread` being shared, `preview` read (a screen's fixture).
 pub fn publish_set(r : ChatRef, thread : Double, preview : Json) -> Unit {
   publish_reset()
-  publishing.of = Some((r, thread))
-  publishing.preview = Some(preview)
-  publishing.read = 1
+  publishing.of.set(Some((r, thread)))
+  publishing.preview.set(Some(preview))
+  publishing.read.set(1)
 }
 
 ///|
@@ -96,12 +96,12 @@ let publish_shot : String = "publish/picture"
 /// The picture taken (the attachments ticked in it, nothing else of the page's), then handed out as its button says:
 /// copied, its button 已复制 a moment, else what came of it said.
 fn publish_go(c : @ui.Ctx) -> Unit {
-  publishing.busy = true
+  publishing.busy.set(true)
   c.take_shot(publish_shot, fn(png) {
-    publishing.busy = false
+    publishing.busy.set(false)
     let (_, icon) = @sf.picture_out_way()
     if picture_out(c, png, copy_said=icon == "copy") && icon == "copy" {
-      publishing.copied += 1
+      publishing.copied.set(publishing.copied.get() + 1)
     }
   })
 }
@@ -109,7 +109,7 @@ fn publish_go(c : @ui.Ctx) -> Unit {
 ///|
 /// The page that shares it, while it is open, over the frame's pages (under the presenters and the toasts).
 pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
-  match publishing.of {
+  match publishing.of.get() {
     Some((r, thread)) => publish_page(c, src, r, thread)
     None => ()
   }
@@ -120,7 +120,7 @@ pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
 /// chat's width, what it is for over it (viewer_frame_act: the bar a file opened has, or 取消 and 保存到相册 at the
 /// foot); Esc closes it. While its picture is taken, the picture drawn whole off the screen.
 fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  let p = publishing.preview
+  let p = publishing.preview.get()
   let messages = items(p, "list")
   let here : MessageHere = {
     station: r.station,
@@ -139,9 +139,9 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   let column = dmin(c.width, publish_page_w)
   let o = c.overlay("publish", modal=true, scrim=@sf.theme().p.bg, fn() {
     c.box(style=publish_fill, fn() {
-      match publishing.read {
+      match publishing.read.get() {
         0 => c.box(style=publish_note, fn() { @sf.wait_line(c, @sf.t("web-pages.chat.publish.reading"), key="publish/reading") }) |> ignore
-        2 => c.box(style=publish_note, fn() { c.text(publishing.error, style=publish_problem) |> ignore }) |> ignore
+        2 => c.box(style=publish_note, fn() { c.text(publishing.error.get(), style=publish_problem) |> ignore }) |> ignore
         _ if messages.length() == 0 =>
           c.box(style=publish_note, fn() { c.text(@sf.t("web-pages.chat.publish.empty"), style=publish_note_words) |> ignore })
           |> ignore
@@ -165,8 +165,8 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       c.layer(fn() {
         let (label, _) = @sf.picture_out_way()
         // (copied: 已复制 a moment after)
-        let shown = publishing.copied > 0 &&
-          !@kit.after(c, "publish/copied/\{publishing.copied}", true, @sf.copied_ms)
+        let shown = publishing.copied.get() > 0 &&
+          !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
         let (closed, acted) = @sf.viewer_frame_act(
           c,
           "publish",
@@ -175,7 +175,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
           text(p, "hiddenText"),
           @sf.page_viewer_ink(),
           if shown { @sf.t("common.copied") } else { label },
-          busy=publishing.busy,
+          busy=publishing.busy.get(),
           disabled=p is None || messages.length() == 0,
         )
         if acted && p is Some(_) && messages.length() > 0 {
@@ -193,7 +193,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
     }
   })
-  if o.dismissed is Some(_) && !publishing.busy {
+  if o.dismissed is Some(_) && !publishing.busy.get() {
     publish_reset()
   }
 }
@@ -278,7 +278,7 @@ fn picture_message(m : Message, taking : Bool) -> Message {
 /// Attachment `a` of message `seq`'s number in the preview (its `files`' `k`, by the message's n and where it is); ""
 /// when it has none.
 fn file_k(seq : Double, a : Attachment) -> String {
-  for f in items(publishing.preview, "files") {
+  for f in items(publishing.preview.get(), "files") {
     if number(Some(f), "n") == seq && text(field(Some(f), "file"), "path") == a.path {
       return text(Some(f), "k")
     }

@@ -13,8 +13,8 @@ priv struct SaDraft {
   mut description : String
   mut color : String
   groups : Map[String, Bool]
-  mut icon : String
-  mut icon_error : String
+  icon : @signals.Signal[String]
+  icon_error : @signals.Signal[String]
   /// the icon as shown (its picture's key), "" none
   mut shown : String
   /// what was picked: an avatar's id, or a picture of the person's own (its key), "" neither
@@ -53,8 +53,8 @@ fn sa_draft(key : String, settings : Json?) -> SaDraft {
     description: text(settings, "description"),
     color: text(settings, "backgroundColor"),
     groups,
-    icon: "",
-    icon_error: "",
+    icon: @signals.signal(""),
+    icon_error: @signals.signal(""),
     shown: "",
     picked: "",
     upload: "",
@@ -106,7 +106,7 @@ let sa_started : Map[String, String] = {}
 ///|
 /// The forms whose permissions Slack wants approved (their install links), by station/connect.
 // kept across runs: said by 应用's answer; slack_app_reset empties it
-let sa_approve : Map[String, String] = {}
+let sa_approve : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 // kept across runs: counted by sa_icon_made; slack_app_reset puts it back
@@ -352,12 +352,12 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
       None => ()
     }
     app_fields(c, core, d, sections, false, desk_column(c) - 2.0 * sa_card_in)
-    if d.icon_error != "" {
-      @sf.card_lines(c, "", bad=d.icon_error)
+    if d.icon_error.get() != "" {
+      @sf.card_lines(c, "", bad=d.icon_error.get())
     }
     let now = sa_settings(d, settings)
     let changed = now != sa_settings(sa_draft(key, settings), settings)
-    let dirty = changed || d.icon != ""
+    let dirty = changed || d.icon.get() != ""
     @sf.card_foot(c, at_end=true, fn() {
       if dirty && @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost) {
         sa_drafts.remove(key)
@@ -366,8 +366,8 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
         let input = match now {
           Object(m) => {
             let m2 = Map::from_iter(m.iter())
-            if d.icon != "" {
-              m2["icon"] = str(d.icon)
+            if d.icon.get() != "" {
+              m2["icon"] = str(d.icon.get())
             }
             Json::object(m2)
           }
@@ -381,8 +381,8 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
               Ok(v) => {
                 let rv = Some(v)
                 let approve = flag(rv, "permissionsUpdated")
-                d.icon = ""
-                d.icon_error = opt_text(rv, "iconError").unwrap_or("")
+                d.icon.set("")
+                d.icon_error.set(opt_text(rv, "iconError").unwrap_or(""))
                 let install = text(field(rv, "links"), "install")
                 if approve {
                   sa_approve[me] = if install != "" { install } else { text(links, "install") }
@@ -724,16 +724,16 @@ fn sa_icon_made(d : SaDraft, icon : @pixels.Canvas) -> Unit {
   sa_icons_made.val += 1
   d.shown = "mem:desk-slack-icon/\{sa_icons_made.val}"
   @ui.add_image(d.shown, jpeg)
-  d.icon = url
-  d.icon_error = ""
+  d.icon.set(url)
+  d.icon_error.set("")
 }
 
 ///|
 /// An icon that could not be made: why.
 fn sa_icon_failed(d : SaDraft, words : String) -> Unit {
   d.reading = ""
-  d.icon = ""
-  d.icon_error = words
+  d.icon.set("")
+  d.icon_error.set(words)
 }
 
 ///|

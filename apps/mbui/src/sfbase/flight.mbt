@@ -97,7 +97,7 @@ pub(all) struct FlyingFile {
 }
 
 ///|
-pub let send_flight : Ref[SendFlight?] = { val: None }
+pub let send_flight : @signals.Signal[SendFlight?] = @signals.signal(None)
 
 ///|
 /// What flies to the `i`th quote of the message words are sent to (as file_key says a file: "upload:<id>").
@@ -145,7 +145,7 @@ pub fn flight_start(
   hold~ : (Double) -> Unit,
   desk~ : Bool,
 ) -> Unit {
-  send_flight.val = None
+  send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
@@ -153,7 +153,7 @@ pub fn flight_start(
     Some(((x, y), (rx, ry, w, h))) => {
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
       let (lines, lead) = field_lines_of(c, field, words)
-      send_flight.val = Some({
+      send_flight.set(Some({
         chat,
         turns,
         text: words,
@@ -176,7 +176,7 @@ pub fn flight_start(
         gone: leaving(),
         carried: false,
         from_top: y - 8.0,
-      })
+      }))
       hold(flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
       // wait for nothing (list_turns.mbt)
@@ -209,7 +209,7 @@ pub fn flight_carry_start(
   hold~ : (Double) -> Unit,
   desk~ : Bool,
 ) -> Unit {
-  send_flight.val = None
+  send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
@@ -221,7 +221,7 @@ pub fn flight_carry_start(
       } else {
         files[0].from.1
       }
-      send_flight.val = Some({
+      send_flight.set(Some({
         chat,
         turns: "",
         text: words,
@@ -245,7 +245,7 @@ pub fn flight_carry_start(
         gone: leaving(),
         carried: true,
         from_top,
-      })
+      }))
       hold(flight_wait_ms)
     }
     None => ()
@@ -280,7 +280,7 @@ pub fn flight_carry_into(
 /// A new chat's first words, and its files, where they were, while its chat is made (over the new chat's page: till
 /// the page is the chat, which draws them then).
 pub fn flight_carry_waiting(c : @ui.Ctx) -> Unit {
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) if f.carried => {
       flight_waiting(c, f.chat)
       flight_files(c, f.chat)
@@ -293,7 +293,7 @@ pub fn flight_carry_waiting(c : @ui.Ctx) -> Unit {
 /// The new chat's first words not sent (the chat not made, or the message refused): they leave, back in the field.
 pub fn flight_carry_gone(from : String) -> Unit {
   match flight_of(from) {
-    Some(f) if f.carried => send_flight.val = None
+    Some(f) if f.carried => send_flight.set(None)
     _ => ()
   }
 }
@@ -346,7 +346,7 @@ pub fn flight_carried(chat : String) -> Bool {
 ///|
 /// The flight of chat `chat`'s words, while there is one.
 pub fn flight_of(chat : String) -> SendFlight? {
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) if f.chat == chat => Some(f)
     _ => None
   }
@@ -451,7 +451,7 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
       // (landed: their way at the end it declared as it set out)
       let landed = f.placed && f.way.over()
       if (!f.placed && waited) || landed {
-        send_flight.val = None
+        send_flight.set(None)
         // their turn over: where they were declared to land (or now, never having set out)
         turns.over(c, Send, if landed { f.way.ends() } else { turns.moment(c) })
       }

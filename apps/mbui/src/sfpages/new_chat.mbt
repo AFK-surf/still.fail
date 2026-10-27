@@ -615,7 +615,7 @@ fn new_composer_place(
 ) -> Unit {
   let wide = c.width >= @sf.page_narrow_most
   match state {
-    Going(_, _) => list_space(c, @sfbase.fresh.room)
+    Going(_, _) => list_space(c, @sfbase.fresh.room.get())
     Held(_) if address == "" => list_space(c, @motion.measured(c, "new/composer").unwrap_or(0.0))
     _ => {
       let held = state is Held(_)
@@ -870,10 +870,10 @@ fn new_send(
     toast_later(read_only_words)
     return
   }
-  if fresh.starting {
+  if fresh.starting.get() {
     return
   }
-  let words = d.text.trim(chars=" \n\t").to_string()
+  let words = d.text.get().trim(chars=" \n\t").to_string()
   // (as its message will have them: taken out of the draft before the chat is made)
   let up = up_files(d)
   let going = going_files(d)
@@ -892,18 +892,18 @@ fn new_send(
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
   )
-  fresh.starting = true
+  fresh.starting.set(true)
   @sfbase.writing_starting(src, d, true)
   let sig = @sfbase.picked_sig(v)
   let give_back = fn(e : Json) {
-    fresh.starting = false
+    fresh.starting.set(false)
     @sfbase.flight_carry_gone(d.key)
     @sfbase.writing_starting(src, d, false)
     writing_restore(src, d, text(Some(e), "message"))
   }
   writing_take(src, d, station~, fn(taken) {
     guard taken is Some(_) else {
-      fresh.starting = false
+      fresh.starting.set(false)
       @sfbase.flight_carry_gone(d.key)
       @sfbase.writing_starting(src, d, false)
       return
@@ -924,8 +924,8 @@ fn new_send(
         match res {
           Err(e) => give_back(e)
           Ok(_) => {
-            fresh.sent = true
-            fresh.starting = false
+            fresh.sent.set(true)
+            fresh.starting.set(false)
             @sfbase.writing_starting(src, d, false)
             // the page becomes the chat, in place, its first words in its list from now and going on there; called
             // what the page was (新对话) until someone names it, as the core calls it
@@ -940,9 +940,9 @@ fn new_send(
             )
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
             @sfbase.writing_carry(src, d.key, station + ":" + key)
-            fresh.scene = v
-            fresh.became = Some(r)
-            fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
+            fresh.scene.set(v)
+            fresh.became.set(Some(r))
+            fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
             // (its choices fade as where the chat opens has them: in this page's place, Android's)
             @sfbase.became_starts(wide=!frame.in_place)
             new_chat_reset()
@@ -952,8 +952,8 @@ fn new_send(
         }
       })
     }
-    if fresh.made != "" {
-      send(fresh.made)
+    if fresh.made.get() != "" {
+      send(fresh.made.get())
     } else {
       (src.call)("newChat.create", { "station": Json::string(station) }, fn(res) {
         match res {
@@ -961,8 +961,8 @@ fn new_send(
             match text(Some(made), "key") {
               "" => give_back({ "message": Json::string("newChat.create: no key") })
               key => {
-                fresh.made = key
-                fresh.made_sig = sig
+                fresh.made.set(key)
+                fresh.made_sig.set(sig)
                 send(key)
               }
             }

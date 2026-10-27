@@ -174,13 +174,13 @@ pub(all) struct Viewer {
   kind : PKind?
   mime : String
   /// a file of no known kind: text (its first bytes UTF-8, no NULs)? None while asked
-  mut sniffed : Bool?
-  mut sniffing : Bool
-  mut bytes : Bytes?
-  mut fetching : Bool
+  sniffed : @signals.Signal[Bool?]
+  sniffing : @signals.Signal[Bool]
+  bytes : @signals.Signal[Bytes?]
+  fetching : @signals.Signal[Bool]
   /// how much of it has come while it is read whole, and its whole size where the station says it (FileData.progress)
-  mut got : (Double, Double?)?
-  mut error : String?
+  got : @signals.Signal[(Double, Double?)?]
+  error : @signals.Signal[String?]
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
@@ -225,7 +225,7 @@ pub(all) struct Viewer {
   mut pinch_y : Double
   mut pinched : Bool
   /// a read of the video's file, logged the first times
-  mut reads : Int
+  reads : @signals.Signal[Int]
   /// how a song's player stands, pinned for a fixture's shot
   mut pinned : @kit.MediaStatus?
   /// what it steps through (an image): its chat's images, a folder's
@@ -511,12 +511,12 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     drive,
     kind,
     mime,
-    sniffed: None,
-    sniffing: false,
-    bytes: None,
-    fetching: false,
-    got: None,
-    error: None,
+    sniffed: @signals.signal(None),
+    sniffing: @signals.signal(false),
+    bytes: @signals.signal(None),
+    fetching: @signals.signal(false),
+    got: @signals.signal(None),
+    error: @signals.signal(None),
     asked: false,
     save_after: false,
     download_asked: false,
@@ -549,7 +549,7 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     pinch_x: 0.0,
     pinch_y: 0.0,
     pinched: false,
-    reads: 0,
+    reads: @signals.signal(0),
     pinned: None,
     steps,
     vx: 0.0,
@@ -579,7 +579,7 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     copied: 0,
     head_w: 0.0,
   }
-  v.bytes = kept_read(v.id())
+  v.bytes.set(kept_read(v.id()))
   v
 }
 
@@ -722,7 +722,7 @@ pub fn Viewer::shown_kind(self : Viewer) -> PKind? {
   match self.kind {
     Some(k) => Some(k)
     None =>
-      match self.sniffed {
+      match self.sniffed.get() {
         Some(true) => Some(KText)
         _ => None
       }
@@ -734,7 +734,7 @@ pub fn Viewer::shown_kind(self : Viewer) -> PKind? {
 pub fn Viewer::told_of(self : Viewer) -> Bool {
   match self.shown_kind() {
     Some(KVideo) | Some(KAudio) | Some(KPdf) => false
-    None => self.kind is None && self.sniffed is Some(_)
+    None => self.kind is None && self.sniffed.get() is Some(_)
     Some(_) => self.file.size > big_file
   }
 }
@@ -923,7 +923,7 @@ pub fn Viewer::kept_whole(self : Viewer) -> Bool {
 /// The whole of it: a chat's in one `station.file`; a drive's a part (4 MB) at a time, as its reader reads.
 pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) -> Unit) -> Unit {
   let done = fn(r) {
-    self.got = None
+    self.got.set(None)
     done(r)
   }
   match self.drive {
@@ -949,7 +949,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
         fn(v) {
           match field(Some(v), "loaded") {
             Some(Number(n, ..)) =>
-              self.got = Some(
+              self.got.set(Some(
                 (
                   n,
                   match field(Some(v), "total") {
@@ -957,7 +957,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
                     _ => None
                   },
                 ),
-              )
+              ))
             _ => ()
           }
         },
@@ -982,7 +982,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
               }
               parts.push(bytes)
               got.val += bytes.length()
-              self.got = Some((got.val.to_double(), Some(total.to_double())))
+              self.got.set(Some((got.val.to_double(), Some(total.to_double()))))
               if bytes.length() == 0 || got.val >= total {
                 let all = Buffer(size_hint=got.val)
                 for b in parts {
@@ -1008,17 +1008,17 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
 pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   let v = self
   // (each asked once a viewer, by its file: nothing a build changes)
-  if v.kind is None && v.sniffed is None && !v.sniffing {
-    v.sniffing = true
+  if v.kind is None && v.sniffed.get() is None && !v.sniffing.get() {
+    v.sniffing.set(true)
     v.read_part(src, 0.0, 8192, "file", fn(r) {
-      v.sniffing = false
-      v.sniffed = Some(
+      v.sniffing.set(false)
+      v.sniffed.set(Some(
         match r {
           Ok((_, bytes)) => @codec.looks_like_text(bytes)
           // a station from before parts cannot say: told of, as anything else not shown
           Err(_) => false
         },
-      )
+      ))
     })
     return
   }
@@ -1039,10 +1039,10 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
               stream_part(src, v.part_call(), v.part_params(offset, length, "played"), v.listed_size(), answer, ended=fn(r) {
                 match r {
                   Ok(bytes) => {
-                    if v.reads < 3 {
+                    if v.reads.get() < 3 {
                       @ui.log("preview: \{v.name} @\{offset.to_int()} \{bytes} bytes through the core (\{v.part_call()})")
                     }
-                    v.reads += 1
+                    v.reads.set(v.reads.get() + 1)
                   }
                   Err(e) => @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
                 }
@@ -1061,26 +1061,26 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     _ => ()
   }
   let want = !v.told_of() || v.asked
-  if want && v.bytes is None && !v.fetching && v.error is None &&
-    (v.kind is Some(_) || v.sniffed is Some(_)) {
-    v.fetching = true
+  if want && v.bytes.get() is None && !v.fetching.get() && v.error.get() is None &&
+    (v.kind is Some(_) || v.sniffed.get() is Some(_)) {
+    v.fetching.set(true)
     v.read_whole(src, fn(r) {
-      v.fetching = false
+      v.fetching.set(false)
       match r {
         Ok(bytes) => {
           @ui.log(
             "preview: \{v.name} read whole through the core (\{if v.drive is Some(_) { "drive.read" } else { "station.file" }}, \{bytes.length()} bytes)",
           )
-          v.bytes = Some(bytes)
+          v.bytes.set(Some(bytes))
           keep_read(v.id(), bytes)
         }
         Err(e) =>
-          v.error = Some(
+          v.error.set(Some(
             match text(Some(e), "message") {
               "" => e.stringify()
               m => m
             },
-          )
+          ))
       }
     })
   }
@@ -1176,11 +1176,11 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   let shown = if v.flies { p } else { faded }
   v.fetch(c, src)
   // asked for to be saved, and come: saved
-  if v.save_after && v.bytes is Some(_) {
+  if v.save_after && v.bytes.get() is Some(_) {
     v.save_after = false
     v.ask_save(c)
   }
-  if v.install_after && v.bytes is Some(_) {
+  if v.install_after && v.bytes.get() is Some(_) {
     v.install_after = false
     v.ask_install(c)
   }
@@ -1420,7 +1420,7 @@ pub fn Viewer::draft_key(self : Viewer) -> String {
 /// The marked image asked for: drawn by the host at the picture's own size (marks.mbt), then downloaded or put in the
 /// chat's draft with a quote per numbered mark (ImageMarks.kt finish).
 pub fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
-  let bytes = match self.bytes {
+  let bytes = match self.bytes.get() {
     Some(b) => b
     None => return
   }
@@ -1481,7 +1481,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
 ///|
 /// An image still coming (its thumbnail in its place meanwhile).
 pub fn Viewer::coming(self : Viewer) -> Bool {
-  self.shown_kind() == Some(KImage) && self.bytes is None && self.error is None
+  self.shown_kind() == Some(KImage) && self.bytes.get() is None && self.error.get() is None
 }
 
 ///|
@@ -1495,18 +1495,18 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     _ =>
       if vf_reads(v) {
         // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
-        match v.bytes {
+        match v.bytes.get() {
           Some(b) => vf_read(v, c, src, b)
           None => ()
         }
       } else if v.told_of() {
         let dl = v.download(src)
         v.note(c, fn() { vf_facts(v, c, src, dl) })
-      } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
+      } else if (v.kind is None && v.sniffed.get() is None) || (v.bytes.get() is None && v.error.get() is None) {
         tap_stage(c, v, stage)
         v.note(c, fn() { vf_coming(v, c) })
       } else {
-        match v.error {
+        match v.error.get() {
           Some(e) => {
             tap_stage(c, v, stage)
             v.note(c, fn() {
@@ -1515,7 +1515,7 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
             })
           }
           None =>
-            match (kind, v.bytes) {
+            match (kind, v.bytes.get()) {
               (Some(KPdf), Some(b)) => v.pdf_stage(c, b, stage)
               (Some(k), Some(b)) => v.text_stage(c, k, b, stage)
               _ => ()
@@ -1626,14 +1626,14 @@ pub let surface2_dark : Int64 = 0x2C2D31FFL
 /// system_said): the leave to install apps asked for (its page opened), 允许 still.fail 安装应用后，再次点击安装; a
 /// failure, 无法安装：….
 pub fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
-  match self.bytes {
+  match self.bytes.get() {
     Some(b) => {
       let name = self.file.name
       // (handed to the host once the frame's builds are over: its bytes, given once)
       c.tell("install/" + name, fn() { @ui.install_package(name, b) })
     }
     None => {
-      self.error = None
+      self.error.set(None)
       self.asked = true
       self.install_after = true
     }
@@ -1645,12 +1645,12 @@ pub fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
 /// (downloads.mbt): on by itself whatever becomes of this viewer, how far it has come said here and on its message,
 /// kept once it is all here; a drive's is fetched first.
 pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
-  match self.bytes {
+  match self.bytes.get() {
     // kept where the system keeps downloads, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
     None if self.drive is None => self.download_asked = true
     None => {
-      self.error = None
+      self.error.set(None)
       self.asked = true
       self.save_after = true
     }
@@ -1804,7 +1804,7 @@ pub fn Viewer::draw_flight(
 /// (@sf.picture_out_way, as a picture made here). Round it, none. What is under the viewer (the chat's
 /// picture it was opened from, with its 引用) is never asked: the viewer is over it.
 fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, Double, Double, Double)?) -> Unit {
-  match (c.menu_asked(stage), at, self.bytes) {
+  match (c.menu_asked(stage), at, self.bytes.get()) {
     (Some((x, y)), Some((rx, ry, rw, rh)), Some(b)) if x >= rx && x < rx + rw && y >= ry && y < ry + rh => {
       // held by a finger: the press is the menu's, felt
       @sf.menu_held(c, "preview") |> ignore
@@ -2052,7 +2052,7 @@ pub fn drive_attachment(f : DriveFile) -> Attachment {
 ///|
 /// What shows of an image: its whole picture once read, else what stands in for it; "" while none is here.
 pub fn Viewer::picture(self : Viewer, src : Source) -> String {
-  match self.bytes {
+  match self.bytes.get() {
     Some(b) if self.image == "" => {
       self.image = "mem:preview/" + self.id()
       @ui.add_image(self.image, b)
@@ -2091,16 +2091,16 @@ pub fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : 
     match n {
       Some(n) => {
         ids.push(n.id())
-        if n.bytes is None && !n.fetching && n.error is None && n.file.size <= big_file {
-          n.fetching = true
+        if n.bytes.get() is None && !n.fetching.get() && n.error.get() is None && n.file.size <= big_file {
+          n.fetching.set(true)
           n.read_whole(src, fn(r) {
-            n.fetching = false
+            n.fetching.set(false)
             match r {
               Ok(b) => {
-                n.bytes = Some(b)
+                n.bytes.set(Some(b))
                 keep_read(n.id(), b)
               }
-              Err(_) => n.error = Some("")
+              Err(_) => n.error.set(Some(""))
             }
           })
         }

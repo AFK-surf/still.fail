@@ -18,15 +18,15 @@ priv struct Typed {
 /// ⌘⇧G's dialog (open, what is typed, the line chosen; what the core worked out for what was typed, by what; the
 /// folders read where the last part is typed, which were asked) and the station's button whose menu is open.
 priv struct Go {
-  mut open : Bool
+  open : @signals.Signal[Bool]
   field : @ui.Field
-  mut typed : String
-  mut at : Int
-  mut resolved : (String, Typed?)?
-  mut asking : String?
-  mut folders : (String, String, Array[String])?
-  mut asked : String
-  mut switching : Int
+  typed : @signals.Signal[String]
+  at : @signals.Signal[Int]
+  resolved : @signals.Signal[(String, Typed?)?]
+  asking : @signals.Signal[String?]
+  folders : @signals.Signal[(String, String, Array[String])?]
+  asked : @signals.Signal[String]
+  switching : @signals.Signal[Int]
   /// its dialog as presented (@sf.last_presented; 0 none)
   mut shown : Int
 }
@@ -34,29 +34,29 @@ priv struct Go {
 ///|
 // kept across runs: the dialog's state (go_reset puts it back)
 let go : Go = {
-  open: false,
+  open: @signals.signal(false, same=fn(a, b) { a == b }),
   field: @ui.Field::new(),
-  typed: "",
-  at: 0,
-  resolved: None,
-  asking: None,
-  folders: None,
-  asked: "",
-  switching: 0,
+  typed: @signals.signal("", same=fn(a, b) { a == b }),
+  at: @signals.signal(0, same=fn(a, b) { a == b }),
+  resolved: @signals.signal(None),
+  asking: @signals.signal(None),
+  folders: @signals.signal(None),
+  asked: @signals.signal("", same=fn(a, b) { a == b }),
+  switching: @signals.signal(0, same=fn(a, b) { a == b }),
   shown: 0,
 }
 
 ///|
 fn go_reset() -> Unit {
-  go.open = false
+  go.open.set(false)
   go.field.set("")
-  go.typed = ""
-  go.at = 0
-  go.resolved = None
-  go.asking = None
-  go.folders = None
-  go.asked = ""
-  go.switching = 0
+  go.typed.set("")
+  go.at.set(0)
+  go.resolved.set(None)
+  go.asking.set(None)
+  go.folders.set(None)
+  go.asked.set("")
+  go.switching.set(0)
   go.shown = 0
 }
 
@@ -64,7 +64,7 @@ fn go_reset() -> Unit {
 /// ⌘⇧G's dialog opened, empty.
 pub fn go_to_open() -> Unit {
   go_reset()
-  go.open = true
+  go.open.set(true)
 }
 
 ///|
@@ -132,19 +132,19 @@ fn place_of(stations : Array[DvStation], station : String, abs : String) -> Driv
 /// gone to.
 pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt) -> Unit) -> Unit {
   ignore(c)
-  if go.open && go.shown == 0 {
+  if go.open.get() && go.shown == 0 {
     @sf.panel(
       @sf.t("web-pages.files.goTo"),
       fn(c, _) { go_body(c, src, ws, here, to) },
       from=Unanchored,
       description=@sf.t("web-pages.files.goToNote"),
       gone=fn() {
-        go.open = false
+        go.open.set(false)
         go.shown = 0
       },
     )
     go.shown = @sf.last_presented()
-  } else if !go.open && go.shown > 0 {
+  } else if !go.open.get() && go.shown > 0 {
     // (a folder gone to: down)
     @sf.close_presented_of(go.shown)
     go.shown = 0
@@ -157,18 +157,18 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
 fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt) -> Unit) -> Unit {
   let t = @sf.theme()
   let stations = drive_stations(src, ws).0.unwrap_or([])
-  let typed = go.typed
+  let typed = go.typed.get()
   // what is typed, worked out by the core as it changes (the last answer for what is typed now)
   let asked_for = typed + "\n" + here.station + "\n" + dv_absolute(here.root.unwrap_or(""), here.path)
-  if go.asking != Some(asked_for) {
+  if go.asking.get() != Some(asked_for) {
     c.after_build("files-goto/resolve", fn() {
-      if go.asking != Some(asked_for) {
-        go.asking = Some(asked_for)
-        go_resolve(src, ws, typed, here, fn(r) { if go.asking == Some(asked_for) { go.resolved = Some((typed, r)) } })
+      if go.asking.get() != Some(asked_for) {
+        go.asking.set(Some(asked_for))
+        go_resolve(src, ws, typed, here, fn(r) { if go.asking.get() == Some(asked_for) { go.resolved.set(Some((typed, r)))} })
       }
     })
   }
-  let resolved = match go.resolved {
+  let resolved = match go.resolved.get() {
     Some((_, r)) => r
     None => None
   }
@@ -180,16 +180,16 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
   match (resolved, named) {
     (Some(r), Some(n)) if n.anywhere => {
       let key = r.station + "\n" + r.parent
-      if go.asked != key {
+      if go.asked.get() != key {
         c.after_build("files-goto/folders", fn() {
-          if go.asked != key {
-            go.asked = key
+          if go.asked.get() != key {
+            go.asked.set(key)
             (src.call)("drive.folders", { "station": Json::string(r.station), "path": Json::string(r.parent) }, fn(a) {
-              if go.asked == key {
-                go.folders = Some((r.station, r.parent, match a {
+              if go.asked.get() == key {
+                go.folders.set(Some((r.station, r.parent, match a {
                   Ok(v) => items(Some(v), "entries").map(fn(e) { text(Some(e), "name") })
                   Err(_) => []
-                }))
+                })))
               }
             })
           }
@@ -208,7 +208,7 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       }
     }
   }
-  match (resolved, named, go.folders) {
+  match (resolved, named, go.folders.get()) {
     (Some(r), Some(n), Some((fs, fp, names))) if fs == r.station && fp == r.parent => {
       let prefix = if r.station == here.station && !typed.contains(":") { "" } else { @sf.lower(n.name) + ":" }
       let found = names.filter(fn(name) { !name.has_prefix(".") && @sf.lower(name).has_prefix(@sf.lower(r.partial)) })
@@ -219,15 +219,15 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     }
     _ => ()
   }
-  if go.at >= rows.length() {
-    go.at = if rows.length() > 0 { rows.length() - 1 } else { 0 }
+  if go.at.get() >= rows.length() {
+    go.at.set(if rows.length() > 0 { rows.length() - 1 } else { 0 })
   }
   let open = fn(target : (String, String)?) {
     match target {
       Some((st, abs)) =>
         match place_of(stations, st, abs) {
           Some(p) => {
-            go.open = false
+            go.open.set(false)
             c.blur()
             to(p)
           }
@@ -238,7 +238,7 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
   }
   // Enter: as typed now, whatever came back for what was typed before
   let enter = fn(r : Typed?) {
-    let chosen = rows.get(go.at)
+    let chosen = rows.get(go.at.get())
     match (r, chosen) {
       (Some(r), Some((_, _, target))) if r.partial != "" => open(target)
       (Some(r), _) => open(Some((r.station, r.abs)))
@@ -247,18 +247,18 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     }
   }
   // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
-  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at < rows.length() - 1 {
-    go.at += 1
+  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at.get() < rows.length() - 1 {
+    go.at.set(go.at.get() + 1)
   }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at > 0 {
-    go.at -= 1
+  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at.get() > 0 {
+    go.at.set(go.at.get() - 1)
   }
   if c.key_pressed(@ui.key_tab, in_field=true) {
-    match rows.get(go.at) {
+    match rows.get(go.at.get()) {
       Some((_, complete, _)) => {
         go.field.set(complete)
-        go.typed = complete
-        go.at = 0
+        go.typed.set(complete)
+        go.at.set(0)
       }
       None => ()
     }
@@ -281,13 +281,13 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     if !res.focused {
       c.focus_editor("files-goto/field")
     }
-    if res.text != go.typed {
-      go.typed = res.text
-      go.at = 0
+    if res.text != go.typed.get() {
+      go.typed.set(res.text)
+      go.at.set(0)
     }
     match res.submitted {
       Some(words) =>
-        match go.resolved {
+        match go.resolved.get() {
           Some((was, r)) if was == words => enter(r)
           _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
         }
@@ -308,16 +308,16 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
           open(target)
         }
         if c.lit(id) {
-          go.at = i
+          go.at.set(i)
         }
-        let row = c.box(style=if i == go.at { go_row_on } else { go_row }, id~, fn() {
+        let row = c.box(style=if i == go.at.get() { go_row_on } else { go_row }, id~, fn() {
           @sf.icon(c, "folder", size=go_icon, color=t.p.muted) |> ignore
           c.text(label, style=go_row_words) |> ignore
-          if i == go.at {
+          if i == go.at.get() {
             c.box(style=go_key_box, fn() { c.text("Tab", style=go_key) |> ignore }) |> ignore
           }
         })
-        c.semantics(row, Option, id~, label~, selected=i == go.at)
+        c.semantics(row, Option, id~, label~, selected=i == go.at.get())
       }
     })
     c.semantics(list, Listbox)
@@ -390,14 +390,14 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
       })
     })
     @sf.pick(@sf.t("web-pages.files.switchNote"), choices, at.station, picked, from=Of(chip))
-    go.switching = @sf.last_presented()
+    go.switching.set(@sf.last_presented())
   }
   let b = c.box(style=switch_button, id=chip, fn() {
     @sf.station_icon(c, f.st.emoji, f.st.icon, switch_icon, t.p.muted, here=f.st.station == here)
     c.text(f.st.name, style=switch_words) |> ignore
     @sf.icon(c, "chevron-down", size=switch_chevron, color=t.p.muted) |> ignore
   })
-  let open = go.switching != 0 && @sf.presented_drawn_of(go.switching)
+  let open = go.switching.get() != 0 && @sf.presented_drawn_of(go.switching.get())
   c.semantics(b, Button, id=chip, label=@sf.t("web-pages.files.switchStation"), expanded=open)
 }
 

@@ -69,14 +69,14 @@ pub fn page_script_served(fetches : Bool) -> String {
 /// What a service's page has open through the app: its WebSockets (the core's call for each, by the page's name for
 /// it), the bodies its requests left here (by the id they carry), its fetches under way (how each is stopped, by id).
 pub(all) struct PageLink {
-  sockets : Map[String, Int]
+  sockets : @sf.LiveMap[String, Int]
   bodies : Map[String, (Bytes, String)]
   fetches : Map[String, () -> Unit]
 }
 
 ///|
 pub fn page_link_new() -> PageLink {
-  { sockets: {}, bodies: {}, fetches: {} }
+  { sockets: @sf.LiveMap::from({}), bodies: {}, fetches: {} }
 }
 
 ///|

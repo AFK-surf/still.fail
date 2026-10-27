@@ -29,7 +29,7 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
     @sf.t("web-main.relay.title"),
     fn(c, _) {
       let view = relay_view(c, src)
-      relay_body(c, src, view, opt_text(view, "link"), relaying.picked)
+      relay_body(c, src, view, opt_text(view, "link"), relaying.picked.get())
     },
     from~,
     field="relay/search",
@@ -37,7 +37,7 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
     live=fn() { (@sf.t("web-main.relay.title"), "", @sf.t("web-main.relay.lead")) },
     foot=fn(c, close) {
       let view = relay_view(c, src)
-      let picked = relaying.picked
+      let picked = relaying.picked.get()
       let ready = picked is Some(_) || opt_text(view, "link") is Some(_)
       let label = match picked {
         Some(row) => @sf.t("web-main.relay.goTo", args=[("place", text(Some(row), "name"))])
@@ -46,12 +46,12 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
       if @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost) {
         close()
       }
-      if @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy, disabled=!ready) {
+      if @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy.get(), disabled=!ready) {
         relay_go(src, view, done=close)
       }
     },
     gone=fn() {
-      if !relaying.busy {
+      if !relaying.busy.get() {
         relay_reset()
       }
     },
@@ -82,8 +82,8 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
         for b in bots {
           let id = text(Some(b), "id")
           if relay_scope(c, src, id, text(Some(b), "label"), id == on) {
-            relaying.bot = id
-            relaying.all = false
+            relaying.bot.set(id)
+            relaying.all.set(false)
           }
         }
       })
@@ -103,16 +103,16 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
       (None, Some(row)) =>
         relay_list(c, fn() {
           if relay_place(c, "relay/picked", text(Some(row), "kind"), text(Some(row), "name"), Some(text(Some(row), "note")), true, true) {
-            relaying.picked = None
+            relaying.picked.set(None)
             relay_focus.val = "relay/search"
           }
           relay_via(c, src, text(Some(row), "connect"))
         })
       (None, None) =>
-        match relaying.read {
+        match relaying.read.get() {
           0 => @sf.wait_line(c, @sf.t("web-main.relay.reading"), key="relay/reading")
-          2 => c.text(relaying.error, style=relay_failed) |> ignore
-          _ if relaying.connects.length() == 0 => relay_said(c, @sf.t("web-main.relay.noConnects"), relay_empty)
+          2 => c.text(relaying.error.get(), style=relay_failed) |> ignore
+          _ if relaying.connects.get().length() == 0 => relay_said(c, @sf.t("web-main.relay.noConnects"), relay_empty)
           _ =>
             match view {
               None => @sf.wait_line(c, @sf.t("web-main.relay.reading"), key="relay/reading")
@@ -146,7 +146,7 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     for row in rows {
       let key = "relay/place/" + text(Some(row), "connect") + "/" + text(field(Some(row), "place"), "id")
       if relay_place(c, key, text(Some(row), "kind"), text(Some(row), "name"), opt_text(Some(row), "aside"), false, false) {
-        relaying.picked = Some(row)
+        relaying.picked.set(Some(row))
         relay_focus.val = "relay/note"
       }
     }
@@ -159,7 +159,7 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     if recent && total > rows.length() {
       let id = c.id("relay/all")
       if c.clicked(id) {
-        relaying.all = true
+        relaying.all.set(true)
       }
       let label = @sf.t("web-main.relay.showAll", args=[("count", total.to_string())])
       let b = c.box(style=relay_more, id~, fn() { c.text(label, style=relay_more_words) |> ignore })

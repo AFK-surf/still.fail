@@ -175,7 +175,7 @@ test "a new chat's first words stay where typed while the chat is made and read,
   assert_at(typed, seen_once(t, words))
   // up with the list, no frame where they are not, nor a jump
   let landed = up_till(t, words, placed + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   // in their bubble, under the bar at the list's top
   assert_true(landed.1 < 200.0)
   assert_true((landed.0 - typed.0).abs() > 1.0)
@@ -230,7 +230,7 @@ test "a new chat's first words with the core at once: never gone, up into their 
   let typed = new_chat_sent(t, words)
   let sent = t.time()
   let landed = up_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   assert_true(landed.1 < 200.0)
   assert_true(landed.1 < typed.1 - 300.0)
 }
@@ -262,7 +262,7 @@ test "a new chat's first words not sent (the chat not made): they leave the scre
     None => fail("no chat asked for")
   }
   t.draw()
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   assert_true(app.nav.top() is NewChat)
   let (_, back, _, _) = t.ime()
   assert_eq(back, words)

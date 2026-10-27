@@ -74,7 +74,7 @@ test "recent photos: the same time by id, and no more than asked" {
 /// the tiles tapped to `tapped`.
 fn strip_tester(n : Int, tapped : Array[Int]) -> @ui.Tester {
   recent_reset()
-  recent.access = Whole
+  recent.access.set(Whole)
   for i in 1..=n {
     recent.photos.push(photo(i.to_int64(), recent_now - i.to_int64(), -1, -1))
   }
@@ -108,11 +108,11 @@ test "recent photos: a tap puts one in alone; its ring chooses it, then a tap an
   // its ring in its top end corner chooses it
   let (x2, y2) = strip_tile(2)
   t.tap(x2 + recent_tile_w - 10.0, y2 + 10.0)
-  assert_eq(recent.chosen, [src(2)])
+  assert_eq(recent.chosen.copy(), [src(2)])
   // some chosen: a tap anywhere on a tile chooses it, or not
   let (x3, y3) = strip_tile(3)
   t.tap(x3 + 40.0, y3 + 90.0)
-  assert_eq(recent.chosen, [src(2), src(3)])
+  assert_eq(recent.chosen.copy(), [src(2), src(3)])
   assert_eq(tapped, [1])
   // each numbered in the order chosen, in its ring
   let ring_at = fn(i : Int) {
@@ -127,7 +127,7 @@ test "recent photos: a tap puts one in alone; its ring chooses it, then a tap an
     _ => fail("the chosen are not numbered")
   }
   t.tap(x2 + 40.0, y2 + 90.0)
-  assert_eq(recent.chosen, [src(3)])
+  assert_eq(recent.chosen.copy(), [src(3)])
   // the camera is still the camera
   let (x0, y0) = strip_tile(0)
   t.tap(x0 + 40.0, y0 + 60.0)

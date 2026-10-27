@@ -40,20 +40,20 @@ let fpane_text_part : Int = 64 * 1024
 /// its text's start, or that it could not be read.
 priv struct FPane {
   mut key : String
-  mut picture : String
-  mut text : String?
-  mut failed : Bool
+  picture : @signals.Signal[String]
+  text : @signals.Signal[String?]
+  failed : @signals.Signal[Bool]
 }
 
 ///|
-let fpane : FPane = { key: "", picture: "", text: None, failed: false }
+let fpane : FPane = { key: "", picture: @signals.signal("", same=fn(a, b) { a == b }), text: @signals.signal(None), failed: @signals.signal(false, same=fn(a, b) { a == b })}
 
 ///|
 fn pane_reset() -> Unit {
   fpane.key = ""
-  fpane.picture = ""
-  fpane.text = None
-  fpane.failed = false
+  fpane.picture.set("")
+  fpane.text.set(None)
+  fpane.failed.set(false)
 }
 
 ///|
@@ -113,7 +113,7 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
           let now = got + bytes.length()
           if way == "text" {
             let (words, _) = @hostapi.decode_text(bytes, truncated=total > now)
-            fpane.text = Some(words)
+            fpane.text.set(Some(words))
           } else if bytes.length() > 0 && now < total {
             next(now)
           } else {
@@ -123,11 +123,11 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
                 whole.push(b[i])
               }
             }
-            fpane.picture = "mem:files-pane/" + key
-            @ui.add_image(fpane.picture, Bytes::from_array(whole[:]))
+            fpane.picture.set("mem:files-pane/" + key)
+            @ui.add_image(fpane.picture.get(), Bytes::from_array(whole[:]))
           }
         }
-        Err(_) => fpane.failed = true
+        Err(_) => fpane.failed.set(true)
       }
     })
   }
@@ -217,7 +217,7 @@ pub fn drive_pane(
 /// and how to open it (pressed, it opens).
 fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ : Double, fixed? : Bool = false) -> Unit {
   let t = @sf.theme()
-  if fpane.failed {
+  if fpane.failed.get() {
     c.box(style=fpane_body_box, fn() { c.text(@sf.t("web-pages.files.previewFailed"), style=fpane_none) |> ignore })
     |> ignore
     return
@@ -225,19 +225,19 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
   match way {
     "picture" =>
       c.box(style=fpane_picture_box, fn() {
-        if fpane.picture == "" {
+        if fpane.picture.get() == "" {
           c.box(style=fpane_waiting, fn() {  }) |> ignore
         } else {
           // whole, as large as the pane is wide and no taller than its room
-          let (nw, nh) = @ui.image_natural(fpane.picture).unwrap_or((fpane_inner, fpane_inner))
+          let (nw, nh) = @ui.image_natural(fpane.picture.get()).unwrap_or((fpane_inner, fpane_inner))
           let s = dmin(fpane_inner / dmax(1.0, nw), room / dmax(1.0, nh))
           let s = dmin(s, 1.0)
-          c.image(fpane.picture, w=Px(nw * s), h=Px(nh * s), fit=FitContain, bg=0L) |> ignore
+          c.image(fpane.picture.get(), w=Px(nw * s), h=Px(nh * s), fit=FitContain, bg=0L) |> ignore
         }
       })
       |> ignore
     "text" =>
-      match fpane.text {
+      match fpane.text.get() {
         None => c.box(style=fpane_picture_box, fn() { c.box(style=fpane_waiting, fn() {  }) |> ignore }) |> ignore
         Some(words) => {
           let cut = e.size > fpane_text_part.to_double()

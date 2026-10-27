@@ -816,12 +816,12 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
   let id = text(cv, "id")
   let key = "connect-secret/" + (desk_dialogs.val + 1).to_string()
   let secret = field_of(key + "/secret")
-  let error : Ref[String] = Ref("")
+  let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
   open_dialog(
     @sf.t("web-pages.connect.feishu.replace"),
     description=@sf.t("web-pages.connect.feishu.replaceLead"),
     fn(c, _) {
-      @sf.field(c, "App Secret", error=error.val, fn() {
+      @sf.field(c, "App Secret", error=error.get(), fn() {
         @sf.input(c, key + "/secret-input", placeholder=text(field(cv, "feishu"), "appSecret"), secret=true, field=secret)
         |> ignore
       })
@@ -833,14 +833,14 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
       let typed = secret.text().trim(chars=" \t\n").to_owned()
       let saving = is_doing(core, ["feishu.putSecret"], [("station", station), ("id", id)])
       if @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=typed == "") {
-        error.val = ""
+        error.set("")
         (core.call)("feishu.putSecret", obj([("station", str(station)), ("id", str(id)), ("appSecret", str(typed))]), fn(r) {
           match r {
             Ok(_) => {
               (core.say)(@sf.t("web-pages.connect.feishu.secretSaved"))
               shut()
             }
-            Err(e) => error.val = error_text(e)
+            Err(e) => error.set(error_text(e))
           }
         })
       }

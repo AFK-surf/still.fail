@@ -681,7 +681,7 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   assert_at((ex, ey), { let (x, y, _, _) = composer_glass(t); (x, y) })
   // the words in their bubble under the chat's bar, gone across to its right
   t.run_for(sent + flight_carry_ms + 34.0 - t.time())
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   let landed = seen_once(t, words)
   assert_true(landed.1 < typed.1 - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
 }
@@ -759,7 +759,7 @@ test "wide: a new chat's first words stay where they were typed while the chat i
   t.draw()
   let placed = t.time()
   let landed = up_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   assert_true(landed.1 < typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
   // out of the composer: its hint back
   t.run_for(@sf.hint_back_ms)
@@ -922,7 +922,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("剪切")
   t.frame()
   assert_eq(t.clipboard(), "发布前再看一眼")
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some(""))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text.get() }), Some(""))
   // 粘贴: the clipboard read, its words put in
   t.clipboard_gives("再看一眼签名")
   let (fx, fy) = field_at()
@@ -931,7 +931,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text.get() }), Some("再看一眼签名"))
   // a picture on the clipboard: put in as a file, as ⌘V puts one
   t.clipboard_gives_png(@pixels.png(2, 2, FixedArray::make(16, b'\xff')))
   let (fx, fy) = field_at()
@@ -1963,7 +1963,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
     Some(d) => {
       assert_eq(d.files.length(), 1)
       assert_eq(text(Some(d.files[0]), "name"), "image.png")
-      assert_eq(d.text, "")
+      assert_eq(d.text.get(), "")
     }
     None => fail("no draft")
   }
@@ -1972,7 +1972,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text.get() }), Some("再看一眼签名"))
   // files copied in Finder (their names beside them as words): the files themselves, by their names, not the words
   t.clipboard_gives_files([("发布清单.pdf", b"%PDF-1.7"), ("截图.jpg", b"\xff\xd8\xff")], text="发布清单.pdf\n截图.jpg")
   t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
@@ -1981,7 +1981,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
       assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
-      assert_eq(d.text, "再看一眼签名")
+      assert_eq(d.text.get(), "再看一眼签名")
     }
     None => fail("no draft")
   }

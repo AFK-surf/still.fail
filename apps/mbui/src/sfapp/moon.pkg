@@ -7,6 +7,7 @@ import {
   "moonbitlang/core/math",
   "mbui/dmath",
   "mbui/ui",
+  "mbui/signals",
   "mbui/kit",
   "mbui/motion",
   "stillfail/sf",
@@ -20,4 +21,4 @@ import {
   "stillfail/sffixture",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens", "mbui/signals" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"

@@ -25,14 +25,14 @@ pub(all) struct Finding {
   mut chat : String
   field : @ui.Field
   mut query : String
-  mut asked : String
-  mut found : Found?
-  mut at : Int
-  mut k : Int
-  mut position : Int
-  mut total : Int
+  asked : @signals.Signal[String]
+  found : @signals.Signal[Found?]
+  at : @signals.Signal[Int]
+  k : @signals.Signal[Int]
+  position : @signals.Signal[Int]
+  total : @signals.Signal[Int]
   mut moves : Int
-  mut bringing : Bool
+  bringing : @signals.Signal[Bool]
 }
 
 ///|
@@ -40,14 +40,14 @@ pub let finding : Finding = {
   chat: "",
   field: @ui.Field::new(),
   query: "",
-  asked: "",
-  found: None,
-  at: -1,
-  k: 0,
-  position: 0,
-  total: 0,
+  asked: @signals.signal("", same=fn(a, b) { a == b }),
+  found: @signals.signal(None),
+  at: @signals.signal(-1, same=fn(a, b) { a == b }),
+  k: @signals.signal(0, same=fn(a, b) { a == b }),
+  position: @signals.signal(0, same=fn(a, b) { a == b }),
+  total: @signals.signal(0, same=fn(a, b) { a == b }),
   moves: 0,
-  bringing: false,
+  bringing: @signals.signal(false, same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -87,14 +87,14 @@ pub fn find_close() -> Unit {
   finding.chat = ""
   finding.field.set("")
   finding.query = ""
-  finding.asked = ""
-  finding.found = None
-  finding.at = -1
-  finding.k = 0
-  finding.position = 0
-  finding.total = 0
+  finding.asked.set("")
+  finding.found.set(None)
+  finding.at.set(-1)
+  finding.k.set(0)
+  finding.position.set(0)
+  finding.total.set(0)
   finding.moves = 0
-  finding.bringing = false
+  finding.bringing.set(false)
 }
 
 ///|
@@ -107,7 +107,7 @@ pub fn find_preset(key : String, words : String) -> Unit {
 ///|
 /// The words to mark in every message of chat `key` drawn now: what ⌘F found while its bar is open in it.
 pub fn find_words_in(key : String) -> Array[String] {
-  match finding.found {
+  match finding.found.get() {
     Some(f) if finding.chat == key => f.words
     _ => []
   }
@@ -116,13 +116,13 @@ pub fn find_words_in(key : String) -> Array[String] {
 ///|
 /// Which time in the message gone to the reader is at (0 the first).
 pub fn find_k() -> Int {
-  finding.k
+  finding.k.get()
 }
 
 ///|
 /// Which of the messages found the reader is at (-1 none), and what is typed (a test's).
 pub fn find_at() -> Int {
-  finding.at
+  finding.at.get()
 }
 
 ///|
@@ -152,8 +152,8 @@ fn found_of(v : Json) -> Found {
 ///|
 /// The list to the time the reader is at: its message gone to, the words marked there.
 fn find_go(list : FindList) -> Unit {
-  match finding.found {
-    Some(f) if finding.at >= 0 && finding.at < f.hits.length() => (list.go)(f.hits[finding.at].0, f.words)
+  match finding.found.get() {
+    Some(f) if finding.at.get() >= 0 && finding.at.get() < f.hits.length() => (list.go)(f.hits[finding.at.get()].0, f.words)
     _ => ()
   }
 }
@@ -163,12 +163,12 @@ fn find_go(list : FindList) -> Unit {
 /// are while what was found still has it, else where they start (from the messages showing); else the next (1) or the
 /// one before (-1). The list goes there as the reader moves to another message or another time in one.
 fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
-  let f = match finding.found {
+  let f = match finding.found.get() {
     Some(f) => f
     None => return
   }
-  let at : Json = if finding.at >= 0 && finding.at < f.hits.length() {
-    { "seq": Json::number(f.hits[finding.at].0), "k": Json::number(finding.k.to_double()) }
+  let at : Json = if finding.at.get() >= 0 && finding.at.get() < f.hits.length() {
+    { "seq": Json::number(f.hits[finding.at.get()].0), "k": Json::number(finding.k.get().to_double()) }
   } else {
     Json::null()
   }
@@ -191,26 +191,26 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
     if finding.chat != key || finding.moves != n {
       return
     }
-    match (res, finding.found) {
+    match (res, finding.found.get()) {
       (Ok(j), Some(now)) => {
-        let was = (finding.at, finding.k)
+        let was = (finding.at.get(), finding.k.get())
         let seq = match field(Some(j), "at") {
           Some(Object(_)) as a => Some((number(a, "seq"), number(a, "k").to_int()))
           _ => None
         }
         match seq {
           Some((s, k)) => {
-            finding.at = now.hits.search_by(fn(h) { h.0 == s }).unwrap_or(-1)
-            finding.k = k
+            finding.at.set(now.hits.search_by(fn(h) { h.0 == s }).unwrap_or(-1))
+            finding.k.set(k)
           }
           None => {
-            finding.at = -1
-            finding.k = 0
+            finding.at.set(-1)
+            finding.k.set(0)
           }
         }
-        finding.position = number(Some(j), "position").to_int()
-        finding.total = number(Some(j), "total").to_int()
-        if (finding.at, finding.k) != was {
+        finding.position.set(number(Some(j), "position").to_int())
+        finding.total.set(number(Some(j), "total").to_int())
+        if (finding.at.get(), finding.k.get()) != was {
           find_go(list)
         }
       }
@@ -228,15 +228,15 @@ pub let find_typing_ms : Double = 120.0
 /// The chat (station `station`, thread `thread`) looked in for `query`: at once in what the device holds, then with
 /// what it does not.
 fn find_ask(src : Source, station : String, thread : Double, key : String, list : FindList, query : String) -> Unit {
-  finding.asked = query
+  finding.asked.set(query)
   let q = query.trim(chars=" ").to_string()
   if q == "" {
-    finding.found = None
-    finding.at = -1
-    finding.k = 0
-    finding.position = 0
-    finding.total = 0
-    finding.bringing = false
+    finding.found.set(None)
+    finding.at.set(-1)
+    finding.k.set(0)
+    finding.position.set(0)
+    finding.total.set(0)
+    finding.bringing.set(false)
     return
   }
   fn ask(bring : Bool) {
@@ -250,34 +250,34 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
       },
       fn(res) {
         // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked != query || finding.chat != key {
+        if finding.asked.get() != query || finding.chat != key {
           return
         }
         match res {
           Ok(j) => {
             let f = found_of(j)
             // where the reader was, as a message of what is found now (gone: none)
-            let was = match finding.found {
-              Some(o) if bring && finding.at >= 0 && finding.at < o.hits.length() => o.hits[finding.at].0
+            let was = match finding.found.get() {
+              Some(o) if bring && finding.at.get() >= 0 && finding.at.get() < o.hits.length() => o.hits[finding.at.get()].0
               _ => -1.0
             }
-            finding.found = Some(f)
-            finding.bringing = false
-            finding.at = f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1)
-            if finding.at < 0 {
-              finding.k = 0
+            finding.found.set(Some(f))
+            finding.bringing.set(false)
+            finding.at.set(f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1))
+            if finding.at.get() < 0 {
+              finding.k.set(0)
             }
-            finding.position = 0
-            finding.total = f.hits.fold(init=0, fn(n, h) { n + h.1 })
+            finding.position.set(0)
+            finding.total.set(f.hits.fold(init=0, fn(n, h) { n + h.1 }))
             // kept where it is still found, else where the reader starts (the core's)
             find_move(src, key, list, 0)
             if !bring && !f.whole {
-              finding.bringing = true
+              finding.bringing.set(true)
               ask(true)
             }
           }
           // its station away, or the core an older one: what was found stays as it is
-          Err(_) => finding.bringing = false
+          Err(_) => finding.bringing.set(false)
         }
       },
     )
@@ -289,7 +289,7 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
 ///|
 /// Which of how many times the words are in the chat the reader is at (1 the first; 0 none), as the core said it.
 pub fn find_position() -> (Int, Int) {
-  (finding.position, finding.total)
+  (finding.position.get(), finding.total.get())
 }
 
 ///|
@@ -323,10 +323,10 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
   let t = @sf.theme()
   let key = chat_key(r)
   c.box(style=find_bar_style, fn() {
-    match finding.found {
+    match finding.found.get() {
       Some(f) if !f.whole =>
         c.box(style=find_note_box, fn() {
-          let note = if finding.bringing {
+          let note = if finding.bringing.get() {
             @sf.t("web-main.find.bringing", args=[("held", f.held.to_string())])
           } else {
             @sf.t("web-main.find.partial", args=[("held", f.held.to_string()), ("of", f.of.to_string())])
@@ -356,10 +356,10 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       let typed = res.text.replace_all(old="\n", new="")
       finding.query = typed
       // looked for 120 ms after the last key; none typed, nothing found at once
-      if typed != finding.asked &&
+      if typed != finding.asked.get() &&
         (typed.trim(chars=" ").is_empty() || @kit.after(c, "find/typing/" + typed, true, find_typing_ms)) {
         // (asked once the frame's builds are over)
-        finding.asked = typed
+        finding.asked.set(typed)
         c.tell("find/ask/" + typed, fn() { find_ask(src, r.station, thread, key, list, typed) })
       }
       if back || res.submitted is Some(_) {
@@ -370,10 +370,10 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         c.tell("find/move", fn() { find_move(src, key, list, by) })
       }
       let (at, total) = find_position()
-      match finding.found {
+      match finding.found.get() {
         // (nothing found yet while the rest is read is not "nothing found")
         // (nor before the core has said where the reader is among them)
-        Some(_) if !(finding.bringing && total == 0) && !(total > 0 && at == 0) =>
+        Some(_) if !(finding.bringing.get() && total == 0) && !(total > 0 && at == 0) =>
           c.box(style=find_count_box, fn() {
             let words = if total > 0 { "\{at}/\{total}" } else { @sf.t("web-main.find.none") }
             c.text(words, style=find_meta) |> ignore

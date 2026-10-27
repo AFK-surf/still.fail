@@ -34,7 +34,7 @@ pub(all) struct ComposerSpec {
 /// restoring one failed (by their drafts).
 priv struct Composing {
   mut picking : (String, @ui.Pick)?
-  mut let_go : Bool
+  let_go : @signals.Signal[Bool]
   warmed : Map[String, Int]
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
@@ -49,8 +49,8 @@ priv struct Composing {
   mut toolbar : (() -> Unit)?
   mut toolbar_before : (() -> Unit)?
   mut toolbar_leaving : (() -> Unit)?
-  restoring : Map[String, Bool]
-  restore_errors : Map[String, String]
+  restoring : @sf.LiveMap[String, Bool]
+  restore_errors : @sf.LiveMap[String, String]
   /// a finger went down outside it (keyboard_let_go); its `@` menu up over it as it was last drawn (a press in it is
   /// the composer's own)
   mut outside : Bool
@@ -78,7 +78,7 @@ pub fn composer_take_focus() -> Unit {
 ///|
 let composing : Composing = {
   picking: None,
-  let_go: false,
+  let_go: @signals.signal(false, same=fn(a, b) { a == b }),
   warmed: {},
   comments: {},
   roomy: None,
@@ -89,8 +89,8 @@ let composing : Composing = {
   toolbar: None,
   toolbar_before: None,
   toolbar_leaving: None,
-  restoring: {},
-  restore_errors: {},
+  restoring: @sf.LiveMap::new(),
+  restore_errors: @sf.LiveMap::new(),
   outside: false,
   menu_up: false,
   cc_open: false,
@@ -103,7 +103,7 @@ let composing : Composing = {
 ///|
 fn composing_reset() -> Unit {
   composing.picking = None
-  composing.let_go = false
+  composing.let_go.set(false)
   composing.warmed.clear()
   composing.comments.clear()
   composing.grounds.clear()
@@ -180,12 +180,12 @@ pub fn composer(
   let focused = c.editor_focused(composer_field_key)
   // a box while it has the cursor; lost, a capsule a moment later (LET_GO_MS)
   if focused {
-    composing.let_go = true
+    composing.let_go.set(true)
   }
   let lost_long = @kit.after(c, "composer/let-go", !focused, let_go_ms)
-  let held = composing.let_go && !focused && !lost_long
+  let held = composing.let_go.get() && !focused && !lost_long
   if lost_long {
-    composing.let_go = false
+    composing.let_go.set(false)
   }
   // words just sent from it still in it: as tall as it was then, its field where it was and its ＋ and send at its foot
   // (composer_hold), so nothing in it moves until it comes down
@@ -194,19 +194,19 @@ pub fn composer(
     focused ||
     held ||
     sent_box > 0.0 ||
-    w.text != "" ||
+    w.text.get() != "" ||
     w.files.length() > 0 ||
     w.quotes.length() > 0
   // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
-  let ready = (w.ready || (w.text.trim() != "" && !w.starting)) && !spec.locked
+  let ready = (w.ready || (w.text.get().trim() != "" && !w.starting)) && !spec.locked
   // sent once what it refers to can be read in this workspace (OutsideShare.tsx, sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
   let submit = fn() {
     if ready {
-      @sfbase.send_sharing(src, w.key, spec.station, w.text.trim(chars=" \n\t").to_string(), fn() { send(w) })
+      @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_string(), fn() { send(w) })
       // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
       // shown once over them as they set out)
       if @sfbase.flight_hint_away(c, w.key) {
@@ -436,7 +436,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
   match followed_into.get(w.key) {
     Some(words) => {
       followed_into.remove(w.key)
-      let now = w.text
+      let now = w.text.get()
       let said = if now.trim() == "" { words } else { now.trim_end().to_owned() + "\n" + words }
       w.field.set(said)
       c.tell("composer/followed/" + w.key, fn() { writing_text(src, w, said) })
@@ -573,19 +573,19 @@ fn composer_text(
     match res.submitted {
       // (they stay in the field until they go)
       Some(words) => {
-        if words != w.text {
+        if words != w.text.get() {
           writing_text(src, w, words)
         }
         submit()
       }
       None =>
-        if res.text != w.text && !w.starting {
+        if res.text != w.text.get() && !w.starting {
           writing_text(src, w, res.text)
           warm(c, src, spec)
         }
     }
     // nothing typed: the chat above or below, as the list shows them now
-    if res.focused && w.text == "" && !(@sfbase.neighbour_held.val)() && !menu {
+    if res.focused && w.text.get() == "" && !(@sfbase.neighbour_held.val)() && !menu {
       if c.key_pressed(@ui.key_code_up, in_field=true) {
         (@sfbase.neighbour_go.val)(src, ws, -1)
       } else if c.key_pressed(@ui.key_code_down, in_field=true) {
@@ -805,7 +805,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
           Pasted => {
             if said.restored {
               let back = text(field(v, "pasted"), "text")
-              let words = if w.text == "" { back } else { w.text + "\n" + back }
+              let words = if w.text.get() == "" { back } else { w.text.get() + "\n" + back }
               @sfbase.refs_put(w.key, w.field, words)
               writing_text(src, w, words)
               writing_remove(src, w, id)
@@ -1529,7 +1529,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     toast_later(read_only_words)
     return
   }
-  let words = w.text.trim(chars=" \n\t").to_string()
+  let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w))
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as

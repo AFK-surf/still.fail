@@ -30,7 +30,7 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
   let top = app.nav.top()
   let switched = match (page_switch.was, top) {
     (Some(NewChat), Chat(r)) =>
-      match fresh.became {
+      match fresh.became.get() {
         Some(b) if b == r => false
         _ => true
       }
@@ -40,7 +40,7 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
   if switched && !@ui.reduced_motion() {
     page_switch.from_new = page_switch.was == Some(NewChat)
     if page_switch.from_new {
-      fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
+      fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
       // the new chat left: its scene leaves by its own way, from now
       became_starts(wide=true)
     }
@@ -57,7 +57,7 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
 /// fading where they are: fresh.mbt), drawn only, its composer gone to the chat's.
 fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let gone = new_leave(c).get()
-  if gone >= 1.0 || !page_switch.from_new || fresh.became is Some(_) {
+  if gone >= 1.0 || !page_switch.from_new || fresh.became.get() is Some(_) {
     return
   }
   let v = page_switch.new_view

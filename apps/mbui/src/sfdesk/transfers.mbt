@@ -8,24 +8,24 @@
 ///|
 /// Whether the bar's 传输 has its list open, and the list as presented (@sf.last_presented; 0 none).
 priv struct Transfers {
-  mut open : Bool
+  open : @signals.Signal[Bool]
   mut shown : Int
 }
 
 ///|
 // kept across runs: the list's state (transfers_reset puts it back)
-let ftransfers : Transfers = { open: false, shown: 0 }
+let ftransfers : Transfers = { open: @signals.signal(false, same=fn(a, b) { a == b }), shown: 0 }
 
 ///|
 fn transfers_reset() -> Unit {
-  ftransfers.open = false
+  ftransfers.open.set(false)
   ftransfers.shown = 0
 }
 
 ///|
 /// The bar's 传输 with its list open (a page shown at that moment: the fixture's).
 pub fn transfers_open() -> Unit {
-  ftransfers.open = true
+  ftransfers.open.set(true)
 }
 
 ///|
@@ -82,14 +82,14 @@ fn coming_words(n : Int, percent : Int) -> String {
 }
 
 ///|
-/// Their list, while `ftransfers.open`: the library's panel from `id` (beside it, or a sheet from the foot on a small
+/// Their list, while `ftransfers.open.get()`: the library's panel from `id` (beside it, or a sheet from the foot on a small
 /// screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
 /// closed once there is none. `go`: where a copy's folder is shown.
 fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveAt) -> Unit, none : Bool) -> Unit {
   if none {
-    ftransfers.open = false
+    ftransfers.open.set(false)
   }
-  if ftransfers.open && ftransfers.shown == 0 {
+  if ftransfers.open.get() && ftransfers.shown == 0 {
     @sf.panel(
       @sf.t("web-pages.files.transfers"),
       fn(c, _) {
@@ -111,12 +111,12 @@ fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveA
       from=Of(id),
       w=ftransfers_w,
       gone=fn() {
-        ftransfers.open = false
+        ftransfers.open.set(false)
         ftransfers.shown = 0
       },
     )
     ftransfers.shown = @sf.last_presented()
-  } else if !ftransfers.open && ftransfers.shown > 0 {
+  } else if !ftransfers.open.get() && ftransfers.shown > 0 {
     @sf.close_presented_of(ftransfers.shown)
     ftransfers.shown = 0
   }
@@ -137,12 +137,12 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   }
   let (n, percent, failed) = all.going()
   if c.clicked(id) {
-    ftransfers.open = !ftransfers.open
+    ftransfers.open.set(!ftransfers.open.get())
   }
   rail_ground(
     c,
     id,
-    ftransfers.open,
+    ftransfers.open.get(),
     fn(color) {
       @sf.icon(c, "download", size=rail_icon_size, color~) |> ignore
       // (round its mark, as the small screen's key's: @sf.progress_key)
@@ -197,7 +197,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
   let offered = build && !updating && @sfbase.update_phase() != "failed"
   if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update_phase() == "failed") {
-    ftransfers.open = !ftransfers.open
+    ftransfers.open.set(!ftransfers.open.get())
   }
   transfers_list(c, src, ws, id, go, false)
 }
@@ -272,7 +272,7 @@ pub fn transfers_shown(src : Source, ws : String) -> Bool {
 ///|
 /// The list open over the sidebar's foot (a fixture's: MBUI_FIXTURE=home-transfers).
 pub fn open_transfers() -> Unit {
-  ftransfers.open = true
+  ftransfers.open.set(true)
 }
 
 ///|
@@ -336,7 +336,7 @@ fn opens(j : Json?) -> Bool {
 fn open_coming(j : Json?) -> Unit {
   let from = field(j, "from")
   let station = text(j, "station")
-  ftransfers.open = false
+  ftransfers.open.set(false)
   match field(from, "file") {
     Some(f) => {
       let thread = match field(from, "thread") {
@@ -406,7 +406,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
         call("drive.transfer.retry")
       }
       if state == "done" && @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show")) {
-        ftransfers.open = false
+        ftransfers.open.set(false)
         go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
       }
     })

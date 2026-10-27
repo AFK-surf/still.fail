@@ -74,7 +74,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
 
 ///|
 /// What was chosen here before the core's prefs say it (prefs.set on its way): by the pref's name.
-let chosen : Map[String, String] = Map::new()
+let chosen : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
@@ -149,7 +149,7 @@ pub fn legal_url(page : String) -> String {
 
 ///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
-pub let notify_switched : Ref[Bool?] = Ref(None)
+pub let notify_switched : @signals.Signal[Bool?] = @signals.signal(None)
 
 ///|
 /// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
@@ -159,9 +159,9 @@ pub fn use_notify(core : Core, on : Bool) -> Unit {
   if on {
     (core.notify_ask)()
   }
-  notify_switched.val = Some(on)
+  notify_switched.set(Some(on))
   (core.call)("notify.set", obj([("on", Json::boolean(on))]), fn(r) {
-    notify_switched.val = None
+    notify_switched.set(None)
     match r {
       Ok(v) =>
         (core.push_sync)(

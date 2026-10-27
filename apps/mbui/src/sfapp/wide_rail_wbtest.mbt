@@ -35,10 +35,10 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
   // off it: still there for a moment, then folded again
   t.move(1000.0, 400.0)
   t.frame()
-  assert_true(@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.peeking.get())
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
-  assert_false(@sfdesk.wide.peeking)
+  assert_false(@sfdesk.wide.peeking.get())
   t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("新建对话") is None)
   // ⌘\ again: open, kept so
@@ -118,7 +118,7 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
   t.tap(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@sfdesk.side_move_ms)
   assert_true(@sfdesk.wide.folded)
-  assert_true(@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.peeking.get())
   // pressed in the bar: open again
   let (bx, by, bw, bh) = t.query(Button, label="对话").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
@@ -156,7 +156,7 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
   assert_eq(@sfdesk.wide.side_w, 240.0)
   // 对话 pressed: its sidebar as it was left, folded, 300 wide, shown a while (the pointer is on the rail)
   press("对话")
-  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking.get())
   assert_eq(@sfdesk.wide.side_w, 300.0)
   assert_true(t.find("新建对话") is Some(_))
   // the pointer off it: folded again a moment after
@@ -164,7 +164,7 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
   t.run_for(@sfdesk.side_move_ms)
-  assert_false(@sfdesk.wide.peeking)
+  assert_false(@sfdesk.wide.peeking.get())
   assert_true(t.find("新建对话") is None)
 }
 
@@ -559,7 +559,7 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
   // folded with the pointer on the rail: shown a while
   press_lit()
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking.get())
   let (shown_x, _) = bar_title_at(t)
   // pressed again: open; halfway there, the title between where it was and where it ends
   press_lit()
@@ -581,7 +581,7 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
   t.run_for(@sfdesk.side_move_ms / 2.0)
   let (back_x, _) = bar_title_at(t)
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking.get())
   let (again_x, _) = bar_title_at(t)
   assert_true(
     back_x >= dmin(open_x, again_x) && back_x <= dmax(open_x, again_x),
@@ -603,7 +603,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.folded && !@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.folded && !@sfdesk.wide.peeking.get())
   let (folded_x, _) = bar_title_at(t)
   // the pointer on the rail: shown a while, the title where it was halfway and after
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
@@ -611,7 +611,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   t.run_for(@sfdesk.side_move_ms / 2.0)
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="halfway at \{bar_title_at(t).0}, folded \{folded_x}")
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.peeking.get())
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="shown at \{bar_title_at(t).0}, folded \{folded_x}")
   // its place pressed: open, the title on its way past the sidebar with the page
   press_lit()
@@ -625,7 +625,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   // pressed again: shown a while, back beside the window's buttons
   press_lit()
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.peeking.get())
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="back at \{bar_title_at(t).0}, folded \{folded_x}")
 }
 
@@ -651,7 +651,7 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.peeking)
+  assert_true(@sfdesk.wide.peeking.get())
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
 }
 

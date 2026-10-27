@@ -33,9 +33,9 @@ priv struct ScreenSess {
   /// the core's latest state of the view (ScreenViewState, whole each time); None before the first
   mut state : Json?
   /// the call failed (the core said why), rather than the view ending
-  mut failure : String?
+  failure : @signals.Signal[String?]
   /// the call answered: the view ended (the last state says why)
-  mut finished : Bool
+  finished : @signals.Signal[Bool]
   /// the frames' codec and size, from the latest config
   mut codec : String?
   mut size : (Int, Int)?
@@ -106,8 +106,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         screen,
         view: "mbui-\{screens_made.val}",
         state: None,
-        failure: None,
-        finished: false,
+        failure: @signals.signal(None),
+        finished: @signals.signal(false),
         codec: None,
         size: None,
         shown_any: false,
@@ -169,14 +169,14 @@ fn screen_ack(src : Source, s : ScreenSess, ts : Double) -> Unit {
 ///|
 /// What the phase is as the viewer shows it: the call's own failure and end over what the state last said.
 fn ScreenSess::phase(self : ScreenSess) -> String {
-  if self.failure is Some(_) {
+  if self.failure.get() is Some(_) {
     return "failed"
   }
   let p = match opt_text(self.state, "phase") {
     Some(p) => p
     None => "connecting"
   }
-  if self.finished && (p == "connecting" || p == "live" || p == "reconnecting") {
+  if self.finished.get() && (p == "connecting" || p == "live" || p == "reconnecting") {
     "ended"
   } else {
     p
@@ -186,7 +186,7 @@ fn ScreenSess::phase(self : ScreenSess) -> String {
 ///|
 /// Why, in the viewer's words, for a phase that needs saying.
 fn ScreenSess::message(self : ScreenSess) -> String? {
-  match self.failure {
+  match self.failure.get() {
     Some(f) => Some(f)
     None => opt_text(self.state, "message")
   }
@@ -379,11 +379,11 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     return
   }
   // again after it ended (重新打开): on its way, not still saying how the last one ended
-  if self.finished || self.failure is Some(_) {
+  if self.finished.get() || self.failure.get() is Some(_) {
     self.state = None
   }
-  self.failure = None
-  self.finished = false
+  self.failure.set(None)
+  self.finished.set(false)
   let quality = screen_quality(src)
   self.asked = quality
   let (mw, mh) = quality_bounds(quality)
@@ -423,8 +423,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     fn(r) {
       me.call = 0
       match r {
-        Ok(_) => me.finished = true
-        Err(e) => me.failure = Some(text(Some(e), "message"))
+        Ok(_) => me.finished.set(true)
+        Err(e) => me.failure.set(Some(text(Some(e), "message")))
       }
     },
   )

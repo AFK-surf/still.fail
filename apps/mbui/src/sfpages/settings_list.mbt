@@ -193,7 +193,7 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
   }
   // notifications as the core's `notify` says, or as switched while `notify.set` is out; refused by the system, in red
   let notify = (core.topic)("notify", Map::new()).value
-  let on = match @settings.notify_switched.val {
+  let on = match @settings.notify_switched.get() {
     Some(v) => v
     None => notify is None || flag(notify, "on")
   }

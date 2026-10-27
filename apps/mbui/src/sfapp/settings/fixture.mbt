@@ -2071,12 +2071,12 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
     "add" | "add-existing" | "add-command" => {
       open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")
       if what == "add-command" {
-        adding.made = Some(
+        adding.made.set(Some(
           (
             "curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b",
             "stillfail station enroll https://still.fail 4f7c2a9e1b",
           ),
-        )
+        ))
       }
     }
     _ => ()

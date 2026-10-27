@@ -290,14 +290,14 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
           f.look_sent = now.stringify()
           c.tell("nc-look/" + f.form, fn() { nc_edit(core, f, obj([("settings", now)])) })
         }
-        let icon = d.icon + "\u{1}" + d.icon_error
+        let icon = d.icon.get() + "\u{1}" + d.icon_error.get()
         if icon != f.icon_sent {
           f.icon_sent = icon
           c.tell("nc-icon/" + f.form, fn() {
-            nc_edit(core, f, obj([("icon", if d.icon == "" { Json::null() } else { str(d.icon) }), ("iconError", if d.icon_error == "" {
+            nc_edit(core, f, obj([("icon", if d.icon.get() == "" { Json::null() } else { str(d.icon.get()) }), ("iconError", if d.icon_error.get() == "" {
               Json::null()
             } else {
-              str(d.icon_error)
+              str(d.icon_error.get())
             })]))
           })
         }
