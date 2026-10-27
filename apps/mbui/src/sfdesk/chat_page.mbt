@@ -576,7 +576,8 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
           Some(j) => c.box(style=tile_card_agent, fn() { agent_card(c, src, r.station, j) }) |> ignore
           None => ()
         }
-        @settings.station_peek_card(c, r.station)
+        // (its head as the agent's: the two start alike)
+        @settings.station_peek_part(c, r.station)
       })
       |> ignore
     _ =>
