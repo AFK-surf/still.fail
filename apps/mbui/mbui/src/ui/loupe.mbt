@@ -7,15 +7,16 @@
 /// Where a finger reads now, if it drags what needs seeing there: a field's handle (the caret hanging loupe_reach over
 /// the finger, its handle under it), or a long press's word slid on (under the finger itself). None else.
 pub fn Ctx::finger_reads(self : Ctx) -> (Double, Double)? {
-  // (read so: hand.mbt)
+  // (read so: hand.mbt; where the finger is, only while it drags what needs seeing)
   hand.down.get() |> ignore
-  hand.pointer.get() |> ignore
   if !self.down || !(pointing() is Finger) {
     return None
   }
   if self.handle_drag != 0 {
+    hand.pointer.get() |> ignore
     Some((self.px, self.py - loupe_reach))
   } else if self.word_drag != 0 {
+    hand.pointer.get() |> ignore
     Some((self.px, self.py))
   } else {
     None

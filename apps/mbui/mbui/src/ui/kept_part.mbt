@@ -225,6 +225,10 @@ let parts_on : Ref[Bool] = Ref(false)
 /// list's rows with them (kept_rows.mbt).
 pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {
   ignore(self)
+  // (how frames are built changed by the test, a list's rows set on the pixels with it: the next built whole)
+  if parts_on.val != on {
+    test_stepped()
+  }
   parts_on.val = on
 }
 
