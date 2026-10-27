@@ -7,8 +7,9 @@ import { command, field } from "../parts.css.ts";
 import { spinner } from "./spinner.css.ts";
 import { PANEL_PAD, TEXT_IN, inner, surface } from "./align.ts";
 
-/** How far in from its end a button's icon sits: 4 less than its words' 16 (sf parts.mbt button_icon_in). */
-export const BUTTON_ICON_IN = 12;
+/** How far in from its end a button's icon sits: the words' 16 less what its drawing leaves of its 16 box (about 3 on
+ * still.fail's 24 grid), its ink as far in as the words (sf parts.mbt button, by each icon's own ink). */
+export const BUTTON_ICON_IN = 13;
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
   padding: "0 16px", borderRadius: "999px", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
@@ -20,7 +21,7 @@ export const btn = style({
     "&:disabled": { opacity: ".45", cursor: "default" },
     "&[aria-busy=\"true\"]": { cursor: "progress", opacity: ".7" },
     // An icon before the words sits in by less than they do from the other end (BUTTON_ICON_IN): its drawing stops short
-    // of its box and is lighter than words, so the even padding left it looking farther from its edge.
+    // of its box, so the even padding left it looking farther from its edge.
     "&:has(> svg:first-child)": { paddingLeft: `${BUTTON_ICON_IN}px` },
   },
 });

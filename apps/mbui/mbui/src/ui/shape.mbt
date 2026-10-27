@@ -52,14 +52,61 @@ pub fn vector_shapes(v : @pixels.Vector, w : Double, scale : Double, tint? : Int
 ///|
 /// A box `w` by `h` that draws `shapes` over its ground, one after another (in its own coordinates, from its top left);
 /// `name`: what it is (an icon's ".../icon/<name>/...": what a scripted run's `icon:<name>` finds, as an image's source).
-pub fn Ctx::shapes(self : Ctx, shapes : Array[Shape], w~ : Size, h~ : Size, name? : String = "") -> Int {
+pub fn Ctx::shapes(
+  self : Ctx,
+  shapes : Array[Shape],
+  w~ : Size,
+  h~ : Size,
+  name? : String = "",
+  by_ink? : Bool = false,
+) -> Int {
   let i = self.alloc_part(kind_box, true, false)
   let n = self.nodes[i]
   n.w = w
   n.h = h
   n.shapes = shapes
   n.text = name
+  // (`by_ink`: laid out by where it draws, what it leaves of its box either side taking no room, so it stands where its
+  // ink shows: an icon on its grid, its strokes short of its box, as far in from a button's end as the words are from
+  // the other; the spacing rules measure it so, gaps.mbt rule 4)
+  match w {
+    Px(fw) if by_ink => {
+      let (l, r) = shapes_ink_in(shapes, fw)
+      n.mar_l = -l
+      n.mar_r = -r
+    }
+    _ => ()
+  }
   i
+}
+
+///|
+/// How far in from the left and right of a box `w` wide `shapes` draw: their outlines' points, a stroke's half width
+/// round them.
+fn shapes_ink_in(shapes : Array[Shape], w : Double) -> (Double, Double) {
+  let mut x0 = w
+  let mut x1 = 0.0
+  for sh in shapes {
+    let half = if sh.stroke != 0L { sh.width / 2.0 } else { 0.0 }
+    for o in sh.outlines {
+      let pts = o.0
+      let mut j = 0
+      while j + 1 < pts.length() {
+        if pts[j] - half < x0 {
+          x0 = pts[j] - half
+        }
+        if pts[j] + half > x1 {
+          x1 = pts[j] + half
+        }
+        j += 2
+      }
+    }
+  }
+  if x0 > x1 || x0 < 0.0 || x1 > w {
+    (0.0, 0.0)
+  } else {
+    (x0, w - x1)
+  }
 }
 
 ///|

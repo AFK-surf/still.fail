@@ -12,12 +12,12 @@ pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 
 ///|
 /// For parts whose own parameter is called `icon`.
-fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Unit {
+fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? : Bool = false) -> Unit {
   // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
   if name.has_prefix("runtime:") {
     maker_mark(c, "", name.view(start_offset=8).to_string(), size) |> ignore
   } else {
-    icon(c, name, size~, color~) |> ignore
+    icon(c, name, size~, color~, by_ink~) |> ignore
   }
 }
 
@@ -105,8 +105,6 @@ pub fn button(
     w~,
     h=Px(height),
     padx=button_padx,
-    // (an icon before its words sits in by less than they do from the other end: button_icon_in)
-    pl=if icon != "" { button_icon_in } else { button_padx },
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
@@ -125,7 +123,9 @@ pub fn button(
         )
         |> ignore
       } else if icon != "" {
-        draw_icon(c, icon, 16.0, ink)
+        // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes
+        // taking none, so the two ends look alike)
+        draw_icon(c, icon, button_icon, ink, by_ink=true)
       }
       c.text(
         label,
@@ -156,9 +156,8 @@ pub fn button(
 let button_padx : Double = 16.0
 
 ///|
-/// How far in from its end a button's icon sits (controls.css.ts BUTTON_ICON_IN): 4 less than its words', the drawing
-/// stopping short of its box and lighter than words, so the even padding left it looking farther from its edge.
-let button_icon_in : Double = 12.0
+/// How big a button's icon is.
+let button_icon : Double = 16.0
 
 ///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
