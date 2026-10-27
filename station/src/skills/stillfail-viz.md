@@ -18,70 +18,67 @@ lists show only your words, and figures are not read aloud.
 In Slack, attach but omit the Markdown link; files upload below the text, and still.fail's copy of the thread shows
 the file as a card that opens it, not drawn in the message. Say what the figure shows for people staying in Slack.
 
-## Build it from the components
+## Components and tokens
 
-Every fragment has still.fail's components loaded: `<sf-…>` elements that take your data and draw in still.fail's
-own look, light and dark, on every screen. Build figures from them; write your own markup, styles or scripts only for
-what none of them draws, and then only with the tokens below. No libraries are needed for ordinary charts.
+Every fragment has still.fail's design tokens (`--sf-…`, below) and a few components loaded. Compose figures from
+the components and plain HTML styled with the tokens; for charts use `<sf-chart>`, not a chart library.
 
-Data goes in a `data` attribute as JSON (single-quote the attribute), or in a `<script type="application/json">`
-inside the element for anything long.
+Atoms:
 
-| Element | What it draws |
+| Element or class | What it is |
 |---|---|
 | `<sf-stack>`, `<sf-row>`, `<sf-grid>` | a column, a wrapping row, auto columns (`style="--min:240px"` sets the least width) |
-| `<sf-card title note>` | a card: its ground, a title and a quiet line under it, then what is inside |
-| `<sf-stat label value unit note tone delta delta-tone trend>` | a number with its label (a card of its own; `plain` drops the ground); `delta="+8%"` with `delta-tone="good|bad"`, `trend="[…]"` a small line under it; `tone` colours the note, only when something is wrong |
-| `<sf-chart type data unit height stacked title>` | `bar`, `line`, `area`, `donut`, `pie`, `scatter` (`{"series":[{"name","points":[[x,y,"label"]]}]}`, `x-unit`); data `{"labels":[…],"values":[…]}` or `{"labels":[…],"series":[{"name","values","tone"}]}`; donut/pie `{"items":[{"label","value","tone"}]}` (`center` sets the middle words) |
-| `<sf-bars data unit max>` | horizontal bars: a ranking or shares; `[["label", 3], …]` or `[{"label","value","tone","note"}]` |
-| `<sf-table data sortable search="placeholder">` | a table: `{"columns":["…"],"rows":[["…",…]]}` or rows as objects; number columns set right by themselves; `sortable` sorts by a header's click, `search` adds a filter field; a `<table>` inside it works too |
-| `<sf-facts data>` | keys and values: `{"key":"value"}` or `[["key", value]]`, or a `<dl>` inside it |
-| `<sf-steps row>` of `<sf-step state title note>` | steps (a timeline; `row` for a flow across): `state` is `done`, `current`, `todo` or `error` |
-| `<sf-progress value max label note>` | a progress bar with what it says |
-| `<sf-tabs>` of `<sf-tab label selected>` | panels under a segmented choice |
-| `<sf-choices id>` of `<sf-choice title note end send>` | options to answer with: a click puts `send` (else the title) in the chat's composer for the person to send, and keeps their pick (you hear it as `modelContent`) |
-| `<sf-button primary quiet small send>` | a button; with `send`, a click puts those words in the composer |
-| `<sf-list data>` or `<sf-item title note end status badge>` | a list card of rows (machines, issues, files…); `plain` drops its ground |
-| `<sf-compare data>` | options side by side: `[{"title","note","badge","recommended","pros":[…],"cons":[…],"facts":{…},"send","action"}]`; the recommended one ringed in ink, `send` adds a button that answers with it |
-| `<sf-code lang title highlight="3,5-7" start>` | code with line numbers; put the code in a `<script type="text/plain">` inside it |
-| `<sf-diff title>` | a unified diff (`git diff` as it prints), files, hunks, lines added and removed; the diff in a `<script type="text/plain">` |
-| `<sf-tree data>` | files as a tree: paths, or `[{"path","change":"added|modified|deleted|renamed","note","end"}]` |
-| `<sf-timeline data>` or `<sf-event time title note tone>` | what happened when |
-| `<sf-heatmap data unit tone>` | a calendar of days `{"2026-10-01": 3, …}`, or `{"rows":[…],"columns":[…],"values":[[…]]}` |
-| `<sf-gantt data>` | tasks along time: `[{"name","start","end","state","note"}]` (dates or numbers) |
-| `<sf-matrix data>` | what each option has: `{"columns":[…],"rows":[["feature", true, false, "partial", "text"]]}` |
-| `<sf-meter label value max note cells tone>` | a measure in cells (a disk, a quota) |
-| `<sf-before-after before after before-label after-label>` | two pictures (data URIs or SVG) with a handle to drag between |
-| `<sf-form intro submit>` of `<sf-field label type options placeholder note>` | a small form (`text`, `textarea`, `number`, `select`, `choice`, `check`; options `a|b|c`): submitting puts `intro` and each answer in the composer |
-| `<sf-details summary note open>` | a section that opens |
-| `<sf-board data>` | columns of cards: `[{"title","items":[{"title","note","status","badge","end"}]}]` |
-| `<sf-spark data tone>` | a small trend line inline |
+| `<sf-card title note>` | a card: its ground, an optional title and a quiet line under it |
+| `<sf-stat label value unit note tone delta delta-tone trend>` | a number with its label; `delta="+8%"` (`delta-tone="good\|bad"`), `trend="[…]"` a small line under it; `plain` drops its ground |
 | `<sf-status tone>` | a small dot and words: `ok`, `busy`, `warn`, `error`, `off`, `info` |
 | `<sf-badge tone>` | a pill: grey, or `blue`, `green`, `amber`, `red`, `purple` |
+| `<sf-button primary quiet small send>` | a button; with `send`, a click puts those words in the chat's composer |
+| `<sf-progress value max label note>` | a progress bar with what it says |
 | `<sf-note>` | quieter words: a source, an aside |
+| `<sf-table>` around a `<table>` | a table: head quieter, rows apart by room; `class="num"` on number cells sets them right |
+| `.sf-title`, `.sf-sub` | a title, the quiet line under it |
+| `.sf-segmented` of `button.sf-segment` (`aria-selected="true"` on the chosen) | a segmented choice: tabs, a pick of a few; your script switches it |
+| `.sf-input`, `.sf-select`, `.sf-label`, `label.sf-check` | fields |
 
-A cell, a fact or a row's end may be `{"text":"失败","status":"error"}` (a dot and words), `{"text":"beta","badge":"blue"}`,
-`{"spark":[…]}`, `{"code":"…"}`, `true`/`false` (✓ and –), or `{"text":"…","tone":"red"}` / `{"text":"…","muted":true}`.
-Components write no words of their own: every label, button and heading is what you give them, in the chat's language.
+Charts, drawn from data in a `data` attribute as JSON (single-quote it) or a `<script type="application/json">`
+inside the element:
+
+| Element | Data |
+|---|---|
+| `<sf-chart type="bar\|line\|area" unit height stacked title>` | `{"labels":[…],"values":[…]}`, or `{"labels":[…],"series":[{"name","values","tone"}]}` |
+| `<sf-chart type="hbar" unit max>` | `{"labels":[…],"values":[…]}` or `{"items":[{"label","value","tone","note"}]}`: a ranking, shares |
+| `<sf-chart type="donut\|pie" unit center>` | `{"items":[{"label","value","tone"}]}`; `center` sets the middle words |
+| `<sf-chart type="scatter" unit x-unit>` | `{"series":[{"name","points":[[x, y, "label"]]}]}` |
+| `<sf-spark data tone width height>` | `[…]`: a small trend line inline |
+
+One series is drawn in ink; more take the series colours in order, with a legend. Hovering shows each value.
 
 ```html
 <sf-stack>
   <sf-grid>
-    <sf-stat label="Merged" value="128" note="12 more than last week"></sf-stat>
+    <sf-stat label="Merged" value="128" delta="+12" delta-tone="good" trend="[90,96,104,128]"></sf-stat>
     <sf-stat label="Failing checks" value="3" tone="error" note="android twice in a row"></sf-stat>
   </sf-grid>
   <sf-card title="PRs merged a day" note="last two weeks">
     <sf-chart type="bar" data='{"labels":["10/26","10/27","10/28"],"values":[7,22,24]}'></sf-chart>
   </sf-card>
   <sf-card title="Checks">
-    <sf-table data='{"columns":["Check","State","Time"],"rows":[["linux",{"status":"ok","text":"passed"},"3:41"],["android",{"status":"error","text":"failed"},"9:58"]]}'></sf-table>
+    <sf-table><table>
+      <tr><th>Check</th><th>State</th><th class="num">Time</th></tr>
+      <tr><td>linux</td><td><sf-status tone="ok">passed</sf-status></td><td class="num">3:41</td></tr>
+      <tr><td>android</td><td><sf-status tone="error">failed</sf-status></td><td class="num">9:58</td></tr>
+    </table></sf-table>
   </sf-card>
-  <sf-choices id="window">
-    <sf-choice title="Count from midnight" note="as the usage page does"></sf-choice>
-    <sf-choice title="Last 24 hours" note="a rolling window"></sf-choice>
-  </sf-choices>
+  <sf-row>
+    <sf-button primary send="Run the failing checks again">Run again</sf-button>
+    <sf-note>From CI, every 10 minutes.</sf-note>
+  </sf-row>
 </sf-stack>
 ```
+
+Anything else (a comparison, a timeline, a file tree, a diff) you build from these and plain HTML, with the tokens
+and the look below. Components write no words of their own: every label is what you give them, in the chat's
+language.
 
 ## Look
 
@@ -140,10 +137,9 @@ a figure written for it draws in still.fail's look; prefer the components.
   JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
   should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
   `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
-  `<sf-choices>` keeps its pick here by itself.
 - `ember.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
-  wrote it. Only from their click or key press (a button's handler); it never sends by itself. `<sf-choice>` and
-  `<sf-button send>` do it for you.
+  wrote it. Only from their click or key press (a button's handler); it never sends by itself. `<sf-button send>` does it
+  for you.
 
 Before posting a large or scripted one, check it renders: open the file in a browser (or a screenshot tool) and fix
 what does not draw or throws.
