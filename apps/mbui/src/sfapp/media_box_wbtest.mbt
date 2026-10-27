@@ -94,7 +94,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     carried: false,
     from_top: 640.0,
   }
-  send_flight.val = Some(f)
+  send_flight.set(Some(f))
   let t = @ui.Tester::new(
     fn(c) {
       // its box in the message, 360 × 16, the picture's share of it its own proportions'
@@ -116,7 +116,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   // no ground under it: the message shows the picture on none
   let neutral = @sf.theme().p.neutral_bg
   assert_false(t.drawn_rects().iter().any(fn(r) { r.4 == neutral }))
-  send_flight.val = None
+  send_flight.set(None)
 }
 
 ///|
@@ -164,7 +164,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     carried: false,
     from_top: 640.0,
   }
-  send_flight.val = Some(f)
+  send_flight.set(Some(f))
   let t = @ui.Tester::new(
     fn(c) {
       let item = c.box(style=@ui.style(w=Fixed(240.0), h=Fixed(160.0)), fn() {  })
@@ -187,5 +187,5 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   assert_eq(faced.val, 0)
   let drawn = t.drawn_images()
   assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{drawn}")
-  send_flight.val = None
+  send_flight.set(None)
 }

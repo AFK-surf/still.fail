@@ -15,13 +15,13 @@ priv struct NewWorkspace {
   name : @ui.Field
   code : @ui.Field
   mut owner : String
-  mut asked : Bool
-  mut creating : Bool
-  mut error_code : String
-  mut error : String
+  asked : @signals.Signal[Bool]
+  creating : @signals.Signal[Bool]
+  error_code : @signals.Signal[String]
+  error : @signals.Signal[String]
   mut focus : Bool
   mut close : () -> Unit
-  mut responding : String
+  responding : @signals.Signal[String]
 }
 
 ///|
@@ -30,19 +30,19 @@ let new_ws : NewWorkspace = {
   name: @ui.Field::new(),
   code: @ui.Field::new(),
   owner: "",
-  asked: false,
-  creating: false,
-  error_code: "",
-  error: "",
+  asked: @signals.signal(false, same=fn(a, b) { a == b }),
+  creating: @signals.signal(false, same=fn(a, b) { a == b }),
+  error_code: @signals.signal("", same=fn(a, b) { a == b }),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
   focus: false,
   close: fn() {  },
-  responding: "",
+  responding: @signals.signal("", same=fn(a, b) { a == b }),
 }
 
 ///|
 fn workspace_reset() -> Unit {
   new_ws_cleared()
-  new_ws.responding = ""
+  new_ws.responding.set("")
   ws_menu.val = false
 }
 
@@ -52,10 +52,10 @@ fn new_ws_cleared() -> Unit {
   new_ws.name.set("")
   new_ws.code.set("")
   new_ws.owner = ""
-  new_ws.asked = false
-  new_ws.creating = false
-  new_ws.error_code = ""
-  new_ws.error = ""
+  new_ws.asked.set(false)
+  new_ws.creating.set(false)
+  new_ws.error_code.set("")
+  new_ws.error.set("")
   new_ws.focus = false
   new_ws.close = fn() {  }
 }
@@ -372,12 +372,12 @@ fn invitations(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
         c.text(text(account, "email"), style=invite_line_email) |> ignore
       })
       |> ignore
-      let busy = new_ws.responding != ""
-      if @sf.button(c, @sf.t("android-misc.invite.join"), key="invite/join/" + id, tone=Primary, busy=new_ws.responding == "+" + id) &&
+      let busy = new_ws.responding.get() != ""
+      if @sf.button(c, @sf.t("android-misc.invite.join"), key="invite/join/" + id, tone=Primary, busy=new_ws.responding.get() == "+" + id) &&
         !busy {
         answer_invitation(src, account, id, true, name, close)
       }
-      if @sf.button(c, @sf.t("android-misc.invite.ignore"), key="invite/ignore/" + id, busy=new_ws.responding == "-" + id) &&
+      if @sf.button(c, @sf.t("android-misc.invite.ignore"), key="invite/ignore/" + id, busy=new_ws.responding.get() == "-" + id) &&
         !busy {
         answer_invitation(src, account, id, false, name, fn() {  })
       }
@@ -407,10 +407,10 @@ pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool
     toast_later(read_only_words)
     return
   }
-  new_ws.responding = (if join { "+" } else { "-" }) + id
+  new_ws.responding.set((if join { "+" } else { "-" }) + id)
   let params : Json = { "account": Json::string(text(account, "sub")), "id": Json::string(id) }
   (src.call)(if join { "invitation.accept" } else { "invitation.decline" }, params, fn(r) {
-    new_ws.responding = ""
+    new_ws.responding.set("")
     match r {
       Ok(v) =>
         if join {
@@ -444,7 +444,7 @@ pub fn open_new_workspace(src : Source) -> Unit {
     from=Unanchored,
     description=@sf.t("web-pages.workspace.createLead"),
     foot=fn(c, close) { new_workspace_foot(c, src, close) },
-    gone=fn() { if !new_ws.creating { new_ws_cleared() } },
+    gone=fn() { if !new_ws.creating.get() { new_ws_cleared() } },
   )
 }
 
@@ -472,7 +472,7 @@ fn new_ws_create(src : Source, close : () -> Unit) -> Unit {
   let (_, owner) = new_ws_owner(src)
   let name = new_ws.name.text().trim(chars=" \n\t").to_string()
   let code = new_ws.code.text().trim(chars=" \n\t").to_string()
-  if name != "" && owner != "" && !new_ws.creating {
+  if name != "" && owner != "" && !new_ws.creating.get() {
     new_ws.close = close
     make_workspace(src, owner, name, code)
   }
@@ -483,7 +483,7 @@ fn new_ws_create(src : Source, close : () -> Unit) -> Unit {
 /// under it, else what it is for), what else went wrong.
 fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
   let (accounts, owner) = new_ws_owner(src)
-  let wants_code = invite_error_key(new_ws.error_code) is Some(_)
+  let wants_code = invite_error_key(new_ws.error_code.get()) is Some(_)
   let code = new_ws.code.text().trim(chars=" \n\t").to_string()
   @sf.field(c, @sf.t("web-pages.settings.workspace.name"), fn() {
     let f = @sf.input(c, "new-ws/name", placeholder=@sf.t("web-pages.workspace.namePlaceholder"), field=new_ws.name)
@@ -511,7 +511,7 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
       )
     })
   }
-  if new_ws.asked || wants_code {
+  if new_ws.asked.get() || wants_code {
     @sf.field(
       c,
       @sf.t("web-pages.cloud.inviteCode"),
@@ -522,11 +522,11 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
         }
       },
       hint=@sf.t("web-pages.workspace.codeHint", args=[("name", "still.fail")]),
-      error=if wants_code && code != "" { new_ws.error } else { "" },
+      error=if wants_code && code != "" { new_ws.error.get() } else { "" },
     )
   }
-  if new_ws.error != "" && !wants_code {
-    c.text(new_ws.error, style=new_ws_failed) |> ignore
+  if new_ws.error.get() != "" && !wants_code {
+    c.text(new_ws.error.get(), style=new_ws_failed) |> ignore
   }
 }
 
@@ -543,7 +543,7 @@ fn new_workspace_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
       @sf.t("web-pages.workspace.createAction"),
       key="new-ws/create",
       tone=Primary,
-      busy=new_ws.creating,
+      busy=new_ws.creating.get(),
       disabled=name == "",
     ) {
     new_ws_create(src, close)
@@ -567,11 +567,11 @@ fn make_workspace(src : Source, owner : String, name : String, code : String) ->
   if code != "" {
     params["invite_code"] = Json::string(code)
   }
-  new_ws.creating = true
-  new_ws.error = ""
-  new_ws.error_code = ""
+  new_ws.creating.set(true)
+  new_ws.error.set("")
+  new_ws.error_code.set("")
   (src.call)("workspace.create", Json::object(params), fn(r) {
-    new_ws.creating = false
+    new_ws.creating.set(false)
     match r {
       Ok(v) => {
         let close = new_ws.close
@@ -580,10 +580,10 @@ fn make_workspace(src : Source, owner : String, name : String, code : String) ->
         switch_workspace(src, text(Some(v), "id"))
       }
       Err(e) => {
-        new_ws.error_code = text(Some(e), "code")
-        new_ws.error = landing_error_words(e)
-        if invite_error_key(new_ws.error_code) is Some(_) {
-          new_ws.asked = true
+        new_ws.error_code.set(text(Some(e), "code"))
+        new_ws.error.set(landing_error_words(e))
+        if invite_error_key(new_ws.error_code.get()) is Some(_) {
+          new_ws.asked.set(true)
         }
       }
     }

@@ -152,7 +152,7 @@ test "a quote sent alone is in the list at once, its card flying there from the 
   let sent = sending_of("ws1/st1\u{1}s-c1")
   assert_eq(sent.length(), 1)
   assert_eq(sent[0].row.quotes.map(fn(q) { (q.text, q.comment, q.ts) }), [(quote_passage, "这里要对齐", "ts8")])
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) => assert_eq(f.files.map(fn(ff) { ff.key }), [@sfbase.quote_key(0)])
     None => fail("nothing flies")
   }
@@ -176,7 +176,7 @@ test "a quote sent alone is in the list at once, its card flying there from the 
   // and back once it is out of it
   t.run_for(@sf.hint_back_ms)
   assert_true(hint_seen(t))
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   // landed in its message, over the composer, as wide as it needs
   let (_, y) = quote_once(t)
   assert_true(y < was.1 - 40.0, msg="landed at \{y}, its words were at \{was.1}")
@@ -199,7 +199,7 @@ test "words sent with a quote land under its card, which is in their row from th
   tap_send(t)
   assert_eq(sending_of("ws1/st1\u{1}s-c1")[0].row.quotes.length(), 1)
   t.run_for(flight_ms + 50.0)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   let (_, qy) = quote_once(t)
   match t.drawn_of("先上屏") {
     Some((_, wy)) => assert_true(qy < wy, msg="the quote at \{qy}, the words at \{wy}")

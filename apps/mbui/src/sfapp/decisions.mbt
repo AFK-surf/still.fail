@@ -791,11 +791,11 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
     return
   }
   let v = Some(item)
-  let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
+  let words = with_link_words(d.text.get().trim(chars=" \n\t").to_owned(), d)
   let files = up_files(d)
   let uploads = up_uploads(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
-  let taken_text = d.text
+  let taken_text = d.text.get()
   let taken_files = d.files.copy()
   let taken_quotes = d.quotes.copy()
   let taken_comments = d.comments.copy()
@@ -803,7 +803,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   d.files.clear()
   d.quotes.clear()
   d.comments.clear()
-  d.error = None
+  d.error.set(None)
   sent_draft(d, taken_files.length())
   save_draft(src, d)
   c.blur()
@@ -827,8 +827,8 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
       match res {
         Err(e) => {
           if text(Some(e), "code") == "invalid_params" && draft_empty(d) {
-            d.text = taken_text
-            d.put_text = Some(taken_text)
+            d.text.set(taken_text)
+            d.put_text.set(Some(taken_text))
             for f in taken_files {
               d.files.push(f)
             }

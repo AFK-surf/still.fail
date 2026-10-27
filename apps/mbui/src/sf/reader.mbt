@@ -127,10 +127,10 @@ pub(all) struct Reading {
   mut file : ViewerFile?
   mut asked : Bool
   mut got : Got?
-  mut failed : String?
-  mut book : Book?
+  failed : @signals.Signal[String?]
+  book : @signals.Signal[Book?]
   /// the book come anew: its wait for where it was left counted from here (reader_place_ms)
-  mut ready_n : Int
+  ready_n : @signals.Signal[Int]
   mut started : Bool
   mut chunk : Int
   mut within : Double
@@ -177,9 +177,9 @@ pub fn reading_for(key : String) -> Reading {
         file: None,
         asked: false,
         got: None,
-        failed: None,
-        book: None,
-        ready_n: 0,
+        failed: @signals.signal(None),
+        book: @signals.signal(None),
+        ready_n: @signals.signal(0),
         started: false,
         chunk: 0,
         within: 0.0,
@@ -212,7 +212,7 @@ pub fn reading_for(key : String) -> Reading {
 pub fn reader_let_go(key : String) -> Unit {
   match readings.get(key) {
     Some(r) => {
-      match r.book {
+      match r.book.get() {
         Some(book) => reader_keep(r, book, true)
         None => ()
       }
@@ -243,7 +243,7 @@ pub fn reader_load(r : Reading, file : ViewerFile, markdown : Bool) -> Unit {
       (file.read)(reader_most, fn(got) { r.got = Some(got) }, fn(res) {
         match res {
           Ok(b) => reader_build(r, file, b, markdown)
-          Err(e) => r.failed = Some(e)
+          Err(e) => r.failed.set(Some(e))
         }
       })
   }
@@ -258,10 +258,10 @@ fn reader_build(r : Reading, file : ViewerFile, bytes : Bytes, markdown : Bool) 
   (viewer_host().read_book)(decoded, markdown, fn(res) {
     match res {
       Ok(read) => {
-        r.book = Some(book_of(file.name, read, encoding, cut, markdown))
-        r.ready_n += 1
+        r.book.set(Some(book_of(file.name, read, encoding, cut, markdown)))
+        r.ready_n.set(r.ready_n.get() + 1)
       }
-      Err(e) => r.failed = Some(e)
+      Err(e) => r.failed.set(Some(e))
     }
   })
 }
@@ -299,7 +299,7 @@ pub fn reader_open_at(c : @ui.Ctx, r : Reading, book : Book) -> Bool {
     }
     NeverLeft => r.started = true
     NotKnown =>
-      if @kit.after(c, "reader-place/\{r.ready_n}", true, reader_place_ms) {
+      if @kit.after(c, "reader-place/\{r.ready_n.get()}", true, reader_place_ms) {
         r.started = true
       }
   }
@@ -824,7 +824,7 @@ pub fn reader(
   let style = (host.reader_style)()
   let p = reader_paper(style.paper)
   c.box(style=reader_fill.then(@ui.style(bg=Data(p.ground))), fn() {
-    match (r.book, r.failed) {
+    match (r.book.get(), r.failed.get()) {
       (Some(book), _) =>
         if reader_open_at(c, r, book) {
           if book.text.trim(chars=" \n\t\r\u{3000}").to_owned() == "" {
@@ -917,7 +917,7 @@ fn desk_reader_chrome(
   back_label : String,
   on_back : () -> Unit,
 ) -> Unit {
-  let book = r.book
+  let book = r.book.get()
   let chapter = match book {
     Some(b) => reader_chapter(r, b)
     None => -1
@@ -1481,7 +1481,7 @@ fn narrow_reader_chrome(
   room_top : Double,
   room_foot : Double,
 ) -> Unit {
-  let book = r.book
+  let book = r.book.get()
   let chapter = match book {
     Some(b) => reader_chapter(r, b)
     None => -1

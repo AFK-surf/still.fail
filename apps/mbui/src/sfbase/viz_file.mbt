@@ -296,11 +296,11 @@ pub fn is_viz(name : String) -> Bool {
 /// A visualization's page and what its widget kept (VizFiles.kt Loaded), fetched once per file: a file sent never
 /// changes.
 pub(all) struct VizLoad {
-  mut html : String?
+  html : @signals.Signal[String?]
   /// what its widget kept, as last read or kept here (None: nothing); whether that has been read
-  mut state : Json?
-  mut state_read : Bool
-  mut failed : Bool
+  state : @signals.Signal[Json?]
+  state_read : @signals.Signal[Bool]
+  failed : @signals.Signal[Bool]
   mut asked : Bool
 }
 
@@ -330,7 +330,7 @@ pub fn viz_load(
   let l = match viz_loads.get(id) {
     Some(l) => l
     None => {
-      let l : VizLoad = { html: None, state: None, state_read: false, failed: false, asked: false }
+      let l : VizLoad = { html: @signals.signal(None), state: @signals.signal(None), state_read: @signals.signal(false), failed: @signals.signal(false), asked: false }
       viz_loads[id] = l
       l
     }
@@ -349,8 +349,8 @@ pub fn viz_load(
         Json::object(p),
         fn(r) {
           match r {
-            Ok((_, bytes)) => l.html = Some(@utf8.decode_lossy(bytes))
-            Err(_) => l.failed = true
+            Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
+            Err(_) => l.failed.set(true)
           }
         },
       )
@@ -360,22 +360,22 @@ pub fn viz_load(
         fn(r) {
           match r {
             Ok(v) =>
-              l.state = match field(Some(v), "state") {
+              l.state.set(match field(Some(v), "state") {
                 Some(Null) | None => None
                 Some(s) => Some(s)
-              }
+              })
             Err(_) => ()
           }
-          l.state_read = true
+          l.state_read.set(true)
         },
       )
     })
   }
-  if l.failed {
+  if l.failed.get() {
     return Some(Err(()))
   }
-  match l.html {
-    Some(h) if l.state_read => Some(Ok((h, l.state)))
+  match l.html.get() {
+    Some(h) if l.state_read.get() => Some(Ok((h, l.state.get())))
     _ => None
   }
 }
@@ -385,11 +385,11 @@ pub fn viz_load(
 pub fn viz_keep(src : Source, station : String, key : String, path : String, state : Json) -> Unit {
   match viz_loads.get(viz_id(station, key, path)) {
     Some(l) => {
-      l.state = match state {
+      l.state.set(match state {
         Null => None
         s => Some(s)
-      }
-      l.state_read = true
+      })
+      l.state_read.set(true)
     }
     None => ()
   }

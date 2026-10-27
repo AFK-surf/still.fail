@@ -88,7 +88,7 @@ pub(all) struct Playing {
   media : @kit.Media
   /// the file as last given (where it is is kept with it)
   mut file : ViewerFile?
-  mut opened : Bool
+  opened : @signals.Signal[Bool]
   mut subtitle_of : String
   mut keeps : Int
 }
@@ -103,7 +103,7 @@ pub fn playing_for(key : String) -> Playing {
   match playings.get(key) {
     Some(p) => p
     None => {
-      let p : Playing = { media: new_media("drive-play"), file: None, opened: false, subtitle_of: "", keeps: 0 }
+      let p : Playing = { media: new_media("drive-play"), file: None, opened: @signals.signal(false), subtitle_of: "", keeps: 0 }
       playings[key] = p
       p
     }
@@ -134,8 +134,8 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
   pl.file = Some(file)
   // where it was left, held on this device: waited on a moment at most from when it is first drawn (`after` asks for
   // the frame it is up on)
-  let waited = @kit.after(c, "play-place", !pl.opened, player_place_ms)
-  if !pl.opened {
+  let waited = @kit.after(c, "play-place", !pl.opened.get(), player_place_ms)
+  if !pl.opened.get() {
     let start = match (file.place)() {
       LeftAt(at, of) =>
         // left near its end: from the start again
@@ -145,7 +145,7 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
     }
     match start {
       Some(start) => {
-        pl.opened = true
+        pl.opened.set(true)
         pl.media.open({ name: file.name, mime: file.mime, audio: file.kind == "audio", read: player_read(file) }, start~)
       }
       None => ()

@@ -89,7 +89,7 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   let sends = named(calls, "chat.send")
   assert_eq(sends.length(), 1)
   assert_eq(text(Some(sends[0].params), "text"), "先看第三项")
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text, "")
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "")
 }
 
 ///|
@@ -359,7 +359,7 @@ test "desk composer: an image sent while it goes up is among its message's files
   assert_eq(row.uploads.map(fn(u) { u.0 }), ["build.log"])
   // it flies there as the upload it is (file_key: its path the station's once it is up), drawn where its tile was as
   // its tile, a picture, until it sets off; not a card
-  let flying = match send_flight.val {
+  let flying = match send_flight.get() {
     Some(f) => f.files
     None => fail("nothing flies")
   }
@@ -371,7 +371,7 @@ test "desk composer: an image sent while it goes up is among its message's files
   face.draw()
   assert_true(face.find("照片.png") is None)
   assert_eq(face.image_loads().length(), 1)
-  send_flight.val = None
+  send_flight.set(None)
 }
 
 ///|
@@ -405,7 +405,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   let lines = t.drawn_lines()
   t.enter()
   t.frame()
-  let flying = match send_flight.val {
+  let flying = match send_flight.get() {
     Some(f) => f.files
     None => fail("nothing flies")
   }
@@ -418,7 +418,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   face.draw()
   assert_eq(face.image_loads().length(), 1)
   let spun = face.drawn_lines().length() > 0
-  send_flight.val = None
+  send_flight.set(None)
   (tile, spun)
 }
 

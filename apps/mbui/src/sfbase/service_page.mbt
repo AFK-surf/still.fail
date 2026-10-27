@@ -41,7 +41,7 @@ pub(all) struct ServicePage {
   mut viewport : Viewport?
   mut restarting : Bool
   /// requests under way: the core's call for each
-  calls : Map[Int, Int]
+  calls : @sf.LiveMap[Int, Int]
   mut asked : Int
   /// the path the address field was last given, and the one last said on the log
   mut shown_path : String
@@ -147,7 +147,7 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
             }
         },
         restarting: false,
-        calls: {},
+        calls: @sf.LiveMap::from({}),
         asked: 0,
         shown_path: "",
         logged_path: "",

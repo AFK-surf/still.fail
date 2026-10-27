@@ -21,7 +21,7 @@ test "words sent are in the list the frame they are sent, the core not answering
   assert_true(rd.known.contains("o:local:1"))
   // laid out in that frame: the words set off from the field the frame after
   t.draw()
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) => {
       assert_eq(f.key, "o:local:1")
       assert_true(f.placed)
@@ -29,7 +29,7 @@ test "words sent are in the list the frame they are sent, the core not answering
     None => fail("nothing flies")
   }
   t.run_for(flight_ms)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   // still there, as sent, till the core has it
   assert_eq(sent_rows(), ["o:local:1"])
   assert_true(t.find("先上屏") is Some(_))
@@ -71,7 +71,7 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
   // the core's outbox has it: the row is its, what flies goes on to it
   let rd = reading_of("ws1/st1\u{1}s-c1")
   assert_eq(sent_rows(), [])
-  match send_flight.val {
+  match send_flight.get() {
     Some(f) => {
       assert_true(f.key != "o:local:1")
       assert_true(rd.known.contains(f.key))
@@ -80,7 +80,7 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
     None => fail("nothing flies")
   }
   t.run_for(flight_ms)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   assert_true(t.find("先上屏") is Some(_))
   fix_clock.val = None
 }
@@ -98,7 +98,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   let sent_at = t.time()
   tap_send(t)
   t.draw()
-  let landing = match send_flight.val {
+  let landing = match send_flight.get() {
     Some(f) => {
       assert_true(f.placed)
       f.way.ends()
@@ -129,7 +129,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   assert_true(t.find("收到：「看一下列表」") is None)
   let was = t.drawn_of("再看一下按钮")
   t.run_for(landing - t.time())
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   match (was, t.drawn_of("再看一下按钮")) {
     (Some((_, y0)), Some((_, y1))) => assert_true((y1 - y0).abs() < 1.0)
@@ -151,7 +151,7 @@ test "words sent are seen every frame from the field to their bubble: not gone t
     t.frame()
     seen_once(t, "先上屏") |> ignore
   }
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
 }
 
 ///|
@@ -199,7 +199,7 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
   // the core has it: its row, joined, shorter than what was sent from here (and the one before without its time)
   has.val = true
   t.frame()
-  let lands = match send_flight.val {
+  let lands = match send_flight.get() {
     Some(f) => {
       assert_true(f.key == "o:out-1")
       f.way.ends()

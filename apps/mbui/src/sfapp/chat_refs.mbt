@@ -12,7 +12,7 @@
 /// as written (Android's InputTransformation sees the user's edits only; what the app puts in goes as it is).
 fn ref_field_put(d : Draft, words : String, caret? : Int) -> Unit {
   @sfbase.refs_put(d.key, d.field, words, caret?)
-  d.text = words
+  d.text.set(words)
 }
 
 // ── the `@` menu ────────────────────────────────────────────────────────

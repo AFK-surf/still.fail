@@ -12,7 +12,7 @@
 pub(all) struct Writing {
   key : String
   field : @ui.Field
-  mut text : String
+  text : @signals.Signal[String]
   mut quotes : Array[Json]
   mut files : Array[Json]
   mut focus : String
@@ -20,7 +20,7 @@ pub(all) struct Writing {
   mut error : String
   mut ready : Bool
   mut uploading : Bool
-  mut pending : Int
+  pending : @signals.Signal[Int]
   mut acked : Double
   mut seen_rev : Double
   mut adopted : Int
@@ -77,7 +77,7 @@ pub fn writing(src : Source, key : String) -> Writing {
       let w : Writing = {
         key,
         field: @ui.Field::new(),
-        text: "",
+        text: @signals.signal(""),
         quotes: [],
         files: [],
         focus: "",
@@ -85,7 +85,7 @@ pub fn writing(src : Source, key : String) -> Writing {
         error: "",
         ready: false,
         uploading: false,
-        pending: 0,
+        pending: @signals.signal(0),
         acked: 0.0,
         seen_rev: -1.0,
         adopted: -1,
@@ -105,7 +105,7 @@ pub fn writing(src : Source, key : String) -> Writing {
 /// read back, taken, put back, carried on) into the field.
 fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   guard v is Some(Object(_)) else { return }
-  if w.pending > 0 || number(v, "version") < w.acked || w.adopted == version {
+  if w.pending.get() > 0 || number(v, "version") < w.acked || w.adopted == version {
     return
   }
   w.adopted = version
@@ -129,8 +129,8 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   let rev = number(v, "rev")
   if rev != w.seen_rev {
     w.seen_rev = rev
-    w.text = text(v, "text")
-    w.field.set(w.text)
+    w.text.set(text(v, "text"))
+    w.field.set(w.text.get())
   }
 }
 
@@ -151,10 +151,10 @@ fn writing_act(
     return
   }
   show(w)
-  w.pending += 1
+  w.pending.set(w.pending.get() + 1)
   params["key"] = Json::string(w.key)
   let answered = fn(r : Result[Json, Json]) {
-    w.pending -= 1
+    w.pending.set(w.pending.get() - 1)
     match r {
       Ok(a) =>
         match field(Some(a), "version") {
@@ -174,10 +174,10 @@ fn writing_act(
 ///|
 /// What is typed, told to the core as it is typed (`composer.text`).
 pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
-  if words == w.text {
+  if words == w.text.get() {
     return
   }
-  w.text = words
+  w.text.set(words)
   writing_act(src, w, "text", { "text": Json::string(words) })
 }
 
@@ -474,7 +474,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// going up), sent as it says: its files as they were when it took them, not as this page last drew them. `station`:
 /// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
-  w.taken = Some((w.text, w.quotes, w.files))
+  w.taken = Some((w.text.get(), w.quotes, w.files))
   let params : Map[String, Json] = {}
   if station != "" {
     params["station"] = Json::string(station)
@@ -485,7 +485,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
     "take",
     params,
     show=fn(w) {
-      w.text = ""
+      w.text.set("")
       w.field.set("")
       w.quotes = []
       w.files = []
@@ -506,7 +506,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
 /// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
 /// only while nothing new is written there (`composer.restore`).
 pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
-  if unless_written && (w.text.trim(chars=" \n\t").to_string() != "" || w.files.length() > 0 || w.quotes.length() > 0) {
+  if unless_written && (w.text.get().trim(chars=" \n\t").to_string() != "" || w.files.length() > 0 || w.quotes.length() > 0) {
     return
   }
   let kept = w.taken
@@ -522,7 +522,7 @@ pub fn writing_restore(src : Source, w : Writing, error : String, unless_written
     show=fn(w) {
       match kept {
         Some((words, quotes, files)) => {
-          w.text = words
+          w.text.set(words)
           w.field.set(words)
           w.quotes = quotes
           w.files = files

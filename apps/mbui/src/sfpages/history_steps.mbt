@@ -15,10 +15,10 @@ priv struct StepsOwn {
   opened : Map[String, Bool]
   detail : Map[String, (Double, String)]
   tools : Map[String, Json]
-  mut older : String
+  older : @signals.Signal[String]
   /// an entry asked to be brought into view, by history (`<station>\u{1}<key>`); the item gone to, marked a moment
   /// (its history's list, its key), and the histories gone to an entry, not following their newest since
-  focus : Map[String, Int]
+  focus : @sf.LiveMap[String, Int]
   mut marked : (String, String)
   went : Map[String, Bool]
   /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
@@ -30,8 +30,8 @@ let steps_own : StepsOwn = {
   opened: {},
   detail: {},
   tools: {},
-  older: "",
-  focus: {},
+  older: @signals.signal("", same=fn(a, b) { a == b }),
+  focus: @sf.LiveMap::new(),
   marked: ("", ""),
   went: {},
   only_io: @signals.signal(false, same=fn(a, b) { a == b }),
@@ -42,7 +42,7 @@ fn steps_reset() -> Unit {
   steps_own.opened.clear()
   steps_own.detail.clear()
   steps_own.tools.clear()
-  steps_own.older = ""
+  steps_own.older.set("")
   steps_own.focus.clear()
   steps_own.marked = ("", "")
   steps_own.went.clear()
@@ -148,16 +148,16 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     Some(info) => info.first >= 0 && info.first <= 2
     None => false
   }
-  match (more && (near || steps_own.focus.contains(fk)), steps_own.older != first) {
+  match (more && (near || steps_own.focus.contains(fk)), steps_own.older.get() != first) {
     (true, true) =>
       c.after_build("history-older/" + lkey, fn() {
-        if steps_own.older == first {
+        if steps_own.older.get() == first {
           return
         }
-        steps_own.older = first
+        steps_own.older.set(first)
         (src.call)("history.older", Json::object(params), fn(res) {
           if res is Err(_) {
-            steps_own.older = ""
+            steps_own.older.set("")
             // (an entry asked for before what could be had: where it opens)
             steps_own.focus.remove(fk)
           }

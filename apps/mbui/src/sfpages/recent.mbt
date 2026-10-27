@@ -23,25 +23,25 @@ let recent_step : Double = 98.0
 priv struct Recent {
   /// the gallery's answers when last read
   mut answers : Int
-  mut access : @hostapi.GalleryAccess
+  access : @signals.Signal[@hostapi.GalleryAccess]
   mut reading : @ui.GalleryRead?
   /// read again once the read under way is taken (asked for while it read)
   mut again : Bool
-  mut photos : Array[@hostapi.GalleryPhoto]
+  photos : @sf.LiveArray[@hostapi.GalleryPhoto]
   /// the photos chosen to go together (their `src`), in the order chosen; none as the sheet opens
-  chosen : Array[String]
+  chosen : @sf.LiveArray[String]
 }
 
 ///|
-let recent : Recent = { answers: -1, access: NoGallery, reading: None, again: false, photos: [], chosen: [] }
+let recent : Recent = { answers: -1, access: @signals.signal(NoGallery), reading: None, again: false, photos: @sf.LiveArray::new(), chosen: @sf.LiveArray::new()}
 
 ///|
 fn recent_reset() -> Unit {
   recent.answers = -1
-  recent.access = NoGallery
+  recent.access.set(NoGallery)
   recent.reading = None
   recent.again = false
-  recent.photos = []
+  recent.photos.replace([])
   recent.chosen.clear()
 }
 
@@ -54,7 +54,7 @@ pub fn recent_photo(i : Int) -> @hostapi.GalleryPhoto? {
 ///|
 /// Whether and how the gallery may be read, as last asked.
 pub fn recent_access() -> @hostapi.GalleryAccess {
-  recent.access
+  recent.access.get()
 }
 
 ///|
@@ -123,11 +123,11 @@ fn recent_read() -> Unit {
     recent.again = true
     return
   }
-  recent.access = @hostapi.gallery_access()
-  recent.reading = match recent.access {
+  recent.access.set(@hostapi.gallery_access())
+  recent.reading = match recent.access.get() {
     Whole | Chosen => @ui.gallery_read()
     _ => {
-      recent.photos = []
+      recent.photos.replace([])
       None
     }
   }
@@ -145,7 +145,7 @@ pub fn recent_frame(src : Source) -> Unit {
       match r.photos() {
         Some(all) => {
           recent.reading = None
-          recent.photos = latest_photos(all, ((src.now)() / 1000.0).to_int64(), recent_most)
+          recent.photos.replace(latest_photos(all, ((src.now)() / 1000.0).to_int64(), recent_most))
           // (one chosen and gone from the gallery since: not chosen)
           recent.chosen.retain(fn(s) { recent.photos.iter().any(fn(p) { p.src == s }) })
           @hostapi.log("recent photos: \{recent.photos.length()} of \{all.length()}")
@@ -215,7 +215,7 @@ pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   let t = @sf.theme()
   let photos = recent.photos
-  let ask = match recent.access {
+  let ask = match recent.access.get() {
     Whole => None
     Chosen => Some(@sf.t("android-chat.attach.recent.more"))
     _ => Some(@sf.t("android-chat.attach.recent.allow"))

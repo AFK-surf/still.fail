@@ -116,11 +116,11 @@ test "what a visualization's widget keeps is kept, given back as it is shown aga
   t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"seen\":true}}")
   t.frame()
   let l = viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap()
-  assert_eq(l.state, Some({ "seen": true }))
+  assert_eq(l.state.get(), Some({ "seen": true }))
   let big = "x".repeat(17000)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":\"" + big + "\"}")
   t.frame()
-  assert_eq(l.state, Some({ "seen": true }))
+  assert_eq(l.state.get(), Some({ "seen": true }))
 }
 
 ///|
@@ -212,7 +212,7 @@ test "beside: the visualization as a page of its own, served from here with what
   // what its widget keeps from there is kept too
   t.view_says(site, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"n\":2}}")
   t.frame()
-  assert_eq(viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap().state, Some({ "n": 2 }))
+  assert_eq(viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap().state.get(), Some({ "n": 2 }))
 }
 
 ///|

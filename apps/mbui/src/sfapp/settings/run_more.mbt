@@ -420,15 +420,15 @@ pub fn open_machine_sessions(core : Core, station : String, name : String, from?
 /// (`machineSessions.read`); 继续 makes the chat that goes on with it (`machineSessions.continue`) and opens it.
 fn look_at_machine_session(core : Core, station : String, name : String, s : Json) -> Unit {
   let sv = Some(s)
-  let said : Ref[(Array[Json], Int)?] = Ref(None)
-  let error : Ref[String] = Ref("")
+  let said : @signals.Signal[(Array[Json], Int)?] = @signals.signal(None)
+  let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
   (core.call)("machineSessions.read", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id"))), ("limit", Json::number(200.0))]), fn(r) {
     match r {
       Ok(v) => {
         let list = items(Some(v), "said")
-        said.val = Some((list, if has(Some(v), "total") { count(Some(v), "total") } else { list.length() }))
+        said.set(Some((list, if has(Some(v), "total") { count(Some(v), "total") } else { list.length() })))
       }
-      Err(e) => error.val = error_text(e)
+      Err(e) => error.set(error_text(e))
     }
   })
   @sf.panel(first_text(sv, ["title", "first"], ""), from=Unanchored, tall=0.85, fn(c, close) {
@@ -438,9 +438,9 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     })
     |> ignore
     c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), fn() {
-      match said.val {
+      match said.get() {
         None =>
-          if error.val == "" {
+          if error.get() == "" {
             c.box(w=Fill(1.0), pt=40.0, align=ACenter, fn() { wait_line(c, tr("common.reading")) }) |> ignore
           }
         Some((list, total)) => {
@@ -490,9 +490,9 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
       }
     })
     |> ignore
-    if error.val != "" {
+    if error.get() != "" {
       c.box(style=@sf.panel_words_in(), w=Fill(1.0), pady=6.0, fn() {
-        c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+        c.text(error.get(), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
       })
       |> ignore
     }
@@ -504,7 +504,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
         open_machine_sessions(core, station, name)
       }
       if @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy) {
-        error.val = ""
+        error.set("")
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {
           match r {
             Ok(v) => {
@@ -512,7 +512,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
               (core.pop)()
               (core.open_chat)(station, text(Some(v), "key"), first_text(sv, ["title", "first"], ""))
             }
-            Err(e) => error.val = error_text(e)
+            Err(e) => error.set(error_text(e))
           }
         })
       }
@@ -569,11 +569,11 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
   vault_serial.val += 1
   let key = "add-people/" + vault_serial.val.to_string()
   let role : Ref[String] = Ref("member")
-  let error : Ref[String] = Ref("")
-  let done : Ref[String] = Ref("")
-  let people : Ref[Array[Json]?] = Ref(None)
+  let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+  let done : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+  let people : @signals.Signal[Array[Json]?] = @signals.signal(None)
   let problems : Array[String] = []
-  let reading : Ref[Int] = Ref(0)
+  let reading : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
   let picked : Array[String] = []
   let inside : Array[String] = []
   for m in items(view, "members") {
@@ -587,9 +587,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
   @sf.panel(tr("android-settings.add.title"), from~, tall=0.8, form=true, fn(c, close) {
     let t = @sf.theme()
     let online = online_stations(core, here)
-    if done.val != "" {
+    if done.get() != "" {
       c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
-        c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
+        c.text(done.get(), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
       return
@@ -624,12 +624,12 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
       },
     ]
     if online.length() > 0 {
-      match people.val {
+      match people.get() {
         None =>
           blocks.push(fn() {
             c.box(dir=Row, fn() {
-              if @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.val > 0) {
-                reading.val = online.length()
+              if @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.get() > 0) {
+                reading.set(online.length())
                 let seen : Map[String, Json] = Map([])
                 for s in online {
                   (core.call)("slack.people", obj([("station", str(text(Some(s), "station")))]), fn(r) {
@@ -647,8 +647,8 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                       }
                       Err(e) => problems.push(error_text(e))
                     }
-                    reading.val -= 1
-                    if reading.val == 0 {
+                    reading.set(reading.get() - 1)
+                    if reading.get() == 0 {
                       let all = seen.values().collect()
                       all.sort_by(fn(a, b) {
                         let ga = flag(Some(a), "guest")
@@ -659,7 +659,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                           text(Some(a), "name").compare(text(Some(b), "name"))
                         }
                       })
-                      people.val = Some(all)
+                      people.set(Some(all))
                       // once read, the workspace's own Slack people are picked; guests are left to choose
                       for p in all {
                         let e = text(Some(p), "email")
@@ -734,8 +734,8 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
         }
       }
     })
-    if error.val != "" {
-      blocks.push(fn() { c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore })
+    if error.get() != "" {
+      blocks.push(fn() { c.text(error.get(), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore })
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       scroll_page(c, key, blocks.mapi(fn(i, b) {
@@ -746,7 +746,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
   }, foot=fn(c, close) {
     // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), from what is typed
     // and picked now
-    if done.val != "" {
+    if done.get() != "" {
       if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
         close()
       }
@@ -769,7 +769,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
           tr("android-settings.add.one")
         }, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0) {
       c.blur()
-      error.val = ""
+      error.set("")
       (core.call)(
         "workspace.addMembers",
         obj([
@@ -782,7 +782,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
           match r {
             Ok(v) => {
               let n = fn(k : String) { items(Some(v), k).length() }
-              done.val = fill("android-settings.add.done", [
+              done.set(fill("android-settings.add.done", [
                 (
                   "list",
                   join(
@@ -794,9 +794,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                     tr("android-settings.add.sep"),
                   ),
                 ),
-              ])
+              ]))
             }
-            Err(e) => error.val = error_text(e)
+            Err(e) => error.set(error_text(e))
           }
         },
       )

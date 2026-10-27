@@ -5,13 +5,14 @@
 /// What was set going and is not answered yet (AppState.isDoing), by its key; what failed a moment ago (the core's
 /// doing keeps a failure 6 s: DoingMark's red mark), by its key, which failure it is (each its own 6 s).
 pub(all) struct Acting {
-  doing : Map[String, Bool]
-  failed : Map[String, Int]
+  doing : @sf.LiveMap[String, Bool]
+  failed : @sf.LiveMap[String, Int]
   mut failed_n : Int
 }
 
 ///|
-pub let acting : Acting = { doing: {}, failed: {}, failed_n: 0 }
+// kept across runs: put back by acting_reset
+pub let acting : Acting = { doing: @sf.LiveMap::new(), failed: @sf.LiveMap::new(), failed_n: 0 }
 
 ///|
 /// As at the start (the app's reset).
@@ -24,8 +25,8 @@ pub fn acting_reset() -> Unit {
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
-  app.toast = words
-  app.toast_n += 1
+  app.toast.set(words)
+  app.toast_n.set(app.toast_n.get() + 1)
   app.toast_action = action
   app.toast_run = run
 }

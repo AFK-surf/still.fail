@@ -82,7 +82,7 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
   t.run_for(@sfbase.flight_len(true) * 0.4)
   let mid = t.drawn_images().map(fn(i) { i[2] })
   t.run_for(@sfbase.flight_len(true) + @sf.hint_back_ms)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   let rest = t.drawn_images().map(fn(i) { i[2] })
   let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
   assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")

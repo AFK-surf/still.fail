@@ -203,17 +203,17 @@ priv struct Pending {
   /// a picture's bytes as picked (Composer.kt Pending.local): what the viewer shows it from before it is sent; None
   /// for any other file, and for one of a kept draft (only the file it went up as is kept)
   local : Bytes?
-  mut done : Json?
+  done : @signals.Signal[Json?]
   /// how much of it the station has
-  mut sent : Int
-  mut error : String?
+  sent : @signals.Signal[Int]
+  error : @signals.Signal[String?]
   /// its id in the core, which sends it up (`composer.add`): a message sent before it is up names it (`uploads`); ""
   /// for one going up here (a station's file switched to one) and for any other
   mut core_id : String
   /// failed going up in the core: it can go again from what the core kept (`composer.retry`)
   mut retry : Bool
   /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
-  mut retrying : Bool
+  retrying : @signals.Signal[Bool]
 }
 
 ///|
@@ -231,18 +231,18 @@ priv struct DraftQuote {
 /// A chat's draft: its words (the field's, kept here as they change), quotes and files.
 priv struct Draft {
   key : String
-  mut text : String
+  text : @signals.Signal[String]
   /// words for the field to take the next time it is drawn (kept words read, words put back)
-  mut put_text : String?
-  quotes : Array[DraftQuote]
+  put_text : @signals.Signal[String?]
+  quotes : @sf.LiveArray[DraftQuote]
   /// the quotes' comments, by quote (their fields' words)
-  comments : Map[Int, String]
-  files : Array[Pending]
-  mut error : String?
+  comments : @sf.LiveMap[Int, String]
+  files : @sf.LiveArray[Pending]
+  error : @signals.Signal[String?]
   /// what the core kept has been read: only then is it written over
-  mut loaded : Bool
+  loaded : @signals.Signal[Bool]
   /// what was last kept, and when it last changed
-  mut kept : String
+  kept : @signals.Signal[String]
   mut changed_at : Double
   /// how many times typing woke the agent's runtime (`session.warm`, once a minute: the next a minute of this
   /// composer shown after the last)
@@ -260,7 +260,7 @@ priv struct Draft {
 
 ///|
 /// Each chat's draft while the app runs (files still going up go on as its page goes).
-let drafts : Map[String, Draft] = {}
+let drafts : @sf.LiveMap[String, Draft] = @sf.LiveMap::new()
 
 ///|
 let next_pending : Ref[Int] = { val: 1 }
@@ -317,15 +317,15 @@ fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
     None => {
       let d : Draft = {
         key,
-        text: "",
-        put_text: None,
+        text: @signals.signal(""),
+        put_text: @signals.signal(None),
         field: @ui.Field::new(),
-        quotes: [],
-        comments: {},
-        files: [],
-        error: None,
-        loaded: false,
-        kept: "",
+        quotes: @sf.LiveArray::from([]),
+        comments: @sf.LiveMap::from({}),
+        files: @sf.LiveArray::from([]),
+        error: @signals.signal(None),
+        loaded: @signals.signal(false),
+        kept: @signals.signal(""),
         changed_at: 0.0,
         warm_n: 0,
         focus: 0,
@@ -342,8 +342,8 @@ fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
           Ok(v) => draft_named(d, v)
           _ => ()
         }
-        d.loaded = true
-        d.kept = draft_sig(d)
+        d.loaded.set(true)
+        d.kept.set(draft_sig(d))
       }) })
       d
     }
@@ -352,7 +352,7 @@ fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
 
 ///|
 fn draft_empty(d : Draft) -> Bool {
-  d.text == "" && d.quotes.length() == 0 && d.files.length() == 0 && refs_of(d.key).length() == 0
+  d.text.get() == "" && d.quotes.length() == 0 && d.files.length() == 0 && refs_of(d.key).length() == 0
 }
 
 ///|
@@ -360,8 +360,8 @@ fn draft_empty(d : Draft) -> Bool {
 fn fill_draft(d : Draft, v : Json) -> Unit {
   let s = Some(v)
   let words = text(s, "text")
-  d.text = words
-  d.put_text = Some(words)
+  d.text.set(words)
+  d.put_text.set(Some(words))
   for q in items(s, "quotes") {
     let qs = Some(q)
     let id = next_pending.val
@@ -389,12 +389,12 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       height: number(as_, "height").to_int(),
       pasted: None,
       local: None,
-      done: Some(a),
-      sent: number(as_, "size").to_int(),
-      error: None,
+      done: @signals.signal(Some(a)),
+      sent: @signals.signal(number(as_, "size").to_int()),
+      error: @signals.signal(None),
       core_id: "",
       retry: false,
-      retrying: false,
+      retrying: @signals.signal(false),
     })
   }
   // links shared in (share-in.ts): each a card among the files, kept and sent as words
@@ -414,12 +414,12 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       height: 0,
       pasted: None,
       local: None,
-      done: Some({ "link": l }),
-      sent: 0,
-      error: None,
+      done: @signals.signal(Some({ "link": l })),
+      sent: @signals.signal(0),
+      error: @signals.signal(None),
       core_id: "",
       retry: false,
-      retrying: false,
+      retrying: @signals.signal(false),
     })
   }
 }
@@ -446,12 +446,12 @@ fn quote_json(d : Draft, q : DraftQuote, trim : Bool) -> Json {
 /// What is kept of it (DraftView): the words, the quotes with their comments, the files up.
 fn draft_view(d : Draft) -> Map[String, Json] {
   let v : Map[String, Json] = {
-    "text": Json::string(d.text),
+    "text": Json::string(d.text.get()),
     "quotes": Json::array(d.quotes.map(fn(q) { quote_json(d, q, false) })),
     "files": Json::array(up_files(d)),
   }
   // the links shared in, kept beside the files (the core's DraftView `links`)
-  let links = d.files.filter_map(fn(f) { field(f.done, "link") })
+  let links = d.files.filter_map(fn(f) { field(f.done.get(), "link") })
   if links.length() > 0 {
     v["links"] = Json::array(links)
   }
@@ -466,14 +466,14 @@ fn draft_sig(d : Draft) -> String {
 ///|
 /// Kept on the device as it is now (`draft.put`), when it changed since it was last kept; never on a read-only run.
 fn save_draft(src : Source, d : Draft) -> Unit {
-  if !d.loaded || src.read_only {
+  if !d.loaded.get() || src.read_only {
     return
   }
   let sig = draft_sig(d)
-  if sig == d.kept {
+  if sig == d.kept.get() {
     return
   }
-  d.kept = sig
+  d.kept.set(sig)
   let params = draft_view(d)
   params["key"] = Json::string(d.key)
   (src.call)("draft.put", Json::object(params), fn(res) {
@@ -490,7 +490,7 @@ fn save_draft(src : Source, d : Draft) -> Unit {
 fn sent_draft(d : Draft, files : Int) -> Unit {
   // (only one files went up from needs it: a draft with none named nothing)
   if files > 0 {
-    d.kept = "\u{0}sent"
+    d.kept.set("\u{0}sent")
     d.id = ""
   }
 }
@@ -540,7 +540,7 @@ pub let draft_keep_ms : Double = 400.0
 ///|
 /// A change kept a moment after it is made (the core writes it down then too), and at once as the chat is left.
 fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
-  let unsaved = d.loaded && !src.read_only && draft_sig(d) != d.kept
+  let unsaved = d.loaded.get() && !src.read_only && draft_sig(d) != d.kept.get()
   // (asked each frame, unsaved or not: kept, its time starts again; nothing shown waits for it)
   if @kit.after(c, "draft/" + d.key, unsaved, draft_keep_ms, later=true) && unsaved {
     // (once the frame's builds are over: what the composer took in further on in this one kept with it)
@@ -550,14 +550,14 @@ fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
 
 ///|
 fn uploading(d : Draft) -> Bool {
-  d.files.iter().any(fn(f) { f.done is None && f.error is None }) || refs_uploading(d.key)
+  d.files.iter().any(fn(f) { f.done.get() is None && f.error.get() is None }) || refs_uploading(d.key)
 }
 
 ///|
 /// A file going up outside the core (a station's file switched to one, station_files.mbt): sending waits for it here
 /// (Composer.kt goingHere).
 fn going_here(d : Draft) -> Bool {
-  d.files.iter().any(fn(f) { f.done is None && f.error is None && f.core_id == "" }) || refs_uploading(d.key)
+  d.files.iter().any(fn(f) { f.done.get() is None && f.error.get() is None && f.core_id == "" }) || refs_uploading(d.key)
 }
 
 ///|
@@ -565,13 +565,13 @@ fn going_here(d : Draft) -> Bool {
 /// here, no file that failed (sent again or taken out first, never left out unsaid), nothing locking it.
 fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
-    d.text.trim(chars=" \n\t") != "" ||
-    d.files.iter().any(fn(f) { f.done is Some(_) || f.core_id != "" }) ||
+    d.text.get().trim(chars=" \n\t") != "" ||
+    d.files.iter().any(fn(f) { f.done.get() is Some(_) || f.core_id != "" }) ||
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
   ) &&
   !going_here(d) &&
-  !d.files.iter().any(fn(f) { f.error is Some(_) }) &&
+  !d.files.iter().any(fn(f) { f.error.get() is Some(_) }) &&
   !locked
 }
 
@@ -597,7 +597,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
   next_pending.val += 1
   d.quotes.push({ id, author, text: name, ts, role, file: name })
   d.comments[id] = ""
-  if !d.files.iter().any(fn(f) { f.done is Some(_) && text(f.done, "path") == path }) {
+  if !d.files.iter().any(fn(f) { f.done.get() is Some(_) && text(f.done.get(), "path") == path }) {
     let fid = next_pending.val
     next_pending.val += 1
     let size = number(s, "size").to_int()
@@ -610,12 +610,12 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
       height: number(s, "height").to_int(),
       pasted: None,
       local: None,
-      done: Some(a),
-      sent: size,
-      error: None,
+      done: @signals.signal(Some(a)),
+      sent: @signals.signal(size),
+      error: @signals.signal(None),
       core_id: "",
       retry: false,
-      retrying: false,
+      retrying: @signals.signal(false),
     })
   }
   d.focus = id
@@ -636,7 +636,7 @@ fn quote_file_of(d : Draft, q : DraftQuote) -> Pending? {
   d.files
   .iter()
   .find_first(fn(f) {
-    let up = text(f.done, "name")
+    let up = text(f.done.get(), "name")
     (if up != "" { up } else { f.name }) == q.file
   })
 }
@@ -674,20 +674,20 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     height: 0,
     pasted: None,
     local: None,
-    done: None,
-    sent: 0,
-    error: None,
+    done: @signals.signal(None),
+    sent: @signals.signal(0),
+    error: @signals.signal(None),
     core_id: "",
     retry: false,
-    retrying: false,
+    retrying: @signals.signal(false),
   }
   d.files.push(p)
   if size > max_file.to_int64() {
-    p.error = Some(tr("android-chat.file.tooBig"))
+    p.error.set(Some(tr("android-chat.file.tooBig")))
     return
   }
   if src.read_only {
-    p.error = Some(read_only_words)
+    p.error.set(Some(read_only_words))
     return
   }
   let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
@@ -711,13 +711,13 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     }),
     fn(res) {
       match res {
-        Err(e) if p.done is None =>
-          p.error = Some(
+        Err(e) if p.done.get() is None =>
+          p.error.set(Some(
             match text(Some(e), "message") {
               "" => tr("android-chat.file.uploadFailed")
               m => m
             },
-          )
+          ))
         _ => ()
       }
     },
@@ -757,20 +757,20 @@ fn add_file(
     height: h,
     pasted,
     local: if w > 0 { Some(bytes) } else { None },
-    done: None,
-    sent: 0,
-    error: None,
+    done: @signals.signal(None),
+    sent: @signals.signal(0),
+    error: @signals.signal(None),
     core_id: "",
     retry: false,
-    retrying: false,
+    retrying: @signals.signal(false),
   }
   d.files.push(p)
   if bytes.length() > max_file {
-    p.error = Some(tr("android-chat.file.tooBig"))
+    p.error.set(Some(tr("android-chat.file.tooBig")))
     return
   }
   if src.read_only {
-    p.error = Some(read_only_words)
+    p.error.set(Some(read_only_words))
     return
   }
   // the core sends it up, from its bytes handed over beside the call; a message sent before it is up waits for it
@@ -804,13 +804,13 @@ fn add_file(
     bytes,
     fn(res) {
       match res {
-        Err(e) if p.done is None =>
-          p.error = Some(
+        Err(e) if p.done.get() is None =>
+          p.error.set(Some(
             match text(Some(e), "message") {
               "" => tr("android-chat.file.uploadFailed")
               m => m
             },
-          )
+          ))
         _ => ()
       }
     },
@@ -832,18 +832,18 @@ fn upload_key(d : Draft) -> String {
 /// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
 /// up (with a picture's size from here when the station gave none), or failed (to go again).
 fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
-  if !d.files.iter().any(fn(f) { f.core_id != "" && f.done is None && f.error is None }) {
+  if !d.files.iter().any(fn(f) { f.core_id != "" && f.done.get() is None && f.error.get() is None }) {
     return
   }
   let v = (src.topic)("composer", { "key": Json::string(upload_key(d)) }).value
   for one in items(v, "files") {
     let id = text(Some(one), "id")
     for f in d.files {
-      if f.core_id != id || f.done is Some(_) || f.error is Some(_) {
+      if f.core_id != id || f.done.get() is Some(_) || f.error.get() is Some(_) {
         continue
       }
       match field(Some(one), "sent") {
-        Some(Number(n, ..)) => f.sent = n.to_int()
+        Some(Number(n, ..)) => f.sent.set(n.to_int())
         _ => ()
       }
       match field(Some(one), "done") {
@@ -853,18 +853,18 @@ fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
             file["width"] = Json::number(f.width.to_double())
             file["height"] = Json::number(f.height.to_double())
           }
-          f.sent = f.size
-          f.done = Some(Json::object(file))
+          f.sent.set(f.size)
+          f.done.set(Some(Json::object(file)))
           if f.image != "" {
-            sent_pictures[sent_key(station, text(f.done, "path"))] = f.image
+            sent_pictures[sent_key(station, text(f.done.get(), "path"))] = f.image
           }
         }
         _ =>
           match text(Some(one), "error") {
-            "" => f.retrying = false
-            _ if f.retrying => ()
+            "" => f.retrying.set(false)
+            _ if f.retrying.get() => ()
             e => {
-              f.error = Some(e)
+              f.error.set(Some(e))
               f.retry = true
             }
           }
@@ -879,18 +879,18 @@ fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
   if !f.retry || f.core_id == "" {
     return
   }
-  f.error = None
-  f.sent = 0
+  f.error.set(None)
+  f.sent.set(0)
   f.retry = false
-  f.retrying = true
+  f.retrying.set(true)
   (src.call)("composer.retry", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(res) {
     match res {
-      Err(e) if f.done is None => {
-        f.retrying = false
-        f.error = Some(text(Some(e), "message"))
+      Err(e) if f.done.get() is None => {
+        f.retrying.set(false)
+        f.error.set(Some(text(Some(e), "message")))
       }
       // taken again: what it says from here on is of this try
-      _ => f.retrying = false
+      _ => f.retrying.set(false)
     }
   })
 }
@@ -899,7 +899,7 @@ fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
 /// A file taken out of the draft: one going up in the core stops (it lets go of it: `composer.remove`).
 fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
   d.files.retain(fn(x) { x.id != f.id })
-  if f.core_id != "" && f.done is None {
+  if f.core_id != "" && f.done.get() is None {
     (src.call)("composer.remove", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(_) {  })
   }
 }
@@ -908,7 +908,7 @@ fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
 /// The files still going up in the core as a message takes them (Taken.uploads): it waits for them in the outbox.
 fn up_uploads(d : Draft) -> Array[Json] {
   d.files.filter_map(fn(f) {
-    if f.core_id == "" || f.done is Some(_) || f.error is Some(_) {
+    if f.core_id == "" || f.done.get() is Some(_) || f.error.get() is Some(_) {
       return None
     }
     let u : Map[String, Json] = {
@@ -938,7 +938,7 @@ fn upload_part(
   have : Int,
 ) -> Unit {
   // taken out of the draft meanwhile: nothing more goes
-  if !d.files.iter().any(fn(f) { f.id == p.id }) && !ref_upload(d.key, p.id) && p.done is None {
+  if !d.files.iter().any(fn(f) { f.id == p.id }) && !ref_upload(d.key, p.id) && p.done.get() is None {
     return
   }
   let size = bytes.length()
@@ -955,7 +955,7 @@ fn upload_part(
   // (how far it has gone, heard while the part goes: Calls.kt partSent)
   let heard = fn(v : Json, _b : Bytes?) {
     match field(Some(v), "sent") {
-      Some(Number(n, ..)) if p.done is None && p.error is None => p.sent = have + n.to_int()
+      Some(Number(n, ..)) if p.done.get() is None && p.error.get() is None => p.sent.set(have + n.to_int())
       _ => ()
     }
   }
@@ -969,8 +969,8 @@ fn upload_part(
               file["width"] = Json::number(p.width.to_double())
               file["height"] = Json::number(p.height.to_double())
             }
-            p.sent = size
-            p.done = Some(Json::object(file))
+            p.sent.set(size)
+            p.done.set(Some(Json::object(file)))
           }
           _ => {
             let next = match field(Some(answer), "have") {
@@ -978,20 +978,20 @@ fn upload_part(
               _ => have + len
             }
             if next <= have {
-              p.error = Some(tr("android-chat.file.uploadFailed"))
+              p.error.set(Some(tr("android-chat.file.uploadFailed")))
             } else {
-              p.sent = next
+              p.sent.set(next)
               upload_part(src, d, station, p, bytes, id, next)
             }
           }
         }
       Err(e) =>
-        p.error = Some(
+        p.error.set(Some(
           match text(Some(e), "message") {
             "" => tr("android-chat.file.uploadFailed")
             m => m
           },
-        )
+        ))
     }
   })
   |> ignore
@@ -1000,11 +1000,11 @@ fn upload_part(
 ///|
 /// What a file going up says: how far it has gone, once that is known.
 fn uploading_text(f : Pending) -> String {
-  if f.sent <= 0 || f.size <= 0 {
+  if f.sent.get() <= 0 || f.size <= 0 {
     tr("common.uploading")
   } else {
     fill("android-chat.file.uploading.part", [
-      ("percent", "\{(f.sent.to_double() * 100.0 / f.size.to_double()).to_int()}"),
+      ("percent", "\{(f.sent.get().to_double() * 100.0 / f.size.to_double()).to_int()}"),
       ("size", @sf.file_size(f.size.to_double())),
     ])
   }
@@ -1058,7 +1058,7 @@ priv struct ComposerUi {
   /// a finger went down outside the composer (it lets go of the keyboard once lifted or moved: Ctx::press)
   mut outside : Bool
   /// why restoring the chat failed (Composer.kt ArchiveNotice: said under it until it is tried again), by its draft
-  restore_error : Map[String, String]
+  restore_error : @sf.LiveMap[String, String]
   /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
   /// composer_room_of)
   mut room_for : (String, ChatView?)
@@ -1067,7 +1067,7 @@ priv struct ComposerUi {
   mut cap_id : Int
   mut content_id : Int
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
-  doing : Map[String, Bool]
+  doing : @sf.LiveMap[String, Bool]
 }
 
 ///|
@@ -1076,11 +1076,11 @@ let cui : ComposerUi = {
   picking: None,
   picking_for: "",
   outside: false,
-  restore_error: {},
+  restore_error: @sf.LiveMap::new(),
   room_for: ("", None),
   cap_id: 0,
   content_id: 0,
-  doing: {},
+  doing: @sf.LiveMap::new(),
 }
 
 ///|
@@ -1192,10 +1192,10 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
   let flying : Array[FlyingFile] = []
   for f in d.files {
     // (an image still going up: where its message draws it from its picture here: sent_local)
-    let key = match f.done {
+    let key = match f.done.get() {
       Some(_) if f.core_id != "" => @sfbase.upload_path(f.core_id)
       Some(a) => text(Some(a), "path")
-      None if f.core_id != "" && f.error is None && kind_of(f.name) == "image" => @sfbase.upload_path(f.core_id)
+      None if f.core_id != "" && f.error.get() is None && kind_of(f.name) == "image" => @sfbase.upload_path(f.core_id)
       None => ""
     }
     match @motion.measured_rect(c, "composer/tile/\{f.id}") {
@@ -1222,7 +1222,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     return
   }
   // the station files named by their paths, a line each under the words
-  let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
+  let words = with_link_words(with_ref_words(d.text.get().trim(chars=" \n\t").to_string(), d.key), d)
   // (the station files sent as files with them, taken before the draft lets go of its refs)
   let files = up_files(d)
   let uploads = up_uploads(d)
@@ -1236,7 +1236,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   draft_refs.remove(d.key)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   // what was taken, to put back
-  let taken_text = d.text
+  let taken_text = d.text.get()
   let taken_files = d.files.copy()
   let taken_quotes = d.quotes.copy()
   let taken_comments = d.comments.copy()
@@ -1245,7 +1245,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   let flying = draft_flying(c, src, r, d)
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
-      (Some({ done: Some(a), .. }), Some(from)) if x.mode == "file" && text(Some(a), "path") != "" =>
+      (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode == "file" && text(Some(a), "path") != "" =>
         flying.push({ key: text(Some(a), "path"), from, picture: "", face: fn() { ref_card(c, d.key, x) }, ground: 0L })
       _ => ()
     }
@@ -1271,7 +1271,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   d.files.clear()
   d.quotes.clear()
   d.comments.clear()
-  d.error = None
+  d.error.set(None)
   // sent: what is written next is another draft, which the core names as this one is kept empty
   sent_draft(d, taken_files.length())
   save_draft(src, d)
@@ -1298,8 +1298,8 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     match res {
       Err(e) if text(Some(e), "code") == "invalid_params" =>
         if draft_empty(d) {
-          d.text = taken_text
-          d.put_text = Some(taken_text)
+          d.text.set(taken_text)
+          d.put_text.set(Some(taken_text))
           for f in taken_files {
             d.files.push(f)
           }
@@ -1310,7 +1310,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
           for k, w in taken_comments {
             d.comments[k] = w
           }
-          d.error = Some(text(Some(e), "message"))
+          d.error.set(Some(text(Some(e), "message")))
           save_draft(src, d)
         } else {
           toast_later(fill("android-chat.composer.send.failed", [("error", text(Some(e), "message"))]))
@@ -1350,10 +1350,10 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   let locked = archived
   let focused = c.editor_focused(field_key)
   // the words kept, or put back, into the field (put there, not written: no link in it taken as pasted, chat_refs.mbt)
-  match d.put_text {
+  match d.put_text.get() {
     Some(words) => {
       ref_field_put(d, words)
-      d.put_text = None
+      d.put_text.set(None)
     }
     None => ()
   }
@@ -1393,8 +1393,8 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   match followed_into.get(d.key) {
     Some(words) => {
       followed_into.remove(d.key)
-      d.text = if d.text.trim() == "" { words } else { d.text.trim_end().to_owned() + "\n" + words }
-      d.put_text = Some(d.text)
+      d.text.set(if d.text.get().trim() == "" { words } else { d.text.get().trim_end().to_owned() + "\n" + words })
+      d.put_text.set(Some(d.text.get()))
       d.focus = -1
     }
     None => ()
@@ -1447,7 +1447,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     None => ()
   }
   let expanded = focused ||
-    d.text != "" ||
+    d.text.get() != "" ||
     d.files.length() > 0 ||
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
@@ -1504,7 +1504,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
           None => false
         }
         composer_bar(c, src, r, v, d, expanded, locked || held, locked || offline || held, fresh)
-        match d.error {
+        match d.error.get() {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=t.t.caption, color=t.p.red, line=16.0) |> ignore })
             |> ignore
@@ -1734,7 +1734,7 @@ fn composer_bar(
   let part_ms = composer_morph_ms
   // each part goes to its new place for what the bar holds (folded or opened, its words, files, quotes, what it says
   // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
-  let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error is Some(_)}|" + d.field.text()
+  let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}|" + d.field.text()
   let part = fn(i : Int, name : String) {
     @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Out), by=holds)
   }
@@ -1856,7 +1856,7 @@ fn composer_bar(
         match res.submitted {
           Some(words) => {
             // (they stay in the field until they go)
-            d.text = words
+            d.text.set(words)
             if draft_ready(d, locked) && (fresh is Some(_) || v is Some(_)) {
               send_sharing(src, d, r.station, go)
               sharing_go(d.key)
@@ -1864,9 +1864,9 @@ fn composer_bar(
           }
           None => ()
         }
-        if res.text != d.text {
+        if res.text != d.text.get() {
           // what shows (opened, send ready) follows the words: the typing's own frames draw it
-          d.text = res.text
+          d.text.set(res.text)
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
             Some(view) if !locked && !view.offline && !src.read_only && view.agents.length() > 0 &&
@@ -2121,7 +2121,7 @@ fn draft_picture_key(src : Source, r : ChatRef, f : Pending) -> String {
   if f.image != "" {
     return f.image
   }
-  match f.done {
+  match f.done.get() {
     Some(a) if kind_of(f.name) == "image" && f.pasted is None => {
       let owner = text(Some(a), "owner")
       let k = (src.file)(r.station, if owner != "" { owner } else { r.session }, text(Some(a), "name"))
@@ -2138,7 +2138,7 @@ fn draft_picture_key(src : Source, r : ChatRef, f : Pending) -> String {
 ///|
 /// Whether a file of the draft shows as a picture's tile.
 fn draft_is_picture(f : Pending, picture : String) -> Bool {
-  picture != "" || (kind_of(f.name) == "image" && f.pasted is None && f.done is Some(_))
+  picture != "" || (kind_of(f.name) == "image" && f.pasted is None && f.done.get() is Some(_))
 }
 
 ///|
@@ -2251,18 +2251,18 @@ fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int, again? : I
       if picture != "" {
         c.image(picture, w=Px(picture_tile), h=Px(picture_tile), fit=FitCover, bg=0L) |> ignore
       }
-      if f.done is None {
+      if f.done.get() is None {
         c.layer(fn() {
-          let can = f.error is Some(_) && f.retry && again != 0
+          let can = f.error.get() is Some(_) && f.retry && again != 0
           let shade = c.box(
             w=Fill(1.0),
             h=Fill(1.0),
-            bg=@sf.alpha(0x000000FFL, if f.error is Some(_) { 0.5 } else { 0.25 }),
+            bg=@sf.alpha(0x000000FFL, if f.error.get() is Some(_) { 0.5 } else { 0.25 }),
             align=ACenter,
             justify=JCenter,
             id=if can { again } else { 0 },
             fn() {
-              if f.error is Some(_) {
+              if f.error.get() is Some(_) {
                 if can {
                   @sf.icon(c, "retry", size=16.0, color=0xFFFFFFFFL) |> ignore
                 }
@@ -2340,9 +2340,9 @@ fn pasted_card(
   locked : Bool,
 ) -> Int {
   let t = @sf.theme()
-  let busy = f.done is None && f.error is None
+  let busy = f.done.get() is None && f.error.get() is None
   let action = c.id("composer/paste-action/\{f.id}")
-  let can_retry = f.error is Some(_) && !src.read_only
+  let can_retry = f.error.get() is Some(_) && !src.read_only
   // (words not too long to put back: the core keeps them in what it says of them)
   let can_restore = field(Some(info), "text") is Some(String(_)) && !locked
   if c.clicked(action) {
@@ -2351,9 +2351,9 @@ fn pasted_card(
       paste_as_file(src, d, r.station, words)
     } else if can_restore {
       take_out(src, d, f)
-      let now = if d.text == "" { words } else { d.text + "\n" + words }
-      d.text = now
-      d.put_text = Some(now)
+      let now = if d.text.get() == "" { words } else { d.text.get() + "\n" + words }
+      d.text.set(now)
+      d.put_text.set(Some(now))
       d.focus = -1
     }
   }
@@ -2385,7 +2385,7 @@ fn pasted_card(
         )
         |> ignore
         c.text(
-          match f.error {
+          match f.error.get() {
             Some(e) => e
             None =>
               if busy {
@@ -2395,7 +2395,7 @@ fn pasted_card(
               }
           },
           size=t.t.caption,
-          color=if f.error is Some(_) { t.p.red } else { t.p.muted },
+          color=if f.error.get() is Some(_) { t.p.red } else { t.p.muted },
           wrap=false,
           line=16.0,
         )
@@ -2425,9 +2425,9 @@ fn pasted_card(
 /// size or how it goes.
 fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
   let t = @sf.theme()
-  let busy = f.done is None && f.error is None
+  let busy = f.done.get() is None && f.error.get() is None
   // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt LinkCard)
-  let link = field(f.done, "link")
+  let link = field(f.done.get(), "link")
   let open = c.id("composer/link/\{f.id}")
   match link {
     Some(l) if c.clicked(open) => open_link(text(Some(l), "url"))
@@ -2455,7 +2455,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     c.box(w=Fill(1.0), fn() {
       c.text(f.name, size=t.t.ui, color=t.p.text, wrap=false, line=20.0) |> ignore
       c.text(
-        match (f.error, link) {
+        match (f.error.get(), link) {
           (Some(e), _) => e
           (None, Some(l)) =>
             match text(Some(l), "site") {
@@ -2465,7 +2465,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
           (None, None) => if busy { uploading_text(f) } else { @sf.file_size(f.size.to_double()) }
         },
         size=t.t.caption,
-        color=if f.error is Some(_) { t.p.red } else { t.p.muted },
+        color=if f.error.get() is Some(_) { t.p.red } else { t.p.muted },
         wrap=false,
         line=16.0,
       )
@@ -2473,7 +2473,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     })
     |> ignore
     // failed going up in the core: its retry key at its end (ChatFiles.kt FileCard onRetry)
-    if f.error is Some(_) && f.retry && again != 0 {
+    if f.error.get() is Some(_) && f.retry && again != 0 {
       card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
     }
     },
@@ -2483,7 +2483,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
 ///|
 /// The files that go up with the message: those up, a link shared in left out (it goes as words).
 fn up_files(d : Draft) -> Array[Json] {
-  d.files.filter_map(fn(f) { f.done }).filter(fn(j) { field(Some(j), "link") is None })
+  d.files.filter_map(fn(f) { f.done.get() }).filter(fn(j) { field(Some(j), "link") is None })
 }
 
 ///|
@@ -2491,8 +2491,8 @@ fn up_files(d : Draft) -> Array[Json] {
 /// core's row does (file_key).
 fn up_shown(d : Draft) -> Array[Json] {
   d.files.filter_map(fn(f) {
-    match f.done {
-      Some(Object(a)) if field(f.done, "link") is None && f.core_id != "" => {
+    match f.done.get() {
+      Some(Object(a)) if field(f.done.get(), "link") is None && f.core_id != "" => {
         let shown = a.copy()
         shown["upload"] = Json::string(f.core_id)
         Some(Json::object(shown))
@@ -2509,7 +2509,7 @@ fn up_shown(d : Draft) -> Array[Json] {
 fn with_link_words(words : String, d : Draft) -> String {
   let lines = if words == "" { [] } else { [words] }
   for f in d.files {
-    match field(f.done, "link") {
+    match field(f.done.get(), "link") {
       Some(link) => {
         let title = text(Some(link), "title")
         let url = text(Some(link), "url")

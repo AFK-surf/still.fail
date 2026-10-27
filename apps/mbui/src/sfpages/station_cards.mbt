@@ -120,7 +120,7 @@ fn host_details(c : @ui.Ctx, rows : Array[(String, String)]) -> Unit {
 /// What is asked of a station's software (useSoftware): updating one, checking, its channel, updating by itself; what
 /// went wrong with it, by station ("" nothing).
 // kept across runs: said as an update fails or is asked again; station_cards_reset empties it
-let software_failed : Map[String, String] = {}
+let software_failed : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 fn station_cards_reset() -> Unit {

@@ -114,7 +114,7 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 /// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {
-    let l = c.layer(fn() { new_left(c, src, w, fresh.scene, new_leave(c).get(), new_fade(c).get()) })
+    let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c).get(), new_fade(c).get()) })
     // (drawn only, while it leaves)
     c.draw_only(l)
   }

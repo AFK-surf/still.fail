@@ -44,7 +44,7 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
     return
   }
   let l = c.layer(fn() {
-    @sfpages.new_chat_left(c, src, w, new_frame(src, w), fresh.scene, new_leave(c).get(), new_fade(c).get())
+    @sfpages.new_chat_left(c, src, w, new_frame(src, w), fresh.scene.get(), new_leave(c).get(), new_fade(c).get())
   })
   // (drawn only, while it leaves)
   c.draw_only(l)

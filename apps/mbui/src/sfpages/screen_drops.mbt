@@ -16,14 +16,14 @@ priv struct ScreenDropItem {
   folder : String
   reveal : Bool
   bytes : Bytes
-  mut name : String
+  name : @signals.Signal[String]
   /// the names refused for being taken there
-  tried : Array[String]
-  mut sent : Int
+  tried : @sf.LiveArray[String]
+  sent : @signals.Signal[Int]
   /// `waiting`, `going`, `done` or `failed` (why in `error`)
-  mut state : String
+  state : @signals.Signal[String]
   mut error : String
-  mut id : String
+  id : @signals.Signal[String]
 }
 
 ///|
@@ -39,7 +39,7 @@ fn drop_path(folder : String, name : String) -> String {
 
 ///|
 fn ScreenDropItem::path(self : ScreenDropItem) -> String {
-  drop_path(self.folder, self.name)
+  drop_path(self.folder, self.name.get())
 }
 
 ///|
@@ -52,12 +52,12 @@ fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to 
       folder: to.folder,
       reveal: to.reveal,
       bytes: f.bytes,
-      name: f.name,
-      tried: [],
-      sent: 0,
-      state: "waiting",
+      name: @signals.signal(f.name),
+      tried: @sf.LiveArray::from([]),
+      sent: @signals.signal(0),
+      state: @signals.signal("waiting"),
       error: "",
-      id: "",
+      id: @signals.signal(""),
     })
   }
   self.pump()
@@ -66,7 +66,7 @@ fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to 
 ///|
 /// Let go of: off the list (stopped, if it was going: what the station says of it next is let go).
 fn ScreenSess::dismiss(self : ScreenSess, d : ScreenDropItem) -> Unit {
-  let going = d.state == "going"
+  let going = d.state.get() == "going"
   self.drops.retain(fn(x) { x.serial != d.serial })
   if going {
     self.pumping = false
@@ -77,12 +77,12 @@ fn ScreenSess::dismiss(self : ScreenSess, d : ScreenDropItem) -> Unit {
 ///|
 /// Failed: tried again from the start.
 fn ScreenSess::retry(self : ScreenSess, d : ScreenDropItem) -> Unit {
-  if d.state != "failed" {
+  if d.state.get() != "failed" {
     return
   }
-  d.state = "waiting"
+  d.state.set("waiting")
   d.error = ""
-  d.sent = 0
+  d.sent.set(0)
   self.pump()
 }
 
@@ -92,21 +92,21 @@ fn ScreenSess::pump(self : ScreenSess) -> Unit {
   if self.pumping {
     return
   }
-  match self.drops.iter().find_first(fn(d) { d.state == "waiting" }) {
+  match self.drops.iter().find_first(fn(d) { d.state.get() == "waiting" }) {
     Some(d) => {
       if self.src.read_only {
-        d.state = "failed"
+        d.state.set("failed")
         d.error = read_only_words
         self.pump()
         return
       }
       self.pumping = true
-      d.state = "going"
-      d.sent = 0
-      d.id = upload_id(
-        "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name, d.bytes),
+      d.state.set("going")
+      d.sent.set(0)
+      d.id.set(upload_id(
+        "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name.get(), d.bytes),
         d.serial,
-      )
+      ))
       self.drop_part(d, 0, dv_part_first)
     }
     None => ()
@@ -116,7 +116,7 @@ fn ScreenSess::pump(self : ScreenSess) -> Unit {
 ///|
 /// Whether `d` is still on the list, going.
 fn ScreenSess::still_going(self : ScreenSess, d : ScreenDropItem) -> Bool {
-  self.drops.iter().any(fn(x) { x.serial == d.serial }) && d.state == "going"
+  self.drops.iter().any(fn(x) { x.serial == d.serial }) && d.state.get() == "going"
 }
 
 ///|
@@ -130,8 +130,8 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
   let params : Map[String, Json] = {
     "station": Json::string(self.station),
     "root": Json::string(d.folder),
-    "path": Json::string(d.name),
-    "id": Json::string(d.id),
+    "path": Json::string(d.name.get()),
+    "id": Json::string(d.id.get()),
     "offset": Json::number(have.to_double()),
     "total": Json::number(size.to_double()),
   }
@@ -151,15 +151,15 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
           _ => have + len
         }
         if entry || next >= size {
-          d.sent = size
-          d.state = "done"
+          d.sent.set(size)
+          d.state.set("done")
           self.pumping = false
           self.pump()
         } else if next <= have {
           // nothing more taken: a part the station could not take
           self.drop_failed(d, @sf.t("android-chat.file.uploadFailed"))
         } else {
-          d.sent = next
+          d.sent.set(next)
           let more = if next == have + len {
             if planned * 2 > dv_part_max {
               dv_part_max
@@ -176,19 +176,19 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
         let taken = number(Some(e), "status") == 409.0 || text(Some(e), "code") == "exists"
         if taken && d.tried.length() < drop_tries {
           // a name taken there: the next one beside it, from the first one asked, as the station keeps both (putFree)
-          d.tried.push(d.name)
-          dv_beside_name(self.src, self.station, d.folder, "", d.tried[0], d.tried, fn(r) {
+          d.tried.push(d.name.get())
+          dv_beside_name(self.src, self.station, d.folder, "", d.tried[0], d.tried.copy(), fn(r) {
             if !self.still_going(d) {
               return
             }
             match r {
               Ok(name) => {
-                d.name = name
-                d.sent = 0
-                d.id = upload_id(
-                  "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name, d.bytes),
+                d.name.set(name)
+                d.sent.set(0)
+                d.id.set(upload_id(
+                  "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name.get(), d.bytes),
                   d.serial,
-                )
+                ))
                 self.drop_part(d, 0, dv_part_first)
               }
               Err(why) => self.drop_failed(d, why)
@@ -204,7 +204,7 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
 
 ///|
 fn ScreenSess::drop_failed(self : ScreenSess, d : ScreenDropItem, why : String) -> Unit {
-  d.state = "failed"
+  d.state.set("failed")
   d.error = why
   self.pumping = false
   self.pump()

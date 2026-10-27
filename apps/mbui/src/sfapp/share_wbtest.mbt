@@ -30,7 +30,7 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; a n
     Chat(r) => assert_eq(r.session, "s-c4")
     _ => fail("not the chat")
   }
-  assert_true(share_in.shared is None)
+  assert_true(share_in.shared.get() is None)
   let n = share_tester("share-in-stations")
   assert_true(n.find("MBA") is Some(_))
   n.tap_text("MBA")
@@ -42,15 +42,15 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; a n
 test "a shared link in a draft: a card with its site, sent as words after what is written" {
   let d : Draft = {
     key: "ws1/st1:s-c4",
-    text: "",
-    put_text: None,
+    text: @signals.signal(""),
+    put_text: @signals.signal(None),
     field: @ui.Field::new(),
-    quotes: [],
-    comments: {},
-    files: [],
-    error: None,
-    loaded: true,
-    kept: "",
+    quotes: @sf.LiveArray::from([]),
+    comments: @sf.LiveMap::from({}),
+    files: @sf.LiveArray::from([]),
+    error: @signals.signal(None),
+    loaded: @signals.signal(true),
+    kept: @signals.signal(""),
     changed_at: 0.0,
     warm_n: 1,
     focus: 0,
@@ -101,10 +101,10 @@ test "over another app, the sheet closed: the app goes once it has sunk away, ba
 test "over another app signed out: to sign in in the app first, 打开 still.fail opens it" {
   reset()
   let src = fixture("signin")
-  share_in.shared = Some(fix_shared)
-  share_in.env_taken = true
+  share_in.shared.set(Some(fix_shared))
+  share_in.env_taken.set(true)
   raise_sheet(ShareSheet)
-  share_in.raised = true
+  share_in.raised.set(true)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
@@ -121,8 +121,8 @@ fn over_toast_foot(foot : Double) -> Double raise {
   t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
   t.frame()
   sheet_rested(t, "sf-present")
-  app.toast = "发到了"
-  app.toast_n += 1
+  app.toast.set("发到了")
+  app.toast_n.set(app.toast_n.get() + 1)
   t.frame()
   match t.rect_of("发到了") {
     Some((_, y, _, h)) => y + h

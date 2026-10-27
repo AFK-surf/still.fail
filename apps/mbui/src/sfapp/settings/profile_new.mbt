@@ -9,9 +9,9 @@ pub(all) struct NewProfile {
   form : String
   mut opened : Bool
   mut dropped : Bool
-  mut login : String
+  login : @signals.Signal[String]
   mut asked : Bool
-  mut error : String
+  error : @signals.Signal[String]
   mut key : String
   mut endpoint : String
   mut filled : Bool
@@ -35,9 +35,9 @@ pub fn new_profile_of(station : String) -> NewProfile {
         form: "mbui-profile-" + profile_forms.val.to_string(),
         opened: false,
         dropped: false,
-        login: "",
+        login: @signals.signal(""),
         asked: false,
-        error: "",
+        error: @signals.signal(""),
         key: "",
         endpoint: "",
         filled: false,
@@ -65,15 +65,15 @@ fn new_profile_left(core : Core, station : String) -> Unit {
 ///|
 /// The sign-in a new profile's page started let go, unless it made its profile.
 pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
-  if n.login != "" {
-    let made = match pending_login(core, station, n.login) {
+  if n.login.get() != "" {
+    let made = match pending_login(core, station, n.login.get()) {
       Some(l) => has(Some(l), "created")
       None => false
     }
     if !made {
-      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login))]), fn(_) {  })
+      (core.call)("login.drop", obj([("station", str(station)), ("id", str(n.login.get()))]), fn(_) {  })
     }
-    n.login = ""
+    n.login.set("")
   }
   n.asked = false
 }
@@ -96,7 +96,7 @@ pub fn pending_login(core : Core, station : String, id : String) -> Json? {
 /// A plan's sign-in started for the page (`login.new` with what it signs in to).
 pub fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
   n.asked = true
-  n.error = ""
+  n.error.set("")
   let p = [("station", str(station)), ("runtime", str(runtime))]
   if access != "" {
     p.push(("access", str(access)))
@@ -104,11 +104,11 @@ pub fn start_login(core : Core, station : String, n : NewProfile, runtime : Stri
   (core.call)("login.new", obj(p), fn(r) {
     match r {
       Ok(v) =>
-        n.login = match v {
+        n.login.set(match v {
           String(id) => id
           _ => text(Some(v), "id")
-        }
-      Err(e) => n.error = error_text(e)
+        })
+      Err(e) => n.error.set(error_text(e))
     }
   })
 }
@@ -146,11 +146,11 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     // (once the frame's builds are over; start_login says it asked)
     c.tell("profile-login/" + form, fn() { start_login(core, station, n, runtime, text(sign, "access")) })
   }
-  let pending = if n.login == "" { None } else { pending_login(core, station, n.login) }
+  let pending = if n.login.get() == "" { None } else { pending_login(core, station, n.login.get()) }
   // the sign-in made its profile: on to it, in this page's place
   match opt_text(pending, "created") {
     Some(id) => {
-      n.login = ""
+      n.login.set("")
       (core.say)(tr("android-settings.profile.addedLogin"))
       // on to choosing its models (PickModels), the step chats need
       (core.in_place)(PickModels(station, id))
@@ -248,10 +248,10 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         pad(fn() {
           let job = field(pending, "job")
           let state = text(job, "state")
-          if n.error != "" || state == "failed" || state == "cancelled" {
+          if n.error.get() != "" || state == "failed" || state == "cancelled" {
             c.text(
-              if n.error != "" {
-                n.error
+              if n.error.get() != "" {
+                n.error.get()
               } else {
                 match opt_text(job, "error") {
                   Some(e) => e
@@ -271,17 +271,17 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
             login_steps(
               c,
               core,
-              station + "/new/" + n.login,
+              station + "/new/" + n.login.get(),
               job,
               provider,
               fn(code) {
-                if n.login != "" {
-                  act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]))
+                if n.login.get() != "" {
+                  act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login.get())), ("code", str(code))]))
                 }
               },
               in_station=(text(s, "name"), fn(what) {
-                if n.login != "" {
-                  act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login))]), then=fn(v) {
+                if n.login.get() != "" {
+                  act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login.get()))]), then=fn(v) {
                     (core.open_screen)(station, text(Some(v), "screen"))
                   })
                 }

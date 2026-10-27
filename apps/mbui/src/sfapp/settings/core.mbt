@@ -507,10 +507,10 @@ pub fn left(route : Route) -> Unit {
         None => ()
       }
     KeptFiles => {
-      kept.chats = None
-      kept.drive = 0.0
-      kept.loose = []
-      kept.asked += 1
+      kept.chats.set(None)
+      kept.drive.set(0.0)
+      kept.loose.set([])
+      kept.asked.set(kept.asked.get() + 1)
     }
     BarSettings => bar_adding.val = false
     RunSettings(_, key) => {
@@ -533,7 +533,7 @@ pub fn reset() -> Unit {
   fonts_at.val = 0
   adb_reset()
   keyed_fields.clear()
-  notify_switched.val = None
+  notify_switched.set(None)
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()
@@ -558,14 +558,14 @@ pub fn reset() -> Unit {
   login_state.seen.clear()
   profile_forms.val = 0
   machine_sessions.clear()
-  adding.existing = false
-  adding.made = None
-  adding.error = ""
-  adding.known = []
+  adding.existing.set(false)
+  adding.made.set(None)
+  adding.error.set("")
+  adding.known.set([])
   adding.took.clear()
   adding.order.clear()
-  adding.picked = ""
-  adding.serial = 0
+  adding.picked.set("")
+  adding.serial.set(0)
   mark_pick.emojis = false
   mark_pick.color = ""
   mark_pick.serial = 0
@@ -585,11 +585,11 @@ pub fn reset() -> Unit {
   decision_forms.clear()
   policy_forms.clear()
   // what this device keeps, asked of a run's own core
-  kept.chats = None
-  kept.drive = 0.0
-  kept.loose = []
-  kept.asked = 0
-  kept.read = -1
+  kept.chats.set(None)
+  kept.drive.set(0.0)
+  kept.loose.set([])
+  kept.asked.set(0)
+  kept.read.set(-1)
   run_opened.clear()
   run_list.clear()
   new_profiles.clear()

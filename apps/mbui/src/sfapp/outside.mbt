@@ -9,7 +9,7 @@
 /// Sends what draft `d` holds by `send`, written on `station`, once this workspace's agents can read what it refers
 /// to (sfbase's send_sharing).
 fn send_sharing(src : Source, d : Draft, station : String, send : () -> Unit) -> Unit {
-  @sfbase.send_sharing(src, d.key, station, d.text.trim(chars=" \n\t").to_string(), send)
+  @sfbase.send_sharing(src, d.key, station, d.text.get().trim(chars=" \n\t").to_string(), send)
 }
 
 ///|
@@ -100,7 +100,7 @@ fn outside_reset() -> Unit {
 fn outside_sheet(c : @ui.Ctx, src : Source, key : String) -> Unit {
   ignore(c)
   match (@sfbase.outside_asking(key), outside_shown.get(key)) {
-    (Some(s), None) if s.open => {
+    (Some(s), None) if s.open.get() => {
       @sf.panel(
         tr("web-main.outside.title"),
         fn(c, _) { outside_body_of(c, key) },
@@ -108,14 +108,14 @@ fn outside_sheet(c : @ui.Ctx, src : Source, key : String) -> Unit {
         foot=fn(c, _) { outside_foot(c, src, key) },
         gone=fn() {
           match @sfbase.outside_asking(key) {
-            Some(s) if s.open => @sfbase.outside_no(s)
+            Some(s) if s.open.get() => @sfbase.outside_no(s)
             _ => ()
           }
         },
       )
       outside_shown[key] = @sf.last_presented()
     }
-    (Some(s), Some(serial)) if !s.open =>
+    (Some(s), Some(serial)) if !s.open.get() =>
       if @sf.presented_drawn_of(serial) {
         // answered (shared and sent, or 取消): down
         @sf.close_presented_of(serial)
@@ -158,8 +158,8 @@ fn outside_body_of(c : @ui.Ctx, key : String) -> Unit {
     })
     |> ignore
   }
-  if s.error != "" {
-    c.box(style=outside_failed_box, fn() { c.text(s.error, style=outside_cannot) |> ignore }) |> ignore
+  if s.error.get() != "" {
+    c.box(style=outside_failed_box, fn() { c.text(s.error.get(), style=outside_cannot) |> ignore }) |> ignore
   }
 }
 
@@ -171,7 +171,7 @@ fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
     @sfbase.outside_no(s)
   }
   let label = tr(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  if dv_button(c, "outside/go", label, primary=true, busy=s.busy) {
+  if dv_button(c, "outside/go", label, primary=true, busy=s.busy.get()) {
     @sfbase.outside_yes(src, s)
     // (a core that answers at once has cleared it to go already)
     sharing_go(s.key)

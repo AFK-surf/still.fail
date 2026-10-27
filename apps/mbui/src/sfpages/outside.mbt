@@ -11,7 +11,7 @@
 fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
   guard @sfbase.outside_asking(key) is Some(s) else { return }
   match outside_up.get(key) {
-    None if s.open => {
+    None if s.open.get() => {
       @sf.panel(
         @sf.t("web-main.outside.title"),
         fn(c, _) { outside_body(c, key) },
@@ -33,7 +33,7 @@ fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
       outside_up[key] = @sf.last_presented()
     }
     // decided (shared, sent as it is, or 取消): down
-    Some(serial) if !s.open => {
+    Some(serial) if !s.open.get() => {
       outside_up.remove(key)
       @sf.close_presented_of(serial)
       @sfbase.outside_gone(s)
@@ -76,8 +76,8 @@ fn outside_body(c : @ui.Ctx, key : String) -> Unit {
       })
       |> ignore
     }
-    if s.error != "" {
-      c.text(s.error, style=outside_cannot) |> ignore
+    if s.error.get() != "" {
+      c.text(s.error.get(), style=outside_cannot) |> ignore
     }
   })
   |> ignore
@@ -88,14 +88,14 @@ fn outside_body(c : @ui.Ctx, key : String) -> Unit {
 fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
   guard @sfbase.outside_asking(key) is Some(s) else { return }
   // Enter sent it, so Enter again says yes (read in the panel: its keys while it is open)
-  if s.open && c.key_pressed(@ui.key_code_enter) {
+  if s.open.get() && c.key_pressed(@ui.key_code_enter) {
     @sfbase.outside_yes(src, s)
   }
   if @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost) {
     @sfbase.outside_no(s)
   }
   let label = @sf.t(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  if @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy) {
+  if @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get()) {
     @sfbase.outside_yes(src, s)
   }
 }

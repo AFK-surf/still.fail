@@ -9,28 +9,28 @@
 /// none), the place asked (None: the home), what it holds (and what it held last: its places stay while the next is
 /// read), why it could not be read, the ask on its way (`asking`: one asked, not answered yet).
 priv struct Picker {
-  mut picking : String
-  mut at : String?
-  mut value : Json?
-  mut last : Json?
-  mut error : String
-  mut denied : Bool
-  mut serial : Int
-  mut asking : Bool
+  picking : @signals.Signal[String]
+  at : @signals.Signal[String?]
+  value : @signals.Signal[Json?]
+  last : @signals.Signal[Json?]
+  error : @signals.Signal[String]
+  denied : @signals.Signal[Bool]
+  serial : @signals.Signal[Int]
+  asking : @signals.Signal[Bool]
   filter : @ui.Field
 }
 
 ///|
 // kept across runs: the picker's state (dialogs_reset puts it back)
 let dialogs : Picker = {
-  picking: "",
-  at: None,
-  value: None,
-  last: None,
-  error: "",
-  denied: false,
-  serial: 0,
-  asking: false,
+  picking: @signals.signal("", same=fn(a, b) { a == b }),
+  at: @signals.signal(None),
+  value: @signals.signal(None),
+  last: @signals.signal(None),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  denied: @signals.signal(false, same=fn(a, b) { a == b }),
+  serial: @signals.signal(0, same=fn(a, b) { a == b }),
+  asking: @signals.signal(false, same=fn(a, b) { a == b }),
   filter: @ui.Field::new(),
 }
 
@@ -41,14 +41,14 @@ fn dialogs_reset() -> Unit {
 
 ///|
 fn picker_close() -> Unit {
-  dialogs.picking = ""
-  dialogs.at = None
-  dialogs.value = None
-  dialogs.last = None
-  dialogs.error = ""
-  dialogs.denied = false
-  dialogs.serial += 1
-  dialogs.asking = false
+  dialogs.picking.set("")
+  dialogs.at.set(None)
+  dialogs.value.set(None)
+  dialogs.last.set(None)
+  dialogs.error.set("")
+  dialogs.denied.set(false)
+  dialogs.serial.set(dialogs.serial.get() + 1)
+  dialogs.asking.set(false)
   dialogs.filter.set("")
 }
 
@@ -163,18 +163,18 @@ fn drive_station_of(src : Source, ws : String, id : String) -> DvStation? {
 /// The picker's folders at `path` (its home when None) asked of the station (`drive.folders`), a later ask superseding
 /// one on its way; what it held kept (its places stay while the next is read).
 fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Unit {
-  dialogs.at = path
-  match dialogs.value {
-    Some(v) => dialogs.last = Some(v)
+  dialogs.at.set(path)
+  match dialogs.value.get() {
+    Some(v) => dialogs.last.set(Some(v))
     None => ()
   }
-  dialogs.value = None
-  dialogs.error = ""
-  dialogs.denied = false
-  dialogs.serial += 1
+  dialogs.value.set(None)
+  dialogs.error.set("")
+  dialogs.denied.set(false)
+  dialogs.serial.set(dialogs.serial.get() + 1)
   dialogs.filter.set("")
-  let serial = dialogs.serial
-  dialogs.asking = true
+  let serial = dialogs.serial.get()
+  dialogs.asking.set(true)
   let params : Map[String, Json] = { "station": Json::string(station) }
   match path {
     Some(p) => params["path"] = Json::string(p)
@@ -182,17 +182,17 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
   }
   c.tell("drive.folders/picker", fn() {
     (src.call)("drive.folders", Json::object(params), fn(r) {
-      if serial != dialogs.serial {
+      if serial != dialogs.serial.get() {
         return
       }
-      dialogs.asking = false
+      dialogs.asking.set(false)
       match r {
         Ok(v) => {
-          dialogs.value = Some(v)
-          dialogs.last = Some(v)
-          dialogs.denied = flag(Some(v), "unreadable")
+          dialogs.value.set(Some(v))
+          dialogs.last.set(Some(v))
+          dialogs.denied.set(flag(Some(v), "unreadable"))
         }
-        Err(e) => if text(Some(e), "code") == "permission" { dialogs.denied = true } else { dialogs.error = dv_error(e) }
+        Err(e) => if text(Some(e), "code") == "permission" { dialogs.denied.set(true)} else { dialogs.error.set(dv_error(e))}
       }
     })
   })
@@ -217,7 +217,7 @@ fn set_roots(c : @ui.Ctx, src : Source, station : String, roots : Array[String],
 /// shown (one pinned already, or one the station may not read, is not).
 fn picker_open(src : Source, ws : String, station : String) -> Unit {
   picker_close()
-  dialogs.picking = station
+  dialogs.picking.set(station)
   let lent = fn() {
     match drive_station_of(src, ws, station) {
       Some(s) => s.roots.map(fn(r) { r.path })
@@ -231,7 +231,7 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
     description=@sf.t("web-pages.drive.pickNote"),
     wide=true,
     foot=fn(c, close) {
-      let v = dialogs.value
+      let v = dialogs.value.get()
       let path = text(v, "path")
       let lent = lent()
       let taken = v is Some(_) && lent.contains(path)
@@ -244,7 +244,7 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
           @sf.t(if taken { "web-pages.drive.already" } else { "web-pages.drive.pickThis" }),
           key="drive/picker/pick",
           tone=Primary,
-          disabled=v is None || taken || dialogs.denied,
+          disabled=v is None || taken || dialogs.denied.get(),
         ) {
         let name = match dv_name(path.trim_end(chars="/\\").to_owned()) {
           "" => path
@@ -263,17 +263,17 @@ fn picker_open(src : Source, ws : String, station : String) -> Unit {
 /// What the picker on `station` holds, each frame while it is open.
 fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
   // (closed: what it held last stays drawn as it goes, nothing asked)
-  if dialogs.picking != station {
+  if dialogs.picking.get() != station {
     return
   }
   let t = @sf.theme()
   // (asked once: not again each frame while the answer is on its way)
-  if dialogs.value is None && dialogs.error == "" && !dialogs.denied && dialogs.last is None && !dialogs.asking {
-    picker_go(c, src, station, dialogs.at)
+  if dialogs.value.get() is None && dialogs.error.get() == "" && !dialogs.denied.get() && dialogs.last.get() is None && !dialogs.asking.get() {
+    picker_go(c, src, station, dialogs.at.get())
   }
   let narrow = look_of(c) is Narrow
-  let v = dialogs.value
-  let near = dialogs.last
+  let v = dialogs.value.get()
+  let near = dialogs.last.get()
   let path = text(v, "path")
   // the way here, the filter at its end (under it, narrow)
   let way = match near {
@@ -284,7 +284,7 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
     @sf.way_line(c, "drive/picker/way", way.map(fn(w) { w.0 }), picker_way(), fn(i) {
       picker_go(c, src, station, Some(way[i].1))
     })
-    if !dialogs.denied && dialogs.error == "" {
+    if !dialogs.denied.get() && dialogs.error.get() == "" {
       c.box(style=if narrow { picker_filter_narrow } else { picker_filter }, fn() {
         @sf.input(c, "drive/picker/filter", placeholder=@sf.t("web-pages.drive.pickFilter"), field=dialogs.filter) |> ignore
       })
@@ -333,10 +333,10 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
       |> ignore
     }
     c.box(style=picker_list, fn() {
-      if dialogs.denied || dialogs.error != "" {
+      if dialogs.denied.get() || dialogs.error.get() != "" {
         c.box(style=picker_shut, fn() {
           @sf.icon(c, "folder", size=shut_icon, color=t.p.muted) |> ignore
-          c.text(if dialogs.denied { @sf.t("web-pages.drive.pickNeedsAccess") } else { dialogs.error }, style=shut_words) |> ignore
+          c.text(if dialogs.denied.get() { @sf.t("web-pages.drive.pickNeedsAccess") } else { dialogs.error.get() }, style=shut_words) |> ignore
         })
         |> ignore
       } else {

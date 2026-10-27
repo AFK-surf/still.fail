@@ -26,7 +26,7 @@ fn notify_page_reset() -> Unit {
 ///|
 /// What was just chosen of what the app's icon counts before the prefs say it back (`badgeKinds`), by kind ("on" the
 /// badge itself).
-let badge_chosen : Map[String, Bool] = {}
+let badge_chosen : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// What the badge counts, as the core keeps it (`workspaceMarks`' `badgeKinds`: the prefs', or as their older `badge`
@@ -89,7 +89,7 @@ let kind_open : Ref[String] = Ref("")
 
 ///|
 /// What was just chosen of the kinds before the core says it back (`notify.set` `kinds`), by kind.
-let kinds_chosen : Map[String, Json] = {}
+let kinds_chosen : @sf.LiveMap[String, Json] = @sf.LiveMap::new()
 
 ///|
 /// Whether `kind` comes as a banner now: notifications on, and the kind's own as the core keeps it (`kinds`, each said:
@@ -175,8 +175,8 @@ pub fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> 
 fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Json?) -> Array[() -> Unit] {
   let blocks : Array[() -> Unit] = []
   let permission = text(notify, "permission")
-  let pending = is_doing(core, ["notify.set"], []) || notify_switched.val is Some(_)
-  let on = match notify_switched.val {
+  let pending = is_doing(core, ["notify.set"], []) || notify_switched.get() is Some(_)
+  let on = match notify_switched.get() {
     Some(v) => v
     None => flag(notify, "on")
   }

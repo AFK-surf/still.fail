@@ -113,11 +113,11 @@ pub fn open_drive_fixture(mode : String) -> Unit {
             station: "ws1/st1",
             root: @sffixture.fix_docs,
             dir: "",
-            name,
+            name: @signals.signal(name),
             bytes: Bytes::new(size),
-            sent,
-            state,
-            error,
+            sent: @signals.signal(sent),
+            state: @signals.signal(state),
+            error: @signals.signal(error),
             replace: false,
             id: "",
           })
@@ -125,7 +125,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         up("旅行照片.zip", 6291456, 2621440, "going", "")
         up("长篇小说.txt", 2048, 0, "taken", "")
         up("会议录音.m4a", 3145728, 0, "failed", "station 已离线")
-        ups.pumping = true
+        ups.pumping.set(true)
       }
     }
     "drive-sub" => {
@@ -522,23 +522,23 @@ fn open_service_fixture(mode : String) -> Unit {
 fn open_share_fixture(mode : String) -> Unit {
   match mode {
     "share-in" | "share-in-stations" => {
-      share_in.shared = Some(@sffixture.fix_shared)
-      share_in.env_taken = true
+      share_in.shared.set(Some(@sffixture.fix_shared))
+      share_in.env_taken.set(true)
       raise_sheet(ShareSheet)
-      share_in.raised = true
-      share_in.choosing = mode == "share-in-stations"
+      share_in.raised.set(true)
+      share_in.choosing.set(mode == "share-in-stations")
     }
     // files from another app's share sheet (ACTION_SEND_MULTIPLE): two pictures (the chat fixture's) and a document
     "share-in-files" => {
-      share_in.shared = Some(("", None))
-      share_in.files = [
+      share_in.shared.set(Some(("", None)))
+      share_in.files.set([
         { name: "home-after.png", bytes: Bytes::new(182345), image: @sffixture.fixture_file("home-after.png") },
         { name: "compare.png", bytes: Bytes::new(96512), image: @sffixture.fixture_file("compare.png") },
         { name: "季度数据.csv", bytes: Bytes::new(23110), image: "" },
-      ]
-      share_in.env_taken = true
+      ])
+      share_in.env_taken.set(true)
       raise_sheet(ShareSheet)
-      share_in.raised = true
+      share_in.raised.set(true)
     }
     _ => ()
   }

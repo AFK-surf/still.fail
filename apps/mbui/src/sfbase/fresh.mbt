@@ -6,40 +6,40 @@
 pub(all) struct FreshChat {
   /// the chat made for the first message (its key), and what was picked when it was made: picked anew, it is made
   /// anew (until a message went to it)
-  mut made : String
-  mut made_sig : String
-  mut sent : Bool
+  made : @signals.Signal[String]
+  made_sig : @signals.Signal[String]
+  sent : @signals.Signal[Bool]
   /// a message on its way (the create and the send)
-  mut starting : Bool
+  starting : @signals.Signal[Bool]
   /// the chat it became (its scene leaving over it: new_leave)
-  mut became : ChatRef?
+  became : @signals.Signal[ChatRef?]
   /// the scene's look as it left: the view it showed; in the wide frame, how tall its composer's place was (what the
   /// scene leaving keeps clear, so nothing of it moves)
-  mut scene : Json?
-  mut room : Double
+  scene : @signals.Signal[Json?]
+  room : @signals.Signal[Double]
 }
 
 ///|
 pub let fresh : FreshChat = {
-  made: "",
-  made_sig: "",
-  sent: false,
-  starting: false,
-  became: None,
-  scene: None,
-  room: 0.0,
+  made: @signals.signal("", same=fn(a, b) { a == b }),
+  made_sig: @signals.signal("", same=fn(a, b) { a == b }),
+  sent: @signals.signal(false, same=fn(a, b) { a == b }),
+  starting: @signals.signal(false, same=fn(a, b) { a == b }),
+  became: @signals.signal(None),
+  scene: @signals.signal(None),
+  room: @signals.signal(0.0, same=fn(a, b) { a == b }),
 }
 
 ///|
 /// A new chat begun: nothing made for it yet (useEnsureChat's, made once a page).
 pub fn fresh_reset() -> Unit {
-  fresh.made = ""
-  fresh.made_sig = ""
-  fresh.sent = false
-  fresh.starting = false
-  fresh.became = None
-  fresh.scene = None
-  fresh.room = 0.0
+  fresh.made.set("")
+  fresh.made_sig.set("")
+  fresh.sent.set(false)
+  fresh.starting.set(false)
+  fresh.became.set(None)
+  fresh.scene.set(None)
+  fresh.room.set(0.0)
 }
 
 ///|
@@ -95,8 +95,8 @@ pub fn picked_sig(v : Json?) -> String {
 /// What is picked now (`v`, the newChat view): the chat made for it before is let go if it was made with other picks
 /// and nothing was sent to it yet.
 pub fn fresh_picked(v : Json?) -> Unit {
-  if !fresh.sent && !fresh.starting && picked_sig(v) != fresh.made_sig {
-    fresh.made = ""
+  if !fresh.sent.get() && !fresh.starting.get() && picked_sig(v) != fresh.made_sig.get() {
+    fresh.made.set("")
   }
 }
 
@@ -122,7 +122,7 @@ pub fn pick_new(src : Source, ws : String, fill : Map[String, Json]) -> Unit {
 /// Whether chat `r` is the one a new chat just became, its scene still leaving over it (till the end declared as it
 /// set out).
 pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
-  match fresh.became {
+  match fresh.became.get() {
     Some(b) => b == r && !new_leave(c).over()
     None => false
   }
@@ -132,7 +132,7 @@ pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
 /// Whether chat `r` was just made from a new chat, its scene still leaving or its first words still carried: the
 /// core's own, its first view not read yet, nothing breathing over it (Chat.kt made).
 pub fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
-  match fresh.became {
+  match fresh.became.get() {
     Some(b) if b == r => !new_leave(c).over() || flight_carried(r.station + ":" + r.session)
     _ => false
   }

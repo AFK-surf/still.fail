@@ -9,44 +9,44 @@
 /// not be (`created` its error's code and words), whether a code was asked for; the invitation being accepted, why it
 /// could not be; the account being signed out, why it could not be.
 priv struct LandingState {
-  mut creating : Bool
-  mut code_tried : String
-  mut create_code : String
-  mut create_error : String
-  mut asked : Bool
-  mut accepting : String
-  mut accept_error : String
-  mut leaving : Bool
-  mut leave_error : String
+  creating : @signals.Signal[Bool]
+  code_tried : @signals.Signal[String]
+  create_code : @signals.Signal[String]
+  create_error : @signals.Signal[String]
+  asked : @signals.Signal[Bool]
+  accepting : @signals.Signal[String]
+  accept_error : @signals.Signal[String]
+  leaving : @signals.Signal[Bool]
+  leave_error : @signals.Signal[String]
   code : @ui.Field
 }
 
 ///|
 let landing : LandingState = {
-  creating: false,
-  code_tried: "",
-  create_code: "",
-  create_error: "",
-  asked: false,
-  accepting: "",
-  accept_error: "",
-  leaving: false,
-  leave_error: "",
+  creating: @signals.signal(false, same=fn(a, b) { a == b }),
+  code_tried: @signals.signal("", same=fn(a, b) { a == b }),
+  create_code: @signals.signal("", same=fn(a, b) { a == b }),
+  create_error: @signals.signal("", same=fn(a, b) { a == b }),
+  asked: @signals.signal(false, same=fn(a, b) { a == b }),
+  accepting: @signals.signal("", same=fn(a, b) { a == b }),
+  accept_error: @signals.signal("", same=fn(a, b) { a == b }),
+  leaving: @signals.signal(false, same=fn(a, b) { a == b }),
+  leave_error: @signals.signal("", same=fn(a, b) { a == b }),
   code: @ui.Field::new(),
 }
 
 ///|
 /// As at the start (tests).
 pub fn landing_reset() -> Unit {
-  landing.creating = false
-  landing.code_tried = ""
-  landing.create_code = ""
-  landing.create_error = ""
-  landing.asked = false
-  landing.accepting = ""
-  landing.accept_error = ""
-  landing.leaving = false
-  landing.leave_error = ""
+  landing.creating.set(false)
+  landing.code_tried.set("")
+  landing.create_code.set("")
+  landing.create_error.set("")
+  landing.asked.set(false)
+  landing.accepting.set("")
+  landing.accept_error.set("")
+  landing.leaving.set(false)
+  landing.leave_error.set("")
   landing.code.set("")
 }
 
@@ -181,20 +181,20 @@ fn create_workspace(src : Source, account : Json?, code : String) -> Unit {
   if code != "" {
     params["invite_code"] = Json::string(code)
   }
-  landing.creating = true
-  landing.code_tried = code
-  landing.create_error = ""
-  landing.create_code = ""
+  landing.creating.set(true)
+  landing.code_tried.set(code)
+  landing.create_error.set("")
+  landing.create_code.set("")
   (src.call)("workspace.create", Json::object(params), fn(r) {
-    landing.creating = false
+    landing.creating.set(false)
     match r {
       Ok(v) => @sfbase.pick_workspace(src, text(Some(v), "id"))
       Err(e) => {
-        landing.create_code = text(Some(e), "code")
-        landing.create_error = landing_error_words(e)
+        landing.create_code.set(text(Some(e), "code"))
+        landing.create_error.set(landing_error_words(e))
         // once asked for a code, the form stays while codes are tried
-        if invite_error_key(landing.create_code) is Some(_) {
-          landing.asked = true
+        if invite_error_key(landing.create_code.get()) is Some(_) {
+          landing.asked.set(true)
         }
       }
     }
@@ -225,14 +225,14 @@ fn invite_code_form(c : @ui.Ctx, src : Source, account : Json?) -> Unit {
         code = r.text.trim(chars=" \n").to_string()
       })
       |> ignore
-      if @sf.button(c, @sf.t("android-misc.workspace.create"), key="landing/create-code", tone=Primary, busy=landing.creating, disabled=code == "") {
+      if @sf.button(c, @sf.t("android-misc.workspace.create"), key="landing/create-code", tone=Primary, busy=landing.creating.get(), disabled=code == "") {
         create_workspace(src, account, code)
       }
     })
     |> ignore
     // (nothing was wrong with a code nobody had typed yet)
-    if landing.create_error != "" && landing.code_tried != "" {
-      c.text(landing.create_error, style=landing_error) |> ignore
+    if landing.create_error.get() != "" && landing.code_tried.get() != "" {
+      c.text(landing.create_error.get(), style=landing_error) |> ignore
     }
   })
   |> ignore
@@ -251,7 +251,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
       pending.push((field(Some(e), "account"), i))
     }
   }
-  let asking = landing.asked
+  let asking = landing.asked.get()
   c.box(style=landing_page, fn() {
     landing_picture(c)
     if pending.length() > 0 {
@@ -280,19 +280,19 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
             |> ignore
           })
           |> ignore
-          if @sf.button(c, @sf.t("android-misc.invite.join"), key="landing/join/" + id, tone=Primary, busy=landing.accepting == id, reach=@sf.foot_across(@sf.button_height())) &&
-            landing.accepting == "" {
+          if @sf.button(c, @sf.t("android-misc.invite.join"), key="landing/join/" + id, tone=Primary, busy=landing.accepting.get() == id, reach=@sf.foot_across(@sf.button_height())) &&
+            landing.accepting.get() == "" {
             accept_invitation(src, account, id)
           }
         })
         |> ignore
       }
-      if landing.accept_error != "" {
-        c.text(landing.accept_error, style=landing_error) |> ignore
+      if landing.accept_error.get() != "" {
+        c.text(landing.accept_error.get(), style=landing_error) |> ignore
       }
       if asking {
         invite_code_form(c, src, first)
-      } else if @sf.button(c, @sf.t("android-misc.invite.declineCreate"), key="landing/decline-create", busy=landing.creating) {
+      } else if @sf.button(c, @sf.t("android-misc.invite.declineCreate"), key="landing/decline-create", busy=landing.creating.get()) {
         create_workspace(src, first, "")
       }
     } else if asking {
@@ -305,11 +305,11 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
       c.text(@sf.t("android-misc.workspace.none"), style=landing_title) |> ignore
       c.text(@sf.t("android-misc.workspace.none.lead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
       |> ignore
-      if @sf.button(c, @sf.t("android-misc.workspace.createOne"), key="landing/create", tone=Primary, busy=landing.creating) {
+      if @sf.button(c, @sf.t("android-misc.workspace.createOne"), key="landing/create", tone=Primary, busy=landing.creating.get()) {
         create_workspace(src, first, "")
       }
-      if landing.create_error != "" {
-        c.text(landing.create_error, style=landing_error) |> ignore
+      if landing.create_error.get() != "" {
+        c.text(landing.create_error.get(), style=landing_error) |> ignore
       }
       if @sf.button(c, @sf.t("android-misc.invite.byLink"), key="landing/by-link") {
         by_link()
@@ -327,16 +327,16 @@ fn accept_invitation(src : Source, account : Json?, id : String) -> Unit {
     toast_later(read_only_words)
     return
   }
-  landing.accepting = id
-  landing.accept_error = ""
+  landing.accepting.set(id)
+  landing.accept_error.set("")
   (src.call)("invitation.accept", { "account": Json::string(text(account, "sub")), "id": Json::string(id) }, fn(r) {
-    landing.accepting = ""
+    landing.accepting.set("")
     match r {
       Ok(v) => {
         @sfbase.pick_workspace(src, text(Some(v), "id"))
         @sfbase.nav_home()
       }
-      Err(e) => landing.accept_error = error_words(e)
+      Err(e) => landing.accept_error.set(error_words(e))
     }
   })
 }
@@ -349,20 +349,20 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
     landing_picture(c)
     c.text(text(entry, "blocked"), style=landing_title) |> ignore
     c.text(text(account, "email"), style=landing_lead) |> ignore
-    if @sf.button(c, @sf.t("android-misc.account.signOut"), key="landing/sign-out", tone=Primary, busy=landing.leaving) &&
-      !landing.leaving {
-      landing.leaving = true
-      landing.leave_error = ""
+    if @sf.button(c, @sf.t("android-misc.account.signOut"), key="landing/sign-out", tone=Primary, busy=landing.leaving.get()) &&
+      !landing.leaving.get() {
+      landing.leaving.set(true)
+      landing.leave_error.set("")
       (src.call)("auth.signOut", { "account": Json::string(text(account, "sub")) }, fn(r) {
-        landing.leaving = false
+        landing.leaving.set(false)
         match r {
           Ok(_) => ()
-          Err(e) => landing.leave_error = error_words(e)
+          Err(e) => landing.leave_error.set(error_words(e))
         }
       })
     }
-    if landing.leave_error != "" {
-      c.text(landing.leave_error, style=landing_error) |> ignore
+    if landing.leave_error.get() != "" {
+      c.text(landing.leave_error.get(), style=landing_error) |> ignore
     }
     switch_account_button(c, src)
   })

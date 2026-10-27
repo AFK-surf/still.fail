@@ -42,7 +42,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
       // nothing to mark it into: it is in the draft already
       assert_eq(v.draft_key(), "")
       // from the bytes picked: none asked of the station
-      assert_true(v.bytes is Some(_))
+      assert_true(v.bytes.get() is Some(_))
     }
     None => fail("the viewer did not open")
   }
@@ -224,7 +224,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   t.tap_text("发消息")
   t.type_text("看这张")
   tap_send(t)
-  let f = match send_flight.val {
+  let f = match send_flight.get() {
     Some(f) => f
     None => fail("nothing flies")
   }
@@ -243,7 +243,7 @@ test "files sent fly from their tiles to their places in the message, then are i
     None => fail("the message's picture is not where the flight can see it")
   }
   t.run_for(flight_ms)
-  assert_true(send_flight.val is None)
+  assert_true(send_flight.get() is None)
   fix_clock.val = None
 }
 

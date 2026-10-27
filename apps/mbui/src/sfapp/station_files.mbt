@@ -46,7 +46,7 @@ fn draft_ref(
 
 ///|
 /// The station files in each draft (by its key), while the app runs.
-let draft_refs : Map[String, Array[DraftRef]] = Map([])
+let draft_refs : @sf.LiveMap[String, Array[DraftRef]] = @sf.LiveMap::new()
 
 ///|
 fn refs_of(key : String) -> Array[DraftRef] {
@@ -77,7 +77,7 @@ fn with_ref_words(words : String, key : String) -> String {
 fn ref_attachments(key : String) -> Array[Json] {
   refs_of(key).filter_map(fn(r) {
     match r.up {
-      Some(p) if r.mode == "file" => p.done
+      Some(p) if r.mode == "file" => p.done.get()
       _ => None
     }
   })
@@ -88,7 +88,7 @@ fn ref_attachments(key : String) -> Array[Json] {
 fn refs_uploading(key : String) -> Bool {
   refs_of(key).iter().any(fn(r) {
     match r.up {
-      Some(p) => r.mode == "file" && p.done is None && p.error is None
+      Some(p) => r.mode == "file" && p.done.get() is None && p.error.get() is None
       None => r.mode == "file"
     }
   })
@@ -123,7 +123,7 @@ fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
 /// is kept, switched back or not.
 fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : DraftRef) -> Unit {
   match r.up {
-    Some(p) if p.done is Some(_) || p.error is None => return
+    Some(p) if p.done.get() is Some(_) || p.error.get() is None => return
     _ => ()
   }
   if src.read_only {
@@ -141,21 +141,21 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     height: 0,
     pasted: None,
     local: None,
-    done: None,
-    sent: 0,
-    error: None,
+    done: @signals.signal(None),
+    sent: @signals.signal(0),
+    error: @signals.signal(None),
     core_id: "",
     retry: false,
-    retrying: false,
+    retrying: @signals.signal(false),
   }
   r.up = Some(p)
   let failed = fn(e : Json) {
-    p.error = Some(
+    p.error.set(Some(
       match text(Some(e), "message") {
         "" => tr("android-chat.file.uploadFailed")
         m => m
       },
-    )
+    ))
   }
   if r.station == station {
     // (sent once the frame's builds are over: by the file's place as it was chosen)
@@ -170,8 +170,8 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
       fn(res) {
         match res {
           Ok(a) => {
-            p.done = Some(a)
-            p.sent = p.size
+            p.done.set(Some(a))
+            p.sent.set(p.size)
           }
           Err(e) => failed(e)
         }
@@ -236,11 +236,11 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
   let up = if named { None } else { r.up }
   let busy = !named &&
     (match up {
-      Some(p) => p.done is None && p.error is None
+      Some(p) => p.done.get() is None && p.error.get() is None
       None => true
     })
   let failed = match up {
-    Some(p) => p.error
+    Some(p) => p.error.get()
     None => None
   }
   let name = if !named && r.dir { r.name + ".zip" } else { r.name }
@@ -249,7 +249,7 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
   } else {
     match up {
       Some(p) =>
-        match (p.error, p.done) {
+        match (p.error.get(), p.done.get()) {
           (Some(e), _) => e
           (_, Some(done)) => @sf.file_size(number(Some(done), "size"))
           _ => uploading_text(p)

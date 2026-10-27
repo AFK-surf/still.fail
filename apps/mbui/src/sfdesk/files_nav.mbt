@@ -7,14 +7,14 @@
 ///|
 /// What the sidebar holds: the stations opened (to their places), each station's places as read (asked once).
 priv struct Nav {
-  open : Map[String, Bool]
-  places : Map[String, Array[(String, String, Bool)]]
-  asked : Map[String, Bool]
+  open : @sf.LiveMap[String, Bool]
+  places : @sf.LiveMap[String, Array[(String, String, Bool)]]
+  asked : @sf.LiveMap[String, Bool]
 }
 
 ///|
 // kept across runs: the sidebar's state (nav_reset puts it back)
-let nav : Nav = { open: {}, places: {}, asked: {} }
+let nav : Nav = { open: @sf.LiveMap::new(), places: @sf.LiveMap::new(), asked: @sf.LiveMap::new()}
 
 ///|
 fn nav_reset() -> Unit {

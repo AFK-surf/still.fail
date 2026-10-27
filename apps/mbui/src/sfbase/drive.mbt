@@ -351,16 +351,16 @@ pub fn dv_beside_name(
 /// then on its way again.
 pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
   let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir })
-  u.state = "naming"
-  dv_beside_name(src, u.station, u.root, u.dir, u.name, others.map(fn(x) { x.name }), fn(r) {
+  u.state.set("naming")
+  dv_beside_name(src, u.station, u.root, u.dir, u.name.get(), others.map(fn(x) { x.name.get() }), fn(r) {
     match r {
       Ok(name) => {
-        u.name = name
-        u.state = "waiting"
+        u.name.set(name)
+        u.state.set("waiting")
       }
       Err(why) => {
-        u.state = "failed"
-        u.error = why
+        u.state.set("failed")
+        u.error.set(why)
       }
     }
     dv_pump(src)

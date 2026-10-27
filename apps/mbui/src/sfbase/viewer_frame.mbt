@@ -155,7 +155,7 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     shown,
     ink,
     fn() {
-      match v.got {
+      match v.got.get() {
         Some(got) if v.coming() && (@sf.layout(c.width) is Small) => file_progress(c, got, v.file.size)
         _ => ()
       }
@@ -193,7 +193,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
     })
   }
-  match v.bytes {
+  match v.bytes.get() {
     Some(b) => {
       @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
       @sf.native_over_act("copy", @sf.t("common.copy"), "copy", fn() {
@@ -204,7 +204,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     None => ()
   }
   let dl = v.download(src)
-  if (v.bytes is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
+  if (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
     @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
   }
 }
@@ -220,11 +220,11 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
     Some(KImage) if !v.coming() => {
       @sf.viewer_zoom(c, "preview", v.zoom, ink)
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-      if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
+      if v.bytes.get() is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
         marks_start()
       }
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
-      match v.bytes {
+      match v.bytes.get() {
         Some(b) => {
           let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, @sf.copied_ms)
           if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
@@ -235,7 +235,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
         None => ()
       }
     }
-    Some(KCsv) | Some(KHtml) | Some(KMarkdown) if v.bytes is Some(_) => {
+    Some(KCsv) | Some(KHtml) | Some(KMarkdown) if v.bytes.get() is Some(_) => {
       let chosen = @sf.segmented(
         c,
         "preview/tabs",
@@ -261,7 +261,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
     // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
-    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+    let saving = v.bytes.get() is Some(_) || ((v.told_of() || streamed) && !v.asked)
     let coming = if downloading(dl) { Some(number(dl, "progress")) } else { None }
     if @sf.viewer_download(c, "preview/download", ink, disabled=!saving, coming?=coming) {
       v.ask_save(c)
@@ -298,7 +298,7 @@ pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
       pv("android-chat.file.tooBigToShow")
     },
   )
-  if v.asked && v.bytes is None && v.error is None {
+  if v.asked && v.bytes.get() is None && v.error.get() is None {
     vf_coming(v, c)
     return
   }
@@ -313,7 +313,7 @@ pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
   if text(dl, "state") == "failed" {
     @sf.viewer_failed(c, text(dl, "statusText"))
   }
-  match v.error {
+  match v.error.get() {
     Some(e) => @sf.viewer_failed(c, @sf.t("web-main.preview.loadFailed", args=[("error", e)]))
     None => ()
   }
@@ -331,7 +331,7 @@ pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
 /// What shows while it comes (FilePreview.tsx FileComing, WaitLine): how much has come out of its size once the core
 /// has said, else 正在打开.
 pub fn vf_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
-  match vw.got {
+  match vw.got.get() {
     Some(got) => file_progress(c, got, vw.file.size)
     None => @sf.wait_line(c, @sf.t("common.opening"), key="preview")
   }
@@ -360,7 +360,7 @@ pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
 ///|
 /// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
 pub fn vf_reads(vw : Viewer) -> Bool {
-  vw.bytes is Some(_) &&
+  vw.bytes.get() is Some(_) &&
   (vw.shown_kind() == Some(KMarkdown) || vw.shown_kind() == Some(KText)) &&
   !vw.told_of()
 }

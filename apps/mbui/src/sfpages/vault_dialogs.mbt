@@ -252,7 +252,7 @@ pub fn vault_editor_dialog(
 pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   vault_serial.val += 1
   let key = "vault-recover/" + vault_serial.val.to_string()
-  let state : Ref[(Bool, String)] = Ref((false, ""))
+  let state : @signals.Signal[(Bool, String)] = @signals.signal((false, ""))
   let words = Ref("")
   let count_of = fn() { words.val.replace_all(old="\n", new=" ").split(" ").filter(fn(w) { w != "" }).count() }
   open_dialog(
@@ -260,7 +260,7 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
     description=@sf.t("web-pages.vault.recoverLead"),
     fn(c, _) {
       words.val = @sf.textarea(c, key, rows=4, field=field_of(key))
-      let (_, error) = state.val
+      let (_, error) = state.get()
       if error != "" {
         c.text(error, style=desk_note_bad) |> ignore
       }
@@ -273,16 +273,16 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
         c.blur()
         shut()
       }
-      let (busy, _) = state.val
+      let (busy, _) = state.get()
       // (its button's words short beside the count and 取消 on a phone: the dialog's title says what it is)
       if @sf.button(c, @sf.t("web-pages.vault.recoverGo"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
-        state.val = (true, "")
+        state.set((true, ""))
         (core.call)("vault.recover", obj([("workspace", str(ws)), ("words", str(words.val.trim(chars=" \n").to_lower().to_owned()))]), fn(
           r,
         ) {
           match r {
             Ok(v) => {
-              state.val = (false, "")
+              state.set((false, ""))
               let got = count(Some(v), "recovered")
               (core.say)(
                 if got > 0 {
@@ -295,7 +295,7 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
                 shut()
               }
             }
-            Err(e) => state.val = (false, vault_said(e).unwrap_or(""))
+            Err(e) => state.set((false, vault_said(e).unwrap_or("")))
           }
         })
       }

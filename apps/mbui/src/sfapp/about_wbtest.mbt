@@ -100,7 +100,7 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
   t.draw()
   t.draw()
   assert_true(t.find("已是最新版本") is Some(_))
-  assert_eq(app.toast, "")
+  assert_eq(app.toast.get(), "")
   update_reset()
 }
 

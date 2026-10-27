@@ -642,7 +642,7 @@ priv enum Named {
 /// The chats links name, by the station of the chat they are in and the link: asked once each, as the pointer comes
 /// onto one.
 // kept across runs: what the core said of each link, the same each time it is asked
-let chats_named : Map[String, Named] = {}
+let chats_named : @sf.LiveMap[String, Named] = @sf.LiveMap::new()
 
 ///|
 /// The chat `href` names, read in a chat of station `here` (a link with no station of its own, `…/chats/<id>`, one of

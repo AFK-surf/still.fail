@@ -3931,11 +3931,11 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
 ///|
 /// What the catching up said last, by its key (said as it goes), and whether it showed (only then the tick).
 // kept across runs: put back as it goes (sync_key)
-let sync_said : Map[String, String] = {}
+let sync_said : LiveMap[String, String] = LiveMap::new()
 
 ///|
 // kept across runs: put back as it goes (sync_key)
-let sync_seen : Map[String, Bool] = {}
+let sync_seen : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
 /// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).

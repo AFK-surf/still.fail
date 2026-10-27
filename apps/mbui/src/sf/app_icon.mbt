@@ -34,7 +34,7 @@ pub let app_makers : Array[AppAvatar] = [
 
 ///|
 /// The buddies as the core lists them (asked once), None until it has answered.
-let buddy_list : Ref[Array[AppAvatar]?] = Ref(None)
+let buddy_list : @signals.Signal[Array[AppAvatar]?] = @signals.signal(None)
 
 ///|
 let buddies_asked : Ref[Bool] = Ref(false)
@@ -63,7 +63,7 @@ pub fn app_buddies(c : @ui.Ctx, ask : ((Result[Json, Json]) -> Unit) -> Unit) ->
       if !buddies_asked.val {
         buddies_asked.val = true
         ask(fn(r) {
-          buddy_list.val = Some(
+          buddy_list.set(Some(
             match r {
               Ok(Array(a)) =>
                 a.map(fn(b) {
@@ -81,18 +81,18 @@ pub fn app_buddies(c : @ui.Ctx, ask : ((Result[Json, Json]) -> Unit) -> Unit) ->
                 })
               _ => []
             },
-          )
+          ))
         })
       }
     })
   }
-  buddy_list.val.unwrap_or([])
+  buddy_list.get().unwrap_or([])
 }
 
 ///|
 /// The buddies forgotten, as the app begins anew.
 pub fn app_icons_reset() -> Unit {
-  buddy_list.val = None
+  buddy_list.set(None)
   buddies_asked.val = false
 }
 

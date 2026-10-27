@@ -95,11 +95,11 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
     // left unfinished: let go
     @settings.drop_login(core, station, n)
   }
-  let pending = if n.login == "" { None } else { @settings.pending_login(core, station, n.login) }
+  let pending = if n.login.get() == "" { None } else { @settings.pending_login(core, station, n.login.get()) }
   // the sign-in made its profile: on to choosing its models (PickModels), in this page's place
   match opt_text(pending, "created") {
     Some(id) => {
-      n.login = ""
+      n.login.set("")
       (core.say)(@sf.t("web-pages.profiles.signedInAdded"))
       (core.in_place)(PickModels(station, id))
     }
@@ -124,10 +124,10 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
       } else {
         let job = field(pending, "job")
         let state = text(job, "state")
-        if n.error != "" || state == "failed" || state == "cancelled" {
+        if n.error.get() != "" || state == "failed" || state == "cancelled" {
           c.box(style=ap_form, fn() {
-            let why = if n.error != "" {
-              n.error
+            let why = if n.error.get() != "" {
+              n.error.get()
             } else {
               match opt_text(job, "error") {
                 Some(e) => e
@@ -149,21 +149,21 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
               "new/" + form,
               job,
               text(sign, "provider"),
-              is_doing(core, ["login.code"], [("station", station), ("id", n.login)]),
+              is_doing(core, ["login.code"], [("station", station), ("id", n.login.get())]),
               fn(code, sent) {
-                if n.login != "" {
+                if n.login.get() != "" {
                   @settings.act(
                     core,
                     @sf.t("web-pages.profiles.finish"),
                     "login.code",
-                    obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]),
+                    obj([("station", str(station)), ("id", str(n.login.get())), ("code", str(code))]),
                     then=fn(_) { sent() },
                   )
                 }
               },
-              in_station=(text(s, "name"), is_doing(core, ["login.browser"], [("station", station), ("id", n.login)]), fn(what) {
-                if n.login != "" {
-                  @settings.act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login))]), then=fn(v) {
+              in_station=(text(s, "name"), is_doing(core, ["login.browser"], [("station", station), ("id", n.login.get())]), fn(what) {
+                if n.login.get() != "" {
+                  @settings.act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login.get()))]), then=fn(v) {
                     (core.open_screen)(station, text(Some(v), "screen"))
                   })
                 }
