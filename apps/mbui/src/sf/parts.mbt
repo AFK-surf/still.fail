@@ -3819,8 +3819,8 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 ///|
 /// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
 /// `side` across, its mark `mark`): the download mark in its middle, an accent dot in its top right; while it is `busy`
-/// (asked again first, downloaded, installed), the mark where it is and how far it has come round it, close to it
-/// (`coming`, 0 to 1, from its top; None while not known: the spinner's quarter turning there), no words; one that
+/// (asked again first, downloaded, installed), in the mark's place how far it has come (coming_mark: `coming`, 0 to 1,
+/// from its top; None while not known, the spinner's quarter turning there), no words; one that
 /// failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on the frame it is
 /// pressed, not while it is busy.
 pub fn update_key(
@@ -3842,16 +3842,7 @@ pub fn update_key(
     id~,
     fn() {
       if busy {
-        icon(c, "download", size=mark, color=t.p.text) |> ignore
-        // (close round the mark: its inside 2 off the mark's box, not out on the key's edge, where the ring looked
-        // bigger than the keys beside it, whose edges are not drawn)
-        c.layer(fn() {
-          c.box(style=update_ring_at, fn() {
-            progress_spinner(c, key, coming, size=mark + 2.0 * (update_ring_clear + spin_stroke)) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
+        coming_mark(c, key, coming, mark, t.p.text)
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
         c.layer(fn() {
@@ -3955,9 +3946,9 @@ let sync_out_ms : Double = 400.0
 
 ///|
 /// A key of a bar for what comes by itself (what comes to this device: sfdesk transfers.mbt), as update_key draws one:
-/// round, `side` across, its `glyph` `mark` big in its middle, a ring round it as far as what comes has come (`coming`;
-/// none while nothing comes), update_key's dot where something waits on a press (`dot`: the accent's) or `failed`
-/// (red's); pressed, what comes (the page's). True on its press.
+/// round, `side` across, its `glyph` `mark` big in its middle, in its place while something comes how far it has come
+/// (`coming`: coming_mark; None while nothing comes), update_key's dot where something waits on a press (`dot`: the
+/// accent's) or `failed` (red's); pressed, what comes (the page's). True on its press.
 pub fn progress_key(
   c : @ui.Ctx,
   key : String,
@@ -3975,15 +3966,10 @@ pub fn progress_key(
     style=(if c.lit(id) { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
-      icon(c, glyph, size=mark, color=t.p.text) |> ignore
       if coming is Some(_) {
-        c.layer(fn() {
-          c.box(style=update_ring_at, fn() {
-            progress_spinner(c, key, coming, size=mark + 2.0 * (update_ring_clear + spin_stroke)) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
+        coming_mark(c, key, coming, mark, t.p.text)
+      } else {
+        icon(c, glyph, size=mark, color=t.p.text) |> ignore
       }
       if failed || dot {
         c.layer(fn() {
@@ -4013,13 +3999,34 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
-/// How far an update has come round the update key's mark (@sf.progress_spinner), in its middle.
+/// What a key holds, in its middle, over what else it holds (sync_key's marks turning into each other).
 // kept across runs: a value (no field of it changes)
 let update_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
-/// How far the ring's inside stands off the mark's box.
-let update_ring_clear : Double = 2.0
+/// What comes (a download, a newer build), drawn as an icon in an icon's place (`size`, the box the icons beside it
+/// are drawn in, in `color`): a ring where those icons draw their circles (as check-circle's, 3.5 to 20.5 of their 24
+/// grid, a line as wide as theirs), the accent from its top as far round as it has come (`coming`, 0 to 1; None, the
+/// spinner's quarter turning: @sf.progress_spinner), a short arrow down in it. No bigger than the icons beside it: a
+/// ring drawn round the download's mark instead stood out of the row, half again as wide as its neighbours.
+pub fn coming_mark(c : @ui.Ctx, key : String, coming : Double?, size : Double, color : Int64) -> Unit {
+  let stroke = size * icon_stroke / 24.0
+  c.box(style=@ui.style(w=Fixed(size), h=Fixed(size), align=ACenter, justify=JCenter), fn() {
+    progress_spinner(c, key, coming, size=size * coming_ring / 24.0 + stroke, stroke~) |> ignore
+    c.layer(fn() {
+      c.box(style=update_ring_at, fn() { icon(c, "download-ring", size~, color~) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The icons' line (design/icons: stroke-width 1.75 of 24), and the width of the circles they draw (3.5 to 20.5).
+let icon_stroke : Double = 1.75
+
+///|
+let coming_ring : Double = 17.0
 
 ///|
 /// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).

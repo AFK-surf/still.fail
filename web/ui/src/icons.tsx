@@ -137,6 +137,10 @@ export function Disk(props: IconProps) {
   return <Svg {...props}><path d="M6.5 6.5H17.5L20.5 13V16Q20.5 19.5 17 19.5H7Q3.5 19.5 3.5 16V13Z M3.5 13H20.5 M13.5 16.25H16" /><circle cx="7.5" cy="16.25" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
+export function DownloadRing(props: IconProps) {
+  return <Svg {...props}><path d="M12 7.5V16.5 M8.5 13L12 16.5L15.5 13" /></Svg>;
+}
+
 export function Download(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V15 M7.5 10.5L12 15L16.5 10.5 M4.5 20H19.5" /></Svg>;
 }
@@ -574,6 +578,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "cursor": Cursor,
   "devices": Devices,
   "disk": Disk,
+  "download-ring": DownloadRing,
   "download": Download,
   "edit": Edit,
   "expand": Expand,
