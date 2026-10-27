@@ -45,6 +45,9 @@ static void vlog(NSString *fmt, ...) {
 
 // a read's most bytes (a part of the core's)
 static const long long kMaxRead = 4 << 20;
+// How much past where it is must have come for it to play on (ms): a stretch, not the next frame alone, so playing
+// on a slow network goes on for a while each time rather than a frame at a time.
+static const double kPlayAhead = 1000;
 
 // ---------------------------------------------------------------------------
 // Views of the platform: flipped on macOS (the app's coordinates are from the
@@ -176,6 +179,7 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double speed;
 // a seek on its way (to seekMs), and the one asked meanwhile to go to once it is done (chaseMs), if any
 @property(nonatomic) BOOL seeking, chasing;
+@property(nonatomic) int seekGen;  // the seek on its way (one let go of for another: not this one's completion)
 @property(nonatomic) double seekMs, chaseMs;
 @property(nonatomic) BOOL chaseNear;  // the one asked meanwhile is to go about there (seekTo:near:)
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
@@ -223,6 +227,8 @@ id mb_views_root(CGRect frame) {
 - (void)refreshSnap;
 - (void)seekTo:(double)ms;
 - (void)seekTo:(double)ms near:(BOOL)near;
+- (BOOL)hasAt:(double)ms;
+- (void)playWhatCame;
 - (CGImageRef)copyFrame;
 @end
 
@@ -294,15 +300,18 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 }
 
 - (void)seekTo:(double)ms near:(BOOL)near {
-  // (one on its way, or the item not ready for one yet: this one next, once it is)
-  if (self.seeking || self.item.status != AVPlayerItemStatusReadyToPlay) {
+  // (one on its way to what is here, or the item not ready for one yet: this one next, once it is; one on its way to
+  // what has not come waits on the network, not on decoding, and the next goes at once in its place)
+  if ((self.seeking && [self hasAt:self.seekMs]) || self.item.status != AVPlayerItemStatusReadyToPlay) {
     self.chasing = YES;
     self.chaseMs = ms;
     self.chaseNear = near;
     return;
   }
   self.seeking = YES;
+  self.chasing = NO;
   self.seekMs = ms;
+  int gen = ++self.seekGen;
   __weak MBNative *wv = self;
   // (to the µs: a frame's start, said with its fraction of a ms, is that frame's, not the one before)
   CMTime slack = near ? kCMTimePositiveInfinity : kCMTimeZero;
@@ -312,15 +321,40 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
         completionHandler:^(BOOL done) {
           dispatch_async(dispatch_get_main_queue(), ^{
             MBNative *v = wv;
-            if (!v) return;
+            if (!v || v.seekGen != gen) return;
             v.seeking = NO;
             if (v.chasing && !v.closed) {
               v.chasing = NO;
               [v seekTo:v.chaseMs near:v.chaseNear];
             }
+            [v playWhatCame];
             mb_host_request_frame();
           });
         }];
+}
+
+// Whether what plays at `ms` has come (a range the item has loaded holds it).
+- (BOOL)hasAt:(double)ms {
+  for (NSValue *r in self.item.loadedTimeRanges) {
+    CMTimeRange tr = r.CMTimeRangeValue;
+    double a = CMTimeGetSeconds(tr.start) * 1000.0, b = CMTimeGetSeconds(CMTimeRangeGetEnd(tr)) * 1000.0;
+    if (a <= ms + 1 && ms < b) return YES;
+  }
+  return NO;
+}
+
+// Played, waiting only for what has not come: AVPlayer, left to itself, waits until it reckons the rest will come
+// before it is played (AVPlayerWaitingToMinimizeStallsReason), on a slow network all of it; what has come plays at
+// once, and where it runs out it waits again (the player's own waiting for bytes) until the next has come.
+- (void)playWhatCame {
+  if (self.seeking || self.chasing || self.player.rate <= 0) return;
+  if (self.player.timeControlStatus != AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate) return;
+  if (![self.player.reasonForWaitingToPlay isEqualToString:AVPlayerWaitingToMinimizeStallsReason]) return;
+  CMTime t = self.player.currentTime;
+  if (!CMTIME_IS_NUMERIC(t)) return;
+  double now = CMTimeGetSeconds(t) * 1000.0, dur = [self durationMs];
+  // (up to its end: its last stretch is shorter)
+  if ([self hasAt:dur > 0 ? fmin(now + kPlayAhead, dur - 1) : now + kPlayAhead]) [self.player playImmediatelyAtRate:self.player.rate];
 }
 
 // The video track's frames' times (its samples' presentation times, through a sample cursor: the index only), on a
@@ -626,6 +660,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     CGSize ps = self.item.presentationSize;
     if (self.playerLayer.readyForDisplay || (can && ps.width == 0 && ps.height == 0)) [self tell:1];
     else if (self.failed) [self tell:-1];
+    [self playWhatCame];
     mb_host_request_frame();
   });
 }
@@ -656,6 +691,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   if (!self.observing) return;
   self.observing = NO;
   [self.item removeObserver:self forKeyPath:@"status" context:kStatus];
+  [self.item removeObserver:self forKeyPath:@"loadedTimeRanges" context:kStatus];
   [self.playerLayer removeObserver:self forKeyPath:@"readyForDisplay" context:kReady];
   [self.player removeObserver:self forKeyPath:@"timeControlStatus" context:kStatus];
 }
@@ -892,6 +928,7 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
   v.playerLayer.backgroundColor = black_color();
   v.content = pv;
   [v.item addObserver:v forKeyPath:@"status" options:0 context:kStatus];
+  [v.item addObserver:v forKeyPath:@"loadedTimeRanges" options:0 context:kStatus];
   [v.playerLayer addObserver:v forKeyPath:@"readyForDisplay" options:0 context:kReady];
   // playing, waiting for what it needs, paused: a frame as that changes (the app draws a playing one's time; one that
   // waits moves on its own no more until this says so)
