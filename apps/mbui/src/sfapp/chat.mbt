@@ -280,7 +280,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           // each opens its card (AgentSheet.kt)
           let id = c.id("bar-agent/" + a.key)
           if c.clicked(id) {
-            agent_sheet(src, r, a.key)
+            open_agent(src, r, a.key)
           }
           c.box(id~, fn() {
             if i == 0 {

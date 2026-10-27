@@ -26,10 +26,6 @@ pub(all) struct Shell {
   /// the rail changed where it is (自定义侧边条, Rail.tsx editing), where the layout has a rail beside the pages; none
   /// where it has none
   edit_rail : () -> Unit
-  /// one of a chat's agents in full (its card, then the station it runs on, its account, its history, its jobs:
-  /// AgentSheet.kt), opened `from` what was pressed: what a phone's chat bar and a tablet's agent tile open
-  /// (open_agent)
-  agent : (Source, ChatRef, String, @sf.Anchor) -> Unit
 }
 
 ///|
@@ -46,7 +42,6 @@ pub fn bare_shell() -> Shell {
     back: stack_back,
     show: fn() {  },
     edit_rail: fn() {  },
-    agent: fn(_, _, _, _) {  },
   }
 }
 
@@ -140,12 +135,6 @@ pub fn stack_open(p : Page) -> Unit {
   }
 }
 
-
-///|
-/// Chat `r`'s agent `key` in full, opened `from` what was pressed (Shell's `agent`).
-pub fn open_agent(src : Source, r : ChatRef, key : String, from : @sf.Anchor) -> Unit {
-  (shell.val.agent)(src, r, key, from)
-}
 
 ///|
 /// Chat `r`'s detail `tab` opened, where the layout has it (Shell's `detail`).

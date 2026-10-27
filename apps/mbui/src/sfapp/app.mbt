@@ -125,7 +125,6 @@ fn pages_shell(src : Source) -> Shell {
       }
     },
     edit_rail: fn() { @sfdesk.wide.editing = true },
-    agent: fn(src, r, key, from) { agent_sheet(src, r, key, from~) },
   }
 }
 
