@@ -59,7 +59,7 @@ export function addSpec(topic: string, spec: Spec): void {
 /// An item's key: the fields' values (a field missing is null).
 export function keyOf(item: unknown, fields: string[]): Key {
   const v = (f: string) => (isObject(item) && item[f] !== undefined ? item[f] : null);
-  return fields.length === 1 ? v(fields[0]) : fields.map(v);
+  return fields.length === 1 ? v(fields[0]!) : fields.map(v);
 }
 
 const text = (k: Key) => JSON.stringify(k);
@@ -121,7 +121,7 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
   const now = new Set(nextKeys);
   const out: AnyOp[] = [];
   for (let i = 0; i < old.length; i++) {
-    if (!now.has(oldKeys[i])) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
+    if (!now.has(oldKeys[i]!)) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
   }
   // Where each kept one was among the kept (in the new order), and which of them stay.
   const positions = nextKeys.map((k) => was.get(k) ?? -1);
@@ -134,7 +134,7 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
   const stay = longestRun(positions);
   for (let i = next.length - 1; i >= 0; i--) {
     const before = i + 1 < next.length ? keyOf(next[i + 1], fields) : null;
-    const from = positions[i];
+    const from = positions[i]!;
     if (from < 0) {
       out.push({ path: [...path], key: fields, put: next[i], before });
       continue;
@@ -156,7 +156,7 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
 /// without writing out the value (a list of 2000 rows is 100 KB: weighing it on every change is the cost saved).
 export function heavier(ops: AnyOp[], value: unknown): boolean {
   // One value set whole: as heavy as the value where it is all of it, lighter where it is a part.
-  if (ops.length === 1 && "set" in ops[0]) return ops[0].path.length === 0;
+  if (ops.length === 1 && "set" in ops[0]!) return ops[0]!.path.length === 0;
   // Ops that set a long list whole (one loaded after its first screen) are about as heavy as the value: not weighed.
   if (setsLongList(ops)) return false;
   const size = JSON.stringify(ops).length;
@@ -178,20 +178,20 @@ function longestRun(positions: number[]): Set<number> {
   const tails: number[] = []; // index into positions of the smallest tail of each run length
   const prev = new Array<number>(positions.length).fill(-1);
   for (let i = 0; i < positions.length; i++) {
-    const p = positions[i];
+    const p = positions[i]!;
     if (p < 0) continue;
     let lo = 0;
     let hi = tails.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (positions[tails[mid]] < p) lo = mid + 1;
+      if (positions[tails[mid]!]! < p) lo = mid + 1;
       else hi = mid;
     }
-    if (lo > 0) prev[i] = tails[lo - 1];
+    if (lo > 0) prev[i] = tails[lo - 1]!;
     tails[lo] = i;
   }
   const out = new Set<number>();
-  for (let i = tails.length > 0 ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) out.add(i);
+  for (let i = tails.length > 0 ? tails[tails.length - 1]! : -1; i >= 0; i = prev[i]!) out.add(i);
   return out;
 }
 

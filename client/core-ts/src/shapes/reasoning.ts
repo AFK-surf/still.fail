@@ -25,7 +25,7 @@ export function available(runtime: string, model: string | null | undefined, cat
 
 export function common(profiles: string[][], runtime: string): string[] {
   if (profiles.length === 0) return available(runtime, null, null);
-  let levels = [...profiles[0]];
+  let levels = [...profiles[0]!];
   for (const other of profiles.slice(1)) levels = levels.filter((l) => other.includes(l));
   return levels;
 }
