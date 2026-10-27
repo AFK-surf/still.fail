@@ -1,5 +1,7 @@
 # 小面板
 
+Station 的高级网络设置默认折叠在设置页底部；拥塞控制算法用 select 显示当前值，小屏点开小窗选择，不把所有算法常驻排在页面里（2026-10-28 用户定）。
+
 菜单、下拉、右键菜单、popover、悬停卡片、station 卡片、通知气泡、⌘K 之外的一切「浮起来的小东西」都是小面板。规范在代码里：`web/ui/src/styles/align.ts`（数）、`web/ui/src/styles/controls.css.ts` 的 `popover` / `panelCard` / `panelEdge`（底）、`web/ui/src/parts.tsx` 的 `Panel*`（部件）。这里只写规则。
 
 ## 底

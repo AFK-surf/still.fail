@@ -15,6 +15,7 @@ fn station_page_reset() -> Unit {
   env_seeded.clear()
   env_sent.clear()
   rs_shown.clear()
+  network_open.clear()
 }
 
 ///|
@@ -607,6 +608,10 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
   if manager {
     out.push(fn() { station_workspaces(c, core, address) })
   }
+  match field(o, "network") {
+    Some(Object(_)) as network => out.push(fn() { station_network(c, core, address, network, manager) })
+    _ => ()
+  }
   out
 }
 
@@ -927,6 +932,32 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
     })
   })
 }
+
+///|
+/// Advanced controls stay folded until asked for; selection is stored for the next station start.
+fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, manager : Bool) -> Unit {
+  @sf.group(c, fn() {
+    let open = network_open.get(address).unwrap_or(false)
+    if @sf.link_row(c, "network-open/" + address, @sf.t("web-pages.stations.network.advanced"), folds=open) {
+      network_open[address] = !open
+    }
+    if open {
+      st_section(c, @sf.t("web-pages.stations.network.algorithm"), description=@sf.t("web-pages.stations.network.note"), fn() {
+        let busy = is_doing(core, ["network.setCongestion"], [("station", address)])
+        @sf.select(c, "network-select/" + address, text(network, "congestion"),
+          ["cubic", "bbr"].map(fn(algorithm) { (algorithm, @sf.t("web-pages.stations.network." + algorithm)) }),
+          fn(algorithm) {
+            @settings.act(core, @sf.t("web-pages.stations.network.what"), "network.setCongestion",
+              obj([("station", str(address)), ("congestion", str(algorithm))]), done=@sf.t("web-pages.stations.network.saved"))
+          }, label=@sf.t("web-pages.stations.network.algorithm"), disabled=!manager || busy, whole=true)
+      })
+    }
+  })
+}
+
+///|
+// kept across runs: opened by the person; station_page_reset empties it
+let network_open : Map[String, Bool] = {}
 
 ///|
 /// The workspaces it is in (Workspaces), for its home's owners and admins once it is in more than one: its home

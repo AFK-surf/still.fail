@@ -1,3 +1,4 @@
+import { NetworkSection } from "../StationNetwork.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
@@ -322,6 +323,7 @@ function StationPage({ s, manager, login }: { s: StationView; manager: boolean; 
       {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
       {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
       {manager && <Workspaces s={s} />}
+      {s.overview?.network && <NetworkSection station={s.station} network={s.overview.network} manager={manager} />}
       {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
       <div style={{ height: 30 }} />
     </div>

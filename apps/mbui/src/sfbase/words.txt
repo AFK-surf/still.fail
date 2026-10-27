@@ -1936,3 +1936,11 @@ web-pages.workspace.resizeSidebar
 web-pages.drive.viewAll
 web-pages.drive.pinnedFolders
 web-pages.screen.none
+
+web-pages.stations.network.advanced
+web-pages.stations.network.algorithm
+web-pages.stations.network.cubic
+web-pages.stations.network.bbr
+web-pages.stations.network.note
+web-pages.stations.network.what
+web-pages.stations.network.saved

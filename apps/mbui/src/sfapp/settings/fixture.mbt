@@ -14,6 +14,7 @@ priv struct SettingsFixture {
   /// the station's updating by itself
   mut auto : Bool
   /// the station going on afresh by itself once a session's cache is over
+  mut congestion : String
   mut afresh : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
@@ -58,6 +59,7 @@ let fx : SettingsFixture = {
   version: 0,
   marks: {},
   auto: false,
+  congestion: "cubic",
   afresh: false,
   none: false,
   login: "",
@@ -136,6 +138,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.afresh = false
+  fx.congestion = "cubic"
   fx.none = false
   fx_adb.val = ""
   fx.login = ""
@@ -899,6 +902,7 @@ fn fx_station(address : String) -> Json {
           ),
           ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
           ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
+          ("network", obj([("congestion", str(fx.congestion))])),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
@@ -1930,6 +1934,10 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     "software.auto" => {
       fx.auto = flag(p, "on")
       fx_changed()
+      Some(Ok(obj([])))
+    }
+    "network.setCongestion" => {
+      fx.congestion = text(p, "congestion")
       Some(Ok(obj([])))
     }
     "context.setAfresh" => {

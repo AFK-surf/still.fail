@@ -15,7 +15,7 @@ test("a station keeps its configured UDP address across restarts and exchanges s
   const address = `127.0.0.1:${reservation.address().port}`;
   await assert.rejects(bindStation(mesh, options(), { STILLFAIL_MESH_BIND_ADDR: address }));
   await new Promise<void>((resolve) => reservation.close(() => resolve()));
-  for (let restart = 0; restart < 2; restart++) {
+  for (const congestion of ["cubic", "bbr"]) {
     const result = spawnSync(process.execPath, ["--input-type=module", "--eval", `
     import assert from "node:assert/strict";
     import { randomBytes } from "node:crypto";
@@ -23,7 +23,7 @@ test("a station keeps its configured UDP address across restarts and exchanges s
     const mesh = loadMesh();
     const options = ${options.toString()};
     const address = ${JSON.stringify(address)};
-    const server = await bindStation(mesh, options());
+    const server = await bindStation(mesh, { ...options(), congestion: ${JSON.stringify(congestion)} });
     const client = await mesh.bind(options());
     try {
       assert.ok(server.sockets().includes(address));

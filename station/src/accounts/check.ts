@@ -5,6 +5,7 @@ import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";
 import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { checkNetwork } from "../mesh/settings.ts";
 import { checkAgentEnv } from "../ops/agent-env.ts";
 import { checkSandbox } from "../agents/sandbox.ts";
 
@@ -49,6 +50,7 @@ export function checkConfig(raw: any, _data: string): void {
   }
   // The variables for what it starts for its agents (src/ops/agent-env.ts).
   checkAgentEnv(raw.agentEnv);
+  checkNetwork(raw.network);
   // Execution in sandboxes (src/agents/sandbox.ts).
   checkSandbox(raw);
   // The drive's folders (src/drive/drive.ts).
