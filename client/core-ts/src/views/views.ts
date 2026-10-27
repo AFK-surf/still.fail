@@ -1849,6 +1849,12 @@ export class Views implements Owner {
       const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
       if (isObject(m)) (m as J).asked = true;
     }
+    // The bell to what waits floats over the list's end only while that is out of view there: one at the end itself
+    // (the line saying what an agent needs, or the last post with nothing after it) shows whenever the end does, so
+    // the end keeps clear of the bell only for another. Else a need coming in would push the chat up for nothing.
+    const lastSeq = messages.length > 0 ? u64(get(messages[messages.length - 1], "seq")) : null;
+    const atEnd = (seq: number) => view.newer !== true && (seq === view.stateAsk || (seq === lastSeq && arr(outbox).length === 0 && view.stateText === undefined));
+    if (view.asks.some((a: J) => !atEnd(a.seq))) view.askClear = true;
     if (letters > 0) view.letters = letters;
     // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
     const ccTo = arr(get(thread, "cc")).flatMap((o) => {

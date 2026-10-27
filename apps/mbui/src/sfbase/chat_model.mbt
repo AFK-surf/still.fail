@@ -531,6 +531,8 @@ pub(all) struct ChatView {
   /// what an agent needs a person for, as `state` says it (the core's `stateAsk`): the post that asks it, let go right
   /// under the line rather than under that post
   state_ask : Double?
+  /// one of `asks` is not at the end itself (the core's `askClear`): the end keeps clear of the bell that leads to it
+  ask_clear : Bool
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -639,6 +641,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
       None => None
     },
     state_ask: opt_number(s, "stateAsk"),
+    ask_clear: flag(s, "askClear"),
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),

@@ -257,6 +257,8 @@ pub fn rich_chat(older : Int) -> Json {
     "archivable": true,
     // what waits to be decided: the two cards not answered (with_cards takes those answered here off)
     "asks": [{ "seq": 8 }, { "seq": 10 }],
+    // (posts after them: the end keeps clear of the bell to them)
+    "askClear": true,
   }
 }
 

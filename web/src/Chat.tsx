@@ -262,7 +262,8 @@ export function asksOf(chat: ChatView): ChatAsk[] {
  * how far the bell's top is over the composer's room.
  */
 export function askClear(chat: ChatView, over: number): CSSProperties {
-  return asksOf(chat).length > 0 ? ({ "--ask-clear": `${over}px` } as CSSProperties) : {};
+  // (only for one not at the end itself, the core's `askClear`: that one shows whenever the end does, no bell over it)
+  return asksOf(chat).length > 0 && chat.askClear ? ({ "--ask-clear": `${over}px` } as CSSProperties) : {};
 }
 
 /**
@@ -274,6 +275,7 @@ export function askClear(chat: ChatView, over: number): CSSProperties {
 export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
   const asks = asksOf(chat);
   const posts = asks.map((a) => a.seq).join(" ");
+  const stateAsk = chat.stateAsk;
   const [shown, setShown] = useState(true);
   useEffect(() => {
     if (posts === "") return;
@@ -281,14 +283,16 @@ export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
     // Each one's post in the pane: among its items, and reaching into it (below what covers its top).
     const check = () => {
       const all = posts.split(" ").every((seq) => {
-        const top = model.offsetOf(`m:${seq}`);
-        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(`m:${seq}`)?.height ?? 1) > model.covered;
+        // (what an agent needs: where the chat's end says it, its 忽略 under that line)
+        const key = Number(seq) === stateAsk ? "state" : `m:${seq}`;
+        const top = model.offsetOf(key);
+        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(key)?.height ?? 1) > model.covered;
       });
       setShown(all);
     };
     check();
     return virtual.watch(check);
-  }, [virtual.model, posts, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [virtual.model, posts, stateAsk, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return asks.length > 0 && shown ? NO_ASKS : asks;
 }
 

@@ -1470,6 +1470,8 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   // What waits undecided: the page leads to it, and its post says it can be let go there; no other post does.
   assert.deepEqual(v.asks, [{ seq: 4, card: true, mine: false, text: "那 C 呢？" }]);
   assert.deepEqual(m.map((x: J) => x.asked ?? false), [false, false, false, true]);
+  // The last post, nothing after it: no room kept for the bell at the end.
+  assert.equal(v.askClear, undefined);
 });
 
 test("an_agents_need_without_a_card_is_let_go_where_the_chats_end_says_it", async () => {
@@ -1490,6 +1492,8 @@ test("an_agents_need_without_a_card_is_let_go_where_the_chats_end_says_it", asyn
   assert.deepEqual([v.stateLead, v.stateRest, v.stateAsk], ["need", "在手机上试新列表", 2]);
   assert.deepEqual(v.asks, [{ seq: 2, card: false, mine: false, text: "在手机上试新列表" }]);
   assert.deepEqual(v.messages.map((x: J) => x.asked ?? false), [false, false]);
+  // It is the end itself, no bell over it there: the end keeps no room for one.
+  assert.equal(v.askClear, undefined);
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {
