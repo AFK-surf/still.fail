@@ -257,8 +257,10 @@ struct Node {
   mut rich : Rich?
   // lines drawn over its ground (Ctx::lines: line.mbt)
   mut lines : Array[Line]
-  // shapes drawn over its ground (Ctx::shapes: shape.mbt)
+  // shapes drawn over its ground (Ctx::shapes: shape.mbt), and the bands they come to, worked out once for the shapes
+  // they were worked out for (kept as the node is handed on to another: Ctx::paint_shapes asks whether they are those)
   mut shapes : Array[Shape]
+  mut shape_bands : ShapeBands?
   // its runs as laid out when cut after its max_lines, or on one line laid narrower than it is (the ellipsis a run of
   // its own), else None: what is drawn
   mut rcut : Rich?
@@ -421,6 +423,7 @@ fn Node::new() -> Node {
     rich: None,
     lines: [],
     shapes: [],
+    shape_bands: None,
     rcut: None,
     rl: None,
     rl_max: 0.0,
