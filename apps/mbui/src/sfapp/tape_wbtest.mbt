@@ -187,7 +187,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     let at = "platform \{platform}"
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
     // the sidebar in use, its own 240: held a while first (a finger's hold on an edge is to drag it, no long press:
-    // no words of it), then dragged 60 wider, the page beside it as much further on as it goes; let go, the width kept
+    // no words of it; a finger drags it only so, @sf.handle_drag), then dragged 60 wider, the page beside it as much further on as it goes; let go, the width kept
     let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
     let before = page_at()
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
@@ -216,13 +216,25 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
     let shown = page_end()
     let (px, py) = edge_middle(t, "调整侧栏宽度")
-    drag_slowly(t, px, py, 200.0, up=false)
+    drag_slowly(t, px, py, 200.0, up=false, hold=true)
     assert_true((page_end() - (shown + 200.0)).abs() < 1.0e-9, msg=at)
     t.release(px + 200.0, py)
     t.frame()
     assert_true((page_end() - (shown + 200.0)).abs() < 1.0e-9, msg=at)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
   }
+}
+
+///|
+test "on the tape a finger swiped across the edge at once, not held first, leaves its width as it was" {
+  let t = tape_chat(2, 720.0, 840.0, width="medium", height="medium")
+  let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
+  drag_slowly(t, ex, ey, 60.0)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.side_w, 240.0)
+  drag_slowly(t, ex, ey, 60.0, hold=true)
+  t.frame()
+  assert_eq(@sfdesk.wide.side_w, 300.0)
 }
 
 ///|
@@ -233,7 +245,7 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
     let page_from = fn() raise { covered(t, "收起侧边栏").unwrap().0 }
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
-    drag_slowly(t, ex, ey, 60.0)
+    drag_slowly(t, ex, ey, 60.0, hold=true)
     t.frame()
     assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
     // in the gap before the page: pressed once, nothing; twice, its own width, the sidebar still in use
@@ -631,8 +643,19 @@ let slow_drag_ms : Double = 50.0
 ///|
 /// A finger down at (`x`, `y`) dragged across by `by`, 10 at a time, slow_drag_ms apart (no fling); `up`: let go at
 /// the end.
-fn drag_slowly(t : @ui.Tester, x : Double, y : Double, by : Double, up? : Bool = true) -> Unit {
+fn drag_slowly(
+  t : @ui.Tester,
+  x : Double,
+  y : Double,
+  by : Double,
+  up? : Bool = true,
+  hold? : Bool = false,
+) -> Unit {
   t.press_at(x, y)
+  // (an edge: a finger's held on it first, @sf.handle_drag)
+  if hold {
+    t.run_for(@ui.long_press_ms)
+  }
   let steps = (by.abs() / 10.0).ceil().to_int()
   let step = by / steps.to_double()
   for i in 1..=steps {

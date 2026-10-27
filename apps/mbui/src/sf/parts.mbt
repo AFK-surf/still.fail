@@ -3168,7 +3168,9 @@ let handlings : Map[Int, Handling] = {}
 ///|
 /// What the pointer does with the edge `id` of a column `width` wide, on its `edge`, a drag area across (Ctx::drag_on:
 /// a finger's or a mouse's, what scrolls or drags under it taking what goes its own way, claim.mbt; once it is the
-/// drag's, no tap and no long press of it): pressed and gone past the slop from where it went down, the width it is
+/// drag's, no tap and no long press of it; a finger's only once held still on it a long press's time, `hold`: a swipe
+/// or a scroll that passes over it is what it passes over's): pressed and gone past the slop from where it went down,
+/// the width it is
 /// dragged to (the width it had then, the pointer's way on the right edge, the other way on the left, between `min`
 /// and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the second of two clicks.
 /// A width that changes builds the frame again (Ctx::built_from_changed): the page takes it there, the column and its
@@ -3181,7 +3183,7 @@ pub fn handle_drag(
   max~ : Double,
   edge? : @ui.Side = Right,
 ) -> Resized {
-  c.drag_on(id, axis=Horizontal)
+  c.drag_on(id, axis=Horizontal, hold=true)
   let at = fn(h : Handling, x : Double) {
     let d = if edge is Left { h.x0 - x } else { x - h.x0 }
     dmax(min, dmin(max, (h.w0 + d).round()))
