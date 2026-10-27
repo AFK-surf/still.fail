@@ -35,9 +35,23 @@ fn system_took(json : String) -> Unit {
       Bars(top~, bottom~, left~, right~) => system_bars_now.val = { top, bottom, left, right }
       SizeClasses(width~, height~) => system_size_class_now.val = Some({ width, height })
       Fold(hinge~, divisions~) => system_fold_now.val = { hinge, divisions }
+      NavAction(x~, y~, w~, h~) => system_nav_action_now.val = if w > 0.0 && h > 0.0 { Some((x, y, w, h)) } else { None }
       _ => ()
     }
   }
+}
+
+///|
+/// Where the system's bars put the app's action of its own (`nav_action`), as the host last said it. Put back by each
+/// Tester (messages_reset).
+let system_nav_action_now : Ref[(Double, Double, Double, Double)?] = Ref::new(None)
+
+///|
+/// Where the system's bars put the app's action of its own in the view (x, y, w, h: iOS 27's prominent tab, an iPhone
+/// Duo's round one at its column's foot), as the host last said it: None where none is shown, from a host that says
+/// none, and in a Tester until a test posts it.
+pub fn system_nav_action() -> (Double, Double, Double, Double)? {
+  system_nav_action_now.val
 }
 
 ///|

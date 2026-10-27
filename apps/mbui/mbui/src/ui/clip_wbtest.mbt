@@ -395,6 +395,27 @@ test "a rounded clip cutting through another's corner: what it holds cut by both
 }
 
 ///|
+test "a rounded clip mostly past the window's edge keeps as much of its rect as its corners take: its far corner as round as its line" {
+  let t = Tester::new(
+    fn(c) {
+      // a card 240 wide, 184 of it past the window's left edge: 56 shown, its foot right corner 46 round
+      c.box(w=Px(240.0), h=Px(200.0), radius=46.0, clip=true, left=-184.0, top=0.0, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore
+      })
+      |> ignore
+    },
+    w=260.0,
+    h=260.0,
+  )
+  t.draw()
+  let a = rect_of_color(red)
+  // as much of its own rect kept past the window's edge as its corners take (not cut to the 56 shown, whose corner
+  // the renderers would draw 28), its far corners its own
+  assert_eq([a[16], a[17], a[18], a[19]], [56.0 - 92.0, 0.0, 56.0, 200.0])
+  assert_eq([a[25], a[26]], [46.0, 46.0])
+}
+
+///|
 test "an outer clip kept as what holds it is pushed again: the outermost a frame cuts through, not the one between" {
   let t = Tester::new(
     fn(c) {

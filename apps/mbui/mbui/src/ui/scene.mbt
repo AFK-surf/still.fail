@@ -74,6 +74,37 @@ let clip_stack : Array[Double] = [
 ]
 
 ///|
+/// Whether each level of `clip_stack` is the window's own edges (its base; a look's copy of them where what it moves
+/// is laid out, draw.mbt): what cuts nothing drawn, past which nothing is. A level not said (one pushed whole, a part's
+/// band: kept_part.mbt) is not.
+// kept across runs: pushed and popped with `clip_stack`'s levels, its base the only one left between frames
+let clip_window : Array[Bool] = [true]
+
+///|
+/// Whether the clip at `k` (in `clip_stack`) is the window's own edges (clip_window).
+fn clip_is_window(k : Int) -> Bool {
+  let level = k / clip_n
+  level < clip_window.length() && clip_window[level]
+}
+
+///|
+/// The level just pushed said to be the window's own edges, or not (clip_window).
+fn clip_say_window(window : Bool) -> Unit {
+  let levels = clip_stack.length() / clip_n
+  while clip_window.length() > levels {
+    clip_window.pop() |> ignore
+  }
+  while clip_window.length() < levels - 1 {
+    clip_window.push(false)
+  }
+  if clip_window.length() < levels {
+    clip_window.push(window)
+  } else {
+    clip_window[levels - 1] = window
+  }
+}
+
+///|
 /// The numbers a level of `clip_stack` has: its own clip's 12, then its outer's (none: its radii 0).
 let clip_n = 24
 
@@ -152,6 +183,20 @@ fn push_clip_r(
   for j in 0..<12 {
     clip_stack.push(clip_stack[from + j])
   }
+  // (a square clip holding all of the window's edges it is in, a frame's whole, is those edges still)
+  let s = clip_stack
+  clip_say_window(
+    clip_is_window(k) &&
+    x0 <= s[k] &&
+    y0 <= s[k + 1] &&
+    x1 >= s[k + 2] &&
+    y1 >= s[k + 3] &&
+    r.0 <= 0.0 &&
+    r.1 <= 0.0 &&
+    r.2 <= 0.0 &&
+    r.3 <= 0.0 &&
+    !has_outer,
+  )
 }
 
 ///|
@@ -233,10 +278,18 @@ fn push_circle_clip(cx : Double, cy : Double, r : Double) -> Unit {
 ///|
 /// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
 fn push_round_clip(n : Node) -> Unit {
-  let x = n.x
-  let y = n.y
-  let w = n.fw
-  let h = n.fh
+  // (a box whose border is drawn over what it holds (paint's border_over) cuts it at the border's inside, as CSS's
+  // overflow cuts at the padding box: what it holds never shows under its line, which is the box's edge (a list's row
+  // under a card's see-through line read as the line through it), its corners concentric with the box's there)
+  let bw = if n.border_w > 0.0 && n.first >= 0 && (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll) {
+    dmin(n.border_w, dmin(n.fw, n.fh) / 2.0)
+  } else {
+    0.0
+  }
+  let x = n.x + bw
+  let y = n.y + bw
+  let w = n.fw - 2.0 * bw
+  let h = n.fh - 2.0 * bw
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -246,10 +299,29 @@ fn push_round_clip(n : Node) -> Unit {
   // as round, and as smooth, as its ground's corners are (the renderers cap a radius at half the shorter side, and
   // smooth it as far as the box has room for)
   let room = dmin(w, h) / 2.0
+  // (cut by the window's edges alone, which cut nothing drawn (past them nothing is), no less of its own rect kept than
+  // its corners take: a box mostly past one keeps its far corners as round as it draws them, the renderers drawing a
+  // corner no longer than half the clip's room (an iPhone Duo's card 56 of its 240 shown: its 46 corner 28, flatter
+  // than its line, what it holds showing past it))
+  let edges = clip_is_window(k)
+  let most = dmin(
+    concentric(dmax(dmax(n.radius_at(0), n.radius_at(1)), dmax(n.radius_at(2), n.radius_at(3))), bw),
+    room,
+  )
+  let (x0, x1) = if edges && x1 - x0 < 2.0 * most {
+    (if x0 > x { dmax(x, x1 - 2.0 * most) } else { x0 }, if x1 < x + w { dmin(x + w, x0 + 2.0 * most) } else { x1 })
+  } else {
+    (x0, x1)
+  }
+  let (y0, y1) = if edges && y1 - y0 < 2.0 * most {
+    (if y0 > y { dmax(y, y1 - 2.0 * most) } else { y0 }, if y1 < y + h { dmin(y + h, y0 + 2.0 * most) } else { y1 })
+  } else {
+    (y0, y1)
+  }
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(n.radius_at(j), room), 0.0)
+    let r = dmax(dmin(concentric(n.radius_at(j), bw), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
       (r, smoothness(r, room))
     } else {
@@ -267,6 +339,9 @@ fn push_round_clip(n : Node) -> Unit {
 fn pop_clip() -> Unit {
   for _ in 0..<clip_n {
     clip_stack.pop() |> ignore
+  }
+  while clip_window.length() > clip_stack.length() / clip_n {
+    clip_window.pop() |> ignore
   }
 }
 

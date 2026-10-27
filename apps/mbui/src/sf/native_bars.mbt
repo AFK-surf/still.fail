@@ -25,6 +25,7 @@ pub fn native_bars_reset() -> Unit {
   native_bars.on = false
   native_bars.side = 0.0
   native_bars.corner = 0.0
+  native_foot_made.val = None
   native_over_clear()
 }
 
@@ -57,6 +58,59 @@ pub fn native_clear() -> Double {
     0.0
   }
 }
+
+///|
+/// How high a capsule across a card's foot stands beside the system's action at the column's foot (iOS 27's prominent
+/// tab, an iPhone Duo's round one: @ui.system_nav_action): as high as it, so the two are one row (the user, 2026-10-28:
+/// 输入框跟右边的对上); None where there is none (every other device, upright, none said).
+pub fn native_capsule_h() -> Double? {
+  if !native_side() {
+    return None
+  }
+  match @ui.system_nav_action() {
+    Some((_, _, _, h)) => Some(h)
+    None => None
+  }
+}
+
+///|
+/// The cards' foot corners away from the screen's edges, their feet at `foot` in the window, beside the system's action
+/// at the column's foot: the corner a capsule as high as the action (native_capsule_h), its foot on the action's,
+/// stands concentric in (as far in from a card's side as from its foot), each card's the same so the gaps between them
+/// run even (the user, 2026-10-28: 左边圆角也对齐); none where there is no action, or it is not over their feet (the
+/// keyboard up: under it). Said by the frame once a frame, before its cards; tape_corners reads it (native_foot_corner).
+/// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
+pub fn native_foot_set(foot : Double) -> Bool {
+  let was = native_foot_made.val
+  native_foot_made.val = match (native_capsule_h(), @ui.system_nav_action()) {
+    (Some(h), Some((_, y, _, _))) => {
+      let d = foot - (y + h)
+      if d < corner_fit.near || d > h {
+        None
+      } else {
+        Some(@ui.round_like_out(h / 2.0 + d))
+      }
+    }
+    _ => None
+  }
+  native_foot_made.val != was
+}
+
+///|
+/// The cards' foot corners away from the screen's edges as native_foot_set said them this frame (None: the tape's own).
+pub fn native_foot_corner() -> Double? {
+  native_foot_made.val
+}
+
+///|
+/// Whether a panel's foot left corner `r` round is one native_foot_corner made this frame (beside the system's action).
+fn native_foot_corner_now(r : Double) -> Bool {
+  native_foot_made.val is Some(m) && (m - r).abs() < 1.0e-6
+}
+
+///|
+// kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew
+let native_foot_made : Ref[Double?] = Ref(None)
 
 ///|
 /// How far the cards stand from the window's edges and from each other beside the system's tabs (the user,

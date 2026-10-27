@@ -17,7 +17,9 @@ test "profiles: the sidebar thumb is outside its rows, dragging it scrolls witho
   t.run_for(@ui.scrollbar_fade_ms)
   let bar = profiles_side_bar(t)
   assert_true(bar.0 >= row.x + row.w)
-  assert_eq(bar.0 + bar.2, edge - @ui.scroll_bar_inset)
+  // (as far in from the panel's line (B1) as a bar is from what holds it: what the panel holds is cut at its line's
+  // inside)
+  assert_eq(bar.0 + bar.2, edge - 1.0 - @ui.scroll_bar_inset)
   let x = bar.0 + bar.2 / 2.0
   let y = bar.1 + bar.3 / 2.0
   t.move(x, y)

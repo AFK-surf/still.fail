@@ -31,9 +31,10 @@ let drawn_page : Ref[Page?] = { val: None }
 let nav_page_of : Ref[Page?] = { val: None }
 
 ///|
-/// How much of the home indicator's room the cards keep clear beside the column (its line, 8 over the window's foot;
-/// the rest of the system's 20 to 34 under them, as the system's own sidebars go).
-let cards_foot : Double = 8.0
+/// How much of the home indicator's room the cards keep clear beside the column: none, its line over their ground as
+/// over the system's own apps', the cards as far from the screen's foot as from its side (native_in), so their corners
+/// there are concentric with the screen's (the user, 2026-10-28: 跟手机的圆角对上).
+let cards_foot : Double = 0.0
 
 ///|
 /// Whether the wide frame lays its cards across beside the column of the system's glass (sfapp's sides: their ground
