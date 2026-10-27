@@ -41,6 +41,9 @@ pub(all) struct Fixture {
   /// each sidebar's width and folding as kept on this device (the prefs' `sidebars`, by `<workspace>\n<group>`), as
   /// the core's prefs.ts keeps a map: by key, null letting one go
   sidebars : Map[String, Json]
+  /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-poster, -receipt and
+  /// -terminal open it in theirs
+  mut share_look : String
 }
 
 ///|
@@ -832,6 +835,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "sidebars": Json::object(f.sidebars),
         "appearance": Json::string(f.appearance),
         "motion": Json::string(f.motion),
+        "shareLook": if f.share_look == "" { Json::null() } else { Json::string(f.share_look) },
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
@@ -1020,6 +1024,12 @@ pub fn fixture(mode : String) -> Source {
     queue_set_aside: {},
     queue_was: { "key": Json::null(), "at": 0 },
     sidebars: {},
+    share_look: match mode {
+      "share-card-poster" => "poster"
+      "share-card-receipt" => "receipt"
+      "share-card-terminal" => "terminal"
+      _ => ""
+    },
   }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
@@ -1155,6 +1165,10 @@ pub fn fixture(mode : String) -> Source {
           }
           match field(Some(params), "appearance") {
             Some(String(a)) => f.appearance = a
+            _ => ()
+          }
+          match field(Some(params), "shareLook") {
+            Some(String(l)) => f.share_look = l
             _ => ()
           }
           match field(Some(params), "motion") {
@@ -1361,7 +1375,8 @@ pub fn fixture_fleet(f : Fixture) -> Json {
     }
   }
   // each day's chats archived (57 in all, 12 today), as a share of the most on a day
-  let shares = [5.0, 7.0, 4.0, 10.0, 8.0, 11.0, 12.0].map(fn(n) { n / 12.0 })
+  let counts = [5, 7, 4, 10, 8, 11, 12]
+  let shares = counts.map(fn(n) { n.to_double() / 12.0 })
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
     "at": "10月26日 04:12",
@@ -1418,7 +1433,12 @@ pub fn fixture_fleet(f : Fixture) -> Json {
       ],
       "days": Json::array(
         shares.mapi(fn(i, x) {
-          Json::object({ "label": Json::string(labels[i]), "share": Json::number(x), "today": Json::boolean(i == 6) })
+          Json::object({
+            "label": Json::string(labels[i]),
+            "share": Json::number(x),
+            "value": Json::string("\{counts[i]} 个"),
+            "today": Json::boolean(i == 6),
+          })
         }),
       ),
     },

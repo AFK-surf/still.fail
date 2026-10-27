@@ -72,6 +72,45 @@ test "the card to share in a short window, in a 360 phone's sheet: all of it see
 }
 
 ///|
+test "the card to share's looks: each chosen under it draws the picture in it at once, all of it, nothing cut short, and is what is handed out; the choice kept the device's" {
+  for at in [(1440.0, 1000.0, 0), (390.0, 844.0, 2)] {
+    let src = fixture_app("share-card")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=at.0, h=at.1, platform=at.2)
+    t.run_for(@kit.presence_in_ms)
+    // the night's, none kept: its rings' lead
+    assert_true(t.find("用 6 个 Claude 订阅账号消耗了") is Some(_))
+    // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
+    // what it leaves out
+    for look in [
+      ("大字报", "489%", "OpenCode Go 订阅"),
+      ("小票", "5 个", "9 个对话正在运行"),
+      ("终端", "still.fail fetch", "10/20"),
+      ("夜色", "用 6 个 Claude 订阅账号消耗了", "5 个"),
+    ] {
+      t.click(Button, label=look.0)
+      t.run_for(@kit.presence_in_ms)
+      assert_true(t.find(look.1) is Some(_), msg="\{(at, look)}")
+      assert_true(t.find(look.2) is None, msg="\{(at, look)}")
+      assert_eq(t.squeeze_faults(), [])
+      assert_eq(t.corner_faults(), [])
+      assert_eq(t.contrast_faults(), [])
+      let png = if at.2 == 2 {
+        t.click(Button, label="保存到相册")
+        t.run_for(@kit.presence_in_ms)
+        t.kept()[t.kept().length() - 1].2
+      } else {
+        t.click(Button, label="复制图片")
+        t.frame()
+        t.clipboard_png().unwrap()
+      }
+      assert_true(png_size(png) is Some((1080, _)), msg="\{(at, look)}")
+    }
+    // (kept: the prefs say the last chosen)
+    assert_eq(@sfbase.text((src.topic)("prefs", Map::new()).value, "shareLook"), "night")
+  }
+}
+
+///|
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [

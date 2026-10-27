@@ -3416,6 +3416,8 @@ export interface FleetDay {
 	label: string;
 	/** Its chats archived as a share of the most on a day (0 to 1). */
 	share: number;
+	/** Its chats archived, said (3 个): a receipt's line of the day. */
+	value: string;
 	today: boolean;
 }
 
@@ -5297,6 +5299,11 @@ export interface PrefsView {
 	 * (JSON: [{station, path, name}]), whoever else browses there.
 	 */
 	driveFavorites?: Record<string, string>;
+	/**
+	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
+	 * `poster`, `receipt`, `terminal`, or (none) `night`.
+	 */
+	shareLook?: string;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**
