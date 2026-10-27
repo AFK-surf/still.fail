@@ -46,9 +46,9 @@ fn quote_ground(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
 }
 
 ///|
-/// Whether the composer's hint (发消息) is seen now: drawn in its colour where it is.
-fn hint_seen(t : @ui.Tester) -> Bool {
-  match t.words().iter().find_first(fn(w) { w.0 == "发消息" }) {
+/// Whether the composer's hint (发消息; a new chat's, 做任何事) is seen now: drawn in its colour where it is.
+fn hint_seen(t : @ui.Tester, hint? : String = "发消息") -> Bool {
+  match t.words().iter().find_first(fn(w) { w.0 == hint }) {
     Some((_, x, y, w, h, _)) =>
       t
       .drawn_glyphs()

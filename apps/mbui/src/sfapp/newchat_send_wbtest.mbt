@@ -109,6 +109,37 @@ fn up_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (Double
 }
 
 ///|
+test "wide: a new chat's first words sent: its field's hint not drawn over them in the frame they go" {
+  // (frame by frame as a host draws them, one build each: the core a round trip late, as a phone's)
+  let src = @sffixture.round_trip(fixture_app("chat"), 60.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let carried = Ref(0)
+  let hinted : Array[Double] = []
+  let look = fn(t : @ui.Tester) {
+    if seen_words(t, "把发布说明写一下").length() > 0 {
+      carried.val += 1
+      if hint_seen(t, hint="做任何事") {
+        hinted.push(t.time())
+      }
+    }
+  }
+  t.drive(
+    "timeout 20000\nuntil 新建对话\ntap 新建对话\nuntil 做任何事\ntap 做任何事\ntype 把发布说明写一下\ntap icon:arrow-up\n",
+    each=look,
+  )
+  |> ignore
+  // each frame of the words' way out of the field, till the page has become the chat and past it
+  let till = t.time() + @sfbase.flight_desk_ms
+  while t.time() < till {
+    t.frame()
+    look(t)
+  }
+  assert_true(carried.val > 10)
+  assert_true(app.nav.top() is Chat(_))
+  assert_eq(hinted, [])
+}
+
+///|
 test "a new chat's first words stay where typed while the chat is made and read, then go up into their bubble" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)

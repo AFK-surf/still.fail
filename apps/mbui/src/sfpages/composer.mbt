@@ -207,6 +207,11 @@ pub fn composer(
   let submit = fn() {
     if ready {
       @sfbase.send_sharing(src, w.key, spec.station, w.text.trim(chars=" \n\t").to_string(), fn() { send(w) })
+      // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
+      // shown once over them as they set out)
+      if @sfbase.flight_hint_away(c, w.key) {
+        w.field.colors(placeholder=@sf.alpha(p.subtle, 0.0), caret=@sf.alpha(p.accent, 0.0))
+      }
     }
   }
   outside_dialog(c, src, w.key)

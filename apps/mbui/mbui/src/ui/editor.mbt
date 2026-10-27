@@ -1294,6 +1294,17 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
 }
 
 ///|
+/// The colours of what it shows while nothing is in it and of its caret, said again after its editor was built this
+/// frame (Ctx::editor's `placeholder_color`, `caret_color`): drawn as said here, as its words are as Field::set left
+/// them. For what empties it in the same build after it (words sent from it: their hint and caret gone with them from
+/// the frame they go, not shown once over them).
+pub fn Field::colors(self : Field, placeholder~ : Int64, caret~ : Int64) -> Unit {
+  self.st.ph_color = placeholder
+  self.st.caret_color = caret
+  self.st.sel_color = (caret & 0xFFFFFF00L) | 0x40L
+}
+
+///|
 /// Its words from `from` to `to` picked (UTF-16, in its words: the anchor at `from`, the caret at `to`), as a name
 /// changed in place picks it but its extension.
 pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
