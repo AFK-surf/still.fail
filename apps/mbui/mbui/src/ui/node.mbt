@@ -194,6 +194,8 @@ struct Node {
   mut portal : Bool
   // a layer's own node (portal): the layer's id (overlay.mbt), 0 for any other
   mut portal_id : Int
+  // drawn over what flies (put_over's 2) built before it: a page's bar (Ctx::over_flying)
+  mut over_flying : Bool
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
   mut shot : Bool
   /// what it shows of the frame larger (Ctx::magnified): where it reads and how much larger
@@ -387,6 +389,7 @@ fn Node::new() -> Node {
     aspect: 0.0,
     portal: false,
     portal_id: 0,
+    over_flying: false,
     shot: false,
     magnify: None,
     blocks: false,
@@ -481,6 +484,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moves = ""
   self.portal = false
   self.portal_id = 0
+  self.over_flying = false
   self.shot = false
   self.magnify = None
   self.blocks = false
