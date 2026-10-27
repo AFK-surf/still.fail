@@ -386,6 +386,35 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
 }
 
 ///|
+test "a video picked shows as the host's still of it in its tile and its message, read whole or held; any other file as a card" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let _ = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let w = @sfbase.writing(src, draft_key(r))
+  let picked = fn(name : String, held : Int, src : String) -> @hostapi.Picked {
+    { name, bytes: if held == 0 { b"\x00\x00\x00\x18ftypmp42" } else { b"" }, held, size: 12.0, src }
+  }
+  @sfbase.writing_add_picked(src, w, r.station, picked("短片.mp4", 0, "content://media/video/7"))
+  @sfbase.writing_add_picked(src, w, r.station, picked("长片.mov", 3, "content://media/video/8"))
+  @sfbase.writing_add_picked(src, w, r.station, picked("合同.pdf", 0, "content://docs/9"))
+  let ids = w.files.map(fn(f) { text(Some(f), "id") })
+  assert_eq(ids.length(), 3)
+  assert_eq(@sfbase.writing_pictures.get(ids[0]), Some("content://media/video/7"))
+  assert_eq(@sfbase.writing_pictures.get(ids[1]), Some("content://media/video/8"))
+  assert_eq(@sfbase.writing_pictures.get(ids[2]), None)
+  // sent while it still goes up: its message draws the still from here, as a picture's does
+  let file = attachment_of({
+    "name": Json::string("短片.mp4"),
+    "path": Json::string(@sfbase.upload_path(ids[0])),
+    "size": Json::number(12.0),
+    "upload": Json::string(ids[0]),
+  })
+  assert_eq(sent_picture(r.station, file), Some("content://media/video/7"))
+}
+
+///|
 test "image sizes from their bytes" {
   // a PNG's header (IHDR 1600 × 900), a GIF's (3 × 2)
   let png = Bytes::from_array([

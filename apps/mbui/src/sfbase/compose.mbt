@@ -183,8 +183,9 @@ pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
 
 ///|
 /// A file picked or pasted (`pasted`: long words kept as a file, what the core says of them) going up to `station`
-/// (`composer.add`, its bytes beside the call): shown at once, a picture from its bytes; or the picture of the quote
-/// `quote` (a mark's screenshot), shown in its card.
+/// (`composer.add`, its bytes beside the call): shown at once, a picture from its bytes, else the host's picture of it
+/// (`still`: where the host has it, @hostapi.Picked.src; a video's still); or the picture of the quote `quote` (a
+/// mark's screenshot), shown in its card.
 pub fn writing_add(
   src : Source,
   w : Writing,
@@ -193,6 +194,7 @@ pub fn writing_add(
   bytes : Bytes,
   pasted? : Json,
   quote? : String = "",
+  still? : String = "",
 ) -> Unit {
   writing_n.val += 1
   let id = "f" + upload_id(w.key + "\u{1}" + file_seed(station, name, bytes), writing_n.val)
@@ -205,7 +207,14 @@ pub fn writing_add(
         // its message drawn from it, as picked, sent before it is up (it names its upload: sent.mbt)
         sent_pictures["upload\u{1}" + id] = key
       }
-      None => ()
+      None =>
+        match host_picture(name, still) {
+          "" => ()
+          picture => {
+            writing_pictures[id] = picture
+            sent_pictures["upload\u{1}" + id] = picture
+          }
+        }
     }
   }
   writing_went[id] = (station, name, bytes)
@@ -269,9 +278,12 @@ pub fn writing_add(
 pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
   writing_n.val += 1
   let id = "f" + upload_id(w.key + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{f.size}", writing_n.val)
-  if f.src != "" {
-    writing_pictures[id] = f.src
-    sent_pictures["upload\u{1}" + id] = f.src
+  match host_picture(f.name, f.src) {
+    "" => ()
+    picture => {
+      writing_pictures[id] = picture
+      sent_pictures["upload\u{1}" + id] = picture
+    }
   }
   writing_stations[id] = station
   let one : Map[String, Json] = {
@@ -315,7 +327,17 @@ pub fn writing_add_picked(src : Source, w : Writing, station : String, f : @host
   if f.held != 0 {
     writing_add_held(src, w, station, f)
   } else {
-    writing_add(src, w, station, f.name, f.bytes)
+    writing_add(src, w, station, f.name, f.bytes, still=f.src)
+  }
+}
+
+///|
+/// The host's picture of a file picked (@hostapi.Picked.src: an image's, a video's still), what its tile and its
+/// message show while it is this device's: "" for a file of any other kind, which shows as a file's card.
+pub fn host_picture(name : String, src : String) -> String {
+  match preview_kind(name) {
+    (Some(KImage | KVideo), _, _) => src
+    _ => ""
   }
 }
 

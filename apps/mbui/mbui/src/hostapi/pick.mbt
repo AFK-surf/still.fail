@@ -19,8 +19,8 @@ pub(all) enum PickKind {
 
 ///|
 /// A file picked: its name and its bytes; or, one too big to be read whole (a video), held by the host: `held` its id
-/// there (0: read whole, its bytes here), its `size`, and `src` where it is (an image source the host draws: its
-/// gallery's content:// address, a video's still). A file held goes up through the core a part at a time, read from
+/// there (0: read whole, its bytes here), its `size`; and `src`, held or not, where it is where the host can say it (an
+/// image source the host draws: its gallery's content:// address, a video's still; "" where it cannot). A file held goes up through the core a part at a time, read from
 /// the host as it goes (the core's `composer.add` with `blob: {hostFile: held, size}`: the host answers `picked.read`,
 /// `picked.hash`, `picked.release`; still.fail's Android app's PickedFiles.kt).
 pub(all) struct Picked {
@@ -89,7 +89,8 @@ pub fn Pick::files(self : Pick) -> Array[Picked]? {
     1 => {
       let out = []
       for i in 0..<pk_count(self.id) {
-        // (one held by the host: its id, size and address, a tab between; none for one read whole)
+        // (its id held by the host, 0 for one read whole, its size and address, a tab between; none from a host that says
+        // none)
         let info = pk_info(self.id, i).split("\t").to_array()
         let bytes = pk_bytes(self.id, i)
         match info {

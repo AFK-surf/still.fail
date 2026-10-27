@@ -1344,10 +1344,10 @@ fn up_files(w : Writing) -> Array[Json] {
 }
 
 ///|
-/// The files of a draft that are up, and its images still going up (drawn where they land from their pictures here:
-/// sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or still going up,
-/// its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or its picture is
-/// (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
+/// The files of a draft that are up, and its images and videos still going up (drawn where they land from their
+/// pictures here: sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or
+/// still going up, its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or
+/// its picture is (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
 fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   w.files.filter_map(fn(f) {
@@ -1433,14 +1433,14 @@ fn quote_picture(src : Source, station : String, q : Json?) -> (String, Json?)? 
 }
 
 ///|
-/// What a file waiting is in the message it goes with (file_key: one put up from here, or an image still going up
-/// (`going`), its upload; any other its path), "" none.
+/// What a file waiting is in the message it goes with (file_key: one put up from here, or one with its picture here
+/// still going up (`going`: an image, a video), its upload; any other its path), "" none.
 fn flying_key(v : Json?, going : Bool) -> String {
   let id = text(v, "id")
   match field(v, "done") {
     Some(_) if @sfbase.writing_put_here(id) => @sfbase.upload_path(id)
     Some(done) => text(Some(done), "path")
-    None if going && file_kind(text(v, "name")) == "image" => @sfbase.upload_path(id)
+    None if going && writing_pictures.contains(id) => @sfbase.upload_path(id)
     None => ""
   }
 }
