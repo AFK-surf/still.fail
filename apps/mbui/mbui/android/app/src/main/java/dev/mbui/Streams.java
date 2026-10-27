@@ -586,7 +586,7 @@ final class Streams {
                 format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(width * height, 1 << 20));
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
                 format.setInteger(MediaFormat.KEY_PRIORITY, 0);
-                made = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                made = avcDecoder(width, height);
                 if (failStart != null && failStart.equals(String.valueOf(++startCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_START: start " + startCalls);
                 made.setCallback(callback(g), handler);
                 made.configure(format, surface, null, 0);
@@ -603,6 +603,22 @@ final class Streams {
                 }
                 stream.say("c nostart " + g);
             }
+        }
+
+        /**
+         * An H.264 decoder that gives each frame back as soon as it is decoded, where the device has one: KEY_LOW_LATENCY
+         * asks it only of a decoder that can, and the first a device lists may not (a Snapdragon's c2.qti.avc.decoder
+         * keeps the newest frame until another comes; its c2.qti.avc.decoder.low_latency does not). A frame kept so is
+         * neither shown nor acknowledged while the screen stays still, and the station sends nothing more until it is.
+         */
+        private static MediaCodec avcDecoder(int w, int h) throws java.io.IOException {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                MediaFormat ask = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, Math.max(w, 16), Math.max(h, 16));
+                ask.setFeatureEnabled(android.media.MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency, true);
+                String name = new MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(ask);
+                if (name != null) return MediaCodec.createByCodecName(name);
+            }
+            return MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         }
 
         private void stopCodec() {
