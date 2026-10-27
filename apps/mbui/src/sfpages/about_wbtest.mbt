@@ -22,7 +22,7 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
 }
 
 ///|
-test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words and a spinner at its end, pressed still" {
+test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words and the bar under them, the row as tall all the way, pressed still" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(About, w, platform~)
@@ -44,7 +44,17 @@ test "关于's version rows, at each width and with either hand: this build alon
     let (_, uy, _, uh) = t.rect_of("更新到 0.1.1").unwrap()
     assert_true(ny >= uy + uh, msg=at)
     assert_true(t.beside_faults().length() == 0, msg="\{at}: \{t.beside_faults()}")
+    // asked again, downloading, installing: the row as tall each way (what is under it where it was)
+    let (_, under, _, _) = t.rect_of("更新日志").unwrap()
     @sfbase.update.installing.set(false)
+    for told in [("downloading", 40, "下载中 40%"), ("downloading", -1, "下载中"), ("installing", -1, "正在安装")] {
+      t.tells_update("{\"phase\":\"\{told.0}\",\"percent\":\{told.1},\"error\":\"\"}")
+      t.draw()
+      assert_true(t.find(told.2) is Some(_), msg="\{at} \{told.2}")
+      let (_, y, _, _) = t.rect_of("更新日志").unwrap()
+      assert_eq(y, under, msg="\{at} \{told.2}")
+    }
+    t.tells_update("")
     @sfbase.update.available.set(None)
   }
 }

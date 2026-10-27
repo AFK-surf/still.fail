@@ -391,11 +391,17 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? 
 
 ///|
 /// A newer build downloaded, checked and handed to the system's installer (@hostapi.update_install): how it goes,
-/// `update_state`, and the host's word as it changes (hostcall.mbt's outside_update). Under a Tester, nothing.
+/// `update_state`, and the host's word as it changes (hostcall.mbt's outside_update). What the host says as it takes
+/// it (downloading) is read at once, not on its event a frame or more later: until then it said nothing was under
+/// way, and what shows how it goes went from 正在检查 to nothing to 下载中 (the update dialog's bar gone and back, its
+/// sheet shorter and taller again, 2026-10-28). Under a Tester, nothing.
 pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
   match fake.val {
     Some(_) => ()
-    None => @hostapi.update_install(url, sha256, size, name)
+    None => {
+      @hostapi.update_install(url, sha256, size, name)
+      update_told.set(@hostapi.update_state())
+    }
   }
 }
 
