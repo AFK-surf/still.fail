@@ -313,6 +313,15 @@
       svg.innerHTML = OWN[name];
       el.replaceWith(svg);
     }
+    // which end of a button an icon is at (ember-viz.css sets it in by less there): what is first or last in it, words
+    // aside from blank ones
+    for (const b of document.querySelectorAll(".btn")) {
+      const parts = [...b.childNodes].filter((n) => n.nodeType === 1 || n.textContent.trim());
+      const icon = (n) => n?.nodeType === 1 && (n.localName === "svg" || n.localName === "i" || n.hasAttribute("data-icon") || n.hasAttribute("data-lucide"));
+      const at = parts.length > 1 ? [icon(parts[0]) && "start", icon(parts[parts.length - 1]) && "end"].filter(Boolean).join(" ") : "";
+      if (at) b.setAttribute("data-icon-at", at);
+      else b.removeAttribute("data-icon-at");
+    }
     if (!foreign) return;
     const lucide = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16, "stroke-width": 1.75, class: "viz-icon" } });
     if (globalThis.lucide) return lucide();

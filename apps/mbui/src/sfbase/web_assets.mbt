@@ -231,6 +231,16 @@ pub let viz_css : String =
   #|.btn-icon:is([aria-pressed="true"], [aria-selected="true"], .is-selected) { background: var(--selected); color: var(--foreground); }
   #|.btn-icon:disabled { opacity: .45; cursor: default; }
   #|.btn-block { display: flex; width: 100%; }
+  #|/* An icon at an end (the runtime marks which: data-icon-at) sits in from it by less than words do: the drawing stops
+  #|   short of its box and is lighter than words, so an even padding leaves it looking farther from the edge. */
+  #|.btn[data-icon-at~="start"] { padding-left: 12px; }
+  #|.btn[data-icon-at~="end"] { padding-right: 12px; }
+  #|.btn-lg[data-icon-at~="start"] { padding-left: 14px; }
+  #|.btn-lg[data-icon-at~="end"] { padding-right: 14px; }
+  #|.btn-sm[data-icon-at~="start"] { padding-left: 9px; }
+  #|.btn-sm[data-icon-at~="end"] { padding-right: 9px; }
+  #|.btn-xs[data-icon-at~="start"] { padding-left: 7px; }
+  #|.btn-xs[data-icon-at~="end"] { padding-right: 7px; }
   #|
   #|/* ── Fields ───────────────────────────────────────────────────────────────────────── */
   #|.form-label { display: block; margin-bottom: 4px; color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
@@ -753,6 +763,15 @@ pub let viz_components : String =
   #|      svg.classList.add("viz-icon");
   #|      svg.innerHTML = OWN[name];
   #|      el.replaceWith(svg);
+  #|    }
+  #|    // which end of a button an icon is at (ember-viz.css sets it in by less there): what is first or last in it, words
+  #|    // aside from blank ones
+  #|    for (const b of document.querySelectorAll(".btn")) {
+  #|      const parts = [...b.childNodes].filter((n) => n.nodeType === 1 || n.textContent.trim());
+  #|      const icon = (n) => n?.nodeType === 1 && (n.localName === "svg" || n.localName === "i" || n.hasAttribute("data-icon") || n.hasAttribute("data-lucide"));
+  #|      const at = parts.length > 1 ? [icon(parts[0]) && "start", icon(parts[parts.length - 1]) && "end"].filter(Boolean).join(" ") : "";
+  #|      if (at) b.setAttribute("data-icon-at", at);
+  #|      else b.removeAttribute("data-icon-at");
   #|    }
   #|    if (!foreign) return;
   #|    const lucide = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16, "stroke-width": 1.75, class: "viz-icon" } });
