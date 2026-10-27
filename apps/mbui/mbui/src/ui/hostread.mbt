@@ -5,8 +5,10 @@
 // environment, version 0.
 
 ///|
-/// The host's clock in ms (a Tester's: its frames'). Inside a view, Ctx::now is this frame's.
+/// The host's clock in ms (a Tester's: its frames'). Inside a view, Ctx::now is this frame's; read as a view is built,
+/// followed as Ctx::now is (frame_watch.mbt).
 pub fn now() -> Double {
+  clock_read_here()
   h_now()
 }
 

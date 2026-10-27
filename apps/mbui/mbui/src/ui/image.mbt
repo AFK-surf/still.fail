@@ -122,7 +122,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   let mut pending = false
   let mut failed = false
   for e in list {
-    e.poll(self.now)
+    e.poll(self.clock)
     if e.state == -1 {
       failed = true
       continue
@@ -163,7 +163,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       mover: Mover::new(),
       fade_told: false,
     }
-    e.poll(self.now)
+    e.poll(self.clock)
     // smallest first
     let mut k = 0
     while k < list.length() && list[k].px < want {
@@ -216,7 +216,7 @@ fn image_size(src : String) -> (Double, Double)? {
   match image_cache.get(src) {
     Some(list) => {
       for e in list {
-        e.poll(g().now)
+        e.poll(g().clock)
         if e.state == 1 {
           return Some((e.ow, e.oh))
         }
@@ -466,7 +466,7 @@ fn Ctx::draw_image(
     shot_waits.val = true
   }
   let fade = if fade && !shooting.val {
-    dclamp((self.now - e.ready_at) / image_fade_ms, 0.0, 1.0)
+    dclamp((self.now_before(e.ready_at + image_fade_ms) - e.ready_at) / image_fade_ms, 0.0, 1.0)
   } else {
     1.0
   }

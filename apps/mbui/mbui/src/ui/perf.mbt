@@ -33,6 +33,8 @@ pub(all) struct FramePerf {
   placed : Int
   same : Int
   insts : Int
+  /// a frame of its looks by the clock alone (frame_watch.mbt): nothing built, laid out or painted
+  looks : Bool
   build_ms : Double
   layout_ms : Double
   paint_ms : Double
@@ -64,11 +66,12 @@ pub fn Tester::frame_perf(self : Tester) -> FramePerf {
 fn frame_perf() -> FramePerf {
   let c = g()
   {
-    nodes: c.count,
+    nodes: if looks_drawn.val { 0 } else { c.count },
     laid: commit_counts[0] - perf_at[0],
     placed: commit_counts[1] - perf_at[1],
     same: commit_counts[2] - perf_at[2],
     insts: c.ninst,
+    looks: looks_drawn.val,
     build_ms: c.t_build,
     layout_ms: c.t_layout,
     paint_ms: c.t_paint,
@@ -123,7 +126,7 @@ pub fn Tester::wanted_why(self : Tester) -> String {
   }
   if why.is_empty() && c.wake_at > 0.0 {
     why.push(
-      "a wake in \{(c.wake_at - c.now).ceil().to_int()} ms" +
+      "a wake in \{(c.wake_at - c.clock).ceil().to_int()} ms" +
       by_of(c.wake_by) +
       (if c.periodic.is_empty() { "" } else { " (comes again: " + self.periodic().join("; ") + ")" }),
     )
@@ -188,6 +191,6 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   let p = frame_perf()
   h_log(
-    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} share=\{presented_share.val} passes=\{p.passes}",
+    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} share=\{presented_share.val} passes=\{p.passes}",
   )
 }

@@ -44,9 +44,9 @@ pub fn runtime() -> @effect.Runtime {
 }
 
 ///|
-/// A frame starts at `c.now`: the runtime goes there (whole milliseconds), its fibers run.
+/// A frame starts at `c.clock`: the runtime goes there (whole milliseconds), its fibers run.
 fn fx_frame_start(c : Ctx) -> Unit {
-  fx.val.frame(whole_ms(c.now).to_int64())
+  fx.val.frame(whole_ms(c.clock).to_int64())
 }
 
 ///|

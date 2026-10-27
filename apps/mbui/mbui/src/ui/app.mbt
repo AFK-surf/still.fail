@@ -86,24 +86,13 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let fed = inputs_since.val
   inputs_since.val = false
   in_frame.val = true
+  frame_running.val = true
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
   env_at_frame()
-  // (where only looks by the clock move on, the frame before stepped to now, nothing built: step_frame.mbt; under a
-  // Tester built whole all the same, held to what the step would have drawn)
-  let can_step = c.step_can(w, h, scale, t, fed)
-  let t0 = if can_step && fake.val is None && c.step_try(t) {
-    h_now()
-  } else {
-    let stepped = if can_step && fake.val is Some(_) { c.step_predict(t) } else { None }
-    let t0 = frame_body(c, w, h, scale, t)
-    match stepped {
-      Some(s) => c.step_check(s)
-      None => ()
-    }
-    t0
-  }
+  // (built whole where what it read changed, or of its looks by the clock alone: frame_watch.mbt)
+  let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
   c.took_input = fed
@@ -115,7 +104,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // what the shots being taken drew read back (shot.mbt)
   c.shots_after_present()
   log_drawn(w, h, scale, t)
-  c.trim_images()
+  // (a frame of the looks alone drew no picture of its own: none is let go for it)
+  if !looks_drawn.val {
+    c.trim_images()
+  }
   let t4 = work_now()
   c.t_present = t4 - t3
   if bench.mode > 0 {
@@ -133,9 +125,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // whether the frame left nothing that ends to come (Ctx::at_rest): said of a run, asserted (Tester::at_rest), never
   // waited on
   c.frame_rest = c.at_rest()
-  c.step_keep(w, h, scale)
   let held = bench.held
   bench.held = false
+  looks_left(c, held)
   if c.wants_frame || bench.mode > 0 || held {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
@@ -153,6 +145,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
+  frame_running.val = false
+  frame_built.val = false
 }
 
 ///|
@@ -203,13 +197,15 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.font_scale = fs
     c.epoch = c.epoch + 1
   }
-  c.now = t
+  c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
   c.frame_no = c.frame_no + 1
   if !layout_reuse.val {
     c.epoch = c.epoch + 1
   }
+  // (no wake but a look's asked yet: frame_watch.mbt)
+  looks_frame_start()
   c.wants_frame = false
   c.wake_at = -1.0
   c.wake_waited = -1.0
@@ -239,6 +235,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
   parts_frame_start(c)
+  // what came from outside and of the hand, taken: read, so that the next frame is built again as more comes
+  // (frame_watch.mbt)
+  frame_inputs_read()
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
   // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
@@ -249,8 +248,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.focus_frame_start()
   // the press as this frame sees it (press.mbt): every build of it the same
   c.press() |> ignore
-  // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
-  views_frame_start()
   // each stream's events since the last frame (a frame decoded, let go, a decoder broken), the frame it shows from now
   streams_frame_start()
   // built and laid out; built again, at once, while what the view read in it changed as it was built or laid out
@@ -323,8 +320,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let tell_ids = c.tells.map(fn(t) { t.0 })
   let tells = tells_once(c.tells)
   c.tells.clear()
-  // (what is told changes what the next frame builds, though nothing came from outside: built, not stepped)
-  step_told(tell_ids, c.told.map(fn(t) { t.0 }))
+  // (what is told changes what the next frame builds, though nothing came from outside: built again, frame_watch.mbt)
+  looks_told(tell_ids, c.told.map(fn(t) { t.0 }))
   for f in tells {
     f()
   }
@@ -367,13 +364,13 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint_raised()
   c.paint_overlays()
   c.raise_tops()
-  // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn on kept to step the next frames
-  // from (step_frame.mbt)
-  c.step_note()
-  c.cycle_looks()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
+  // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
+  // (frame_watch.mbt)
+  looks_keep(c)
+  looks_apply(c)
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()
@@ -529,7 +526,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
 fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
   bench.frames = bench.frames + 1
   if bench.frames == 30 {
-    bench.start = c.now
+    bench.start = c.clock
     bench.speed = -23.0
   }
   if bench.frames > 30 {
@@ -544,7 +541,7 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
     }
   }
   if bench.frames == 630 {
-    let wall = c.now - bench.start
+    let wall = c.clock - bench.start
     let cs = bench.cpu.copy()
     cs.sort_by(fn(a, b) { a.compare(b) })
     let ps = bench.present.copy()
@@ -624,7 +621,9 @@ fn field_written() -> Unit {
 /// the one after it are the framework's to draw (inputrec.mbt `inputs_since`).
 fn input_came() -> Unit {
   inputs_since.val = true
-  h_request_frame()
+  // (what the frame reads of the hand: frame_watch.mbt; no event from outside for what is kept, kept_part.mbt)
+  inputs_told()
+  h_frame_owed()
 }
 
 ///|
@@ -1583,7 +1582,7 @@ let probe_gpu_n : Ref[Int] = { val: 0 }
 let probe_cpu : Ref[Double] = { val: -1.0 }
 
 ///|
-/// The frames stepped (step_frame.mbt) as the probe's 2 s began.
+/// The frames of the looks alone (frame_watch.mbt) as the probe's 2 s began.
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
 let probe_steps : Ref[Int] = { val: 0 }
 
@@ -1629,10 +1628,10 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
     let cpu_now = h_cpu_ms()
     let cpu = if cpu_now >= 0.0 && probe_cpu.val >= 0.0 { ((cpu_now - probe_cpu.val) * 100.0 / span).round() } else { -1.0 }
     probe_cpu.val = cpu_now
-    let stepped = step.n - probe_steps.val
-    probe_steps.val = step.n
+    let stepped = looks_frames.val - probe_steps.val
+    probe_steps.val = looks_frames.val
     h_log(
-      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% stepped=\{stepped} (\{step.why}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
+      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% looks_alone=\{stepped} (built: \{built_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
       "work_avg=\{(probe_work.val / probe_frames.val.to_double() * 10.0).round() / 10.0}ms " +
       "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / probe_frames.val.to_double() * 10.0).round() / 10.0 })} nodes=\{c.count} " +
       "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / probe_frames.val.to_double() * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / probe_frames.val.to_double()).round()}% " +

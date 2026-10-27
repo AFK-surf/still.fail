@@ -371,6 +371,8 @@ pub fn Tester::shared_out(self : Tester) -> Array[(String, String, String, Bytes
 /// of a stream, an event its host told (`{"stream":{"id":N,"e":E}}`: taken at the next frame, as Tester::stream_shows).
 /// What is not said is not known (NativeView::frames None, no frame grabbed). False for a line that is none of these.
 pub fn Tester::view_said(self : Tester, line : String) -> Bool {
+  // (what the host says of its views comes from outside: frame_watch.mbt)
+  outside_counted()
   fake_view_said(self.fake, line)
 }
 

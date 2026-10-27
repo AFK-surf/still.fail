@@ -122,7 +122,7 @@ pub fn ripple(
     let p = Anim::new(0.0)
     p.name = "ripple"
     p.animate(0.5, tween(ripple_enter_ms, ease=Standard))
-    list.push({ x: px - bx + out_x, y: py - by + top, progress: p, at: c.now(), lifted: false, lifted_at: 0.0, leaving: false })
+    list.push({ x: px - bx + out_x, y: py - by + top, progress: p, at: c.moment(), lifted: false, lifted_at: 0.0, leaving: false })
     ripples[id] = list
   }
   // let go (or the press taken by a scroll): on to its end from where its way in ended, once that is over (the way
@@ -130,10 +130,10 @@ pub fn ripple(
   for r in list {
     if !down && !r.lifted {
       r.lifted = true
-      r.lifted_at = c.now()
+      r.lifted_at = c.moment()
     }
     let out_at = if r.lifted_at > r.at + ripple_enter_ms { r.lifted_at } else { r.at + ripple_enter_ms }
-    if r.lifted && !r.leaving && c.now() >= out_at {
+    if r.lifted && !r.leaving && c.moment() >= out_at {
       r.leaving = true
       r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
     }

@@ -153,7 +153,7 @@ fn unwatched(node : ReactiveNode) -> Unit {
     // (nothing for signals: always mutable, never dirty until their pending value changes)
     SignalNode => ()
     EffectNode => effect_oper(node)
-    ScopeNode | TriggerNode => effect_scope_oper(node)
+    ScopeNode | TriggerNode | WatchNode => effect_scope_oper(node)
   }
 }
 
@@ -354,6 +354,23 @@ fn[T] update_signal(s : ReactiveNode, state : SignalState[T]) -> Bool {
 ///|
 fn run_effect(e : ReactiveNode) -> Unit {
   let flags = e.flags
+  // (a watch told: what it read changed, it says so; what it read stays followed till it reads anew, Watch::read)
+  if e.kind is WatchNode {
+    let dirty = (flags & DIRTY) != 0 ||
+      (
+        (flags & PENDING) != 0 &&
+        (match e.deps {
+          Some(d) => check_dirty(d, e)
+          None => false
+        })
+      )
+    e.flags = WATCHING
+    if dirty {
+      let told : () -> Unit = coerce(e.own)
+      told()
+    }
+    return
+  }
   if (flags & DIRTY) != 0 || ((flags & PENDING) != 0 && check_dirty(e.deps.unwrap(), e)) {
     if (flags & HAS_CHILD_EFFECT) != 0 {
       let mut link = e.deps_tail
@@ -461,11 +478,16 @@ pub fn[T] Signal::get(self : Signal[T]) -> T {
 
 ///|
 /// The signal set (signalOper write): what follows it told, unless it is the same as what was set.
-pub fn[T] Signal::set(self : Signal[T], value : T) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
   let state : SignalState[T] = coerce(self.0.own)
   let changed = !same_as(state.same, state.pending, value)
   state.pending = value
   if changed {
+    // (set as a watch reads: where, for it to say what changed what it read as it read, Watch::set_as_read)
+    if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
+      watch_reading.sets.push(loc.to_string())
+    }
     let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
@@ -647,4 +669,111 @@ pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
       None => break
     }
   }
+}
+
+// ── not alien-signals': what follows what a run read without running it again ──────────────────────────────
+
+///|
+/// A watch: what a run of `Watch::read` read, followed; as any of it changes (a signal set to another value, a
+/// computed worked out to another), the watch is stale and `changed` is called, once, nothing of the run run again.
+/// What reads anew (the next read) follows what that run reads. For what is worked out when asked, and asked only as
+/// it is stale: a window's frame, built anew only where what its last build read changed.
+pub struct Watch {
+  priv node : ReactiveNode
+  priv stale : Ref[Bool]
+  /// where what it read was set again as its last read ran, the first few (Watch::set_as_read)
+  priv set_by : Array[String]
+}
+
+///|
+/// How deep in watches' reads the run is, and where values were set in them (Signal::set's callers, the first few).
+priv struct WatchReading {
+  mut depth : Int
+  sets : Array[String]
+}
+
+///|
+// kept across runs: counts back to 0 as each read ends
+let watch_reading : WatchReading = { depth: 0, sets: [] }
+
+///|
+/// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
+/// till the next read.
+pub fn watch(changed : () -> Unit) -> Watch {
+  let stale = Ref(true)
+  // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
+  let told : () -> Unit = fn() {
+    if !stale.val {
+      stale.val = true
+      changed()
+    }
+  }
+  // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
+  { node: ReactiveNode::new(NONE, WatchNode, own=coerce(told)), stale, set_by: [] }
+}
+
+///|
+/// What `f` makes, all it reads followed by the watch in place of what the last read read; not stale after it unless
+/// what it read changed as it ran (a value it read set later in it), and then `changed` is called at its end. What
+/// was reading before it does not read what it reads.
+pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
+  let e = self.node
+  if watch_reading.depth == 0 {
+    watch_reading.sets.clear()
+  }
+  watch_reading.depth += 1
+  self.set_by.clear()
+  e.deps_tail = None
+  e.flags = WATCHING | RECURSED_CHECK
+  let prev_sub = set_active_sub(Some(e))
+  run.cycle += 1
+  let v = f()
+  run.active_sub = prev_sub
+  watch_reading.depth -= 1
+  e.flags = e.flags & RECURSED_CHECK.lnot()
+  purge_deps(e)
+  self.stale.val = false
+  // (what it read set again as it ran, after it was read: told then as what reads it is, the run still going)
+  if (e.flags & (DIRTY | PENDING)) != 0 {
+    let dirty = (e.flags & DIRTY) != 0 ||
+      (match e.deps {
+        Some(d) => check_dirty(d, e)
+        None => false
+      })
+    e.flags = WATCHING
+    if dirty {
+      for s in watch_reading.sets {
+        self.set_by.push(s)
+      }
+      let told : () -> Unit = coerce(e.own)
+      told()
+    }
+  }
+  v
+}
+
+///|
+/// Where values were set as the last read ran, where what it read changed as it ran (the first few; none where it did
+/// not): what changed what it read as it read.
+pub fn Watch::set_as_read(self : Watch) -> Array[String] {
+  self.set_by.copy()
+}
+
+///|
+/// Whether what the watch's last read read changed since (or it was never read).
+pub fn Watch::is_stale(self : Watch) -> Bool {
+  self.stale.val
+}
+
+///|
+/// The watch stale, as though what it read changed (`changed` not called): read anew before it is relied on.
+pub fn Watch::touch(self : Watch) -> Unit {
+  self.stale.val = true
+}
+
+///|
+/// The watch let go of what it read: it follows nothing, and is stale.
+pub fn Watch::stop(self : Watch) -> Unit {
+  effect_scope_oper(self.node)
+  self.stale.val = true
 }

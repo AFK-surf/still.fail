@@ -498,9 +498,9 @@ fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   }
   st.index = next
   // the page that showed is now one width away, and slides in from there
-  let (x, v) = st.slide.at(self.now)
+  let (x, v) = st.slide.at(self.clock)
   st.slide.put(x + dir.to_double() * st.width)
-  st.slide.go(self.now, 0.0, v~)
+  st.slide.go(self.clock, 0.0, v~)
 }
 
 ///|
@@ -512,7 +512,7 @@ fn Ctx::place_pager_slot(self : Ctx, i : Int) -> Unit {
     Some(st) => {
       let p = self.nodes[n.parent]
       st.width = p.fw
-      n.tx = (n.item - st.index).to_double() * p.fw + st.slide.value(self.now)
+      n.tx = (n.item - st.index).to_double() * p.fw + st.slide.value(self.now_before(st.slide.end()))
     }
     None => ()
   }
@@ -526,7 +526,7 @@ fn Ctx::pager_drag(self : Ctx, id : Int, dx : Double) -> Bool {
     Some(st) => {
       st.dragging = true
       // resisting past the first and last page
-      let offset = st.slide.value(self.now)
+      let offset = st.slide.value(self.now_before(st.slide.end()))
       let at_end = (st.index == 0 && offset + dx > 0.0) ||
         (st.index == st.count - 1 && offset + dx < 0.0)
       st.slide.put(offset + (if at_end { dx * 0.35 } else { dx }))
@@ -544,7 +544,7 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
     Some(st) => {
       st.dragging = false
       let w = dmax(st.width, 1.0)
-      let offset = st.slide.value(self.now)
+      let offset = st.slide.value(self.now_before(st.slide.end()))
       // past the last or first page, turn() hands it to the app
       if offset < -w / 3.0 || vel < -0.4 {
         self.turn(st, 1)
@@ -552,7 +552,7 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
         self.turn(st, -1)
       }
       // (vel a millisecond)
-      st.slide.go(self.now, 0.0, v=vel * 1000.0)
+      st.slide.go(self.clock, 0.0, v=vel * 1000.0)
     }
     None => ()
   }

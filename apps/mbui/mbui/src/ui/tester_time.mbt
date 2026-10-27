@@ -16,7 +16,6 @@
 pub fn Tester::draw(self : Tester) -> Unit {
   // (what the test changed, as an event from outside is: a part kept is built anew, kept_part.mbt)
   outside_came()
-  step_test_changed()
   self.drawn_now()
 }
 
@@ -94,8 +93,8 @@ pub fn rest_of(name : String) -> Double {
   let mut last = -1.0
   for e in c.movers {
     if e.what.contains(name) {
-      let r = e.m.rest_at(c.now, c.frame_no)
-      if r > c.now && r > last {
+      let r = e.m.rest_at(c.clock, c.frame_no)
+      if r > c.clock && r > last {
         last = r
       }
     }
@@ -109,14 +108,14 @@ pub fn rest_of(name : String) -> Double {
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
 /// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
-  // (what the test changed before it, never an event a host has: its first frame built, not stepped, step_frame.mbt)
-  step_test_changed()
+  // (what the test changed before it shows at its first frame: a step of the test's, frame_watch.mbt)
+  test_stepped()
   // (on the display's frame where it falls on one, to the bit: the same moment however it was summed)
   let end = self.on_grid(self.fake.time + ms)
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
   if self.host_frames {
     while self.fake.time < end - 1.0e-9 {
-      self.frame_at(self.tick_after(self.fake.time))
+      self.clock_frame()
     }
     return
   }
@@ -169,7 +168,7 @@ fn Tester::next_due(self : Tester) -> Double {
   let now = self.fake.time
   let mut due = if c.wake_at > now { c.wake_at } else { @double.infinity }
   for e in c.movers {
-    let r = e.m.rest_at(c.now, c.frame_no)
+    let r = e.m.rest_at(c.clock, c.frame_no)
     if r > now && r < due {
       due = r
     }
@@ -212,6 +211,8 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
         " (an input's frame after)"
       } else if c.read_back_moved {
         " (what the view reads still changed: \{c.read_back_key})"
+      } else if watch_said.val != "" {
+        " (\{watch_said.val})"
       } else {
         ""
       }),
@@ -220,7 +221,7 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
     why.push("a frame asked for between frames")
   }
   if c.wake_waited >= 0.0 {
-    why.push("a wake in \{(c.wake_waited - c.now).ceil().to_int()} ms" + by_of(c.wake_by))
+    why.push("a wake in \{(c.wake_waited - c.clock).ceil().to_int()} ms" + by_of(c.wake_by))
   }
   let rt = fx.val.unsettled()
   if rt != "" {
@@ -280,7 +281,7 @@ fn Ctx::rest_why(self : Ctx) -> String {
     why.push("a motion said is not at rest: " + self.moving_now().join("; "))
   }
   if self.wake_waited >= 0.0 {
-    why.push("a wake in \{(self.wake_waited - self.now).ceil().to_int()} ms" + by_of(self.wake_by))
+    why.push("a wake in \{(self.wake_waited - self.clock).ceil().to_int()} ms" + by_of(self.wake_by))
   }
   let rt = fx.val.unsettled()
   if rt != "" {

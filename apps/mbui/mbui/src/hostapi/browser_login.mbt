@@ -14,6 +14,13 @@
 // None there).
 
 ///|
+/// Said as what the host keeps and changes with no event of its own is read (BrowserLogin::back): mbui's frames make it
+/// a read of their clock, so what reads that as it is built is built again each frame while it does (ui's
+/// frame_watch.mbt).
+// kept across runs: set once by ui as it starts
+pub let polled : Ref[() -> Unit] = Ref(fn() {  })
+
+///|
 /// A sign-in under way in the browser.
 pub struct BrowserLogin {
   priv id : Int
@@ -42,6 +49,8 @@ pub fn BrowserLogin::open(self : BrowserLogin, url : String) -> Bool {
 /// The address the browser came back to (`redirect` with the service's query), once it has; None until then. A frame
 /// is asked for as it comes, so a view can look each frame.
 pub fn BrowserLogin::back(self : BrowserLogin) -> String? {
+  // (the host's own state, come with no event: what reads it as it is built, built each frame while it does)
+  (polled.val)()
   let s = bl_back(self.id)
   if s.length() == 0 {
     None

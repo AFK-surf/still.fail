@@ -177,7 +177,7 @@ test "the outside a test stands for posts after a frame what came by then: the n
 test "what the outside says comes at its moment, however the clock is run on: a frame drawn then, taken at it" {
   let got : Array[(String, Double)] = []
   let t = Tester::new(fn(c) { c.text(got.map(fn(g) { g.0 }).join(",")) |> ignore }, w=100.0, h=100.0)
-  on_message("test.a", fn(j, _) { got.push((j, g().now)) })
+  on_message("test.a", fn(j, _) { got.push((j, g().clock)) })
   // a kept conversation's message due 437 ms on (off the display's frames)
   let at = t.time() + 437.0
   let due = Ref::new(at)

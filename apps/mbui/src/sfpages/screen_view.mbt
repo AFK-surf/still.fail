@@ -160,9 +160,12 @@ pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame, 
       s.fit = Some((u.box_w, u.box_h, c.scale))
     }
     if shown {
-      // 画质 chosen otherwise: opened again with it
+      // 画质 chosen otherwise: opened again with it; open again where it was let go, not where it is over (重新打开
+      // opens that)
       s.asked_again(src)
-      s.open(src)
+      if !phase_over(s.phase()) {
+        s.open(src)
+      }
     } else {
       s.pause(src)
     }

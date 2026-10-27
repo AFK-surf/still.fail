@@ -180,7 +180,7 @@ pub fn Ctx::move_state(
   let from = if self.in_frame() { self.shown_last } else { self.shown_now }
   // (the moment it is said: this frame's, or between frames the clock's then, a frame asked for to show it)
   let start = if self.in_frame() {
-    self.now
+    self.clock
   } else {
     self.owe_frame()
     h_now()
@@ -205,7 +205,7 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
     if run.vars.contains(name) {
       match run.from.get(name) {
         Some(f) => {
-          let p = run.at(self.now)
+          let p = run.at(self.now())
           v = f.v[0] + (target - f.v[0]) * p
           if p < 1.0 {
             part_live()
@@ -227,7 +227,7 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
 fn Ctx::moves_frame_start(self : Ctx) -> Unit {
   self.shown_last = self.shown_now
   self.shown_now = {}
-  let now = self.now
+  let now = self.clock
   self.move_runs.retain(fn(r) { r.start + r.dur > now })
 }
 
@@ -256,7 +256,7 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
         Some(run) =>
           match run.from.get(key) {
             Some(f) => {
-              let p = run.at(self.now)
+              let p = run.at(self.now())
               shown[k] = move_mix(k, f.v, built, p)
               // (shown otherwise each frame while it goes: what holds it, kept, built each frame till it is over)
               if p < 1.0 {

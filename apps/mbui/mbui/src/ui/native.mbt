@@ -750,12 +750,27 @@ fn device_px(v : Double, scale : Double) -> Double {
 }
 
 ///|
-/// Before the view is built: how each open view stands (view_info), so what the frame shows of it is as it stands now.
-fn views_frame_start() -> Unit {
+/// As a frame begins, before it is decided what it does again (frame_watch.mbt): how each native view stands, read of
+/// the host; where one stands otherwise than it did, said come from outside (the frame is built and reads it).
+fn views_arrive() -> Unit {
+  let mut came = false
   for v in open_views {
     if !v.closed && v.id != 0 {
-      v.state = h_view_info(v.id, v.info)
+      let was = v.info.copy()
+      let state = h_view_info(v.id, v.info)
+      if state != v.state {
+        came = true
+      }
+      for k in 0..<v.info.length() {
+        if v.info[k] != was[k] {
+          came = true
+        }
+      }
+      v.state = state
     }
+  }
+  if came {
+    outside_counted()
   }
 }
 
@@ -1308,7 +1323,7 @@ pub fn image_state(src : String) -> Int {
     Some(list) => {
       let mut failed = list.length() > 0
       for e in list {
-        e.poll(g().now)
+        e.poll(g().clock)
         if e.state == 1 {
           return 1
         }

@@ -83,7 +83,7 @@ pub fn Ctx::take_shot(self : Ctx, key : String, done : (Bytes?) -> Unit, scale? 
   self.shots[shot_id(key)] = {
     done,
     asked: self.frame_no,
-    since: self.now,
+    since: self.clock,
     scale,
     layer: -1,
     node: -1,
@@ -192,7 +192,7 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
       continue
     }
     let end = s.since + shot_wait_most
-    if s.waits && self.now < end {
+    if s.waits && self.now() < end {
       // (the host's frame as a picture comes; its time's end at the latest)
       if self.wake_at < 0.0 || end < self.wake_at {
         self.wake_at = end

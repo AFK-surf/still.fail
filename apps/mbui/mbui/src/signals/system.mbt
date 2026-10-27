@@ -33,6 +33,8 @@ enum NodeKind {
   EffectNode
   ScopeNode
   TriggerNode
+  /// a watch (signals.mbt's Watch): told, it calls its own (a `() -> Unit`), what it read still followed
+  WatchNode
 }
 
 ///|

@@ -1281,6 +1281,8 @@ fn drive_steps(c : Ctx) -> Unit {
       "contrast" =>
         if inst_owners.on {
           inst_owners.on = false
+          // (drawn as before from the next frame on, built whole: frame_watch.mbt)
+          test_stepped()
           for f in c.contrast_faults_drawn(contrast_mark_least) {
             h_log("DRIVE CONTRAST " + f)
           }

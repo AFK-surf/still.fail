@@ -392,7 +392,7 @@ fn logging() -> Bool {
 /// are: `MOTION <ms> <key> <fields>` (`name=value` …), when MBUI_MOTION_LOG=1.
 pub fn log_frame(c : @ui.Ctx, key : String, fields : String) -> Unit {
   if logging() {
-    @ui.log("MOTION \{c.now()} \{key} \{fields}")
+    @ui.log("MOTION \{c.moment()} \{key} \{fields}")
   }
 }
 
@@ -824,7 +824,7 @@ pub fn list_keys(
 ) -> Int {
   install()
   let id = c.id(list)
-  let now = c.now()
+  let now = c.moment()
   let frame = c.frame_number()
   // the very names of the frame before (a list that keeps them while it is the same): nothing to work out again, as
   // many as it has rows
@@ -1017,10 +1017,10 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
   match mo.lists.get(list) {
     Some(lm) =>
       match lm.lifted.get(motion_key(key)) {
-        Some(at) if c.now() - at < lift_ms => {
+        Some(at) if c.moment() - at < lift_ms => {
           // (read by what is built: built again each frame while it passes over the others, Ctx::shows_motion)
           c.shows_motion(lm.lift_mover, true)
-          c.now() - at
+          c.moment() - at
         }
         Some(_) => {
           c.shows_motion(lm.lift_mover, false)
@@ -1081,7 +1081,7 @@ pub fn presence(
   }
   let l = t.at(fv, mv)
   if logging() && (f.running || m.running) {
-    @ui.log("MOTION \{c.now()} \{key} alpha=\{l.alpha} dx=\{l.dx} dy=\{l.dy} scale=\{l.sx}")
+    @ui.log("MOTION \{c.moment()} \{key} alpha=\{l.alpha} dx=\{l.dx} dy=\{l.dy} scale=\{l.sx}")
   }
   Some(l)
 }
@@ -1337,7 +1337,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           } else {
             // closing over a row gone: a little late, unless it went ahead
             let delay = match lm {
-              Some(l) if c.now() <= l.close_until && !l.lifted.contains(e.key) => 100.0
+              Some(l) if c.moment() <= l.close_until && !l.lifted.contains(e.key) => 100.0
               _ => 0.0
             }
             let spec = match e.spec {
@@ -1366,7 +1366,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
                 match l.arrived.get(e.key) {
                   Some(at) => {
                     l.arrived.remove(e.key)
-                    c.now() - at < 400.0
+                    c.moment() - at < 400.0
                   }
                   None => false
                 }
@@ -1536,7 +1536,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     }
     if logging() && e.name != "" && (!look.is_still() || e.fly is Some(_)) {
       @ui.log(
-        "MOTION \{c.now()} \{e.name} x=\{nx + look.dx} y=\{ny + look.dy} w=\{nw * look.sx} h=\{nh * look.sy} alpha=\{look.alpha} dx=\{look.dx} dy=\{look.dy} scale=\{look.sx} fy=\{flip_dy}",
+        "MOTION \{c.moment()} \{e.name} x=\{nx + look.dx} y=\{ny + look.dy} w=\{nw * look.sx} h=\{nh * look.sy} alpha=\{look.alpha} dx=\{look.dx} dy=\{look.dy} scale=\{look.sx} fy=\{flip_dy}",
       )
     }
 }

@@ -216,7 +216,9 @@ pub struct Ctx {
   mut scale : Double
   /// whether the host sets things on whole device pixels (whole_px_layout), as the frame began
   mut whole_px : Bool
-  mut now : Double
+  /// the frames' clock as the frame began (ms), read as it is, not followed: what reads it so reads a moment (a
+  /// stamp, a wake's time); what shows it reads it followed (Ctx::now, frame_watch.mbt)
+  mut clock : Double
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
@@ -553,7 +555,7 @@ fn Ctx::new() -> Ctx {
     window_h: 600.0,
     scale: 2.0,
     whole_px: false,
-    now: 0.0,
+    clock: 0.0,
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
@@ -1664,7 +1666,7 @@ pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
   if self.active != id || !self.down {
     return false
   }
-  if self.press_late && self.now < self.press_at + tap_indication_ms {
+  if self.press_late && self.clock < self.press_at + tap_indication_ms {
     self.wake_at_time(self.press_at + tap_indication_ms)
     return false
   }
@@ -1745,16 +1747,22 @@ pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
 }
 
 ///|
-pub fn Ctx::now(self : Ctx) -> Double {
-  self.now
+/// The frames' clock (ms): this frame's time, followed (frame_watch.mbt): what reads it as it is built or drawn is built
+/// and drawn again each frame. What only changes at a moment says so (Ctx::wake_in, Ctx::every, a cycle's step) and
+/// is not built again till then.
+#callsite(autofill(loc))
+pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
+  clock_read(loc)
+  self.clock
 }
 
 ///|
 /// The moment now: the frame's time in a frame (Ctx::now), else the clock's as it stands between frames (an input's
-/// handler, a fiber, a test's change): where what is told now starts from.
+/// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
+/// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
   if self.in_frame() {
-    self.now
+    self.clock
   } else {
     h_now()
   }
@@ -2051,9 +2059,9 @@ pub fn Ctx::spring(
   // where it is now: a function of the time since it set out (motion_data.mbt); a new target (or one born away from
   // it) sets it out again from here, as fast as it goes
   if target != s.target() {
-    s.go(self.now, target, what="c.spring \"" + key + "\"", loc~)
+    s.go(self.clock, target, what="c.spring \"" + key + "\"", loc~)
   }
-  s.value(self.now)
+  s.value(self.now_before(s.end()))
 }
 
 ///|
@@ -2061,14 +2069,15 @@ pub fn Ctx::spring(
 /// what a test runs to.
 pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
   match self.springs.get(self.id(key)) {
-    Some(s) if s.end() > self.now => s.end()
+    Some(s) if s.end() > self.clock => s.end()
     _ => -1.0
   }
 }
 
 ///|
 fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false) -> Unit {
-  part_wake(self.now, t, later)
+  part_wake(self.clock, t, later)
+  looks_wake(t)
   if self.wake_at < 0.0 || t < self.wake_at {
     self.wake_at = t
   }
@@ -2256,5 +2265,5 @@ pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : Sourc
   if !later && self.wake_by is None {
     self.wake_by = Some(loc)
   }
-  self.wake_at_time(self.now + dmax(ms, 1.0), later~)
+  self.wake_at_time(self.clock + dmax(ms, 1.0), later~)
 }

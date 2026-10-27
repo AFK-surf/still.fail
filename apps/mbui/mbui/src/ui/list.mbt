@@ -134,7 +134,7 @@ fn Ctx::ease_list(self : Ctx, id : Int, d : Double, at : Double) -> Unit {
     Some(st) => {
       // (from the notch's own moment, said once as it sets out: a list at rest since its last frame, long ago, eases
       // it in from now, not all of it at once at the next frame)
-      let at = dmax(at, self.now)
+      let at = dmax(at, self.clock)
       let (came, v) = if st.easing() {
         ease_state(st.ease, st.ease_v, at - st.ease_t0)
       } else {
@@ -204,7 +204,7 @@ fn ease_end(total : Double, v0 : Double) -> Double {
 /// its scroll bar gone (the frames' clock; before now: it is).
 pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
   match self.lists.get(self.id(key)) {
-    Some(st) => st.rest_at(self.now, self.frame_no)
+    Some(st) => st.rest_at(self.clock, self.frame_no)
     None => -1.0
   }
 }
@@ -212,8 +212,8 @@ pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
 ///|
 /// List `st` scrolled now: its scroll bar shows (and then fades) from now, said as what moves.
 fn Ctx::scrolled(self : Ctx, st : ListState) -> Unit {
-  st.bar.wake(self.now, st.shown_until())
-  st.last_scroll = self.now
+  st.bar.wake(self.clock, st.shown_until())
+  st.last_scroll = self.clock
   self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease and scroll bar")
 }
 
@@ -309,7 +309,7 @@ fn Ctx::step_ease(self : Ctx, st : ListState) -> Unit {
   if !st.easing() {
     return
   }
-  let t = dmax(0.0, self.now - st.ease_t0)
+  let t = dmax(0.0, self.now() - st.ease_t0)
   let came = ease_come(st.ease, st.ease_v, t)
   st.pending = st.pending + (came - st.ease_done)
   st.ease_done = came
@@ -327,8 +327,8 @@ fn Ctx::step_edge(self : Ctx, st : ListState) -> Unit {
   if st.edge_v == 0.0 {
     return
   }
-  st.pending = st.pending + st.edge_v * dmax(0.0, self.now - st.edge_t)
-  st.edge_t = self.now
+  st.pending = st.pending + st.edge_v * dmax(0.0, self.now() - st.edge_t)
+  st.edge_t = self.clock
   self.scrolled(st)
   st.glide = false
   st.follow_item = -1
@@ -341,7 +341,7 @@ fn Ctx::edge_scroll(self : Ctx, id : Int, v : Double) -> Unit {
   match self.lists.get(id) {
     Some(st) if st.edge_v != v => {
       if st.edge_v == 0.0 {
-        st.edge_t = self.now
+        st.edge_t = self.clock
       }
       st.edge_v = v
       self.scrolled(st)
@@ -492,7 +492,7 @@ pub fn Ctx::list(
   // (built again in the same frame: its motion stepped once a frame, at the first)
   let again = st.built == self.frame_no
   st.built = self.frame_no
-  if back && st.rest_at(self.now, self.frame_no) > self.now {
+  if back && st.rest_at(self.clock, self.frame_no) > self.clock {
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
   if !again {
@@ -514,7 +514,7 @@ pub fn Ctx::list(
   // (where its own motions have it, read by what is built round it, a part or a row kept: built again as it is told
   // anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion; and the heights its rows came out
   // at as they were laid out, what its bar and its rows' places are drawn from)
-  self.shows_motion(st.ease_mover, st.rest_at(self.now, self.frame_no) > self.now)
+  self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
   if part_building() {
     st.heights_learned.get() |> ignore
   }
@@ -805,15 +805,15 @@ fn Ctx::place_list(
     if st.glide_t0 == @double.infinity {
       // it sets out at its first layout: its way said once (what is left of it e^(-t/list_glide_ms), at its end once
       // under a pixel)
-      st.glide_t0 = self.now
+      st.glide_t0 = self.clock
       st.glide_l0 = left
-      st.glide_rest = if left < 1.0 { self.now } else { self.now + (list_glide_ms * @dmath.ln(left)).ceil() }
+      st.glide_rest = if left < 1.0 { self.clock } else { self.clock + (list_glide_ms * @dmath.ln(left)).ceil() }
     }
     if left < 1.0 {
       st.glide = false
       st.at_end = to_end < 1.0
       if st.glide_shows {
-        st.last_scroll = dmax(st.last_scroll, self.now)
+        st.last_scroll = dmax(st.last_scroll, self.clock)
       }
     }
   }
@@ -1024,7 +1024,7 @@ fn Ctx::glide_to_end(self : Ctx, id : Int, st : ListState) -> Unit {
   // (its bar out from now till the glide's end, where it showed)
   st.glide_shows = self.list_shown(id)
   if st.glide_shows {
-    st.bar.wake(self.now, st.shown_until())
+    st.bar.wake(self.clock, st.shown_until())
   }
   st.glide = true
   st.glide_t0 = @double.infinity
@@ -1039,7 +1039,7 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
   if !st.glide || st.glide_t0 == @double.infinity {
     return
   }
-  if self.now >= st.glide_rest {
+  if self.clock >= st.glide_rest {
     // there: its end, or the top of the row it follows (its goal as last laid out); its bar fades from then
     if st.follow_item >= 0 {
       st.pending = st.pending + st.glide_left
@@ -1052,7 +1052,7 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
     }
     return
   }
-  let want = st.glide_l0 * @dmath.exp(-(self.now - st.glide_t0) / list_glide_ms)
+  let want = st.glide_l0 * @dmath.exp(-(self.now() - st.glide_t0) / list_glide_ms)
   if st.glide_left > want {
     st.pending = st.pending + (st.glide_left - want)
   }
