@@ -154,6 +154,10 @@ pub fn toggle_group(
           }
           if r.clicked {
             any = r
+            // another chosen by a finger: felt
+            if !now.contains(it.value) {
+              felt_tick(c, key)
+            }
             if multiple {
               now = if now.contains(it.value) {
                 now.filter(fn(v) { v != it.value })

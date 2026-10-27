@@ -162,6 +162,10 @@ pub fn sheet(
         // however short it is: else one shorter than that and 80 could never be dragged closed)
         let least = if draggable { sheet_least_h } else { 0.0 }
         let to = dmax(from - dy, least)
+        // drawn past its top: felt as it starts to give
+        if from <= top && to > top {
+          felt_tick(c, key + "/top")
+        }
         s.held = to
         s.h.put(stretched(to, top, total - top))
       }

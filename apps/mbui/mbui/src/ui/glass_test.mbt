@@ -58,6 +58,45 @@ test "where less transparency is asked for, glass is its solid ground" {
 }
 
 ///|
+test "frosted glass sharing a capture takes the last frosted one, past liquid glass drawn between" {
+  let frost = @ui.Glass::frosted(blur=20.0, tint=0xFFFFFFB8L, solid=0xFDFCFBFFL)
+  let t = @ui.Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=0x1559C4FFL, fn() {
+      c.box(w=Px(300.0), h=Px(60.0), glass=frost, fn() {  }) |> ignore
+      c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=@ui.Glass::liquid(), fn() {  }) |> ignore
+      c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=frost.sharing(), fn() {  }) |> ignore
+    })
+    |> ignore
+  })
+  let runs = t.drawn_glass().map(fn(g) { g.5 })
+  assert_eq(runs.length(), 3)
+  assert_true(runs[1] != runs[0])
+  assert_eq(runs[2], runs[0])
+}
+
+///|
+test "liquid glass of a group merges with none drawn right before or after it" {
+  let t = @ui.Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=0xE5704AFFL, fn() {
+      c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=@ui.Glass::liquid(), fn() {  }) |> ignore
+      c.box(dir=Row, gap=8.0, glass_group=true, fn() {
+        for _ in 0..<2 {
+          c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=@ui.Glass::liquid(), fn() {  }) |> ignore
+        }
+      })
+      |> ignore
+      c.box(w=Px(56.0), h=Px(56.0), radius=28.0, glass=@ui.Glass::liquid(), fn() {  }) |> ignore
+    })
+    |> ignore
+  })
+  let runs = t.drawn_glass().map(fn(g) { g.5 })
+  assert_eq(runs.length(), 4)
+  assert_eq(runs[1], runs[2])
+  assert_true(runs[0] != runs[1])
+  assert_true(runs[3] != runs[2])
+}
+
+///|
 test "liquid glass of a group is drawn first, as one capture, its words inked by what is under it" {
   let t = @ui.Tester::new(fn(c) {
     c.box(w=Fill(1.0), h=Fill(1.0), bg=0xE5704AFFL, fn() {

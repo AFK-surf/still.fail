@@ -52,6 +52,8 @@ test "a switch held long by a finger is still its press: let go, turned" {
   t.run_for(@ui.long_press_ms * 2.0)
   t.release(x + w / 2.0, y + h / 2.0)
   assert_true(on.val)
+  // (turned by a finger, felt: a light tick)
+  assert_eq(t.haptics(), [@ui.TextHandleMove])
 }
 
 ///|

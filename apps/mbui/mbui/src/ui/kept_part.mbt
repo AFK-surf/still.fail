@@ -983,6 +983,9 @@ fn Ctx::part_paint_again(self : Ctx, st : KeptPart) -> Unit {
         }
       }
       a[b + 20] = -now.to_double()
+      if kind == 5.0 {
+        glass_paint.frost_run = now
+      }
       glass_paint.run_start = -1
       glass_paint.run_len = 0
     }

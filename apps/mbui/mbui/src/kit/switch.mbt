@@ -32,6 +32,10 @@ pub fn switch(
   // (held however long, still its press: let go, turned; its knob a lens meanwhile, where its look has one)
   let r = c.interact(id, disabled~, holds=true)
   let on = if r.clicked { !checked } else { checked }
+  // turned by a finger: felt, a light tick (as iOS's switch)
+  if r.clicked {
+    felt_tick(c, key)
+  }
   let t = switch_knob(c, key, on)
   let st = {
     on,
@@ -154,6 +158,15 @@ pub let switch_ms : Double = 140.0
 /// When the switch `key`'s knob is at rest after a turn (the frames' clock; -1: it is, +inf: told, not started).
 pub fn switch_rest(key : String) -> Double {
   @ui.rest_of("\u{2}animate/" + key + "/knob")
+}
+
+///|
+/// A light tick felt for `key`'s control turned by a finger now (a switch turned, a group's other item chosen, a
+/// sheet drawn past its top): told once, as the frame's builds are over (Ctx::tell: the build that took the press).
+pub fn felt_tick(c : @ui.Ctx, key : String) -> Unit {
+  if @ui.pointing() is Finger {
+    c.tell("\u{2}tick/" + key, fn() { @ui.haptic(TextHandleMove) })
+  }
 }
 
 ///|
