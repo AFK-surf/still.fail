@@ -282,6 +282,16 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 }
 
 ///|
+fn window_hold() -> Unit {
+  ffi_window_hold()
+}
+
+///|
+fn window_show() -> Unit {
+  ffi_window_show()
+}
+
+///|
 /// Whether the window's buttons are in the app's top row now (an inset window, not full screen): the room the app
 /// leaves them there.
 fn window_inset() -> Bool {
