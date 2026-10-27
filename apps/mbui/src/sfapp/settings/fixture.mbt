@@ -560,7 +560,7 @@ fn fx_cx_more() -> Array[(String, Json)] {
     ("models", ["gpt-6-mini"]),
     ("available", Json::array(ids.map(str))),
     ("names", Json::object(names)),
-    ("series", [obj([("name", str("GPT")), ("models", Json::array(ids.map(str)))])]),
+    ("series", fx_cx_series(ids)),
     ("canAddModel", Json::boolean(true)),
     (
       "quota",
@@ -580,6 +580,23 @@ fn fx_cx_more() -> Array[(String, Json)] {
       ]),
     ),
   ]
+}
+
+///|
+/// Its models by series, as the core gives them (newest first, one named by hand under 其他).
+fn fx_cx_series(ids : Array[String]) -> Json {
+  let series = [
+    ("GPT-6", ["gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini"]),
+    ("GPT-5.5", ["gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex"]),
+    ("GPT-5", ["gpt-5", "gpt-5-mini"]),
+    ("o9", ["o9", "o9-mini"]),
+  ]
+  let rest = ids.filter(fn(m) { !series.iter().any(fn(s) { s.1.contains(m) }) })
+  let all = series.map(fn(s) { obj([("name", str(s.0)), ("models", Json::array(s.1.map(str)))]) })
+  if rest.length() > 0 {
+    all.push(obj([("name", str("其他")), ("models", Json::array(rest.map(str)))]))
+  }
+  Json::array(all)
 }
 
 ///|
