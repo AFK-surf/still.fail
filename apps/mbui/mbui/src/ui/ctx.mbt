@@ -44,12 +44,14 @@ struct ListState {
   mut below : Double
   // gliding to its end (Ctx::list_to_end), until there or scrolled: set out at `glide_t0` (+inf: at its next layout)
   // from `glide_l0` px above its end, what is left of it e^(-t/list_glide_ms) of that, at its end at `glide_rest`;
-  // how far it was above its end at the last layout
+  // how far it was above its end at the last layout, and how far the glide meant it to be after its last step (its
+  // end moved meanwhile, a row come or grown under it, or a row it follows nearer: it sets out again from there)
   mut glide : Bool
   mut glide_t0 : Double
   mut glide_l0 : Double
   mut glide_rest : Double
   mut glide_left : Double
+  mut glide_meant : Double
   // a row followed from its top (Ctx::list_follow_from: still.fail's newest message, kept in view from its top as
   // Follow.kt's anchor), `follow_margin` under the view's top; -1 none. The reader's scroll lets it go
   mut follow_item : Int
