@@ -45,7 +45,6 @@ fn menus(c : @ui.Ctx) -> Unit {
             hovered: false,
             focus_shown: false,
             disabled: false,
-            rect: (0.0, 0.0, 0.0, 0.0),
           })
         })
         |> ignore
@@ -57,7 +56,6 @@ fn menus(c : @ui.Ctx) -> Unit {
             hovered: false,
             focus_shown: false,
             disabled: false,
-            rect: (0.0, 0.0, 0.0, 0.0),
           })
         })
         |> ignore

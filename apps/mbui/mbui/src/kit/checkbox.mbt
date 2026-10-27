@@ -10,7 +10,6 @@ pub(all) struct CheckboxState {
   pressed : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -40,7 +39,6 @@ pub fn checkbox(
     pressed: r.pressed,
     focus_shown: r.focus_shown,
     disabled,
-    rect: r.rect,
   }
   let i = c.box(id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Checkbox, id~, label~, check=now, disabled~, actions=pick(disabled, [], [Activate]))
@@ -88,7 +86,7 @@ pub fn checkbox_look_of(
             c.box(w=Px(size * 0.5), h=Px(2.0), radius=1.0, bg=mark.unwrap_or(t.on_primary), fn() {  }) |> ignore
           Off => ()
         }
-        focus_ring(c, s.focus_shown, s.rect, radius)
+        focus_ring(c, s.focus_shown, radius)
       },
     )
     |> ignore

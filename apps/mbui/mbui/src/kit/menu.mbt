@@ -530,7 +530,6 @@ pub fn menubar(
           pressed: r.pressed,
           focus_shown: r.focus_shown,
           disabled: false,
-          rect: r.rect,
           first: k == 0,
           last: k == n - 1,
         }
@@ -603,7 +602,7 @@ pub fn menubar_trigger_look(c : @ui.Ctx, s : ToggleState) -> Unit {
   let lit = s.on || s.hovered
   c.box(h=Px(28.0), padx=8.0, justify=JCenter, radius=8.0, bg=pick(lit, t.hover, 0L), fn() {
     c.text(s.label, size=t.font, weight=pick(s.on, 500, 400), color=pick(lit, t.fg, t.muted), wrap=false) |> ignore
-    focus_ring(c, s.focus_shown, s.rect, 8.0)
+    focus_ring(c, s.focus_shown, 8.0)
   })
   |> ignore
 }

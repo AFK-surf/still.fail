@@ -29,7 +29,6 @@ pub(all) struct ToggleState {
   pressed : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
   first : Bool
   last : Bool
 }
@@ -55,7 +54,6 @@ pub fn toggle(
     pressed: r.pressed,
     focus_shown: r.focus_shown,
     disabled,
-    rect: r.rect,
     first: true,
     last: true,
   }
@@ -84,7 +82,7 @@ pub fn toggle_look(c : @ui.Ctx, s : ToggleState) -> Unit {
     fn() {
       c.text(s.label, size=t.font, weight=if s.on { 600 } else { 500 }, color=pick(s.on || lit, t.fg, t.muted), wrap=false)
       |> ignore
-      focus_ring(c, s.focus_shown, s.rect, t.radius)
+      focus_ring(c, s.focus_shown, t.radius)
     },
   )
   |> ignore
@@ -179,7 +177,6 @@ pub fn toggle_group(
             pressed: r.pressed,
             focus_shown: r.focus_shown,
             disabled: off,
-            rect: r.rect,
             first: k == 0,
             last: k == items.length() - 1,
           }
@@ -306,7 +303,7 @@ pub fn group_slid_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
         wrap=false,
       )
       |> ignore
-      focus_ring(c, s.focus_shown, s.rect, 15.0)
+      focus_ring(c, s.focus_shown, 15.0)
     },
   )
   |> ignore
@@ -358,7 +355,7 @@ pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
         wrap=false,
       )
       |> ignore
-      focus_ring(c, s.focus_shown, s.rect, 15.0)
+      focus_ring(c, s.focus_shown, 15.0)
     },
   )
   |> ignore

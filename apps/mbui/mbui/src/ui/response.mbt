@@ -24,8 +24,6 @@ pub(all) struct Response {
   gained_focus : Bool
   /// the widget's value changed this frame (said by the widget: Response::changed_to)
   changed : Bool
-  /// where it was last frame, as far as it showed (x, y, w, h; all 0 the first frame)
-  rect : (Double, Double, Double, Double)
 } derive(Show)
 
 ///|
@@ -42,7 +40,6 @@ pub fn Response::none() -> Response {
     focus_shown: false,
     gained_focus: false,
     changed: false,
-    rect: (0.0, 0.0, 0.0, 0.0),
   }
 }
 
@@ -50,6 +47,17 @@ pub fn Response::none() -> Response {
 /// The same, `changed` when `yes`.
 pub fn Response::changed_to(self : Response, yes : Bool) -> Response {
   { ..self, changed: self.changed || yes }
+}
+
+///|
+/// Where the widget was drawn last frame, as far as it showed (x, y, w, h; all 0 the first frame and for none): read
+/// only where it is read (a slider's track under the finger, what a select's menu opens by), for what reads it reads
+/// the frame before (Ctx::rect_of).
+pub fn Response::rect(self : Response) -> (Double, Double, Double, Double) {
+  if self.id == 0 {
+    return (0.0, 0.0, 0.0, 0.0)
+  }
+  current().rect_of(self.id).unwrap_or((0.0, 0.0, 0.0, 0.0))
 }
 
 ///|
@@ -87,9 +95,8 @@ pub fn Ctx::interact(
   if id == 0 {
     return Response::none()
   }
-  let rect = self.rect_of(id).unwrap_or((0.0, 0.0, 0.0, 0.0))
   if disabled {
-    return { ..Response::none(), id, hovered: self.lit(id), rect }
+    return { ..Response::none(), id, hovered: self.lit(id) }
   }
   if focusable {
     self.focusable(id, node~, keys~, on_press=focus_on_press)
@@ -107,7 +114,6 @@ pub fn Ctx::interact(
     focus_shown: self.focus_shown(id),
     gained_focus: self.focus_gained(id),
     changed: false,
-    rect,
   }
 }
 

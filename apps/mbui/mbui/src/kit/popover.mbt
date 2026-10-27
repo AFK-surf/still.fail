@@ -212,10 +212,10 @@ pub fn tooltip(
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
-  // over its trigger: by where the pointer is, not by what is on top there (the tip itself, the frame it first comes
-  // before it is placed, lies over the trigger: hovered alone, it shut and opened again every frame)
+  // over its trigger: what is on top there; while it shows, by where the pointer is (the tip itself, the frame it first
+  // comes before it is placed, lies over the trigger: hovered alone, it shut and opened again every frame)
   // (a mouse's: a finger held on a button or dragging a list over one shows no tip, @ui.pointing)
-  let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || pointer_in(c, trigger))
+  let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || (was && pointer_in(c, trigger)))
   let focused = c.focus_shown(trigger)
   // a finger held on the trigger: shown while it stays down, then a moment after it is lifted, or until the next press
   // (wherever it lands, a tap's let go before a frame saw it down too: a tip says what was held, the next touch goes on

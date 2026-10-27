@@ -43,7 +43,6 @@ fn foundation(c : @ui.Ctx) -> Unit {
             pressed,
             focus_shown: focus,
             disabled,
-            rect: (0.0, 0.0, if label == "Focused" { 88.0 } else { 0.0 }, t.control_h),
           })
         })
         |> ignore

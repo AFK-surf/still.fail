@@ -260,7 +260,7 @@ pub fn toast_button(c : @ui.Ctx, key : String, text : String, label : String, ro
     fn() {
       c.text(text, size=if round { 12.0 } else { t.font }, weight=500, color=@ui.alpha(t.on_primary, if round { 0.7 } else { 1.0 }), wrap=false)
       |> ignore
-      focus_ring(c, r.focus_shown, r.rect, 14.0)
+      focus_ring(c, r.focus_shown, 14.0)
     },
   )
   c.semantics(i, Button, id~, label~, actions=[Activate])

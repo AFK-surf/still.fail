@@ -3,27 +3,24 @@
 
 ///|
 /// The ring round what has the keyboard's focus (when `shown`), `radius` the corner of what it rings, as wide and as
-/// far out as the theme says. Built last in the box it rings (laid over it, its size the box's last frame: `rect`).
-pub fn focus_ring(c : @ui.Ctx, shown : Bool, rect : (Double, Double, Double, Double), radius : Double) -> Unit {
-  let (_, _, w, h) = rect
-  if !shown || w <= 0.0 {
+/// far out as the theme says. Built last in the box it rings, out of its flow: laid round the box as this frame lays it
+/// out, wherever and however large it is.
+pub fn focus_ring(c : @ui.Ctx, shown : Bool, radius : Double) -> Unit {
+  if !shown {
     return
   }
   let t = c.theme()
   let out = t.focus_gap + t.focus_w
-  c.layer(fn() {
-    c.box(
-      w=Px(w + 2.0 * out),
-      h=Px(h + 2.0 * out),
-      tx=-out,
-      ty=-out,
-      radius=radius + out,
-      border=t.focus_w,
-      border_color=t.focus,
-      fn() {  },
-    )
-    |> ignore
-  })
+  c.box(
+    left=-out,
+    top=-out,
+    right=-out,
+    bottom=-out,
+    radius=radius + out,
+    border=t.focus_w,
+    border_color=t.focus,
+    fn() {  },
+  )
   |> ignore
 }
 

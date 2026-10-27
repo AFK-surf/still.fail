@@ -1519,7 +1519,6 @@ pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false, 
     held: @kit.switch_held(c, key, pressed),
     focus_shown: false,
     disabled: false,
-    rect: (0.0, 0.0, w, h),
   })
 }
 

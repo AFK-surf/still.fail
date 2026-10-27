@@ -21,8 +21,6 @@ pub(all) struct ButtonState {
   pressed : Bool
   focus_shown : Bool
   disabled : Bool
-  /// where it was last frame (for the focus ring)
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -46,7 +44,6 @@ pub fn button(
     pressed: r.pressed,
     focus_shown: r.focus_shown,
     disabled,
-    rect: r.rect,
   }
   let i = c.box(w~, id=if disabled { 0 } else { id }, fn() { look(c, st) })
   c.semantics(i, Button, id~, label~, disabled~, actions=if disabled { [] } else { [Activate] })
@@ -98,7 +95,7 @@ pub fn button_look(c : @ui.Ctx, s : ButtonState) -> Unit {
     opacity=if s.disabled { 0.45 } else { 1.0 },
     fn() {
       c.text(s.label, size=t.font, weight=500, color=ink, wrap=false) |> ignore
-      focus_ring(c, s.focus_shown, s.rect, h / 2.0)
+      focus_ring(c, s.focus_shown, h / 2.0)
     },
   )
   |> ignore

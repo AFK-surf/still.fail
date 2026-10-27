@@ -11,7 +11,6 @@ pub(all) struct RadioState {
   pressed : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -54,7 +53,6 @@ pub fn radio_group(
           pressed: r.pressed,
           focus_shown: r.focus_shown,
           disabled: off,
-          rect: r.rect,
         }
         let i = c.box(id=if off { 0 } else { iid }, fn() { look(c, st) })
         c.semantics(i, Radio, id=iid, label=it.label, check=if st.on { On } else { Off }, disabled=off, actions=pick(
@@ -107,7 +105,7 @@ pub fn radio_look_of(
       )
       |> ignore
       c.text(s.label, size=t.font, wrap=false) |> ignore
-      focus_ring(c, s.focus_shown, s.rect, 6.0)
+      focus_ring(c, s.focus_shown, 6.0)
     })
     |> ignore
   }

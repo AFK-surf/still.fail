@@ -15,7 +15,6 @@ pub(all) struct SelectState {
   hovered : Bool
   focus_shown : Bool
   disabled : Bool
-  rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -75,7 +74,6 @@ pub fn select(
     hovered: r.hovered,
     focus_shown: r.focus_shown,
     disabled,
-    rect: r.rect,
   }
   let i = c.box(id=if disabled { 0 } else { id }, w=Px(w), fn() { look(c, st) })
   c.semantics(i, Combobox, id~, label~, value=shown, expanded=open, disabled~, actions=pick(disabled, [], [Activate]))
@@ -92,7 +90,7 @@ pub fn select(
         c,
         key + "/list",
         entries,
-        r.rect,
+        r.rect(),
         Bottom,
         Start,
         4.0,
@@ -141,7 +139,7 @@ pub fn select_look(c : @ui.Ctx, s : SelectState) -> Unit {
       })
       |> ignore
       chevron(c, false, t.muted)
-      focus_ring(c, s.focus_shown, s.rect, t.control_h / 2.0)
+      focus_ring(c, s.focus_shown, t.control_h / 2.0)
     },
   )
   |> ignore
@@ -256,7 +254,6 @@ pub fn navigation_menu(
           pressed: r.pressed,
           focus_shown: r.focus_shown,
           disabled: false,
-          rect: r.rect,
           first: k == 0,
           last: k == n - 1,
         }

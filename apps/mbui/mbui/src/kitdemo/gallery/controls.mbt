@@ -28,7 +28,6 @@ let shown : Ref[Bool] = Ref(false)
 ///|
 fn controls(c : @ui.Ctx) -> Unit {
   let t = c.theme()
-  let ring = fn(w : Double, h : Double) { (0.0, 0.0, w, h) }
   section(c, "Switch", fn() {
     line(c, fn() {
       sw_on.val = @kit.switch(c, "sw", sw_on.val, label="Wi-Fi").value
@@ -43,7 +42,6 @@ fn controls(c : @ui.Ctx) -> Unit {
           held: 0.0,
           focus_shown: true,
           disabled: false,
-          rect: ring(36.0, 22.0),
         })
       })
       |> ignore
@@ -63,7 +61,6 @@ fn controls(c : @ui.Ctx) -> Unit {
           pressed: false,
           focus_shown: true,
           disabled: false,
-          rect: ring(18.0, 18.0),
         })
       })
       |> ignore
