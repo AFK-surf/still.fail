@@ -633,7 +633,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
 test "wide: a newer build of the desktop app: 更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  update.available = Some({ "versionName": "0.1.9999" })
+  update.available.set(Some({ "versionName": "0.1.9999" }))
   t.frame()
   t.frame()
   let (x, y, w, h) = t.query(Button, label="更新").unwrap().rect
@@ -660,7 +660,7 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":0,\"left\":0,\"right\":0}}")
-  update.available = Some({ "versionName": "0.1.9999" })
+  update.available.set(Some({ "versionName": "0.1.9999" }))
   t.frame()
   t.run_for(@sfdesk.side_move_ms)
   let (_, y, _, h) = t.query(Button, label="更新").unwrap().rect
@@ -673,7 +673,7 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
   update_version.val = 1
   let (x, _, w, _) = t.query(Button, label="更新").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_eq(update.available, None)
+  assert_eq(update.available.get(), None)
 }
 
 ///|

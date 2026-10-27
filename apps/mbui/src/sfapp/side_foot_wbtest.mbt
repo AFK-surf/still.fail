@@ -43,7 +43,7 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   // (said once 关于 has asked still.fail cloud: what it answered, none newer, said over)
   if newer != "" {
-    update.available = Some({ "versionName": Json::string(newer) })
+    update.available.set(Some({ "versionName": Json::string(newer) }))
     t.run_for(@ui.nav_push_ms)
   }
   t
@@ -66,7 +66,7 @@ test "a settings row's words at its end leave it before its title is cut: About 
   // (what is at its end shorter than the row, longer than the row leaves it beside its title)
   let newer = "0.1.5425-beta"
   let t = settings_at_end(520.0, locale="en-US", newer~)
-  update.available = None
+  update.available.set(None)
   assert_true(side_row_at(t, "About", 400.0) is Some(_), msg="no About in the sidebar")
   // (the row too short for both: what is at its end gone from it, its title whole)
   let said = "Update to " + newer

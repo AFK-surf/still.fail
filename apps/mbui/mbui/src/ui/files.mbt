@@ -394,11 +394,22 @@ pub fn update_install(url : String, sha256 : String, size : Double, name : Strin
 }
 
 ///|
-/// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's): read as a frame builds, each
-/// change of it bringing a frame of its own (outside_update), not looked for frame after frame.
+/// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's, a host that does not update
+/// itself, nothing told yet): as the host last told it, a signal (each change the host's event, hostcall.mbt's
+/// on_outside, which sets it), so what reads it follows it, a part kept as it was drawn or a computed of it alike.
 pub fn update_state() -> String {
-  match fake.val {
-    Some(_) => ""
-    None => @hostapi.update_state()
-  }
+  update_told.get()
 }
+
+///|
+/// The host tells how an update goes (@hostapi.update_state's JSON, `{"phase","percent","error"}`), as a host's event
+/// does (hostcall.mbt's on_outside): what reads it follows it.
+pub fn Tester::tells_update(self : Tester, state : String) -> Unit {
+  ignore(self)
+  update_told.set(state)
+}
+
+///|
+/// How an update goes as the host last told it ("" before it has told anything: nothing under way).
+// kept across runs: a real host's alone (a Tester's host tells no update), set by the host's events
+let update_told : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })

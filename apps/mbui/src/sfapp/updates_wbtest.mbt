@@ -36,9 +36,40 @@ test "a newer build that brings something: Home's download key; 关于's row off
   let t = updates_tester(release(["列表滑得更顺"]), asked)
   t.frame()
   assert_eq(asked, ["1 false"])
-  assert_true(update.available is Some(_))
+  assert_true(update.available.get() is Some(_))
   assert_eq((update_stands().doing, update_stands().newer), ("", "0.1.1"))
   // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
+}
+
+///|
+/// The button said as `label` (none: not shown).
+fn update_button_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? {
+  for s in t.semantics() {
+    if s.label == label && s.role == @ui.Role::Button && !s.hidden {
+      return Some(s.rect)
+    }
+  }
+  None
+}
+
+///|
+test "a small screen's 传输: 更新 pressed, the download the host tells of shown as it goes, not offered again (2026-10-27)" {
+  let t = updates_tester(release(["列表滑得更顺"]), [])
+  t.frame()
+  guard update_button_at(t, "传输") is Some((x, y, w, h)) else { fail("no 传输 key on Home") }
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.nav_push_ms)
+  guard update_button_at(t, "更新到 0.1.1") is Some((x, y, w, h)) else { fail("no 更新到 0.1.1 in 传输") }
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.nav_push_ms)
+  // (asked again, handed to the host, which tells how it goes)
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\"}")
+  t.draw()
+  assert_true(t.words().iter().any(fn(w) { w.0 == "下载中 40%" }), msg="how far it has come not said")
+  assert_true(update_button_at(t, "更新到 0.1.1") is None, msg="更新 offered again while it downloads")
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":70,\"error\":\"\"}")
+  t.draw()
+  assert_true(t.words().iter().any(fn(w) { w.0 == "下载中 70%" }))
 }
 
 ///|
@@ -78,7 +109,7 @@ test "no source: nothing is asked; asked now, it says why" {
   assert_eq(said.length(), 0)
   update_check(fixture("home"), true, done=fn(w) { said.push(w) })
   assert_eq(said, ["检查更新失败：开发版不检查更新"])
-  assert_eq(update.said, UpdateSaid::CouldNot("开发版不检查更新"))
+  assert_eq(update.said.get(), UpdateSaid::CouldNot("开发版不检查更新"))
   assert_false(update_asks())
 }
 

@@ -195,8 +195,8 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
     None
   }
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
-  let offered = build && !updating && @sfbase.update.phase != "failed"
-  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update.phase == "failed") {
+  let offered = build && !updating && @sfbase.update_phase() != "failed"
+  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update_phase() == "failed") {
     ftransfers.open = !ftransfers.open
   }
   transfers_list(c, src, ws, id, go, false)
@@ -206,11 +206,11 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
 /// Whether a newer build of the app is to be listed with what comes: offered (it brings something the changelog
 /// says), coming, being installed, or failed.
 fn update_coming() -> Bool {
-  let offered = match @sfbase.update.available {
+  let offered = match @sfbase.update.available.get() {
     Some(v) => items(Some(v), "news").length() > 0
     None => false
   }
-  offered || @sfbase.update_under_way() || @sfbase.update.phase == "failed"
+  offered || @sfbase.update_under_way() || @sfbase.update_phase() == "failed"
 }
 
 ///|
@@ -219,14 +219,14 @@ fn update_coming() -> Bool {
 /// red, its key to try again.
 fn update_row(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
-  let failed = @sfbase.update.phase == "failed"
+  let failed = @sfbase.update_phase() == "failed"
   let going = @sfbase.update_under_way()
-  let version = text(@sfbase.update.available, "versionName")
-  let first = match items(@sfbase.update.available, "news").get(0) {
+  let version = text(@sfbase.update.available.get(), "versionName")
+  let first = match items(@sfbase.update.available.get(), "news").get(0) {
     Some(String(line)) => line
     _ => ""
   }
-  let said = if going { @sfbase.update_progress() } else if failed { @sfbase.update_error("") } else { first }
+  let said = if going { @sfbase.update_progress() } else if failed { @sfbase.update_why() } else { first }
   c.box(style=ftransfer_row, fn() {
     c.box(style=ftransfer_mark, fn() {
       @sf.icon(c, if failed { "retry" } else { "sparks" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted }) |> ignore

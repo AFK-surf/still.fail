@@ -16,15 +16,15 @@
 ///|
 /// As at the start (the app's reset).
 pub fn update_reset() -> Unit {
-  update.available = None
+  update.available.set(None)
   update.asked = false
-  update.checking = false
-  update.installing = false
-  update.phase = "idle"
+  update.checking.set(false)
+  update.installing.set(false)
   update.source = None
-  update.said = Unsaid
+  update.said.set(Unsaid)
   update.dialog = 0
   update_version.val = 0
+  update_say_follows()
 }
 
 ///|
@@ -46,29 +46,29 @@ pub(all) enum UpdateSaid {
 } derive(Eq, Debug)
 
 ///|
-/// How an update stands: the newer build found, a check under way (the person's, or one before installing), the
-/// host's phase last seen, the source; what the last check asked now answered, the update dialog (its presenter's
-/// serial, 0 none yet).
+/// How an update stands: the newer build found, a check under way (the person's, or one before installing), what
+/// the last check asked now answered, each a signal (what shows them follows them as they change, as the host's word of
+/// how it goes is followed: update_how); whether it was asked at the start, the source, the update dialog (its
+/// presenter's serial, 0 none yet).
 pub(all) struct Update {
-  mut available : Json?
+  available : @signals.Signal[Json?]
   mut asked : Bool
-  mut checking : Bool
-  mut installing : Bool
-  mut phase : String
+  checking : @signals.Signal[Bool]
+  installing : @signals.Signal[Bool]
   mut source : UpdateSource?
-  mut said : UpdateSaid
+  said : @signals.Signal[UpdateSaid]
   mut dialog : Int
 }
 
 ///|
+// kept across runs: put back by update_reset
 pub let update : Update = {
-  available: None,
+  available: @signals.signal(None),
   asked: false,
-  checking: false,
-  installing: false,
-  phase: "idle",
+  checking: @signals.signal(false, same=fn(a, b) { a == b }),
+  installing: @signals.signal(false, same=fn(a, b) { a == b }),
   source: None,
-  said: Unsaid,
+  said: @signals.signal(Unsaid, same=fn(a, b) { a == b }),
   dialog: 0,
 }
 
@@ -147,7 +147,7 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
     _ => {
       if now {
         let why = @sf.t("desktop.update.dev")
-        update.said = CouldNot(why)
+        update.said.set(CouldNot(why))
         done(@sf.t("android-misc.updates.checkFailed", args=[("error", why)]))
       }
       return
@@ -156,23 +156,23 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
   (source.check)(version, now, fn(r) {
     match r {
       Ok(Object(_) as v) => {
-        update.available = Some(v)
+        update.available.set(Some(v))
         if now {
-          update.said = Unsaid
+          update.said.set(Unsaid)
         }
         @hostapi.log("update: \{text(Some(v), "versionName")} (\{number(Some(v), "versionCode").to_int()}) is newer than this build (\{version})")
         done("")
       }
       Ok(_) => {
-        update.available = None
+        update.available.set(None)
         if now {
-          update.said = NoneNewer
+          update.said.set(NoneNewer)
         }
         done(if now { @sf.t("android-misc.updates.latest") } else { "" })
       }
       Err(e) => {
         if now {
-          update.said = CouldNot(e)
+          update.said.set(CouldNot(e))
         }
         done(if now { @sf.t("android-misc.updates.checkFailed", args=[("error", e)]) } else { "" })
       }
@@ -184,13 +184,13 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
 /// The newer build downloaded and handed to the installer (Updates.kt install): asked again now first; none newer
 /// said so.
 pub fn update_install(src : Source) -> Unit {
-  if update.checking || update.installing || update_busy() {
+  if update.checking.get() || update.installing.get() || update_busy() {
     return
   }
-  update.installing = true
+  update.installing.set(true)
   update_check(src, true, done=fn(said) {
-    update.installing = false
-    match update.available {
+    update.installing.set(false)
+    match update.available.get() {
       Some(v) if said == "" => {
         let file = text(Some(v), "file")
         let name = match file.rev_find("/") {
@@ -230,33 +230,95 @@ pub fn update_error(e : String) -> String {
 }
 
 ///|
-/// What an update under way is doing ("下载中 40%"), "" when none is; what went wrong said once.
+/// How the update goes as the host tells it (@ui.update_state's JSON): its phase (idle, allow, downloading, retrying,
+/// installing, handed, failed), how far (-1 not known) and what went wrong.
+priv struct UpdateHow {
+  phase : String
+  percent : Int
+  error : String
+} derive(Eq)
+
+///|
+/// How the update goes, worked out of the host's word as that changes (a computed of @ui.update_state, a signal the
+/// host's events set): what shows it reads it here and follows it, never a copy one reader refreshed (2026-10-27: the
+/// small screen's update row read such a copy, which said idle while the host downloaded, and offered 更新 again after
+/// its check). Nothing told (a Tester, a host that does not update itself): idle.
+// kept across runs: worked out of a signal the Tester puts back
+let update_how : @signals.Computed[UpdateHow] = @signals.computed(
+  fn(_) {
+    let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
+    match v {
+      Some(_) => { phase: text(v, "phase"), percent: number(v, "percent").to_int(), error: text(v, "error") }
+      None => { phase: "idle", percent: -1, error: "" }
+    }
+  },
+  same=fn(a, b) { a == b },
+)
+
+///|
+/// The update's phase as the host tells it (update_how).
+pub fn update_phase() -> String {
+  update_how.get().phase
+}
+
+///|
+/// How far the download has come as the host tells it, in percent (-1 not known).
+pub fn update_percent() -> Int {
+  update_how.get().percent
+}
+
+///|
+/// What went wrong with the update, in the words it is said in (update_error), "" where nothing has.
+pub fn update_why() -> String {
+  let how = update_how.get()
+  if how.phase == "failed" {
+    update_error(how.error)
+  } else {
+    ""
+  }
+}
+
+///|
+/// What follows the host's word to say what went wrong, or that the leave to install apps is asked, once as it comes
+/// (update_say: in a toast where the dialog is not open to say it); let go of as the app begins again.
+// kept across runs: made anew by update_reset
+let update_saying : Ref[(() -> Unit)?] = { val: None }
+
+///|
+fn update_say_follows() -> Unit {
+  match update_saying.val {
+    Some(stop) => stop()
+    None => ()
+  }
+  let seen = Ref(update_how.peek().map(fn(h) { h.phase }).unwrap_or("idle"))
+  update_saying.val = Some(
+    @signals.effect(fn() {
+      let how = update_how.get()
+      if how.phase != seen.val {
+        seen.val = how.phase
+        @signals.untracked(fn() {
+          match how.phase {
+            "failed" =>
+              update_say(@sf.t("android-misc.updates.failed", args=[("error", update_error(how.error))]))
+            "allow" => update_say(@sf.t("android-misc.updates.allowInstall", args=[("app", "still.fail")]))
+            _ => ()
+          }
+        })
+      }
+    }),
+  )
+}
+
+///|
+/// What an update under way is doing ("下载中 40%"), "" when none is.
 pub fn update_progress() -> String {
-  if update.installing {
+  if update.installing.get() {
     return @sf.t("android-misc.updates.checking")
   }
-  let st = @ui.update_state()
-  if st == "" {
-    return ""
-  }
-  let v = try Some(@json.parse(st)) catch { _ => None }
-  let phase = text(v, "phase")
-  if phase != update.phase {
-    update.phase = phase
-    match phase {
-      "failed" =>
-        update_say(
-          @sf.t("android-misc.updates.failed", args=[
-            ("error", update_error(text(v, "error"))),
-          ]),
-        )
-      "allow" => update_say(@sf.t("android-misc.updates.allowInstall", args=[("app", "still.fail")]))
-      _ => ()
-    }
-  }
-  match phase {
+  let how = update_how.get()
+  match how.phase {
     "downloading" => {
-      let p = number(v, "percent").to_int()
+      let p = how.percent
       if p >= 0 {
         @sf.t("android-misc.updates.downloadingPercent", args=[("percent", p.to_string())])
       } else {
@@ -271,7 +333,7 @@ pub fn update_progress() -> String {
 
 ///|
 pub fn update_busy() -> Bool {
-  match update.phase {
+  match update_phase() {
     "downloading" | "retrying" | "installing" => true
     _ => false
   }
@@ -281,20 +343,16 @@ pub fn update_busy() -> Bool {
 /// Whether an update is under way, as the update key shows it: still.fail cloud asked again before it is downloaded,
 /// downloading, going on after the network came back, being installed.
 pub fn update_under_way() -> Bool {
-  update.installing || update_busy()
+  update.installing.get() || update_busy()
 }
 
 ///|
 /// How far the update under way has come (0 to 1) while it downloads and the host says how far; None otherwise (asked
 /// again first, going on after the network came back, being installed: how far is not known).
 pub fn update_part() -> Double? {
-  if update.phase != "downloading" {
-    return None
-  }
-  let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
-  let p = number(v, "percent")
-  if p >= 0.0 {
-    Some(p / 100.0)
+  let how = update_how.get()
+  if how.phase == "downloading" && how.percent >= 0 {
+    Some(how.percent.to_double() / 100.0)
   } else {
     None
   }
@@ -314,8 +372,8 @@ pub fn update_first(src : Source) -> Unit {
 /// update goes; 正在检查 while the person's check is) and the newer build known.
 pub fn update_stands() -> @settings.VersionNow {
   let progress = update_progress()
-  let doing = if progress == "" && update.checking { @sf.t("android-settings.version.checking") } else { progress }
-  let newer = match update.available {
+  let doing = if progress == "" && update.checking.get() { @sf.t("android-settings.version.checking") } else { progress }
+  let newer = match update.available.get() {
     Some(v) => text(Some(v), "versionName")
     None => ""
   }
@@ -326,7 +384,7 @@ pub fn update_stands() -> @settings.VersionNow {
 /// The version row pressed: with a newer build known (更新到 …), installed; the dialog opened, saying how it goes (with
 /// none known, still.fail cloud asked now).
 pub fn update_row_tapped(src : Source) -> Unit {
-  if update.available is Some(_) {
+  if update.available.get() is Some(_) {
     update_install(src)
   }
   update_dialog(src)
@@ -351,7 +409,7 @@ pub fn update_dialog_open() -> Bool {
 /// ask: 重试), the newer build and what it brings (更新 or 稍后), how far it has come and what went wrong. Open
 /// already, it stays the one.
 pub fn update_dialog(src : Source) -> Unit {
-  if update.available is None && !update.checking && !update_under_way() {
+  if update.available.get() is None && !update.checking.get() && !update_under_way() {
     update_ask_now(src)
   }
   if update_dialog_open() {
@@ -375,9 +433,9 @@ pub fn update_dialog(src : Source) -> Unit {
 ///|
 /// still.fail cloud asked now, by the person (what it answers kept: update_check).
 fn update_ask_now(src : Source) -> Unit {
-  update.checking = true
-  update.said = Unsaid
-  update_check(src, true, done=fn(_) { update.checking = false })
+  update.checking.set(true)
+  update.said.set(Unsaid)
+  update_check(src, true, done=fn(_) { update.checking.set(false) })
 }
 
 ///|
@@ -391,11 +449,11 @@ priv enum UpdateTalk {
 
 ///|
 fn update_talk() -> UpdateTalk {
-  match update.available {
+  match update.available.get() {
     Some(v) => Newer(v)
-    None if update.checking || update.installing => Asking
+    None if update.checking.get() || update.installing.get() => Asking
     None =>
-      match update.said {
+      match update.said.get() {
         NoneNewer => Latest
         CouldNot(why) => Failed(why)
         Unsaid => Asking
@@ -503,11 +561,9 @@ fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
 /// What went wrong with the update as the host says it (无法更新：…, red), or what it waits for (Android's leave to
 /// install apps); "" while nothing has.
 fn update_trouble() -> (String, Bool) {
-  match update.phase {
-    "failed" => {
-      let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
-      (@sf.t("android-misc.updates.failed", args=[("error", update_error(text(v, "error")))]), true)
-    }
+  let how = update_how.get()
+  match how.phase {
+    "failed" => (@sf.t("android-misc.updates.failed", args=[("error", update_why())]), true)
     "allow" => (@sf.t("android-misc.updates.allowInstall", args=[("app", "still.fail")]), false)
     _ => ("", false)
   }

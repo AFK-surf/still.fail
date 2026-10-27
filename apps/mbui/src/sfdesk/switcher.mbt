@@ -260,8 +260,8 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
     _ => ()
   }
   // the app's newer build, as 更新 over the sidebar offers it (brand.mbt)
-  if update.available is Some(_) && !update_under_way() {
-    offer(action_offered("update.app", "download", version=text(update.available, "versionName"), fn() { update_install(src) }))
+  if update.available.get() is Some(_) && !update_under_way() {
+    offer(action_offered("update.app", "download", version=text(update.available.get(), "versionName"), fn() { update_install(src) }))
   }
   offer(action_offered("chat.new", "compose", fn() { new_chat() }))
   // (the wide frame's alone)

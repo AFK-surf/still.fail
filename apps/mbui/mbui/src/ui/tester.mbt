@@ -69,6 +69,7 @@ fn reset_globals() -> Unit {
   views_told_info.clear()
   sites_told_state.clear()
   outside_tickets.clear()
+  update_told.set("")
   views_told.clear()
   pagers.clear()
   code_fields.clear()

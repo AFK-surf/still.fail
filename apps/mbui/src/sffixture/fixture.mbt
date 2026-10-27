@@ -1284,10 +1284,10 @@ pub fn fixture(mode : String) -> Source {
 /// update dialog with what it brings), as an update source would say it, from the made-up source (fixture_updates)
 /// unless one is given: for a made-up run's pictures of it (src/sffix, src/sffilm: MBUI_UPDATE=<version>).
 pub fn fixture_update(version : String) -> Unit {
-  update.available = Some({
+  update.available.set(Some({
     "versionName": Json::string(version),
     "news": ["改进：对话列表滑到底时不再多停一下", "修复：图片预览关闭后偶尔留下一块空白", "新增：设置里可以给 station 起别名"],
-  })
+  }))
   if update.source is None {
     fixture_updates()
   }
@@ -1302,7 +1302,7 @@ pub fn fixture_updates(ms? : Double = 0.0) -> Unit {
   set_update_source(
     Some({
       check: fn(_, _, done) {
-        let answer = fn() { done(Ok(update.available.unwrap_or(Json::null()))) }
+        let answer = fn() { done(Ok(update.available.get().unwrap_or(Json::null()))) }
         if ms > 0.0 {
           fix_later(ms, answer)
         } else {
