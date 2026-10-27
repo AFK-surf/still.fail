@@ -1558,7 +1558,7 @@ fn narrow_reader_chrome(
             })
             |> ignore
             // 搜索
-            c.box(style=narrow_top_end.then(@ui.style(justify=JEnd)), fn() {
+            c.box(style=narrow_top_end.then(@ui.style(justify=JEnd, gap=keys_gap(size=narrow_key_side))), fn() {
               let id = c.id("reader/find")
               if live && c.clicked(id) {
                 if r.panel == Find {
@@ -1845,6 +1845,10 @@ let narrow_top_end : @ui.Style = @ui.css("row min_w=S16 align=ACenter")
 /// round, in the middle of the bar's capsule ends concentric with them.
 // kept across runs: a value (no field of it changes)
 let narrow_back_box : @ui.Style = @ui.css("row min_w=S9 h=S9 pl=S1 pr=S2_5 align=ACenter radius=Full hovered{bg=Tint}")
+
+///|
+/// 搜索's and 下载's side (narrow_top_button's S9), keys_gap apart.
+let narrow_key_side : Double = 36.0
 
 ///|
 // kept across runs: a value (no field of it changes)
