@@ -425,7 +425,10 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
           self.across_seen.push((n.id, n.x, n.fw))
           None
         } else {
-          foot_bar(n.id, n.x, n.fw, n.fw + st.max, st.x, (x0, y0, x1, y1), r_bl, r_br)
+          // (along the view it is for: `bar_in` in from either side, what it holds as wide less that)
+          let b = dclamp(st.bar_in, 0.0, dmax(0.0, n.fw / 2.0 - scroll_bar_least))
+          let shows = (dmax(x0, n.x + b), y0, dmin(x1, n.x + n.fw - b), y1)
+          foot_bar(n.id, n.x + b, n.fw - 2.0 * b, n.fw + st.max - 2.0 * b, st.x, shows, dmax(0.0, r_bl - b), dmax(0.0, r_br - b))
         }
       _ => None
     }

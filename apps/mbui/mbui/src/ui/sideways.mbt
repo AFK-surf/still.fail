@@ -47,6 +47,8 @@ priv struct Sideways {
   mut field : Bool
   /// built with room at its foot for its bar (Ctx::sideways: as it could scroll when last laid out)
   mut bar_room : Bool
+  /// how far in from either side its bar runs (Ctx::sideways's `bar_in`)
+  mut bar_in : Double
 }
 
 ///|
@@ -64,7 +66,9 @@ let sideways_friction : Double = 0.996
 /// scrollTo(maxValue)). `fill`: what it holds at least as wide as the box (what fills it there sharing it: a strip of
 /// tabs across it), scrolled only where it needs more. `show`: the part built in it with that id brought into view
 /// once laid out whenever it is another (the chosen one of a strip of tabs, as it is first shown and as another is
-/// chosen), as little as that takes. Its id, for what is drawn in it.
+/// chosen), as little as that takes. `bar_in`: its bar runs that far in from either side, under the view it is for,
+/// where what it holds scrolls out past that view (a table out across a chat's margins: under the message's words, not
+/// to the screen's edges). Its id, for what is drawn in it.
 pub fn Ctx::sideways(
   self : Ctx,
   key : String,
@@ -76,12 +80,14 @@ pub fn Ctx::sideways(
   to_end? : String = "",
   fill? : Bool = false,
   show? : Int = 0,
+  bar_in? : Double = 0.0,
   body : () -> Unit,
 ) -> Int {
   let id = if across { self.root_id("\u{1}sideways\u{1}" + key) } else { self.id("\u{1}sideways\u{1}" + key) }
   let st = self.scroll_state(id, false)
   st.theme = self.theme
   st.built_frame = self.frame_no
+  st.bar_in = bar_in
   let px = if padx >= 0.0 { padx } else { pad }
   let py = if pady >= 0.0 { pady } else { pad }
   // (while what it holds is wider than it (as last laid out: read back), room at its foot for its bar, under what it
@@ -159,6 +165,7 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         built_frame: -1,
         field: false,
         bar_room: false,
+        bar_in: 0.0,
       }
       sideways[id] = s
       s
