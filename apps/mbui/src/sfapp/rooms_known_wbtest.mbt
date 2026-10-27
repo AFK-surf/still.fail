@@ -25,8 +25,9 @@
 /// room fewer. The same day a profile's models side by side by series, each a row's least height: 45 room fewer.
 /// Keys in a row as far apart as makes each a press's room across (@sf.keys_gap: a bar's, the viewer's, the
 /// player's, beside 新建对话): 1432 room fewer. A web service's page beside its chat a screen of its own
-/// (chat-service-side), what it has as chat-jobs-side has: its tab's close key, the chat's agent's two halves: 5 more.)
-let rooms_known : Map[String, Int] = { "room": 476, "apart": 0, "hover": 0 }
+/// (chat-service-side), what it has as chat-jobs-side has: its tab's close key, the chat's agent's two halves: 5 more.
+/// A chat's bar's agent and its station two keys of their own with touch (@sf.tile_split): 132 room fewer.)
+let rooms_known : Map[String, Int] = { "room": 344, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
