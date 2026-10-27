@@ -107,6 +107,10 @@ priv struct PanelOf {
   stage : Bool
   /// on a stage, what is chosen of the picture between it and its buttons (panel's `above`)
   above : ((@ui.Ctx) -> Unit)?
+  /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`)
+  side : @ui.Side
+  along : @ui.Along
+  offset : Double
 }
 
 ///|
@@ -244,7 +248,9 @@ pub fn pick(
 /// the same (stage_centred): no panel round it, the window under it the night (stage_scrim), what it holds in the
 /// middle drawn as large as the window lets it (whole_fitted), 关闭 and its `foot`'s buttons under it on the night;
 /// a press beside it, Escape and the back close it too; `above`, over those buttons, what is chosen of the picture (the
-/// card to share's looks).
+/// card to share's looks). `side`, `along`, `offset`: where it stands beside what opened it (under it by default, its
+/// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
+/// it, as everything opened from there does.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -265,9 +271,12 @@ pub fn panel(
   field? : String = "",
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+  offset? : Double = panel_offset,
 ) -> Unit {
   present(
-    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage, above }),
+    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage, above, side, along, offset }),
     from,
     gone~,
   )
@@ -878,6 +887,10 @@ fn anchor_of(c : @ui.Ctx, from : Anchor) -> (Int, (Double, Double, Double, Doubl
 pub let pick_search_from : Int = 8
 
 ///|
+/// How far a small panel stands from what opened it, by default (the web's popovers' sideOffset: 6).
+pub let panel_offset : Double = 6.0
+
+///|
 /// A small panel's width beside what opened it, by default (parts.css.ts popover: 280).
 pub let panel_w : Double = 280.0
 
@@ -1081,7 +1094,9 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     key,
     p.open,
     anchor,
-    along=Start,
+    side=x.side,
+    along=x.along,
+    offset=x.offset,
     at?,
     label=x.title,
     modal=true,

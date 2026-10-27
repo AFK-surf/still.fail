@@ -84,8 +84,19 @@ fn coming_words(n : Int, percent : Int) -> String {
 ///|
 /// Their list, while `ftransfers.open.get()`: the library's panel from `id` (beside it, or a sheet from the foot on a small
 /// screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
-/// closed once there is none. `go`: where a copy's folder is shown.
-fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveAt) -> Unit, none : Bool) -> Unit {
+/// closed once there is none. `go`: where a copy's folder is shown. `side`, `along`: where it stands beside `id` (the
+/// rail's key: beside the rail, `rail_menu_off` out, its foot level with the key's, as the workspaces' menu under it is;
+/// under it, it lay over the rail, the mark of the workspace in view showing at its edge).
+fn transfers_list(
+  c : @ui.Ctx,
+  src : Source,
+  ws : String,
+  id : Int,
+  go : (DriveAt) -> Unit,
+  none : Bool,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+) -> Unit {
   if none {
     ftransfers.open.set(false)
   }
@@ -110,6 +121,9 @@ fn transfers_list(c : @ui.Ctx, src : Source, ws : String, id : Int, go : (DriveA
       },
       from=Of(id),
       w=ftransfers_w,
+      side~,
+      along~,
+      offset=if side is Right { rail_menu_off } else { @sf.panel_offset },
       gone=fn() {
         ftransfers.open.set(false)
         ftransfers.shown = 0
@@ -132,7 +146,7 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let id = c.id("rail/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, id, go, true)
+    transfers_list(c, src, ws, id, go, true, side=Right, along=End)
     return
   }
   let (n, percent, failed) = all.going()
@@ -152,7 +166,7 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     },
     label=coming_words(n, percent),
   )
-  transfers_list(c, src, ws, id, go, false)
+  transfers_list(c, src, ws, id, go, false, side=Right, along=End)
 }
 
 ///|

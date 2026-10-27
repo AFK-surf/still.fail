@@ -244,6 +244,8 @@ pub fn code_ink(@ui.Ctx, String, String) -> String??
 
 pub let columns : Columns
 
+pub fn coming_mark(@ui.Ctx, String, Double?, Double, Int64) -> Unit
+
 pub let command_box_corner : Double
 
 pub fn compare_natural(String, String) -> Int32
@@ -1206,7 +1208,7 @@ pub let pane_round : @ref.Ref[FixedArray[@ui.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
-pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit) -> Unit
+pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, side? : @ui.Side, along? : @ui.Along, offset? : Double) -> Unit
 
 pub fn panel_bleed() -> @ui.Style
 
@@ -1241,6 +1243,8 @@ pub let panel_in : @ui.Radius
 pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool) -> Int32
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
+
+pub let panel_offset : Double
 
 pub let panel_pad : Double
 
@@ -1418,7 +1422,7 @@ pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, do
 
 pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
-pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double) -> Int32
+pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Double) -> Int32
 
 pub fn provider_logo(@ui.Ctx, String, String, Double, String) -> Unit
 
@@ -1754,7 +1758,7 @@ pub let space_5 : @ui.Space
 
 pub fn speed_label(Double) -> String
 
-pub fn spinner(@ui.Ctx, size? : Double, ring? : Int64, arc? : Int64, sweep? : Double, period? : Double) -> Int32
+pub fn spinner(@ui.Ctx, size? : Double, stroke? : Double, ring? : Int64, arc? : Int64, sweep? : Double, period? : Double) -> Int32
 
 pub let spinner_inline : Double
 
