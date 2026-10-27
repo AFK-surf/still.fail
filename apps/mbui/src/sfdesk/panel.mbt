@@ -587,7 +587,7 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
   let t = @sf.theme()
   match station_tab(tab) {
     Some((kind, _, _)) => {
-      @sf.icon(c, if kind == "drive" { "folder" } else { "monitor" }, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
+      @sf.icon(c, match kind { "drive" => "folder"; "adb" => "phone"; _ => "monitor" }, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
       return
     }
     None => ()

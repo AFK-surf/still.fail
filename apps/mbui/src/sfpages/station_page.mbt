@@ -502,11 +502,16 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
           (core.push)(Memory(address))
         }
         let shared = (core.topic)("adbShare", Map([])).value
+        // (a device with no adb to lend, as the core says: why, and nowhere to go)
+        let card = (core.topic)("adbCard", { "station": Json::string(address) }).value
+        let lends = !(card is Some(_) && !flag(card, "lendable"))
         if @sf.link_row(
             c,
             "st-adb/" + address,
             @sf.t("android-misc.adb.title"),
             value=if flag(shared, "sharing") && text(shared, "station") == address { @sf.t("android-misc.adb.sharing") } else { "" },
+            note=if lends { "" } else { text(card, "line") },
+            goes=lends,
           ) {
           (core.push)(AdbShare(address))
         }

@@ -42,8 +42,20 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
   the app goes; nothing is kept for a next run.
 
 The core (`client/core-ts/src/adb.ts`) holds the offer: the `adbShare` topic and the
-calls `adb.share`, `adb.stop`, `adb.pair`, `adb.grant`. Only native cores carry
-tunnels (the web has no sockets).
+calls `adb.share`, `adb.stop`, `adb.pair`, `adb.grant`. Only a phone lends: a
+native core on a device that said it is Android (`client.device` `app`); a Mac's
+or a PC's core has sockets but no adbd, and the web has neither. Elsewhere a
+chat's card of a station's 共享调试 says so (`adbCard` `lendable: false`) and
+does nothing, and the station page's row goes nowhere.
+
+In a chat, an agent's link to it alone in a paragraph is a card that asks (as
+a vault request's does): whether that station's agents may debug this device.
+Once the phone has Developer options and Wi-Fi, and Wireless debugging on (or
+the app may turn it on itself), 共享 lends it from the card; before that the
+card says the first thing the phone lacks and 查看步骤 opens the page, which
+says how. While it is lent there the card says how that stands, with 详情 and
+停止共享. On a wide frame the page opens beside the chat, as the station's own
+page does (a tab, `adb:["<station>"]`).
 
 ## On the wire
 

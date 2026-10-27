@@ -39,9 +39,6 @@ pub let monitor_mark : LinkMark = { name: "monitor" }
 // kept across runs: an immutable icon name
 pub let globe_mark : LinkMark = { name: "web" }
 
-///|
-// kept across runs: an immutable icon name
-pub let phone_mark : LinkMark = { name: "phone" }
 
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
@@ -260,22 +257,83 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
 }
 
 ///|
-/// A station's 共享调试 as a card (AdbLinks.kt AdbLinkCard): a phone, its title (the link's own words, when it has
-/// them) over how this phone's sharing with that station stands, the phone in the accent while it is shared there.
-/// Its size kept while the core has not said. A tap opens the page, as the link does.
+/// A station's 共享调试 asked for (an agent's link to it alone in a paragraph: docs/adb-share.md), as a card that asks
+/// (vault_ask.mbt's look: the question for its title, the line the answer turns on, a solid button and a text one):
+/// whether its agents may debug this device. Where the phone has all it takes (as its host says:
+/// @settings.adb_ready), 共享 lends it from here; where it lacks something first, what, and 查看步骤 opens the page that
+/// says how; while it is lent there, how that stands (the core's line) with 详情 and 停止共享. A device with no adb to
+/// lend (the core's `lendable`; an Android before 11, as its host says) says so, with nothing to press. `words`, the
+/// link's own, are not its title: the card asks its own question.
 pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
+  ignore(words)
   let card = adb_card_of(src, href)
-  let open = c.id("adb-link/" + href)
-  if c.clicked(open) {
-    open_link(href)
+  let station = @sf.adb_of_link(href).unwrap_or("")
+  let sharing = flag(card, "sharing")
+  let ready = if card is Some(_) && flag(card, "lendable") {
+    @settings.adb_ready(c)
+  } else if card is Some(_) {
+    @settings.AdbCannot(text(card, "line"))
+  } else {
+    @settings.AdbUnknown
   }
-  let title = match words {
-    Some(w) => w
-    None => adb_title(src, href)
+  let ws = match station.find("/") {
+    Some(i) => station.view(end_offset=i).to_owned()
+    None => station
   }
-  c.box(style=link_card, id=open, fn() {
-    link_mark(c, Some(phone_mark), if flag(card, "sharing") { Accent } else { Muted })
-    link_card_words(c, title, text(card, "line"), false, link_words)
+  let name = match dv_stations(src, ws).0 {
+    Some(list) =>
+      match list.iter().find_first(fn(s) { s.station == station }) {
+        Some(s) => s.name
+        None => @settings.station_name(station)
+      }
+    None => @settings.station_name(station)
+  }
+  let key = "adb-ask/" + href
+  let stopping = "adb-stop/" + station
+  c.box(style=@sf.ask_card_room, fn() {
+    @sf.card(c, fn() {
+      if sharing {
+        @settings.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
+        @settings.ask_buttons(c, fn() {
+          if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary) {
+            open_link(href)
+          }
+          if @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping)) {
+            act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
+          }
+        })
+        return
+      }
+      let title = @sf.t("android-misc.adb.ask.title", args=[("name", name)])
+      match ready {
+        @settings.AdbCannot(why) => @settings.ask_words(c, title, why)
+        @settings.AdbLacks(step) => {
+          @settings.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
+          @settings.ask_buttons(c, fn() {
+            if @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary) {
+              open_link(href)
+            }
+          })
+        }
+        @settings.AdbLends => {
+          // lent to another station now: lending it here moves it
+          let now = (src.topic)("adbShare", {}).value
+          let elsewhere = flag(now, "sharing") && text(now, "station") != station
+          @settings.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
+          @settings.ask_buttons(c, fn() {
+            if @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking()) {
+              @settings.adb_lend(station, name)
+            }
+            if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost) {
+              open_link(href)
+            }
+          })
+        }
+        // (not known yet what the phone has: the question alone, its answer as it comes)
+        @settings.AdbUnknown => @settings.ask_words(c, title, "")
+      }
+    })
+    |> ignore
   })
   |> ignore
 }

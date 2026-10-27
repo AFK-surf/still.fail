@@ -66,17 +66,6 @@ fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] {
 }
 
 ///|
-/// The name of the picture drawn as shapes (sf's draw_drawable: its key, size, scale and tint) whose name holds `part`.
-fn shapes_named(t : @ui.Tester, part : String) -> String {
-  for b in t.shape_boxes() {
-    if b.0.contains(part) {
-      return b.0
-    }
-  }
-  ""
-}
-
-///|
 /// The draw list's line of the image whose key holds `part`.
 fn image_line(t : @ui.Tester, part : String) -> String {
   for line in t.drawlist().split("\n") {
@@ -106,13 +95,14 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   // 共享调试 bare in a sentence: its title, a link; alone: its card
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
-  assert_true(t.find("未共享") is Some(_))
+  assert_true(t.find("允许 Studio 的 agent 调试此设备？") is Some(_))
   // a link to anywhere else as it was
   assert_true(t.run_rects("https://example.com/login-v2").length() > 0)
   // the title in the sentence opens the link, the card too, as a tap on the link would
   t.tap_run("共享调试")
   assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
-  t.tap_text("未共享")
+  guard adb_button_at(t, "详情") is Some((x, y)) else { fail("the card's 详情") }
+  t.tap(x, y)
   assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb", "https://still.fail/w/ws1/s/st1/adb"])
   scroll_to_words(t, "Ana 正在查看")
   t.tap_text("Ana 正在查看")
@@ -139,17 +129,60 @@ test "a screen its station no longer has: its title muted; a live one's in the i
 }
 
 ///|
-test "共享调试's phone in the accent while this phone's adb is shared there, else muted" {
-  let streams = []
-  let cancelled = []
-  let calls : Array[Made] = []
-  let t = screen_links_core(streams, cancelled, calls)
+/// A button on 共享调试's card by its words, where it has one: its middle.
+fn adb_button_at(t : @ui.Tester, label : String) -> (Double, Double)? {
+  for s in t.semantics() {
+    if s.role == @ui.Role::Button && s.label == label && !s.hidden {
+      let (x, y, w, h) = s.rect
+      return Some((x + w / 2.0, y + h / 2.0))
+    }
+  }
+  None
+}
+
+///|
+test "共享调试's card: lent from the chat where the phone has all it takes; else what it lacks first, its page a tap away" {
+  let t = screen_links_core([], [], [])
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.nav_push_ms)
-  // (the phone's muted: as the card's line, 未共享)
-  let muted = inks_of(t, "未共享")[0]
-  assert_true(shapes_named(t, "sf/icon/phone/24/").has_suffix("/\{muted}"))
-  let t = screen_links_core(streams, cancelled, calls, over=fn(name, topic) {
+  // all it takes (the fixture's phone): the question, and 共享 lending to this station from here, the page not opened
+  assert_true(t.find("一小时后自动停止") is Some(_))
+  guard adb_button_at(t, "共享") is Some((x, y)) else { fail("the card's 共享") }
+  t.tap(x, y)
+  t.draw()
+  let started = t.native_asked().filter(fn(a) { a.0 == "adb.start" })
+  assert_eq(started.length(), 1)
+  guard started[0].1 is Object(m) else { fail("adb.start's params") }
+  assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
+  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(t.opened(), [])
+  for c in t.native_calls() {
+    t.answer_native(c.0, {})
+  }
+  t.draw()
+  // Developer options off (said by the host as the app comes back): the card says so, no 共享; 查看步骤, the page
+  t.post("native:adb.phone", adb_phone_of(developer=false).stringify())
+  t.draw()
+  assert_true(t.find("需要先打开开发者选项") is Some(_))
+  assert_true(adb_button_at(t, "共享") is None)
+  guard adb_button_at(t, "查看步骤") is Some((x, y)) else { fail("the card's 查看步骤") }
+  t.tap(x, y)
+  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
+  // Wireless debugging off, which the app may turn on itself: 共享 again, turning it on as it lends
+  t.post("native:adb.phone", adb_phone_of(can_switch=true).stringify())
+  t.draw()
+  guard adb_button_at(t, "共享") is Some((x, y)) else { fail("the card's 共享, the app turning Wireless debugging on") }
+  t.tap(x, y)
+  t.draw()
+  let asked = t.native_asked().map(fn(a) { a.0 })
+  assert_eq(asked.filter(fn(n) { n == "adb.switch" }).length(), 1)
+  assert_eq(asked.filter(fn(n) { n == "adb.start" }).length(), 2)
+}
+
+///|
+test "共享调试's card while it is lent there: how it stands, 停止共享 stopping it" {
+  let calls : Array[Made] = []
+  let t = screen_links_core([], [], calls, over=fn(name, topic) {
     if name == "adbCard" {
       { ..topic, value: Some({ "title": "共享调试", "line": "共享中 · 剩余 58 分钟", "sharing": true, "lendable": true }) }
     } else {
@@ -158,10 +191,32 @@ test "共享调试's phone in the accent while this phone's adb is shared there,
   })
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("正在共享调试给 Studio") is Some(_))
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
-  // (the phone's accent, sf's narrow palette: tokens.mbt)
-  let accent = 0xCC5A34FFL
-  assert_true(shapes_named(t, "sf/icon/phone/24/").has_suffix("/\{accent}"))
+  guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
+  t.tap(x, y)
+  t.draw()
+  assert_eq(calls.filter(fn(m) { m.name == "adb.stop" }).length(), 1)
+}
+
+///|
+test "共享调试's card on a device with no adb to lend: why, and nothing to press" {
+  let t = screen_links_core([], [], [], over=fn(name, topic) {
+    if name == "adbCard" {
+      { ..topic, value: Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false }) }
+    } else {
+      topic
+    }
+  })
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("仅安卓 app 支持共享调试") is Some(_))
+  assert_true(adb_button_at(t, "共享") is None)
+  assert_true(adb_button_at(t, "详情") is None)
+  t.tap_text("仅安卓 app 支持共享调试")
+  t.draw()
+  assert_eq(t.opened(), [])
+  assert_eq(t.native_asked().length(), 0)
 }
 
 ///|

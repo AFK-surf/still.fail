@@ -233,6 +233,55 @@ fn adb_do(core : Core, what : String) -> Unit {
 }
 
 ///|
+/// Lent to the agents of the station at `address` (`name`, its notification's): the notifications allowed first (the
+/// pairing code is typed into one), Wireless debugging turned on by the app where it may and it is off; the lending
+/// itself the host's (adb.start: the core's, as it has it).
+pub fn adb_lend(address : String, name : String) -> Unit {
+  if @ui.notice_permission() != "granted" {
+    @ui.notice_ask() |> ignore
+  }
+  let phone = adb_host.phone
+  if !flag(phone, "wireless") && flag(phone, "canSwitch") {
+    adb_ask("adb.switch", obj([]))
+  }
+  adb_ask("adb.start", obj([("station", str(address)), ("name", str(name)), ("texts", adb_texts())]))
+}
+
+///|
+/// Whether a tap asked of the host (adb.start, adb.switch…) is still on its way.
+pub fn adb_asking() -> Bool {
+  !adb_host.doing.is_empty()
+}
+
+///|
+/// What this device can do for 共享调试 from where a chat shows it (@sfbase's adb_link_card), as its host says the
+/// phone stands: not known yet; lent from there (the phone has all it takes, or the app turns Wireless debugging on
+/// itself); first what the phone lacks, a step only the system's settings take (its page says how); or nothing (a host
+/// without it, an Android before 11), why.
+pub(all) enum AdbReady {
+  AdbUnknown
+  AdbLends
+  AdbLacks(String)
+  AdbCannot(String)
+} derive(Eq)
+
+///|
+/// What the phone has for 共享调试, as a chat's card of it goes by (AdbReady).
+pub fn adb_ready(c : @ui.Ctx) -> AdbReady {
+  let phone = adb_phone(c)
+  if phone is None {
+    return AdbUnknown
+  }
+  if !flag(phone, "supported") {
+    return AdbCannot(tr("android-misc.adb.unsupported"))
+  }
+  match adb_next(None, phone, false) {
+    Some(step) if step.act != "switch" => AdbLacks(step.title)
+    _ => AdbLends
+  }
+}
+
+///|
 /// A port the app found for adbd on the phone (`adbShare`'s `connectPort`, `pairPort`), at its row's end: the number,
 /// marked when a tunnel found nothing there (`refusedPort`); `none` without one.
 fn adb_port(view : Json?, key : String, none : String) -> (String, Bool) {
@@ -264,24 +313,28 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let sharing = flag(view, "sharing")
   let there = sharing && text(view, "station") == address
   let elsewhere = sharing && text(view, "station") != address
-  let phone = adb_phone(c)
+  // (a device with no adb to lend, as the core says: so at once, not after asking its host)
+  let card = (core.topic)("adbCard", { "station": str(address) }).value
+  let cannot = card is Some(_) && !flag(card, "lendable") && !there
+  let phone = if cannot { None } else { adb_phone(c) }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     nav_bar(c, core, "Station", tr("android-misc.adb.title"), sub=fn() {
       c.text(name, size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore
     })
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
-    if phone is None {
-      // (until the host has said what the phone has: the rest as it comes)
-      ()
-    } else if !flag(phone, "supported") && !there {
+    if cannot || (phone is Some(_) && !flag(phone, "supported") && !there) {
+      let why = if cannot { text(card, "line") } else { tr("android-misc.adb.unsupported") }
       blocks.push(fn() {
         list_card(c, fn() {
           list_row(c, fn() {
-            c.text(tr("android-misc.adb.unsupported"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+            c.text(why, size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           })
           |> ignore
         })
       })
+    } else if phone is None {
+      // (until the host has said what the phone has: the rest as it comes)
+      ()
     } else {
       // how it stands, and why
       blocks.push(fn() {
@@ -296,14 +349,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             if there {
               act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
             } else {
-              // the pairing code is typed into a notification: they are asked for once, as the lending starts
-              if @ui.notice_permission() != "granted" {
-                @ui.notice_ask() |> ignore
-              }
-              adb_ask(
-                "adb.start",
-                obj([("station", str(address)), ("name", str(name)), ("texts", adb_texts())]),
-              )
+              adb_lend(address, name)
             }
           }
           // how it stands, a row of its own (what the station says of it is as long as it is)

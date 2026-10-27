@@ -866,6 +866,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
           ],
         },
       })
+    // (chat-screens-pc: the same chat on a device with no adb to lend, a Mac's or a PC's)
+    "adbCard" if f.mode == "chat-screens-pc" =>
+      Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
@@ -1015,6 +1018,13 @@ pub fn fixture(mode : String) -> Source {
     for k in 1..=4 {
       fix_later(at + (k - 1).to_double() * 1600.0, fn() { f.step = k })
     }
+  }
+  // the phone's word on 共享调试 said already (the app's Android: AdbShare.java), as a chat's card of it goes by: all it
+  // takes, the card lending from where it is
+  if f.mode == "chat-screens" {
+    @settings.adb_phone_said(
+      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+    )
   }
   let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
     match fixture_kept(name, params, None) {

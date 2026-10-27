@@ -1987,6 +1987,16 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   const values = new Map();
   apply(host, values);
   assert.deepEqual([v(values, 1).sharing, v(values, 1).phase], [false, "off"]);
+  // Only a phone has an adb to lend: a Mac's core reaches TCP too, and its card says it cannot (2026-10-27).
+  subscribe(core, ui, 4, { topic: "adbCard", station: "ws1/st1" });
+  call(core, ui, 5, "client.device", { app: "desktop", build: "1", userAgent: "Macintosh; Mac OS X" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 4).lendable, false);
+  call(core, ui, 6, "client.device", { app: "android", build: "1" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 4).lendable, v(values, 4).line], [true, "未共享"]);
   call(core, ui, 2, "adb.share", { station: "ws1/st1", connect: 41234, device: "Pixel" });
   await host.settle();
   apply(host, values);

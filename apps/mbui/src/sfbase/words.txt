@@ -295,6 +295,15 @@ android-misc.account.signOut
 android-misc.account.switch
 android-misc.act.failed
 android-misc.act.unconfirmed
+android-misc.adb.ask.first
+android-misc.adb.ask.how
+android-misc.adb.ask.more
+android-misc.adb.ask.share
+android-misc.adb.ask.sharing
+android-misc.adb.ask.stop
+android-misc.adb.ask.title
+android-misc.adb.elsewhere
+android-misc.adb.hour
 android-misc.adb.title
 android-misc.bar.action.files
 android-misc.bar.place.archive

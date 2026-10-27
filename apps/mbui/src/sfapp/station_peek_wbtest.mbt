@@ -217,6 +217,28 @@ test "station tabs show their page beside the chat, preserve folders and release
 }
 
 ///|
+test "共享调试 opened from a wide chat: beside it in a tab, the chats' sidebar and the chat staying as they are" {
+  reset()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.native_answers("adb.phone", fn(_) { adb_phone_of(wireless=true) })
+  t.run_for(@ui.nav_push_ms)
+  @sfbase.open_page(Setting(@settings.Route::AdbShare("ws1/st1")))
+  t.run_for(@sfdesk.side_in_ms)
+  // not the settings' place in the chat's (its sidebar and page swapped in, and swapped back on the way back)
+  assert_true(app.nav.top() is Chat(_))
+  assert_eq(@sfdesk.lit_place(), "chats")
+  assert_eq(side_now(r), (["adb:[\"ws1/st1\"]"], "adb:[\"ws1/st1\"]"))
+  assert_true(t.find("一小时后自动停止") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // asked again (the card again, the station page's row): the same tab, in front
+  @sfbase.open_page(Setting(@settings.Route::AdbShare("ws1/st1")))
+  t.frame()
+  assert_eq(side_now(r).0.length(), 1)
+}
+
+///|
 test "a login screen opened beside a chat closes its tab when the login browser is gone" {
   reset()
   let base = fixture("chat")

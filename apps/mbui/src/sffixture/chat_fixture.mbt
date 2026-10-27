@@ -423,7 +423,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-table-images" {
             with_table_images(rich_chat(f.older))
-          } else if f.mode == "chat-screens" {
+          } else if f.mode == "chat-screens" || f.mode == "chat-screens-pc" {
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-peeks" {
             with_message(rich_chat(f.older), peeks_answer)
