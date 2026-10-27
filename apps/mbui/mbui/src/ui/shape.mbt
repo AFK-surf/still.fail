@@ -74,22 +74,67 @@ let shape_band = 8.0
 let seg_slots : FixedArray[Int] = [0, 2, 3, 4, 6, 7]
 
 ///|
-/// A node's shapes painted.
+/// A node's shapes painted: the bands they come to worked out once for those shapes (as the node is built with the
+/// same ones again, an icon's, or kept), each frame only put where the node is, in its colours.
 fn Ctx::paint_shapes(self : Ctx, n : Node, alpha : Double) -> Unit {
-  for s in n.shapes {
+  let bands = match n.shape_bands {
+    Some(b) if physical_equal(b.of, n.shapes) => b
+    _ => {
+      let b = shape_bands(n.shapes)
+      n.shape_bands = Some(b)
+      b
+    }
+  }
+  for k, s in n.shapes {
     if s.fill != 0L {
-      self.emit_shape(n.x, n.y, s.outlines, true, 0.0, s.even_odd, s.fill, alpha)
+      self.emit_bands(n.x, n.y, bands.fills[k], 0.0, s.fill, alpha)
     }
     if s.stroke != 0L && s.width > 0.0 {
-      self.emit_shape(n.x, n.y, s.outlines, false, s.width / 2.0, false, s.stroke, alpha)
+      self.emit_bands(n.x, n.y, bands.strokes[k], s.width / 2.0, s.stroke, alpha)
     }
   }
 }
 
 ///|
-/// One shape's fill (`fill`) or stroke (`hw` half its width) at (`ox`, `oy`): its pieces, then a band at a time those
-/// that reach it. Its bands and its pieces' shares of them are worked out in its own coordinates, then the bands put
-/// at (`ox`, `oy`): the same numbers wherever it is drawn, as when it is drawn again moved (kept_rows.mbt).
+/// What shapes come to as bands (shape_band_of), each one's fill and stroke, for the shapes they are of (`of`).
+priv struct ShapeBands {
+  of : Array[Shape]
+  fills : Array[Array[ShapeBand]]
+  strokes : Array[Array[ShapeBand]]
+}
+
+///|
+/// One band of a shape's fill or stroke (scene.mbt's kind 11), in the shape's own coordinates: where it is (x, y, w,
+/// h), the pieces of its outlines that reach it as shares of it (x0 y0 x1 y1 …), and whether it is filled by the
+/// even-odd rule.
+priv struct ShapeBand {
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+  pieces : Array[Double]
+  even_odd : Bool
+}
+
+///|
+fn shape_bands(shapes : Array[Shape]) -> ShapeBands {
+  let fills = []
+  let strokes = []
+  for s in shapes {
+    fills.push(if s.fill != 0L { shape_band_of(s.outlines, true, 0.0, s.even_odd) } else { [] })
+    strokes.push(
+      if s.stroke != 0L && s.width > 0.0 {
+        shape_band_of(s.outlines, false, s.width / 2.0, false)
+      } else {
+        []
+      },
+    )
+  }
+  { of: shapes, fills, strokes }
+}
+
+///|
+/// One shape's fill (`fill`) or stroke (`hw` half its width) at (`ox`, `oy`): its bands (shape_band_of), put there.
 fn Ctx::emit_shape(
   self : Ctx,
   ox : Double,
@@ -101,6 +146,54 @@ fn Ctx::emit_shape(
   color : Int64,
   alpha : Double,
 ) -> Unit {
+  self.emit_bands(ox, oy, shape_band_of(outlines, fill, hw, even_odd), hw, color, alpha)
+}
+
+///|
+/// Bands of a shape put at (`ox`, `oy`), `hw` half its stroke's width (0: a fill), in `color`: their pieces after the
+/// frame's, an instance each.
+fn Ctx::emit_bands(
+  self : Ctx,
+  ox : Double,
+  oy : Double,
+  bands : Array[ShapeBand],
+  hw : Double,
+  color : Int64,
+  alpha : Double,
+) -> Unit {
+  for b in bands {
+    let first = self.segs.length() / 4
+    self.segs.append(b.pieces)
+    self.push_inst(
+      ox + b.x,
+      oy + b.y,
+      b.w,
+      b.h,
+      hw,
+      11.0,
+      0.0,
+      0.0,
+      color,
+      alpha,
+      first.to_double(),
+      (b.pieces.length() / 4).to_double(),
+      if b.even_odd { 1.0 } else { 0.0 },
+      0.0,
+    )
+  }
+}
+
+///|
+/// One shape's fill (`fill`) or stroke (`hw` half its width) as bands: its pieces, then a band at a time those that
+/// reach it, as shares of the band. Worked out in its own coordinates: the same numbers wherever it is drawn (moved,
+/// kept_nodes.mbt), and once for a shape drawn again (Ctx::paint_shapes).
+fn shape_band_of(
+  outlines : Array[(Array[Double], Bool)],
+  fill : Bool,
+  hw : Double,
+  even_odd : Bool,
+) -> Array[ShapeBand] {
+  let out = []
   let segs : Array[Double] = []
   for o in outlines {
     let (pts, closed) = o
@@ -122,7 +215,7 @@ fn Ctx::emit_shape(
   }
   let count = segs.length() / 4
   if count == 0 {
-    return
+    return out
   }
   // as far round its pieces as a pixel of it reaches: its stroke and a pixel more (a fill's rows half a pixel off)
   let m = hw + 1.0
@@ -153,32 +246,18 @@ fn Ctx::emit_shape(
       let bx = x0 - m
       let bw = x1 - x0 + 2.0 * m
       let bh = b1 - b0
-      let first = self.segs.length() / 4
+      let pieces : Array[Double] = []
       for k in mine {
-        self.segs.push((segs[4 * k] - bx) / bw)
-        self.segs.push((segs[4 * k + 1] - b0) / bh)
-        self.segs.push((segs[4 * k + 2] - bx) / bw)
-        self.segs.push((segs[4 * k + 3] - b0) / bh)
+        pieces.push((segs[4 * k] - bx) / bw)
+        pieces.push((segs[4 * k + 1] - b0) / bh)
+        pieces.push((segs[4 * k + 2] - bx) / bw)
+        pieces.push((segs[4 * k + 3] - b0) / bh)
       }
-      self.push_inst(
-        ox + bx,
-        oy + b0,
-        bw,
-        bh,
-        hw,
-        11.0,
-        0.0,
-        0.0,
-        color,
-        alpha,
-        first.to_double(),
-        mine.length().to_double(),
-        if fill && even_odd { 1.0 } else { 0.0 },
-        0.0,
-      )
+      out.push({ x: bx, y: b0, w: bw, h: bh, pieces, even_odd: fill && even_odd })
     }
     b0 = b1
   }
+  out
 }
 
 ///|
