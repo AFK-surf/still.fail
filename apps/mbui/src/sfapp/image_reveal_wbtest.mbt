@@ -53,3 +53,21 @@ test "a message's image already decoded as it is first shown comes as it is" {
   t.run_for(reveal_ms / 2.0)
   assert_eq(t.drawn_glass().length(), 0)
 }
+
+///|
+test "a message's image the device had comes as it is once decoded, not brushed in as one waited for from its station" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) { @sfpages.image_reveal(c, "pic", 300.0, 200.0, FitCover, "", held=true) },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    images=[("pic", 600, 400)],
+  )
+  t.frame()
+  // decoded by the next frame: as it is from then
+  t.frame()
+  assert_eq(t.drawn_glass().length(), 0)
+  t.run_for(reveal_ms / 2.0)
+  assert_eq(t.drawn_glass().length(), 0)
+}

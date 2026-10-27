@@ -25,9 +25,10 @@ function partAnswer(c: { stream: boolean }, said: Record<string, unknown>, bytes
   return c.stream ? said : new Beside(said, bytes);
 }
 
-/// What is kept small on the device (base64 there), its bytes beside `{ type }`.
+/// What is kept small on the device (base64 there), its bytes beside `{ type, held }`: `held`, the device had it (what
+/// shows it shows it as it is, as it would what was there already, not as what was waited for from the station).
 function keptBeside(kept: { type: string; bytes: string }): Beside {
-  return new Beside({ type: kept.type }, fromBase64(kept.bytes) ?? new Uint8Array());
+  return new Beside({ type: kept.type, held: true }, fromBase64(kept.bytes) ?? new Uint8Array());
 }
 
 /// Pieces one after another.

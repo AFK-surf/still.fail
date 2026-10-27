@@ -1400,9 +1400,11 @@ test("what_a_chat_shows_small_is_read_once_and_kept_on_the_device", async () => 
   const poster = { station: ST, key: "k", name: "v.mp4" };
   const small = await asked(s, 1, "station.file", thumb);
   assert.deepEqual(small, { ok: { type: "application/json" }, bytes: JSON.stringify("small") });
-  assert.deepEqual(await asked(s, 2, "station.file", thumb), small, "shown again: from the device");
+  // (what the device had says so: what shows it shows it as it is)
+  const held = (a: { ok: J; bytes: string | undefined }) => ({ ...a, ok: { ...a.ok, held: true } });
+  assert.deepEqual(await asked(s, 2, "station.file", thumb), held(small), "shown again: from the device");
   const jpeg = await asked(s, 3, "station.poster", poster);
-  assert.deepEqual(await asked(s, 4, "station.poster", poster), jpeg);
+  assert.deepEqual(await asked(s, 4, "station.poster", poster), held(jpeg));
   assert.deepEqual([gets(s.host, "/sessions/k/files?name=a.png&thumb=1"), gets(s.host, "/sessions/k/poster?name=v.mp4")], [1, 1]);
   // The whole file is read as it is opened: not kept.
   await asked(s, 5, "station.file", { ...thumb, thumb: false });
@@ -1410,8 +1412,8 @@ test("what_a_chat_shows_small_is_read_once_and_kept_on_the_device", async () => 
   assert.equal(gets(s.host, "/sessions/k/files?name=a.png"), 2);
   // The app started anew: still there.
   const later = await reopen(s);
-  assert.deepEqual(await asked(later, 7, "station.file", thumb), small);
-  assert.deepEqual(await asked(later, 8, "station.poster", poster), jpeg);
+  assert.deepEqual(await asked(later, 7, "station.file", thumb), held(small));
+  assert.deepEqual(await asked(later, 8, "station.poster", poster), held(jpeg));
   assert.deepEqual([gets(s.host, "/sessions/k/files?name=a.png&thumb=1"), gets(s.host, "/sessions/k/poster?name=v.mp4")], [1, 1]);
   later.core.close();
 });

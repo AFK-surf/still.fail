@@ -191,11 +191,13 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
 test "the list while it is read: no rows, the shapes" {
   let t = tester("loading")
   t.frame()
-  // (the first page built as it opens, shown once it has its list, LOCAL_MS at most: not drawn till then, not its
-  // shapes swapped for its rows a frame later)
+  // (the first page built as it opens, shown once it has its list, first_page_ms at most: not drawn till then, not
+  // its shapes swapped for its rows a frame later)
   let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
   assert_true(!drawn("星火工作室"))
   t.run_for(page_local_ms)
+  assert_true(!drawn("星火工作室"), msg="a page opening's wait is not the first page's")
+  t.run_for(first_page_ms - page_local_ms)
   assert_true(drawn("星火工作室"))
   assert_true(t.find("整理发布清单") is None)
   assert_true(t.find("星火工作室") is Some(_))
@@ -593,4 +595,32 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   assert_eq(asked.length(), 2)
   assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
   assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+}
+
+///|
+test "the wide frame's first page: shown once its pane has landed on what the core says was open, not the list beside an empty pane before it" {
+  reset()
+  let base = fixture("home")
+  // the core's marks of the workspaces (the chat last open in it among them) not come while `slow`
+  let slow = Ref(true)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if slow.val && name == "workspaceMarks" {
+        return { value: None, error: None, version: 0 }
+      }
+      (base.topic)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
+  t.frame()
+  assert_true(t.find("整理发布清单") is Some(_), msg="the list built")
+  t.run_for(page_local_ms)
+  assert_true(!drawn("整理发布清单"), msg="not shown with nothing beside it")
+  slow.val = false
+  t.frame()
+  t.frame()
+  assert_true(app.nav.top() == NewChat, msg="landed")
+  assert_true(drawn("整理发布清单"), msg="shown with what it landed on")
 }

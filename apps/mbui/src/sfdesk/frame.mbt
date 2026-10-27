@@ -1626,6 +1626,13 @@ pub let edge_half : Double = 6.0
 pub let closed_edge : Double = 46.0
 
 ///|
+/// Whether the chats' place of workspace `w` has nothing open yet and is still to land on its chat (land: the core's
+/// mark of it not come): what is beside the list is not known till then.
+pub fn landing(w : Workspace) -> Bool {
+  app.nav.depth() == 1 && app.nav.top() == Home && wide.landed != w.id
+}
+
+///|
 /// The chats' place with nothing open: the chat the core says was open last in this workspace, else a new chat
 /// (workspace.tsx WorkspaceHome; once per workspace, so closing the chat goes back to the list on a phone).
 fn land(src : Source, w : Workspace) -> Unit {

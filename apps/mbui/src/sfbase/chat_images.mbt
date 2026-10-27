@@ -12,11 +12,13 @@ pub struct ChatImages {
   unreached : Map[String, String]
   /// each station's being reached as last seen (`seen`)
   reached : Map[String, Bool]
+  /// the ones the device had (the core's `held`), by id
+  held : Map[String, Bool]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {} }
+  { keys: {}, unreached: {}, reached: {}, held: {} }
 }
 
 ///|
@@ -25,6 +27,7 @@ pub fn ChatImages::clear(self : ChatImages) -> Unit {
   self.keys.clear()
   self.unreached.clear()
   self.reached.clear()
+  self.held.clear()
 }
 
 ///|
@@ -43,10 +46,13 @@ pub fn ChatImages::get(
       self.keys[id] = ""
       ask(fn(r) {
         match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
+          Ok((said, Some(bytes))) if bytes.length() > 0 => {
             @ui.add_image(name, bytes)
             self.keys[id] = name
             self.unreached.remove(id)
+            if field(Some(said), "held") is Some(True) {
+              self.held[id] = true
+            }
           }
           Ok(_) => self.keys[id] = "!"
           Err(e) => {
@@ -66,6 +72,12 @@ pub fn ChatImages::get(
 /// Whether picture `id` failed for want of its station (asked again by `again`), not for its station having none.
 pub fn ChatImages::unreached(self : ChatImages, id : String) -> Bool {
   self.unreached.contains(id)
+}
+
+///|
+/// Whether picture `id` came from what the device had (the core's `held`), not from its station.
+pub fn ChatImages::held(self : ChatImages, id : String) -> Bool {
+  self.held.contains(id)
 }
 
 ///|
