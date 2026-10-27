@@ -2,10 +2,10 @@
 // host's text and pictures, as a film runs it, the script's steps on the display's frames (120 a second), and a frame
 // drawn at one only where the app asks for one there, as a host draws (Tester::bench). Each frame drawn: what it did
 // (@ui.FramePerf: what was built and laid out), how long its work took by this machine's clock, what of it differs
-// from the frame before (src/damage, as a window's host is told), and that part drawn by this host's renderer as a
-// window's frame is, its uploading and encoding and its GPU time measured (src/host/apple_render.m). What a run said,
-// one line: APPBENCH and its numbers as JSON, medians and the 95th centiles over the frames drawn. Measured, never
-// judged: a time is reported and compared, never a test's condition.
+// from the frame before (src/damage, as a window's host is told) and how long working that out took, and that part
+// drawn by this host's renderer as a window's frame is, its uploading and encoding and its GPU time measured
+// (src/host/apple_render.m). What a run said, one line: APPBENCH and its numbers as JSON, medians and the 95th
+// centiles over the frames drawn. Measured, never judged: a time is reported and compared, never a test's condition.
 //
 //   MBUI_BENCH_DRIVE=<script> MBUI_BENCH_NAME=<scene> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_POINTING=finger|mouse] [MBUI_BENCH_FPS=120] [MBUI_BENCH_FRAMES=<file>: each of the display's frames, a line,
@@ -19,6 +19,7 @@ priv struct Measured {
   encode_ms : Double
   gpu_ms : Double
   damage : Double
+  damage_ms : Double
   bytes : Int
 }
 
@@ -105,7 +106,10 @@ pub fn bench(
     }
     let perf = t.frame_perf()
     let (n, (r, g, b)) = host_frame(t, buf)
+    // (what of it differs worked out as a window's host does, on its main thread before it is drawn: h_present)
+    let d0 = now_ms()
     let parts = damage.next(buf.val, n, w, h, scale, r, g, b)
+    let damage_ms = now_ms() - d0
     let area = parts.fold(init=0.0, fn(a, p) { if p.2 < 0.0 { a + w * h } else { a + p.2 * p.3 } })
     if parts.is_empty() {
       // (nothing differs: the window's picture as it was, nothing drawn)
@@ -120,6 +124,7 @@ pub fn bench(
       encode_ms: timing[0],
       gpu_ms: timing[1],
       damage: dmin(1.0, area / (w * h)),
+      damage_ms,
       // (what a frame drawn uploads: its instances, 32-bit numbers)
       bytes: if parts.is_empty() { 0 } else { n * inst_size * 4 },
     }
@@ -166,6 +171,7 @@ pub fn bench(
     "laid": stat(d(fn(m) { m.perf.laid.to_double() })),
     "insts": stat(d(fn(m) { m.perf.insts.to_double() })),
     "damage": stat(d(fn(m) { m.damage })),
+    "damage_ms": stat(d(fn(m) { m.damage_ms })),
     "upload_kb": stat(d(fn(m) { m.bytes.to_double() / 1024.0 })),
     "passes": d(fn(m) { m.perf.passes.to_double() }).fold(init=0.0, dmax).to_json(),
     "passed": passed.to_json(),

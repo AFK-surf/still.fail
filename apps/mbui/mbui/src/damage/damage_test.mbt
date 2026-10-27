@@ -246,5 +246,25 @@ test "another number of instances, two changes far apart: each its own, what is 
   more.push((300.0, 280.0, 2.0, 12.0, 0))
   let b = frame(more)
   b[52 + 8] = 0.0
-  inspect(next(d, b), content="[(298, 278, 6, 16), (8, 8, 8, 8)]")
+  inspect(next(d, b), content="[(8, 8, 8, 8), (298, 278, 6, 16)]")
+}
+
+///|
+test "a list scrolled, a row more: each row where it was and where it is, one part, what is beside it kept" {
+  // rows moved up 3 points with one more come in at the foot, none of them the same as any before, and a dot drawn
+  // among them that stays
+  let rows = [(0.0, 0.0, 400.0, 300.0, 0)]
+  let moved = [(0.0, 0.0, 400.0, 300.0, 0)]
+  for k in 0..<21 {
+    if k < 20 {
+      rows.push((20.0, 30.0 + k.to_double() * 10.0, 100.0, 8.0, 1))
+    }
+    moved.push((20.0, 27.0 + k.to_double() * 10.0, 100.0, 8.0, 1))
+    if k == 9 {
+      rows.push((300.0, 150.0, 4.0, 4.0, 0))
+      moved.push((300.0, 150.0, 4.0, 4.0, 0))
+    }
+  }
+  let d = seen(frame(rows))
+  inspect(next(d, frame(moved)), content="[(18, 25, 104, 212)]")
 }

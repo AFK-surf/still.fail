@@ -36,9 +36,10 @@ where:
 
 Otherwise the frames' instances are matched: as many, each against the one at its place; another number (a caret
 shown or hidden, a row's actions under the pointer, a word typed), those the same from the start and from the end
-each against its own, and those between in order where their numbers are equal, the fewest left over (Myers's diff
-of their numbers, up to 512 edits: past that, all between counts; more than 512 of either with no equal one in the
-other, in any order, as every instance of a list being scrolled, is past that before it is looked for). Once the
+each against its own, and those between in order where their numbers are equal, the fewest left over. Those between
+with no equal one in the other (every instance of a list being scrolled) are in no match whatever the rest are: they
+count first, and the rest are matched by Myers's diff of their numbers over them alone (the same pairs as over all,
+its cost by how far apart those are, not by how many moved; up to 512 edits: past that, all between counts). Once the
 parts counted are more than half the window, nothing more is compared: the frame is drawn whole. Matched in order,
 what is drawn over what is the same, so a pixel no unmatched or changed instance reaches is as it was. Each instance
 that differs in any of its 52 numbers, or has no match, counts where it was and where it is now, each as far as any
@@ -57,7 +58,10 @@ Two more things count though their numbers did not change:
   under the same numbers, so it is drawn again every frame.
 
 A part is merged with any other it meets or comes within 16 points of (two passes over all the instances cost more
-than the pixels between); beyond four, the pair whose rect grows least is merged.
+than the pixels between); beyond four, the pair whose rect grows least is merged, and then any it comes near, so no
+two parts are left near each other. An instance's reach already inside a part adds nothing, and where it was and
+where it is, near each other, are one rect: a list scrolled changes every instance in it, and what is worked out for
+each is a few comparisons, no part made for it (it is a frame's work too, on the main thread, before it is drawn).
 
 ### Glass
 
