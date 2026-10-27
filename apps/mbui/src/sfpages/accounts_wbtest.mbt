@@ -74,6 +74,32 @@ test "a profile's models, at each width and with either hand: how many are on, e
   }
 }
 
+///|
+test "a profile's models, wide with a mouse: the series side by side, a model's id right under its name" {
+  let t = setting_tester(ProfileModels("ws1/st1", "cx"), 1280.0)
+  // the third of GPT-6 and of GPT-5.5 on one line, the second series beside the first
+  match (t.find("GPT-6-NANO"), t.find("GPT-5.5-CODEX")) {
+    (Some((x6, y6)), Some((x55, y55))) => {
+      assert_true((y6 - y55).abs() < 1.0, msg="side by side")
+      assert_true(x55 > x6, msg="the newer first")
+    }
+    _ => abort("no GPT-6-NANO or GPT-5.5-CODEX")
+  }
+  // its id under the pointer, under its own words (not under the middle of the page)
+  let (nx, ny) = t.find("O9-MINI").unwrap()
+  t.move(nx, ny)
+  t.run_for(@sf.tip_delay_ms + 200.0)
+  match t.find("o9-mini") {
+    Some((tx, ty)) => {
+      assert_true((tx - nx).abs() < 40.0, msg="under its name: \{tx} for \{nx}")
+      assert_true(ty > ny, msg="under it")
+    }
+    None => abort("no tip")
+  }
+  t.leave()
+  t.run_for(@kit.tooltip_delay_ms)
+}
+
 // A profile's quota reset and its models (Accounts.tsx QuotaSection, ModelPool) over ChatGPT 团队: a reset used once
 // asked, its models chosen in place (ModelChecklist): a model named by hand, a filter over the many.
 

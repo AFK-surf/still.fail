@@ -766,6 +766,7 @@ function ModelChecklist({ profile, found, onSave }: { profile: Profile; found: s
         <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
         <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
       </div>
+      <div className={css.modelPoolSeries}>
       {series.map((s) => {
         const list = s.models.filter((m) => shown.includes(m));
         if (list.length === 0) return null;
@@ -792,6 +793,7 @@ function ModelChecklist({ profile, found, onSave }: { profile: Profile; found: s
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

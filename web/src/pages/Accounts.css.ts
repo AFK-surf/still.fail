@@ -37,6 +37,9 @@ export const modelChip = style({
 export const profileState = style({ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" });
 export const modelPoolFilter = style({ maxWidth: "240px", height: "30px" });
 export const modelPoolGone = style({ fontSize: vars.textMeta });
+/** The series side by side, each as wide as its longest name, going on under where the page has not the room. */
+export const modelPoolSeries = style({ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "16px 36px" });
+globalStyle(`${modelPoolSeries} > *`, { marginTop: 0 });
 /** The machine's own logins, offered where a first profile is asked for (pages/Accounts.tsx's MachineLoginOffers). */
 export const machineLogins = style({ width: "100%", marginTop: "20px", display: "grid", gap: "4px", textAlign: "left" });
 export const machineLoginsHead = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });

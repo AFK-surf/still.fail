@@ -22,8 +22,8 @@
 /// keyboard and mouse and 44 with touch (the user, 2026-10-27: 大屏按最小 36 来设计，不用 44), a sidebar's rows no more
 /// 32 high one after another: 4617 room fewer. A ground no control (Ctx::cursor's Arrow: a message's words a hold
 /// picks in, a stage, the room round a list's rows): a message's name and time no more parted with its words, 1957
-/// room fewer.)
-let rooms_known : Map[String, Int] = { "room": 1430, "apart": 0, "hover": 28 }
+/// room fewer. The same day a profile's models side by side by series, each a row's least height: 45 room fewer.)
+let rooms_known : Map[String, Int] = { "room": 1385, "apart": 0, "hover": 28 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

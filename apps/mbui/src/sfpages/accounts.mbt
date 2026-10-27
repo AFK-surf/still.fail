@@ -1481,7 +1481,7 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
 ///|
 /// The whole list of a profile's models to enable (ModelChecklist), by the core's series, a filter when many, all or
 /// none of what is shown, each tick saved at once (`profile.put` models).
-fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? : Bool = false) -> Unit {
+fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   let enabled = strings(p, "models")
@@ -1507,28 +1507,16 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
     )
   }
   c.box(style=pf_pool, fn() {
-    // (all and none together, going on under the filter where the two have not the room; `head`: first on its card,
-    // the filter in its top corner, concentric with it (@sf.head_reach), the two back where the card's words stand)
+    // (all and none together, going on under the filter where the two have not the room)
     let filtered = all.length() > 10
-    let reach = head && filtered
-    // (on one line the two as far from the filter as the scale's 28, what head_back takes them back by among it)
-    let back = @sf.card_pad - @sf.card_foot_in(@sf.input_height())
-    c.box(
-      style=if reach {
-        pf_pool_tools.then(@sf.head_reach(@sf.input_height())).then(@ui.style(gap=@sf.room_of(pf_pool_apart - back)))
-      } else {
-        pf_pool_tools
-      },
-      flow=true,
-      line_gap=@ui.Space::S3.px(),
-      fn() {
+    c.box(style=pf_pool_tools, flow=true, line_gap=@ui.Space::S3.px(), fn() {
       if filtered {
         c.box(style=pf_pool_filter, fn() {
           @sf.input(c, "profile-filter/" + key, placeholder=@sf.t("web-pages.profiles.filter"), field=filter) |> ignore
         })
         |> ignore
       }
-      c.box(style=if reach { pf_pool_toggles.then(@sf.head_back(@sf.input_height())) } else { pf_pool_toggles }, fn() {
+      c.box(style=pf_pool_toggles, fn() {
         if text_toggle(c, "profile-all/" + key, if q != "" { @sf.t("web-pages.profiles.selectFiltered") } else { @sf.t("web-pages.settings.members.all") }, busy) {
           let next = enabled.copy()
           for m in shown {
@@ -1543,67 +1531,71 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? 
         }
       })
       |> ignore
-      },
-    )
+    })
     |> ignore
-    for s in items(p, "series") {
-      let sv = Some(s)
-      let list = strings(sv, "models").filter(fn(m) { shown.contains(m) })
-      if list.length() == 0 {
-        continue
-      }
-      let every = list.iter().all(fn(m) { enabled.contains(m) })
-      c.box(style=pf_series, fn() {
-        c.box(style=pf_series_head, fn() {
-          c.text(text(sv, "name"), style=pf_series_name) |> ignore
-          if text_toggle(
-              c,
-              "profile-series/" + key + "/" + text(sv, "name"),
-              if every { @sf.t("web-pages.settings.members.none") } else { @sf.t("web-pages.settings.members.all") },
-              busy,
-            ) {
-            if every {
-              commit(enabled.filter(fn(m) { !list.contains(m) }))
-            } else {
-              let next = enabled.copy()
-              for m in list {
-                if !next.contains(m) {
-                  next.push(m)
+    // (the series side by side, each as wide as its longest name, going on under where the page has not the room: the
+    // list a glance wide, each model's id under the pointer beside its own name, 2026-10-27 用户「信息密度也很低」)
+    c.box(style=pf_series_all, flow=true, line_gap=pf_series_lines, fn() {
+      for s in items(p, "series") {
+        let sv = Some(s)
+        let list = strings(sv, "models").filter(fn(m) { shown.contains(m) })
+        if list.length() == 0 {
+          continue
+        }
+        let every = list.iter().all(fn(m) { enabled.contains(m) })
+        c.box(style=pf_series, fn() {
+          c.box(style=pf_series_head, fn() {
+            c.text(text(sv, "name"), style=pf_series_name) |> ignore
+            if text_toggle(
+                c,
+                "profile-series/" + key + "/" + text(sv, "name"),
+                if every { @sf.t("web-pages.settings.members.none") } else { @sf.t("web-pages.settings.members.all") },
+                busy,
+              ) {
+              if every {
+                commit(enabled.filter(fn(m) { !list.contains(m) }))
+              } else {
+                let next = enabled.copy()
+                for m in list {
+                  if !next.contains(m) {
+                    next.push(m)
+                  }
                 }
+                commit(next)
               }
-              commit(next)
             }
-          }
+          })
+          |> ignore
+          c.box(style=pf_pool_list, fn() {
+            for m in list {
+              let on = enabled.contains(m)
+              // (its id over it while it is pointed at: Accounts.tsx's tip)
+              let item = c.id("profile-model-item/" + key + "/" + m)
+              c.box(style=pf_pool_item.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
+                let now = @kit.checkbox(c, "profile-model/" + key + "/" + m, if on { On } else { Off }, label=name(m), disabled=busy).value
+                if (now == On) != on {
+                  commit(if on { enabled.filter(fn(x) { x != m }) } else { enabled.copy()..push(m) })
+                }
+                @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
+                c.text(name(m), style=pf_chip_words) |> ignore
+                if saving.contains(m) {
+                  @sf.spinner(c, size=pf_spin) |> ignore
+                }
+                match found {
+                  Some(f) if !f.contains(m) => c.text(@sf.t("web-pages.profiles.gone"), style=pf_gone) |> ignore
+                  _ => ()
+                }
+              })
+              |> ignore
+              @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m)
+            }
+          })
+          |> ignore
         })
         |> ignore
-        c.box(style=pf_pool_list, fn() {
-          for m in list {
-            let on = enabled.contains(m)
-            // (its id over it while it is pointed at: Accounts.tsx's tip)
-            let item = c.id("profile-model-item/" + key + "/" + m)
-            c.box(style=pf_pool_item, id=item, taps=false, points=true, fn() {
-              let now = @kit.checkbox(c, "profile-model/" + key + "/" + m, if on { On } else { Off }, label=name(m), disabled=busy).value
-              if (now == On) != on {
-                commit(if on { enabled.filter(fn(x) { x != m }) } else { enabled.copy()..push(m) })
-              }
-              @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
-              c.text(name(m), style=pf_chip_words) |> ignore
-              if saving.contains(m) {
-                @sf.spinner(c, size=pf_spin) |> ignore
-              }
-              match found {
-                Some(f) if !f.contains(m) => c.text(@sf.t("web-pages.profiles.gone"), style=pf_gone) |> ignore
-                _ => ()
-              }
-            })
-            |> ignore
-            @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m)
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -1620,9 +1612,8 @@ fn text_toggle(c : @ui.Ctx, key : String, words : String, disabled : Bool) -> Bo
 }
 
 ///|
-/// A model named by hand (AddModel), for a provider that does not list them all; `foot`: last on its card, its field and
-/// button in its foot corners, concentric with them (@sf.foot_reach).
-fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bool = false) -> Unit {
+/// A model named by hand (AddModel), for a provider that does not list them all.
+fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
   let f = profile_field("add-model/" + address + "/" + id)
   let adding = is_doing(core, ["profile.addModel"], [("station", address), ("id", id)])
   let add = fn() {
@@ -1632,7 +1623,7 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bo
       f.set("")
     }
   }
-  c.box(style=if foot { pf_input_row.then(@sf.foot_reach(@sf.button_height(), start=@sf.input_height())) } else { pf_input_row }, fn() {
+  c.box(style=pf_input_row, fn() {
     c.box(style=pf_input_grow, fn() {
       if @sf.input(
           c,
@@ -1784,10 +1775,6 @@ let pf_chip_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg
 let pf_pool : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
-/// How far the filter and the two after it stand apart on one line where the filter reaches into the card's corner.
-let pf_pool_apart : Double = 28.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let pf_pool_tools : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
@@ -1801,12 +1788,22 @@ let pf_pool_toggles : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 let pf_pool_filter : @ui.Style = @ui.css("w=S60")
 
 ///|
+/// The series side by side, 36 apart (as an allowance's windows are: quota_dials), 16 between their lines.
 // kept across runs: a value (no field of it changes)
-let pf_series : @ui.Style = @ui.css("w=Full gap=S1_5")
+let pf_series_all : @ui.Style = @ui.css("row w=Full gap=S9")
+
+///|
+let pf_series_lines : Double = 16.0
+
+///|
+/// A series: its name over its models, as wide as the longest of them, each model as wide as its own words (its id's
+/// tip under them, not under the middle of the card).
+// kept across runs: a value (no field of it changes)
+let pf_series : @ui.Style = @ui.css("gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_series_head : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+let pf_series_head : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1814,11 +1811,12 @@ let pf_series_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_pool_list : @ui.Style = @ui.css("w=Full gap=SPx")
+let pf_pool_list : @ui.Style = @ui.css("gap=SPx")
 
 ///|
+/// A model's row (its height at least a row's, row_least_h at its use: the press's room).
 // kept across runs: a value (no field of it changes)
-let pf_pool_item : @ui.Style = @ui.css("row w=Full py=S1 gap=S2 align=ACenter")
+let pf_pool_item : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2012,17 +2010,16 @@ fn models_sample(c : @ui.Ctx, core : Core, look : Look) -> Unit {
 }
 
 ///|
-/// A profile's models to tick (those listed) and one to name by hand (where it can be); narrow, on a card of its own:
-/// what is first and last on it in its corners, unless a failure is said under it.
+/// A profile's models to tick (those listed) and one to name by hand (where it can be), loose on its page (models_body):
+/// as far in as the page's words, nothing reaching for a card's corners.
 fn models_pool(c : @ui.Ctx, core : Core, look : Look, address : String, id : String, p : Json?) -> Unit {
-  let carded = look is Narrow
-  let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
+  ignore(look)
   c.box(style=pf_models_body, fn() {
     if items(p, "available").length() > 0 {
-      model_checklist(c, core, address, p, head=carded)
+      model_checklist(c, core, address, p)
     }
     if flag(p, "canAddModel") {
-      add_model(c, core, address, id, foot~)
+      add_model(c, core, address, id)
     }
   })
   |> ignore
