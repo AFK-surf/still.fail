@@ -278,6 +278,8 @@ priv struct ListMo {
   mut close_until : Double
   arrived : Map[Int, Double]
   lifted : Map[Int, Double]
+  /// what moves its rows lifted over others (read where a row reads how long ago it was lifted: `lifted`)
+  lift_mover : @ui.Mover
   /// rows let go without a copy left behind (swiped away: list_unghost)
   unghost : Map[Int, Bool]
   mut seen : Int
@@ -512,6 +514,8 @@ pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
+  // (seen where a part or a row drawn again that it is in shows it: built again, it is not new)
+  kept_said(c, e.key, false)
   e.enter = Some(enter)
   e.fresh = true
 }
@@ -538,6 +542,8 @@ pub fn reshape(
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
+  // (seen where a part or a row drawn again that it is in shows it: built again, it reshapes from there)
+  kept_said(c, e.key, false)
   e.reshape = true
   e.carry = carry
   e.spec = spec
@@ -839,6 +845,7 @@ pub fn list_keys(
         close_until: -1.0e9,
         arrived: {},
         lifted: {},
+        lift_mover: @ui.Mover::new(),
         unghost: {},
         seen: frame,
       }
@@ -918,7 +925,7 @@ pub fn list_keys(
         Some(r) if r > kept_i && liftable(keys[i]) => {
           lm.lifted[k] = now
           // frames while it passes over the others (lift_ms from now)
-          c.moving(@ui.Mover::new(), (Lift::{ at: now }) as &@ui.Moving, what="a row lifted")
+          c.moving(lm.lift_mover, (Lift::{ at: now }) as &@ui.Moving, what="a row lifted")
         }
         _ => ()
       }
@@ -1010,8 +1017,13 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
   match mo.lists.get(list) {
     Some(lm) =>
       match lm.lifted.get(motion_key(key)) {
-        Some(at) if c.now() - at < lift_ms => c.now() - at
+        Some(at) if c.now() - at < lift_ms => {
+          // (read by what is built: built again each frame while it passes over the others, Ctx::shows_motion)
+          c.shows_motion(lm.lift_mover, true)
+          c.now() - at
+        }
         Some(_) => {
+          c.shows_motion(lm.lift_mover, false)
           lm.lifted.remove(motion_key(key))
           -1.0
         }
@@ -1062,10 +1074,12 @@ pub fn presence(
       m.follow(to, t.spec)
     }
   }
-  if !shown && f.value <= 0.0 && m.value <= 0.0 {
+  // (read so: what reads it is built again as it is told and each frame while it goes, Anim::get)
+  let (fv, mv) = (f.get(), m.get())
+  if !shown && fv <= 0.0 && mv <= 0.0 {
     return None
   }
-  let l = t.at(f.value, m.value)
+  let l = t.at(fv, mv)
   if logging() && (f.running || m.running) {
     @ui.log("MOTION \{c.now()} \{key} alpha=\{l.alpha} dx=\{l.dx} dy=\{l.dy} scale=\{l.sx}")
   }
@@ -1146,6 +1160,24 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     }
   }
   for e in if order.is_empty() { mo.entries } else { order } {
+    // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
+    c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
+  }
+  // what is drawn where things are this frame (placed): once every place this frame lays out is kept
+  for e in mo.entries {
+    match e.placed {
+      Some(at) => c.reads_for(e.node, fn() { c.set_look(e.node, c.look_of(e.node).then(at())) })
+      None => ()
+    }
+  }
+  kept_recs_taken(c)
+  forget_recs(c)
+}
+
+///|
+/// Entry `e` laid out this frame (after_layout): where it is kept, how it moves from where it showed, the look it is
+/// drawn by.
+fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : Map[Int, Double]) -> Unit {
     let (nx, ny, nw, nh) = c.node_rect(e.node)
     let app_look = c.look_of(e.node)
     let mut look = app_look
@@ -1507,16 +1539,6 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         "MOTION \{c.now()} \{e.name} x=\{nx + look.dx} y=\{ny + look.dy} w=\{nw * look.sx} h=\{nh * look.sy} alpha=\{look.alpha} dx=\{look.dx} dy=\{look.dy} scale=\{look.sx} fy=\{flip_dy}",
       )
     }
-  }
-  // what is drawn where things are this frame (placed): once every place this frame lays out is kept
-  for e in mo.entries {
-    match e.placed {
-      Some(at) => c.set_look(e.node, c.look_of(e.node).then(at()))
-      None => ()
-    }
-  }
-  kept_recs_taken(c)
-  forget_recs(c)
 }
 
 ///|

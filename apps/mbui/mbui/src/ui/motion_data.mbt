@@ -31,9 +31,6 @@ impl Moving with sample(self, now) {
 /// number: whatever context it was made in, and whatever was made or told before it, it is no other's.
 pub struct Mover {
   priv mut told : Int
-  /// the part kept (Ctx::kept_part) what it moves was last built in (0 none): what it says moves that part's drawing,
-  /// whenever it is said (a list flung before its panel was kept flings on in it)
-  priv mut part : Int
   /// how many times it was told, as a signal, once a part or a row kept read where it is (Ctx::shows_motion)
   priv mut said : @signals.Signal[Int]?
 }
@@ -41,7 +38,7 @@ pub struct Mover {
 ///|
 /// A mover of its own, for what moves.
 pub fn Mover::new() -> Mover {
-  { told: 0, part: 0, said: None }
+  { told: 0, said: None }
 }
 
 ///|
@@ -61,10 +58,6 @@ struct MoverEntry {
   who : Mover
   mut m : &Moving
   mut what : String
-  /// the part kept while it is the same (Ctx::kept_part) being built as it was told, whose drawing it moves (0: none);
-  /// the list's row kept so (kept_rows.mbt)
-  mut part : Int
-  mut row : Int
 }
 
 ///|
@@ -93,6 +86,35 @@ pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", l
 }
 
 ///|
+/// What `f` reads (where a motion is now, a value's signal) read for node `node`, laid out this frame: by the list's row
+/// or the part kept that it is drawn in (the innermost; kept_part.mbt, kept_rows.mbt), as though its build had read it,
+/// so that it is built again as that changes, and each frame while a motion it reads goes; read as it is where none
+/// holds it (or `node` is -1). For what reads, once the frame is laid out, what moves what was laid out (the motion
+/// package's moves and reshapes): what a drawing depends on is followed where it is read, whoever told it, wherever
+/// and whenever (signals' rule: a dependence is said by the read, not by the write).
+pub fn Ctx::reads_for(self : Ctx, node : Int, f : () -> Unit) -> Unit {
+  let mut row = 0
+  let mut part = 0
+  let mut p = node
+  while p >= 0 && p < self.nodes.length() {
+    match self.drawn_entry(p) {
+      Some(e) => {
+        if row == 0 && e.said_row != 0 {
+          row = e.said_row
+        }
+        if e.part != 0 {
+          part = e.part
+          break
+        }
+      }
+      None => ()
+    }
+    p = self.nodes[p].parent
+  }
+  read_for(part, row, f)
+}
+
+///|
 /// What is said to move, handed this frame's time (Moving::sample): before the view builds.
 fn Ctx::movers_sample(self : Ctx) -> Unit {
   // (what a sample sets out anew is handed the time from the next frame)
@@ -106,21 +128,14 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 /// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
 pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
   who.changed()
-  let part = part_now.part
-  if part != 0 {
-    who.part = part
-  }
-  let row = part_now.row
   for e in self.movers {
     if physical_equal(e.who, who) {
       e.m = m
       e.what = what
-      e.part = part
-      e.row = row
       return
     }
   }
-  self.movers.push({ who, m, what, part, row })
+  self.movers.push({ who, m, what })
 }
 
 ///|

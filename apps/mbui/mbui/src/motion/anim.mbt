@@ -7,7 +7,8 @@
 ///|
 /// A number that animates (Compose's Animatable).
 pub struct Anim {
-  mut value : Double
+  /// where it is, read outside this package only as it is shown (Anim::get: what reads it follows it)
+  priv mut value : Double
   /// per second
   mut velocity : Double
   mut target : Double
@@ -22,7 +23,8 @@ pub struct Anim {
   mut start : Double
   mut asked : Int
   mut dur : Double
-  mut running : Bool
+  /// whether it goes, read outside this package only so (Anim::moving)
+  priv mut running : Bool
   /// the frame it was last stepped in, and last used in
   mut stepped : Int
   mut used : Int
@@ -364,7 +366,8 @@ pub fn animate(
   if a.running && logging() {
     @ui.log("MOTION \{c.now()} \{key} value=\{a.value} to=\{a.target}")
   }
-  a.value
+  // (read so: what reads it is built again as it is told and each frame while it goes, Anim::get)
+  a.get()
 }
 
 ///|

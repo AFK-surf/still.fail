@@ -4,10 +4,10 @@
 // Chromium keeps a layer's display list recorded past what shows, its interest rect, so that scrolling replays it.)
 //
 // What builds a row again is a part's (kept_part.mbt's head): what it read of signals and of time (the frame, a
-// moment), an event from outside, its key (the list's width, its rows' count, its scope), the layout's epoch; and a
-// row's own: any motion round it but its list's scrolling (what moves may be read in what it shows; and the frame it is
-// over, as it ended), a press held but for the list's own drag, the mouse's pointer over it (it lights what it points
-// at), what it holds held at the list's top as it scrolls past (Ctx::stick: a message's picture), and where it now
+// moment, what moves what it laid out), an event from outside, its key (the list's width, its rows' count, its scope),
+// the layout's epoch; and a row's own: a press held but for the list's own drag, the mouse's pointer over it (it lights
+// what it points at), what it holds held at the list's top as it scrolls past (Ctx::stick: a message's picture), and
+// where it now
 // shows more than its last build drew of it (row_reach past its list's clip, both ways: a row taller than that is built
 // again every so often as it scrolls). A row that holds what must be built each frame (a field, a native view, a list
 // of its own, a scroll bar its list's rows share, what is drawn over everything) is always built.
@@ -74,9 +74,6 @@ priv struct RowKept {
   /// the words its build held, as what holds it is named by them (Ctx::words_in), and as a box pressed is (own_words)
   mut read_words : String
   mut read_own : String
-  /// its last build was while a motion round it went (its ground fading from under the pointer): built once more as it
-  /// is over, so what is drawn again is where the motion ended, not where it had got as that build was drawn
-  mut moved_built : Bool
 }
 
 ///|
@@ -107,7 +104,6 @@ fn RowKept::new(list : Int, item : Int) -> RowKept {
     read_out: false,
     read_words: "",
     read_own: "",
-    moved_built: false,
   }
 }
 
@@ -164,19 +160,16 @@ fn rows_frame_end(c : Ctx) -> Unit {
 
 ///|
 /// What a list's rows are kept by in this build of the frame, worked out once for its rows (Ctx::rows_round): the list
-/// (its id), the build, its rows' key, whether anything moves round them but the list's own scrolling, the rows with a
-/// motion of their own.
+/// (its id), the build, its rows' key.
 priv struct RowsRound {
   mut list : Int
   mut build : Int
   mut key : String
-  mut moving : Bool
-  rows : Array[Int]
 }
 
 ///|
 // kept across runs: worked out anew for each list and build (Ctx::rows_round)
-let rows_round : RowsRound = { list: 0, build: -1, key: "", moving: false, rows: [] }
+let rows_round : RowsRound = { list: 0, build: -1, key: "" }
 
 ///|
 /// Whether a part kept and a list's row kept may be drawn again (a test's: false, each built every frame, its drawing
@@ -240,9 +233,9 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   kp.shown = self.frame_no
   let id = kp.id
   let round = self.rows_round(list, st, iw)
-  // (while what moves round its rows goes, or a press is held but by the list's own drag, none of them is drawn again:
-  // each built as where none is kept, nothing of its drawing taken)
-  if round.moving || (self.down && !(self.dragging && st.held)) {
+  // (while a press is held but by the list's own drag, none of them is drawn again: each built as where none is kept,
+  // nothing of its drawing taken)
+  if self.down && !(self.dragging && st.held) {
     kp.built = -1
     // (what its build says of the frame said where its list's rows say theirs, as of a row built to be kept)
     self.build_marks(kp.built_marks)
@@ -255,7 +248,6 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     e.said_row = id
     return r
   }
-  let moving = round.rows.contains(id)
   let key = round.key
   let same = !force &&
     drawn_again_on.val &&
@@ -269,9 +261,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     kp.scale == self.scale &&
     kp.pointing == pointing() &&
     // (read out: what it said taken as it was built, else built so that it is)
-    (rk.read_out || !self.reads_out) &&
-    !moving &&
-    !rk.moved_built
+    (rk.read_out || !self.reads_out)
   rk.build = st.row
   rk.part = st.part
   if !same {
@@ -340,7 +330,6 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   rk.node = r
   if ran {
     kp.built = self.frame_no
-    rk.moved_built = moving
     kp.key = key
     kp.outside = outside_events.val
     kp.epoch = self.epoch
@@ -394,9 +383,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
 /// What the rows of list `list` (`st`, `iw` wide) are kept by in this build (RowsRound), worked out at its first row:
 /// their key (its width, its rows' count, its scope, picking, its layer, its direction, what the press is on: one taken
 /// from it, as the list takes the drag, shows it pressed no more; the theme each build works out anew from what changes
-/// only by what builds it again: a setting, the system, a motion); whether anything moves round them but the list's own
-/// scrolling (another row's motion is that row's: what moves may be read in what a row shows, a message held till an
-/// avatar lands); the rows with a motion of their own. Motions asked as the last frame left them, as a part asks.
+/// only by what builds it again: a setting, the system, a motion).
 fn Ctx::rows_round(self : Ctx, list : Int, st : ListState, iw : Double) -> RowsRound {
   let r = rows_round
   if r.list == list && r.build == self.build_no {
@@ -405,18 +392,6 @@ fn Ctx::rows_round(self : Ctx, list : Int, st : ListState, iw : Double) -> RowsR
   r.list = list
   r.build = self.build_no
   r.key = "\{iw} \{st.count} \{st.seed} \{st.owner} \{st.sel} \{st.layer} \{st.direction} \{self.active} \{self.down}"
-  r.moving = false
-  r.rows.clear()
-  let last = self.frame_no - 1
-  for e in self.movers {
-    if e.m.rest_at(self.now, last) > self.now {
-      if e.row != 0 {
-        r.rows.push(e.row)
-      } else if (e.part == 0 || e.part == st.part) && !physical_equal(e.who, st.ease_mover) {
-        r.moving = true
-      }
-    }
-  }
   r
 }
 

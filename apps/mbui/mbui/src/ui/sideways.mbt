@@ -164,10 +164,6 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
       s
     }
   }
-  // (what moves it, in the part it is built in: Mover's `part`)
-  if building.val {
-    st.mover.part = part_now.part
-  }
   if !st.held && st.rest >= 0.0 {
     if st.t0 == @double.infinity {
       // its first step: it sets out now, its way solved once (where it stops, when)
@@ -184,6 +180,9 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
     }
   }
   st.x = dclamp(st.x, 0.0, dmax(st.max, 0.0))
+  // (where its fling and its bar have it, read by what is built round it, a part or a row kept: built again as it is
+  // told anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion)
+  self.shows_motion(st.mover, dmax(st.fling_rest(), st.bar.rest(self.now, st.bar_until())) > self.now)
   st
 }
 
