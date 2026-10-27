@@ -44,7 +44,7 @@ import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
-import { carrySubagents, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
+import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { shownFacts } from "./image-size.ts";
@@ -775,12 +775,12 @@ export class Hub {
     return this.actor(row).compact();
   }
 
-  /// Clears the session's context between turns, as `-clear` in a thread would (SessionActor.clear): why not, when it
-  /// cannot now.
-  async clear(key: string): Promise<string | null> {
+  /// Clears the session's context between turns, as `-clear` in a thread would (SessionActor.clear; `readBack`: to go on
+  /// afresh): why not, when it cannot now.
+  async clear(key: string, readBack = false): Promise<string | null> {
     const row = this.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    return this.actor(row).clear();
+    return this.actor(row).clear(false, readBack);
   }
 
   /// A word from the station for a session's agent, outside any conversation (SessionActor.notify).
@@ -1029,7 +1029,8 @@ export class Hub {
       },
       live: this.live,
       startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
-      cleared: (key) => toldCleared(this, key),
+      cleared: (key, readBack) => toldCleared(this, key, readBack),
+      coldAfresh: (key, now) => goesAfresh(this, key, now),
       resumeLost: (key) => toldResumeLost(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),

@@ -7,10 +7,11 @@ export interface OperationParams {
   "station.module.set": { id: string; enabled: boolean };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
   "search.setPersonal": { personal: boolean };
+  "context.setAfresh": { afreshWhenCold: boolean };
   "session.warm": { key: string };
   "session.evict": { key: string };
   "session.compact": { key: string };
-  "session.clear": { key: string };
+  "session.clear": { key: string; readBack?: boolean | null | undefined };
   "session.delete": { key: string };
   "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; repick?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
@@ -149,6 +150,7 @@ export function bindStationOperations(call: Call) {
     stationModule: <T = unknown>(params: OperationParams["station.module.set"]) => call("station.module.set", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
+    contextSetAfresh: <T = unknown>(params: OperationParams["context.setAfresh"]) => call("context.setAfresh", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,
     sessionEvict: <T = unknown>(params: OperationParams["session.evict"]) => call("session.evict", params) as Promise<T>,
     sessionCompact: <T = unknown>(params: OperationParams["session.compact"]) => call("session.compact", params) as Promise<T>,

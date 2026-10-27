@@ -13,6 +13,7 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
+import type { ContextCall } from "../store/usage.ts";
 
 // ── prices (usage.rs) ──
 
@@ -137,8 +138,13 @@ export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: n
 
 /// What a session's calls used, as its chat shows it while it works and at rest (the clients' TranscriptUsage): its
 /// calls as the usage counter recorded them, added up, with what they would cost (`sessionUsage`: the same count as the
-/// usage page's), and of its last main-thread call the model, the context it left and the model's window, where told.
-export type SessionUsage = Counted & { model: string | null; contextTokens?: number; contextWindow: number | null };
+/// usage page's), and of its last main-thread call the model, the context it left and the model's window, where told;
+/// when it was made and how long what it left in the cache is kept there (`cacheMs`, where its runtime tells what it
+/// wrote: Claude's), and what sending its context again once that is over would cost (`rereadCost`, dollars: all of it
+/// written to the cache again, where its model has a price).
+export type SessionUsage = Counted & {
+  model: string | null; contextTokens?: number; contextWindow: number | null; lastCallAt?: number; cacheMs?: number; rereadCost?: number;
+};
 
 /// A session's usage before a call of it is recorded.
 export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0, model: null, contextWindow: null });
@@ -146,15 +152,33 @@ export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cac
 /// What usage reads of a session's calls (store.ts `usageOfSession`, `lastContexts`).
 type SessionCalls = {
   usageOfSession(session: string): UsageGroup[];
-  lastContexts(session: string, limit: number): { model: string | null; context: number | null; window: number | null }[];
+  lastContexts(session: string, limit: number): ContextCall[];
 };
+
+/// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
+const CACHE_SHORT_MS = 5 * 60_000;
+const CACHE_LONG_MS = 60 * 60_000;
+
+/// The calls looked back on for what was last written to the cache (one may write nothing: all of it read).
+const CACHE_CALLS = 5;
 
 /// A session's usage now (SessionUsage), from what is recorded of its calls; none before one is.
 export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
   const counted = sessionUsage(s.usageOfSession(key));
   if (counted.modelCalls === 0) return null;
-  const last = s.lastContexts(key, 1)[0];
-  return { ...counted, model: last?.model ?? null, ...(last?.context != null ? { contextTokens: last.context } : {}), contextWindow: last?.window ?? null };
+  const calls = s.lastContexts(key, CACHE_CALLS);
+  const last = calls.at(-1);
+  const out: SessionUsage = { ...counted, model: last?.model ?? null, ...(last?.context != null ? { contextTokens: last.context } : {}), contextWindow: last?.window ?? null };
+  if (last === undefined) return out;
+  out.lastCallAt = last.at;
+  // A read keeps it for as long again as it was written for: as the latest write asked.
+  const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
+  if (wrote === undefined) return out;
+  const long = wrote.cacheWriteLong > 0;
+  out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
+  const p = last.model === null ? null : price(last.model);
+  if (p !== null && last.context !== null) out.rereadCost = ((last.context * p.input * (long ? 2.0 : 1.25)) / 1e6) * (last.fast ? 2.0 : 1.0);
+  return out;
 }
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).

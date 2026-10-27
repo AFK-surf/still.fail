@@ -753,6 +753,8 @@ web-main.attention.label
 web-main.attention.settings
 web-main.attention.untitled
 web-main.attention.waitOne
+web-main.chat.afresh
+web-main.chat.afreshBusy
 web-main.chat.agentCard.cache
 web-main.chat.agentCard.context
 web-main.chat.agentCard.cost

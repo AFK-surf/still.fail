@@ -27,6 +27,7 @@ import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
 import { PermissionsSection } from "../StationPermissions.tsx";
 import { SearchSection } from "../StationSearch.tsx";
+import { ContextSection } from "../StationContext.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
@@ -339,6 +340,8 @@ function Settings({ s, manager, marked }: { s: StationView; manager: boolean; ma
       {o?.agentEnv && <AgentEnv station={s.station} env={o.agentEnv} manager={manager} />}
       {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
       {s.online && o?.search && <SearchSection station={s.station} search={o.search} manager={manager} />}
+      {/* Whether a session whose prompt cache is over goes on afresh by itself; none from a station from before it. */}
+      {o?.context && <ContextSection station={s.station} context={o.context} manager={manager} />}
       {manager && <Workspaces s={s} />}
     </>
   );

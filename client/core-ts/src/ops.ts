@@ -68,10 +68,11 @@ export const PARAMS: Record<string, string> = {
   "station.module.set": "id:string enabled:boolean",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
+  "context.setAfresh": "afreshWhenCold:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.compact": "key:string",
-  "session.clear": "key:string",
+  "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
   "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
@@ -299,6 +300,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // set by the workspace's owners and admins.
     case "search.setPersonal":
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
+    // Whether a person's message to an agent whose large context's cache is over starts it afresh by itself (its
+    // station's routes/context.ts); set by the workspace's owners and admins.
+    case "context.setAfresh":
+      return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":
@@ -312,7 +317,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.compact":
       return op("POST", () => `/sessions/${p.at("key")}/compact`, null, session("key"));
     case "session.clear":
-      return op("POST", () => `/sessions/${p.at("key")}/clear`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/clear`, p.has("readBack") ? p.pick(["readBack"]) : null, session("key"));
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":

@@ -13,6 +13,8 @@ priv struct SettingsFixture {
   marks : Map[String, String]
   /// the station's updating by itself
   mut auto : Bool
+  /// the station going on afresh by itself once a session's cache is over
+  mut afresh : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
@@ -56,6 +58,7 @@ let fx : SettingsFixture = {
   version: 0,
   marks: {},
   auto: false,
+  afresh: false,
   none: false,
   login: "",
   login_station: false,
@@ -132,6 +135,7 @@ fn fixture_reset() -> Unit {
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
+  fx.afresh = false
   fx.none = false
   fx_adb.val = ""
   fx.login = ""
@@ -894,6 +898,7 @@ fn fx_station(address : String) -> Json {
             ],
           ),
           ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
+          ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
@@ -1924,6 +1929,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       )
     "software.auto" => {
       fx.auto = flag(p, "on")
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "context.setAfresh" => {
+      fx.afresh = flag(p, "afreshWhenCold")
       fx_changed()
       Some(Ok(obj([])))
     }

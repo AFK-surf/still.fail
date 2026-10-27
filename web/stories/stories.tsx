@@ -373,11 +373,11 @@ const together = (...all: DemoExtension[]): DemoExtension => ({
   call: (name, params) => { for (const e of all) { const v = e.call?.(name, params); if (v !== undefined) return v; } return undefined; },
   stream: (name, params, emit, signal) => { for (const e of all) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; } return undefined; },
 });
-/** A Mac station with everything its page shows: screens, grants missing, logins, variables, search, two workspaces. */
+/** A Mac station with everything its page shows: screens, grants missing, logins, variables, search, its context, two workspaces. */
 const fullStation = (): DemoExtension => together(
   permissionsDemo("missing", screensDemo()), agentEnvDemo("set"), logins(), memberships(),
   { then: (t, value) => (t.topic === "stations" && Array.isArray(value)
-    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false } } } : s))
+    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false } } } : s))
     : undefined) },
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
@@ -463,6 +463,15 @@ const followed: DemoExtension = {
       };
     });
     return { ...chat, messages: [...chat.messages, ...said] };
+  },
+};
+/** Its agent at rest, its prompt cache over (the core's `cacheCold`): said over the composer, with 换新上下文. */
+const cacheCold: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const session = chat.agents[0]?.session.key;
+    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊将重新读入 186K token（约 $1.49）" } } : undefined;
   },
 };
 /** What the chat's agent and another chat's wrote each other: not in the chat (only its bar's button says how many,
@@ -815,6 +824,8 @@ export const stories: Story[] = [
   { id: "app-chat", group: "应用", title: "对话页", app: true },
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
+  { id: "app-chat-cache-cold", group: "应用", title: "对话 · 缓存已过期", app: true, demo: cacheCold },
+  { id: "phone-chat-cache-cold", group: "手机", title: "对话 · 缓存已过期", app: true, phone: true, demo: cacheCold },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
   // A chat shared as a picture: its messages as the chat's list draws them (the visitor's in their bubble, a vault
   // request as its card), its files to tick.

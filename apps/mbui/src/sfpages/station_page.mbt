@@ -597,6 +597,10 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
       out.push(fn() { station_search(c, core, address, search, manager) })
     _ => ()
   }
+  match field(o, "context") {
+    Some(Object(_)) as context => out.push(fn() { station_context(c, core, address, context, manager) })
+    _ => ()
+  }
   if manager {
     out.push(fn() { station_workspaces(c, core, address) })
   }
@@ -885,6 +889,36 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, search : Json?, ma
           @sf.t("web-pages.stations.search.what"),
           "search.setPersonal",
           obj([("station", str(address)), ("personal", Json::boolean(now))]),
+        )
+      }
+    })
+  })
+}
+
+///|
+/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): whether a person's
+/// message to an agent at rest whose large context's cache is over starts it afresh by itself, said by the workspace's
+/// managers (others read it).
+fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
+  st_section(c, @sf.t("web-pages.stations.context.section"), fn() {
+    @sf.group(c, fn() {
+      let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
+      let on = flag(context, "afreshWhenCold")
+      let now = @sf.switch_row(
+        c,
+        "context-afresh/" + address,
+        @sf.t("web-pages.stations.context.afresh"),
+        on,
+        note=@sf.t("web-pages.stations.context.afreshLine"),
+        disabled=!manager,
+        busy~,
+      )
+      if now != on {
+        @settings.act(
+          core,
+          @sf.t("web-pages.stations.context.what"),
+          "context.setAfresh",
+          obj([("station", str(address)), ("afreshWhenCold", Json::boolean(now))]),
         )
       }
     })

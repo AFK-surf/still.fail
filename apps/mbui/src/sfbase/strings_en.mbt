@@ -773,6 +773,8 @@ let en : Map[String, String] = {
   "web-main.attention.settings": "Notification settings",
   "web-main.attention.untitled": "New chat",
   "web-main.attention.waitOne": "Needs you",
+  "web-main.chat.afresh": "Start afresh",
+  "web-main.chat.afreshBusy": "Starting afresh",
   "web-main.chat.agentCard.cache": "Cache hits",
   "web-main.chat.agentCard.context": "Context",
   "web-main.chat.agentCard.cost": "Est. cost",

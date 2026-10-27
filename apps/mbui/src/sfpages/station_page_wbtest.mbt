@@ -44,6 +44,37 @@ test "a station's page, its parts chosen by its choice: 设置 pressed shows it"
 }
 
 ///|
+test "a station's 设置 switches going on afresh once a session's cache is over" {
+  let asked : Array[Json] = []
+  let t = setting_tester(
+    Station("ws1/st1"),
+    390.0,
+    platform=2,
+    h=2400.0,
+    over=fn(s) {
+      {
+        ..s,
+        call: fn(name, params, done) {
+          if name == "context.setAfresh" {
+            asked.push(params)
+          }
+          (s.call)(name, params, done)
+        },
+      }
+    },
+    ready=fn() { @settings.station_parts["ws1/st1"] = "settings" },
+  )
+  t.run_for(@ui.nav_push_ms)
+  scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
+  assert_true(t.find("缓存过期后自动换新上下文") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // (the switch alone takes the press: by its label)
+  t.click(Switch, label="缓存过期后自动换新上下文")
+  t.draw()
+  assert_eq(asked.length(), 1, msg="switched")
+  assert_eq(field(Some(asked[0]), "afreshWhenCold"), Some(Json::boolean(true)))
+}
+
+///|
 test "a login's link opens its station's page at 设置, where its card is" {
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, ready=fn() {
     @settings.mark_login("ws1/st1", "login-2")

@@ -1452,6 +1452,10 @@ web-pages.stations.page.footprint
 web-pages.stations.page.part.machine
 web-pages.stations.page.part.overview
 web-pages.stations.page.part.settings
+web-pages.stations.context.afresh
+web-pages.stations.context.afreshLine
+web-pages.stations.context.section
+web-pages.stations.context.what
 web-pages.stations.search.personal
 web-pages.stations.search.personalLine
 web-pages.stations.search.section

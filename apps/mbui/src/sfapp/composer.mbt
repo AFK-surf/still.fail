@@ -1606,6 +1606,15 @@ let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
+let notice_wrapped : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true, w=Full)
+
+///|
+/// (beside what is at its line's end: the rest of the line)
+// kept across runs: a value (no field of it changes)
+let notice_grown : @ui.TextStyle = notice_wrapped.then(@ui.text_style(w=@sf.grow))
+
+///|
+// kept across runs: a value (no field of it changes)
 let restore_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
@@ -1614,7 +1623,8 @@ let notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 /// What the composer says over its bar (Composer.kt ArchiveNotice, chatComposer's notices): an archived chat's, with its
-/// restore (the words underlined; why it failed in red under it, tapped again to try again); an offline station's.
+/// restore (the words underlined; why it failed in red under it, tapped again to try again); its agent's prompt cache
+/// over, with its 换新上下文 (why it failed in a toast); an offline station's.
 fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : String) -> Unit {
   let t = @sf.theme()
   if v.archived {
@@ -1669,6 +1679,37 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
       }
     })
     |> ignore
+  }
+  match v.cache_cold {
+    Some((_, said, true)) if !v.archived =>
+      // its station goes on afresh by itself: said, nothing to tap
+      c.box(style=notice_box, fn() { c.text(said, style=notice_wrapped) |> ignore }) |> ignore
+    Some((session, said, _)) if !v.archived => {
+      let afresh = c.id("composer/afresh")
+      let doing = "session.clear/" + r.station + "/" + session
+      let busy = @sfbase.doing(doing)
+      if !busy && !v.offline && c.clicked(afresh) {
+        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "readBack": Json::boolean(true) }
+        c.tell("composer/afresh", fn() { @sfbase.act(src, tr("web-main.chat.afresh"), doing, "session.clear", params) })
+      }
+      c.box(style=notice_box, fn() {
+        // (its words wrapped beside it where they do not fit, 换新上下文 at the line's end)
+        c.box(style=notice_line.then(@ui.style(gap=S3)), fn() {
+          c.text(said, style=notice_grown) |> ignore
+          c.box(id=afresh, fn() {
+            c.rich(
+              [@ui.span(tr(if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }), underline=true)],
+              style=if busy || v.offline { notice_words } else { restore_words },
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+    _ => ()
   }
   if v.offline {
     c.box(padx=8.0, pady=2.0, fn() {
