@@ -188,7 +188,7 @@ fn edge_view(width : Ref[Double], said : Array[Resized]) -> (@ui.Ctx) -> Unit {
 }
 
 ///|
-test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the width from where it was pressed, 160 to 640" {
+test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the width from where it was pressed, 160 to 640, felt at either" {
   let width = Ref(240.0)
   let said : Array[Resized] = []
   let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
@@ -204,12 +204,18 @@ test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the wid
   assert_eq(width.val, 290.0)
   // the edge under the pointer in the frame it moved in
   assert_eq(t.get(Separator, label="调整列宽").rect.0, x + 50.0 - 3.0)
+  assert_eq(t.haptics(), [])
+  // at either end, felt as it gets there, once while it stays
   t.move(x + 1000.0, 400.0)
   assert_eq(width.val, 640.0)
+  t.move(x + 1100.0, 400.0)
+  assert_eq(t.haptics(), [@ui.TextHandleMove])
   t.move(x - 500.0, 400.0)
   assert_eq(width.val, 160.0)
+  assert_eq(t.haptics(), [@ui.TextHandleMove, @ui.TextHandleMove])
   t.move(x + 60.4, 400.0)
   assert_eq(width.val, 300.0)
+  assert_eq(t.haptics().length(), 2)
   t.release(x + 60.4, 400.0)
   assert_eq(said[said.length() - 1], Dropped(300.0))
   assert_eq(t.get(Separator, label="调整列宽").rect.0, 300.0 + handle_out - handle_w)

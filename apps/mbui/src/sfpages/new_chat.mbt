@@ -873,6 +873,8 @@ fn new_send(
   if fresh.starting.get() {
     return
   }
+  // sent, felt as a key's light tap (a no as something refused)
+  @ui.haptic(KeyboardTap)
   let words = d.text.get().trim(chars=" \n\t").to_string()
   // (as its message will have them: taken out of the draft before the chat is made)
   let up = up_files(d)
@@ -896,6 +898,7 @@ fn new_send(
   @sfbase.writing_starting(src, d, true)
   let sig = @sfbase.picked_sig(v)
   let give_back = fn(e : Json) {
+    @ui.haptic(Reject)
     fresh.starting.set(false)
     @sfbase.flight_carry_gone(d.key)
     @sfbase.writing_starting(src, d, false)

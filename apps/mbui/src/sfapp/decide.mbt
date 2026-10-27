@@ -89,6 +89,8 @@ fn decide_reset() -> Unit {
 /// An option picked (Decisions.kt DecisionUnder → answerDecision): the core sends it as the viewer's message quoting
 /// the post (or, for an option the agent made to close, closes the card without one); the option's spinner meanwhile.
 fn answer_option(src : Source, station : String, thread : Double, seq : Double, option : String) -> Unit {
+  // picked, felt as something done (a no as something refused: act)
+  @ui.haptic(Confirm)
   act(
     src,
     tr("android-misc.decisions.answerWhat"),

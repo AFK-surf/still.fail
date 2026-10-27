@@ -49,13 +49,27 @@ fn Haptic::code(self : Haptic) -> Int {
 }
 
 ///|
-/// A haptic of `kind` (@hostapi.haptic); a Tester's host keeps it (Tester::haptics).
+/// A haptic of `kind` (@hostapi.haptic); a Tester's host keeps it (Tester::haptics). None while the app has them off
+/// (set_haptics).
 pub fn haptic(kind : Haptic) -> Unit {
+  if !haptics_on.val {
+    return
+  }
   match fake.val {
     Some(f) => f.dev.haptics.push(kind)
     None => @hostapi.haptic(kind.code())
   }
 }
+
+///|
+/// Haptics on (the default) or off, as the app's person chose: off, `haptic` does nothing.
+pub fn set_haptics(on : Bool) -> Unit {
+  haptics_on.val = on
+}
+
+///|
+// kept across runs: the app sets it each frame from its settings (set_haptics)
+let haptics_on : Ref[Bool] = { val: true }
 
 ///|
 /// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake); a Tester's host keeps
@@ -178,6 +192,8 @@ priv struct FakeDevice {
 
 ///|
 fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
+  // (a test's own: on, as an app starts, whatever one before it set)
+  haptics_on.val = true
   {
     awake: false,
     haptics: [],

@@ -210,6 +210,8 @@ pub fn reset() -> Unit {
   app.nav = new_nav()
   app.picked = ""
   @ui.set_motion_chosen(None)
+  @ui.set_haptics(true)
+  felt_reset()
   app.filters.clear()
   app.menu = false
   app.switch_way = 0
