@@ -920,11 +920,7 @@ pub fn drive_row(
       (row.press)()
     }
   }
-  let (px, py, _) = c.pointer()
-  let over = match c.rect_of(id) {
-    Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-    None => false
-  }
+  let over = c.hovered(id)
   let open = drive_row_menu_drawn(key)
   if open {
     drive_row_menu_now(key, (row.items)())

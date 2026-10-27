@@ -203,6 +203,8 @@ struct Node {
   mut blocks : Bool
   // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
   mut stops_wheel : Bool
+  // the pointer goes through it and what it holds to what lies under it (Ctx::passes: a tooltip)
+  mut passes : Bool
   // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways); built inside such a box's
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
@@ -394,6 +396,7 @@ fn Node::new() -> Node {
     magnify: None,
     blocks: false,
     stops_wheel: false,
+    passes: false,
     sideways: false,
     in_sideways: false,
     bones: 0L,
@@ -489,6 +492,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.magnify = None
   self.blocks = false
   self.stops_wheel = false
+  self.passes = false
   self.sideways = false
   self.in_sideways = false
   self.bones = 0L

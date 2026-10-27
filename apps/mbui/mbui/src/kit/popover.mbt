@@ -147,7 +147,7 @@ pub fn hover_card(
     }
     Mouse => {
       let on_trigger = c.hovered(trigger)
-      let on_card = was && (pointer_in(c, c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
+      let on_card = was && (c.hovered(c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
       if was {
         !after(c, key + "/out", !(on_trigger || on_card), close_delay)
       } else {
@@ -212,10 +212,10 @@ pub fn tooltip(
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
-  // over its trigger: what is on top there; while it shows, by where the pointer is (the tip itself, the frame it first
-  // comes before it is placed, lies over the trigger: hovered alone, it shut and opened again every frame)
+  // over its trigger, as what is on top there has it: the tip itself lets the pointer through to it (Ctx::passes: the
+  // frame it first comes, before it is placed, it lies over the trigger), a dialog or a panel over it does not
   // (a mouse's: a finger held on a button or dragging a list over one shows no tip, @ui.pointing)
-  let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || (was && pointer_in(c, trigger)))
+  let hovered = @ui.pointing() is Mouse && c.hovered(trigger)
   let focused = c.focus_shown(trigger)
   // a finger held on the trigger: shown while it stays down, then a moment after it is lifted, or until the next press
   // (wherever it lands, a tap's let go before a frame saw it down too: a tip says what was held, the next touch goes on
@@ -264,18 +264,6 @@ pub fn tooltip(
 }
 
 ///|
-/// Whether the pointer is over what `id` drew last frame.
-fn pointer_in(c : @ui.Ctx, id : Int) -> Bool {
-  match c.rect_of(id) {
-    Some((x, y, w, h)) => {
-      let (px, py, _) = c.pointer()
-      px >= x && px < x + w && py >= y && py < y + h
-    }
-    None => false
-  }
-}
-
-///|
 /// Layer `key`'s content by the trigger `anchor` (Ctx::place, by its size as it is laid out), drawn as `shows` (its
 /// coming and going) growing out of the side it went on, named for the semantics tree.
 fn beside(
@@ -310,8 +298,11 @@ fn beside(
     (x, y)
   })
   c.semantics(i, role, label~)
-  // a wheel over it scrolls what it holds, never the page under it (a tooltip's, which takes no press, it passes)
-  if !(role is Tooltip) {
+  // a wheel over it scrolls what it holds, never the page under it; a tooltip's takes nothing, the pointer, a press and
+  // the wheel going through it to what is under it
+  if role is Tooltip {
+    c.passes(i)
+  } else {
     c.stop_wheel(i)
   }
   c.look(i, grown_from(shows, went, along))
