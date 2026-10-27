@@ -761,8 +761,11 @@ pub fn frame(
   let panel_top = top + bar_in_now()
   let panel_h = dmax(0.0, page_h - 2.0 * bar_in_now())
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric
-  // in on its line: said before any of them is built)
-  @sf.native_foot_set(panel_top + panel_h)
+  // in on its line: said before any of them is built; another than the last frame's, what was kept of them, cut by
+  // their corners as they were, drawn anew, as for the screen's corner: rail_native.mbt native_frame)
+  if @sf.native_foot_set(panel_top + panel_h) {
+    c.forget_parts()
+  }
   // the page in its pane, `ph` high
   // (its top row, a bar's height, the window's title bar under the page, whether the page has a bar there or not: a
   // new chat, settings, 奏: title_row)

@@ -79,7 +79,9 @@ pub fn native_capsule_h() -> Double? {
 /// stands concentric in (as far in from a card's side as from its foot), each card's the same so the gaps between them
 /// run even (the user, 2026-10-28: 左边圆角也对齐); none where there is no action, or it is not over their feet (the
 /// keyboard up: under it). Said by the frame once a frame, before its cards; tape_corners reads it (native_foot_corner).
-pub fn native_foot_set(foot : Double) -> Unit {
+/// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
+pub fn native_foot_set(foot : Double) -> Bool {
+  let was = native_foot_made.val
   native_foot_made.val = match (native_capsule_h(), @ui.system_nav_action()) {
     (Some(h), Some((_, y, _, _))) => {
       let d = foot - (y + h)
@@ -91,6 +93,7 @@ pub fn native_foot_set(foot : Double) -> Unit {
     }
     _ => None
   }
+  native_foot_made.val != was
 }
 
 ///|

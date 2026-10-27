@@ -1068,7 +1068,7 @@ pub fn native_clear() -> Double
 
 pub fn native_foot_corner() -> Double?
 
-pub fn native_foot_set(Double) -> Unit
+pub fn native_foot_set(Double) -> Bool
 
 pub let native_in : Double
 
