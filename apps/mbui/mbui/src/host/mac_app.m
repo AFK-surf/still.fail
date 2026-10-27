@@ -7,6 +7,7 @@
 #import <Network/Network.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
+#include <sys/resource.h>
 #include <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -2912,6 +2913,13 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
 // The system's Reduce Transparency (glass drawn solid).
 int32_t mb_host_reduce_transparency(void) {
   return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceTransparency] ? 1 : 0;
+}
+
+// The CPU's time the whole process has had, every thread's (@hostapi.cpu_ms: MBUI_PROBE's share of a CPU), in ms.
+double mb_host_cpu_ms(void) {
+  struct rusage u;
+  if (getrusage(RUSAGE_SELF, &u) != 0) return -1;
+  return (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000.0 + (u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1000.0;
 }
 
 double mb_host_mem_bytes(void) {

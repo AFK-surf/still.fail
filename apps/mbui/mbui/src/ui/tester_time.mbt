@@ -16,6 +16,7 @@
 pub fn Tester::draw(self : Tester) -> Unit {
   // (what the test changed, as an event from outside is: a part kept is built anew, kept_part.mbt)
   outside_came()
+  step_test_changed()
   self.drawn_now()
 }
 
@@ -108,12 +109,14 @@ pub fn rest_of(name : String) -> Double {
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
 /// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
+  // (what the test changed before it, never an event a host has: its first frame built, not stepped, step_frame.mbt)
+  step_test_changed()
   // (on the display's frame where it falls on one, to the bit: the same moment however it was summed)
   let end = self.on_grid(self.fake.time + ms)
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
   if self.host_frames {
     while self.fake.time < end - 1.0e-9 {
-      self.frame()
+      self.frame_at(self.tick_after(self.fake.time))
     }
     return
   }

@@ -316,6 +316,11 @@ impl @hostapi.Host for Native with gpu_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with cpu_ms(_) {
+  cpu_ms()
+}
+
+///|
 impl @hostapi.Host for Native with env(_, name) {
   env(name)
 }

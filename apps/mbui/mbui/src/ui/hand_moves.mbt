@@ -190,11 +190,14 @@ pub fn Tester::hand_moves(self : Tester) -> Array[String] {
   c.lit_every = true
   c.lit_all = true
   self.fake.wants = false
+  step_test_changed()
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
   let faults = c.hand_faults(rest)
   c.lit_every = false
   c.lit_all = false
+  // (the frame after it built as before, not stepped from this one: step_frame.mbt)
+  step_test_changed()
   frame_ended_outside()
   faults
 }

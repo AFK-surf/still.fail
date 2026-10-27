@@ -1374,6 +1374,15 @@ int32_t mb_host_reduce_transparency(void) {
   return v == 0;
 }
 
+// The CPU's time the whole process has had, every thread's (@hostapi.cpu_ms: MBUI_PROBE's share of a CPU), in ms.
+double mb_host_cpu_ms(void) {
+  FILETIME made, ended, kernel, user;
+  if (!GetProcessTimes(GetCurrentProcess(), &made, &ended, &kernel, &user)) return -1;
+  ULARGE_INTEGER k = {.LowPart = kernel.dwLowDateTime, .HighPart = kernel.dwHighDateTime};
+  ULARGE_INTEGER u = {.LowPart = user.dwLowDateTime, .HighPart = user.dwHighDateTime};
+  return (double)(k.QuadPart + u.QuadPart) / 10000.0;
+}
+
 double mb_host_mem_bytes(void) {
   PROCESS_MEMORY_COUNTERS_EX pmc = {sizeof pmc};
   if (!K32GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS *)&pmc, sizeof pmc)) return 0;

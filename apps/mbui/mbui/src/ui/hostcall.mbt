@@ -763,6 +763,14 @@ fn h_gpu_ms() -> Double {
 }
 
 ///|
+fn h_cpu_ms() -> Double {
+  match fake.val {
+    Some(_) => -1.0
+    None => @hostapi.cpu_ms()
+  }
+}
+
+///|
 fn h_set_ime(
   active : Bool,
   x : Double,

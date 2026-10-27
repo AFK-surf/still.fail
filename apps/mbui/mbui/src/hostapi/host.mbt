@@ -72,6 +72,7 @@ pub(open) trait Host {
   back_enabled(Self, Bool) -> Unit = _
   reduce_transparency(Self) -> Bool = _
   gpu_ms(Self) -> Double = _
+  cpu_ms(Self) -> Double = _
   env(Self, String) -> String = _
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
@@ -503,6 +504,11 @@ impl Host with reduce_transparency(_) {
 
 ///|
 impl Host with gpu_ms(_) {
+  -1.0
+}
+
+///|
+impl Host with cpu_ms(_) {
   -1.0
 }
 
@@ -1670,6 +1676,13 @@ pub fn reduce_transparency() -> Bool {
 /// this host).
 pub fn gpu_ms() -> Double {
   current.val.gpu_ms()
+}
+
+///|
+/// The CPU's time the whole process has had since it started, every thread's (the app's and what runs beside it: a
+/// core's, the system's for it), in ms (-1: not known on this host): a probe's (MBUI_PROBE) share of a CPU.
+pub fn cpu_ms() -> Double {
+  current.val.cpu_ms()
 }
 
 ///|
