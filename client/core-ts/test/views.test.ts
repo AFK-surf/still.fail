@@ -2044,7 +2044,7 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
   t.set(overview("ws/a"), overviewOf([gpt], []));
   const call = (tool: string, args: J, at: string, callId: string) => ({ at, kind: "tool_call", tool, text: JSON.stringify(args), callId });
   t.data.putItems("transcript", "ws/a", "k", [
-    [0, { at: "1970-01-01T00:00:01Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="Mia (U9)" ts="1.5">看看项目</message>' }],
+    [0, { at: "1970-01-01T00:00:01Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="Mia (U9)" ts="1.5">看看项目\n\nAttached files:\n- /ws/k/uploads/shot.png (shot.png, 13 bytes)</message>' }],
     [1, call("mcp__stillfail__chat_post", { to: "C0OPS/1.5", text: "*看了*" }, "1970-01-01T00:00:03Z", "c1")],
     [2, { at: "1970-01-01T00:00:03Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     [3, { at: "1970-01-01T00:00:04Z", kind: "user", text: '<message via="slack" thread="C0OPS/1.5" from="GPT-Ember (<@UB2>)" ts="4.0">也看了</message>' }],
@@ -2065,6 +2065,8 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
   assert.equal(v.elsewhere[0].by.picture, mia.picture);
   assert.equal(v.elsewhere[1].by.picture, undefined);
   assert.equal(v.elsewhere[2].by.picture, gpt.botImage);
+  // The files the person sent with it are its files, kept by the session they were given to; not its words.
+  assert.deepEqual(v.elsewhere.map((s: J) => s.attachments ?? []), [[{ name: "shot.png", path: "/ws/k/uploads/shot.png", size: 13, owner: "k" }], [], [], []]);
 });
 
 // ── What is shared is never written on (docs/core-ts.md「谁能改什么」) ──

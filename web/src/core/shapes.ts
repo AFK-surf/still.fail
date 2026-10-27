@@ -1990,6 +1990,11 @@ export interface ChatSentElsewhere {
 	failed?: boolean;
 	/** A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there. */
 	received?: boolean;
+	/**
+	 * The files a person's message in Slack came with, as the station keeps them for its agent (`owner`: that
+	 * agent's session). Empty for what the agent sent there.
+	 */
+	attachments?: Attachment[];
 	by: MessageBy;
 	/** Its times in words, by field (`createdAt`). */
 	time?: Record<string, Stamp>;

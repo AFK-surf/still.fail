@@ -29,6 +29,7 @@ import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
 import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
+import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -2029,8 +2030,12 @@ export class Views implements Owner {
         // (a bot is said as its mention, `<@U…>`)
         const picture = s.out || s.user === null ? undefined : pictures.get(s.user.replace(/^<@(.+)>$/, "$1"));
         const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack", ...(picture !== undefined ? { picture } : {}) };
-        const text = present.mentions(s.text, people.bots, people.members);
+        // A person's files are listed after their words, as the agent was given them: drawn as files, kept in the
+        // workspace of the agent's session that was given them.
+        const words = s.out ? { text: s.text, files: [] } : heardFiles(s.text);
+        const text = present.mentions(words.text, people.bots, people.members);
         const item: J = { key: `${key}/${s.i}/${s.k}`, after, createdAt: s.at, text, place, failed: s.failed, by };
+        if (words.files.length > 0) item.attachments = words.files.map((f) => ({ ...f, owner: key }));
         if (!s.out) item.received = true;
         out.push(item);
       }

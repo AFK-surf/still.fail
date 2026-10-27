@@ -6,7 +6,7 @@ import { args, doing } from "../src/activity.ts";
 import { activity, hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { markdown } from "../src/markdown.ts";
-import { readItem } from "../src/elsewhere.ts";
+import { heardFiles, readItem } from "../src/elsewhere.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -376,4 +376,19 @@ test("a_task_on_another_station_says_where_it_runs_and_what", () => {
   const g = presentHistory(live, { ...cx([], [], []), stations: new Map([[studio, "Studio"]]) }).items[1].body.content;
   assert.deepEqual(g.rows.map((r: J) => r.content.said), ["在 Studio 上准备 typecheck web", "在 Studio 上运行 typecheck web"]);
   assert.equal(g.summary, "在 Studio 上运行 typecheck web · 共 2 项");
+});
+
+test("a_slack_messages_files_are_its_files_not_its_words", () => {
+  const path = "/w/s/workspace/uploads/2026-10-27T09-15-34-F0-image.png";
+  const text = `看这个\n\nAttached files:\n- ${path} (image.png, 1709315 bytes)\n- /w/s/workspace/uploads/b (a (1), b.txt, 3 bytes)`;
+  const prompt = `<message via="slack" connect="c" thread="C1/1.0" from="Ada (U1)" ts="2.0">\n${text}\n</message>`;
+  const read = readItem(0, { kind: "user", text: prompt, at: "2026-10-27T01:15:34Z" }) as J;
+  assert.deepEqual(heardFiles(read.said[0].text), {
+    text: "看这个",
+    files: [{ path, name: "image.png", size: 1709315 }, { path: "/w/s/workspace/uploads/b", name: "a (1), b.txt", size: 3 }],
+  });
+  // Files alone: no words.
+  assert.deepEqual(heardFiles(`Attached files:\n- ${path} (image.png, 9 bytes)`), { text: "", files: [{ path, name: "image.png", size: 9 }] });
+  // Words that only look like it are words.
+  for (const words of ["Attached files:\n- see below", "a\nAttached files:\n- /p (x, 1 bytes)"]) assert.deepEqual(heardFiles(words), { text: words, files: [] });
 });
