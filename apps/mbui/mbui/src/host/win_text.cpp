@@ -86,9 +86,12 @@ static void init(void) {
   // as DirectWrite's own grayscale text is: a glyph's baseline is on a pixel
   // row (draw_layout, and on_pixels where it is placed), so a horizontal stroke
   // falls on whole rows, not smeared grey over two (1x-1.5x screens, Han most)
+  // (natural, not natural symmetric: fitted, natural symmetric drew a glyph of
+  // the system's Segoe UI one way and the same glyph from the font's file, or
+  // in another run, another way)
   IDWriteRenderingParams2 *p2 = NULL;
   dw->CreateCustomRenderingParams(1.0f, 0.0f, 0.0f, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
-                                  DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+                                  DWRITE_RENDERING_MODE_NATURAL,
                                   DWRITE_GRID_FIT_MODE_ENABLED, &p2);
   params = p2;
   D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), NULL, (void **)&d2d);
