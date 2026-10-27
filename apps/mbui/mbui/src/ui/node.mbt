@@ -191,6 +191,8 @@ struct Node {
   mut portal : Bool
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
   mut shot : Bool
+  /// what it shows of the frame larger (Ctx::magnified): where it reads and how much larger
+  mut magnify : (Double, Double, Double)?
   mut blocks : Bool
   // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
   mut stops_wheel : Bool
@@ -379,6 +381,7 @@ fn Node::new() -> Node {
     aspect: 0.0,
     portal: false,
     shot: false,
+    magnify: None,
     blocks: false,
     stops_wheel: false,
     sideways: false,
@@ -470,6 +473,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moves = ""
   self.portal = false
   self.shot = false
+  self.magnify = None
   self.blocks = false
   self.stops_wheel = false
   self.sideways = false

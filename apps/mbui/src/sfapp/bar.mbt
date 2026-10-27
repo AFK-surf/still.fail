@@ -58,8 +58,6 @@ let slot_px : Double = 90.0
 ///|
 let lean : Double = 0.25
 
-///|
-let max_stretch : Double = 36.0
 
 ///|
 let opens : Double = 24.0
@@ -1361,9 +1359,9 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
       let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
       let v = if (goal_x - m.ball_x.x).abs() < 0.5 { 0.0 } else { m.ball_x.v / 60.0 }
-      let stretch = dmin(max_stretch, v.abs() * 1.6)
+      let (stretch, lower) = @kit.speed_stretch(v)
       let bw = ball_size + stretch
-      let bh = ball_size - dmin(6.0, stretch * 0.2)
+      let bh = ball_size - lower
       let left = m.ball_x.x - ball_size / 2.0 - (if v < 0.0 { stretch } else { 0.0 })
       let bcx = left + bw / 2.0
       let sw = bw * scale

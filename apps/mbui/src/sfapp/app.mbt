@@ -523,6 +523,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
       @sf.presented(c)
       toast(c)
+      finger_loupe(c)
     }
     None =>
       // (none in view while the prefs are read too: workspace_in_view)
@@ -534,6 +535,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // the library's presenters over it (the sheet among them: src/sf presenters.mbt), then the toasts
         @sf.presented(c)
         toast(c)
+        finger_loupe(c)
       } else {
         let failed = match ws.error {
           Some(e) => Some(text(Some(e), "message"))
@@ -741,6 +743,13 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 /// navigation bar the view reaches under (Sheet.kt's navigationBars padding).
 fn toast(c : @ui.Ctx) -> Unit {
   @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() })
+}
+
+///|
+/// What a finger hides as it drags a field's caret or what is picked (@ui.Ctx::finger_reads), shown larger over it:
+/// kit's loupe, of the glass a switch's knob held is (@sf.glass_knob), over everything.
+fn finger_loupe(c : @ui.Ctx) -> Unit {
+  @kit.loupe(c, "loupe", c.finger_reads(), glass=@sf.glass_knob())
 }
 
 ///|

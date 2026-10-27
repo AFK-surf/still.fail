@@ -70,7 +70,7 @@ pub fn switch_look_of(
   shadow? : Bool = true,
   lens? : @ui.Glass,
   lens_w? : Double = 1.45,
-  lens_grow? : Double = 1.25,
+  lens_grow? : Double = knob_lens_grow,
 ) -> (@ui.Ctx, SwitchState) -> Unit {
   fn(c, s) {
     let t = c.theme()

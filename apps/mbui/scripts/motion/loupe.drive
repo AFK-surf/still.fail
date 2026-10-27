@@ -1,0 +1,11 @@
+# The loupe: words typed in the composer, a long press on them slid along (Android's: the word there picked, widened
+# by words as the finger goes): what the finger hides shown larger over it while it holds.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 把首页列表的高度和间距都调一下
+wait 800
+holdon 700 -130 0 450 @230,769
+wait 1200

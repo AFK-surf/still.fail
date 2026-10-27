@@ -23,6 +23,8 @@ priv struct KitState {
   toast_dues : Map[String, Double]
   /// a menu's panel's open submenu (its entry's index, menu.mbt), by the panel's id
   subs : Map[Int, Int]
+  /// where each loupe last read (loupe.mbt), by its key: where it goes as it is let go
+  loupes : Map[String, (Double, Double)]
   /// what was typed to find an entry by its first letters, by the panel's id (when: Ctx::mark, by that id)
   typed : Map[Int, String]
   /// where a context menu opened, by its id; which of a menubar's menus is open (-1 none), by its id
@@ -49,6 +51,7 @@ fn KitState::new() -> KitState {
     toasts: {},
     toast_dues: {},
     subs: {},
+    loupes: {},
     typed: {},
     at: {},
     bars: {},
