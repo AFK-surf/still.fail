@@ -245,7 +245,7 @@ const COLLECTIONS = ["sessions", "threads", "connects", "profiles", "logins", "w
 
 /// A request path as a span shows it: no query, and ids as `:id`.
 export function route(path: string): string {
-  const p = path.split(/[?#]/)[0];
+  const p = path.split(/[?#]/)[0]!;
   let afterCollection = false;
   return p
     .split("/")

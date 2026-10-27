@@ -155,7 +155,7 @@ function fits(value: unknown, kind: Param): boolean {
     case "bool":
       return typeof value === "boolean";
     default:
-      return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= LIMITS[kind];
+      return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= LIMITS[kind]!;
   }
 }
 
@@ -235,7 +235,7 @@ export function parseClientMessage(raw: unknown, bytes?: Uint8Array, moduleTopic
 
 /// The Rust core's `{topic:?}` (for the words of a shape's error).
 export function topicDebug(topic: Topic): string {
-  const name = topic.topic[0].toUpperCase() + topic.topic.slice(1);
+  const name = topic.topic[0]!.toUpperCase() + topic.topic.slice(1);
   const params = Object.entries(topic).filter(([k]) => k !== "topic");
   if (params.length === 0) return name;
   const shown = (v: unknown) => (v === null ? "None" : typeof v === "string" ? JSON.stringify(v) : String(v));

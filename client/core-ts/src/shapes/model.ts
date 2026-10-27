@@ -25,7 +25,7 @@ export function key(id: string): string {
   const at = lower.indexOf("[");
   const [base, context] = at >= 0 ? [lower.slice(0, at), lower.slice(at)] : [lower, ""];
   let m = base.split("/").pop() ?? base;
-  m = m.split("@")[0];
+  m = m.split("@")[0]!;
   for (;;) {
     const dot = m.indexOf(".");
     if (dot < 0) break;
@@ -39,8 +39,8 @@ export function key(id: string): string {
   const parts = m.split("-");
   const n = parts.length;
   const digits = (s: string, k: number) => s.length === k && isDigits(s);
-  if (n > 1 && digits(parts[n - 1], 8)) m = parts.slice(0, n - 1).join("-");
-  else if (n > 3 && digits(parts[n - 3], 4) && digits(parts[n - 2], 2) && digits(parts[n - 1], 2)) m = parts.slice(0, n - 3).join("-");
+  if (n > 1 && digits(parts[n - 1]!, 8)) m = parts.slice(0, n - 1).join("-");
+  else if (n > 3 && digits(parts[n - 3]!, 4) && digits(parts[n - 2]!, 2) && digits(parts[n - 1]!, 2)) m = parts.slice(0, n - 3).join("-");
   return m + context;
 }
 
@@ -77,7 +77,7 @@ function oSeries(first: string): boolean {
 export const family = remembered(familyOf);
 function familyOf(id: string): string | null {
   const k = key(id);
-  const base = k.split("[")[0];
+  const base = k.split("[")[0]!;
   if (namedOf(base) === null) return null;
   const words = base.split("-").filter((w) => w !== "");
   const first = words[0];
@@ -87,8 +87,8 @@ function familyOf(id: string): string | null {
     return w === undefined ? null : word(w);
   }
   if (first === "gpt") {
-    const f = words.slice(2).find((w) => ["sol", "astra", "luna"].includes(w.split(":")[0]));
-    if (f !== undefined) return word(f.split(":")[0]);
+    const f = words.slice(2).find((w) => ["sol", "astra", "luna"].includes(w.split(":")[0]!));
+    if (f !== undefined) return word(f.split(":")[0]!);
   }
   if (oSeries(first)) return "o 系列";
   return word(first.replace(/[0-9.]+$/, ""));
@@ -119,7 +119,7 @@ function orderKeyOf(id: string): Readonly<{ rank: number; family: string; versio
     return i >= 0 ? i : CLAUDE.length;
   })();
   const k = key(id);
-  const base = k.split("[")[0];
+  const base = k.split("[")[0]!;
   const version = base.split(/[^0-9]/).filter((n) => n !== "").map((n) => Number(n)).filter((n) => n <= 0xffffffff);
   return { rank, family: f ?? "", version, key: k };
 }
@@ -168,8 +168,8 @@ const BRANDS: Record<string, string> = {
 };
 
 function word(w: string): string {
-  if (w in BRANDS) return BRANDS[w];
+  if (w in BRANDS) return BRANDS[w]!;
   const chars = [...w];
   if (chars.length === 0) return "";
-  return chars[0].toUpperCase() + chars.slice(1).join("");
+  return chars[0]!.toUpperCase() + chars.slice(1).join("");
 }

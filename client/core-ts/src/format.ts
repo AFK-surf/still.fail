@@ -46,7 +46,7 @@ export function compactNumber(n: number): string {
 export function decimal(text: string): string {
   const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text.trim());
   if (!m) return text;
-  const whole = m[2].replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const whole = m[2]!.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fraction = (m[3] ?? "").slice(0, 2).replace(/0+$/, "");
   const sign = m[1] && (whole !== "0" || fraction) ? "-" : "";
   return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
@@ -411,7 +411,7 @@ export function effortLabel(effort: string): string {
   const key = `web-main.model.effortLevel.${effort}`;
   const words = said(key);
   if (words !== key) return words;
-  return effort === "" ? effort : effort[0].toUpperCase() + effort.slice(1);
+  return effort === "" ? effort : effort[0]!.toUpperCase() + effort.slice(1);
 }
 
 /// How hard a runtime's models can think, lowest first.
@@ -457,7 +457,7 @@ export function modeText(mode: string, requireMention: boolean): [string, string
 
 /// Why a turn failed, in words, from its `detail`.
 export function failureText(detail: string): string {
-  switch (detail.split(":")[0].trim()) {
+  switch (detail.split(":")[0]!.trim()) {
     case "rate_limit":
       return said("core-logic.format.failure.rate_limit");
     case "auth":
