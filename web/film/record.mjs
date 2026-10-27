@@ -302,3 +302,82 @@ if (doing('scene')) {
   await browser.close();
   server.close();
 }
+
+// ---- The path-traced film: the room exported (export), Cycles' pictures (cycles), the words over them (overlay),
+// the two put together (final). FILM_FRAMES=150,420 (or 0-1140) picks frames; FILM_SAMPLES Cycles' samples. ----
+const CFPS = 30;
+async function scenePage(query = '') {
+  const { server, base } = await serve(OUT);
+  const browser = await playwright.chromium.launch({
+    ...(process.env.PLAYWRIGHT_CHANNEL === '' ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' }),
+    args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
+  });
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  page.on('pageerror', (e) => console.error(`scene: ${e.message}`));
+  await writeFile(join(OUT, 'scene.html'), await readFile(here('scene.html')));
+  await page.goto(`${base}scene.html${query}`);
+  await page.waitForFunction(() => window.ready === true || window.failed, null, { timeout: 180000 });
+  return { page, close: async () => { await browser.close(); server.close(); } };
+}
+if (doing('export')) {
+  const C = join(OUT, 'cycles');
+  await mkdir(join(OUT, 'frames', 'phone-bar'), { recursive: true });
+  await mkdir(C, { recursive: true });
+  const { page, close } = await scenePage();
+  const { appendFile } = await import('node:fs/promises');
+  await rm(join(C, 'scene.glb'), { force: true });
+  await page.exposeFunction('saveChunk', (b64) => appendFile(join(C, 'scene.glb'), Buffer.from(b64, 'base64')));
+  console.log('export: glb bytes', await page.evaluate(() => window.exportGlb()));
+  const plan = await page.evaluate((fps) => window.plan(fps), CFPS);
+  // The phone's pictures with its status bar, those the film shows.
+  for (const fr of plan) {
+    const src = fr.screens.phone;
+    if (!src) continue;
+    const name = `frames/phone-bar/${src.split('/').pop().replace('.jpg', '')}-${fr.clock.replace(':', '')}.jpg`;
+    if (!existsSync(join(OUT, name))) {
+      const url = await page.evaluate(([src, clock]) => window.phoneBar(src, clock), [src, fr.clock]);
+      await writeFile(join(OUT, name), Buffer.from(url.split(',')[1], 'base64'));
+    }
+    fr.screens.phone = name;
+  }
+  await writeFile(join(C, 'plan.json'), JSON.stringify(plan));
+  await close();
+  console.log(`export: ${plan.length} frames planned`);
+}
+const FRAMES = process.env.FILM_FRAMES || `0-${LENGTH * CFPS}`;
+if (doing('cycles')) {
+  await run(process.env.BLENDER || 'blender', ['-b', '-P', here('film.py'), '--', OUT, FRAMES, process.env.FILM_SAMPLES || '128']);
+}
+if (doing('overlay')) {
+  const dir = join(OUT, 'cycles', 'overlay');
+  await mkdir(dir, { recursive: true });
+  const { page, close } = await scenePage('?overlay=1');
+  const list = FRAMES.includes('-') ? (([a, b]) => Array.from({ length: b - a }, (_, i) => a + i))(FRAMES.split('-').map(Number)) : FRAMES.split(',').map(Number);
+  for (const f of list) {
+    await page.evaluate((s) => window.render(s), f / CFPS);
+    await page.screenshot({ path: join(dir, `${String(f).padStart(5, '0')}.png`), omitBackground: true });
+  }
+  await close();
+  console.log('overlay: done');
+}
+if (doing('final')) {
+  const C = join(OUT, 'cycles');
+  if (process.env.FILM_FRAMES && !process.env.FILM_FRAMES.includes('-')) {
+    // Stills: each Cycles picture with its words over it.
+    await mkdir(join(OUT, 'peek'), { recursive: true });
+    for (const f of process.env.FILM_FRAMES.split(',')) {
+      const n = String(f).padStart(5, '0');
+      await run(process.env.FFMPEG || 'ffmpeg', ['-loglevel', 'error', '-y', '-i', join(C, 'frames', `${n}.png`), '-i', join(C, 'overlay', `${n}.png`), '-filter_complex', 'overlay', '-q:v', '3', join(OUT, 'peek', `cycles-${f}.jpg`)]);
+    }
+  } else {
+    // Under the end card nothing shows: the frames not rendered there are the last one that was.
+    let last = null;
+    for (let f = 0; f < LENGTH * CFPS; f++) {
+      const p = join(C, 'frames', `${String(f).padStart(5, '0')}.png`);
+      if (existsSync(p)) last = p; else if (last) await writeFile(p, await readFile(last));
+    }
+    await run(process.env.FFMPEG || 'ffmpeg', ['-loglevel', 'error', '-y', '-framerate', String(CFPS), '-i', join(C, 'frames', '%05d.png'), '-framerate', String(CFPS), '-i', join(C, 'overlay', '%05d.png'),
+      '-filter_complex', '[0][1]overlay', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'slow', '-movflags', '+faststart', join(OUT, 'film-cycles.mp4')]);
+    console.log(`final: ${join(OUT, 'film-cycles.mp4')}`);
+  }
+}

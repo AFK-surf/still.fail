@@ -48,6 +48,10 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const W = 1920, H = 1080, FPS = 60, SCREEN_FPS = 30;
+/** ?overlay=1: only what goes over the picture (words, tags, the lines between the machines), on nothing; the picture
+ *  itself is Cycles' (film.py), from the scene this page exports (exportGlb) and the camera it plans (plan). */
+const OVERLAY = new URLSearchParams(location.search).has('overlay');
+if (OVERLAY) document.documentElement.style.background = document.body.style.background = 'transparent';
 /** The phone's clock (ms) at a moment of the film (s). */
 const LEAD = 0.6;
 const paneMs = (s) => Math.max(0, (s - LEAD) * 1000);
@@ -66,6 +70,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 document.body.prepend(renderer.domElement);
+if (OVERLAY) renderer.domElement.style.display = 'none';
+const lines2d = document.createElement('canvas'); lines2d.width = W; lines2d.height = H; lines2d.style.cssText = 'position:absolute;inset:0'; document.body.prepend(lines2d);
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
 const camera = new THREE.PerspectiveCamera(32, W / H, 0.01, 60);
@@ -168,7 +174,8 @@ function machine(root, key, width, screenTest, o = {}) {
     }
     // Glass over it, clear.
     root.traverse((x) => { if (x.isMesh && !screens.includes(x) && x.material?.transparent && (x.material.opacity < 0.05 || /glass/i.test(x.material.name))) x.visible = false; });
-    for (const sc of screens) sc.material = m;
+    m.name = `screen_${key}`;
+    for (const [i, sc] of screens.entries()) { sc.material = m; sc.name = i ? `screen_${key}_${i}` : `screen_${key}`; }
     group.userData.screen = { key, tex: t, mesh: screen };
   }
   return group;
@@ -202,6 +209,7 @@ const ssh = new THREE.Group();
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.576, 0.36), new THREE.MeshPhysicalMaterial({ color: 0, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 1.1, roughness: 0.1, clearcoat: 1 }));
   screen.position.z = 0.0065; ssh.add(screen);
   screen.material.clearcoat = 0.35; screen.material.roughness = 0.3;
+  screen.name = 'screen_cloud'; screen.material.name = 'screen_cloud';
   ssh.userData.screen = { key: 'cloud', tex: t, mesh: screen };
 }
 ssh.position.set(0.82, DESK_Y + 0.42, -0.3); ssh.rotation.y = -0.32; scene.add(ssh);
@@ -248,6 +256,9 @@ async function show(screen, src, clock) {
   screen.tex.image = phoneCanvas; screen.tex.needsUpdate = true;
 }
 
+Object.assign(laptop, { name: 'laptop' }); Object.assign(studio, { name: 'studio' }); Object.assign(mini, { name: 'mini' }); Object.assign(win, { name: 'win' });
+Object.assign(tower, { name: 'tower' }); Object.assign(plant, { name: 'plant' }); Object.assign(ssh, { name: 'ssh' }); Object.assign(phone, { name: 'phone' });
+Object.assign(desk, { name: 'desk' }); Object.assign(wall, { name: 'wall' }); Object.assign(floor, { name: 'floor' });
 const SCREENS = [laptop, studio, win, ssh, phone].map((g) => g.userData.screen).filter(Boolean);
 scene.updateMatrixWorld(true);
 
@@ -327,12 +338,101 @@ const cap = document.getElementById('cap'), capH = cap.querySelector('h2'), capP
 const clockEl = document.getElementById('clock'), clockText = document.getElementById('clockText');
 const fade = document.getElementById('fade'), end = document.getElementById('end'), tapEl = document.getElementById('tap');
 
+/** The moment's camera, and where the phone is; the place's light. */
+function pose(s) {
+  // At the end the phone is on the desk with the rest.
+  if (s >= 31.4) { phone.position.set(0.05, DESK_Y + 0.0045, 0.36); phone.rotation.set(-Math.PI / 2, 0, 0.3); }
+  else { phone.position.copy(PHONE_AT); phone.rotation.set(0, -0.08, 0); }
+  // The camera; in the station the station's light and its picture, at the desk the room's.
+  const onTrain = s < 6.0 || (s >= 22.6 && s < 31.4);
+  scene.environment = onTrain ? metroEnv : officeEnv;
+  scene.background = onTrain ? metroHdr : null;
+  scene.backgroundBlurriness = 0.12; scene.backgroundIntensity = 0.9;
+  scene.backgroundRotation.y = 1.2 + s * 0.02;
+  const c = cameraAt(s);
+  camera.position.copy(c.pos); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.lookAt(c.at);
+  bokeh.uniforms.focus.value = c.pos.distanceTo(c.at);
+  bokeh.uniforms.aperture.value = c.blur;
+  return { ...c, onTrain };
+}
+
+/** The lines between the machines, and what goes along them, drawn over the picture (the overlay's). */
+function drawLines(s) {
+  const g = lines2d.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  for (const [key, r] of Object.entries(routes)) {
+    const back = BACK[key];
+    const busy = Math.max(1 - clamp(Math.abs(s - (SENT + 0.5)) / 1.0), 1 - clamp(Math.abs(s - (back + 0.55)) / 1.0));
+    const a = (0.25 + 0.6 * busy) * clamp((s - SENT) / 0.3) * (1 - clamp((s - 22.4) / 0.5));
+    if (a <= 0.01) continue;
+    const px = (p) => { const v = p.clone().project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H, v.z]; };
+    g.beginPath();
+    for (let i = 0; i <= 80; i++) { const [x, y] = px(r.curve.getPointAt(i / 80)); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.strokeStyle = `rgba(110,235,160,${a})`; g.lineWidth = 2.5; g.setLineDash([3, 9]); g.lineCap = 'round'; g.stroke(); g.setLineDash([]);
+    const going = s >= SENT && s < SENT + 1.0, coming = s >= back && s < back + 1.1;
+    for (let i = 0; i < 3; i++) {
+      const t = going ? ease(clamp((s - SENT) / 1.0 - i * 0.07)) : coming ? 1 - ease(clamp((s - back) / 1.1 - i * 0.07)) : null;
+      if (t === null || t <= 0 || t >= 1) continue;
+      const [x, y] = px(r.curve.getPointAt(t));
+      const glow = g.createRadialGradient(x, y, 0, x, y, 26);
+      glow.addColorStop(0, `rgba(170,255,200,${1 - i * 0.28})`); glow.addColorStop(0.3, `rgba(80,225,140,${0.6 - i * 0.15})`); glow.addColorStop(1, 'rgba(47,179,107,0)');
+      g.fillStyle = glow; g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill();
+    }
+  }
+}
+
+/** Each frame's camera (its matrix, field of view, focus), the phone's matrix, the place and the screens' pictures, at `fps`. */
+window.plan = (fps) => {
+  const frames = [];
+  for (let f = 0; f < Math.round(window.LENGTH * fps); f++) {
+    const s = f / fps;
+    const c = pose(s);
+    camera.updateMatrixWorld(true); phone.updateMatrixWorld(true);
+    const ms = paneMs(s);
+    frames.push({
+      s, camera: camera.matrixWorld.toArray(), fov: camera.fov, focus: c.pos.distanceTo(c.at), blur: c.blur, phone: phone.matrixWorld.toArray(), train: c.onTrain,
+      screens: Object.fromEntries(SCREENS.map((sc) => [sc.key, sc.key === 'phone'
+        ? `frames/phone/${String(Math.min((COUNT.phone ?? 1) - 1, Math.floor((ms / 1000) * FPS))).padStart(5, '0')}.jpg`
+        : `frames/screen-${sc.key}/${String(Math.min((COUNT[`screen-${sc.key}`] ?? 1) - 1, Math.floor(s * SCREEN_FPS))).padStart(5, '0')}.jpg`])),
+      clock: ms > 20000 ? '8:41' : '8:40',
+    });
+  }
+  return frames;
+};
+
+/** The room as glTF, for Cycles: the machines, the desk, the room; not the lines, the lights or what is only drawn here. */
+window.exportGlb = async () => {
+  const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
+  pose(0);
+  const keep = [laptop, studio, mini, win, tower, plant, ssh, phone, desk, wall, floor, ...scene.children.filter((o) => o.isMesh && o.geometry?.type === 'BoxGeometry')];
+  const root = new THREE.Scene();
+  for (const o of keep) root.add(o.clone());
+  // The screens' pictures are Cycles' to put on: empty here.
+  root.traverse((o) => { if (o.isMesh && /^screen_/.test(o.material?.name ?? '')) o.material = new THREE.MeshStandardMaterial({ name: o.material.name, color: 0x000000, roughness: 0.3 }); });
+  const glb = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true, maxTextureSize: 4096 });
+  const bytes = new Uint8Array(glb);
+  const CHUNK = 4 << 20;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    let b = ''; const part = bytes.subarray(i, i + CHUNK);
+    for (let j = 0; j < part.length; j += 0x8000) b += String.fromCharCode(...part.subarray(j, j + 0x8000));
+    await window.saveChunk(btoa(b));
+  }
+  return bytes.length;
+};
+
+/** The phone's picture as it shows with its status bar (a JPEG, as a data URL): for Cycles. */
+window.phoneBar = async (src, clock) => {
+  const sc = phone.userData.screen;
+  delete shown.phone;
+  await show(sc, src, clock);
+  return phoneCanvas.toDataURL('image/jpeg', 0.92);
+};
 window.LENGTH = 38;
 window.render = async (s) => {
   // What the screens show now.
   const f = Math.floor(s * SCREEN_FPS);
   const waits = [];
-  for (const sc of SCREENS) {
+  for (const sc of OVERLAY ? [] : SCREENS) {
     if (sc.key === 'phone') {
       const n = COUNT.phone ?? 1;
       waits.push(show(sc, `frames/phone/${String(Math.min(n - 1, Math.floor((paneMs(s) / 1000) * FPS))).padStart(5, '0')}.jpg`, paneMs(s) > 20000 ? '8:41' : '8:40'));
@@ -358,20 +458,10 @@ window.render = async (s) => {
       if (p.visible) { p.position.copy(r.curve.getPointAt(t)); p.material.opacity = 1 - i * 0.28; }
     });
   }
-  // At the end the phone is on the desk with the rest.
-  if (s >= 31.4) { phone.position.set(0.05, DESK_Y + 0.0045, 0.36); phone.rotation.set(-Math.PI / 2, 0, 0.3); }
-  else { phone.position.copy(PHONE_AT); phone.rotation.set(0, -0.08, 0); }
-  // The camera; in the station the station's light and its picture, at the desk the room's.
-  const onTrain = s < 6.0 || (s >= 22.6 && s < 31.4);
-  scene.environment = onTrain ? metroEnv : officeEnv;
-  scene.background = onTrain ? metroHdr : null;
-  scene.backgroundBlurriness = 0.12; scene.backgroundIntensity = 0.9;
-  scene.backgroundRotation.y = 1.2 + s * 0.02;
-  const c = cameraAt(s);
-  camera.position.copy(c.pos); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.lookAt(c.at);
-  bokeh.uniforms.focus.value = c.pos.distanceTo(c.at);
-  bokeh.uniforms.aperture.value = c.blur;
-  composer.render();
+  const c = pose(s);
+  scene.updateMatrixWorld(true); camera.updateMatrixWorld(true);
+  if (!OVERLAY) composer.render();
+  else drawLines(s);
   // Over the picture: where each machine is, the words, the clock, a finger on the phone.
   const tagsOn = s >= 10.4 && s < 22.4 ? Math.min(clamp((s - 10.4) / 0.5), clamp((22.4 - s) / 0.4)) : 0;
   for (const [k, [g, off]] of Object.entries(TAG_AT)) {
