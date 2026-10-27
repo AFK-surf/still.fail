@@ -328,8 +328,14 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
     _ => false
   }
   let busy = archive_doing(src, station, session)
-  // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
-  let over = @sf.pointed_or_finger(c, c.lit(id) || c.lit(back) || c.lit(drop) || busy)
+  // its 恢复 and 删除 while pointed at (shown only under the hand), or one under way; where the native input is touch
+  // they are held for (its menu), as a chat's row's 归档 is: no keys drawn too small for a finger (@sf.more_held)
+  let over = busy || (!@sf.more_held() && c.hand_lit(c.lit(id) || c.lit(back) || c.lit(drop)))
+  // right clicked, or held long by a finger (Ctx::menu_asked): 恢复 and 删除
+  match c.menu_asked(id) {
+    Some((x, y)) if !busy => archive_menu(c, src, it, id, x, y)
+    _ => ()
+  }
   let l = @sf.theme().chat_list
   c.box(style=if more { @sf.list_more(Side) } else { @sfpages.row_last }, fn() {
     // (the library's list row, a chat's as high as its rows are: @sf.list_row)
@@ -416,22 +422,7 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
   if flag(v, "deletable") {
     if !busy && c.clicked(drop) {
-      @sf.confirm(
-        @sf.t("web-pages.archive.deleteConfirm", args=[("title", title)]),
-        @sf.t("web-pages.archive.deleteText"),
-        @sf.t("common.delete"),
-        danger=true,
-        fn() {
-          act(
-            src,
-            @sf.t("common.delete"),
-            "",
-            "session.delete",
-            { "station": Json::string(station), "key": Json::string(session) },
-            done=@sf.t("web-pages.archive.deleted"),
-          )
-        },
-      )
+      archive_delete(src, it)
     }
     let d = c.box(style=@sf.row_key_box, id=drop, fn() {
       @sf.icon(c, "trash", size=arch_icon, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
@@ -439,6 +430,42 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
     c.semantics(d, Button, id=drop, label=@sf.t("web-pages.archive.deleteNamed", args=[("title", title)]))
     @sf.tip(c, "side/archived-drop-tip/" + key, drop, @sf.t("common.delete"))
   }
+}
+
+///|
+/// Deleted for good, once said so (its 删除, under the pointer or in its menu).
+fn archive_delete(src : Source, it : Json) -> Unit {
+  let v = Some(it)
+  @sf.confirm(
+    @sf.t("web-pages.archive.deleteConfirm", args=[("title", text(v, "title"))]),
+    @sf.t("web-pages.archive.deleteText"),
+    @sf.t("common.delete"),
+    danger=true,
+    fn() {
+      act(
+        src,
+        @sf.t("common.delete"),
+        "",
+        "session.delete",
+        { "station": Json::string(text(v, "station")), "key": Json::string(text(v, "session")) },
+        done=@sf.t("web-pages.archive.deleted"),
+      )
+    },
+  )
+}
+
+///|
+/// Its menu, right clicked or held (its 恢复 and 删除 as its keys under the pointer: archive_actions); held by a finger,
+/// from the row.
+fn archive_menu(c : @ui.Ctx, src : Source, it : Json, id : Int, x : Double, y : Double) -> Unit {
+  let held = @sf.menu_held(c, "archived")
+  let items : Array[@sf.MenuItem?] = [
+    Some(@sf.menu_item_of(@sf.t("web-pages.archive.restore"), icon="retry", fn() { archive_restore(src, it) })),
+  ]
+  if flag(Some(it), "deletable") {
+    items.push(Some(@sf.menu_item_of(@sf.t("common.delete"), icon="trash", danger=true, fn() { archive_delete(src, it) })))
+  }
+  @sf.menu(items, from=if held { Of(id) } else { @sf.at_point(x, y) }, title=text(Some(it), "title"))
 }
 
 ///|

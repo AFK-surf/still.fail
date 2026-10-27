@@ -274,7 +274,7 @@ fn station_row(
           None => false
         },
         fn() {
-          let d = c.box(style=disclosure, id=did, fn() {
+          let d = c.box(style=disclosure(), id=did, fn() {
             @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=nav_icon, color=t.p.subtle) |> ignore
           })
           c.semantics(
@@ -484,8 +484,19 @@ let unkeep_row_pad : Double = 10.0
 let unkeep_side : Double = 20.0
 
 ///|
+/// A station's disclosure: its chevron 16 across, its box as wide as makes it a press's room inside its row (whose sides
+/// are the band's pad in: 20 with touch), the chevron in its middle.
+fn disclosure() -> @ui.Style {
+  let w = dmax(disclosure_side, @ui.room_least() - 2.0 * @sf.theme().chat_list.band_pad)
+  disclosure_look.then(@ui.style(w=Fixed(w)))
+}
+
+///|
+let disclosure_side : Double = 16.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let disclosure : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
+let disclosure_look : @ui.Style = @ui.css("h=S4 align=ACenter justify=JCenter")
 
 ///|
 /// This machine (here): a pill on the accent's ground, its words small.
