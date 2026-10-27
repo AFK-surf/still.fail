@@ -771,6 +771,16 @@ impl @hostapi.Host for Native with rn_dirty(_, x, y, w, h) {
 }
 
 ///|
+impl @hostapi.Host for Native with nv_bar(_, spec) {
+  nv_bar(spec)
+}
+
+///|
+impl @hostapi.Host for Native with nv_able(_) {
+  nv_able() != 0
+}
+
+///|
 impl @hostapi.Host for Native with nt_state(_, what) {
   nt_state(what)
 }

@@ -34,7 +34,7 @@ let zh : Map[String, String] = {
   "android-chat.asks.go": "跳转到待决策的消息",
   "android-chat.attach.camera": "拍照",
   "android-chat.attach.files": "文件",
-  "android-chat.attach.photos": "照片",
+  "android-chat.attach.photos": "照片和视频",
   "android-chat.attach.recent.allow": "显示最近照片",
   "android-chat.attach.recent.more": "选择更多照片",
   "android-chat.attach.title": "添加到消息",

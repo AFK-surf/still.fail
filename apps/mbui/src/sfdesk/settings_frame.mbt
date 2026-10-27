@@ -149,22 +149,25 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.box(style=settings_side_fill, fn() {
     side_top(c)
     side_scroll(c, "settings-nav", fn() {
-      if nav_row(c, "settings-nav/back", false, fn() {
-          @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
-          nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
-        }) {
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
+      // (none beside the system's tabs: 对话 is one of them, rail_native.mbt)
+      if !@sf.native_on() {
+        if nav_row(c, "settings-nav/back", false, fn() {
+            @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
+            nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
+          }) {
+          while app.nav.depth() > 1 {
+            if !app.nav.pop() {
+              break
+            }
           }
+          if app.nav.top() != Home {
+            app.nav.replace(Home)
+          }
+          wide.landed = ""
         }
-        if app.nav.top() != Home {
-          app.nav.replace(Home)
-        }
-        wide.landed = ""
+        // (the way back is the frame's, not one of the list's rows: a group's room between them)
+        @sf.list_apart(c)
       }
-      // (the way back is the frame's, not one of the list's rows: a group's room between them)
-      @sf.list_apart(c)
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         while app.nav.depth() > 1 {
@@ -192,4 +195,5 @@ let settings_nav_icon : Double = 16.0
 ///|
 // kept across runs: a value (no field of it changes)
 let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
+
 

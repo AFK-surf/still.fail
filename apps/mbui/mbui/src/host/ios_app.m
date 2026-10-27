@@ -54,6 +54,9 @@ static void say_system(NSDictionary *said) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
+// (the column of the app's places at the view's trailing edge, the room it takes: MBRoot)
+static CGFloat nav_right(void);
+
 @interface MBPos : UITextPosition
 @property(nonatomic) NSInteger i;
 + (instancetype)at:(NSInteger)i;
@@ -98,6 +101,8 @@ static void say_system(NSDictionary *said) {
 @property(nonatomic, weak) id<UITextInputDelegate> inputDelegate;
 @property(nonatomic, strong) UITextInputStringTokenizer *tok;
 @property(nonatomic, copy) NSDictionary *markedTextStyle;
+// the size the last frame was drawn at (layoutSubviews: one drawn at once at a new one)
+@property(nonatomic) CGSize drawnSize;
 @end
 
 static MBView *the_view;
@@ -174,8 +179,24 @@ static void run_script_step(int step);
   self.menuShown = NO;
 }
 
+// A new size (the screen turned, unfolded or folded): a frame drawn now at it and shown with the change, in its Core
+// Animation transaction, not at the display link's next tick, when the system had shown the frame before stretched to
+// the new size the while between (its words drawn wide: the user, 2026-10-27), as mac_app.m's drawWithWindow does for
+// a window's resize. Not in a scripted run (its frames are its steps'), nor before the first frame, nor within one.
+static BOOL in_frame;
+static double drawn_for;
 - (void)layoutSubviews {
   [super layoutSubviews];
+  CGSize s = self.bounds.size;
+  if (self.window && frames_drawn > 0 && !script && !in_frame && !CGSizeEqualToSize(s, self.drawnSize)) {
+    CAMetalLayer *l = (CAMetalLayer *)self.layer;
+    l.presentsWithTransaction = YES;
+    frame_late = 0;
+    // (never before the frame drawn last: the app's time goes on)
+    [self drawFor:MAX(CACurrentMediaTime() * 1000.0, drawn_for)];
+    l.presentsWithTransaction = NO;
+    last_target = -1;
+  }
   [self requestFrame];
 }
 
@@ -200,7 +221,22 @@ static void run_script_step(int step);
     last_target = -1;
     return;
   }
+  // the frame before on the screen since the display's last refresh (the link's timestamp): past the time it was drawn
+  // for, it was late by as much (a frame that took longer than the display's frame to build)
+  frame_late = last_target >= 0 ? MAX(0, l.timestamp * 1000.0 - last_target) : 0;
+  [self drawFor:l.targetTimestamp * 1000.0];
+  last_target = l.targetTimestamp * 1000.0;
+  if (!self.wantFrame) {
+    l.paused = YES;
+    last_target = -1;
+  }
+}
+
+// A frame for the time `target` it will be on the screen (ms, CACurrentMediaTime's clock as the touches' times are).
+- (void)drawFor:(double)target {
+  drawn_for = target;
   CGSize s = self.bounds.size;
+  self.drawnSize = s;
   double scale = self.window.screen.scale ?: 3.0;
   self.layer.contentsScale = scale;
   mb_text_set_scale(scale);
@@ -212,28 +248,22 @@ static void run_script_step(int step);
   // while it moves, a frame each display frame
   double h = edge ? MAX(1, s.height - ime_over()) : s.height;
   if (edge && ime_moving()) self.wantFrame = YES;
-  // the frame before on the screen since the display's last refresh (the link's timestamp): past the time it was drawn
-  // for, it was late by as much (a frame that took longer than the display's frame to build)
-  frame_late = last_target >= 0 ? MAX(0, l.timestamp * 1000.0 - last_target) : 0;
   // the frame's time is the display's: when this frame will be on screen (the display link's target, on
   // CACurrentMediaTime's clock as the touches' times are), as Android's is its vsync's, not when it happens to be built;
   // in one Core Animation transaction, the native views' moves and the drawable that shows their holes (mac_app.m's)
   [CATransaction begin];
   // (what it waits for said again by the frame, if it still does)
   wake_for = -1;
-  building_for = l.targetTimestamp * 1000.0;
-  mb_cb.frame(s.width, h, scale, l.targetTimestamp * 1000.0);
+  building_for = target;
+  in_frame = YES;
+  mb_cb.frame(s.width, h, scale, target);
+  in_frame = NO;
   building_for = -1;
   [CATransaction commit];
-  last_target = l.targetTimestamp * 1000.0;
   if (frames_drawn == 0)
     say([NSString stringWithFormat:@"ios: first frame %.0fx%.0f @%.0fx in %.0f ms", s.width, s.height, scale, mb_now_ms() - t0]);
   frames_drawn++;
   if (script) run_script_step(frames_drawn);
-  if (!self.wantFrame) {
-    l.paused = YES;
-    last_target = -1;
-  }
 }
 
 // ---- touch ----
@@ -776,7 +806,16 @@ static MBController *the_controller;
 - (void)sayBars {
   if (!edge) return;
   UIEdgeInsets in = self.view.safeAreaInsets;
-  UIEdgeInsets b = UIEdgeInsetsMake(in.top, in.left, in.bottom, in.right);
+  // (where the system's bars are down the side, its navigation bar there too: nothing of it over the view's top but
+  // the window's own)
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    if (self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified && self.view.window)
+      in.top = self.view.window.safeAreaInsets.top;
+  }
+#endif
+  // (the column of the app's places at the trailing edge: no less room there than it takes, nav_right)
+  UIEdgeInsets b = UIEdgeInsetsMake(in.top, in.left, in.bottom, MAX(in.right, nav_right()));
   if (self.barsSaid && UIEdgeInsetsEqualToEdgeInsets(b, self.saidBars)) return;
   self.barsSaid = YES;
   self.saidBars = b;
@@ -815,6 +854,9 @@ static double ime_over(void) {
 
 static BOOL ime_moving(void) { return the_controller.kbMark.layer.animationKeys.count > 0; }
 
+// the system's own bars, the app's tabs and actions in them (@hostapi.nav_bar): an iPhone Duo's alone, ios_nav.h
+#include "ios_nav.h"
+
 // The app's one window, in the scene the system connects (the UIScene life cycle, which iOS 26 asks every app for:
 // the Info.plist's UIApplicationSceneManifest names MBSceneDelegate).
 @interface MBSceneDelegate : UIResponder <UIWindowSceneDelegate>
@@ -838,7 +880,13 @@ static void say_activity(NSUserActivity *a) {
   if (![scene isKindOfClass:UIWindowScene.class]) return;
   self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
   the_controller = [MBController new];
-  self.window.rootViewController = the_controller;
+  // (in the system's tabs, none until the app hands it some: nav_bar)
+  if (@available(iOS 18.0, *)) {
+    the_root = [MBTabs new];
+  } else {
+    the_root = the_controller;
+  }
+  self.window.rootViewController = the_root;
   [self.window makeKeyAndVisible];
   [the_view requestFrame];
   for (UIOpenURLContext *u in opts.URLContexts) say_link(u.URL);
@@ -1616,9 +1664,6 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
-// How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
-// more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
-double mb_host_window_corner(void) { return 0; }
 void mb_host_window_drag(void) {}
 
 // The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,
@@ -1707,7 +1752,10 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
   dispatch_group_t g = dispatch_group_create();
   [results enumerateObjectsUsingBlock:^(PHPickerResult *r, NSUInteger i, BOOL *stop) {
     dispatch_group_enter(g);
-    [r.itemProvider loadFileRepresentationForTypeIdentifier:UTTypeImage.identifier
+    // (a film as a film: its movie's file, else the picture's)
+    NSString *type = [r.itemProvider hasItemConformingToTypeIdentifier:UTTypeMovie.identifier] ? UTTypeMovie.identifier
+                                                                                                : UTTypeImage.identifier;
+    [r.itemProvider loadFileRepresentationForTypeIdentifier:type
                                           completionHandler:^(NSURL *url, NSError *error) {
       NSData *d = url ? [NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:nil] : nil;
       @synchronized(names) {
@@ -1777,7 +1825,8 @@ int32_t mb_host_pick_start(int32_t kind) {
       vc = p;
     } else if (kind == 1) {
       PHPickerConfiguration *cfg = [PHPickerConfiguration new];
-      cfg.filter = PHPickerFilter.imagesFilter;
+      // (photos and films, as Android's picker offers both)
+      cfg.filter = [PHPickerFilter anyFilterMatchingSubfilters:@[ PHPickerFilter.imagesFilter, PHPickerFilter.videosFilter ]];
       cfg.selectionLimit = 0;
       // (as the other apps read them: JPEG for a HEIC the library keeps)
       cfg.preferredAssetRepresentationMode = PHPickerConfigurationAssetRepresentationModeCompatible;

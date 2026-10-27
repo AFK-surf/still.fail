@@ -628,7 +628,6 @@ fn desk_home() -> Unit {
 /// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  ignore(c)
   match place {
     "attention" => {
       wide.attention_open = !wide.attention_open
@@ -638,7 +637,10 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
       let f = if place == "chats" { "all" } else { place }
       if filter_of(src, w.id) != f {
         app.filters[w.id] = f
-        (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+        // (kept once, whichever build asked: Ctx::tell)
+        c.tell("rail/list-filter", fn() {
+          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+        })
       }
       // the chats again: the chat last open stays open beside the list
       if app.nav.pages()[0] == Home && lit_place() == "chats" && !app.nav.pages().contains(Archived) {

@@ -123,6 +123,10 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
 }
 
 ///|
+/// What was chosen in the system's own bars (@hostapi.nav_bar) since the wide frame last took it, oldest first.
+pub let nav_tapped : Array[String] = []
+
+///|
 /// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
 /// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
 /// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
@@ -136,6 +140,8 @@ fn system_said(json : String) -> Unit {
       Link(url) => link_later.push(app_link(url))
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.val = over
+      // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
+      NavTapped(id) => nav_tapped.push(id)
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
       _ => ()
     }

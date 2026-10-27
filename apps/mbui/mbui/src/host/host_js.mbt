@@ -805,6 +805,18 @@ fn nt_cancel(tag : String) -> Unit {
 }
 
 ///|
+/// The system's own bars (@hostapi.nav_bar): none in a browser, the app draws its own.
+fn nv_bar(spec : String) -> Int {
+  ignore(spec)
+  0
+}
+
+///|
+fn nv_able() -> Int {
+  0
+}
+
+///|
 fn nt_state(what : Int) -> Int {
   if what == 2 {
     -1

@@ -16,8 +16,18 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     c.box(style=if in_bar { band_new_bar() } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
-        // (on one line with the search's field under it: its ground's edge, its mark and its words the band's)
-        if band_row(c, "side/new", is_new, fn() {
+        // (on one line with the search's field under it: its ground's edge, its mark and its words the band's; in the
+        // column of the system's glass instead where the rail's places are there: rail_native.mbt)
+        // (新建对话 the system's tab bar's own action where it has the places: the row the card's title there, the list
+        // shown in the workspace, on the line of the page's title beside it: rail_native.mbt)
+        if @sf.native_on() {
+          // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
+          c.box(style=band_title_row.then(@ui.style(h=Fixed(@sf.band_row_h()))), fn() {
+            let shown = list_place(list_mode(src, w))
+            c.text(if shown == "chats" { @sf.t("web-main.filter.chats.all") } else { filter_named(shown) }, style=chat_title_words) |> ignore
+          })
+          |> ignore
+        } else if band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
           }) {
@@ -42,8 +52,10 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
     })
     |> ignore
-    // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo)
-    side_todo(c, src, w)
+    // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo); the column's beside the system's
+    if !@sf.native_on() {
+      side_todo(c, src, w)
+    }
   })
   // over the lists: their scroll bar keeps clear of it (the web's --nav-top)
   c.floats_over(band)
@@ -252,3 +264,8 @@ fn filter_box_bar() -> @ui.Style {
   filter_box.then(@ui.style(radius=Linked(filter_bar_link())))
 }
 
+
+///|
+/// The list card's title beside the system's tab bar (the list shown), as a page's title: its bar's words.
+// kept across runs: a value (no field of it changes)
+let band_title_row : @ui.Style = @ui.css("row w=Full pl=S3 align=ACenter")

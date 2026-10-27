@@ -269,6 +269,8 @@ pub fn Tester::new(
     full: false,
     window_corner,
     font_scale: 1.0,
+    nav_able: false,
+    nav_said: "",
     a11y: false,
     a11y_said: "",
     env: Map::from_array(env),

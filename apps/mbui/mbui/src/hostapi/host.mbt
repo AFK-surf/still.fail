@@ -162,6 +162,8 @@ pub(open) trait Host {
   mk_png(Self, Int) -> Bytes = _
   nt_show(Self, String, String, String, String, String) -> Unit = _
   rn_dirty(Self, Double, Double, Double, Double) -> Unit = _
+  nv_bar(Self, String) -> Int = _
+  nv_able(Self) -> Bool = _
   nt_cancel(Self, String) -> Unit = _
   nt_state(Self, Int) -> Int = _
   nt_text(Self, Int) -> String = _
@@ -953,6 +955,16 @@ impl Host with rn_dirty(_, _, _, _, _) {
 }
 
 ///|
+impl Host with nv_bar(_, _) {
+  0
+}
+
+///|
+impl Host with nv_able(_) {
+  false
+}
+
+///|
 impl Host with nt_cancel(_, _) {
   ()
 }
@@ -1132,6 +1144,8 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
   sideways_now.val = false
+  // (a new host has been handed nothing)
+  nav_said.val = None
 }
 
 ///|
@@ -2292,6 +2306,11 @@ fn mk_png(id : Int) -> Bytes {
 ///|
 fn nt_show(channel : String, tag : String, title : String, body : String, opens : String) -> Unit {
   current.val.nt_show(channel, tag, title, body, opens)
+}
+
+///|
+fn nv_bar(spec : String) -> Int {
+  current.val.nv_bar(spec)
 }
 
 ///|

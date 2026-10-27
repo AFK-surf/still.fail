@@ -409,6 +409,16 @@ impl @hostapi.Host for FakeHost with window_corner(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with nv_able(_) {
+  nav_able()
+}
+
+///|
+impl @hostapi.Host for FakeHost with nv_bar(_, spec) {
+  nav_bar_said(spec)
+}
+
+///|
 impl @hostapi.Host for FakeHost with env(_, a0) {
   h_env(a0)
 }

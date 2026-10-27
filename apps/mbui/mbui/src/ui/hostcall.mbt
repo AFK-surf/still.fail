@@ -108,6 +108,10 @@ struct FakeHost {
   window_corner : Double
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
+  /// whether the system lays out the app's tabs itself (an iPhone Duo's: Tester::set_nav_able), and the bars the app
+  /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
+  mut nav_able : Bool
+  mut nav_said : String
   /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
   mut a11y : Bool
   mut a11y_said : String

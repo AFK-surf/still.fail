@@ -143,6 +143,7 @@
       "src/sfdesk/overlays.mbt",
       "src/sfdesk/pane_page.mbt",
       "src/sfdesk/rail.mbt",
+      "src/sfdesk/rail_native.mbt",
       "src/sfdesk/side.mbt",
       "src/sfdesk/switch.mbt",
       "src/sfdesk/switcher.mbt"

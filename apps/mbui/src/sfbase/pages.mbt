@@ -213,6 +213,7 @@ pub fn reset() -> Unit {
   app.toast_run = fn() {  }
   left_pages.clear()
   felt_holds.clear()
+  nav_tapped.clear()
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
   dv_fetches.clear()

@@ -1361,3 +1361,11 @@ fn Ctx::kept_left(self : Ctx) -> Unit {
     }
   })
 }
+
+///|
+/// Every part kept (Ctx::kept_part) and row kept built anew from the next build: what they show changed by what they do
+/// not read (the screen's corners as the host first says them).
+pub fn Ctx::forget_parts(self : Ctx) -> Unit {
+  ignore(self)
+  parts_forget()
+}

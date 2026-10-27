@@ -340,3 +340,37 @@ pub fn Tester::set_env(self : Tester, name : String, value : String) -> Unit {
   }
   self.fake.wants = true
 }
+
+///|
+/// The system lays out the app's tabs and its actions itself from the next frame on, as an iPhone Duo's does
+/// (@hostapi.nav_bar_able, nav_bar showing what it is handed), or not.
+pub fn Tester::set_nav_able(self : Tester, able : Bool) -> Unit {
+  self.fake.nav_able = able
+  @hostapi.nav_bar_again()
+  self.fake.wants = true
+}
+
+///|
+/// The bars the app handed the system last (@hostapi.nav_bar's JSON: nav.mbt), "" where it handed none.
+pub fn Tester::nav_said(self : Tester) -> String {
+  self.fake.nav_said
+}
+
+///|
+fn nav_able() -> Bool {
+  match fake.val {
+    Some(f) => f.nav_able
+    None => false
+  }
+}
+
+///|
+fn nav_bar_said(spec : String) -> Int {
+  match fake.val {
+    Some(f) => {
+      f.nav_said = spec
+      if f.nav_able { 1 } else { 0 }
+    }
+    None => 0
+  }
+}

@@ -23,6 +23,10 @@ fn attention_reset() -> Unit {
 }
 
 ///|
+/// The window's width as 待处理's panel was last drawn (attention_panel: a turn closes it).
+let attention_size : FixedArray[Double] = [0.0]
+
+///|
 /// 待处理's panel (Attention.tsx): beside the rail's bell, 10 past it (with no bell in the rail, under 待处理 under
 /// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
 /// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
@@ -30,8 +34,12 @@ fn attention_reset() -> Unit {
 /// pointed at (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { wide.attention_open = false }
+  // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
+  if native_turned(c, attention_size) {
+    close()
+  }
   let railed = rail_items(src, w.id).contains("attention")
-  let trigger = c.id(if railed { "rail/attention" } else { "side/attention" })
+  let trigger = c.id(if railed || @sf.native_on() { "rail/attention" } else { "side/attention" })
   // its stations all reached again: a trouble later in the same words is new (said once the frame is built)
   c.after_build("attention/forget", fn() { trouble_forget(src, w) })
   // looked at as it opens (kept at once), no longer listed once it closes: listed while it is first read
@@ -49,7 +57,14 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     "attention",
     wide.attention_open,
     trigger,
-    side=if railed { Right } else { Bottom },
+    // (the system's bell: in its column down the side, beside it from its top; at the top's lead, under it from its left)
+    side=if @sf.native_side() {
+      Left
+    } else if railed && !@sf.native_on() {
+      Right
+    } else {
+      Bottom
+    },
     along=Start,
     offset=if railed { attention_off_rail } else { attention_off_side },
     look=@sf.beside_look(Px(attention_w), inner=att_list),
