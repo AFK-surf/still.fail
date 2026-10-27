@@ -631,6 +631,8 @@ export class Mesh {
   #daysChanged = false;
   /// By station id, then relay (`relayKey`): how fast replies came that way.
   readonly #speeds: Record<string, Record<string, Speed>>;
+  /// By station id and relay: what replies brought that way in this run (`timed`).
+  readonly #came = new Map<string, number>();
 
   private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>) {
     this.#env = env;
@@ -739,9 +741,10 @@ export class Mesh {
     return s !== undefined && this.#env.host.nowMs() - s.at < SPEED_KEPT_MS ? s.bps : null;
   }
 
-  /// A reply of `bytes` from a station came through `relay` in `ms` (from its first bytes to its end). The fastest seen
-  /// lately counts (SPEED_FRESH_MS): a reply also comes slower than its way could bring it (others at once, the station
-  /// reading slowly); one seen before that is not kept against how the way brings replies now.
+  /// `bytes` from a station came through `relay` in `ms`. The fastest seen lately counts (SPEED_FRESH_MS): a reply also
+  /// comes slower than its way could bring it (the station reading slowly); one seen before that is not kept against how
+  /// the way brings replies now. The way the requests go on found slower than it was taken to be: they are moved at once
+  /// if another is clearly better now (`#choose`), not after minutes more on it.
   noteSpeed(addr: string, relay: string, bytes: number, ms: number): void {
     if (bytes < SPEED_MIN_BYTES || ms <= 0) return;
     const bps = (bytes / ms) * 1000;
@@ -750,12 +753,15 @@ export class Mesh {
     const key = relayKey(relay);
     const was = of[key];
     if (was !== undefined && now - was.at < SPEED_FRESH_MS && was.bps >= bps) return;
+    const slower = this.speed(addr, relay) === null || bps < this.speed(addr, relay)!;
     of[key] = { bps, at: now };
     for (const [id, relays] of Object.entries(this.#speeds)) {
       for (const [r, s] of Object.entries(relays)) if (now - s.at >= SPEED_KEPT_MS) delete relays[r];
       if (Object.keys(relays).length === 0) delete this.#speeds[id];
     }
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+    const via = this.current(addr)?.via() ?? null;
+    if (slower && via !== null && relayKey(via) === key) this.#choose(addr, "slow");
   }
 
   /// The speeds seen on every way let go (the device on another network now).
@@ -765,17 +771,32 @@ export class Mesh {
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
   }
 
-  /// A reply's body, timed as it is read: when it ends, how fast it came is noted for the relay it came through.
+  /// A reply's body, timed as it is read: once it has brought SPEED_MIN_BYTES, and again as it ends, how fast its way
+  /// brought bytes meanwhile is noted for the relay it came through: all that came through it from the station since
+  /// this one began coming, not this one's alone. Replies side by side share the line, and each alone said a part of how
+  /// fast it is: a phone's way to ccvm through Beijing's relay, held at a third of its speed, lost to ways never tried,
+  /// each bringing its videos at 35 KB/s (2026-10-28). Told as it is under way, not after: a way found slow by a reply of
+  /// megabytes is left at once (`noteSpeed`), not after it took minutes to come.
   timed(addr: string, relay: string, body: Pull<Uint8Array>): Pull<Uint8Array> {
+    const key = `${stationId(addr)} ${relayKey(relay)}`;
     let first: number | null = null;
-    let bytes = 0;
+    let from = 0;
+    let own = 0;
+    let told = false;
     return {
       take: Effect.flatMap(body.take, (chunk) =>
         Effect.map(Clock.currentTimeMillis, (now) => {
-          if (chunk === null) {
-            if (first !== null) this.noteSpeed(addr, relay, bytes, now - first);
-          } else if (first === null) first = now;
-          else bytes += chunk.length;
+          const came = (this.#came.get(key) ?? 0) + (chunk?.length ?? 0);
+          this.#came.set(key, came);
+          if (first === null) {
+            if (chunk !== null) [first, from] = [now, came];
+            return chunk;
+          }
+          own += chunk?.length ?? 0;
+          if (own >= SPEED_MIN_BYTES && (chunk === null || !told)) {
+            told = true;
+            this.noteSpeed(addr, relay, came - from, now - first);
+          }
           return chunk;
         }),
       ),
@@ -1292,9 +1313,9 @@ export class Mesh {
   }
 
   /// Moves the station's requests to the best way if it is clearly better than theirs (`clearlyBetter`) BETTER_TICKS
-  /// times in a row, or at once (`now`: as a person asks, as a read was answered on another way first); to the best
-  /// way left at once if theirs is gone or missed DEAD_PINGS pings.
-  #choose(addr: string, now: boolean): void {
+  /// times in a row, or at once (`now`, why: "asked" as a person asks, "slow" as theirs was found to bring replies
+  /// slowly); to the best way left at once if theirs is gone or missed DEAD_PINGS pings.
+  #choose(addr: string, now: "asked" | "slow" | null): void {
     const cur = this.current(addr);
     if (cur === null && this.#links.get(addr)?.result === null) return;
     const ways = this.#live(addr);
@@ -1325,7 +1346,7 @@ export class Mesh {
       }
     }
     if (mine.samples < MIN_SAMPLES) return;
-    if (!now && this.now() - (this.#movedAt.get(addr) ?? -Infinity) < MIN_STAY_MS) return;
+    if (now === null && this.now() - (this.#movedAt.get(addr) ?? -Infinity) < MIN_STAY_MS) return;
     const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES && !this.#avoided(addr, w)));
     for (const w of ways) if (w !== best) w.better = 0;
     if (best === null) return;
@@ -1334,7 +1355,7 @@ export class Mesh {
       return;
     }
     best.better++;
-    if (now || best.better >= BETTER_TICKS) this.#promote(addr, best, now ? "asked" : "better");
+    if (now !== null || best.better >= BETTER_TICKS) this.#promote(addr, best, now ?? "better");
   }
 
   /// Whether `way` goes direct: on the LAN endpoint, or on a path iroh punched.
@@ -1461,7 +1482,7 @@ export class Mesh {
         yield* this.#sample(addr);
         this.#tellHealth(addr);
         for (const w of this.#live(addr)) this.#watchPaths(addr, w);
-        this.#choose(addr, false);
+        this.#choose(addr, null);
         this.#prune(addr);
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
         if (this.#movedDirect.get(addr) === true && this.now() - (this.#movedAt.get(addr) ?? Infinity) >= MIN_STAY_MS) this.#directLosses.delete(addr);
@@ -1559,7 +1580,7 @@ export class Mesh {
       if (link === null || !link.usable()) return yield* Effect.fail(meshError(t("core-logic.mesh.not_connected")));
       yield* this.#explore(addr, link.credentials);
       for (let i = 0; i <= MIN_SAMPLES; i++) yield* this.#sample(addr);
-      this.#choose(addr, true);
+      this.#choose(addr, "asked");
       this.#prune(addr);
     });
   }

@@ -842,7 +842,8 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
 
 /// Judged by what it chooses: b answers sooner than a but brings a reply slowly (the device 60 ms away each way on a
 /// 256 KiB/s line, as Hong Kong's back to the mainland). Its speed not known, requests go there; a large reply through
-/// it shows how slow it is, and they go back to a, where the same reply comes sooner.
+/// it shows how slow it is, and they go back to a at once (not minutes on, each read meanwhile coming as slowly: a
+/// phone's videos from ccvm, 2026-10-28), where the same reply comes sooner.
 sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async (s) => {
   const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 256 * 1024 } });
@@ -860,12 +861,29 @@ sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async 
   await s.until(() => sameRelay(via(mesh, id), b), 5 * 60_000);
   const throughB = await big();
   assert.ok(mesh.speed(id, b) !== null, "how fast b is, seen");
-  await s.until(() => sameRelay(via(mesh, id), a), 5 * 60_000);
+  assert.ok(sameRelay(via(mesh, id), a), `through ${via(mesh, id)} as the reply through b ended`);
   const throughA = await big();
   assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
   // And it stays on a.
   await s.time.pass(30 * 60_000);
   assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
+  await close(s, station, mesh);
+});
+
+/// Two large replies through b side by side, each coming at half its speed: b is taken to be as fast as the two came
+/// together, not as either did. Each alone held Beijing's way to ccvm at a third of its speed, and it lost to ways
+/// never tried (2026-10-28).
+sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
+  const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
+  const { station, mesh, id: bare } = await onRelays(s, [b]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(id);
+  const big = Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  await s.run(Effect.all([big, big], { concurrency: "unbounded" }));
+  const seen = mesh.speed(id, b);
+  assert.ok(seen !== null && seen > 0.75 * 256 * 1024, `b at ${seen} B/s, its line 256 KiB/s`);
   await close(s, station, mesh);
 });
 
