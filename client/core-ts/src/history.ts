@@ -67,8 +67,9 @@ function fileOf(text: string): string | null {
   return null;
 }
 
-/// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's.
-export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean };
+/// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's; `agent`: an
+/// agent's (marked `bot`: another session's letter, a bot in the thread), its words Markdown.
+export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean; agent: boolean };
 
 /// What a station notice told its agent, read back from the words it was given (jobs.ts `named` and its notices,
 /// opened.ts `notice`): a job's own words (`said`), or an event of a job's or of a chat it opened, in a line with what
@@ -125,6 +126,11 @@ function attr(attrs: string, name: string): string | null {
     }
     from = at + key.length;
   }
+}
+
+/// Whether a tag's attributes carry `name` bare (`bot`), not inside a quoted value.
+function bare(attrs: string, name: string): boolean {
+  return attrs.replace(/"[^"]*"/g, '""').split(/\s+/).includes(name);
 }
 
 function tagEnd(text: string, open: number): number | null {
@@ -193,6 +199,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
       // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
       slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
       station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
+      agent: bare(attrs, "bot"),
     });
     rest += text.slice(at, open);
     at = b[1];
@@ -209,7 +216,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
     const b = body(second, headEnd + 1, "</slack>");
     if (!b) break;
     const attrs = second.slice(open + 7, headEnd);
-    messages.push({ user: attr(attrs, "user") ?? "", name: null, ts: attr(attrs, "ts") ?? "", text: b[0], thread: null, slack: true, station: false });
+    messages.push({ user: attr(attrs, "user") ?? "", name: null, ts: attr(attrs, "ts") ?? "", text: b[0], thread: null, slack: true, station: false, agent: bare(attrs, "bot") });
     rest += second.slice(at, open);
     at = b[1];
   }
@@ -370,7 +377,7 @@ export function presentHistory(live: J, cx: Context): J {
             // A job's output is a block of code, all of it.
             md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more, cx.md),
           }))),
-          messages: messages.flatMap((m, k) => {
+          messages: messages.flatMap((m, k): J[] => {
             // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.
             const notice = notices[k];
             if (notice?.kind === "event") return [];
@@ -385,7 +392,9 @@ export function presentHistory(live: J, cx: Context): J {
               const name = present.memberName(cx.members, m.user) ?? (m.name !== null && m.name !== "" ? m.name : m.user);
               from = { name, slackUser: null, bound: false };
             }
-            return [{ key: m.ts, from, text: mentions(m.text, cx), place: place(m.thread) }];
+            // A person's words are drawn as they wrote them; an agent's are Markdown, as a chat's page reads them.
+            const said = mentions(m.text, cx);
+            return [{ key: m.ts, from, text: said, place: place(m.thread), ...(m.agent ? { md: markdown(said, cx.md) } : {}) }];
           }),
         };
         break;

@@ -580,8 +580,8 @@ fn fold(c : @ui.Ctx, key : String, lines : Int, line : Double, body : () -> Unit
 }
 
 ///|
-/// A message to the agent (Received): who and where in a line, their words under it, folded to four lines; a job's as
-/// it wrote them, in a monospaced font.
+/// A message to the agent (Received): who and where in a line, their words under it, folded to four lines; an agent's
+/// (another chat's letter) as Markdown, a job's as it wrote them, in a monospaced font.
 fn received(c : @ui.Ctx, src : Source, station : String, key : String, m : Json?, rail : Bool, rail_last : Bool) -> Unit {
   let notice = text(m, "notice")
   let job = notice == "job"
@@ -611,13 +611,17 @@ fn received(c : @ui.Ctx, src : Source, station : String, key : String, m : Json?
     })
     |> ignore
     let words = text(m, "text")
-    fold(c, key, words_lines, words_line, fn() {
-      if job {
-        c.rich([@ui.span(words, mono=true)], style=h_output) |> ignore
-      } else {
-        c.text(words, style=h_words) |> ignore
-      }
-    })
+    match field(m, "md") {
+      Some(Array(_)) as md => fold(c, key, words_lines, md_line, fn() { md_view(c, key + "/md", words, md) })
+      _ =>
+        fold(c, key, words_lines, words_line, fn() {
+          if job {
+            c.rich([@ui.span(words, mono=true)], style=h_output) |> ignore
+          } else {
+            c.text(words, style=h_words) |> ignore
+          }
+        })
+    }
   })
 }
 

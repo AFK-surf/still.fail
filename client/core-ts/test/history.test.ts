@@ -71,10 +71,21 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   assert.deepEqual([said.length, said[0].user, said[0].ts, said[0].text], [1, "U1", "1.2", "hi"]);
   const [messages, note] = parsePrompt('Heads up.\n<message via="slack" from="Ada &amp; Co (U1)" ts="1.2" thread="C1/1.0">\nhi <@UBOT>\n</message>\n(Thread C1/1.0 had messages before you were brought in; read them.)');
   assert.equal(note, "Heads up.");
-  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true, station: false }]);
+  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true, station: false, agent: false }]);
   const [old] = parsePrompt('<slack user="U2" bot ts="3.4">\nyo\n</slack>');
   assert.equal(old[0].user, "U2");
   assert.equal(old[0].text, "yo");
+  assert.equal(old[0].agent, true);
+});
+
+test("an_agents_letter_reads_as_markdown_a_persons_words_as_they_wrote_them", () => {
+  // station instructions.ts: another agent's message is marked `bot`; a person's name may say "bot" and is not one.
+  const [said] = parsePrompt('<message via="web" thread="EMBER/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="EMBER/1.0" from="a bot fan (b@x)" ts="1.2">\n**hi**\n</message>');
+  assert.deepEqual(said.map((m) => m.agent), [true, false]);
+  const h = presentHistory({ timeline: [{ kind: "user", text: '<message via="web" thread="EMBER/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="EMBER/1.0" from="Ada (ada@x)" ts="1.2">\n**hi**\n</message>' }], steps: [] }, cx([], [], []));
+  const [letter, person] = h.items[0].body.content.messages;
+  assert.deepEqual(letter.md, markdown("**根子**：`moves_in`"));
+  assert.equal(person.md, undefined);
 });
 
 test("the_instructions_a_continued_session_is_given_carry_no_messages", () => {

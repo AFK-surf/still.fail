@@ -3789,6 +3789,11 @@ export interface HistoryMessage {
 	key: string;
 	from: HistoryFrom;
 	text: string;
+	/**
+	 * An agent's words (another chat's letter, a bot in the thread) read as Markdown (markdown.ts), its runs of
+	 * words in `text`: what the clients draw. Absent for a person's, drawn as they wrote them, and for a notice.
+	 */
+	md?: unknown;
 	place?: Place;
 	/**
 	 * A notice of the station's own, not a person's message: `job` (a job's words to its agent: `from` is its
