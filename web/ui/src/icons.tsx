@@ -357,6 +357,10 @@ export function Pin(props: IconProps) {
   return <Svg {...props}><path d="M8.5 3.5H15.5 M9.5 3.5V9L6.5 12.5Q5.5 13.5 5.5 14.5V15H18.5V14.5Q18.5 13.5 17.5 12.5L14.5 9V3.5 M12 15V20.5" /></Svg>;
 }
 
+export function PlayMark(props: IconProps) {
+  return <Svg {...props}><path d="M9.43 5.57L19.47 11.19Q20.91 12 19.47 12.81L9.43 18.43Q7.51 19.5 7.51 17.3L7.51 6.7Q7.51 4.5 9.43 5.57Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
 export function Play(props: IconProps) {
   return <Svg {...props}><path d="M7 5.8Q7 4.3 8.3 5L18.4 11Q19.6 12 18.4 13L8.3 19Q7 19.7 7 18.2Z" /></Svg>;
 }
@@ -633,6 +637,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "phone": Phone,
   "photo": Photo,
   "pin": Pin,
+  "play-mark": PlayMark,
   "play": Play,
   "plug": Plug,
   "plus": Plus,

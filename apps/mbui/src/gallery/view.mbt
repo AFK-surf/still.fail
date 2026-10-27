@@ -250,7 +250,7 @@ fn cell(c : @ui.Ctx, src : Source, it : Item, index : Int, side : Double) -> Uni
         c.spacer()
         c.box(dir=Row, pad=6.0, fn() {
           c.box(dir=Row, padx=6.0, pady=2.0, gap=3.0, align=ACenter, bg=0x00000066L, radius=9.0, fn() {
-            @sf.icon(c, "play", size=10.0, color=0xFFFFFFFFL) |> ignore
+            @sf.icon(c, "play-mark", size=12.0, color=0xFFFFFFFFL) |> ignore
             match it.duration {
               Some(d) =>
                 c.text(duration_label(d), size=t.t.caption, weight=500, color=0xFFFFFFFFL, wrap=false)
@@ -470,10 +470,7 @@ fn picture(c : @ui.Ctx, src : Source, it : Item) -> Unit {
     if it.video {
       c.layer(align=ACenter, fn() {
         c.box(h=Fill(1.0), justify=JCenter, fn() {
-          c.box(w=Px(64.0), h=Px(64.0), radius=32.0, bg=0x00000066L, align=ACenter, justify=JCenter, fn() {
-            @sf.icon(c, "play", size=28.0, color=0xFFFFFFFFL) |> ignore
-          })
-          |> ignore
+          @sf.play_mark(c, 64.0, Data(0x00000066L)) |> ignore
         })
         |> ignore
       })
