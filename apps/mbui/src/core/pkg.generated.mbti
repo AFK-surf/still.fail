@@ -29,6 +29,8 @@ pub fn query_of(String) -> String
 
 pub fn receive(String, Bytes?) -> Unit
 
+pub fn receive_said(String, Bytes?) -> Bool
+
 pub let restarted_text : @ref.Ref[String]
 
 pub fn sign_in((Result[Json, Json]) -> Unit) -> Unit
@@ -79,6 +81,7 @@ pub fn Client::stream(Self, String, params? : Json, bytes? : Bytes?, on_value~ :
 pub fn Client::stream_bytes(Self, String, params? : Json, on_value~ : (Json, Bytes?) -> Unit, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Int32
 pub fn Client::subscribe(Self, String, params? : Map[String, Json]) -> Sub
 pub fn Client::time_topics(Self, ((Int32, String, Json?, Bool) -> Unit)?) -> Unit
+pub fn Client::topic_said(Self, Map[String, Json]) -> Bool
 pub fn Client::track(Self, (String) -> Int32, (Int32) -> Unit) -> Unit
 pub fn Client::unsubscribe(Self, Sub) -> Unit
 

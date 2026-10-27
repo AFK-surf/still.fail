@@ -185,6 +185,26 @@ pub fn fatal() -> String? {
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
   let msg = @json.parse(text) catch { _ => return }
+  take(msg, bytes)
+}
+
+///|
+/// What the core said, taken as it comes where it is a topic's change alone (Client::topic_said: what it changes is its
+/// topic's signal and nothing else), before the frame decides what it does: what read the topic is built again, nothing
+/// else (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
+pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
+  let msg = @json.parse(text) catch { _ => return false }
+  match msg {
+    Object(m) if !m.contains("mbui_auth") && !m.contains("clocked") && client.topic_said(m) => {
+      take(msg, bytes)
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn take(msg : Json, bytes : Bytes?) -> Unit {
   match msg {
     Object(m) if m.contains("mbui_auth") => web_auth_done(m)
     Object(m) if m.contains("clocked") => clocked(m)

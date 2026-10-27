@@ -198,3 +198,59 @@ test "what the outside says comes at its moment, however the clock is run on: a 
   assert_true(t.find("late") is Some(_))
   t.assert_idle()
 }
+
+///|
+/// A display's frames, each drawn as a host draws them.
+let said_frame_ms : Double = 1000.0 / 120.0
+
+///|
+/// When a message is posted, and the frame after it looked at.
+let said_post_ms : Int = 100
+
+///|
+test "a message that changes only a signal, taken as it comes: what read it built again, not the whole frame" {
+  let shown : @signals.Signal[String] = @signals.signal("a", same=fn(a, b) { a == b })
+  let handed : Array[String] = []
+  on_message("test.said", fn(j, _) { handed.push(j) })
+  on_message_said("test.said", fn(j, _) {
+    if j.has_prefix("set ") {
+      shown.set(j.unsafe_substring(start=4, end=j.length()))
+      true
+    } else {
+      false
+    }
+  })
+  // twenty rows, the fourth showing the signal
+  let t = Tester::new(
+    fn(c) {
+      c.list("rows", 20, 20.0, fn(i) {
+        c.text(if i == 3 { "row " + shown.get() } else { "row \{i}" }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=600.0,
+  )
+  t.run_for(said_frame_ms)
+  t.check_looks(false)
+  t.set_frame_period(said_frame_ms)
+  // posted between frames, as a host's message comes (each frame's rows kept and built taken as it ends): the first
+  // changing only the signal, then one left for its handler
+  let ends : Array[(Int, Int)] = []
+  let posted : Array[Int] = []
+  t.between_frames(fn() {
+    ends.push(t.rows_as_nodes())
+    let at = (posted.length() + 1) * said_post_ms
+    if posted.length() < 2 && t.time() >= at.to_double() {
+      t.post("test.said", if posted.is_empty() { "set b" } else { "other" })
+      posted.push(ends.length())
+    }
+  })
+  t.run_for((3 * said_post_ms).to_double())
+  assert_true(t.find("row b") is Some(_))
+  assert_eq(handed, ["other"])
+  // the frame that took the first: the one row that read it built, the others kept; the second's, every row built
+  let (kept, built) = ends[posted[0]]
+  assert_true(built == 1 && kept > 10, msg="\{ends[posted[0]]}")
+  assert_true(ends[posted[1]].1 >= 20, msg="\{ends[posted[1]]}")
+}
