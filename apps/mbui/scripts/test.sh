@@ -134,6 +134,21 @@ for t in ${TARGETS:-native}; do
       done
     fi
   fi
+  # The flows seen again (src/sfreplay/flows, one program): their files in REPLAY_SHARDS moon tests side by side (3),
+  # the core's tests in another. One moon test ran them one after another, 83 s of the replay part's run on CI's four
+  # cores, the part the pipeline's longest on a branch (mbui-parts-nodes, 40573326799, 2026-10-28).
+  if [[ " $pkgs " = *" -p stillfail/sfreplay/flows "* ]] && [ "${MBC_LTO:-0}" != thin ]; then
+    flows=(src/sfreplay/flows/*_test.mbt)
+    n=${REPLAY_SHARDS:-3}
+    rest=()
+    for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
+    runs=("${rest[@]}")
+    for ((k = 0; k < n; k++)); do
+      shard=()
+      for ((i = k; i < ${#flows[@]}; i += n)); do shard+=("${flows[i]}"); done
+      [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
+    done
+  fi
   # Which of APP_GROUP's n runners a run is on (k of 1..n). Four (check-mbui's): each two or three of the runs that
   # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
   # 187 and 147, the pages' 174, contrast's 117, screens' 77, squeeze_said's 49, the packages' 10, all nine at once:
