@@ -189,7 +189,6 @@ pub fn update_install(src : Source) -> Unit {
   }
   update.installing.set(true)
   update_check(src, true, done=fn(said) {
-    update.installing.set(false)
     match update.available.get() {
       Some(v) if said == "" => {
         let file = text(Some(v), "file")
@@ -203,8 +202,13 @@ pub fn update_install(src : Source) -> Unit {
             @ui.update_install((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), name)
           None => ()
         }
+        // (no longer asking once the host has it, as it says it downloads: 正在检查 goes on to 下载中, nothing between)
+        update.installing.set(false)
       }
-      _ => update_say(said)
+      _ => {
+        update.installing.set(false)
+        update_say(said)
+      }
     }
   })
 }
