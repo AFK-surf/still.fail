@@ -1411,12 +1411,32 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
     return
   }
   match c.editors.get(c.focus) {
+    Some(st) if kind == text_float_begin || kind == text_float_move => {
+      float_caret(st, kind, a.to_double(), b.to_double(), h_now())
+      h_request_frame()
+    }
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())
       h_request_frame()
     }
     None => ()
   }
+}
+
+///|
+/// The keyboard's trackpad in field `st` (on_text's text_float_begin, text_float_move, at (`x`, `y`) in the window):
+/// the caret put as a pointer would put it as far from where the caret was when it began as (`x`, `y`) is from where it
+/// began, as iOS's own fields move theirs (the host's point is the finger's way, not a place in the words); counted in
+/// the field's words, as the field scrolls under it to follow the caret.
+fn float_caret(st : EditorState, kind : Int, x : Double, y : Double, t : Double) -> Unit {
+  guard st.tl is Some(tl) else { return }
+  if kind == text_float_begin {
+    let (cx, line) = st.place_of(tl, st.caret + st.marked.length())
+    st.floating = Some((x, y, cx, (line.to_double() + 0.5) * tl.line_h))
+    return
+  }
+  guard st.floating is Some((fx, fy, cx, cy)) else { return }
+  place_caret(st, st.ox + cx + x - fx, st.oy + cy + y - fy, t)
 }
 
 ///|

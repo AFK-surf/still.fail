@@ -91,3 +91,16 @@ test "with no field focused, the menu bar's editing items can do nothing" {
   t.draw()
   assert_eq(t.edit_can(), 0)
 }
+
+///|
+test "the keyboard's trackpad moves the caret as far as the finger went, from where the caret was" {
+  let (f, t) = keys_field("hello brave world\nnext one", 17, platform=2)
+  // (where it begins is the finger's, not the caret's: only how far it goes counts)
+  t.ime_trackpad(200, 100, 175, 100)
+  assert_eq(f.selection(), (12, 12))
+  t.ime_trackpad(150, 50, 116, 60)
+  assert_eq(f.selection(), (23, 23))
+  // the host told where the caret went
+  let (_, _, a, b) = t.ime()
+  assert_eq((a, b), (23, 23))
+}
