@@ -660,6 +660,28 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   // (read in a computed, followed as the made-up core changes: Fixture::changed)
   @settings.fixture_followed()
   fix_tick(f)
+  // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
+  // out again each time it is read)
+  let version = f.version + @settings.fixture_version() + fix_browse.changes
+  let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
+  match fixture_answers.get(key) {
+    Some(t) if t.version == version => return t
+    _ => ()
+  }
+  let t = fixture_answer(f, name, params, version)
+  fixture_answers[key] = t
+  t
+}
+
+///|
+/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
+/// (fixture_topic).
+// kept across runs: let go as a fixture is made (fixture)
+let fixture_answers : Map[String, Topic] = {}
+
+///|
+/// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
+fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], version : Int) -> Topic {
   let value = fixture_topic_inner(f, name, params)
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
   // `stationNet` view of its own (the made-up stations say both as `net`)
@@ -691,7 +713,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
     }
     _ => value
   }
-  { value, error: None, version: f.version + @settings.fixture_version() + fix_browse.changes }
+  { value, error: None, version }
 }
 
 ///|
@@ -973,6 +995,7 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 ///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
+  fixture_answers.clear()
   fixture_preview(mode)
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },

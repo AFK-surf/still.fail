@@ -1,0 +1,13 @@
+# 中屏 (an opened fold upright), a finger: two chats chosen in turn from the sidebar, then the sidebar's list dragged.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 500
+log measure
+tap 夜里的构建又失败了
+wait 1000
+tap 首页的列表改成按天分组
+wait 1000
+dragon 0 -300 400 整理发布清单
+wait 1200
+exit

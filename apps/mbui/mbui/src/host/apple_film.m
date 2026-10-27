@@ -5,6 +5,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>
+#import <QuartzCore/QuartzCore.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -207,6 +208,10 @@ int32_t mbf_snapshot(moonbit_string_t path) {
     return mb_render_snapshot(ns(path).fileSystemRepresentation);
   }
 }
+
+// The machine's clock (ms, monotonic): what a bench over a Tester times the frame's work by (src/film's bench; the
+// run's own clock is the Tester's).
+double mbf_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
 void mbf_exit(int32_t code) {
   fflush(stderr);

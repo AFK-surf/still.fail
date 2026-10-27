@@ -9,6 +9,26 @@ fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
 }
 
 ///|
+fn draw_timed(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  parts : Array[(Double, Double, Double, Double)],
+  out : FixedArray[Double],
+) -> Unit {
+  ignore((inst, count, r, g, b, parts))
+  out[0] = 0.0
+  out[1] = 0.0
+}
+
+///|
+fn now_ms() -> Double {
+  0.0
+}
+
+///|
 fn open(path : String, w : Int, h : Int, fps : Int) -> Bool {
   ignore((path, w, h, fps))
   false

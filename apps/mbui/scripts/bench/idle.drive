@@ -1,0 +1,7 @@
+# 大屏, a mouse: the app opened over a long chat, the sidebar's chats at work turning; nothing touched for 2 s.
+timeout 20000
+until 新建对话
+wait 500
+log measure
+wait 2000
+exit

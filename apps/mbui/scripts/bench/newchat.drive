@@ -1,0 +1,14 @@
+# 小屏, a finger: a new chat risen from 令, its composer opened and let go of, the new chat gone back down.
+timeout 20000
+until 整理发布清单
+wait 500
+log measure
+tap icon:ling
+wait 900
+tap 做任何事
+wait 800
+tapxy 195 200
+wait 800
+back
+wait 1000
+exit

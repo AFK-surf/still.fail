@@ -49,6 +49,47 @@ extern "C" fn ffi_exit(code : Int) -> Unit = "mbf_exit"
 extern "C" fn ffi_snapshot(path : String) -> Int = "mbf_snapshot"
 
 ///|
+#borrow(inst, out)
+extern "C" fn ffi_draw_timed(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  out : FixedArray[Double],
+) -> Unit = "mb_render_draw_timed"
+
+///|
+extern "C" fn ffi_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit = "mb_host_render_dirty"
+
+///|
+extern "C" fn ffi_now_ms() -> Double = "mbf_now_ms"
+
+///|
+/// The instances drawn offscreen as a window's frame is, only the parts said to differ (`parts`: none, nothing; one
+/// with w < 0, all of it), timed: the CPU's uploading and encoding them, the GPU's drawing them (ms, into `out`).
+fn draw_timed(
+  inst : FixedArray[Double],
+  count : Int,
+  r : Double,
+  g : Double,
+  b : Double,
+  parts : Array[(Double, Double, Double, Double)],
+  out : FixedArray[Double],
+) -> Unit {
+  for p in parts {
+    ffi_dirty(p.0, p.1, p.2, p.3)
+  }
+  ffi_draw_timed(inst, count, r, g, b, out)
+}
+
+///|
+/// The machine's clock (ms): what a bench times the work by.
+fn now_ms() -> Double {
+  ffi_now_ms()
+}
+
+///|
 fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
   ffi_init_offscreen(w, h, scale)
 }

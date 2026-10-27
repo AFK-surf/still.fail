@@ -156,6 +156,14 @@ pub fn film(
 /// The frame the Tester presented last drawn by this host's renderer, as the film's picture from now on: its
 /// pictures the host's own (Tester::live_image), one the host has not (a stream's frame) left out.
 fn draw_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> Unit {
+  let (n, (r, g, b)) = host_frame(t, buf)
+  draw(buf.val, n, r, g, b)
+}
+
+///|
+/// The frame the Tester presented last, copied into `buf` as this host's renderer draws it: its pictures the host's own
+/// (Tester::live_image), one the host has not (a stream's frame) left out. How many instances, what is under them.
+fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, Double, Double)) {
   let (inst, n, (r, g, b)) = t.presented()
   let len = n * inst_size
   if buf.val.length() < len {
@@ -178,7 +186,7 @@ fn draw_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> Unit {
       }
     }
   }
-  draw(f, n, r, g, b)
+  (n, (r, g, b))
 }
 
 ///|
