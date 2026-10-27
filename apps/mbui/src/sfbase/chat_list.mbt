@@ -53,6 +53,9 @@ pub(all) struct Reading {
   /// the first message when the page before was asked for (once per page)
   asked : @signals.Signal[Double]
   mut asked_newer : Double
+  /// the chat's latest page asked for in place of a window short of its end (chat_latest): the list goes to its end
+  /// as it comes
+  mut latest_asked : Bool
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
   /// the newest message seen whole on this visit (-1 none): read up to there
@@ -183,6 +186,7 @@ pub fn reading_of(key : String) -> Reading {
         lined: false,
         asked: @signals.signal(-1.0),
         asked_newer: -1.0,
+        latest_asked: false,
         told: "",
         seen_whole: -1.0,
         top_seq: -1.0,
@@ -1188,6 +1192,22 @@ pub fn tell_focus(
 }
 
 ///|
+/// Chat `r` (its view `v`) shown short of its end: its latest page in place of what shows (`chat.latest`; Chat.kt
+/// atLatest), its list at its end as it comes (list_after). Asked as the way to the newest is pressed, and as words are
+/// sent: they go at the chat's end, not after what was being read.
+pub fn chat_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, what : String) -> Unit {
+  guard v.newer && v.thread is Some(th) else { return }
+  let rd = reading_of(r.station + "\u{1}" + r.session)
+  rd.latest_asked = true
+  let station = r.station
+  c.tell("chat.latest/" + r.station + "/" + r.session, fn() {
+    act(src, what, "", "chat.latest", { "station": Json::string(station), "thread": Json::number(th) }, failed=fn() {
+      rd.latest_asked = false
+    })
+  })
+}
+
+///|
 pub fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
   let o : Map[String, Json] = {
     "station": Json::string(r.station),
@@ -1578,6 +1598,11 @@ pub fn list_after(
         }
       }
       _ => ()
+    }
+    // the chat's latest page come in place of a window short of its end, asked for (chat_latest): at its end at once
+    if rd.latest_asked && !v.newer {
+      rd.latest_asked = false
+      c.list_to_end(key, glide=false)
     }
     // near the end of a window short of the chat's: the page after
     match (info, v.thread) {

@@ -1597,8 +1597,10 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     hold=fn(ms) { composer_hold(w.key, room, box, ms) },
     desk=true,
   )
-  // the chat's list to its end, where the row is (gliding there while nothing flies to it)
+  // the chat's list to its end, where the row is (gliding there while nothing flies to it); shown short of the chat's
+  // end, its latest page in place of what was read, the row at its end
   c.list_to_end("chat/" + r.station + "/" + r.session, glide=@sfbase.flight_of(w.key) is None)
+  @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
   writing_take(src, w, fn(taken) {
     guard taken is Some(_) else {
       sent_local_gone(rk, row)

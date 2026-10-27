@@ -374,18 +374,7 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
     if !v.newer {
       c.list_to_end(list_key(r))
     } else {
-      match v.thread {
-        Some(th) => {
-          let station = r.station
-          c.tell("chat-jump", fn() {
-            act(src, @sf.t("web-main.chat.toLatest"), "", "chat.latest", {
-              "station": Json::string(station),
-              "thread": Json::number(th),
-            })
-          })
-        }
-        None => ()
-      }
+      @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
     }
   }
   @sf.tip(c, "chat-jump", id, @sf.t("web-main.chat.toLatest"), shortcut="chat.latest")

@@ -38,6 +38,37 @@ test "words sent are in the list the frame they are sent, the core not answering
 }
 
 ///|
+test "words sent from a window short of the chat's end: its latest page asked for, the list at its end as it comes" {
+  let short = Ref(true)
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" || !short.val {
+      return tp
+    }
+    match tp.value {
+      Some(Object(m)) => {
+        let o = m.copy()
+        o["newer"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o)), version: tp.version + 1 }
+      }
+      _ => tp
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("先上屏")
+  tap_send(t)
+  assert_eq(named(calls, "chat.latest").length(), 1)
+  // read up there meanwhile; the latest page comes: the list at its end
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -900.0)
+  assert_true(!t.at_end())
+  short.val = false
+  t.draw()
+  t.draw()
+  assert_true(t.at_end())
+}
+
+///|
 test "refused by the core: what was sent leaves the list, the words back in the field" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

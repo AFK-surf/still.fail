@@ -1358,8 +1358,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     }
   })
   // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends); with words flying
-  // there at once, the rows above going up with them (flight.mbt)
+  // there at once, the rows above going up with them (flight.mbt); shown short of the chat's end, its latest page in
+  // place of what was read
   c.list_to_end(list_key(r), glide=flight_of(d.key) is None)
+  @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
 }
 
 // ── the composer ────────────────────────────────────────────────────────
