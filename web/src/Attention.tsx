@@ -50,7 +50,8 @@ const troubleKeep = (scope: string, text: string) => {
 
 /**
  * `rail`: drawn in the rail (Rail.tsx) as its bell, there even with none, a dot on it while it lists any (how many
- * chats in its label): besides the chats, a station's trouble not looked at yet and the services left up long.
+ * chats in its label): besides the chats, a station's trouble not looked at yet and the services left up long it has not
+ * shown yet.
  */
 export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: string; count: string; label: string } }) {
   const marks = useWorkspaceMarks(scope);
@@ -67,12 +68,15 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
   const [troubleSeen, setTroubleSeen] = useState(() => troubleRead(scope));
   // (as it was before the bell opened while it is open: listed while it is first read)
   const trouble = stationTrouble && stationTrouble.text !== troubleSeen ? stationTrouble : undefined;
-  const jobs = useLongJobs(scope, useToast()).groups.reduce((sum, g) => sum + g.jobs.length, 0);
-  const more = !!rail && (!!trouble || jobs > 0);
+  const long = useLongJobs(scope, useToast());
+  const jobs = long.groups.reduce((sum, g) => sum + g.jobs.length, 0);
+  // (the services left up long light it only until it has shown them; listed while there)
+  const more = !!rail && (!!trouble || long.lit);
   // Looked at as the bell opens (kept at once), no longer listed once it closes.
   const opened = (on: boolean) => {
     setOpen(on);
     if (on && rail && trouble) troubleKeep(scope, trouble.text);
+    if (on && rail && long.lit) long.seen();
     if (!on) setTroubleSeen(troubleRead(scope));
   };
   // Its stations all reached again: a trouble later in the same words is new.
@@ -119,7 +123,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side={rail ? "right" : "bottom"} align="start" sideOffset={rail ? 10 : 6} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}>
-          {all.length === 0 && !more && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
+          {all.length === 0 && !more && !(rail && jobs > 0) && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
           {rail && trouble && (
             <div className={css.group}>
               <div className={css.groupName}>Station</div>

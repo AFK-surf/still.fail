@@ -341,3 +341,20 @@ pub fn long_jobs(src : Source, w : Workspace) -> Int {
   })
 }
 
+///|
+/// Whether those left up long light the rail's bell (the `longJobs` topic's `lit`: one it has not shown yet, and the
+/// bell lit by them).
+pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {
+  flag((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "lit")
+}
+
+///|
+/// The bell has shown those left up long: kept, so they no longer light it (`prefs.set {jobsSeen}` with the
+/// `longJobs` topic's `ids`).
+pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
+  let ids = field((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "ids").unwrap_or(Json::array([]))
+  let m : Map[String, Json] = {}
+  m[w.id] = ids
+  (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), fn(_) {  })
+}
+

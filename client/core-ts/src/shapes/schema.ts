@@ -1856,6 +1856,7 @@ export const SHAPES: Record<string, Shape> = {
     ["previewSizes", map("String"), { default: true, doc: "The size a service's page is shown at on this device (its preview's 尺寸), by its station and job\n(`<station>\\n<job>`): its width, or `<width>x<height>`; none: as big as the preview." }],
     ["sidebars", map("String"), { default: true, doc: "Each sidebar of the wide frame as it was left on this device, by its group\n(`<chats|settings|files|profiles|stations|tabs>`): its width, the person's in every workspace, by `\\n<group>`; folded, each\nworkspace's own, `closed` by `<workspace>\\n<group>` (a width kept there before, `<width>` or `<width>,closed`, is read where\nnone is kept by the group alone)." }],
     ["trouble", map("String"), { default: true, doc: "What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\\n<seen|gone>`:\nthe trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed)." }],
+    ["jobsSeen", map(vec("String")), { default: true, doc: "The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the\n`longJobs` view's `ids` were when it opened. They no longer light it." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
     ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead." }],
@@ -1958,6 +1959,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool", { default: true, doc: "A chat of theirs went wrong." }],
     ["done", "bool", { default: true, doc: "An agent said something they have not read." }],
     ["message", "bool", { default: true, doc: "Someone else said something they have not read." }],
+    ["services", "bool", { default: true, doc: "Services and jobs left up long (an hour) light the rail's bell until it has shown them; never\ncounted in the app's number." }],
   ], { doc: "What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off." }),
   BarPrefs: struct([
     ["sets", vec(vec("String")), { doc: "The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,\nusage, archive)." }],
@@ -2589,6 +2591,8 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   LongJobsView: struct([
     ["groups", vec("LongJobsGroup")],
+    ["lit", "bool", { default: true, doc: "They light the rail's bell: one is there it has not shown yet (`prefs.jobsSeen`), and the\nbell is lit by them (`badgeKinds.services`)." }],
+    ["ids", vec("String"), { default: true, doc: "Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)\nonce the bell opens." }],
   ], { doc: "The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),\noldest first, in groups: web services, then background jobs; none while empty.", keepNone: true }),
   LongJobsGroup: struct([
     ["key", "String", { doc: "services | jobs" }],

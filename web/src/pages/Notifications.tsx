@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
 import { core, useTopic } from "../core/react.ts";
+import { useWorkspaceMarks } from "../lastChat.ts";
 import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, Switch, SwitchRow, Waiting } from "../ui.tsx";
@@ -34,7 +35,7 @@ const ICON = BETA ? "/icon-beta-192.png" : "/icon-192.png";
 export function NotificationsPage({ back, workspace }: { back: string; workspace: string }) {
   const s = useSettings(workspace);
   const navigate = useNavigate();
-  const [open, setOpen] = useState<Kind | null>(null);
+  const [open, setOpen] = useState<Kind | "services" | null>(null);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
@@ -45,10 +46,10 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
   );
 }
 
-/** The settings as `s` has them, `open` the kind whose ways are shown (and the preview's). */
-function Settings({ s, open, onOpen }: { s: SettingsState; open: Kind | null; onOpen(kind: Kind | null): void }) {
+/** The settings as `s` has them, `open` the kind whose ways are shown (and the preview's, one with a banner). */
+function Settings({ s, open, onOpen }: { s: SettingsState; open: Kind | "services" | null; onOpen(kind: Kind | "services" | null): void }) {
   return <>
-    <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
+    <Preview s={s} kind={(open !== "services" ? open : null) ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
     <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
       {CAN_NOTIFY && <div className={css.tiles}>
         <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "unsupported" || s.permission === "denied"}
@@ -61,6 +62,7 @@ function Settings({ s, open, onOpen }: { s: SettingsState; open: Kind | null; on
         {KINDS_SHOWN.map((k) => (
           <KindRow key={k} kind={k} s={s} open={open === k} onOpen={() => onOpen(open === k ? null : k)} />
         ))}
+        <ServicesRow s={s} open={open === "services"} onOpen={() => onOpen(open === "services" ? null : "services")} />
       </div>
     </Section>
     <Section title={t("web-pages.notifications.more.title")}>
@@ -81,6 +83,9 @@ function useSettings(workspace: string) {
   const [busy, setBusy] = useState(false);
   const notify = useTopic<NotifyView>({ topic: "notify" }).value;
   const notices = useTopic<{ items: Notice[] }>({ topic: "notices", workspace }).value?.items ?? [];
+  const kept = useWorkspaceMarks(workspace)?.badgeKinds?.services ?? true;
+  const [bell, setBellNow] = useState<boolean | null>(null);
+  useEffect(() => setBellNow(null), [kept]);
   // What was just chosen shows before the core says it back.
   const [kinds, setKinds] = useState<NotifyKinds | null>(null);
   const [preview, setPreviewNow] = useState<boolean | null>(null);
@@ -108,6 +113,12 @@ function useSettings(workspace: string) {
     setKinds: (patch: Partial<NotifyKinds>) => {
       setKinds({ ...k, ...patch });
       core().call("notify.set", { kinds: patch }).catch((e: unknown) => { setKinds(null); failed(e); });
+    },
+    /** Whether the services left up long light the rail's bell (`badgeKinds.services`). */
+    bell: bell ?? kept,
+    setBell: (on: boolean) => {
+      setBellNow(on);
+      core().call("prefs.set", { badgeKinds: { services: on } }).catch((e: unknown) => { setBellNow(null); failed(e); });
     },
     setPreview: (on: boolean) => {
       setPreviewNow(on);
@@ -163,6 +174,24 @@ function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: SettingsState; open
           ) : (
             <WayRow title={t("web-pages.notifications.ways.banner")} checked={s.kinds[kind] !== false} disabled={off} onChange={(v) => s.setKinds({ [kind]: v })} />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The services and jobs left up long: told of only by the rail's bell, which they light until it has shown them. */
+function ServicesRow({ s, open, onOpen }: { s: SettingsState; open: boolean; onOpen(): void }) {
+  return (
+    <div className={css.kind} data-open={open || undefined}>
+      <button type="button" className={css.kindHead} aria-expanded={open} onClick={onOpen}>
+        <span className={css.kindText}><span>{t("web-pages.notifications.kinds.services")}</span><span className={css.muted}>{t("web-pages.notifications.kinds.servicesNote")}</span></span>
+        <span className={css.sum}>{s.bell ? t("web-pages.notifications.ways.bell") : t("web-pages.notifications.none")}</span>
+        <ChevronRight size={16} className={css.chevron} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className={css.kindWays}>
+          <WayRow title={t("web-pages.notifications.inBell")} checked={s.bell} disabled={false} onChange={s.setBell} />
         </div>
       )}
     </div>

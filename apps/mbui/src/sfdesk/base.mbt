@@ -139,6 +139,8 @@ using @sfbase {
   row_agent_groups,
   open_listed,
   long_jobs,
+  long_jobs_lit,
+  long_jobs_seen,
   held_order,
   decision_show,
   decision_key,

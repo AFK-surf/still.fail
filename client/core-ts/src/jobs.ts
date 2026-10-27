@@ -233,9 +233,14 @@ export interface From {
   chat: { id: string; title: string | null; archived: boolean; station: string } | null;
 }
 
+/// How the rail's bell takes the jobs left up long: whether they light it at all (`badgeKinds.services`), and those it
+/// has shown already (`jobsSeen`, `<station>/<id>`).
+export type Bell = { on: boolean; seen: Set<string> };
+
 /// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart. A task
-/// run for another station's chat (`from`, by its session) is in that chat, and says which station it came from.
-export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null): J {
+/// run for another station's chat (`from`, by its session) is in that chat, and says which station it came from. The
+/// bell's dot (`lit`) while one is there it has not shown yet; `ids` are what it keeps as shown once it opens.
+export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null, bell: Bell = { on: true, seen: new Set() }): J {
   const long: J[] = [];
   for (const [address, name, jobs] of stations) {
     for (const j of jobs) {
@@ -265,7 +270,8 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock, fro
     const list = long.filter((j) => isService(j) === service);
     return list.length === 0 ? [] : [{ key, head: `${t(head)} · ${list.length}`, jobs: list }];
   });
-  return { groups };
+  const ids = long.map((j) => `${j.station}/${strOf(j, "id")}`);
+  return { groups, lit: bell.on && ids.some((id) => !bell.seen.has(id)), ids };
 }
 
 /// A job's output as read, as a terminal shows it (its colours in `runs`, terminal.ts), with its last line and when it

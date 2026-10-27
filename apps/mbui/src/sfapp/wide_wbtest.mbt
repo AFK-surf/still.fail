@@ -2558,3 +2558,22 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   t.frame()
   assert_eq(@sfpages.find_chat(), "")
 }
+
+///|
+test "wide: 通知's 服务开着很久, the bell's alone: 点亮铃铛 on every system (prefs.set badgeKinds services), no banner of it" {
+  let calls : Array[Made] = []
+  // (tall enough for the kinds' last row opened)
+  let t = wide_tester(calls, h=1400.0)
+  app.nav.replace(Setting(@settings.Route::Notifications))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("服务开着很久") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Button, label="服务开着很久")
+  t.draw()
+  assert_true(t.find("点亮铃铛") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("计入红点") is None)
+  t.click(Switch, label="点亮铃铛")
+  t.frame()
+  let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "badgeKinds") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_eq(field(field(Some(set[0].params), "badgeKinds"), "services"), Some(Json::boolean(false)))
+}

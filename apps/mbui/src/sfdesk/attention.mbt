@@ -49,6 +49,10 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     if railed && now != "" {
       c.tell("attention/seen", fn() { trouble_keep(src, w, "seen", Json::string(now)) })
     }
+    // the services left up long it lists: shown, no longer lighting it (still listed)
+    if railed && long_jobs_lit(src, w) {
+      c.tell("attention/jobs-seen", fn() { long_jobs_seen(src, w) })
+    }
   } else if !wide.attention_open {
     attention.trouble_seen = None
   }
@@ -141,9 +145,9 @@ fn bell_trouble(src : Source, w : Workspace) -> String {
 
 ///|
 /// Whether the rail's bell has its dot: something in its panel, the chats (less what was let go here), the stations'
-/// trouble not looked at or services left up long (Attention.tsx `lit`).
+/// trouble not looked at or services left up long it has not shown yet (Attention.tsx `lit`).
 pub fn bell_lit(src : Source, w : Workspace) -> Bool {
-  attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs(src, w) > 0
+  attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs_lit(src, w)
 }
 
 ///|

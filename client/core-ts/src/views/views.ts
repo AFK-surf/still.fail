@@ -26,7 +26,7 @@ import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
-import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
+import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
 import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
@@ -871,7 +871,7 @@ export class Views implements Owner {
         if (view.topic.startsWith("admin")) return adminSources(view);
         return topics;
     }
-    if (view.topic === "chats" || view.topic === "decisions") topics.push({ topic: "prefs" });
+    if (view.topic === "chats" || view.topic === "decisions" || view.topic === "longJobs") topics.push({ topic: "prefs" });
     topics.push({ topic: "workspace", workspace: scope });
     if (view.topic === "stations") topics.push({ topic: "workspaces" });
     for (const s of this.stations(scope) ?? []) {
@@ -1265,7 +1265,9 @@ export class Views implements Owner {
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         const several = stations.length > 1;
         const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address }))] as [string, string | null, J[]]);
-        return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session)) };
+        const prefs = this.ok({ topic: "prefs" }) ?? null;
+        const bell = { on: badgeKindsOf(prefs).services, seen: jobsSeenOf(prefs, view.scope as string) };
+        return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session), bell) };
       }
     }
     return undefined;
