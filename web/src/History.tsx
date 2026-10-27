@@ -219,7 +219,7 @@ function tall(item: HistoryItem, per: number): number {
       return turn + events([
         ...(body.content.note ? [LINE_PX] : []),
         ...body.content.tasks.map((task) => LINE_PX + (task.md ? LINE_PX : 0)),
-        ...body.content.messages.map((m) => LINE_PX + folded(textLines(m.text, per, WORDS_LINES + 1), WORDS_LINES, LINE_PX)),
+        ...body.content.messages.map((m) => LINE_PX + folded(m.md ? mdLines(m.md as Md, m.text, per, WORDS_LINES + 1) : textLines(m.text, per, WORDS_LINES + 1), WORDS_LINES, LINE_PX)),
       ]);
     case "mark": return turn + STATE_PX;
     case "group": return turn + LINE_PX + 8;
@@ -431,13 +431,19 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
   );
 }
 
-/** A message: who and where in a line, their words under it; a job's as it wrote them, in a monospaced font. */
+/**
+ * A message: who and where in a line, their words under it; an agent's as Markdown, a job's as it wrote them, in a
+ * monospaced font.
+ */
 function Received({ from, message, place }: { from: ReactNode; message: HistoryMessage; place?: ReactNode }) {
   const { text, notice } = message;
+  const md = message.md as Md | undefined;
   return (
     <Ev icon={<ReceivedIcon {...ICON} size={14} />}>
       <div className={css.hLabel}>{t(notice === "job" ? "web-main.history.jobMessage.before" : "web-main.history.message.before")}<strong>{from}</strong>{t(notice === "job" ? "web-main.history.jobMessage.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
-      <Fold className={notice === "job" ? css.hOutput : css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>
+      {md
+        ? <Fold className={conversationCss.markdown} of={md} source={text} lines={WORDS_LINES} head={headOf(md, text)}><MdView md={md} source={text} /></Fold>
+        : <Fold className={notice === "job" ? css.hOutput : css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>}
     </Ev>
   );
 }

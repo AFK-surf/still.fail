@@ -3177,6 +3177,7 @@ export const SHAPES: Record<string, Shape> = {
     ["key", "String"],
     ["from", "HistoryFrom"],
     ["text", "String"],
+    ["md", opt("Value"), { doc: "An agent's words (another chat's letter, a bot in the thread) read as Markdown (markdown.ts), its runs of\nwords in `text`: what the clients draw. Absent for a person's, drawn as they wrote them, and for a notice." }],
     ["place", opt("Place")],
     ["notice", opt("String"), { doc: "A notice of the station's own, not a person's message: `job` (a job's words to its agent: `from` is its\nname, `text` what it said as it wrote it, drawn in a monospaced font) or `stillfail` (still.fail's words of no kind\nthe history knows; a job's or a chat's events are `tasks`)." }],
   ]),
