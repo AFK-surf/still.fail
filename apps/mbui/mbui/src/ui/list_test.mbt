@@ -552,6 +552,67 @@ test "a row followed from its top: a glide to the end stops with its top under t
 }
 
 ///|
+test "list: a glide to its end whose end moves on the way goes on from where it is, never standing still or jumping" {
+  let n = Ref::new(10)
+  let tall = Ref::new(80.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        n.val,
+        40.0,
+        fn(i) {
+          c.box(h=Px(if i == 10 { tall.val } else { 40.0 }), fn() { c.text("Row \{i}", wrap=false) |> ignore })
+          |> ignore
+        },
+        stick_end=true,
+        glide_on_growth=true,
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.run_for(@ui.list_glide_ms * 5.0)
+  // a row comes at its end: it glides after it; on its way, the row grows (its words laid out, a card under them)
+  n.val = 11
+  t.draw()
+  let moves : Array[Double] = []
+  let mut was = t.list_offset()
+  // (a frame a sixth of its time constant, about a phone's; the row grows half a time constant in)
+  let step = @ui.list_glide_ms / 6.0
+  let start = t.time()
+  let mut grown = false
+  while t.time() < start + @ui.list_glide_ms * 30.0 {
+    if !grown && t.time() >= start + @ui.list_glide_ms * 0.5 {
+      tall.val = 260.0
+      grown = true
+    }
+    t.frame(ms=step)
+    let now = t.list_offset()
+    moves.push(now - was)
+    was = now
+    if t.at_end() && grown {
+      break
+    }
+  }
+  assert_true(t.at_end())
+  // on every frame of its way it moved, and smoothly: no frame put it a long way that the next did not go on from
+  // (a remainder put at once, the frames round it standing still), each at least half of the one before
+  let last = moves.length() - 1
+  for i, m in moves {
+    if i < last {
+      assert_true(m > 0.0)
+    }
+    if i > 0 && i < last {
+      assert_true(m >= moves[i - 1] * 0.5)
+    }
+  }
+  // its last step a pixel at most (where it is put at its end)
+  assert_true(moves[last] < 2.0)
+}
+
+///|
 /// How far under the view's top a followed row stops in this test.
 let test_follow_margin : Double = 12.0
 

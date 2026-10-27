@@ -444,6 +444,7 @@ pub fn Ctx::list(
         glide_l0: 0.0,
         glide_rest: -1.0,
         glide_left: 0.0,
+        glide_meant: -1.0,
         follow_item: -1,
         follow_margin: 0.0,
         built: -1,
@@ -820,7 +821,10 @@ fn Ctx::place_list(
       }
     }
     st.glide_left = left
-    if st.glide_t0 == @double.infinity {
+    // its end moved since its last step (a row came or grew under it, the row it follows came nearer): it sets out
+    // again from where it is, so it neither jumps the difference at its rest nor stands still till its way catches up
+    let moved = st.glide_meant >= 0.0 && (left - st.glide_meant).abs() > 0.5
+    if st.glide_t0 == @double.infinity || moved {
       // it sets out at its first layout: its way said once (what is left of it e^(-t/list_glide_ms), at its end once
       // under a pixel)
       st.glide_t0 = self.clock
@@ -1049,6 +1053,7 @@ fn Ctx::glide_to_end(self : Ctx, id : Int, st : ListState) -> Unit {
   st.glide = true
   st.glide_t0 = @double.infinity
   st.glide_rest = -1.0
+  st.glide_meant = -1.0
   self.moving(st.ease_mover, st as &Moving, what="a list gliding to its end")
 }
 
@@ -1076,6 +1081,8 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
   if st.glide_left > want {
     st.pending = st.pending + (st.glide_left - want)
   }
+  // (where it means to be after this step: its next layout finds it there unless its end moved)
+  st.glide_meant = dmin(st.glide_left, want)
 }
 
 ///|
