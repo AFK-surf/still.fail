@@ -546,7 +546,7 @@ fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
       // the stations it is signed in on: one borrowing it has nothing of its own to set
       for m in items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }) {
         let mv = Some(m)
-        if list_row(c, key="account-member/" + text(mv, "station"), fn() {
+        if list_row(c, key="account-member/" + text(mv, "station") + "/" + text(mv, "profileId"), fn() {
             c.box(w=Fill(1.0), fn() {
               c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                 presence_dot(
@@ -559,7 +559,7 @@ fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
                     tone_dot(text(mv, "checkTone"))
                   },
                 )
-                c.text(text(mv, "stationName"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
+                c.text(text(mv, "title"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
               })
               |> ignore
               c.text(
@@ -593,6 +593,7 @@ fn account_sample() -> Json {
     {
       "station": Json::string("sample/" + i.to_string()),
       "stationName": Json::string(@sf.sample_words(4 + i)),
+      "title": Json::string(@sf.sample_words(4 + i)),
       "about": Json::string(@sf.sample_words(12)),
       "online": true,
       "usable": true,

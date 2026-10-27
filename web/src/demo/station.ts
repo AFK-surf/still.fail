@@ -236,7 +236,7 @@ export function profiles() {
       // (stopped by its provider: in its check's words, needing a look)
       profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "仅在 Studio",
       stations: [], editable: true, canShare: true,
-      members: [{ station: STATION, stationId: "local", stationName: "Studio", online: true, profileId: p.id, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
+      members: [{ station: STATION, stationId: "local", stationName: "Studio", title: "Studio", online: true, profileId: p.id, profileName: p.name, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],
   };
 }

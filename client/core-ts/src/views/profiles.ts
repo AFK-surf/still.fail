@@ -66,6 +66,8 @@ export function workspaceProfiles(stations: J[]): J {
   const items: J[] = [];
   for (const [key, list] of groups) {
     const members = list.map(([s, p]) => member(s, p, name, byId));
+    // A station with two of its profiles signed in to the account: each row named by its profile too, or they read alike.
+    for (const m of members) if (members.filter((x) => x.stationId === m.stationId).length > 1 && m.profileName !== "") m.title = `${m.stationName} · ${m.profileName}`;
     // What the row shows of it: the copy that has the login (a host, one signed in on its own) on a station that is up,
     // one that works before one in trouble (which the row then names by its station).
     const owns = (m: J) => m.role !== "user";
@@ -163,8 +165,10 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
     station: String(s.station),
     stationId: String(s.id),
     stationName: String(s.name),
+    title: String(s.name),
     online,
     profileId: String(p.id),
+    profileName: String(p.name ?? ""),
     role,
     about,
     usable,
