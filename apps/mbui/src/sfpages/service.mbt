@@ -5,9 +5,10 @@
 // marks service_marks.mbt. The frame puts it where it goes: the phone's stack a page of its own under a bar with its
 // way back (sfapp's service.mbt), a wide frame the chat's side panel's tab (sfdesk's service_tab.mbt).
 //
-// Its bar (@sf's page bar), the same on every screen: back and forward in the page's own history, reload, how far its
-// resources came (the `previewLoad` topic's ring; pressed, each of them in a panel), where it is (its name, then its
-// path; typed, it goes there), its size, marking it. The page fills what is under the bar, or is laid out at a size of
+// Its bar (@sf's page bar) over the page, a phone's two under it in a thumb's reach (as a phone's browser has them):
+// back and forward in the page's own history, reload, how far its resources came (the `previewLoad` topic's ring;
+// pressed, each of them in a panel), where it is (its name, then its path; typed, it goes there), its size, marking
+// it. The page fills what is beside the bar, or is laid out at a size of
 // its own (a phone's, a tablet's, a laptop's, a desktop's, one typed) on the grey of a canvas, fitted and centred, with
 // its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again. Its size is
 // chosen in one place on every screen: the bar's size key, its choices in the presenters' panel (a sheet on a phone,
@@ -27,7 +28,8 @@ pub fn service_note(c : @ui.Ctx, words : String) -> Unit {
 let note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
-/// The service's view in the box it is given (Preview.kt ServicePage, ServiceFrame): its bar, the stage. `file`: a visualization's page, served from here.
+/// The service's view in the box it is given (Preview.kt ServicePage, ServiceFrame): its bar, the stage. `file`: a
+/// visualization's page, served from here.
 pub fn service_view(
   c : @ui.Ctx,
   src : Source,
@@ -78,24 +80,31 @@ pub fn service_view(
   if can_back {
     c.take_back(fn() { site.go_back() })
   }
-  service_page_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
-  service_stage(c, p, site, name, restarting, restarts)
+  // (with touch, as narrow as a phone's: what drives it under it, in a thumb's reach; a row over it would be short of
+  // room for what a browser keeps at hand, a press's room round each key)
+  if @sf.keys_at_foot(c.width) {
+    service_stage(c, p, site, name, restarting, restarts)
+    service_foot_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
+  } else {
+    service_page_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
+    service_stage(c, p, site, name, restarting, restarts)
+  }
 }
 
 ///|
-/// Back, forward, reload, how far its resources came, where it is (typed to go elsewhere), its size, marking it
-/// (PreviewBar).
-fn service_page_bar(
-  c : @ui.Ctx,
-  src : Source,
-  p : ServicePage,
-  site : @ui.NativeView,
-  name : String,
-  station : String,
-  port : Int,
-  fixed? : Bool = false,
-) -> Unit {
-  let t = @sf.theme()
+/// What its bars know of the page this frame (its address said on the log as it moves, a tap on the address typing
+/// there): where it is, whether it can go back and forward, the address's field and whether it is typed in, its pill.
+priv struct BarNow {
+  at : String
+  can_back : Bool
+  can_forward : Bool
+  field_key : String
+  editing : Bool
+  pill : Int
+}
+
+///|
+fn bar_now(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView, fixed : Bool) -> BarNow {
   let (at, can_back, can_forward, _, _) = site.page_at()
   let field_key = "service/address/" + service_key(p.station, p.job)
   let editing = c.editor_focused(field_key)
@@ -112,146 +121,51 @@ fn service_page_bar(
   if !editing && !fixed && c.clicked(pill) {
     c.focus_editor(field_key)
   }
+  { at, can_back, can_forward, field_key, editing, pill }
+}
+
+///|
+/// Back, forward, reload, how far its resources came, where it is (typed to go elsewhere), its size, marking it
+/// (PreviewBar): over the page, in a row.
+fn service_page_bar(
+  c : @ui.Ctx,
+  src : Source,
+  p : ServicePage,
+  site : @ui.NativeView,
+  name : String,
+  station : String,
+  port : Int,
+  fixed? : Bool = false,
+) -> Unit {
+  let n = bar_now(c, p, site, fixed)
   @sf.page_bar(c, fn() {
     // (short of room, as the address keeps its least (@sf.bar_field) and marking's words want four characters at
-    // least: back and forward leave the bar first, then reload, then how far it came, then its size, each offered in
-    // its ⋯ at its end; never the address's place)
+    // least: how far it came leaves the bar first, then its size, then reload, each offered in its ⋯ at its end;
+    // never back and forward, nor the address's place)
     let gone : Array[@sf.MenuItem?] = []
-    let back = @sf.t("web-main.keymap.nav.back")
-    let back_slot = c.id("service/go-back-slot")
-    c.box(id=back_slot, taps=false, drop=bar_drop_nav, fn() {
-      if @sf.bar_key(c, "service/go-back", "arrow-left", back, enabled=can_back) {
-        site.go_back()
-      }
-    })
-    |> ignore
-    if c.left_out(back_slot) {
-      gone.push(Some(bar_line(back, "arrow-left", disabled=!can_back, on_press=fn() { site.go_back() })))
-    }
-    let forward = @sf.t("web-main.keymap.nav.forward")
-    let forward_slot = c.id("service/go-forward-slot")
-    c.box(id=forward_slot, taps=false, drop=bar_drop_nav, fn() {
-      if @sf.bar_key(c, "service/go-forward", "arrow-right", forward, enabled=can_forward) {
-        site.go_forward()
-      }
-    })
-    |> ignore
-    if c.left_out(forward_slot) {
-      gone.push(Some(bar_line(forward, "arrow-right", disabled=!can_forward, on_press=fn() { site.go_forward() })))
-    }
-    let reload = @sf.t("web-main.preview.reload")
-    let reload_slot = c.id("service/reload-slot")
-    c.box(id=reload_slot, taps=false, drop=bar_drop_reload, fn() {
-      if @sf.bar_key(c, "service/reload", "refresh", reload) {
-        site.reload()
-      }
-    })
-    |> ignore
-    if c.left_out(reload_slot) {
-      gone.push(Some(bar_line(reload, "refresh", disabled=false, on_press=fn() { site.reload() })))
-    }
-    // how far the page's resources came (PreviewLoad.kt): a ring, red with one failed; tapped, each of them (a
-    // visualization's page has none: it is served from here)
-    let load = if fixed {
-      None
-    } else {
-      (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
-    }
     let more = c.id("service/more")
-    match load {
-      Some(Object(_)) => {
-        let ring = c.id("service/load")
-        if c.clicked(ring) {
-          service_load_panel(src, station, port, Of(ring))
-        }
-        let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
-        let slot = c.id("service/load-slot")
-        c.box(id=slot, taps=false, drop=bar_drop_load, fn() {
-          // (PreviewLoad.kt: how far, in words, to a screen reader)
-          c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
-            @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-        if c.left_out(slot) {
-          gone.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
-        }
-      }
-      _ => ()
+    // (back and forward stay, whatever the room: a browser's own)
+    back_forward(c, site, n)
+    let reload_slot = c.id("service/reload-slot")
+    c.box(id=reload_slot, taps=false, drop=bar_drop_reload, fn() { reload_key(c, site) }) |> ignore
+    if c.left_out(reload_slot) {
+      gone.push(Some(bar_line(@sf.t("web-main.preview.reload"), "refresh", disabled=false, on_press=fn() { site.reload() })))
     }
-    let markable = p.session != ""
-    if markable && (p.marks.marking || p.marks.marks.length() > 0) {
-      c.box(style=mark_mode_place, keep=true, fn() { page_mark_mode(c, src, p, site) }) |> ignore
-    } else {
-      // where it is (previewAddress)
-      @sf.bar_field(c, pill, editing, fn() {
-        @sf.icon(c, "web", size=t.bars.icon, color=t.p.muted) |> ignore
-        if fixed {
-          // nowhere else to go (a visualization): the address is only its name
-          c.box(style=file_name_box, fn() { c.text(name, style=file_name_words) |> ignore }) |> ignore
-          return
-        }
-        c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false) |> ignore
-        // where it went is what the bar says, unless someone is typing there
-        if !editing && at != p.shown_path {
-          p.shown_path = at
-          p.address.set(at)
-        }
-        let r = c.editor(
-          field_key,
-          font_size=t.t.ui,
-          max_lines=1,
-          plain=true,
-          ime_action=@hostapi.ime_action_go,
-          color=if editing { t.p.text } else { t.p.muted },
-          caret_color=t.p.accent,
-          field=p.address,
-        )
-        match r.submitted {
-          Some(typed) => {
-            let path = typed.trim().to_owned()
-            site.load(if path.has_prefix("/") { path } else { "/" + path })
-            c.blur()
-          }
-          None => ()
-        }
-      })
-    }
-    // its size, on every screen: what it is laid out at (none: as the room is), its choices pressed open (the
-    // presenters' panel: a sheet on a phone, beside it with keyboard and mouse); while a finger moves the page in place of using
-    // it, said here, in the accent with the move icon, and pressed it lets go of moving at once
-    let sid = c.id("service/size")
-    if c.clicked(sid) {
-      if p.moving {
-        p.moving = false
-      } else {
-        service_sizes_panel(service_key(p.station, p.job), Of(sid))
+    let load = load_of(src, station, port, fixed)
+    if load is Some(Object(_)) {
+      let slot = c.id("service/load-slot")
+      c.box(id=slot, taps=false, drop=bar_drop_load, fn() { load_key(c, src, station, port, load) }) |> ignore
+      if c.left_out(slot) {
+        gone.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
       }
     }
-    let size_said = if p.moving { svc("android-chat.preview.moveOff") } else { svc("android-chat.preview.size.title") }
+    address_or_marking(c, src, p, site, name, fixed, n)
     let size_slot = c.id("service/size-slot")
-    c.box(id=size_slot, taps=false, drop=bar_drop_size, fn() {
-      let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
-        @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
-        // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
-        match p.viewport {
-          Some(v) =>
-            c.box(drop=bar_drop_size_words, fn() {
-              c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
-            })
-            |> ignore
-          None => ()
-        }
-      })
-      c.semantics(sb, Button, id=sid, label=size_said)
-      @sf.tip(c, "service/size/tip", sid, size_said)
-    })
-    |> ignore
+    c.box(id=size_slot, taps=false, drop=bar_drop_size, fn() { size_key_of(c, p) }) |> ignore
     if c.left_out(size_slot) {
       gone.push(
         Some(
-          bar_line(size_said, if p.moving { "move" } else { "devices" }, disabled=false, on_press=fn() {
+          bar_line(size_said(p), if p.moving { "move" } else { "devices" }, disabled=false, on_press=fn() {
             if p.moving {
               p.moving = false
             } else {
@@ -261,10 +175,7 @@ fn service_page_bar(
         ),
       )
     }
-    // marking the page for the chat's agent (a page with no chat to put it in has none)
-    if markable && page_mark_key(c, p.marks.marking) {
-      page_marks_toggle(p, site)
-    }
+    mark_key_of(c, p, site)
     // what left it, in its ⋯ at its end (there only while something did)
     c.box(more=true, fn() {
       if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
@@ -277,10 +188,226 @@ fn service_page_bar(
 }
 
 ///|
-/// The size key (web ViewportSize.tsx trigger): 28 high, round, 6 in; sized, on the chip's ground with its size (12)
-/// 5 after the icon, 8 in; moving the page, on the accent's 14% in the accent's ink (as the mark key picking).
+/// The same under the page, in a thumb's reach (as a phone's browser has them: Safari's bar at the foot): where it is
+/// across it with reload after it (marking's say in its place while marking), and under it back, forward, how far it
+/// came, its size and marking it, spread across it, nothing leaving; in a panel of its own (the tape's), the first and
+/// the last concentric with its foot corners (@sf.foot_capsule).
+fn service_foot_bar(
+  c : @ui.Ctx,
+  src : Source,
+  p : ServicePage,
+  site : @ui.NativeView,
+  name : String,
+  station : String,
+  port : Int,
+  fixed? : Bool = false,
+) -> Unit {
+  let n = bar_now(c, p, site, fixed)
+  let load = load_of(src, station, port, fixed)
+  // (each key in its row's middle, as far over its foot as its room leaves under it)
+  let under = (@ui.room_least() - @sf.theme().bars.key) / 2.0
+  let (left, right, foot) = @sf.foot_capsule(@sf.theme().bars.key, foot_keys_in, under)
+  let lifted = dmax(0.0, foot - under)
+  c.box(style=foot_bar_box.then(@ui.style(pb=@sf.room_of(lifted))), fn() {
+    c.box(style=foot_address_row(), fn() {
+      address_or_marking(c, src, p, site, name, fixed, n)
+      reload_key(c, site)
+    })
+    |> ignore
+    c.box(style=foot_keys_row().then(@ui.style(pl=@sf.room_of(left), pr=@sf.room_of(right))), fn() {
+      back_forward(c, site, n)
+      if load is Some(Object(_)) {
+        load_key(c, src, station, port, load)
+      }
+      size_key_of(c, p)
+      mark_key_of(c, p, site)
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The bars under the page (service_foot_bar): on the page's ground (none of their own: what parts them from the page
+/// is where it ends); their two rows each as tall as a press's room (@ui.room_least), what is in them in their middle,
+/// so none takes another's room.
 // kept across runs: a value (no field of it changes)
-let size_key : @ui.Style = @ui.css("row h=S7 radius=Full px=S1_5 gap=S1_25 align=ACenter")
+let foot_bar_box : @ui.Style = @ui.css("w=Full")
+
+///|
+/// Where it is and reload after it, 8 in at its sides, keys_gap apart.
+fn foot_address_row() -> @ui.Style {
+  foot_address_look.then(@ui.style(h=Fixed(@ui.room_least()), gap=@sf.keys_gap(size=@sf.theme().bars.key)))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_address_look : @ui.Style = @ui.css("row w=Full px=S2 align=ACenter")
+
+///|
+/// Its keys spread across it (justified), the first and the last as far in as the address's ends (foot_keys_in) where
+/// no corner of a panel's is to be followed.
+fn foot_keys_row() -> @ui.Style {
+  foot_keys_look.then(@ui.style(h=Fixed(@ui.room_least())))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_keys_look : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
+
+///|
+/// How far in the keys under the address stand at its sides: as far as its capsule's ends (its row's 8, its room's 4).
+let foot_keys_in : Double = 12.0
+
+///|
+/// Back and forward in the page's own history.
+fn back_forward(c : @ui.Ctx, site : @ui.NativeView, n : BarNow) -> Unit {
+  if @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=n.can_back) {
+    site.go_back()
+  }
+  if @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=n.can_forward) {
+    site.go_forward()
+  }
+}
+
+///|
+fn reload_key(c : @ui.Ctx, site : @ui.NativeView) -> Unit {
+  if @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload")) {
+    site.reload()
+  }
+}
+
+///|
+/// How far the page's resources came (the `previewLoad` topic); a visualization's page has none (served from here).
+fn load_of(src : Source, station : String, port : Int, fixed : Bool) -> Json? {
+  if fixed {
+    None
+  } else {
+    (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+  }
+}
+
+///|
+/// How far the page's resources came (PreviewLoad.kt): a ring, red with one failed; pressed, each of them in a panel.
+fn load_key(c : @ui.Ctx, src : Source, station : String, port : Int, load : Json?) -> Unit {
+  let t = @sf.theme()
+  let ring = c.id("service/load")
+  if c.clicked(ring) {
+    service_load_panel(src, station, port, Of(ring))
+  }
+  let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
+  // (PreviewLoad.kt: how far, in words, to a screen reader)
+  c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
+    @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Where it is (previewAddress: its name, then its path, typed to go elsewhere), or what marking says in its place.
+fn address_or_marking(
+  c : @ui.Ctx,
+  src : Source,
+  p : ServicePage,
+  site : @ui.NativeView,
+  name : String,
+  fixed : Bool,
+  n : BarNow,
+) -> Unit {
+  let t = @sf.theme()
+  let markable = p.session != ""
+  if markable && (p.marks.marking || p.marks.marks.length() > 0) {
+    c.box(style=mark_mode_place, keep=true, fn() { page_mark_mode(c, src, p, site) }) |> ignore
+    return
+  }
+  @sf.bar_field(c, n.pill, n.editing, fn() {
+    @sf.icon(c, "web", size=t.bars.icon, color=t.p.muted) |> ignore
+    if fixed {
+      // nowhere else to go (a visualization): the address is only its name
+      c.box(style=file_name_box, fn() { c.text(name, style=file_name_words) |> ignore }) |> ignore
+      return
+    }
+    c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false) |> ignore
+    // where it went is what the bar says, unless someone is typing there
+    if !n.editing && n.at != p.shown_path {
+      p.shown_path = n.at
+      p.address.set(n.at)
+    }
+    let r = c.editor(
+      n.field_key,
+      font_size=t.t.ui,
+      max_lines=1,
+      plain=true,
+      ime_action=@hostapi.ime_action_go,
+      color=if n.editing { t.p.text } else { t.p.muted },
+      caret_color=t.p.accent,
+      field=p.address,
+    )
+    match r.submitted {
+      Some(typed) => {
+        let path = typed.trim().to_owned()
+        site.load(if path.has_prefix("/") { path } else { "/" + path })
+        c.blur()
+      }
+      None => ()
+    }
+  })
+}
+
+///|
+/// What the size key says: its size, or, while a finger moves the page, that a press stops it.
+fn size_said(p : ServicePage) -> String {
+  if p.moving {
+    svc("android-chat.preview.moveOff")
+  } else {
+    svc("android-chat.preview.size.title")
+  }
+}
+
+///|
+/// Its size, on every screen: what it is laid out at (none: as the room is), its choices pressed open (the presenters'
+/// panel: a sheet on a phone, beside it with keyboard and mouse); while a finger moves the page in place of using it,
+/// said here, in the accent with the move icon, and pressed it lets go of moving at once.
+fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
+  let t = @sf.theme()
+  let sid = c.id("service/size")
+  if c.clicked(sid) {
+    if p.moving {
+      p.moving = false
+    } else {
+      service_sizes_panel(service_key(p.station, p.job), Of(sid))
+    }
+  }
+  let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
+    @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
+    // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
+    match p.viewport {
+      Some(v) =>
+        c.box(drop=bar_drop_size_words, fn() {
+          c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
+        })
+        |> ignore
+      None => ()
+    }
+  })
+  c.semantics(sb, Button, id=sid, label=size_said(p))
+  @sf.tip(c, "service/size/tip", sid, size_said(p))
+}
+
+///|
+/// Marking the page for the chat's agent (a page with no chat to put it in has none).
+fn mark_key_of(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView) -> Unit {
+  if p.session != "" && page_mark_key(c, p.marks.marking) {
+    page_marks_toggle(p, site)
+  }
+}
+
+///|
+/// The size key (web ViewportSize.tsx trigger): 28 high, round, 6 in, as wide as high at least (its icon alone in its
+/// middle, as the bar's other keys); sized, on the chip's ground with its size (12) 5 after the icon, 8 in; moving the
+/// page, on the accent's 14% in the accent's ink (as the mark key picking).
+// kept across runs: a value (no field of it changes)
+let size_key : @ui.Style = @ui.css("row h=S7 min_w=S7 radius=Full px=S1_5 gap=S1_25 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -304,21 +431,19 @@ let size_key_words_moving : @ui.TextStyle = size_key_words.then(@ui.text_style(c
 let ring_box : @ui.Style = @ui.css("align=ACenter justify=JCenter")
 
 ///|
-/// What of the page's bar leaves it first where it is short of room, each to its ⋯: back and forward, then reload, then
-/// how far its resources came, then its size (its words first, its key keeping its icon).
-let bar_drop_nav : Int = 1
+/// What of the page's bar leaves it first where it is short of room, each to its ⋯: how far its resources came, then
+/// its size (its words first, its key keeping its icon: chosen now and then), then reload; back and forward never, as
+/// a browser's own (the user, 2026-10-27: 前进后退不能省吧).
+let bar_drop_load : Int = 1
 
 ///|
-let bar_drop_reload : Int = 2
+let bar_drop_size_words : Int = 2
 
 ///|
-let bar_drop_load : Int = 3
+let bar_drop_size : Int = 3
 
 ///|
-let bar_drop_size : Int = 4
-
-///|
-let bar_drop_size_words : Int = 3
+let bar_drop_reload : Int = 4
 
 ///|
 /// A line of the bar's ⋯: what a key that left the bar does, `on_press` once it is chosen.

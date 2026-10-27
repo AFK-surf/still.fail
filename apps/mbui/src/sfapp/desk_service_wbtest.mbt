@@ -9,7 +9,9 @@ test "desk: a web service asked as a page is its chat with the service beside it
   let src = fixture("chat-info")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  // (a window whose side panel holds the whole of its bar, a press's room round each key: a 1280's leaves its size and
+  // how far it came to its ⋯)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
   t.run_for(@ui.nav_push_ms)
   app.nav.push(Service("ws1/st1", "j-web"))
   t.frame()

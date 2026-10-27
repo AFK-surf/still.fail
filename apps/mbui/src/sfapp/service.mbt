@@ -8,9 +8,11 @@
 // each of its pages, with the app's StillFailPreviewNative behind it (service_link.mbt): its WebSockets, its requests'
 // bodies, its top page's fetch() as it comes, marking it (service_marks.mbt). No port on the station is open to anyone.
 //
-// The bar: back and forward in the page's own history (the system's back too, while there is a page to go back to),
-// reload, how far its resources came (the `previewLoad` topic's ring; tapped, each of them in a sheet), where it is
-// (its name, then its path; typed, it goes there), marking it. The page fills what is under the bar, or is laid out at
+// Its bars under the page, in a thumb's reach (as a phone's browser has them: Safari's at the foot; sfpages'
+// service_foot_bar): where it is (its name, then its path; typed, it goes there) with reload after it, and under it
+// back and forward in the page's own history (the system's back too, while there is a page to go back to), how far its
+// resources came (the `previewLoad` topic's ring; tapped, each of them in a sheet), its size, marking it, spread across
+// the screen. The page fills what is over the bars, or is laid out at
 // a size of its own (a phone's, a tablet's, a laptop's, a desktop's, one typed) on the grey of a canvas, fitted and
 // centred, with its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again: the
 // bar's size key chooses (the sizes, 自定义, turned; 移动页面, 适应), as on every screen (sfpages' service.mbt). A

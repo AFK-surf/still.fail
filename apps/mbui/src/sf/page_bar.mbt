@@ -4,11 +4,13 @@
 // (mbui's press_reach), so none is drawn larger for a phone.
 
 ///|
-/// The bar: 8 in, 6 over and under, its keys apart by keys_gap (8 with keyboard and mouse, 16 with touch), in their
-/// middle.
+/// The bar: 8 in, 6 over and under, a press's room high at least, its keys apart by keys_gap (8 with keyboard and
+/// mouse, 16 with touch), in their middle.
 pub fn page_bar(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  // (its keys as far apart as makes each a press's room across: keys_gap)
-  c.box(style=page_bar_box.then(@ui.style(gap=keys_gap(size=theme().bars.key))), body) |> ignore
+  // (its keys as far apart as makes each a press's room across (keys_gap), and as high: a touch's 28 keys 6 over and
+  // under are 40, under its 44)
+  c.box(style=page_bar_box.then(@ui.style(min_h=Fixed(@ui.room_least()), gap=keys_gap(size=theme().bars.key))), body)
+  |> ignore
 }
 
 ///|

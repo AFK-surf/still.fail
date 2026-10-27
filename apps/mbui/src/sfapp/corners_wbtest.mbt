@@ -37,7 +37,7 @@ let corner_modes : Array[String] = [
   "chat-model-pop", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
   "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
   "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
-  "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-station-file", "chat-station-files",
+  "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
   "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "decisions", "decisions-idle", "decisions-text", "archived",
   "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
   "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",

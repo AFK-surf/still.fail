@@ -53,6 +53,14 @@ pub fn attach_from_sheet() -> Bool {
 }
 
 ///|
+/// Whether a page `width` wide that a browser's keys drive (a web service's) has them under it, in a thumb's reach, as a
+/// phone's browser has them and an iPad's Safari as narrow (its own width's: a phone's, a tablet's side panel), rather
+/// than in a row over it: touch's, the native input's, in the narrow arrangement (look_for).
+pub fn keys_at_foot(width : Double) -> Bool {
+  native_input() is Finger && look_for(width) is Narrow
+}
+
+///|
 /// How far an edge standing in a gap `gap` wide between two panels (the tape's, sfdesk's tape_edge) takes presses past
 /// the gap, into the panel it sizes and into the one beside it: with touch none of its own (a row there is swiped
 /// across) and edge_finger_reach of the other, the gap and that as wide as a finger aims at a thing that thin; with
