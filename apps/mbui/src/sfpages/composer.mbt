@@ -1823,7 +1823,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         })
       }
     }
-    let archived_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+    let archived_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
       c.box(style=composer_notice_line, flow=true, fn() {
         c.text(@sf.t("web-main.archived.notice"), style=composer_notice_words) |> ignore
         let b = c.box(id=restore, fn() {
@@ -1846,7 +1846,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
   match v.cache_cold {
     Some((_, said, true)) if !v.archived => {
       // its station goes on afresh by itself: said, nothing to tap
-      let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+      let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
         c.text(said, style=composer_notice_wrapped) |> ignore
       })
       c.floats_over(cold_box)
@@ -1859,7 +1859,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "readBack": Json::boolean(true) }
         c.tell("composer/afresh", fn() { @sfbase.act(src, @sf.t("web-main.chat.afresh"), doing, "session.clear", params) })
       }
-      let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+      let cold_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
         // (its words wrapped beside it where they do not fit, 换新上下文 at the line's end)
         c.box(style=composer_notice_line.then(@ui.style(gap=S3)), fn() {
           c.text(said, style=composer_notice_grown) |> ignore
@@ -1888,7 +1888,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
           @sf.t("web-main.chat.offline")
         }
     }
-    let offline_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+    let offline_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
       c.text(said, style=composer_notice_words) |> ignore
     })
     c.floats_over(offline_box)
@@ -1897,7 +1897,8 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
 
 ///|
 /// A notice over the composer (offlineNotice): 760 wide at most, 32 in from each side, 8 over the composer, 8 by 12 in,
-/// rounded 10, on the hover's ground, the ui size, muted.
+/// rounded 10, on the composer's glass (raised at 72% over a 20px blur, a small shadow: the messages scrolling under it
+/// blurred, not showing through), the ui size, muted.
 let composer_notice_most : Double = 760.0
 
 ///|
@@ -1905,7 +1906,7 @@ let composer_notice_in : Double = 64.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_notice_box : @ui.Style = @ui.css("mb=S2 px=S3 py=S2 radius=Lg bg=Hover gap=S1")
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 px=S3 py=S2 radius=Lg shadow=Sm gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
