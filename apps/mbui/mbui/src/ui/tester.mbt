@@ -271,6 +271,8 @@ pub fn Tester::new(
     zoomed: false,
     snap: (0.0, 0.0, 0.0, 0.0),
     snap_state: 0,
+    window_opens: false,
+    windows_opened: [],
     opened: [],
     dark,
     inset: window_inset,
@@ -1875,6 +1877,19 @@ pub fn Tester::window_drags(self : Tester) -> Int {
 /// 3 close).
 pub fn Tester::window_acts(self : Tester) -> Array[Int] {
   self.fake.window_acts.copy()
+}
+
+///|
+/// Whether the app can open a window of its own, from the next frame on (@hostapi.window_opens: a desktop's).
+pub fn Tester::set_window_opens(self : Tester, can : Bool) -> Unit {
+  self.fake.window_opens = can
+  self.fake.wants = true
+}
+
+///|
+/// What the app opened windows of its own for, oldest first (@hostapi.window_open).
+pub fn Tester::windows_opened(self : Tester) -> Array[String] {
+  self.fake.windows_opened.copy()
 }
 
 ///|

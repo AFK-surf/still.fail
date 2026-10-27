@@ -71,6 +71,16 @@ impl @hostapi.Host for Native with window_snap_state(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_opens(_) {
+  window_opens()
+}
+
+///|
+impl @hostapi.Host for Native with window_open(_, what) {
+  window_open(what)
+}
+
+///|
 impl @hostapi.Host for Native with set_cursor(_, kind) {
   set_cursor(kind)
 }

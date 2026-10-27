@@ -362,39 +362,44 @@ fn main {
     })
     return
   }
-  // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
-  // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
-  @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
-  match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
-    [station, session] =>
-      @sfapp.open_chat({ station, session, title: "", station_name: "" })
-    _ => ()
-  }
-  // MBUI_OPEN_PAGE=files: 文件 pushed over Home (scripted runs; the bottom bar's place until there is one)
-  if @ui.env("MBUI_OPEN_PAGE") == "files" {
-    @sfapp.open_page(Files)
-  }
-  // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
-  if @ui.env("MBUI_OPEN_PAGE") == "decisions" {
-    @sfapp.open_decisions()
-  }
-  // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
-  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
-  // youdid.wtf's core (MBUI_BETA=1, still.fail's own: MBUI_OWN=1) asks the feed's beta, <feed>/beta, itself: its feed
-  // is android, not android/beta (which asked android/beta/beta, a 404); an app of its own on the test channel
-  // (still.fail mbui's: MBUI_BETA=1 alone) asks its feed as named (android/mbui)
-  match @ui.env("MBUI_UPDATE_FEED") {
-    "" => ()
-    feed => {
-      let origin = match @ui.env("MBUI_CLOUD") {
-        "" => "https://app.still.fail"
-        o => o
-      }
-      @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
+  // a window of its own (sfbase's window.mbt, MBUI_WINDOW: started by the app's run beside it, @ui.window_open): the
+  // page it was started for alone, none of what follows (the app's run beside it has them)
+  @sfbase.lone_page.val = @sfbase.window_page(@ui.env("MBUI_WINDOW"))
+  if @sfbase.lone_page.val is None {
+    // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
+    // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
+    @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
+    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+      [station, session] =>
+        @sfapp.open_chat({ station, session, title: "", station_name: "" })
+      _ => ()
     }
+    // MBUI_OPEN_PAGE=files: 文件 pushed over Home (scripted runs; the bottom bar's place until there is one)
+    if @ui.env("MBUI_OPEN_PAGE") == "files" {
+      @sfapp.open_page(Files)
+    }
+    // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
+    if @ui.env("MBUI_OPEN_PAGE") == "decisions" {
+      @sfapp.open_decisions()
+    }
+    // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
+    // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
+    // youdid.wtf's core (MBUI_BETA=1, still.fail's own: MBUI_OWN=1) asks the feed's beta, <feed>/beta, itself: its feed
+    // is android, not android/beta (which asked android/beta/beta, a 404); an app of its own on the test channel
+    // (still.fail mbui's: MBUI_BETA=1 alone) asks its feed as named (android/mbui)
+    match @ui.env("MBUI_UPDATE_FEED") {
+      "" => ()
+      feed => {
+        let origin = match @ui.env("MBUI_CLOUD") {
+          "" => "https://app.still.fail"
+          o => o
+        }
+        @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
+      }
+    }
+    // built in still.fail's desktop app's place: the station that app ran here carried on (sfbase local_station.mbt)
+    @sfbase.local_station_carry_on()
   }
-  // built in still.fail's desktop app's place: the station that app ran here carried on (sfbase local_station.mbt)
-  @sfbase.local_station_carry_on()
   // crash reports and the bar's timing, where the host has them (reports.mbt: Android)
   reports_start()
   @sfapp.use_core_markdown(core_source)

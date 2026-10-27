@@ -217,6 +217,48 @@ test "station tabs show their page beside the chat, preserve folders and release
 }
 
 ///|
+test "a screen beside a chat goes to a window of its own from the panel's bar (a desktop's), its tab closed here" {
+  reset()
+  let cancelled : Array[Int] = []
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    stream: fn(name, params, bytes, value, done) {
+      if name == "screen.view" { 7001 } else { (base.stream)(name, params, bytes, value, done) }
+    },
+    cancel: fn(id) { cancelled.push(id); (base.cancel)(id) },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@sfdesk.side_in_ms)
+  // none where the app opens no window of its own, nor for a tab other than a screen's
+  assert_true(adb_button_at(t, "在新窗口打开") is None)
+  t.set_window_opens(true)
+  t.frame()
+  assert_true(adb_button_at(t, "在新窗口打开") is None)
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的屏幕", until_gone: false }))
+  t.frame()
+  assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
+  let (x, y) = adb_button_at(t, "在新窗口打开").unwrap()
+  t.tap(x, y)
+  t.frame()
+  let opened = t.windows_opened()
+  assert_eq(opened.length(), 1)
+  assert_true(
+    @sfbase.window_page(opened[0]) ==
+    Some(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的屏幕", until_gone: false })),
+  )
+  // its tab closed, its view let go of; the other tab in front
+  assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
+  assert_eq(side_now(r).1, "drive:[\"ws1/st1\"]")
+  t.frame()
+  assert_true(cancelled.contains(7001))
+}
+
+///|
 test "共享调试 opened from a wide chat: beside it in a tab, the chats' sidebar and the chat staying as they are" {
   reset()
   let src = fixture("chat")

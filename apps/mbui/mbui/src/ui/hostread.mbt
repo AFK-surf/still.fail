@@ -263,6 +263,22 @@ pub fn window_act(what : Int) -> Unit {
 }
 
 ///|
+/// Whether the app can open a window of its own beside this one (@hostapi.window_opens; a Tester's as
+/// set_window_opens made it).
+pub fn window_opens() -> Bool {
+  match fake.val {
+    Some(f) => f.window_opens
+    None => @hostapi.window_opens()
+  }
+}
+
+///|
+/// Another window of the app opened beside this one, for `what` (@hostapi.window_open): whether it was.
+pub fn window_open(what : String) -> Bool {
+  h_window_open(what)
+}
+
+///|
 /// Where the app draws the window's maximize button this frame, in points (w 0: none): the host's there
 /// (@hostapi.window_snap).
 pub fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {

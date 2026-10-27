@@ -23,6 +23,8 @@ pub(open) trait Host {
   window_zoomed(Self) -> Bool = _
   window_snap(Self, Double, Double, Double, Double) -> Unit = _
   window_snap_state(Self) -> Int = _
+  window_opens(Self) -> Bool = _
+  window_open(Self, String) -> Bool = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
   menu_setup(Self, String) -> Unit = _
@@ -260,6 +262,16 @@ impl Host with window_snap(_, _, _, _, _) {
 ///|
 impl Host with window_snap_state(_) {
   0
+}
+
+///|
+impl Host with window_opens(_) {
+  false
+}
+
+///|
+impl Host with window_open(_, _) {
+  false
 }
 
 ///|
@@ -1261,6 +1273,22 @@ pub fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
 /// pressing it. The app is drawn again as it changes.
 pub fn window_snap_state() -> Int {
   current.val.window_snap_state()
+}
+
+///|
+/// Whether the app can open a window of its own beside this one (window_open): a desktop's (macOS, Windows, Linux);
+/// false on a phone, a tablet and the web.
+pub fn window_opens() -> Bool {
+  current.val.window_opens()
+}
+
+///|
+/// Another window of the app opened beside this one, for `what` (the app's words for what it shows there): another run
+/// of the same program, as the system starts it, with MBUI_WINDOW=`what` in its environment; it runs once, as many
+/// times as asked (not handed to the one running, as the app started again is), and ends as its window closes. Whether
+/// it was started (false where window_opens is not).
+pub fn window_open(what : String) -> Bool {
+  current.val.window_open(what)
 }
 
 ///|

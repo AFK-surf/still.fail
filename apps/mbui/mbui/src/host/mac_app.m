@@ -1424,7 +1424,8 @@ void mb_host_set_cursor(int32_t kind) {
 // As still.fail's desktop app is on macOS (Electron's): closing the window puts it away and the app goes on (its core,
 // its notifications, the Dock's badge); the Dock's icon clicked, the app opened again or a notification brings it back;
 // ⌘Q (the menu bar's 退出) quits. A program run bare
-// (not an app's bundle: a developer's run, a script's, a test's) ends as its window closes, as before. Said to the app
+// (not an app's bundle: a developer's run, a script's, a test's) ends as its window closes, as before, and so does a
+// window of the app's own (@hostapi.window_open: the program run again, beside this one). Said to the app
 // on the system's channel (hostapi's system.mbt): `shown` with how long it was away as the window comes back, and as
 // the Mac wakes from sleep (a clock that counts the sleep, as iOS's and Android's); `network` as the default network
 // becomes another one (Network's path monitor, as iOS's); `menu` as one of the app's items in the menu bar is chosen.
@@ -1437,6 +1438,34 @@ static void say_system(NSDictionary *said) {
 static BOOL in_bundle(void) {
   NSBundle *b = NSBundle.mainBundle;
   return b.bundleIdentifier && [b.bundlePath.pathExtension isEqualToString:@"app"];
+}
+
+// a window of the app's own (@hostapi.window_open): MBUI_WINDOW said by whoever started it
+static BOOL window_run(void) {
+  const char *w = getenv("MBUI_WINDOW");
+  return w && *w;
+}
+
+// Another window of the app's (@hostapi.window_open): the program run again (the bundle's executable, or this
+// program's own path run bare), its environment this one's with MBUI_WINDOW=<what>. It is an app of its own beside
+// this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose).
+int32_t mb_host_window_opens(void) { return 1; }
+int32_t mb_host_window_open(moonbit_string_t what_s) {
+  NSString *what = mb_ns_from_string(what_s);
+  NSString *exe = NSBundle.mainBundle.executablePath;
+  if (!what.length || !exe) return 0;
+  NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
+  env[@"MBUI_WINDOW"] = what;
+  NSTask *t = [NSTask new];
+  t.executableURL = [NSURL fileURLWithPath:exe];
+  t.environment = env;
+  NSError *e = nil;
+  if (![t launchAndReturnError:&e]) {
+    fprintf(stdout, "mac: no window of its own (%s)\n", e.localizedDescription.UTF8String ?: "");
+    fflush(stdout);
+    return 0;
+  }
+  return 1;
 }
 
 static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
@@ -1463,7 +1492,7 @@ static void bring_back(void) {
 @end
 @implementation MBAppDelegate
 - (BOOL)windowShouldClose:(NSWindow *)w {
-  if (!in_bundle()) return YES;
+  if (!in_bundle() || window_run()) return YES;
   [w orderOut:nil];
   if (!put_away_at) put_away_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
   return NO;

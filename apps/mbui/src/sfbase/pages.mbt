@@ -286,6 +286,8 @@ pub fn reset() -> Unit {
   links_reset()
   menu_bar_given.val = ""
   shell.val = bare_shell()
+  // the page shown alone in a window of its own (window.mbt)
+  lone_page.val = None
 }
 
 ///|

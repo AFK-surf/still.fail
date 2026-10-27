@@ -482,6 +482,15 @@ fn side_panel(
         })
         |> ignore
       }
+      // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
+      match station_tab_page(r, front) {
+        Some(p) if @sfbase.window_opens_for(p) =>
+          if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
+            @sfbase.open_window(p) {
+            side_change(src, r, "close", Some(front))
+          }
+        _ => ()
+      }
       // the panel's switch stays in its top right corner, open or closed
       if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
         side_change(src, r, "clear", None)

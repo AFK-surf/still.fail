@@ -707,6 +707,8 @@ pub fn local_station_carry_on() -> Unit
 
 pub let login_card_of : @ref.Ref[(@ui.Ctx, @settings.Core, String, String, Bool) -> Unit]
 
+pub let lone_page : @ref.Ref[Page?]
+
 pub fn long_jobs(Source, Workspace) -> Int32
 
 pub let machine_here : @ref.Ref[String?]
@@ -904,6 +906,8 @@ pub fn open_setting(String) -> Unit
 pub fn open_target(Source, LinkTarget, Bool, Double?) -> Bool
 
 pub let open_titled : @ref.Ref[String]
+
+pub fn open_window(Page) -> Bool
 
 pub fn opt_number(Json?, String) -> Double?
 
@@ -1602,6 +1606,12 @@ pub let viz_wait_under : @ui.Style
 pub let viz_way : @ui.Style
 
 pub let viz_ways : @ui.Style
+
+pub fn window_opens_for(Page) -> Bool
+
+pub fn window_page(String) -> Page?
+
+pub fn window_text(Page) -> String?
 
 pub fn with_lingering(Reading, Array[Entry]) -> Array[Entry]
 

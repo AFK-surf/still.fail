@@ -405,10 +405,34 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
 }
 
 ///|
+/// A window of its own (sfbase's window.mbt): page `p` alone over all of it, closing it ending the run (its window
+/// closed as its own close button closes it); the library's presenters and the toasts over it. None of the app's: no
+/// workspace, its notifications, the number on its icon, its updates (the app's run beside it has them).
+fn lone_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
+  match p {
+    Screen(at) =>
+      @sfpages.screen_page(c, src, at, system_frame(), on_close=fn() {
+        c.after_build("lone-closed", fn() { @hostapi.exit(0) })
+      })
+    _ => ()
+  }
+  @sf.presented(c)
+  toast(c)
+}
+
+///|
 /// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
 /// has answered), its Home at the root of the pages; the splash while none is known yet and until the first page has
 /// what it shows, and a page that says so when there is none.
 fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
+  // a window of its own (@sfbase.lone_page): its page alone, none of the app's
+  match @sfbase.lone_page.val {
+    Some(p) => {
+      lone_view(c, src, p)
+      return
+    }
+    None => ()
+  }
   let t = @sf.theme()
   let ws = (src.topic)("workspaces", {})
   let (current, all, answered, invited) = workspace_in_view(src)

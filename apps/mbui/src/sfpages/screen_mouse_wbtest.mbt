@@ -236,3 +236,60 @@ test "an agent driving it: who drives and 接管 among the bar's tools; 接管 a
   assert_eq(field(Some(asked[0]), "control"), Some(Json::boolean(true)))
   mouse_done(r)
 }
+
+///|
+test "在新窗口打开 in 控制中心 (a desktop's): the screen goes to a window of its own, which shows it alone, and leaves this one" {
+  let r = mouse_rig()
+  r.t.set_window_opens(true)
+  r.live(others=[])
+  r.tap_label(tr("web-pages.screen.panel"))
+  r.t.run_for(@sf.later_ms)
+  r.t.tap_text("在新窗口打开")
+  nav_rested(r.t)
+  let opened = r.t.windows_opened()
+  assert_eq(opened.length(), 1)
+  // what the window is started with names this screen, and reads back as it
+  assert_true(
+    @sfbase.window_page(opened[0]) ==
+    Some(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "", until_gone: false })),
+  )
+  // here it is closed, its view let go of: not open twice
+  assert_true(!(app.nav.top() is Screen(_)))
+  r.t.draw()
+  assert_true(!screens_open.contains(screen_key("ws-1/st-1", "browser:tab-1")))
+  mouse_done(r)
+}
+
+///|
+test "no 在新窗口打开 where the app opens no window of its own (a phone's, the web's), nor in such a window" {
+  let r = mouse_rig()
+  r.live(others=[])
+  r.tap_label(tr("web-pages.screen.panel"))
+  r.t.run_for(@sf.later_ms)
+  assert_true(r.t.find("全屏") is Some(_))
+  assert_true(r.t.find("在新窗口打开") is None)
+  mouse_done(r)
+  // a window of its own already: none from it
+  let r = mouse_rig()
+  r.t.set_window_opens(true)
+  @sfbase.lone_page.val = Some(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "", until_gone: false }))
+  r.live(others=[])
+  r.tap_label(tr("web-pages.screen.panel"))
+  r.t.run_for(@sf.later_ms)
+  assert_true(r.t.find("全屏") is Some(_))
+  assert_true(r.t.find("在新窗口打开") is None)
+  assert_eq(r.t.windows_opened(), [])
+  @sfbase.lone_page.val = None
+  mouse_done(r)
+}
+
+///|
+test "what a window of its own is started with: a station's screen and its title, read back; nothing else names a page" {
+  let at : @sfbase.Page = Screen({ station: "ws-1/st-1", screen: "desktop", title: "Studio 的屏幕", until_gone: false })
+  let text = @sfbase.window_text(at).unwrap()
+  assert_true(@sfbase.window_page(text) == Some(at))
+  assert_eq(@sfbase.window_text(Files), None)
+  assert_true(@sfbase.window_page("") is None)
+  assert_true(@sfbase.window_page("{\"screen\":{\"station\":\"\",\"screen\":\"desktop\"}}") is None)
+  assert_true(@sfbase.window_page("{\"drive\":{}}") is None)
+}

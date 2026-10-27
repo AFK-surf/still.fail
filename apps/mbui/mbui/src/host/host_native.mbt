@@ -265,6 +265,13 @@ extern "C" fn ffi_window_snap(x : Double, y : Double, w : Double, h : Double) ->
 extern "C" fn ffi_window_snap_state() -> Int = "mb_host_window_snap_state"
 
 ///|
+extern "C" fn ffi_window_opens() -> Int = "mb_host_window_opens"
+
+///|
+#borrow(what)
+extern "C" fn ffi_window_open(what : String) -> Int = "mb_host_window_open"
+
+///|
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
 
 ///|
@@ -347,6 +354,18 @@ fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
 /// How the pointer stands on it (@hostapi.window_snap_state).
 fn window_snap_state() -> Int {
   ffi_window_snap_state()
+}
+
+///|
+/// Whether the app can open a window of its own (@hostapi.window_opens).
+fn window_opens() -> Bool {
+  ffi_window_opens() != 0
+}
+
+///|
+/// Another run of the program, its window beside this one (@hostapi.window_open).
+fn window_open(what : String) -> Bool {
+  ffi_window_open(what) != 0
 }
 
 ///|

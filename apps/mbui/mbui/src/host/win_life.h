@@ -14,7 +14,9 @@
 //   `"role": "tray"` menu) brings it back or quits;
 // - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is;
 //   built in still.fail's desktop app's place (MBUI_OWN), its schemes are claimed for it (links_claimed).
-// A program without one (a demo, a test app's scripted run) ends as its window closes, as before.
+// A program without one (a demo, a test app's scripted run) ends as its window closes, as before. So does a window of
+// the app's own (@hostapi.window_open: the program run again with MBUI_WINDOW): it runs beside the app's one run, not
+// handed to it, with no icon in the notification area and no schemes claimed, its window's class its own.
 // Said to the app on the system's channel (src/hostapi/system.mbt): `shown` with how long it was away as its window
 // comes back after it was put away and as the PC wakes from sleep, `link`, `network` as its default route goes
 // another way (another interface, another address). Told by @hostapi.set_app_state: shown (visible, not minimized),
@@ -113,9 +115,16 @@ const wchar_t *mb_win_app_id(void) { return app_id(); }
 const wchar_t *mb_win_app_name(void) { return app_name(L""); }
 const wchar_t *mb_win_env(const wchar_t *name) { return app_env(name); }
 
-// the window's class, by which the app started again finds the one running
+// a window of the app's own (@hostapi.window_open): MBUI_WINDOW said by whoever started it, never the program's own
+static int window_run(void) {
+  const WCHAR *w = _wgetenv(L"MBUI_WINDOW");
+  return w && *w;
+}
+
+// the window's class, by which the app started again finds the one running (a window of its own's another)
 static void window_class(WCHAR *out, size_t cap) {
-  if (*app_id()) _snwprintf(out, cap, L"mbui %ls", app_id());
+  if (*app_id() && window_run()) _snwprintf(out, cap, L"mbui %ls window", app_id());
+  else if (*app_id()) _snwprintf(out, cap, L"mbui %ls", app_id());
   else lstrcpynW(out, L"mbui", (int)cap);
   out[cap - 1] = 0;
 }
@@ -205,6 +214,7 @@ static const WCHAR *started_with(void) {
 // schemes opens this program, as that app's setAsDefaultProtocolClient had them (HKCU\Software\Classes\<scheme>,
 // shell\open\command "<this program>" "%1"), said again as it starts (it may have moved, or another taken them)
 static void links_claimed(void) {
+  if (window_run()) return;
   const WCHAR *own = app_env(L"MBUI_OWN"), *schemes = app_env(L"MBUI_SCHEMES");
   if (!own || wcscmp(own, L"1") != 0 || !schemes || !*schemes) return;
   WCHAR exe[MAX_PATH * 2], command[MAX_PATH * 2 + 16], key[256], label[300];
@@ -308,7 +318,7 @@ static int tray_on;
 // the window closed: put away where the program is an app (to its icon in the notification area; minimized where it
 // has none there, as Explorer is not running), else the program ends
 static int put_away(void) {
-  if (!*app_id()) return 0;
+  if (!*app_id() || window_run()) return 0;
   if (!tray_on) {
     fprintf(stdout, "win: put away, minimized (no notification area)\n");
     fflush(stdout);
@@ -331,7 +341,7 @@ static HANDLE single, window_up;
 // front), and ends
 static int life_single(void) {
   const WCHAR *id = app_id();
-  if (!*id) return 1;
+  if (!*id || window_run()) return 1;
   WCHAR name[300], up[300];
   _snwprintf(name, 300, L"Local\\mbui %ls", id);
   name[299] = 0;
@@ -383,6 +393,61 @@ static void __cdecl life_begin(void) {
 __declspec(allocate(".CRT$XCU")) void(__cdecl *mb_win_life_begins)(void) = life_begin;
 #pragma comment(linker, "/include:mb_win_life_begins")
 
+// ---- windows of its own ----
+
+// Another window of the app's (@hostapi.window_open): the program run again, its environment this one's with
+// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes.
+int32_t mb_host_window_opens(void) { return 1; }
+int32_t mb_host_window_open(moonbit_string_t what) {
+  int wn = Moonbit_array_length(what);
+  if (wn <= 0) return 0;
+  WCHAR exe[MAX_PATH * 2];
+  DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH * 2);
+  if (!n || n >= MAX_PATH * 2) return 0;
+  // this one's environment, its own MBUI_WINDOW left out, then the new one's (each NAME=VALUE ended by a NUL, all by
+  // another)
+  WCHAR *env = GetEnvironmentStringsW();
+  if (!env) return 0;
+  size_t have = 0;
+  for (const WCHAR *e = env; *e; e += wcslen(e) + 1) have += wcslen(e) + 1;
+  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 16, sizeof(WCHAR));
+  if (!block) {
+    FreeEnvironmentStringsW(env);
+    return 0;
+  }
+  WCHAR *at = block;
+  for (const WCHAR *e = env; *e; e += wcslen(e) + 1) {
+    if (!_wcsnicmp(e, L"MBUI_WINDOW=", 12)) continue;
+    size_t len = wcslen(e);
+    memcpy(at, e, (len + 1) * sizeof(WCHAR));
+    at += len + 1;
+  }
+  FreeEnvironmentStringsW(env);
+  memcpy(at, L"MBUI_WINDOW=", 12 * sizeof(WCHAR));
+  at += 12;
+  memcpy(at, what, (size_t)wn * sizeof(WCHAR));
+  at += wn;
+  *at++ = 0;
+  *at = 0;
+  WCHAR command[MAX_PATH * 2 + 4];
+  _snwprintf(command, MAX_PATH * 2 + 4, L"\"%ls\"", exe);
+  command[MAX_PATH * 2 + 3] = 0;
+  STARTUPINFOW si = {sizeof si};
+  PROCESS_INFORMATION pi = {0};
+  BOOL ok = CreateProcessW(exe, command, NULL, NULL, FALSE, CREATE_UNICODE_ENVIRONMENT, block, NULL, &si, &pi);
+  free(block);
+  if (!ok) {
+    fprintf(stdout, "win: no window of its own (CreateProcess: %lu)\n", GetLastError());
+    fflush(stdout);
+    return 0;
+  }
+  // (its window to the front once it is there: it may take the foreground from this one)
+  AllowSetForegroundWindow(pi.dwProcessId);
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  return 1;
+}
+
 // what the app started again handed over: the window to the front, its link to the app
 static LRESULT life_handed(const COPYDATASTRUCT *cd) {
   if (!cd || cd->dwData != MB_HANDED) return FALSE;
@@ -423,7 +488,7 @@ static HICON own_icon(int size) {
 }
 
 static void tray_put(void) {
-  if (!*app_id() || !hwnd) return;
+  if (!*app_id() || window_run() || !hwnd) return;
   memset(&tray, 0, sizeof tray);
   tray.cbSize = sizeof tray;
   tray.hWnd = hwnd;

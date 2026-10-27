@@ -1120,6 +1120,18 @@ fn window_snap_state() -> Int {
 }
 
 ///|
+/// A window of the app's own (see host_native.mbt): a browser's page opens none.
+fn window_opens() -> Bool {
+  false
+}
+
+///|
+fn window_open(what : String) -> Bool {
+  ignore(what)
+  false
+}
+
+///|
 /// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
 fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)

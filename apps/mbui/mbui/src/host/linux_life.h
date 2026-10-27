@@ -15,7 +15,9 @@
 //   menu) brings it back or quits. Where the desktop shows none (GNOME's own), its window closed ends it, as apps
 //   there do: nothing would show that it runs;
 // - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is.
-// A program without one (a demo, a test app's scripted run) ends as its window closes, as before.
+// A program without one (a demo, a test app's scripted run) ends as its window closes, as before. So does a window of
+// the app's own (@hostapi.window_open: the program run again with MBUI_WINDOW): it runs beside the app's one run, not
+// handed to it, with no icon among the desktop's and none of its notifications.
 // Said to the app on the system's channel (src/hostapi/system.mbt): `shown` with how long it was away as its window
 // comes back after it was put away and as the computer wakes from sleep (logind's PrepareForSleep), `link`, `network`
 // as the way out goes another way (another interface, another address), `menu` as an action of its icon's menu is
@@ -293,6 +295,39 @@ static int32_t notice_drive(int click, const char *words) {
   return 0;
 }
 
+// ---- windows of its own ----
+
+// a window of the app's own (@hostapi.window_open): MBUI_WINDOW said by whoever started it
+static int window_run(void) {
+  const char *w = getenv("MBUI_WINDOW");
+  return w && *w;
+}
+
+// Another window of the app's (@hostapi.window_open): the program run again (/proc/self/exe), its environment this
+// one's with MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes. (GLib
+// reaps it: no G_SPAWN_DO_NOT_REAP_CHILD.)
+int32_t mb_host_window_opens(void) { return 1; }
+int32_t mb_host_window_open(moonbit_string_t what_s) {
+  char *what = utf8(what_s);
+  if (!*what) {
+    g_free(what);
+    return 0;
+  }
+  char **env = g_environ_setenv(g_get_environ(), "MBUI_WINDOW", what, TRUE);
+  g_free(what);
+  char *argv[] = {"/proc/self/exe", NULL};
+  GError *e = NULL;
+  gboolean ok = g_spawn_async(NULL, argv, env, G_SPAWN_DEFAULT, NULL, NULL, NULL, &e);
+  g_strfreev(env);
+  if (!ok) {
+    fprintf(stdout, "linux: no window of its own (%s)\n", e ? e->message : "");
+    fflush(stdout);
+    g_clear_error(&e);
+    return 0;
+  }
+  return 1;
+}
+
 // ---- once for its person ----
 
 // the app's GtkApplication: started again, the call it hands over with carries the launcher's activation token (its
@@ -337,6 +372,8 @@ __attribute__((constructor)) static void life_begin(void) {
   if (!*id) return;
   // what the desktop knows its window by (Wayland's app id, X11's class), its icon's name
   g_set_prgname(id);
+  // (a window of its own: beside the one run, not handed to it)
+  if (window_run()) return;
   if (!g_application_id_is_valid(id)) {
     fprintf(stdout, "linux: MBUI_APP_ID %s is no application id: not once for its person\n", id);
     fflush(stdout);
