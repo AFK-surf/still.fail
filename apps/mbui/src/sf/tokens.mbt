@@ -1847,6 +1847,10 @@ pub let tip_max : @ui.Len = Fixed(300.0)
 pub let login_card_least : @ui.Len = Within(360.0)
 
 ///|
+/// A login card's widest (the web's card: min(100%, 560px), a vault item's card's): what it holds past that wraps.
+pub let login_card_most : @ui.Len = Fixed(560.0)
+
+///|
 /// An agent's request about a vault item as its card in a chat (the web's VaultAsk.css.ts card): as wide as what it
 /// says, 320 at least where there is the room (min(100%, 320px)), 560 at most and never wider than the room (min(100%,
 /// 560px): a Cut box's max in a column).

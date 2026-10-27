@@ -7,6 +7,7 @@ fn login_core(
   login : Json,
   answer? : (String) -> Json = fn(_) { Json::object({}) },
   relay? : Bool = true,
+  w? : Double = 390.0,
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -25,7 +26,7 @@ fn login_core(
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -168,4 +169,24 @@ test "this device's port taken just now: the station's browser is the step, this
   t.click(Button, label="其他方式")
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("在浏览器里登录") is Some(_))
+}
+
+///|
+/// The widest box drawn round `words` 32 high (a step's button, as wide as its card less the card's padding).
+fn step_width(t : @ui.Tester, words : String) -> Double {
+  let (x, y, w, h) = t.rect_of(words).unwrap()
+  t
+  .drawn_rects()
+  .filter(fn(r) { r.3 > 30.0 && r.3 < 34.0 && r.0 <= x && r.0 + r.2 >= x + w && r.1 <= y && r.1 + r.3 >= y + h })
+  .fold(init=0.0, fn(m, r) { if r.2 > m { r.2 } else { m } })
+}
+
+///|
+test "a login card in a wide chat: as wide as what it says, 560 at most, not drawn across the column" {
+  let calls : Array[Made] = []
+  let t = with_logins(
+    login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]), w=1600.0),
+  )
+  let wide = step_width(t, "打开登录页")
+  assert_true(wide >= 340.0 && wide <= 562.0, msg="the step's button \{wide} wide")
 }

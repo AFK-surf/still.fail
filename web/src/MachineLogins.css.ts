@@ -41,7 +41,7 @@ const CARD_PAD = 8;
  */
 export const card = style({
   padding: CARD_PAD, borderRadius: surfaceCorner(CARD_PAD, pillInner(CARD_PAD, PANEL_PILL, vars.cornerScale)), cornerShape: vars.cornerShape,
-  display: "grid", justifyItems: "start", gap: "2px", width: "fit-content", minWidth: "min(100%, 360px)", maxWidth: "100%",
+  display: "grid", justifyItems: "start", gap: "2px", width: "fit-content", minWidth: "min(100%, 360px)", maxWidth: "min(100%, 560px)",
   boxSizing: "border-box", marginTop: "8px", background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
   color: vars.text, textAlign: "left", transition: `background-color ${vars.dur}`,
   selectors: { "&[data-marked]": { background: markedGround } },

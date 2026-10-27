@@ -421,13 +421,15 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
 
 ///|
 /// The card (card): under the agent's message as a decision's options are, as wide as what it holds and at least 360
-/// where there is the room (minWidth: min(100%, 360px)), never wider than where it is, 8 in all round, its parts 2
+/// where there is the room (minWidth: min(100%, 360px)), 560 at most and never wider than where it is (min(100%,
+/// 560px), as a vault item's card: not drawn across a wide chat's column), 8 in all round, its parts 2
 /// apart, on the ink at 5%; its corner its padding and its × pill's; the accent at 10% when it is the one a link
 /// pointed to.
 // kept across runs: a value (no field of it changes)
 let lc_card : @ui.Style = @ui.style(
+  w=Cut,
   min_w=@sf.login_card_least,
-  max_w=Full,
+  max_w=@sf.login_card_most,
   p=@sf.inset_room,
   gap=S0_5,
   radius=@sf.login_card_corner,
