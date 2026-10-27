@@ -4,14 +4,16 @@
 // (mbui's press_reach), so none is drawn larger for a phone.
 
 ///|
-/// The bar: 8 in, 6 over and under, its keys 2 apart, in their middle.
+/// The bar: 8 in, 6 over and under, its keys apart by keys_gap (8 with keyboard and mouse, 16 with touch), in their
+/// middle.
 pub fn page_bar(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=page_bar_box, body) |> ignore
+  // (its keys as far apart as makes each a press's room across: keys_gap)
+  c.box(style=page_bar_box.then(@ui.style(gap=keys_gap(size=theme().bars.key))), body) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let page_bar_box : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 gap=S0_5 align=ACenter")
+let page_bar_box : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 align=ACenter")
 
 ///|
 /// A key of the bar (PreviewBar's iconBtn, Preview.kt BarIcon): round, its icon in the ink, faint when it cannot be
@@ -43,9 +45,10 @@ let bar_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter
 let bar_key_off : @ui.Style = @ui.css("opacity=O35")
 
 ///|
-/// Where the page is (previewAddress): one capsule taking what the bar leaves, 4 in from what is beside it, its words
-/// 12 in and 6 apart, on the chip's ground; typed in, on the card's with the focus's ring (`editing`). `id`: pressed
-/// anywhere, what its page says to do (typing in it).
+/// Where the page is (previewAddress): one capsule taking what the bar leaves, 160 at least (where the bar has less,
+/// what may leave it does first: its page's drop), 4 in from what is beside it, its words 12 in and 6 apart, on the
+/// chip's ground; typed in, on the card's with the focus's ring (`editing`). `id`: pressed anywhere, what its page says
+/// to do (typing in it).
 pub fn bar_field(c : @ui.Ctx, id : Int, editing : Bool, body : () -> Unit) -> Unit {
   let b = theme().bars
   c.box(style=bar_field_room, fn() {
@@ -57,7 +60,12 @@ pub fn bar_field(c : @ui.Ctx, id : Int, editing : Bool, body : () -> Unit) -> Un
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_field_room : @ui.Style = @ui.css("w=Full px=S1")
+let bar_field_room : @ui.Style = @ui.style(w=Full, min_w=Fixed(bar_field_least), px=S1)
+
+///|
+/// The least the place's room is wide before what beside it that may leave the bar does: its capsule 160 (as the find
+/// field's least, find.mbt), 4 either side of it.
+let bar_field_least : Double = 168.0
 
 ///|
 // kept across runs: a value (no field of it changes)

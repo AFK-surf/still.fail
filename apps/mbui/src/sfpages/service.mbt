@@ -113,26 +113,43 @@ fn service_page_bar(
     c.focus_editor(field_key)
   }
   @sf.page_bar(c, fn() {
-    // (short of room, as marking's words want four characters at least: back and forward leave the bar first, then
-    // reload; never the address's place)
-    c.box(drop=bar_drop_nav, fn() {
-      if @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=can_back) {
+    // (short of room, as the address keeps its least (@sf.bar_field) and marking's words want four characters at
+    // least: back and forward leave the bar first, then reload, then how far it came, then its size, each offered in
+    // its ⋯ at its end; never the address's place)
+    let gone : Array[@sf.MenuItem?] = []
+    let back = @sf.t("web-main.keymap.nav.back")
+    let back_slot = c.id("service/go-back-slot")
+    c.box(id=back_slot, taps=false, drop=bar_drop_nav, fn() {
+      if @sf.bar_key(c, "service/go-back", "arrow-left", back, enabled=can_back) {
         site.go_back()
       }
     })
     |> ignore
-    c.box(drop=bar_drop_nav, fn() {
-      if @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=can_forward) {
+    if c.left_out(back_slot) {
+      gone.push(Some(bar_line(back, "arrow-left", disabled=!can_back, on_press=fn() { site.go_back() })))
+    }
+    let forward = @sf.t("web-main.keymap.nav.forward")
+    let forward_slot = c.id("service/go-forward-slot")
+    c.box(id=forward_slot, taps=false, drop=bar_drop_nav, fn() {
+      if @sf.bar_key(c, "service/go-forward", "arrow-right", forward, enabled=can_forward) {
         site.go_forward()
       }
     })
     |> ignore
-    c.box(drop=bar_drop_reload, fn() {
-      if @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload")) {
+    if c.left_out(forward_slot) {
+      gone.push(Some(bar_line(forward, "arrow-right", disabled=!can_forward, on_press=fn() { site.go_forward() })))
+    }
+    let reload = @sf.t("web-main.preview.reload")
+    let reload_slot = c.id("service/reload-slot")
+    c.box(id=reload_slot, taps=false, drop=bar_drop_reload, fn() {
+      if @sf.bar_key(c, "service/reload", "refresh", reload) {
         site.reload()
       }
     })
     |> ignore
+    if c.left_out(reload_slot) {
+      gone.push(Some(bar_line(reload, "refresh", disabled=false, on_press=fn() { site.reload() })))
+    }
     // how far the page's resources came (PreviewLoad.kt): a ring, red with one failed; tapped, each of them (a
     // visualization's page has none: it is served from here)
     let load = if fixed {
@@ -140,6 +157,7 @@ fn service_page_bar(
     } else {
       (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
     }
+    let more = c.id("service/more")
     match load {
       Some(Object(_)) => {
         let ring = c.id("service/load")
@@ -147,11 +165,18 @@ fn service_page_bar(
           service_load_panel(src, station, port, Of(ring))
         }
         let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
-        // (PreviewLoad.kt: how far, in words, to a screen reader)
-        c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
-          @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
+        let slot = c.id("service/load-slot")
+        c.box(id=slot, taps=false, drop=bar_drop_load, fn() {
+          // (PreviewLoad.kt: how far, in words, to a screen reader)
+          c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
+            @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
+          })
+          |> ignore
         })
         |> ignore
+        if c.left_out(slot) {
+          gone.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
+        }
       }
       _ => ()
     }
@@ -204,24 +229,49 @@ fn service_page_bar(
         service_sizes_panel(service_key(p.station, p.job), Of(sid))
       }
     }
-    let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
-      @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
-      match p.viewport {
-        Some(v) => c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
-        None => ()
-      }
+    let size_said = if p.moving { svc("android-chat.preview.moveOff") } else { svc("android-chat.preview.size.title") }
+    let size_slot = c.id("service/size-slot")
+    c.box(id=size_slot, taps=false, drop=bar_drop_size, fn() {
+      let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
+        @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
+        // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
+        match p.viewport {
+          Some(v) =>
+            c.box(drop=bar_drop_size_words, fn() {
+              c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
+            })
+            |> ignore
+          None => ()
+        }
+      })
+      c.semantics(sb, Button, id=sid, label=size_said)
+      @sf.tip(c, "service/size/tip", sid, size_said)
     })
-    c.semantics(
-      sb,
-      Button,
-      id=sid,
-      label=if p.moving { svc("android-chat.preview.moveOff") } else { svc("android-chat.preview.size.title") },
-    )
-    @sf.tip(c, "service/size/tip", sid, if p.moving { svc("android-chat.preview.moveOff") } else { svc("android-chat.preview.size.title") })
+    |> ignore
+    if c.left_out(size_slot) {
+      gone.push(
+        Some(
+          bar_line(size_said, if p.moving { "move" } else { "devices" }, disabled=false, on_press=fn() {
+            if p.moving {
+              p.moving = false
+            } else {
+              service_sizes_panel(service_key(p.station, p.job), Of(more))
+            }
+          }),
+        ),
+      )
+    }
     // marking the page for the chat's agent (a page with no chat to put it in has none)
     if markable && page_mark_key(c, p.marks.marking) {
       page_marks_toggle(p, site)
     }
+    // what left it, in its ⋯ at its end (there only while something did)
+    c.box(more=true, fn() {
+      if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+        @sf.menu(gone, from=Of(more))
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -254,11 +304,27 @@ let size_key_words_moving : @ui.TextStyle = size_key_words.then(@ui.text_style(c
 let ring_box : @ui.Style = @ui.css("align=ACenter justify=JCenter")
 
 ///|
-/// What of the page's bar leaves it first where it is short of room: back and forward, then reload.
+/// What of the page's bar leaves it first where it is short of room, each to its ⋯: back and forward, then reload, then
+/// how far its resources came, then its size (its words first, its key keeping its icon).
 let bar_drop_nav : Int = 1
 
 ///|
 let bar_drop_reload : Int = 2
+
+///|
+let bar_drop_load : Int = 3
+
+///|
+let bar_drop_size : Int = 4
+
+///|
+let bar_drop_size_words : Int = 3
+
+///|
+/// A line of the bar's ⋯: what a key that left the bar does, `on_press` once it is chosen.
+fn bar_line(label : String, icon : String, disabled~ : Bool, on_press~ : () -> Unit) -> @sf.MenuItem {
+  @sf.menu_item_of(label, on_press, icon~, disabled~)
+}
 
 ///|
 /// `390 × 844` (自动 for no height).

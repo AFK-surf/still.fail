@@ -38,7 +38,12 @@ test "47-service-page" {
     f.enter()
     // the second page asked for and given
     f.answered("station.preview", 4)
-    f.tap("icon:arrow-left")
+    // (back from the bar's ⋯ on a phone: its keys a finger apart, the address keeping its least, back and forward
+    // are there: @sf.page_bar)
+    f.tap("icon:more")
+    f.run_to(@kit.sheet_rest("sf-present"))
+    f.tap("后退")
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("/b.html")
     // its size from the bar's size key, in the presenters' sheet (a phone's)
     f.tap("icon:devices")
