@@ -574,20 +574,25 @@ test "list: a glide to its end whose end moves on the way goes on from where it 
     h=300.0,
   )
   t.run_for(@ui.list_glide_ms * 5.0)
-  // a row comes at its end: it glides after it; three frames on, the row grows (its words laid out, a card under them)
+  // a row comes at its end: it glides after it; on its way, the row grows (its words laid out, a card under them)
   n.val = 11
   t.draw()
   let moves : Array[Double] = []
   let mut was = t.list_offset()
-  for f in 0..<120 {
-    if f == 3 {
+  // (a frame a sixth of its time constant, about a phone's; the row grows half a time constant in)
+  let step = @ui.list_glide_ms / 6.0
+  let start = t.time()
+  let mut grown = false
+  while t.time() < start + @ui.list_glide_ms * 30.0 {
+    if !grown && t.time() >= start + @ui.list_glide_ms * 0.5 {
       tall.val = 260.0
+      grown = true
     }
-    t.frame(ms=1000.0 / 60.0)
+    t.frame(ms=step)
     let now = t.list_offset()
     moves.push(now - was)
     was = now
-    if t.at_end() && f > 3 {
+    if t.at_end() && grown {
       break
     }
   }
