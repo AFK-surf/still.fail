@@ -55,12 +55,11 @@ pub fn Ctx::stratum(self : Ctx, i : Int, s : Stratum) -> Unit {
       part_live()
       self.drawn_of(i).z = z_over_scrim
     }
-    OverCover => {
-      part_live()
-      self.drawn_of(i).z = z_over_cover
-    }
+    // (put off only while a cover is up: what the cover is in is painted live then, Cover)
+    OverCover => self.drawn_of(i).z = z_over_cover
     Bar => self.nodes[i].mark = 1
     Cover => {
+      part_live()
       self.nodes[i].mark = 2
       dr.covers.push(i)
     }
