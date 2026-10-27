@@ -1338,9 +1338,9 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 /// words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
 /// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
 /// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
-/// its end its key's room in line with theirs. Its copy key hangs past its right edge, in what scrolls (table_copy.mbt):
-/// beside it where the message has room, out in `bleed` where that has the key's whole room (a wide chat's margin),
-/// else past its end, scrolled to.
+/// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
+/// copy key hangs past its right edge, in what scrolls (table_copy.mbt): beside it where the message has room, out in
+/// `bleed` where that has the key's whole room (a wide chat's margin), else past its end, scrolled to.
 fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let c = self.c
   let cols = t.head.length()
@@ -1412,7 +1412,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   // not at all for it, nor shows a bar across the pane)
   let hang = if self.copy && bleed >= table_key_room { table_key_room } else { 0.0 }
   c.box(mx=-bleed, id~, taps=false, fn() {
-    c.sideways(key, padx=bleed, fn() {
+    c.sideways(key, padx=bleed, bar_in=bleed, fn() {
       c.box(style=table_beside.then(@ui.style(mr=room_of(-hang))), fn() {
         self.table_frame(rows, widths, total, key + "/head")
         if self.copy {
