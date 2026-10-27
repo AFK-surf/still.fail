@@ -1356,6 +1356,8 @@ pub fn pill_inner(Double, Double) -> Double
 
 pub let pin_raised : Raised
 
+pub fn play_mark(@ui.Ctx, Double, @ui.Color) -> Int32
+
 pub fn player(@ui.Ctx, String, ViewerFile, Array[ViewerEntry], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit) -> Unit
 
 pub let player_keep_ms : Double
