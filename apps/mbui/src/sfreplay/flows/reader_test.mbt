@@ -30,7 +30,8 @@ test "98-reader" {
     assert_eq(kept.length(), 1)
     assert_eq(kept[0].2.length(), 4454)
     // the toast's time shown, then its way out
-    f.run_for(@sfapp.toast_ms)
+    // (to its time out, as the toaster has it: counted from when it came, not from when it was first seen whole)
+    f.run_for(@kit.toast_due("toast") - f.t.time())
     f.t.draw()
     f.run_to(@kit.toast_rest("toast"))
     f.end()

@@ -115,26 +115,27 @@ test "over another app signed out: to sign in in the app first, 打开 still.fai
 }
 
 ///|
-/// Where a toast's words end over another app with the navigation bar `foot` high under the view (the host's `bars`).
-fn over_toast_foot(foot : Double) -> Double raise {
+/// Where a toast's words start over another app with the status bar `top` high over the view (the host's `bars`).
+fn over_toast_top(top : Double) -> Double raise {
   let t = share_tester("share-in")
-  t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
+  t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":\{top},\"bottom\":48,\"left\":0,\"right\":0}}")
   t.frame()
   sheet_rested(t, "sf-present")
   app.toast = "发到了"
   app.toast_n += 1
   t.frame()
+  t.run_for(@sf.toast_in_ms)
   match t.rect_of("发到了") {
-    Some((_, y, _, h)) => y + h
+    Some((_, y, _, _)) => y
     None => fail("no toast")
   }
 }
 
 ///|
-test "over another app, the view under the bars: the toasts kept above the navigation bar" {
-  let bare = over_toast_foot(0.0)
-  assert_eq(@ui.system_bars().bottom, 0.0)
-  let under = over_toast_foot(48.0)
-  assert_eq(@ui.system_bars().bottom, 48.0)
-  assert_eq(bare - under, 48.0)
+test "over another app, the view under the bars: the toasts kept under the status bar" {
+  let bare = over_toast_top(0.0)
+  assert_eq(@ui.system_bars().top, 0.0)
+  let under = over_toast_top(24.0)
+  assert_eq(@ui.system_bars().top, 24.0)
+  assert_true((under - bare - 24.0).abs() < 0.5, msg="\{bare} \{under}")
 }

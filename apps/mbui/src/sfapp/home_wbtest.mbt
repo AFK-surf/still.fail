@@ -469,7 +469,7 @@ test "a chat archived from its row says so with 撤销, which asks it back into 
   assert_true(t.locate("=夜里的构建又失败了").is_empty())
   assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
-  t.run_for(@kit.presence_in_ms)
+  t.run_for(@sf.toast_in_ms)
   t.tap_text("撤销")
   let asked = named(calls, "chat.archive")
   assert_eq(asked.length(), 2)
@@ -504,7 +504,7 @@ fn rested_toast(t : @ui.Tester, words : String, action : String) -> ((Double, Do
   app.toast_action = action
   app.toast_n += 1
   t.frame()
-  t.run_for(@kit.presence_in_ms)
+  t.run_for(@sf.toast_in_ms)
   let toast = match t.query(Status, label=words) {
     Some(n) => n.rect
     None => fail("no toast saying \{words}")
@@ -529,6 +529,21 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
       assert_true((gap - inset).abs() < 0.5, msg="\{wide} \{gap} \{inset}")
     }
   }
+}
+
+///|
+test "narrow: a toast drops in at the top, under the status bar, and a flick up puts it away; wide, at the foot" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let ((x, y, w, h), _) = rested_toast(t, "已复制", "")
+  assert_true((y - (status_top() + toast_top)).abs() < 0.5, msg="\{y}")
+  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 80.0)
+  t.run_for(@kit.presence_out_ms)
+  assert_true(t.find("已复制") is None)
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let ((_, y, _, h), _) = rested_toast(t, "已复制", "")
+  assert_true(y + h > t.size().1 / 2.0, msg="\{y}")
 }
 
 ///|
@@ -587,7 +602,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
   t.draw()
   assert_true(t.find("已归档「夜里的构建又失败了」") is Some(_))
   // (come in)
-  t.run_for(@kit.presence_in_ms)
+  t.run_for(@sf.toast_in_ms)
   t.tap_text("撤销")
   let asked = named(calls, "chat.archive")
   assert_eq(asked.length(), 2)

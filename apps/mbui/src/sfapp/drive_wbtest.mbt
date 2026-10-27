@@ -115,6 +115,8 @@ test "held: deleted to the station's trash, said so; 新建文件夹 makes one, 
   let log = t.drive("tap 移到废纸篓\ngone 合同草稿.pdf\nuntil 移到 station 的废纸篓\n")
   assert_true(log.contains("EXIT 0"))
   sheet_rested(t, "sf-present")
+  // (what it said gone: at the top of the narrow frame, over the row the new folder is named in)
+  t.run_for(@sf.toast_ms + @kit.presence_out_ms)
   t.click(Button, label="新建文件夹")
   // (made as 未命名文件夹, its name's field in its row at once)
   t.frame()

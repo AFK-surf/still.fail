@@ -17,7 +17,8 @@ test "72-bar-archive" {
     // Home at once, 已归档 said by its title with its 撤销: its time on screen, the chat popped meanwhile
     f.see("=已归档「从栏上归档 085454」")
     f.see("=撤销")
-    f.run_for(@sfapp.toast_action_ms)
+    // (to its time out, as the toaster has it: counted from when it came, not from when it was first seen whole)
+    f.run_for(@kit.toast_due("toast") - f.t.time())
     f.gone("=从栏上归档 085454")
     // the toast gone
     // (its time out at the last frame: it starts going with the one after)
@@ -41,7 +42,8 @@ test "run_to_rest: only what was said" {
   f.see("icon:archive")
   f.tap("icon:archive")
   f.see("=已归档「从栏上归档 085454」")
-  f.run_for(@sfapp.toast_action_ms)
+  // (to its time out, as the toaster has it: counted from when it came, not from when it was first seen whole)
+  f.run_for(@kit.toast_due("toast") - f.t.time())
   f.gone("=从栏上归档 085454")
   f.t.draw()
   // the toast going, to its end

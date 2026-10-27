@@ -726,11 +726,19 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 
 ///|
 /// What a write said (sfbase's toasts), where the frame has it: the wide frame's 24 over the window's foot (the web's),
-/// the narrow one's over the foot, clear of the bar and the action standing over it (bar_room above it) and above the
-/// navigation bar the view reaches under (Sheet.kt's navigationBars padding).
+/// the narrow one's at the top, under the status bar, dropping in from over it as the phone's own notices come (clear
+/// of the bar and of the thumb: what it says is read, not reached for; its 撤销 as near as a page's top row).
 fn toast(c : @ui.Ctx) -> Unit {
-  @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() })
+  if @sfdesk.is_wide(c) {
+    @sfbase.toasts(c, @sf.toast_bottom)
+  } else {
+    @sfbase.toasts(c, 0.0, top=status_top() + toast_top)
+  }
 }
+
+///|
+/// How far under the status bar the narrow frame's toasts are.
+let toast_top : Double = 8.0
 
 ///|
 /// How long a toast stays (paused while the pointer is on it): the library's (toast.tsx).

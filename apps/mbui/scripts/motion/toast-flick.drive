@@ -1,0 +1,11 @@
+# A toast at the narrow frame's top (a row archived: 已归档 with its 撤销) dropping in, then flicked back up.
+timeout 20000
+until 整理发布清单
+wait 600
+hold 600 Slack 里问的报销流程
+until =复制会话链接
+wait 500
+tap =归档
+wait 1200
+drag 150 28 0 -90 120
+wait 1500
