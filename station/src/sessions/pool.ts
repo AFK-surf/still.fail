@@ -1,6 +1,8 @@
 // The account pool (the Rust station's pool.rs): which of a station's profiles a session runs on. Only profiles with the
 // chosen model enabled qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
-// used up, is passed over. Of the rest: one whose short window (5 hours) is nearly full goes last. The others share the
+// used up, is passed over. Accounts paid for already (subscriptions, memberships) go first: one billed per use (an API
+// key, a gateway) runs a session only when none of them can, and its sessions move back before a turn when one can again
+// and that loses little. Of the rest: one whose short window (5 hours) is nearly full goes last. The others share the
 // sessions by weight, each new one going where (sessions + 1) ÷ weight is least: the weight is how fast a profile has
 // to spend not to lose any of its long window (a week; left × window length ÷ time to refill), times what is left of
 // its short one. So what would be lost is spent first without all sessions crowding onto one account and running its
@@ -10,6 +12,7 @@
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
+import { billedPerUse } from "../agents/profiles.ts";
 import { COMPACTED_FROM } from "../store/rows.ts";
 
 type Json = any;
@@ -119,8 +122,10 @@ export function pickProfile(candidates: Profile[], model: string | null | undefi
     serving = rank.map((_, i) => i);
   }
   const fit = serving.filter((i) => usable(rank[i]![1]));
+  // What is paid for already is spent first, however full: one billed per use only when none of those can run now.
+  const paid = fit.filter((i) => !billedPerUse(rank[i]![0]));
   // Nothing healthy serves it: still pick one that has it enabled, so the failure shows in the session.
-  const pool = fit.length === 0 ? serving : fit;
+  const pool = paid.length > 0 ? paid : fit.length > 0 ? fit : serving;
   const now = signals.now();
   const urgencies = new Map(pool.map((i) => [i, urgency(rank[i]![1].quota, now)]));
   // Each profile's sessions over its weight, with the new one: the least is where it adds the least crowding.

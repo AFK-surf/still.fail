@@ -22,6 +22,13 @@ const access = (p: Profile): ProfileAccess => (p.access && typeof p.access === "
 export const accessKind = (p: Profile): AccessKind => access(p).kind ?? "env";
 /// The provider of Kimi Code's membership (providers.ts).
 export const KIMI_CODE = "kimi-code";
+/// Whether a profile's account is billed for what it uses, not paid for already: an Anthropic key, a provider's key
+/// (but Kimi Code's membership), or a runtime's own variables (a gateway of one's own). The pool runs on these only when
+/// no account paid for already can (sessions/pool.ts).
+export const billedPerUse = (p: Profile): boolean => {
+  const kind = accessKind(p);
+  return kind === "anthropic-api" || kind === "env" || (kind === "api-provider" && access(p).provider !== KIMI_CODE);
+};
 /// A Kimi Code profile signed in to the person's Kimi account (accounts/kimi.ts): its token, renewed every few minutes,
 /// is in its home, never its key; Claude Code reads it there for each request (`keyFile`).
 export const kimiSignedIn = (p: Profile): boolean => accessKind(p) === "api-provider" && access(p).provider === KIMI_CODE && access(p).login === true;

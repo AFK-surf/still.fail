@@ -9,6 +9,7 @@ import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
+import { billedPerUse } from "../agents/profiles.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
@@ -106,10 +107,11 @@ export class Accounts {
   }
 
   /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
-  /// on afresh, afresh.ts), else the one the pool picks among those of its runtime allowed in its workspace. One whose
-  /// short window is nearly full it leaves for one that is not, when that loses little (pool.ts `cheapToLeave`): its
-  /// context was just compacted, or is about to be, and not while its process has work going in the background
-  /// (`holding`: commands and subagents, which end with it).
+  /// on afresh, afresh.ts), else the one the pool picks among those of its runtime allowed in its workspace. One billed
+  /// per use it leaves for one paid for already that can run it, and one whose short window is nearly full for one paid
+  /// for alike that is not, when that loses little (pool.ts `cheapToLeave`): its context was just compacted, or is about
+  /// to be, and not while its process has work going in the background (`holding`: commands and subagents, which end
+  /// with it).
   runOn(key: string, holding = false): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
@@ -126,14 +128,20 @@ export class Accounts {
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
     const keeps = current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)));
+    let among = candidates;
     if (current && keeps) {
-      if (row.profilePinned || !crowded(current)) return withSpelling(current);
-      // Nearly full: it moves only to one that is not (the pool puts those last), and only when that loses little.
-      const room = candidates.some((p) => p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && !crowded(p));
-      if (!room || holding || !this.cheapToLeave(key)) return withSpelling(current);
+      if (row.profilePinned) return withSpelling(current);
+      // It moves from one billed per use to one paid for already, and from one nearly full to one paid for alike that is
+      // not (the pool puts those last), never from one paid for already to one billed per use; only when that loses
+      // little.
+      const paid = (p: Profile) => !billedPerUse(p);
+      const better = (p: Profile) =>
+        p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
+      among = candidates.filter(better);
+      if (among.length === 0 || holding || !this.cheapToLeave(key)) return withSpelling(current);
     }
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
-    const next = this.pick(keeps ? candidates.filter((p) => p.id !== current!.id) : candidates, row.model, false);
+    const next = this.pick(among, row.model, false);
     if (next.id !== row.profile) {
       store.setSessionProfile(key, next.id, false);
       log.info("hub", "session taken on by another profile", { session: key, from: row.profile, to: next.id });

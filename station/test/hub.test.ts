@@ -1729,6 +1729,61 @@ test("a session leaves an account whose five hours are nearly full for one with 
   await r.close();
 });
 
+test("a session runs on the subscription; its allowance used up, on the API key, and back on the subscription when it can run again and that loses little", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.edit((raw) => {
+    raw.profiles[0] = { ...raw.profiles[0], access: { kind: "subscription" }, models: ["opus"] };
+    raw.profiles.push({ id: "key", runtime: "claude", home: "homes/key", access: { kind: "anthropic-api", key: "k" }, models: ["opus"] });
+  });
+  const used = { cc: 60 };
+  r.hub.accounts.setHealth((id) =>
+    id === "cc" ? { quota: { state: "ok", windows: [{ label: "每周", usedPercent: used.cc, resetsAt: null }], detail: null, checkedAt: now } } : { quota: { state: "unsupported", windows: [], detail: "", checkedAt: now } },
+  );
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  assert.equal(r.session(key).profile, "cc", "an API key, counted as half used, does not come before it");
+  const turn = async (text: string) => {
+    await r.accept({ ...say(`<@UBOT> ${text}`), threadTs: m.threadTs });
+    await settle();
+  };
+  const done = async () => {
+    await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+    r.claude.last().complete();
+    await settle();
+  };
+  let call = 0;
+  const calls = (profile: string, each: [string, number][]) =>
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: call, model: "m" }, "claude", each.map(([turn, context]) => [
+      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1, calls: 1, context, window: null },
+      { turn, person: null, thread: null, profile },
+    ]));
+  await done();
+  // Used up: the next turn goes on on the key.
+  used.cc = 100;
+  await turn("once more");
+  assert.equal(r.session(key).profile, "key");
+  await done();
+  // Refilled, its context neither just compacted nor about to be: it stays on the key for now.
+  used.cc = 0;
+  calls("key", [["t1", 60_000], ["t1", 90_000]]);
+  const onKey = r.claude.last();
+  await turn("and again");
+  assert.equal(r.claude.last(), onKey);
+  assert.equal(r.session(key).profile, "key");
+  await done();
+  // Compacted: the next turn starts afresh on the subscription.
+  calls("key", [["t2", 120_000], ["t2", 20_000]]);
+  await turn("and on");
+  assert.ok(onKey.disposed);
+  assert.equal(r.session(key).profile, "cc");
+  await done();
+  await r.close();
+});
+
 test("the station's variables for its agents changed: a process that could take a model in place still ends, the next starts with them", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");

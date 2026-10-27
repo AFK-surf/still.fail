@@ -743,6 +743,27 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
 });
 
+test("the pool runs sessions on subscriptions, however full, and on an account billed per use only when none can", () => {
+  const with_ = (id: string, access: Record<string, unknown>) => hubConfig({ profiles: [{ id, runtime: "claude", home: `/h/${id}`, models: ["m"], access }] }, "/").profiles[0]!;
+  const sub = with_("sub", { kind: "subscription" });
+  const key = with_("key", { kind: "anthropic-api", key: "k" });
+  const gateway = with_("gateway", {});
+  const kimi = with_("kimi", { kind: "api-provider", provider: "kimi-code", key: "k" });
+  const week = (used: number) => ({ state: "ok", windows: [{ label: "每周", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 0 });
+  const perUse = { state: "unsupported", windows: [], detail: "", checkedAt: 0 };
+  const health: Record<string, any> = { sub: { check: ok("ok"), quota: week(90) }, key: { check: ok("ok"), quota: perUse }, gateway: { check: ok("ok") }, kimi: { check: ok("ok"), quota: week(95) } };
+  const signals = (load: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: () => 0, now: () => 0 });
+  // An unknown allowance counts as half used, an API key's too: it no longer comes before a nearly full subscription.
+  assert.equal(pickProfile([key, gateway, sub], "m", signals(), true).id, "sub");
+  assert.equal(pickProfile([key, sub], "m", signals({ sub: 9 }), true).id, "sub", "however many sessions it has");
+  assert.equal(pickProfile([key, kimi], "m", signals(), true).id, "kimi", "a membership is paid for already");
+  // Used up, or a turn on it ran into its allowance: one billed per use takes it on.
+  health.sub = { check: ok("ok"), quota: week(100) };
+  assert.equal(pickProfile([sub, key], "m", signals(), true).id, "key");
+  health.sub = { check: ok("ok"), quota: week(10), spent: true };
+  assert.equal(pickProfile([sub, key], "m", signals(), true).id, "key");
+});
+
 test("the pool shares sessions by what each account would lose, and keeps them off nearly full five hours", () => {
   const now = 1_791_270_331_000;
   const hours = (h: number) => now + h * 3_600_000;
