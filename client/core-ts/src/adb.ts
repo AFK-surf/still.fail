@@ -32,6 +32,9 @@ export type AdbEnv = {
   credentials: (workspace: string) => CredentialSource;
   /// The relays a workspace has of its own (`Mesh.link`).
   relays: (workspace: string) => string[];
+  /// Whether this device has an adb to lend: a phone's own adbd, which only an Android device runs (as it said it is:
+  /// `client.device`), reached over TCP; a Mac's or a PC's core reaches TCP too, and has none.
+  lends: () => boolean;
 };
 
 function head(): RequestHead {
@@ -88,7 +91,7 @@ export class Adb {
   run(call: AdbCall): Effect.Effect<unknown, CoreError> {
     switch (call.kind) {
       case "share":
-        if (!this.#env.host.tcp) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
+        if (!this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
         return Effect.sync(() => {
           this.#share(call.offer);
           return null;
@@ -132,7 +135,7 @@ export class Adb {
   card(station: string): J {
     const title = t("core-views.adb.card.title");
     const sharing = this.#offer !== null && this.#offer.station === station;
-    if (!this.#env.host.tcp) return { title, line: t("core-misc.adb.unsupported"), sharing: false, lendable: false };
+    if (!this.#env.lends()) return { title, line: t("core-misc.adb.unsupported"), sharing: false, lendable: false };
     if (this.#offer === null) return { title, line: t("core-views.adb.card.off"), sharing, lendable: true };
     if (!sharing) return { title, line: t("core-views.adb.card.elsewhere"), sharing, lendable: true };
     const view = this.value();
@@ -149,6 +152,11 @@ export class Adb {
               ? t("core-views.adb.card.missing")
               : (view.message ?? (view.adb === "connecting" || view.adb === null ? t("core-views.adb.card.attaching") : t("core-views.adb.card.failed")));
     return { title, line, sharing, lendable: true };
+  }
+
+  /// What the cards say, again: the device said what it is (`client.device`), and with it whether it lends.
+  deviceTold(): void {
+    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
   }
 
   #shown(): void {

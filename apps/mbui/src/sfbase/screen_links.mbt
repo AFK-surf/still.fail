@@ -262,20 +262,63 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
 ///|
 /// A station's 共享调试 as a card (AdbLinks.kt AdbLinkCard): a phone, its title (the link's own words, when it has
 /// them) over how this phone's sharing with that station stands, the phone in the accent while it is shared there.
-/// Its size kept while the core has not said. A tap opens the page, as the link does.
+/// Its size kept while the core has not said. Lent from the card itself (docs/adb-share.md): where the phone has all it
+/// takes (as its host says: @settings.adb_ready), a switch at its end; where it lacks something first, its line says
+/// what and a tap opens the page, which says how, as it does for what else is asked once it is lent (pairing). A
+/// device with no adb to lend (the core's `lendable`; an Android before 11, as its host says) says so, and its card
+/// does nothing.
 pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
   let card = adb_card_of(src, href)
-  let open = c.id("adb-link/" + href)
-  if c.clicked(open) {
+  let station = @sf.adb_of_link(href).unwrap_or("")
+  let sharing = flag(card, "sharing")
+  let ready = if card is Some(_) && flag(card, "lendable") {
+    @settings.adb_ready(c)
+  } else if card is Some(_) {
+    @settings.AdbCannot(text(card, "line"))
+  } else {
+    @settings.AdbUnknown
+  }
+  let (line, opens) = match ready {
+    @settings.AdbCannot(why) if !sharing => (why, false)
+    @settings.AdbLacks(what) if !sharing => (what, true)
+    _ => (text(card, "line"), true)
+  }
+  let lends = sharing || ready == @settings.AdbLends
+  let open = if opens { c.id("adb-link/" + href) } else { 0 }
+  if opens && c.clicked(open) {
     open_link(href)
   }
   let title = match words {
     Some(w) => w
     None => adb_title(src, href)
   }
+  let stopping = "adb-stop/" + station
   c.box(style=link_card, id=open, fn() {
-    link_mark(c, Some(phone_mark), if flag(card, "sharing") { Accent } else { Muted })
-    link_card_words(c, title, text(card, "line"), false, link_words)
+    link_mark(c, Some(phone_mark), if sharing { Accent } else { Muted })
+    link_card_words(c, title, line, false, link_words)
+    if lends {
+      let busy = @settings.adb_asking() || acting.doing.contains(stopping)
+      let on = @sf.switch(c, "adb-link-switch/" + href, sharing, label=title, busy~)
+      if on != sharing {
+        if sharing {
+          act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
+        } else {
+          let ws = match station.find("/") {
+            Some(i) => station.view(end_offset=i).to_owned()
+            None => station
+          }
+          let name = match dv_stations(src, ws).0 {
+            Some(list) =>
+              match list.iter().find_first(fn(s) { s.station == station }) {
+                Some(s) => s.name
+                None => @settings.station_name(station)
+              }
+            None => @settings.station_name(station)
+          }
+          @settings.adb_lend(station, name)
+        }
+      }
+    }
   })
   |> ignore
 }

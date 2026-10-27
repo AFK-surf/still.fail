@@ -165,6 +165,74 @@ test "共享调试's phone in the accent while this phone's adb is shared there,
 }
 
 ///|
+/// The switch on 共享调试's card, where it has one: its middle.
+fn adb_switch_at(t : @ui.Tester) -> (Double, Double)? {
+  for s in t.semantics() {
+    if s.role == @ui.Role::Switch && !s.hidden {
+      let (x, y, w, h) = s.rect
+      return Some((x + w / 2.0, y + h / 2.0))
+    }
+  }
+  None
+}
+
+///|
+test "共享调试's card: lent from the chat where the phone has all it takes; else what it lacks first, its page a tap away" {
+  let t = screen_links_core([], [], [])
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.nav_push_ms)
+  // all it takes (the fixture's phone): the switch, lending to this station from here, the page not opened
+  guard adb_switch_at(t) is Some((x, y)) else { fail("the card's switch") }
+  t.tap(x, y)
+  t.draw()
+  let started = t.native_asked().filter(fn(a) { a.0 == "adb.start" })
+  assert_eq(started.length(), 1)
+  guard started[0].1 is Object(m) else { fail("adb.start's params") }
+  assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
+  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(t.opened(), [])
+  for c in t.native_calls() {
+    t.answer_native(c.0, {})
+  }
+  t.draw()
+  // Developer options off (said by the host as the app comes back): the card says so, no switch; a tap, the page
+  t.post("native:adb.phone", adb_phone_of(developer=false).stringify())
+  t.draw()
+  assert_true(t.find("打开开发者选项") is Some(_))
+  assert_true(adb_switch_at(t) is None)
+  t.tap_text("打开开发者选项")
+  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
+  // Wireless debugging off, which the app may turn on itself: the switch again, turning it on as it lends
+  t.post("native:adb.phone", adb_phone_of(can_switch=true).stringify())
+  t.draw()
+  guard adb_switch_at(t) is Some((x, y)) else { fail("the card's switch, the app turning Wireless debugging on") }
+  t.tap(x, y)
+  t.draw()
+  let asked = t.native_asked().map(fn(a) { a.0 })
+  assert_eq(asked.filter(fn(n) { n == "adb.switch" }).length(), 1)
+  assert_eq(asked.filter(fn(n) { n == "adb.start" }).length(), 2)
+}
+
+///|
+test "共享调试's card on a device with no adb to lend: why, and nothing to tap" {
+  let t = screen_links_core([], [], [], over=fn(name, topic) {
+    if name == "adbCard" {
+      { ..topic, value: Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false }) }
+    } else {
+      topic
+    }
+  })
+  t.wheel(195.0, 400.0, 2000.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("仅安卓 app 支持共享调试") is Some(_))
+  assert_true(adb_switch_at(t) is None)
+  t.tap_text("仅安卓 app 支持共享调试")
+  t.draw()
+  assert_eq(t.opened(), [])
+  assert_eq(t.native_asked().length(), 0)
+}
+
+///|
 test "a tab's preview: asked for while its card is on the screen, cancelled as it goes from view, asked again back" {
   let streams = []
   let cancelled = []

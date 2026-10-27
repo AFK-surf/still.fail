@@ -1016,6 +1016,13 @@ pub fn fixture(mode : String) -> Source {
       fix_later(at + (k - 1).to_double() * 1600.0, fn() { f.step = k })
     }
   }
+  // the phone's word on 共享调试 said already (the app's Android: AdbShare.java), as a chat's card of it goes by: all it
+  // takes, the card lending from where it is
+  if f.mode == "chat-screens" {
+    @settings.adb_phone_said(
+      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+    )
+  }
   let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
     match fixture_kept(name, params, None) {
       Some(r) => {

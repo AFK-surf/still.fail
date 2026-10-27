@@ -115,6 +115,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.try({
           try: () => {
             prefs.device(inner.data, call.facts);
+            inner.adb.deviceTold();
             hooks.device?.(inner, call.facts);
             const build = isObject(call.facts) ? call.facts.build : undefined;
             if (typeof build === "string" && build.trim() !== "") inner.tracer.setVersion(build.trim());
