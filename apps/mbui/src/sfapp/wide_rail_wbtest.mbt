@@ -3,7 +3,8 @@
 // device; the lit place pressed again folds or opens; ⌃1 … ⌃9 the workspaces; a row's menu relays it.
 
 ///|
-/// The latest `prefs.set` that said this of the sidebars, by `<workspace>\n<group>`.
+/// The latest `prefs.set` that said this of the sidebars, by `<workspace>\n<group>` (folded or not) or `\n<group>` (its
+/// width, every workspace's).
 fn sidebar_kept(calls : Array[Made], key : String) -> Json? {
   let mut out : Json? = None
   for m in calls {
@@ -130,7 +131,7 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
   t.frame()
   // (as far as the pointer went from where it was pressed: the library's edge, @sf.handle_drag)
   assert_eq(@sfdesk.wide.side_w, 300.0)
-  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string(@sfdesk.wide.side_w.round().to_int().to_string())))
+  assert_eq(sidebar_kept(calls, "\nchats"), Some(Json::string(@sfdesk.wide.side_w.round().to_int().to_string())))
 }
 
 ///|
@@ -183,7 +184,34 @@ test "wide: the sidebar's edge let go a little past where the last frame drew it
   assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
-  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("306")))
+  assert_eq(sidebar_kept(calls, "\nchats"), Some(Json::string("306")))
+}
+
+///|
+test "wide: a sidebar's width the person's, the same in another workspace; folded or not each workspace's own" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  // 对话's dragged to 300 and folded in the first workspace
+  let edge = @sfdesk.rail_w + 240.0
+  t.drag(edge, 400.0, edge + 60.0, 400.0)
+  t.frame()
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded)
+  assert_eq(sidebar_kept(calls, "\nchats"), Some(Json::string("300")))
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("closed")))
+  // the second: open, 300 wide
+  t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(app.picked, "ws2")
+  assert_false(@sfdesk.wide.folded)
+  assert_eq(@sfdesk.wide.side_w, 300.0)
+  // back in the first: folded as it was left, 300 wide
+  t.key(@ui.key_of_char('1'), mods=@ui.mod_ctrl)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(app.picked, "ws1")
+  assert_true(@sfdesk.wide.folded)
+  assert_eq(@sfdesk.wide.side_w, 300.0)
 }
 
 ///|

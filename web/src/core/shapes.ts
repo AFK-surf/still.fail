@@ -5391,8 +5391,10 @@ export interface PrefsView {
 	 */
 	previewSizes?: Record<string, string>;
 	/**
-	 * Each sidebar of the wide frame as it was left on this device, by its workspace and its group
-	 * (`<workspace>\n<chats|settings|files|profiles|stations>`): its width, `<width>,closed` folded at that width, or `closed`.
+	 * Each sidebar of the wide frame as it was left on this device, by its group
+	 * (`<chats|settings|files|profiles|stations|tabs>`): its width, the person's in every workspace, by `\n<group>`; folded, each
+	 * workspace's own, `closed` by `<workspace>\n<group>` (a width kept there before, `<width>` or `<width>,closed`, is read where
+	 * none is kept by the group alone).
 	 */
 	sidebars?: Record<string, string>;
 	/**

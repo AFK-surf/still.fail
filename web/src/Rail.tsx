@@ -679,19 +679,22 @@ export type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "statio
 export function openingWidth(group: SidebarGroup): string {
   return group === "stations" ? `${SIDEBAR.stations}px` : "";
 }
-/** The workspace in view (Rail): each has its sidebars open or folded and as wide as it left them, on this device. */
+/** The workspace in view (Rail): each has its sidebars open or folded as it left them, on this device. */
 let sidebarScope = "";
 /** The one shown, whose width the edge drags. */
 let shownGroup: SidebarGroup = "chats";
-/** Where each is kept: the chats' where the one sidebar's was. */
+/** Where each one's width is kept, the person's in every workspace. */
+const widthKey = (group: SidebarGroup) => `--sidebar-w.all.${group}`;
+/** Where a workspace kept its own before, and before that the one sidebar's (the chats') and each group's: read, the
+ *  newest first, where none is kept across them. */
+const scopeWidthKey = (group: SidebarGroup) => `--sidebar-w.${sidebarScope}.${group}`;
 const oldWidthKey = (group: SidebarGroup) => group === "chats" ? "--sidebar-w" : `--sidebar-w.${group}`;
-/** Each workspace's own (the one all had before read where it has none). */
-const widthKey = (group: SidebarGroup) => `--sidebar-w.${sidebarScope}.${group}`;
 /** What makes the sidebar as wide as `group`'s was made (its own width, none made); null if it is already. */
 function widthFor(group: SidebarGroup): (() => void) | null {
   shownGroup = group;
   const root = document.documentElement.style;
-  const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`) ?? localStorage.getItem(`stillfail.width.${oldWidthKey(group)}`));
+  const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`) ?? localStorage.getItem(`stillfail.width.${scopeWidthKey(group)}`)
+    ?? localStorage.getItem(`stillfail.width.${oldWidthKey(group)}`));
   const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : openingWidth(group);
   if (root.getPropertyValue("--sidebar-w") === px) return null;
   return () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
