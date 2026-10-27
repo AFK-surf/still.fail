@@ -38,6 +38,9 @@ pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marke
     Some(Object(_)) as v => v
     _ => return
   }
+  // signed in while its card is in view, felt as something done; failed, as something refused (feel.mbt)
+  @sfbase.felt_change(c, "login-done/" + station + "/" + id, text(l, "state") == "done", Confirm)
+  @sfbase.felt_change(c, "login-failed/" + station + "/" + id, text(l, "state") == "failed", Reject)
   // ended: one quiet line, as an answered decision's (已在 studio 上登录 gh), failed in red; no card
   if !flag(l, "active") {
     let words = match text(l, "endedText") {

@@ -399,6 +399,8 @@ pub fn decision_options(
         let label = options[i].label
         on_pick(i)
         c.tell("options/" + m.ts, fn() {
+          // picked, felt as something done (a no as something refused: act)
+          @ui.haptic(Confirm)
           act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
             "station": Json::string(here.station),
             "thread": Json::number(thread),

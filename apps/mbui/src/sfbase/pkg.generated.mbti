@@ -437,6 +437,10 @@ pub fn failed_lately(@ui.Ctx, String) -> Bool
 
 pub fn feel_hold(@ui.Ctx, String) -> Unit
 
+pub fn feel_needed(@ui.Ctx, ChatRef, ChatView) -> Unit
+
+pub fn felt_change(@ui.Ctx, String, Bool, @ui.Haptic) -> Unit
+
 pub fn field(Json?, String) -> Json?
 
 pub fn file_image_id(String, String, String) -> String

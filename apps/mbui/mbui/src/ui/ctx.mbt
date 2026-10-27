@@ -2792,10 +2792,16 @@ pub fn open_tab(url : String) -> Bool {
 }
 
 ///|
-/// Puts `s` on the system's clipboard.
+/// Puts `s` on the system's clipboard, felt (a light tap: copied_felt).
 pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
-  ignore(self)
   h_clipboard_set(s)
+  self.copied_felt()
+}
+
+///|
+/// What is copied, felt as a key's light tap, once whichever of a frame's builds copied it.
+fn Ctx::copied_felt(self : Ctx) -> Unit {
+  self.tell("\u{2}haptic/copied", fn() { haptic(KeyboardTap) })
 }
 
 ///|
@@ -2806,10 +2812,10 @@ pub fn Ctx::set_full_screen(self : Ctx, on : Bool) -> Unit {
 }
 
 ///|
-/// Puts the picture `data` (an image file's bytes) on the system's clipboard, as a picture other apps paste.
+/// Puts the picture `data` (an image file's bytes) on the system's clipboard, as a picture other apps paste; felt.
 pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
-  ignore(self)
   h_clipboard_image(data)
+  self.copied_felt()
 }
 
 ///|
@@ -2817,8 +2823,8 @@ pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
 /// clipboard's history), taken off `clear_ms` later (0: kept) unless something else was copied meanwhile or another
 /// secret since: on the app's clock (a host keeps no time of its own), nothing the app waits on.
 pub fn Ctx::copy_secret(self : Ctx, s : String, clear_ms~ : Double) -> Unit {
-  ignore(self)
   h_clipboard_secret(s, clear_ms)
+  self.copied_felt()
   secret_copies.val += 1
   let copy = secret_copies.val
   if clear_ms > 0.0 {

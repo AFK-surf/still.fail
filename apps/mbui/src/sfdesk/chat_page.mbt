@@ -77,6 +77,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   match view {
     Some(v) => {
+      // coming to need the viewer while open, felt (feel.mbt)
+      @sfbase.feel_needed(c, r, v)
       if @settings.action_pressed(c, prefs, "chat.find") && v.thread is Some(_) {
         chat_find_open(c, r)
       }

@@ -846,6 +846,8 @@ fn new_send(
   if key == "" {
     return
   }
+  // sent, felt as a key's light tap (a no as something refused)
+  @ui.haptic(KeyboardTap)
   let words = d.text.get().trim(chars=" \n\t").to_string()
   remember_sent_pictures(src, d, station)
   // (as its message will have them: taken out of the draft as it is sent)
@@ -895,6 +897,7 @@ fn new_send(
   let sending = Ref(true)
   // (not sent after all: its row gone from the list, its words back in the chat's composer, saying why)
   let not_sent = fn(why : String) {
+    @ui.haptic(Reject)
     sending.val = false
     fresh.starting.set(false)
     @sfbase.sent_local_gone(rk, row)

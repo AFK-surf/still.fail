@@ -109,6 +109,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         flight_files(c, draft_key(r))
       }
       Some(v) => {
+        // coming to need the viewer while open, felt (feel.mbt)
+        @sfbase.feel_needed(c, r, v)
         // its messages: the pages' one list, laid out by its width (sfpages chat_list.mbt), under the bar, over the
         // composer's room
         @sfpages.chat_list(

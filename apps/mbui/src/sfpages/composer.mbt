@@ -1733,6 +1733,8 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     toast_later(read_only_words)
     return
   }
+  // sent, felt as a key's light tap (a no as something refused)
+  @ui.haptic(KeyboardTap)
   let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
   remember_sent_pictures(src, w, r.station)
@@ -1785,6 +1787,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
       match res {
         Err(e) => {
           sent_local_gone(rk, row)
+          @ui.haptic(Reject)
           let why = @sf.t("web-main.draft.notSent", args=[("error", text(Some(e), "message"))])
           match text(Some(e), "code") {
             "invalid_params" | "core_restarted" | "closed" => writing_restore(src, w, why, unless_written=true)
@@ -2119,9 +2122,13 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
         c.tell("composer/restore", fn() {
           (src.call)("chat.archive", Json::object(p), fn(res) {
             composing.restoring.remove(key)
+            // felt as something done, or refused
             match res {
-              Err(e) => composing.restore_errors[key] = error_words(e)
-              Ok(_) => ()
+              Err(e) => {
+                composing.restore_errors[key] = error_words(e)
+                @ui.haptic(Reject)
+              }
+              Ok(_) => @ui.haptic(Confirm)
             }
           })
         })

@@ -1151,6 +1151,8 @@ let en : Map[String, String] = {
   "web-pages.appearance.fonts.text": "Messages",
   "web-pages.appearance.fonts.title": "Fonts",
   "web-pages.appearance.fonts.ui": "Interface",
+  "web-pages.appearance.haptics.description": "A light tap as you long-press, answer a card, send, copy or drag to the end, and when the chat you have open needs you. Only while the app is open. This device only.",
+  "web-pages.appearance.haptics.title": "Haptics",
   "web-pages.appearance.language.description": "Interface language. System uses this device's language.",
   "web-pages.appearance.motion.description": "Reduced: pages, new messages and panels appear in place instead of sliding or scaling, and spinners slow down. System follows your system's animation setting. This device only.",
   "web-pages.appearance.motion.full": "Full",

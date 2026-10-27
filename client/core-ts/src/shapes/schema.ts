@@ -1899,6 +1899,7 @@ export const SHAPES: Record<string, Shape> = {
     ["appearance", "Appearance", { default: true }],
     ["windowZoom", opt("String"), { default: true, doc: "The window's content size on this device, as a percentage; none means 100%." }],
     ["motion", opt("String"), { doc: "Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to\nfollow the system's setting." }],
+    ["haptics", opt("String"), { doc: "Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a\nchat open in front coming to need the viewer)." }],
     ["rowPicture", "RowPictureSetting", { default: true }],
     ["absoluteTime", "bool", { default: true, doc: "Times are shown as dates rather than \"3 分钟前\"." }],
     ["language", opt("String"), { default: true, doc: "The language chosen: `zh`, `en`, or none to follow the device's (its `locale`)." }],

@@ -3502,10 +3502,12 @@ pub(all) enum Resized {
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge in hand: where the press went down, its column's width then.
+/// An edge in hand: where the press went down, its column's width then; which end of what it is dragged between it was
+/// last felt at (-1 the least, 1 the most, 0 neither).
 priv struct Handling {
   x0 : Double
   w0 : Double
+  mut at_end : Int
 }
 
 ///|
@@ -3544,7 +3546,7 @@ pub fn handle_drag(
     let h = match handlings.get(id) {
       Some(h) => h
       None => {
-        let h : Handling = { x0: d.x0, w0: width }
+        let h : Handling = { x0: d.x0, w0: width, at_end: 0 }
         handlings[id] = h
         h
       }
@@ -3557,10 +3559,24 @@ pub fn handle_drag(
     if w != width {
       c.built_from_changed("a column's edge dragged")
     }
+    // dragged to either end, felt as it gets there (a step passed: TextHandleMove), once the frame's builds are over
+    let at_end = if w <= min {
+      -1
+    } else if w >= max {
+      1
+    } else {
+      0
+    }
+    c.after_build("haptic/edge/\{id}", fn() {
+      if at_end != 0 && at_end != h.at_end {
+        @ui.haptic(TextHandleMove)
+      }
+      h.at_end = at_end
+    })
     return Dragging(w)
   }
   // (pressed, moved and let go before a frame saw it: from the width it has)
-  let h = handlings.get(id).unwrap_or({ x0: d.x0, w0: width })
+  let h = handlings.get(id).unwrap_or({ x0: d.x0, w0: width, at_end: 0 })
   handlings.remove(id)
   if c.double_clicked(id) {
     Twice

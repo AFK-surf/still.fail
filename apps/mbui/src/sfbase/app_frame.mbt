@@ -24,6 +24,8 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
     "full" => Some(false)
     _ => None
   })
+  // haptics as this device is set (the prefs' `haptics`: off), else on
+  @ui.set_haptics(text(prefs, "haptics") != "off")
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
