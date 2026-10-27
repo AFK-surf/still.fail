@@ -31,22 +31,38 @@ inside the element for anything long.
 |---|---|
 | `<sf-stack>`, `<sf-row>`, `<sf-grid>` | a column, a wrapping row, auto columns (`style="--min:240px"` sets the least width) |
 | `<sf-card title note>` | a card: its ground, a title and a quiet line under it, then what is inside |
-| `<sf-stat label value unit note tone>` | a number with its label (a card of its own; `plain` drops the ground); `tone` colours the note, only when something is wrong |
-| `<sf-chart type data unit height stacked title>` | `bar`, `line`, `area`, `donut`, `pie`; data `{"labels":[…],"values":[…]}` or `{"labels":[…],"series":[{"name","values","tone"}]}`; donut/pie `{"items":[{"label","value","tone"}]}` (`center` sets the middle words) |
+| `<sf-stat label value unit note tone delta delta-tone trend>` | a number with its label (a card of its own; `plain` drops the ground); `delta="+8%"` with `delta-tone="good|bad"`, `trend="[…]"` a small line under it; `tone` colours the note, only when something is wrong |
+| `<sf-chart type data unit height stacked title>` | `bar`, `line`, `area`, `donut`, `pie`, `scatter` (`{"series":[{"name","points":[[x,y,"label"]]}]}`, `x-unit`); data `{"labels":[…],"values":[…]}` or `{"labels":[…],"series":[{"name","values","tone"}]}`; donut/pie `{"items":[{"label","value","tone"}]}` (`center` sets the middle words) |
 | `<sf-bars data unit max>` | horizontal bars: a ranking or shares; `[["label", 3], …]` or `[{"label","value","tone","note"}]` |
-| `<sf-table data>` | a table: `{"columns":["…"],"rows":[["…",…]]}` or rows as objects; number columns set right by themselves; a `<table>` inside it works too |
+| `<sf-table data sortable search="placeholder">` | a table: `{"columns":["…"],"rows":[["…",…]]}` or rows as objects; number columns set right by themselves; `sortable` sorts by a header's click, `search` adds a filter field; a `<table>` inside it works too |
 | `<sf-facts data>` | keys and values: `{"key":"value"}` or `[["key", value]]`, or a `<dl>` inside it |
 | `<sf-steps row>` of `<sf-step state title note>` | steps (a timeline; `row` for a flow across): `state` is `done`, `current`, `todo` or `error` |
 | `<sf-progress value max label note>` | a progress bar with what it says |
 | `<sf-tabs>` of `<sf-tab label selected>` | panels under a segmented choice |
 | `<sf-choices id>` of `<sf-choice title note end send>` | options to answer with: a click puts `send` (else the title) in the chat's composer for the person to send, and keeps their pick (you hear it as `modelContent`) |
 | `<sf-button primary quiet small send>` | a button; with `send`, a click puts those words in the composer |
+| `<sf-list data>` or `<sf-item title note end status badge>` | a list card of rows (machines, issues, files…); `plain` drops its ground |
+| `<sf-compare data>` | options side by side: `[{"title","note","badge","recommended","pros":[…],"cons":[…],"facts":{…},"send","action"}]`; the recommended one ringed in ink, `send` adds a button that answers with it |
+| `<sf-code lang title highlight="3,5-7" start>` | code with line numbers; put the code in a `<script type="text/plain">` inside it |
+| `<sf-diff title>` | a unified diff (`git diff` as it prints), files, hunks, lines added and removed; the diff in a `<script type="text/plain">` |
+| `<sf-tree data>` | files as a tree: paths, or `[{"path","change":"added|modified|deleted|renamed","note","end"}]` |
+| `<sf-timeline data>` or `<sf-event time title note tone>` | what happened when |
+| `<sf-heatmap data unit tone>` | a calendar of days `{"2026-10-01": 3, …}`, or `{"rows":[…],"columns":[…],"values":[[…]]}` |
+| `<sf-gantt data>` | tasks along time: `[{"name","start","end","state","note"}]` (dates or numbers) |
+| `<sf-matrix data>` | what each option has: `{"columns":[…],"rows":[["feature", true, false, "partial", "text"]]}` |
+| `<sf-meter label value max note cells tone>` | a measure in cells (a disk, a quota) |
+| `<sf-before-after before after before-label after-label>` | two pictures (data URIs or SVG) with a handle to drag between |
+| `<sf-form intro submit>` of `<sf-field label type options placeholder note>` | a small form (`text`, `textarea`, `number`, `select`, `choice`, `check`; options `a|b|c`): submitting puts `intro` and each answer in the composer |
+| `<sf-details summary note open>` | a section that opens |
+| `<sf-board data>` | columns of cards: `[{"title","items":[{"title","note","status","badge","end"}]}]` |
+| `<sf-spark data tone>` | a small trend line inline |
 | `<sf-status tone>` | a small dot and words: `ok`, `busy`, `warn`, `error`, `off`, `info` |
 | `<sf-badge tone>` | a pill: grey, or `blue`, `green`, `amber`, `red`, `purple` |
 | `<sf-note>` | quieter words: a source, an aside |
 
-A cell or a fact may be `{"text":"失败","status":"error"}` (a dot and words), `{"text":"beta","badge":"blue"}`, or
-`{"text":"…","tone":"red"}` / `{"text":"…","muted":true}`.
+A cell, a fact or a row's end may be `{"text":"失败","status":"error"}` (a dot and words), `{"text":"beta","badge":"blue"}`,
+`{"spark":[…]}`, `{"code":"…"}`, `true`/`false` (✓ and –), or `{"text":"…","tone":"red"}` / `{"text":"…","muted":true}`.
+Components write no words of their own: every label, button and heading is what you give them, in the chat's language.
 
 ```html
 <sf-stack>

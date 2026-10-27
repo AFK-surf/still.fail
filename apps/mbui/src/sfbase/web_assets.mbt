@@ -414,6 +414,163 @@ pub let viz_css : String =
   #|  background: var(--sf-primary); color: var(--sf-on-primary); font-size: var(--sf-text-meta); line-height: 1.4;
   #|  white-space: pre-line; pointer-events: none;
   #|}
+  #|
+  #|/* ── Trends ───────────────────────────────────────────────────────────────────────── */
+  #|sf-spark { display: inline-flex; vertical-align: middle; }
+  #|.sf-spark { display: block; overflow: visible; }
+  #|.sf-stat-trend { margin-top: 6px; }
+  #|.sf-stat-trend .sf-spark { width: 100%; }
+  #|.sf-delta { color: var(--sf-muted); font-weight: 500; }
+  #|.sf-delta[data-tone="good"] { color: var(--sf-green); }
+  #|.sf-delta[data-tone="bad"] { color: var(--sf-red); }
+  #|.sf-yes { color: var(--sf-ink); font-weight: 600; }
+  #|.sf-no, .sf-part { color: var(--sf-muted); }
+  #|
+  #|/* ── Sorting and searching a table ───────────────────────────────────────────────── */
+  #|.sf-search { margin-bottom: 8px; }
+  #|:is(sf-table) th[data-sort] { cursor: pointer; user-select: none; }
+  #|:is(sf-table) th[data-sort]:hover { color: var(--sf-ink); }
+  #|:is(sf-table) th[aria-sort="ascending"]::after { content: " ↑"; }
+  #|:is(sf-table) th[aria-sort="descending"]::after { content: " ↓"; }
+  #|:is(sf-table, .table) tbody tr { transition: background var(--sf-dur) var(--sf-ease); }
+  #|
+  #|/* ── A list card: rows, a ground only while pointed at ───────────────────────────── */
+  #|sf-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 23px; corner-shape: var(--sf-corner-shape); background: var(--sf-card); }
+  #|sf-list[plain] { padding: 0; background: none; }
+  #|sf-card sf-list, sf-card sf-choices { margin: -6px calc(-1 * (var(--sf-card-pad) - 4px)); background: none; }
+  #|.sf-item {
+  #|  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px var(--sf-text-in);
+  #|  border-radius: 18px; corner-shape: var(--sf-corner-shape);
+  #|}
+  #|.sf-item-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #|.sf-item-title { display: flex; align-items: center; gap: 8px; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); font-weight: 500; }
+  #|.sf-item-note { color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
+  #|.sf-item-end { flex: none; color: var(--sf-muted); font-size: var(--sf-text-meta); }
+  #|
+  #|/* ── Options side by side ─────────────────────────────────────────────────────────── */
+  #|sf-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--sf-gap); }
+  #|.sf-option {
+  #|  display: flex; flex-direction: column; gap: var(--sf-gap); padding: var(--sf-card-pad); border-radius: var(--sf-r-card);
+  #|  corner-shape: var(--sf-corner-shape); background: var(--sf-card);
+  #|}
+  #|.sf-option[data-recommended] { box-shadow: inset 0 0 0 1.5px var(--sf-ink); }
+  #|.sf-option-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #|.sf-option sf-button { align-self: flex-start; margin-top: auto; }
+  #|.sf-points { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
+  #|.sf-points li { display: grid; grid-template-columns: 14px 1fr; gap: 6px; }
+  #|.sf-points li::before { font-weight: 600; text-align: center; }
+  #|.sf-points li[data-good]::before { content: "+"; color: var(--sf-green); }
+  #|.sf-points li[data-bad]::before { content: "−"; color: var(--sf-red); }
+  #|
+  #|/* ── Code and diffs ───────────────────────────────────────────────────────────────── */
+  #|sf-code, sf-diff { display: flex; flex-direction: column; gap: var(--sf-gap); min-width: 0; }
+  #|.sf-code { min-width: 0; border-radius: var(--sf-r-field); corner-shape: var(--sf-corner-shape); background: var(--sf-quiet); overflow: hidden; }
+  #|.sf-code-title { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px 0; color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); font-weight: 500; }
+  #|.sf-code-body { overflow-x: auto; padding: 6px 0; }
+  #|.sf-code table { border-collapse: collapse; min-width: 100%; font-family: var(--sf-font-mono); font-size: var(--sf-text-meta); line-height: 20px; }
+  #|.sf-code td { padding: 0; white-space: pre; vertical-align: top; }
+  #|.sf-code-n { width: 1%; padding: 0 8px 0 12px !important; color: var(--sf-muted); text-align: right; user-select: none; opacity: .8; }
+  #|.sf-code-line { padding-right: 12px !important; width: 100%; }
+  #|.sf-code tr[data-mark] { background: color-mix(in srgb, var(--sf-ink) 8%, transparent); }
+  #|.sf-code tr[data-kind="add"] { background: var(--sf-green-ground); }
+  #|.sf-code tr[data-kind="del"] { background: var(--sf-red-ground); }
+  #|.sf-code tr[data-kind="add"] .sf-code-line::before { content: "+"; color: var(--sf-green); margin-right: 6px; }
+  #|.sf-code tr[data-kind="del"] .sf-code-line::before { content: "−"; color: var(--sf-red); margin-right: 6px; }
+  #|.sf-code tr[data-kind="same"] .sf-code-line::before { content: " "; margin-right: 6px; }
+  #|.sf-diff-hunk td { color: var(--sf-muted); padding-top: 4px !important; padding-bottom: 4px !important; }
+  #|.sf-diff-count [data-add] { color: var(--sf-green); }
+  #|.sf-diff-count [data-del] { color: var(--sf-red); }
+  #|
+  #|/* ── A tree of files ──────────────────────────────────────────────────────────────── */
+  #|sf-tree { display: flex; flex-direction: column; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
+  #|.sf-tree-row { display: flex; align-items: center; gap: 6px; min-height: 26px; }
+  #|.sf-tree-icon { flex: none; color: var(--sf-muted); }
+  #|.sf-tree-row[data-folder] .sf-tree-name { color: var(--sf-muted); }
+  #|.sf-tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #|.sf-tree-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sf-muted); font-size: var(--sf-text-meta); }
+  #|.sf-tree-end { margin-left: auto; color: var(--sf-muted); font-size: var(--sf-text-meta); }
+  #|.sf-tree-change { flex: none; width: 14px; margin-left: auto; font-family: var(--sf-font-mono); font-size: var(--sf-text-meta); font-weight: 600; text-align: center; }
+  #|.sf-tree-end + .sf-tree-change { margin-left: 8px; }
+  #|
+  #|/* ── Timeline ─────────────────────────────────────────────────────────────────────── */
+  #|sf-timeline { display: flex; flex-direction: column; }
+  #|.sf-event { position: relative; display: grid; grid-template-columns: minmax(44px, max-content) 16px minmax(0, 1fr); column-gap: 10px; padding-bottom: 14px; overflow: hidden; }
+  #|.sf-event:last-child { padding-bottom: 0; }
+  #|.sf-event-time { color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-body); text-align: right; white-space: nowrap; }
+  #|.sf-event-mark { position: relative; display: grid; place-items: center; height: var(--sf-leading-body); }
+  #|.sf-event-mark::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mark, var(--sf-ink)); z-index: 1; }
+  #|.sf-event:not(:last-child) .sf-event-mark::after { content: ""; position: absolute; top: calc(50% + 6px); left: calc(50% - .75px); width: 1.5px; height: 9999px; background: var(--sf-line); }
+  #|
+  #|/* ── Heatmaps ─────────────────────────────────────────────────────────────────────── */
+  #|sf-heatmap { display: block; overflow-x: auto; }
+  #|.sf-heat-cal { display: grid; grid-template-rows: auto repeat(7, auto); gap: 3px; width: max-content; max-width: 100%; }
+  #|.sf-heat-cal .sf-heat-cell { aspect-ratio: 1; }
+  #|.sf-heat-month { color: var(--sf-muted); font-size: var(--sf-text-caption); line-height: var(--sf-leading-caption); white-space: nowrap; }
+  #|.sf-heat-grid { display: grid; gap: 3px; align-items: center; font-size: var(--sf-text-caption); line-height: var(--sf-leading-caption); }
+  #|.sf-heat-grid .sf-heat-cell { height: 18px; }
+  #|.sf-heat-col { color: var(--sf-muted); text-align: center; white-space: nowrap; overflow: hidden; }
+  #|.sf-heat-row { padding-right: 8px; color: var(--sf-muted); white-space: nowrap; }
+  #|.sf-heat-cell { display: block; border-radius: 3px; }
+  #|
+  #|/* ── Gantt ────────────────────────────────────────────────────────────────────────── */
+  #|.sf-gantt { display: grid; grid-template-columns: minmax(0, max-content) minmax(120px, 1fr); gap: 8px 14px; align-items: center; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
+  #|.sf-gantt-axis { position: relative; height: var(--sf-leading-caption); color: var(--sf-muted); font-size: var(--sf-text-caption); }
+  #|.sf-gantt-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  #|.sf-gantt-axis span:first-child { transform: none; }
+  #|.sf-gantt-axis span:last-child { transform: translateX(-100%); }
+  #|.sf-gantt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #|.sf-gantt-track { position: relative; height: 10px; border-radius: 999px; background: var(--sf-quiet); }
+  #|.sf-gantt-bar { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: var(--sf-muted); }
+  #|.sf-gantt-bar[data-state="done"] { background: var(--sf-ink); }
+  #|.sf-gantt-bar[data-state="current"] { background: var(--sf-ink); box-shadow: 0 0 0 2px var(--sf-page), 0 0 0 3.5px var(--sf-ink); }
+  #|.sf-gantt-bar[data-state="todo"] { background: color-mix(in srgb, var(--sf-ink) 28%, transparent); }
+  #|.sf-gantt-bar[data-state="error"] { background: var(--sf-red); }
+  #|
+  #|/* ── Matrix ───────────────────────────────────────────────────────────────────────── */
+  #|.sf-matrix { width: 100%; border-collapse: collapse; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
+  #|.sf-matrix :is(th, td) { padding: 7px var(--sf-text-in); text-align: center; }
+  #|.sf-matrix :is(th, td):first-child { padding-left: 0; text-align: left; }
+  #|.sf-matrix th { color: var(--sf-muted); font-size: var(--sf-text-meta); font-weight: 500; }
+  #|.sf-matrix tbody td:first-child { color: var(--sf-ink); }
+  #|
+  #|/* ── Meter ────────────────────────────────────────────────────────────────────────── */
+  #|sf-meter { display: flex; flex-direction: column; gap: 6px; }
+  #|.sf-meter-cells { display: flex; gap: 2px; }
+  #|.sf-meter-cells i { flex: 1; height: 8px; border-radius: 2px; background: var(--sf-line); }
+  #|.sf-meter-cells i[data-on] { background: var(--sf-ink); }
+  #|
+  #|/* ── Before and after ─────────────────────────────────────────────────────────────── */
+  #|.sf-ba { position: relative; overflow: hidden; border-radius: var(--sf-r-field); corner-shape: var(--sf-corner-shape); background: var(--sf-quiet); cursor: ew-resize; touch-action: pan-y; user-select: none; }
+  #|.sf-ba img { display: block; width: 100%; height: auto; pointer-events: none; }
+  #|.sf-ba-after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--at)); }
+  #|.sf-ba-after img { height: 100%; object-fit: cover; }
+  #|.sf-ba-handle { position: absolute; top: 0; bottom: 0; left: var(--at); width: 2px; margin-left: -1px; background: var(--sf-page); box-shadow: 0 0 0 .5px var(--sf-line-strong); }
+  #|.sf-ba-handle::after { content: ""; position: absolute; top: 50%; left: 50%; width: 24px; height: 24px; margin: -12px; border-radius: 50%; background: var(--sf-page); box-shadow: 0 1px 4px var(--sf-shadow), 0 0 0 .5px var(--sf-line-strong); }
+  #|.sf-ba-label { position: absolute; top: 8px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--sf-page) 85%, transparent); font-size: var(--sf-text-meta); }
+  #|.sf-ba-label[data-side="before"] { left: 8px; }
+  #|.sf-ba-label[data-side="after"] { right: 8px; }
+  #|
+  #|/* ── Forms ────────────────────────────────────────────────────────────────────────── */
+  #|sf-form { display: flex; flex-direction: column; gap: 14px; }
+  #|.sf-field { display: flex; flex-direction: column; gap: 2px; }
+  #|.sf-field .form-label { margin-bottom: 2px; }
+  #|.sf-form-foot { display: flex; justify-content: flex-end; }
+  #|
+  #|/* ── A section that opens ─────────────────────────────────────────────────────────── */
+  #|sf-details { display: block; }
+  #|sf-details summary { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; list-style: none; cursor: pointer; font-weight: 500; }
+  #|sf-details summary::-webkit-details-marker { display: none; }
+  #|sf-details summary::before { content: "›"; display: inline-block; width: 10px; color: var(--sf-muted); transition: transform var(--sf-dur) var(--sf-ease); }
+  #|sf-details details[open] > summary::before { transform: rotate(90deg); }
+  #|.sf-details-body { padding: 6px 0 4px 18px; }
+  #|
+  #|/* ── Board ────────────────────────────────────────────────────────────────────────── */
+  #|sf-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: var(--sf-gap); overflow-x: auto; }
+  #|.sf-board-col { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 23px; corner-shape: var(--sf-corner-shape); background: var(--sf-card); }
+  #|.sf-board-head { display: flex; justify-content: space-between; padding: 6px var(--sf-text-in) 2px; font-size: var(--sf-text-ui); font-weight: 600; }
+  #|.sf-board-count { color: var(--sf-muted); font-weight: 400; }
+  #|.sf-board-card { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 18px; corner-shape: var(--sf-corner-shape); background: var(--sf-page); }
+  #|.sf-board-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 
 ///|
 /// web/src/viz/bridge.js, as it is.
@@ -535,15 +692,17 @@ pub let viz_components : String =
   #|      else if (k === "style") el.style.cssText = v;
   #|      else el.setAttribute(k, v === true ? "" : String(v));
   #|    }
-  #|    for (const kid of kids.flat()) if (kid !== undefined && kid !== null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+  #|    for (const kid of kids.flat(Infinity)) if (kid !== undefined && kid !== null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
   #|    return el;
   #|  };
   #|  const s = (tag, attrs = {}, ...kids) => {
   #|    const el = document.createElementNS(NS, tag);
   #|    for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) el.setAttribute(k, String(v));
-  #|    for (const kid of kids.flat()) if (kid) el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  #|    for (const kid of kids.flat(Infinity)) if (kid) el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
   #|    return el;
   #|  };
+  #|  /** Puts what is given in place of an element's children, leaving out what is not there. */
+  #|  const put = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== undefined && k !== null && k !== false && k !== ""));
   #|  const ink = (tone, i = 0) => `var(${TONE_INK[tone] ?? `--sf-series-${(i % 6) + 1}`})`;
   #|
   #|  /** The element's data: its `data` attribute, else a <script type="application/json"> inside it. */
@@ -553,7 +712,7 @@ pub let viz_components : String =
   #|    try {
   #|      return JSON.parse(raw);
   #|    } catch (e) {
-  #|      el.replaceChildren(h("sf-note", {}, `${el.localName}: its data is not JSON (${e.message})`));
+  #|      put(el, h("sf-note", {}, `${el.localName}: its data is not JSON (${e.message})`));
   #|      return undefined;
   #|    }
   #|  };
@@ -572,7 +731,7 @@ pub let viz_components : String =
   #|        try {
   #|          this.draw();
   #|        } catch (e) {
-  #|          this.replaceChildren(h("sf-note", {}, `${this.localName}: ${e.message}`));
+  #|          put(this, h("sf-note", {}, `${this.localName}: ${e.message}`));
   #|          postMessage({ emberViz: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
   #|        }
   #|      };
@@ -595,16 +754,34 @@ pub let viz_components : String =
   #|    }
   #|  });
   #|
+  #|  /** A small line of values (a trend), as wide as it is given, in ink. */
+  #|  const spark = (values, { w = 80, hgt = 22, tone } = {}) => {
+  #|    const vs = values.map(num).filter(Number.isFinite);
+  #|    const svg = s("svg", { class: "sf-spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", width: w, height: hgt });
+  #|    if (vs.length < 2) return svg;
+  #|    const lo = Math.min(...vs), hi = Math.max(...vs) === lo ? lo + 1 : Math.max(...vs);
+  #|    const pts = vs.map((v, i) => `${(i / (vs.length - 1)) * w},${2 + (1 - (v - lo) / (hi - lo)) * (hgt - 4)}`);
+  #|    svg.append(s("polyline", { points: pts.join(" "), fill: "none", stroke: tone ? ink(tone) : "var(--sf-ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
+  #|    return svg;
+  #|  };
+  #|  const listOf = (raw) => { try { return JSON.parse(raw); } catch { return String(raw).split(/[\s,]+/).filter(Boolean); } };
+  #|
   #|  // ── A number with its label ─────────────────────────────────────────────────────────
   #|  define("sf-stat", class extends Base {
   #|    draw() {
   #|      const value = this.getAttribute("value") ?? this.textContent.trim();
   #|      const tone = this.getAttribute("tone");
   #|      const note = this.getAttribute("note");
-  #|      this.replaceChildren(
+  #|      const delta = this.getAttribute("delta");
+  #|      const trend = this.getAttribute("trend");
+  #|      put(this,
   #|        h("span.sf-stat-label", {}, this.getAttribute("label") ?? ""),
   #|        h("span.sf-stat-value", {}, /^[\s+\-]*[\d.,]+$/.test(value) && Number.isFinite(num(value)) ? fmt(num(value)) : value, this.hasAttribute("unit") && h("span.sf-stat-unit", {}, this.getAttribute("unit"))),
-  #|        note && h("span.sf-stat-note", {}, tone && h("i.sf-dot", { "data-tone": tone }), h("span", { style: tone && tone !== "off" ? `color:${ink(tone)}` : undefined }, note)),
+  #|        (note || delta) && h("span.sf-stat-note", {},
+  #|          tone && h("i.sf-dot", { "data-tone": tone }),
+  #|          delta && h("span.sf-delta", { "data-tone": this.getAttribute("delta-tone") ?? undefined }, /^[+]/.test(delta) ? `↑ ${delta.slice(1)}` : /^[-−]/.test(delta) ? `↓ ${delta.slice(1)}` : delta),
+  #|          note && h("span", { style: tone && tone !== "off" ? `color:${ink(tone)}` : undefined }, note)),
+  #|        trend && h("span.sf-stat-trend", {}, spark(listOf(trend), { w: 120, hgt: 28, tone: tone && tone !== "off" ? tone : undefined })),
   #|      );
   #|    }
   #|  });
@@ -615,22 +792,30 @@ pub let viz_components : String =
   #|      this.prepend(h("i.sf-dot", { "data-tone": this.getAttribute("tone") ?? this.getAttribute("state") ?? "" }));
   #|    }
   #|  });
+  #|  define("sf-spark", class extends Base {
+  #|    draw() {
+  #|      put(this, spark(listOf(this.getAttribute("data") ?? this.textContent), { w: num(this.getAttribute("width")) || 80, hgt: num(this.getAttribute("height")) || 20, tone: this.getAttribute("tone") ?? undefined }));
+  #|    }
+  #|  });
   #|
-  #|  /** What a table's or a list's cell shows: text, a number, or {text, status|badge|tone}. */
+  #|  /** What a table's or a list's cell shows: text, a number, or {text, status|badge|tone|muted|spark|code}. */
   #|  const cell = (v) => {
   #|    if (v === null || v === undefined) return "";
   #|    if (typeof v === "number") return fmt(v);
+  #|    if (typeof v === "boolean") return h("span", { class: v ? "sf-yes" : "sf-no" }, v ? "✓" : "–");
   #|    if (typeof v !== "object") return String(v);
   #|    const text = v.text ?? v.value ?? "";
-  #|    if (v.status) return h("sf-status", { tone: v.status }, h("i.sf-dot", { "data-tone": v.status }), String(text));
+  #|    if (v.spark) return spark(v.spark, { tone: v.tone });
+  #|    if (v.status) return h("sf-status", { tone: v.status }, String(text));
   #|    if (v.badge !== undefined) return h("sf-badge", { tone: v.badge === true ? undefined : v.badge }, String(text));
+  #|    if (v.code) return h("code", {}, String(v.code));
   #|    if (v.tone) return h("span", { style: `color:${ink(v.tone)}` }, String(text));
   #|    if (v.muted) return h("span", { style: "color:var(--sf-muted)" }, String(text));
   #|    return String(text);
   #|  };
   #|  const plain = (v) => (v && typeof v === "object" ? v.text ?? v.value : v);
   #|
-  #|  // ── Table: from data, or a <table> inside it ────────────────────────────────────────
+  #|  // ── Table: from data (sortable, searchable), or a <table> inside it ─────────────────
   #|  define("sf-table", class extends Base {
   #|    draw() {
   #|      const d = dataOf(this);
@@ -648,10 +833,28 @@ pub let viz_components : String =
   #|        const values = rows.map((r) => plain(at(r, c))).filter((v) => v !== undefined && v !== null && v !== "");
   #|        c.num = c.align ? c.align === "right" : values.length > 0 && values.every(numeric);
   #|      }
-  #|      this.replaceChildren(h("div.sf-table-scroll", {}, h("table", {},
-  #|        h("thead", {}, h("tr", {}, cols.map((c) => h("th", { "data-num": c.num || undefined }, c.label)))),
-  #|        h("tbody", {}, rows.map((r) => h("tr", {}, cols.map((c) => h("td", { "data-num": c.num || undefined }, cell(at(r, c))))))),
-  #|      )));
+  #|      const sortable = this.hasAttribute("sortable");
+  #|      const searching = this.getAttribute("search");
+  #|      let by = -1, down = false, words = "";
+  #|      const body = h("tbody");
+  #|      const heads = cols.map((c, i) => h("th", { "data-num": c.num || undefined, "data-sort": sortable ? "" : undefined, onclick: sortable ? () => { down = by === i ? !down : c.num; by = i; fill(); } : undefined }, c.label));
+  #|      const fill = () => {
+  #|        let list = rows.filter((r) => !words || cols.some((c) => String(plain(at(r, c)) ?? "").toLowerCase().includes(words)));
+  #|        if (by >= 0) {
+  #|          const c = cols[by];
+  #|          list = [...list].sort((x, y) => {
+  #|            const a = plain(at(x, c)), b = plain(at(y, c));
+  #|            const r = c.num && Number.isFinite(num(a)) && Number.isFinite(num(b)) ? num(a) - num(b) : String(a ?? "").localeCompare(String(b ?? ""));
+  #|            return down ? -r : r;
+  #|          });
+  #|        }
+  #|        heads.forEach((th, i) => th.setAttribute("aria-sort", i === by ? (down ? "descending" : "ascending") : "none"));
+  #|        put(body, list.map((r) => h("tr", {}, cols.map((c) => h("td", { "data-num": c.num || undefined }, cell(at(r, c)))))));
+  #|      };
+  #|      fill();
+  #|      put(this,
+  #|        searching !== null && h("input.form-control.sf-search", { type: "search", placeholder: searching, oninput: (e) => { words = e.target.value.trim().toLowerCase(); fill(); } }),
+  #|        h("div.sf-table-scroll", {}, h("table", {}, h("thead", {}, h("tr", {}, heads)), body)));
   #|    }
   #|  });
   #|
@@ -663,7 +866,7 @@ pub let viz_components : String =
   #|      const items = (Array.isArray(d) ? d : d.items ?? []).map((it) => (Array.isArray(it) ? { label: it[0], value: it[1] } : it));
   #|      const max = num(this.getAttribute("max")) || Math.max(0, ...items.map((it) => num(it.value) || 0)) || 1;
   #|      const unit = this.getAttribute("unit") ?? "";
-  #|      this.replaceChildren(...items.flatMap((it) => [
+  #|      put(this, ...items.flatMap((it) => [
   #|        h("span.sf-bar-label", { title: it.label }, it.label),
   #|        h("span.sf-bar-track", {}, h("span.sf-bar-fill", { style: `display:block;width:${Math.max(0, Math.min(100, ((num(it.value) || 0) / max) * 100))}%;background:${it.tone ? ink(it.tone) : "var(--sf-ink)"}` })),
   #|        h("span.sf-bar-value", {}, it.note ?? `${fmt(num(it.value))}${unit}`),
@@ -679,7 +882,7 @@ pub let viz_components : String =
   #|      const share = Math.max(0, Math.min(1, value / max));
   #|      const label = this.getAttribute("label");
   #|      const said = this.getAttribute("note") ?? (max === 100 ? `${fmt(value, 1)}%` : `${fmt(value)} / ${fmt(max)}`);
-  #|      this.replaceChildren(
+  #|      put(this, 
   #|        (label || said) && h("div.sf-progress-head", {}, h("span", {}, label ?? ""), h("span", {}, said)),
   #|        h("div.sf-progress-track", { role: "progressbar", "aria-valuenow": value, "aria-valuemax": max }, h("div.sf-progress-fill", { style: `width:${share * 100}%` })),
   #|      );
@@ -696,7 +899,7 @@ pub let viz_components : String =
   #|        if (!dl) return;
   #|        pairs = [...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling?.localName === "dd" ? [...dt.nextElementSibling.childNodes].map((n) => n.cloneNode(true)) : ""]);
   #|      }
-  #|      this.replaceChildren(...pairs.flatMap(([k, v]) => [h("span.sf-fact-key", {}, k), h("span.sf-fact-value", {}, Array.isArray(v) ? v : cell(v))]));
+  #|      put(this, ...pairs.flatMap(([k, v]) => [h("span.sf-fact-key", {}, k), h("span.sf-fact-value", {}, Array.isArray(v) ? v : cell(v))]));
   #|    }
   #|  });
   #|
@@ -707,7 +910,7 @@ pub let viz_components : String =
   #|      const steps = d ? (Array.isArray(d) ? d : d.steps ?? []) : [...this.querySelectorAll(":scope > sf-step")].map((st) => ({
   #|        state: st.getAttribute("state"), title: st.getAttribute("title") ?? "", note: st.getAttribute("note"), body: [...st.childNodes],
   #|      }));
-  #|      this.replaceChildren(...steps.map((st) => h("div.sf-step", { "data-state": st.state ?? "todo" },
+  #|      put(this, ...steps.map((st) => h("div.sf-step", { "data-state": st.state ?? "todo" },
   #|        h("span.sf-step-mark", {}),
   #|        h("div.sf-step-body", {}, h("div.sf-step-title", {}, st.title), st.note && h("div.sf-step-note", {}, st.note), st.body),
   #|      )));
@@ -758,7 +961,7 @@ pub let viz_components : String =
   #|          send(it.send);
   #|        },
   #|      }, h("span.sf-choice-text", {}, h("span.sf-choice-title", {}, it.title), it.note && h("span.sf-choice-note", {}, it.note)), it.end && h("span.sf-choice-end", {}, it.end)));
-  #|      this.replaceChildren(...rows);
+  #|      put(this, ...rows);
   #|    }
   #|  });
   #|  define("sf-choice", class extends HTMLElement {});
@@ -770,7 +973,7 @@ pub let viz_components : String =
   #|        type: "button", "data-primary": this.hasAttribute("primary") || undefined, "data-quiet": this.hasAttribute("quiet") || undefined,
   #|        "data-small": this.hasAttribute("small") || undefined, onclick: words ? () => send(words) : undefined,
   #|      }, ...this.childNodes);
-  #|      this.replaceChildren(b);
+  #|      put(this, b);
   #|    }
   #|  });
   #|
@@ -808,6 +1011,7 @@ pub let viz_components : String =
   #|      const width = Math.round(this.clientWidth) || 600;
   #|      this._width = width;
   #|      if (type === "donut" || type === "pie") return this.donut(d, unit);
+  #|      if (type === "scatter") return this.scatter(d, unit, width);
   #|      const labels = d.labels ?? [];
   #|      const series = (d.series ?? [{ name: d.name ?? "", values: d.values ?? [], tone: d.tone }]).map((sr, i) => ({ ...sr, color: sr.tone ? ink(sr.tone) : ink(null, i) }));
   #|      const stacked = this.hasAttribute("stacked") && type === "bar";
@@ -872,13 +1076,35 @@ pub let viz_components : String =
   #|        });
   #|      }
   #|      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color}` }), sr.name)));
-  #|      this.replaceChildren(...[this.title_(), svg, legend].filter(Boolean));
+  #|      put(this, this.title_(), svg, legend);
   #|    }
   #|    title_() {
   #|      const t = this.getAttribute("title");
   #|      if (t) this.setAttribute("data-title", t), this.removeAttribute("title");
   #|      const said = this.getAttribute("data-title");
   #|      return said && h("div.sf-title", {}, said);
+  #|    }
+  #|    scatter(d, unit, width) {
+  #|      const series = (d.series ?? [{ name: d.name ?? "", points: d.points ?? [] }]).map((sr, i) => ({ ...sr, color: sr.tone ? ink(sr.tone) : ink(null, i) }));
+  #|      const pts = series.flatMap((sr) => sr.points.map((p) => [num(p[0] ?? p.x), num(p[1] ?? p.y)]));
+  #|      const height = num(this.getAttribute("height")) || 220;
+  #|      const xs = ticks(Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[0])));
+  #|      const ys = ticks(Math.min(0, ...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1])));
+  #|      const xunit = this.getAttribute("x-unit") ?? "";
+  #|      const left = Math.max(...ys.map((v) => (short(v) + unit).length)) * 6.5 + 8, right = 8, top = 8, bottom = 22;
+  #|      const pw = width - left - right, ph = height - top - bottom;
+  #|      const X = (v) => left + ((v - xs[0]) / (xs[xs.length - 1] - xs[0])) * pw;
+  #|      const Y = (v) => top + ph - ((v - ys[0]) / (ys[ys.length - 1] - ys[0])) * ph;
+  #|      const svg = s("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
+  #|      for (const v of ys) svg.append(s("line", { class: "sf-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }), s("text", { class: "sf-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
+  #|      for (const v of xs) svg.append(s("text", { class: "sf-chart-axis", x: X(v), y: height - 6, "text-anchor": "middle" }, short(v) + xunit));
+  #|      series.forEach((sr) => sr.points.forEach((p) => {
+  #|        const x = num(p[0] ?? p.x), y = num(p[1] ?? p.y);
+  #|        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  #|        svg.append(s("circle", { cx: X(x), cy: Y(y), r: 4, fill: sr.color, "fill-opacity": .85, class: "sf-hit", "data-tooltip": `${p.label ?? p[2] ?? (sr.name || "")}${p.label || p[2] || sr.name ? ": " : ""}${fmt(x)}${xunit}, ${fmt(y)}${unit}` }));
+  #|      }));
+  #|      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color};border-radius:50%` }), sr.name)));
+  #|      put(this, this.title_(), svg, legend);
   #|    }
   #|    donut(d, unit) {
   #|      const items = d.items ?? (d.labels ?? []).map((l, i) => ({ label: l, value: (d.values ?? [])[i] }));
@@ -904,7 +1130,330 @@ pub let viz_components : String =
   #|      const center = this.getAttribute("center");
   #|      if (r && center !== "") svg.append(s("text", { class: "sf-chart-center", x: c, y: c, "text-anchor": "middle", "dominant-baseline": "central" }, center ?? `${short(total)}${unit}`));
   #|      const legend = h("div.sf-chart-legend", {}, items.map((it) => h("span", {}, h("span", { style: "display:inline-flex;align-items:center;gap:6px" }, h("i", { style: `background:${it.color}` }), it.label), h("b", {}, `${fmt(num(it.value))}${unit}`))));
-  #|      this.replaceChildren(...[this.title_(), h("div.sf-chart-donut", {}, svg, legend)].filter(Boolean));
+  #|      put(this, this.title_(), h("div.sf-chart-donut", {}, svg, legend));
+  #|    }
+  #|  });
+  #|
+  #|  // ── A list card: rows with a title, a quiet line, what is at their end ───────────────
+  #|  const rowOf = (it) => h("div.sf-item", {},
+  #|    it.status && h("i.sf-dot", { "data-tone": it.status }),
+  #|    h("span.sf-item-text", {}, h("span.sf-item-title", {}, it.title ?? ""), it.note && h("span.sf-item-note", {}, it.note)),
+  #|    it.badge && h("sf-badge", { tone: it.tone ?? undefined }, it.badge),
+  #|    it.end !== undefined && it.end !== null && h("span.sf-item-end", {}, cell(it.end)));
+  #|  define("sf-list", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      const items = d ? (Array.isArray(d) ? d : d.items ?? []) : [...this.querySelectorAll(":scope > sf-item")].map((it) => ({
+  #|        title: it.getAttribute("title") ?? it.textContent.trim(), note: it.getAttribute("note"), end: it.getAttribute("end"),
+  #|        status: it.getAttribute("status"), badge: it.getAttribute("badge"), tone: it.getAttribute("tone"),
+  #|      }));
+  #|      put(this, items.map(rowOf));
+  #|    }
+  #|  });
+  #|  define("sf-item", class extends HTMLElement {});
+  #|
+  #|  // ── Options side by side: what each is, its good and bad, the one recommended ringed ─
+  #|  define("sf-compare", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      const items = Array.isArray(d) ? d : d.options ?? [];
+  #|      put(this, items.map((o) => h("div.sf-option", { "data-recommended": o.recommended || undefined },
+  #|        h("div.sf-head", {}, h("div.sf-option-top", {}, h("span.sf-title", {}, o.title ?? ""), o.badge && h("sf-badge", { tone: o.tone ?? undefined }, o.badge)), o.note && h("div.sf-sub", {}, o.note)),
+  #|        o.facts && h("sf-facts", { data: JSON.stringify(o.facts) }),
+  #|        (o.pros?.length || o.cons?.length) && h("ul.sf-points", {},
+  #|          (o.pros ?? []).map((p) => h("li", { "data-good": "" }, p)),
+  #|          (o.cons ?? []).map((p) => h("li", { "data-bad": "" }, p))),
+  #|        o.send && h("sf-button", { small: true, primary: o.recommended || undefined, send: o.send }, o.action ?? o.title),
+  #|      )));
+  #|    }
+  #|  });
+  #|
+  #|  // ── Code and diffs ──────────────────────────────────────────────────────────────────
+  #|  /** An element's text: a `text` attribute, a <script type="text/plain"> inside it, else what it says. */
+  #|  const textOf = (el) => {
+  #|    const raw = el.getAttribute("text") ?? el.querySelector(":scope > script[type='text/plain'], :scope > template, :scope > pre")?.textContent ?? el.textContent;
+  #|    const lines = raw.replace(/\t/g, "  ").replace(/^\n+|\s+$/g, "").split("\n");
+  #|    const pad = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length));
+  #|    return lines.map((l) => l.slice(Number.isFinite(pad) ? pad : 0));
+  #|  };
+  #|  const ranges = (spec) => {
+  #|    const out = new Set();
+  #|    for (const part of String(spec ?? "").split(",")) {
+  #|      const [a, b] = part.split("-").map((x) => parseInt(x, 10));
+  #|      if (Number.isFinite(a)) for (let i = a; i <= (Number.isFinite(b) ? b : a); i++) out.add(i);
+  #|    }
+  #|    return out;
+  #|  };
+  #|  define("sf-code", class extends Base {
+  #|    draw() {
+  #|      const lines = textOf(this);
+  #|      const marked = ranges(this.getAttribute("highlight"));
+  #|      const first = num(this.getAttribute("start")) || 1;
+  #|      const numbered = !this.hasAttribute("plain");
+  #|      const title = this.getAttribute("title") ?? this.getAttribute("lang");
+  #|      put(this, h("div.sf-code", {},
+  #|        title && h("div.sf-code-title", {}, title),
+  #|        h("div.sf-code-body", {}, h("table", {}, h("tbody", {}, lines.map((l, i) => h("tr", { "data-mark": marked.has(first + i) || undefined },
+  #|          numbered && h("td.sf-code-n", {}, first + i), h("td.sf-code-line", {}, l || " "))))))));
+  #|    }
+  #|  });
+  #|  define("sf-diff", class extends Base {
+  #|    draw() {
+  #|      const lines = textOf(this);
+  #|      const files = [];
+  #|      let file = null, a = 0, b = 0;
+  #|      const start = (name) => { file = { name, rows: [], add: 0, del: 0 }; files.push(file); };
+  #|      for (const l of lines) {
+  #|        if (l.startsWith("diff --git")) { start(l.replace(/^diff --git a\/(.*?) b\/.*$/, "$1")); continue; }
+  #|        if (/^(index |new file|deleted file|similarity|rename |old mode|new mode)/.test(l)) continue;
+  #|        if (l.startsWith("--- ")) { if (!file) start(""); continue; }
+  #|        if (l.startsWith("+++ ")) { const n = l.slice(4).replace(/^b\//, ""); if (file && !file.name && n !== "/dev/null") file.name = n; continue; }
+  #|        if (!file) start(this.getAttribute("title") ?? "");
+  #|        const m = l.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
+  #|        if (m) { a = +m[1]; b = +m[2]; file.rows.push({ kind: "hunk", text: m[3].trim() }); continue; }
+  #|        if (l.startsWith("+")) { file.rows.push({ kind: "add", n: [null, b++], text: l.slice(1) }); file.add++; }
+  #|        else if (l.startsWith("-")) { file.rows.push({ kind: "del", n: [a++, null], text: l.slice(1) }); file.del++; }
+  #|        else if (!l.startsWith("\\")) file.rows.push({ kind: "same", n: [a++, b++], text: l.startsWith(" ") ? l.slice(1) : l });
+  #|      }
+  #|      put(this, files.map((f) => h("div.sf-code", {},
+  #|        (f.name || files.length > 1) && h("div.sf-code-title", {}, h("span", {}, f.name), h("span.sf-diff-count", {}, h("span", { "data-add": "" }, `+${f.add}`), " ", h("span", { "data-del": "" }, `−${f.del}`))),
+  #|        h("div.sf-code-body", {}, h("table", {}, h("tbody", {}, f.rows.map((r) => r.kind === "hunk"
+  #|          ? h("tr.sf-diff-hunk", {}, h("td.sf-code-n", {}), h("td.sf-code-n", {}), h("td.sf-code-line", {}, r.text || "⋯"))
+  #|          : h("tr", { "data-kind": r.kind }, h("td.sf-code-n", {}, r.n[0] ?? ""), h("td.sf-code-n", {}, r.n[1] ?? ""), h("td.sf-code-line", {}, r.text || " ")))))))));
+  #|    }
+  #|  });
+  #|
+  #|  // ── A tree of files (paths), each with a change or a note ───────────────────────────
+  #|  const CHANGE = { added: ["A", "green"], add: ["A", "green"], modified: ["M", "amber"], changed: ["M", "amber"], deleted: ["D", "red"], removed: ["D", "red"], renamed: ["R", "blue"] };
+  #|  const folderIcon = () => s("svg", { viewBox: "0 0 16 16", width: 14, height: 14, class: "sf-tree-icon" }, s("path", { d: "M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.4 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z", fill: "none", stroke: "currentColor", "stroke-width": 1.2 }));
+  #|  const fileIcon = () => s("svg", { viewBox: "0 0 16 16", width: 14, height: 14, class: "sf-tree-icon" }, s("path", { d: "M4 2.5h5l3 3v8H4z M9 2.5v3h3", fill: "none", stroke: "currentColor", "stroke-width": 1.2, "stroke-linejoin": "round" }));
+  #|  define("sf-tree", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      const root = { kids: new Map() };
+  #|      for (const it of Array.isArray(d) ? d : d.files ?? []) {
+  #|        const f = typeof it === "string" ? { path: it } : it;
+  #|        let node = root;
+  #|        const parts = f.path.split("/").filter(Boolean);
+  #|        parts.forEach((p, i) => {
+  #|          if (!node.kids.has(p)) node.kids.set(p, { name: p, kids: new Map() });
+  #|          node = node.kids.get(p);
+  #|          if (i === parts.length - 1) Object.assign(node, { file: !f.path.endsWith("/"), note: f.note, change: f.change, end: f.end });
+  #|        });
+  #|      }
+  #|      const rows = [];
+  #|      const walk = (node, depth) => {
+  #|        const kids = [...node.kids.values()].sort((x, y) => (x.kids.size && !y.kids.size ? -1 : !x.kids.size && y.kids.size ? 1 : x.name.localeCompare(y.name)));
+  #|        for (const k of kids) {
+  #|          // a folder with one folder in it says both on one row (src/viz)
+  #|          let name = k.name, at = k;
+  #|          while (at.kids.size === 1 && !at.file && [...at.kids.values()][0].kids.size) { at = [...at.kids.values()][0]; name += `/${at.name}`; }
+  #|          const ch = CHANGE[at.change];
+  #|          rows.push(h("div.sf-tree-row", { style: `padding-left:${depth * 18}px`, "data-folder": at.kids.size ? "" : undefined },
+  #|            at.kids.size ? folderIcon() : fileIcon(), h("span.sf-tree-name", {}, name),
+  #|            at.note && h("span.sf-tree-note", {}, at.note), at.end && h("span.sf-tree-end", {}, cell(at.end)),
+  #|            ch && h("span.sf-tree-change", { style: `color:${ink(ch[1])}` }, ch[0])));
+  #|          walk(at, depth + 1);
+  #|        }
+  #|      };
+  #|      walk(root, 0);
+  #|      put(this, rows);
+  #|    }
+  #|  });
+  #|
+  #|  // ── Timeline: when, what ────────────────────────────────────────────────────────────
+  #|  define("sf-timeline", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      const items = d ? (Array.isArray(d) ? d : d.events ?? []) : [...this.querySelectorAll(":scope > sf-event")].map((e) => ({
+  #|        time: e.getAttribute("time"), title: e.getAttribute("title") ?? "", note: e.getAttribute("note"), tone: e.getAttribute("tone"), body: [...e.childNodes],
+  #|      }));
+  #|      put(this, items.map((e) => h("div.sf-event", { "data-tone": e.tone ?? undefined },
+  #|        h("span.sf-event-time", {}, e.time ?? ""), h("span.sf-event-mark", { style: e.tone ? `--mark:${ink(e.tone)}` : undefined }),
+  #|        h("div.sf-step-body", {}, h("div.sf-step-title", {}, e.title), e.note && h("div.sf-step-note", {}, e.note), e.body))));
+  #|    }
+  #|  });
+  #|  define("sf-event", class extends HTMLElement {});
+  #|
+  #|  // ── Heatmap: a calendar of days, or a grid of rows by columns ───────────────────────
+  #|  define("sf-heatmap", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      const unit = this.getAttribute("unit") ?? "";
+  #|      const tone = this.getAttribute("tone");
+  #|      const color = tone ? ink(tone) : "var(--sf-ink)";
+  #|      const shade = (v, max) => (v > 0 ? `color-mix(in srgb, ${color} ${Math.round(18 + 82 * (v / max))}%, transparent)` : "var(--sf-quiet)");
+  #|      if (d.rows && d.values) {
+  #|        const max = Math.max(1, ...d.values.flat().map(num).filter(Number.isFinite));
+  #|        put(this, h("div.sf-heat-grid", { style: `grid-template-columns:max-content repeat(${(d.columns ?? []).length || d.values[0].length},minmax(14px,1fr))` },
+  #|          h("span", {}), (d.columns ?? []).map((c) => h("span.sf-heat-col", {}, c)),
+  #|          d.rows.map((r, i) => [h("span.sf-heat-row", {}, r), d.values[i].map((v, j) => h("span.sf-heat-cell", { style: `background:${shade(num(v) || 0, max)}`, "data-tooltip": `${r} · ${(d.columns ?? [])[j] ?? j + 1}: ${fmt(num(v))}${unit}` }))])));
+  #|        return;
+  #|      }
+  #|      const days = Object.entries(d.days ?? d).map(([k, v]) => [new Date(`${k}T00:00:00`), num(v) || 0]).filter(([t]) => !Number.isNaN(+t)).sort((x, y) => x[0] - y[0]);
+  #|      if (!days.length) return;
+  #|      const max = Math.max(1, ...days.map(([, v]) => v));
+  #|      const at = new Map(days.map(([t, v]) => [t.toDateString(), v]));
+  #|      const from = new Date(days[0][0]);
+  #|      from.setDate(from.getDate() - from.getDay());
+  #|      const to = days[days.length - 1][0];
+  #|      const weeks = [];
+  #|      for (let t = new Date(from); t <= to; t.setDate(t.getDate() + 7)) weeks.push(new Date(t));
+  #|      const cells = [];
+  #|      const months = [];
+  #|      weeks.forEach((w, i) => {
+  #|        const first = new Date(w);
+  #|        for (let k = 0; k < 7; k++) {
+  #|          const day = new Date(w);
+  #|          day.setDate(day.getDate() + k);
+  #|          if (day.getDate() === 1 || (i === 0 && k === 0)) months.push([i, day.toLocaleDateString(undefined, { month: "short" })]);
+  #|          const v = at.get(day.toDateString());
+  #|          cells.push(h("span.sf-heat-cell", { style: `grid-column:${i + 1};grid-row:${k + 2};background:${day < days[0][0] || day > to ? "transparent" : shade(v ?? 0, max)}`, "data-tooltip": day < days[0][0] || day > to ? undefined : `${day.toLocaleDateString()}: ${fmt(v ?? 0)}${unit}` }));
+  #|        }
+  #|        void first;
+  #|      });
+  #|      const seen = new Set();
+  #|      put(this, h("div.sf-heat-cal", { style: `grid-template-columns:repeat(${weeks.length},minmax(8px,14px))` },
+  #|        months.filter(([i]) => !seen.has(i) && seen.add(i)).map(([i, m]) => h("span.sf-heat-month", { style: `grid-column:${i + 1} / span 4;grid-row:1` }, m)), cells));
+  #|    }
+  #|  });
+  #|
+  #|  // ── Gantt: tasks along time ─────────────────────────────────────────────────────────
+  #|  define("sf-gantt", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      const tasks = Array.isArray(d) ? d : d.tasks ?? [];
+  #|      const when = (v) => (typeof v === "number" ? v : +new Date(v));
+  #|      const dated = tasks.some((t) => typeof t.start === "string");
+  #|      const lo = Math.min(...tasks.map((t) => when(t.start))), hi = Math.max(...tasks.map((t) => when(t.end ?? t.start)));
+  #|      const span = hi - lo || 1;
+  #|      const at = (v) => ((when(v) - lo) / span) * 100;
+  #|      const label = (v) => (dated ? new Date(v).toLocaleDateString(undefined, { month: "numeric", day: "numeric" }) : fmt(v));
+  #|      const marks = dated ? [lo, lo + span / 2, hi] : ticks(lo, hi, 4).filter((v) => v >= lo && v <= hi);
+  #|      put(this, h("div.sf-gantt", {},
+  #|        h("span", {}), h("div.sf-gantt-axis", {}, marks.map((v) => h("span", { style: `left:${((v - lo) / span) * 100}%` }, label(v)))),
+  #|        tasks.map((t) => [
+  #|          h("span.sf-gantt-name", {}, t.name ?? t.title ?? ""),
+  #|          h("div.sf-gantt-track", {}, h("span.sf-gantt-bar", {
+  #|            "data-state": t.state ?? undefined, style: `left:${at(t.start)}%;width:max(8px,${at(t.end ?? t.start) - at(t.start)}%)${t.tone ? `;background:${ink(t.tone)}` : ""}`,
+  #|            "data-tooltip": `${t.name ?? t.title ?? ""}: ${label(when(t.start))} – ${label(when(t.end ?? t.start))}${t.note ? `\n${t.note}` : ""}`,
+  #|          })),
+  #|        ])));
+  #|    }
+  #|  });
+  #|
+  #|  // ── A matrix: what each option has ──────────────────────────────────────────────────
+  #|  define("sf-matrix", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      put(this, h("div.sf-table-scroll", {}, h("table.sf-matrix", {},
+  #|        h("thead", {}, h("tr", {}, h("th", {}), (d.columns ?? []).map((c) => h("th", {}, c)))),
+  #|        h("tbody", {}, (d.rows ?? []).map((r) => h("tr", {}, h("td", {}, Array.isArray(r) ? r[0] : r.label), (Array.isArray(r) ? r.slice(1) : r.values ?? []).map((v) => h("td", {}, v === "partial" || v === null ? h("span.sf-part", {}, "◐") : cell(v)))))))));
+  #|    }
+  #|  });
+  #|
+  #|  // ── Meter: a measure in cells (a disk, a quota) ─────────────────────────────────────
+  #|  define("sf-meter", class extends Base {
+  #|    draw() {
+  #|      const value = num(this.getAttribute("value")) || 0;
+  #|      const max = num(this.getAttribute("max")) || 100;
+  #|      const n = num(this.getAttribute("cells")) || 20;
+  #|      const full = Math.round(Math.max(0, Math.min(1, value / max)) * n);
+  #|      const tone = this.getAttribute("tone");
+  #|      put(this,
+  #|        h("div.sf-progress-head", {}, h("span", {}, this.getAttribute("label") ?? ""), h("span", {}, this.getAttribute("note") ?? `${fmt(value)} / ${fmt(max)}`)),
+  #|        h("div.sf-meter-cells", {}, Array.from({ length: n }, (_, i) => h("i", { "data-on": i < full || undefined, style: i < full && tone ? `background:${ink(tone)}` : undefined }))));
+  #|    }
+  #|  });
+  #|
+  #|  // ── Before and after: two pictures, a handle between ────────────────────────────────
+  #|  define("sf-before-after", class extends Base {
+  #|    draw() {
+  #|      const before = this.getAttribute("before"), after = this.getAttribute("after");
+  #|      const top = h("div.sf-ba-after", {}, h("img", { src: after, alt: this.getAttribute("after-label") ?? "" }));
+  #|      const handle = h("span.sf-ba-handle");
+  #|      const box = h("div.sf-ba", { style: "--at:50%" }, h("img", { src: before, alt: this.getAttribute("before-label") ?? "" }), top, handle,
+  #|        this.getAttribute("before-label") && h("span.sf-ba-label", { "data-side": "before" }, this.getAttribute("before-label")),
+  #|        this.getAttribute("after-label") && h("span.sf-ba-label", { "data-side": "after" }, this.getAttribute("after-label")));
+  #|      const move = (e) => { const r = box.getBoundingClientRect(); box.style.setProperty("--at", `${Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100))}%`); };
+  #|      box.addEventListener("pointerdown", (e) => { box.setPointerCapture(e.pointerId); move(e); });
+  #|      box.addEventListener("pointermove", (e) => { if (box.hasPointerCapture(e.pointerId)) move(e); });
+  #|      put(this, box);
+  #|    }
+  #|  });
+  #|
+  #|  // ── A form whose answers go to the composer ─────────────────────────────────────────
+  #|  define("sf-form", class extends Base {
+  #|    draw() {
+  #|      const key = this.id || `form${[...document.querySelectorAll("sf-form")].indexOf(this)}`;
+  #|      const was = kept(key) ?? {};
+  #|      const fields = [...this.querySelectorAll(":scope > sf-field")].map((f) => {
+  #|        const name = f.getAttribute("label") ?? f.getAttribute("name") ?? "";
+  #|        const type = f.getAttribute("type") ?? "text";
+  #|        const options = (f.getAttribute("options") ?? "").split("|").filter(Boolean);
+  #|        const value = was[name] ?? f.getAttribute("value") ?? (type === "choice" ? options[0] : "");
+  #|        let input;
+  #|        let read;
+  #|        if (type === "choice") {
+  #|          let chosen = value;
+  #|          const bar = h("div.sf-segmented", {}, options.map((o) => h("button.sf-segment", { type: "button", "aria-selected": String(o === chosen), onclick: (e) => { chosen = o; for (const b of bar.children) b.setAttribute("aria-selected", String(b === e.currentTarget)); } }, o)));
+  #|          input = bar;
+  #|          read = () => chosen;
+  #|        } else if (type === "select") {
+  #|          input = h("select.form-select", {}, options.map((o) => h("option", { selected: o === value || undefined }, o)));
+  #|          read = () => input.value;
+  #|        } else if (type === "textarea") {
+  #|          input = h("textarea.form-control", { placeholder: f.getAttribute("placeholder") ?? undefined, rows: 3 });
+  #|          input.value = value;
+  #|          read = () => input.value.trim();
+  #|        } else if (type === "check") {
+  #|          const box = h("input.form-check-input", { type: "checkbox", checked: value === true || value === "true" || f.hasAttribute("checked") || undefined });
+  #|          input = h("label.form-check", {}, box, h("span.form-check-label", {}, f.getAttribute("text") ?? name));
+  #|          read = () => box.checked;
+  #|        } else {
+  #|          input = h("input.form-control", { type: type === "number" ? "number" : "text", placeholder: f.getAttribute("placeholder") ?? undefined, min: f.getAttribute("min") ?? undefined, max: f.getAttribute("max") ?? undefined });
+  #|          input.value = value;
+  #|          read = () => input.value.trim();
+  #|        }
+  #|        return { name, type, read, el: h("label.sf-field", {}, type !== "check" && h("span.form-label", {}, name), input, f.getAttribute("note") && h("span.sf-sub", {}, f.getAttribute("note"))) };
+  #|      });
+  #|      const submit = () => {
+  #|        const answers = Object.fromEntries(fields.map((f) => [f.name, f.read()]));
+  #|        keep(key, answers);
+  #|        const intro = this.getAttribute("intro");
+  #|        const lines = fields.map((f) => { const v = answers[f.name]; return f.type === "check" ? `${f.name}: ${v ? "✓" : "✗"}` : v === "" ? null : `${f.name}: ${v}`; }).filter(Boolean);
+  #|        send([intro, ...lines].filter(Boolean).join("\n"));
+  #|      };
+  #|      put(this, fields.map((f) => f.el), h("div.sf-form-foot", {}, h("button.sf-button", { type: "button", "data-primary": "", onclick: submit }, this.getAttribute("submit") ?? "OK")));
+  #|    }
+  #|  });
+  #|  define("sf-field", class extends HTMLElement {});
+  #|
+  #|  // ── A section that opens ────────────────────────────────────────────────────────────
+  #|  define("sf-details", class extends Base {
+  #|    draw() {
+  #|      const body = h("div.sf-details-body", {}, ...this.childNodes);
+  #|      const d = h("details", { open: this.hasAttribute("open") || undefined }, h("summary", {}, h("span", {}, this.getAttribute("summary") ?? ""), this.getAttribute("note") && h("span.sf-sub", {}, this.getAttribute("note"))), body);
+  #|      put(this, d);
+  #|    }
+  #|  });
+  #|
+  #|  // ── Board: columns of cards ─────────────────────────────────────────────────────────
+  #|  define("sf-board", class extends Base {
+  #|    draw() {
+  #|      const d = dataOf(this);
+  #|      if (!d) return;
+  #|      put(this, (Array.isArray(d) ? d : d.columns ?? []).map((c) => h("div.sf-board-col", {},
+  #|        h("div.sf-board-head", {}, h("span", {}, c.title ?? ""), h("span.sf-board-count", {}, (c.items ?? []).length)),
+  #|        (c.items ?? []).map((it) => h("div.sf-board-card", {},
+  #|          h("div.sf-item-title", {}, it.status && h("i.sf-dot", { "data-tone": it.status }), it.title ?? ""),
+  #|          it.note && h("div.sf-item-note", {}, it.note),
+  #|          (it.badge || it.end) && h("div.sf-board-foot", {}, it.badge && h("sf-badge", { tone: it.tone ?? undefined }, it.badge), it.end && h("span.sf-item-end", {}, it.end)))))));
   #|    }
   #|  });
   #|})();
