@@ -15,7 +15,8 @@ the band, `rows_said`, `parts_placed`). Whether it may be skipped is a list of c
 rules on top for what it did not read (any event from the host, a press held on it, the pointer over it, the frame
 after an event). Each bug of it so far was one thing written and not recorded, or read and not followed: every kind of
 thing a part may hold has to be recorded and said again by hand, so each new kind is a bug till it is. It is off
-(kept_part.mbt's `parts_on`: every frame built whole) until what replaces it below is there.
+(kept_part.mbt's `parts_on`: only a test turns it on, Tester::keep_parts): a list's row and a part are kept as their
+nodes instead (step 5 below).
 
 ## The model
 
@@ -109,5 +110,9 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    it is read in the frame (what came for the frame, taken as it begins) it reads as it is, no frame after it asked for;
    what reads a measure for its size (`measured`, `measured_size`) is told as its size changes, not as it moves (a page
    it is on sliding in). A Tester builds each pass that kept a row once more keeping none, and the two must build and
-   say the same (rows_check). Then a pane and a page (in place of kept_part.mbt).
+   say the same (rows_check). A part (a pane, a page: Ctx::kept_part) is kept so too (Ctx::part_nodes): built under a
+   watch of its own, its nodes put back where it is built with what it said of the frame, the lists in it laid out
+   each frame as the rest are; built again for what it read, or as what builds it builds it elsewhere, its lists' rows
+   are built anew with it (ListState's `fresh`). Where the stacks are in one (a pane's pages), a stack changed
+   between frames tells it (nav.mbt's `stacks_said`). Then the replay goes (kept_part.mbt's, kept_rows.mbt).
 6. The replay, said.mbt's recording and src/damage's comparing go; only the instances that changed are sent.

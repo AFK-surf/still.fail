@@ -368,20 +368,24 @@ pub fn kept_chat(key : String, make : () -> Json) -> Json {
 }
 
 ///|
-/// The pictures the made-up files are: soft gradients of their own, made once.
-pub let fixture_pictures : Map[String, String] = {}
+/// The pictures the made-up files are: soft gradients of their own, made once (by name: the key they are shown by, and
+/// their bytes).
+pub let fixture_pictures : Map[String, (String, Bytes)] = {}
 
 ///|
 pub fn fixture_file(name : String) -> String {
-  match fixture_pictures.get(name) {
-    Some(k) => k
+  let (key, png) = match fixture_pictures.get(name) {
+    Some(p) => p
     None => {
-      let key = "mem:fixture/" + name
-      @ui.add_image(key, fixture_file_png(name))
-      fixture_pictures[name] = key
-      key
+      let p = ("mem:fixture/" + name, fixture_file_png(name))
+      fixture_pictures[name] = p
+      p
     }
   }
+  // (handed over each time it is asked for: what holds what is handed over, mbui's, is emptied as each Tester starts,
+  // whether the file was asked for before that or after)
+  @ui.add_image(key, png)
+  key
 }
 
 ///|

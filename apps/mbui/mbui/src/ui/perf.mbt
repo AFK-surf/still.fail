@@ -133,7 +133,7 @@ pub fn Tester::wanted_why(self : Tester) -> String {
   if layout_left() {
     why.push(
       "a frame asked for to lay out: " +
-      (if layout_said.val != "" { layout_said.val } else { "what a list's row read changed" }),
+      (if layout_said.val != "" { layout_said.val } else { "what a part or a list's row read changed" }),
     )
   }
   if c.took_input && !c.wants_frame {

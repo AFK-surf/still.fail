@@ -530,10 +530,19 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 
 ///|
 /// A stack changed: changed as the frame is built, built again from it in the frame (no frame shows the page it left
-/// as it was); between frames, the next frame (Ctx::read_changed).
+/// as it was), all of it anew; between frames, the next frame (Ctx::read_changed), what builds a stack told
+/// (stacks_said: a part kept as its nodes that holds one, built again).
 fn wake() -> Unit {
+  if !building.val {
+    stacks_said.set(@signals.untracked(fn() { stacks_said.get() }) + 1)
+  }
   g().read_changed("a stack changed")
 }
+
+///|
+/// How many times a stack changed between frames (wake): what builds one reads it (Ctx::nav, Ctx::nav_flat).
+// kept across runs: a count, read as it changes
+let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Back as a back gesture asks: kind 0 started at x (in a view `w` wide), 1
@@ -609,6 +618,7 @@ pub fn[P] Ctx::nav(
   floor? : Int = 0,
   takes_back? : Bool = true,
 ) -> Int {
+  stacks_said.get() |> ignore
   nav.floor = floor
   if nav.mode == 3 {
     self.page_in_hand = true
@@ -922,6 +932,7 @@ pub fn[P] Ctx::nav_flat(
   stacks? : Bool = false,
   takes_back? : Bool = true,
 ) -> Int {
+  stacks_said.get() |> ignore
   if stacks && nav.stacked() {
     // (one pushed over it slides in once it has what it shows, waiting as long as one put in place waits:
     // Nav::shows_when's, asked this frame)

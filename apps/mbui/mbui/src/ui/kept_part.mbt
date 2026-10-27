@@ -323,17 +323,9 @@ fn parts_forget() -> Unit {
 /// row kept, semantics.mbt), built each frame while it holds what is built each frame wherever it is (a native view, the
 /// field that takes the keys).
 pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
-  // parts off (parts_on): built as the rest of the frame is, in its box, what it reads read by what builds the frame
-  // (frame_watch.mbt), not by a computed of its own none of that follows
+  // parts not kept as drawn (parts_on): kept as its nodes, under a watch of its own (kept_nodes.mbt)
   if !parts_on.val {
-    self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
-      if read_out {
-        body()
-      } else {
-        self.hidden_from_semantics(body)
-      }
-    })
-    |> ignore
+    self.part_nodes(id, key, body, read_out)
     return
   }
   let st = match kept_parts.get(id) {

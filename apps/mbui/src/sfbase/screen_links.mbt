@@ -449,6 +449,8 @@ pub fn screen_peek(
   p.target = target
   p.held_by = @ui.kept_building()
   peeks_built[key] = true
+  // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
+  @ui.built_used(fn() { peeks_built[key] = true })
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
   let ratio = if listed > 0.0 {
     dclamp(listed, peek_ratio_least, peek_ratio_most)
