@@ -77,7 +77,7 @@ export function apply(value: unknown, ops: Op[]): unknown {
 function place(root: Record<string, unknown>, path: Segment[], make: boolean): { holder: Record<string | number, unknown>; key: string | number } | null {
   let holder: Record<string | number, unknown> = root;
   for (let i = 0; i < path.length; i++) {
-    const key = path[i];
+    const key = path[i]!;
     if (i === path.length - 1) {
       if (typeof key === "number") return Array.isArray(holder) && key < holder.length ? { holder, key } : null;
       if (!(key in holder) && make) holder[key] = null;
