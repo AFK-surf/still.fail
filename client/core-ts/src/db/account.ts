@@ -1651,6 +1651,16 @@ export class AccountDb {
     return { type: String(r[0]), bytes: String(r[2]) };
   }
 
+  /// Whether what a chat shows small is kept here (`kind`: thumb, poster), not noting it as shown.
+  hasKeptFile(station: string, session: string, name: string, kind: string): boolean {
+    if (!this.#filesKept) return false;
+    try {
+      return this.sql.all("SELECT 1 FROM file_kept WHERE station = ? AND session = ? AND name = ? AND kind = ?", [station, session, name, kind]).length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   /// Keeps what a chat shows small as its station sent it; past FILES_KEPT, the least lately shown go.
   keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string, at: number): void {
     if (this.readOnly || bytes.length > FILE_KEPT_MOST) return;

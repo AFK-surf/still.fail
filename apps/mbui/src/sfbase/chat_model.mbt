@@ -42,6 +42,9 @@ pub(all) struct Attachment {
   /// a film's length (ms) and how many frames its picture has, as the station read them from its header (0: not said)
   duration : Double
   frames : Int
+  /// its picture (an image's thumbnail, a video's still) kept on this device (the core's `held`): a decode away, so
+  /// the app's first page waits for it as for the rest of what it shows
+  held : Bool
 }
 
 ///|
@@ -58,6 +61,7 @@ pub fn attachment_of(a : Json) -> Attachment {
     upload: text(s, "upload"),
     duration: number(s, "duration"),
     frames: number(s, "frames").to_int(),
+    held: field(s, "held") is Some(True),
   }
 }
 

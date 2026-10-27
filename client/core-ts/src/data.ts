@@ -1207,6 +1207,11 @@ export class Data {
     return this.of(station)?.keptFile(station, session, name, kind, this.#host.nowMs()) ?? null;
   }
 
+  /// Whether what a chat shows small is kept on the device (AccountDb.hasKeptFile).
+  hasKeptFile(station: string, session: string, name: string, kind: string): boolean {
+    return this.of(station)?.hasKeptFile(station, session, name, kind) ?? false;
+  }
+
   /// Keeps what a chat shows small (AccountDb.keepFile).
   keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string): void {
     this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());

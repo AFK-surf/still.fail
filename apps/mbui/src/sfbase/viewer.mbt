@@ -2024,7 +2024,7 @@ pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
 ///|
 /// A drive's file as the viewer takes one (no size of its picture, no likeness).
 pub fn drive_attachment(f : DriveFile) -> Attachment {
-  { name: f.name, path: f.path, size: f.size, width: 0.0, height: 0.0, thumbhash: "", owner: "", upload: "", duration: 0.0, frames: 0 }
+  { name: f.name, path: f.path, size: f.size, width: 0.0, height: 0.0, thumbhash: "", owner: "", upload: "", duration: 0.0, frames: 0, held: false }
 }
 
 ///|

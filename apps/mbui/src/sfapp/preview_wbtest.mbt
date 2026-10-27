@@ -138,6 +138,7 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
   let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
@@ -169,6 +170,7 @@ test "a video in the chat says how long it is at its name's end, as its message 
     upload: "",
     duration: 72500.0,
     frames: 2175,
+    held: false,
   }
   let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
@@ -301,6 +303,7 @@ fn video_in_chat() -> @ui.Tester {
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
   let t = @ui.Tester::new(
     fn(c) {
@@ -411,6 +414,7 @@ fn posterless(size : Double) -> @ui.Tester {
     upload: "",
     duration: 0.0,
     frames: 0,
+    held: false,
   }
   let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
