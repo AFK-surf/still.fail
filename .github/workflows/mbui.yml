@@ -107,7 +107,7 @@ jobs:
       APK_CACHE: ${{ github.workspace }}/.ci/apk
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # versionCode is the commits in the history
+        with: { fetch-depth: 0, filter: "blob:none" } # versionCode is the commits in the history (their files only as checked out)
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: ./.github/actions/setup
@@ -190,7 +190,7 @@ jobs:
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 } # the build's number is the commits in the history
+        with: { fetch-depth: 0, filter: "blob:none" } # the build's number is the commits in the history (their files only as checked out)
       # (GTK 4 and what the host and the core link beside it: libsoup, libsecret)
       - uses: ./.github/actions/apt
         with:
@@ -251,7 +251,7 @@ jobs:
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, filter: "blob:none" }
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB. Before the
       # setup: whether core.hbc is in it says whether the job needs pnpm, below)
       - uses: actions/cache/restore@v4
