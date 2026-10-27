@@ -72,6 +72,9 @@ fn links_core(
   history? : Json? = None,
   invitation? : Result[Json, Json] = Ok({ "workspace": "ws3", "name": "新的工作室", "role": "member", "inviter": "周" }),
   accounts? : Json? = None,
+  w? : Double = 390.0,
+  h? : Double = 844.0,
+  platform? : Int = 2,
 ) -> @ui.Tester {
   reset()
   let base = fixture(mode)
@@ -97,7 +100,7 @@ fn links_core(
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -121,6 +124,22 @@ test "a link to an item tapped in a chat: its chat over this one, its web servic
   assert_true(pages[2] == Chat(chat_ref("ws1/st1", "s-c2")))
   assert_true(pages[3] == Service("ws1/st1", "j-web"))
   assert_eq(t.opened().length(), 0)
+}
+
+///|
+test "a chat's link followed on the wide frame: that chat over this one, back comes to this one again (not a new chat)" {
+  let at = fn() { top_chat().map(fn(r) { (r.station, r.session) }) }
+  for size in [(1280.0, 800.0), (900.0, 700.0)] {
+    let calls : Array[Made] = []
+    let t = links_core(calls, "chat", w=size.0, h=size.1, platform=0)
+    t.frame()
+    open_link("https://app.still.fail/w/ws1/s/st1/chats/s-c2")
+    t.run_for(@ui.nav_push_ms)
+    assert_eq(at(), Some(("ws1/st1", "s-c2")), msg="the linked chat")
+    assert_true(@sfbase.go_back(), msg="back taken")
+    t.run_for(@ui.nav_push_ms)
+    assert_eq(at(), Some(("ws1/st1", "s-c1")), msg="back at \{size.0}: the chat the link was in")
+  }
 }
 
 ///|

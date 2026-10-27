@@ -117,6 +117,7 @@ fn pages_shell(src : Source) -> Shell {
     open_invite,
     behind: peeks_stop_all,
     open: fn(p) { open_where(src, p) },
+    open_over: fn(p) { open_over_where(src, p) },
     detail: detail_where,
     back: back_where,
     show: fn() {
@@ -171,6 +172,24 @@ fn open_where(src : Source, p : Page) -> Unit {
   if @sfdesk.shown_in_page(p) {
     @sfdesk.show_page()
   }
+}
+
+///|
+/// Page `p` opened from the page in view (a chat's link in a message): on the wide frame, another chat over the chat
+/// shown (Nav::push_over), so back comes to it again as the web's history does (the user, 2026-10-27: a chat's link
+/// followed, back went to a new chat); else where the layout has it (open_where).
+fn open_over_where(src : Source, p : Page) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    match (app.nav.top(), p) {
+      (Chat(open), Chat(r)) if open.station != r.station || open.session != r.session => {
+        app.nav.push_over(p)
+        @sfdesk.show_page()
+        return
+      }
+      _ => ()
+    }
+  }
+  open_where(src, p)
 }
 
 ///|

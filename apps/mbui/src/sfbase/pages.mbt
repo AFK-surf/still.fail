@@ -177,6 +177,13 @@ pub fn open_page(p : Page) -> Unit {
   (shell.val.open)(p)
 }
 
+///|
+/// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
+/// layout has it (Shell's `open_over`).
+pub fn open_page_over(p : Page) -> Unit {
+  (shell.val.open_over)(p)
+}
+
 
 ///|
 /// A chat the page is of: its station, the session it is opened by (a row's `session`), its title and its station's

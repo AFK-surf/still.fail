@@ -14,6 +14,9 @@ pub(all) struct Shell {
   /// a page opened where the layout has it (docs/architecture.md, the pane table): what pages, links and the app's
   /// own doings call (open), never the stack themselves
   open : (Page) -> Unit
+  /// a page opened from the page in view (a chat's link in a message): over it where the layout keeps pages, back
+  /// coming to it again (open_over)
+  open_over : (Page) -> Unit
   /// a detail of a chat opened where the layout has it (an agent's history by its key, jobs, letters, files, a
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
@@ -38,6 +41,7 @@ pub fn bare_shell() -> Shell {
     open_invite: fn(_) {  },
     behind: fn(_) {  },
     open: stack_open,
+    open_over: stack_open,
     detail: fn(_, _, _) {  },
     back: stack_back,
     show: fn() {  },
