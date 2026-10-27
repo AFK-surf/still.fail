@@ -113,14 +113,21 @@ tools() {
 }
 
 # apps/mbui into WORK as git has it (a file gone goes there too), by content: a file that did not change keeps its time,
-# and moon sees it as it was; the build's outputs (ignored by git) stay. Its own link to mbui made there.
+# and moon sees it as it was; the build's outputs (ignored by git: a _build, out, .mooncakes or target anywhere, the APK's
+# build) stay. mbui (apps/mbui/mbui) is copied so too, a file gone from it gone: once kept whole, as a link of its own
+# before it was merged in, its step_frame.mbt, deleted by #2341, stayed in the copy and every main release since failed
+# to compile on Mini1 (6 errors, 2026-10-27).
 copy() {
   [ "$WORK" != "$A" ] || return 0
   mkdir -p "$WORK"
   (cd "$A" && git ls-files -z) | python3 -c '
 import os, shutil, sys
 src, dst = sys.argv[1:3]
-keep = {"out", "_build", "mbui", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
+keep = {"android/app/build", "android/app/src/main/jniLibs"}
+outputs = {"out", "_build", ".mooncakes", "target"}
+# (the link to mbui a copy from before the merge may still have: its files are copied in, not through it)
+if os.path.islink(os.path.join(dst, "mbui")):
+    os.remove(os.path.join(dst, "mbui"))
 files = [f for f in sys.stdin.buffer.read().decode().split("\0") if f]
 for f in files:
     a, b = os.path.join(src, f), os.path.join(dst, f)
@@ -136,7 +143,7 @@ for f in files:
 tracked = set(files)
 for root, dirs, names in os.walk(dst):
     rel = os.path.relpath(root, dst)
-    dirs[:] = [d for d in dirs if os.path.normpath(os.path.join(rel, d)) not in keep]
+    dirs[:] = [d for d in dirs if d not in outputs and os.path.normpath(os.path.join(rel, d)) not in keep]
     for n in names:
         r = os.path.normpath(os.path.join(rel, n))
         if r not in tracked and r not in keep:
