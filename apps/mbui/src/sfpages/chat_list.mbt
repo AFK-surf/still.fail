@@ -64,8 +64,9 @@ pub fn chat_list(
   let floor = floor_of(c, rd, key, keys)
   // while something waits to be decided its bell may float over the list's end (to_ask): the end keeps clear of it,
   // its last row as far over the bell as it is over the composer's room without it, not under it (the time, 正在发送
-  // under the viewer's own message, at the column's end where the bell is)
-  let ask_clear = if asks_of(v).is_empty() { 0.0 } else { float_lift + float_side }
+  // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
+  // `askClear`), which shows whenever the end does, no bell over it
+  let ask_clear = if asks_of(v).is_empty() || !v.ask_clear { 0.0 } else { float_lift + float_side }
   // (an iPhone Duo's cards: 32 in however narrow the chat's, row_side)
   let side = if narrow && !@sf.native_on() { row_side_narrow } else { row_side(c) }
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
@@ -334,7 +335,7 @@ fn entry_row(c : @ui.Ctx, src : Source, here : MessageHere, e : Entry) -> Unit {
     Said(m) => message_row(c, src, here, m)
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outbox_row(c, src, here, o)
-    State(words, lead, rest) => chat_state(c, words, lead, rest)
+    State(words, lead, rest) => chat_state(c, src, here, words, lead, rest)
     Working(_) | Top | Foot => ()
   }
 }

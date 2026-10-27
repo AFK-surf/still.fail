@@ -2099,7 +2099,8 @@ export interface ChatMessage {
 	decision?: MessageDecision;
 	/**
 	 * In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
-	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
+	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise, and for an agent's need the
+	 * chat's `stateAsk` says (let go after its state line).
 	 */
 	asked?: boolean;
 	/**
@@ -2532,6 +2533,18 @@ export interface ChatView {
 	stateLead?: StateLead;
 	/** What follows the lead in `stateText` (watching: the whole line). Absent without `stateLead`. */
 	stateRest?: string;
+	/**
+	 * One of `asks` is not at the end of its messages (something comes after its post): the bell leading to it
+	 * may float over the list's end while the end shows, so the end keeps clear of it. Absent when every ask is the end
+	 * itself (`stateAsk`'s line, or the last post with nothing after it), which shows whenever the end does.
+	 */
+	askClear?: boolean;
+	/**
+	 * What an agent needs a person for, as `stateText` says it (lead need), not decided and not let go by the
+	 * viewer: the post that asks it (a seq), let go (`decision.dismiss`) right after the line rather than under that post.
+	 * Absent otherwise.
+	 */
+	stateAsk?: number;
 	/**
 	 * Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what
 	 * going on would cost and offers a fresh context instead. Absent otherwise, and from a core before it.

@@ -262,7 +262,8 @@ export function asksOf(chat: ChatView): ChatAsk[] {
  * how far the bell's top is over the composer's room.
  */
 export function askClear(chat: ChatView, over: number): CSSProperties {
-  return asksOf(chat).length > 0 ? ({ "--ask-clear": `${over}px` } as CSSProperties) : {};
+  // (only for one not at the end itself, the core's `askClear`: that one shows whenever the end does, no bell over it)
+  return asksOf(chat).length > 0 && chat.askClear ? ({ "--ask-clear": `${over}px` } as CSSProperties) : {};
 }
 
 /**
@@ -274,6 +275,7 @@ export function askClear(chat: ChatView, over: number): CSSProperties {
 export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
   const asks = asksOf(chat);
   const posts = asks.map((a) => a.seq).join(" ");
+  const stateAsk = chat.stateAsk;
   const [shown, setShown] = useState(true);
   useEffect(() => {
     if (posts === "") return;
@@ -281,14 +283,16 @@ export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
     // Each one's post in the pane: among its items, and reaching into it (below what covers its top).
     const check = () => {
       const all = posts.split(" ").every((seq) => {
-        const top = model.offsetOf(`m:${seq}`);
-        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(`m:${seq}`)?.height ?? 1) > model.covered;
+        // (what an agent needs: where the chat's end says it, its 忽略 under that line)
+        const key = Number(seq) === stateAsk ? "state" : `m:${seq}`;
+        const top = model.offsetOf(key);
+        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(key)?.height ?? 1) > model.covered;
       });
       setShown(all);
     };
     check();
     return virtual.watch(check);
-  }, [virtual.model, posts, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [virtual.model, posts, stateAsk, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return asks.length > 0 && shown ? NO_ASKS : asks;
 }
 
@@ -335,9 +339,12 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
   </div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
   // Where it stands, as its row says it (the core's `stateText`), whole: done with nothing said, its word after the check.
+  // What an agent needs a person for is let go right under the line that says it (the core's `stateAsk`).
   const state = chat.stateText;
+  const stateAsk = chat.stateAsk;
   if (state) drawn.set("state", () => <div key="state" data-vk="state">
     <WaitingText text={state} lead={chat.stateLead} rest={chat.stateRest || (chat.stateLead === "done" ? t("web-main.status.done") : chat.stateRest)} className={css.chatState} slot />
+    {stateAsk != null && thread !== null && <AskDismiss thread={thread} seq={stateAsk} asked answered={false} />}
   </div>);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {

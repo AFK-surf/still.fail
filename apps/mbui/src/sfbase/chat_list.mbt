@@ -663,15 +663,19 @@ pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int]) -> ListMa
 }
 
 ///|
-/// The rows of the asks waiting in the chat (its cards to decide; none in a chat archived or not made yet): -1 for one
-/// not in the list.
+/// The rows of the asks waiting in the chat (its cards to decide; what an agent needs where the chat's end says it,
+/// the core's `stateAsk`; none in a chat archived or not made yet): -1 for one not in the list.
 pub fn ask_rows_of(v : ChatView, list : Array[Entry]) -> Array[Int] {
   let asks = if v.archived || v.thread is None { [] } else { v.asks }
   asks.map(fn(seq) {
     let mut at = -1
     for i, e in list {
       match e {
-        Said(m) if m.seq == seq => {
+        Said(m) if m.seq == seq && v.state_ask != Some(seq) => {
+          at = i
+          break
+        }
+        State(_, _, _) if v.state_ask == Some(seq) => {
           at = i
           break
         }

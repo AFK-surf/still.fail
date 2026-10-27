@@ -31,7 +31,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         }
         login_card(c, core, station, card.login)
         // (letting it go: under it while it is asked, as under a post with no card)
-        ask_dismiss(c, src, here, m, false)
+        ask_dismiss(c, src, here, m.seq, m.asked, false)
       })
       |> ignore
       return
@@ -42,7 +42,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
   // beside no MessageDecision)
   if m.card is None && m.options is None {
     if m.asked {
-      c.box(style=decision_box, fn() { ask_dismiss(c, src, here, m, false) }) |> ignore
+      c.box(style=decision_box, fn() { ask_dismiss(c, src, here, m.seq, m.asked, false) }) |> ignore
     }
     return
   }
@@ -114,7 +114,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         |> ignore
       },
     )
-    ask_dismiss(c, src, here, m, resolved, asking=open, asked_at~)
+    ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at~)
     // (in their place once they close: in the same turn)
     let outcome = match m.decision {
       Some({ text: Some(words), .. }) if resolved && !open => Some(words)
@@ -324,24 +324,25 @@ pub fn decision_options(
 }
 
 ///|
-/// 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`),
-/// gone at once and back if that fails. It goes as the archive buttons go (280 ms, ArchiveEase: fading, to 85% from its
-/// top left, its room closing), in its turn among what changes the list's height, and with the options once the card
-/// is answered (`asking` false, from `asked_at`).
+/// 忽略 under what asks what no one has decided, post `seq` of the chat (`asked`: the core's, on the post or the chat's
+/// `stateAsk`): the viewer lets it go (`decision.dismiss`), gone at once and back if that fails. It goes as the archive
+/// buttons go (280 ms, ArchiveEase: fading, to 85% from its top left, its room closing), in its turn among what changes
+/// the list's height, and with the options once the card is answered (`asking` false, from `asked_at`).
 fn ask_dismiss(
   c : @ui.Ctx,
   src : Source,
   here : MessageHere,
-  m : Message,
+  seq : Double,
+  asked : Bool,
   resolved : Bool,
   asking? : Bool = true,
   asked_at? : Double = -1.0,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
-  if !m.asked && !resolved {
+  if !asked && !resolved {
     return
   }
-  let k = seq_key(here.station, m.thread, m.seq)
+  let k = seq_key(here.station, thread, seq)
   // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
   let (mine, own_at) = match here.list {
     Some(l) =>
@@ -350,16 +351,16 @@ fn ask_dismiss(
   }
   let shown = asking && mine
   let at = if !asking { asked_at } else { own_at }
-  let id = c.id("ask-dismiss/" + m.ts)
+  let id = c.id("ask-dismiss/" + k)
   if shown && c.clicked(id) {
     dismissed[k] = true
-    c.tell("ask-dismiss/" + m.ts, fn() {
+    c.tell("ask-dismiss/" + k, fn() {
       act(
         src,
         @sf.t("web-main.decisions.dismissWhat"),
         "",
         "decision.dismiss",
-        { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(m.seq) },
+        { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(seq) },
         failed=fn() { dismissed.remove(k) |> ignore },
       )
     })

@@ -257,6 +257,8 @@ pub fn rich_chat(older : Int) -> Json {
     "archivable": true,
     // what waits to be decided: the two cards not answered (with_cards takes those answered here off)
     "asks": [{ "seq": 8 }, { "seq": 10 }],
+    // (posts after them: the end keeps clear of the bell to them)
+    "askClear": true,
   }
 }
 
@@ -1566,7 +1568,7 @@ pub fn with_message(v : Json, words : String) -> Json {
 
 ///|
 /// The chat `v` ending on an agent's need with no card ("chat-need"): what it asks, waiting for a person, nothing to
-/// pick (the core's `asked`).
+/// pick; what it needs said at the chat's end, let go there (the core's `stateAsk`).
 pub fn with_need(v : Json) -> Json {
   match v {
     Object(m) => {
@@ -1578,15 +1580,22 @@ pub fn with_need(v : Json) -> Json {
       all.push(
         msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "你在手机上试一下新的列表，有问题截个图给我。", "1 分钟前", {
           "ending": "need_human",
-          "asked": true,
         }),
       )
       o["messages"] = Json::array(all)
+      o["stateText"] = Json::string(need_state.0)
+      o["stateLead"] = Json::string(need_state.1)
+      o["stateRest"] = Json::string(need_state.2)
+      o["stateAsk"] = Json::number(12.0)
       Json::object(o)
     }
     _ => v
   }
 }
+
+///|
+/// What chat-need's agent needs, as the chat's end says it (`stateText`, `stateLead`, `stateRest`).
+pub let need_state : (String, String, String) = ("要你帮忙：在手机上试新列表", "need", "在手机上试新列表")
 
 // ── an agent at work on a long step (MBUI_FIXTURE=chat-working) ──────────
 
