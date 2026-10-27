@@ -140,7 +140,8 @@ for t in ${TARGETS:-native}; do
   # the part's run 188 s). Alone on four runners (40425191188) corners in Chinese was 92 s, every other run 52 s or less:
   # its press's room and contrast a third corners run since, on the first: on the fourth beside the pages and contrast,
   # the three slowed each other to 85, 81 and 38 s while the first ran 38 (adb-card-direct, 40430050749). A run named
-  # nowhere here is the first's, never left out.
+  # nowhere here is the first's, never left out. (Screens' then on the second: beside both Chinese corners runs on the
+  # first it slowed them to 74 and 62 s, the second running 37, 40430734093.)
   app_group_of() {
     local n=$1
     shift
@@ -149,7 +150,7 @@ for t in ${TARGETS:-native}; do
       "-p "*) echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 1 ;;
-      "src/sfapp/screens_wbtest.mbt  ") echo 1 ;;
+      "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
