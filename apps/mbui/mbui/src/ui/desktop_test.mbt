@@ -387,6 +387,25 @@ test "desktop: a drag from one paragraph into another picks the rest of the firs
 }
 
 ///|
+test "desktop: what is picked ends where the pointer let it go: dragged down, the last line's end; dragged up, the first's start" {
+  let t = three_paragraphs()
+  t.draw()
+  let (ax, ay, aw, ah) = t.run_rects("first words here")[0]
+  let (bx, by, bw, bh) = t.run_rects("last words there")[0]
+  let (x0, y0) = (ax + aw / 2.0, ay + ah / 2.0)
+  let (x1, y1) = (bx + bw / 2.0, by + bh / 2.0)
+  assert_true(t.ctx().selection_end() is None)
+  t.drag(x0, y0, x1, y1)
+  let (ex, ey, eh) = t.ctx().selection_end().unwrap()
+  assert_true(ey <= y1 && ey + eh >= y1, msg="\{(ex, ey, eh)}")
+  assert_true((ex - x1).abs() < 15.0, msg="\{(ex, ey, eh)}")
+  t.drag(x1, y1, x0, y0)
+  let (ex, ey, eh) = t.ctx().selection_end().unwrap()
+  assert_true(ey <= y0 && ey + eh >= y0, msg="\{(ex, ey, eh)}")
+  assert_true((ex - x0).abs() < 15.0, msg="\{(ex, ey, eh)}")
+}
+
+///|
 test "desktop: words picked in a layer over the page stay in it: a drag out of its panel picks none of the page's, nor does a press on its panel over them; a layer's empty room over the page leaves them" {
   let t = @ui.Tester::new(
     fn(c) {

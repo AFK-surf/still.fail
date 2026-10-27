@@ -1003,12 +1003,12 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
   let (px, py, pw, ph) = words_rect(t, "高度先按 90 估")
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()
-  // the pill 8 over the middle of what is picked
+  // the pill 8 over where the pointer let go: its line, its end
   let (qx, qy) = match t.words().filter(fn(w) { w.0 == "引用" && w.2 < py && w.2 > py - 60.0 }) {
     [w, ..] => (w.1, w.2)
     _ => fail("no 引用 over what is picked")
   }
-  assert_true((qx - (px + pw / 2.0)).abs() < 60.0, msg="引用 at \{(qx, qy)}")
+  assert_true((qx - (px + pw)).abs() < 40.0, msg="引用 at \{(qx, qy)}")
   t.tap(qx + 4.0, qy + 4.0)
   t.frame()
   // into the chat's draft as the core keeps it (composer.quote), whose words with them
@@ -1036,11 +1036,21 @@ test "wide: words picked with the pointer from a message's heading into its list
   t.frame()
   let picked = t.ctx().selected_text()
   assert_true(picked.has_prefix("做了什么\n") && picked.has_suffix("滚动位置记成"), msg=picked)
-  // the pill over what is picked, the message's
+  // the pill over where the pointer let go: the line of the list's item, not the heading where it went down
+  let (qx, qy) = match t.words().filter(fn(w) { w.0 == "引用" && w.2 < iy && w.2 > iy - 60.0 }) {
+    [w, ..] => (w.1, w.2)
+    _ => fail("no 引用 over where the pointer let go")
+  }
+  assert_true(qy > hy && (qx - (ix + iw)).abs() < 40.0, msg="引用 at \{(qx, qy)}")
+  // dragged up the other way, over the heading where it let go, at its start
+  t.drag(ix + iw - 1.0, iy + ih / 2.0, hx + 1.0, hy + hh / 2.0)
+  t.frame()
+  assert_eq(t.ctx().selected_text(), picked)
   let (qx, qy) = match t.words().filter(fn(w) { w.0 == "引用" && w.2 < hy && w.2 > hy - 60.0 }) {
     [w, ..] => (w.1, w.2)
-    _ => fail("no 引用 over what is picked")
+    _ => fail("no 引用 over where the pointer let go")
   }
+  assert_true((qx - hx).abs() < 40.0, msg="引用 at \{(qx, qy)}")
   t.tap(qx + 4.0, qy + 4.0)
   t.frame()
   let quoted = named(calls, "composer.quote")
