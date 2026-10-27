@@ -1,15 +1,12 @@
-// still.fail's components for inline visualizations: a few atoms (a card, a number, a status, a button, a progress
-// bar) and charts drawn from the data an agent gives them, in still.fail's look (ember-viz.css styles them and gives
-// the design tokens); the rest is written with the tokens. Runs in every
-// fragment's frame after the bridge (Viz.tsx, the app's viz_file.mbt). How agents use them:
-// station/src/skills/stillfail-viz.md. Plain custom elements without a shadow root: the stylesheet and the theme's
-// tokens reach what they draw, and charts drawn with var(--sf-…) follow the theme without being drawn again.
+// What inline visualizations get beside the stylesheet (Viz.tsx, the app's viz_file.mbt), as Codex's visualize plugin
+// gives its own: tabs (.nav[role="tablist"]) switched by themselves, Lucide icons (data-lucide), and still.fail's
+// charts, <viz-chart> and <viz-spark>, drawn from the data an agent gives them in the theme's colours (var(--…), so they
+// follow it without being drawn again). How agents use them: station/src/skills/stillfail-viz.md.
 (() => {
   const NS = "http://www.w3.org/2000/svg";
   const TONE_INK = {
-    ok: "--sf-green", green: "--sf-green", busy: "--sf-amber", warn: "--sf-amber", amber: "--sf-amber",
-    error: "--sf-red", red: "--sf-red", info: "--sf-blue", blue: "--sf-blue", purple: "--sf-purple", off: "--sf-muted",
-    ink: "--sf-ink", muted: "--sf-muted",
+    green: "--green", ok: "--green", yellow: "--yellow", amber: "--yellow", warn: "--yellow", red: "--red", error: "--red",
+    blue: "--blue", info: "--blue", purple: "--purple", orange: "--orange", ink: "--foreground", muted: "--muted-foreground",
   };
 
   /** An element: tag (with .classes), attributes (on* are listeners), children (strings are text). */
@@ -34,7 +31,7 @@
   };
   /** Puts what is given in place of an element's children, leaving out what is not there. */
   const put = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== undefined && k !== null && k !== false && k !== ""));
-  const ink = (tone, i = 0) => `var(${TONE_INK[tone] ?? `--sf-series-${(i % 6) + 1}`})`;
+  const ink = (tone, i = 0) => `var(${TONE_INK[tone] ?? `--viz-series-${(i % 6) + 1}`})`;
 
   /** The element's data: its `data` attribute, else a <script type="application/json"> inside it. */
   const dataOf = (el) => {
@@ -43,7 +40,7 @@
     try {
       return JSON.parse(raw);
     } catch (e) {
-      put(el, h("sf-note", {}, `${el.localName}: its data is not JSON (${e.message})`));
+      put(el, h("p.text-small.text-muted", {}, `${el.localName}: its data is not JSON (${e.message})`));
       return undefined;
     }
   };
@@ -60,7 +57,7 @@
         try {
           this.draw();
         } catch (e) {
-          put(this, h("sf-note", {}, `${this.localName}: ${e.message}`));
+          put(this, h("p.text-small.text-muted", {}, `${this.localName}: ${e.message}`));
           postMessage({ emberViz: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
         }
       };
@@ -71,92 +68,24 @@
   }
   const define = (name, cls) => { if (!customElements.get(name)) customElements.define(name, cls); };
 
-  // ── Card: a ground with a title ─────────────────────────────────────────────────────
-  define("sf-card", class extends Base {
-    draw() {
-      const title = this.getAttribute("title");
-      const note = this.getAttribute("note");
-      if (title || note) {
-        this.removeAttribute("title"); // not a tooltip
-        this.prepend(h("div.sf-head", {}, title && h("div.sf-title", {}, title), note && h("div.sf-sub", {}, note)));
-      }
-    }
-  });
-
   /** A small line of values (a trend), as wide as it is given, in ink. */
   const spark = (values, { w = 80, hgt = 22, tone } = {}) => {
     const vs = values.map(num).filter(Number.isFinite);
-    const svg = s("svg", { class: "sf-spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", width: w, height: hgt });
+    const svg = s("svg", { class: "viz-spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", width: w, height: hgt });
     if (vs.length < 2) return svg;
     const lo = Math.min(...vs), hi = Math.max(...vs) === lo ? lo + 1 : Math.max(...vs);
     const pts = vs.map((v, i) => `${(i / (vs.length - 1)) * w},${2 + (1 - (v - lo) / (hi - lo)) * (hgt - 4)}`);
-    svg.append(s("polyline", { points: pts.join(" "), fill: "none", stroke: tone ? ink(tone) : "var(--sf-ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
+    svg.append(s("polyline", { points: pts.join(" "), fill: "none", stroke: tone ? ink(tone) : "var(--viz-series-1)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
     return svg;
   };
   const listOf = (raw) => { try { return JSON.parse(raw); } catch { return String(raw).split(/[\s,]+/).filter(Boolean); } };
 
-  // ── A number with its label ─────────────────────────────────────────────────────────
-  define("sf-stat", class extends Base {
-    draw() {
-      const value = this.getAttribute("value") ?? this.textContent.trim();
-      const tone = this.getAttribute("tone");
-      const note = this.getAttribute("note");
-      const delta = this.getAttribute("delta");
-      const trend = this.getAttribute("trend");
-      put(this,
-        h("span.sf-stat-label", {}, this.getAttribute("label") ?? ""),
-        h("span.sf-stat-value", {}, /^[\s+\-]*[\d.,]+$/.test(value) && Number.isFinite(num(value)) ? fmt(num(value)) : value, this.hasAttribute("unit") && h("span.sf-stat-unit", {}, this.getAttribute("unit"))),
-        (note || delta) && h("span.sf-stat-note", {},
-          tone && h("i.sf-dot", { "data-tone": tone }),
-          delta && h("span.sf-delta", { "data-tone": this.getAttribute("delta-tone") ?? undefined }, /^[+]/.test(delta) ? `↑ ${delta.slice(1)}` : /^[-−]/.test(delta) ? `↓ ${delta.slice(1)}` : delta),
-          note && h("span", { style: tone && tone !== "off" ? `color:${ink(tone)}` : undefined }, note)),
-        trend && h("span.sf-stat-trend", {}, spark(listOf(trend), { w: 120, hgt: 28, tone: tone && tone !== "off" ? tone : undefined })),
-      );
-    }
-  });
-
-  // ── Status: a dot and words ─────────────────────────────────────────────────────────
-  define("sf-status", class extends Base {
-    draw() {
-      this.prepend(h("i.sf-dot", { "data-tone": this.getAttribute("tone") ?? this.getAttribute("state") ?? "" }));
-    }
-  });
-  define("sf-spark", class extends Base {
+  define("viz-spark", class extends Base {
     draw() {
       put(this, spark(listOf(this.getAttribute("data") ?? this.textContent), { w: num(this.getAttribute("width")) || 80, hgt: num(this.getAttribute("height")) || 20, tone: this.getAttribute("tone") ?? undefined }));
     }
   });
 
-
-  // ── Progress ────────────────────────────────────────────────────────────────────────
-  define("sf-progress", class extends Base {
-    draw() {
-      const value = num(this.getAttribute("value")) || 0;
-      const max = num(this.getAttribute("max")) || 100;
-      const share = Math.max(0, Math.min(1, value / max));
-      const label = this.getAttribute("label");
-      const said = this.getAttribute("note") ?? (max === 100 ? `${fmt(value, 1)}%` : `${fmt(value)} / ${fmt(max)}`);
-      put(this, 
-        (label || said) && h("div.sf-progress-head", {}, h("span", {}, label ?? ""), h("span", {}, said)),
-        h("div.sf-progress-track", { role: "progressbar", "aria-valuenow": value, "aria-valuemax": max }, h("div.sf-progress-fill", { style: `width:${share * 100}%` })),
-      );
-    }
-  });
-
-
-  // ── Things to send: what is clicked goes into the chat's composer for the person to send ───────────────────
-  const send = (prompt) => window.ember?.sendFollowUpMessage({ prompt }).catch(() => {});
-
-  define("sf-button", class extends Base {
-    draw() {
-      const words = this.getAttribute("send");
-      const b = h("button.sf-button", {
-        type: "button", "data-primary": this.hasAttribute("primary") || undefined, "data-quiet": this.hasAttribute("quiet") || undefined,
-        "data-small": this.hasAttribute("small") || undefined, onclick: words ? () => send(words) : undefined,
-      }, ...this.childNodes);
-      put(this, b);
-    }
-  });
 
   // ── Charts ──────────────────────────────────────────────────────────────────────────
   /** Round steps for an axis from 0 (or the least, when below it) to the most. */
@@ -176,7 +105,7 @@
     return a >= 1e9 ? `${fmt(n / 1e9, 1)}B` : a >= 1e6 ? `${fmt(n / 1e6, 1)}M` : a >= 1e4 ? `${fmt(n / 1e3, 1)}k` : fmt(n);
   };
 
-  define("sf-chart", class extends Base {
+  define("viz-chart", class extends Base {
     draw() {
       const d = dataOf(this);
       if (!d) return;
@@ -209,8 +138,8 @@
       const Y = (v) => top + plotH - ((v - y0) / (y1 - y0)) * plotH;
       const svg = s("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
       for (const v of ys) {
-        svg.append(s("line", { class: "sf-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }));
-        svg.append(s("text", { class: "sf-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
+        svg.append(s("line", { class: "viz-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }));
+        svg.append(s("text", { class: "viz-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
       }
       const n = Math.max(1, labels.length);
       const band = plotW / n;
@@ -218,7 +147,7 @@
       labels.forEach((l, i) => {
         if (i % every) return;
         const x = type === "bar" ? left + band * (i + .5) : left + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
-        svg.append(s("text", { class: "sf-chart-axis", x, y: height - 6, "text-anchor": n > 1 && type !== "bar" && i === 0 ? "start" : n > 1 && type !== "bar" && i === n - 1 ? "end" : "middle" }, l));
+        svg.append(s("text", { class: "viz-chart-axis", x, y: height - 6, "text-anchor": n > 1 && type !== "bar" && i === 0 ? "start" : n > 1 && type !== "bar" && i === n - 1 ? "end" : "middle" }, l));
       });
       const tip = (i, sr, v) => `${labels[i] ?? ""}${sr.name ? ` · ${sr.name}` : ""}: ${fmt(v)}${unit}`;
       if (type === "bar") {
@@ -239,7 +168,7 @@
             const path = top_ && hgt > r
               ? `M${x},${ya + hgt}V${ya + r}Q${x},${ya} ${x + r},${ya}H${x + w - r}Q${x + w},${ya} ${x + w},${ya + r}V${ya + hgt}Z`
               : `M${x},${ya}h${w}v${hgt}h${-w}Z`;
-            svg.append(s("path", { d: path, fill: sr.color, class: "sf-hit", "data-tooltip": tip(i, sr, v) }));
+            svg.append(s("path", { d: path, fill: sr.color, class: "viz-hit", "data-tooltip": tip(i, sr, v) }));
           });
         });
       } else {
@@ -257,22 +186,22 @@
           });
         });
       }
-      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color}` }), sr.name)));
+      const legend = series.length > 1 && h("div.viz-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color}` }), sr.name)));
       put(this, this.title_(), svg, legend);
     }
     title_() {
       const t = this.getAttribute("title");
       if (t) this.setAttribute("data-title", t), this.removeAttribute("title");
       const said = this.getAttribute("data-title");
-      return said && h("div.sf-title", {}, said);
+      return said && h("div.viz-chart-title", {}, said);
     }
     hbar(d, unit) {
       const items = d.items ?? (d.labels ?? []).map((l, i) => ({ label: l, value: (d.values ?? [])[i] }));
       const max = num(this.getAttribute("max")) || Math.max(0, ...items.map((it) => num(it.value) || 0)) || 1;
-      put(this, this.title_(), h("div.sf-hbars", {}, items.map((it, i) => [
-        h("span.sf-bar-label", {}, it.label),
-        h("span.sf-bar-track", {}, h("span.sf-bar-fill", { style: `width:${Math.max(0, Math.min(100, ((num(it.value) || 0) / max) * 100))}%;background:${it.tone ? ink(it.tone) : "var(--sf-ink)"}`, "data-tooltip": `${it.label}: ${fmt(num(it.value))}${unit}` })),
-        h("span.sf-bar-value", {}, it.note ?? `${fmt(num(it.value))}${unit}`),
+      put(this, this.title_(), h("div.viz-hbars", {}, items.map((it, i) => [
+        h("span.viz-bar-label", {}, it.label),
+        h("span.viz-bar-track", {}, h("span.viz-bar-fill", { style: `width:${Math.max(0, Math.min(100, ((num(it.value) || 0) / max) * 100))}%;background:${it.tone ? ink(it.tone) : "var(--viz-series-1)"}`, "data-tooltip": `${it.label}: ${fmt(num(it.value))}${unit}` })),
+        h("span.viz-bar-value", {}, it.note ?? `${fmt(num(it.value))}${unit}`),
       ])));
     }
     scatter(d, unit, width) {
@@ -287,14 +216,14 @@
       const X = (v) => left + ((v - xs[0]) / (xs[xs.length - 1] - xs[0])) * pw;
       const Y = (v) => top + ph - ((v - ys[0]) / (ys[ys.length - 1] - ys[0])) * ph;
       const svg = s("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
-      for (const v of ys) svg.append(s("line", { class: "sf-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }), s("text", { class: "sf-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
-      for (const v of xs) svg.append(s("text", { class: "sf-chart-axis", x: X(v), y: height - 6, "text-anchor": "middle" }, short(v) + xunit));
+      for (const v of ys) svg.append(s("line", { class: "viz-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }), s("text", { class: "viz-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
+      xs.forEach((v, i) => svg.append(s("text", { class: "viz-chart-axis", x: X(v), y: height - 6, "text-anchor": i === 0 ? "start" : i === xs.length - 1 ? "end" : "middle" }, short(v) + xunit)));
       series.forEach((sr) => sr.points.forEach((p) => {
         const x = num(p[0] ?? p.x), y = num(p[1] ?? p.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-        svg.append(s("circle", { cx: X(x), cy: Y(y), r: 4, fill: sr.color, "fill-opacity": .85, class: "sf-hit", "data-tooltip": `${p.label ?? p[2] ?? (sr.name || "")}${p.label || p[2] || sr.name ? ": " : ""}${fmt(x)}${xunit}, ${fmt(y)}${unit}` }));
+        svg.append(s("circle", { cx: X(x), cy: Y(y), r: 4, fill: sr.color, "fill-opacity": .85, class: "viz-hit", "data-tooltip": `${p.label ?? p[2] ?? (sr.name || "")}${p.label || p[2] || sr.name ? ": " : ""}${fmt(x)}${xunit}, ${fmt(y)}${unit}` }));
       }));
-      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color};border-radius:50%` }), sr.name)));
+      const legend = series.length > 1 && h("div.viz-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color};border-radius:50%` }), sr.name)));
       put(this, this.title_(), svg, legend);
     }
     donut(d, unit) {
@@ -314,14 +243,54 @@
         const d_ = span >= Math.PI * 2 - 1e-6
           ? `M${c - R},${c}a${R},${R} 0 1,0 ${R * 2},0a${R},${R} 0 1,0 ${-R * 2},0${r ? `M${c - r},${c}a${r},${r} 0 1,1 ${r * 2},0a${r},${r} 0 1,1 ${-r * 2},0` : ""}Z`
           : `M${p(R, a + gap)}A${R},${R} 0 ${big},1 ${p(R, b - gap)}${r ? `L${p(r, b - gap)}A${r},${r} 0 ${big},0 ${p(r, a + gap)}` : `L${c},${c}`}Z`;
-        svg.append(s("path", { d: d_, fill: color, "fill-rule": "evenodd", class: "sf-hit", "data-tooltip": `${it.label}: ${fmt(v)}${unit} (${fmt((v / total) * 100, 1)}%)` }));
+        svg.append(s("path", { d: d_, fill: color, "fill-rule": "evenodd", class: "viz-hit", "data-tooltip": `${it.label}: ${fmt(v)}${unit} (${fmt((v / total) * 100, 1)}%)` }));
         it.color = color;
         a = b;
       });
       const center = this.getAttribute("center");
-      if (r && center !== "") svg.append(s("text", { class: "sf-chart-center", x: c, y: c, "text-anchor": "middle", "dominant-baseline": "central" }, center ?? `${short(total)}${unit}`));
-      const legend = h("div.sf-chart-legend", {}, items.map((it) => h("span", {}, h("span", { style: "display:inline-flex;align-items:center;gap:6px" }, h("i", { style: `background:${it.color}` }), it.label), h("b", {}, `${fmt(num(it.value))}${unit}`))));
-      put(this, this.title_(), h("div.sf-chart-donut", {}, svg, legend));
+      if (r && center !== "") svg.append(s("text", { class: "viz-chart-center", x: c, y: c, "text-anchor": "middle", "dominant-baseline": "central" }, center ?? `${short(total)}${unit}`));
+      const legend = h("div.viz-chart-legend", {}, items.map((it) => h("span", {}, h("span", { style: "display:inline-flex;align-items:center;gap:6px" }, h("i", { style: `background:${it.color}` }), it.label), h("b", {}, `${fmt(num(it.value))}${unit}`))));
+      put(this, this.title_(), h("div.viz-chart-donut", {}, svg, legend));
     }
+  });
+
+  // ── Tabs: a .nav[role="tablist"] of [role="tab"] buttons shows the panel its chosen one names ──────────────────
+  const TAB = '.nav[role="tablist"] [role="tab"]';
+  const pick = (tab) => {
+    for (const t of tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')) {
+      const on = t === tab;
+      t.classList.toggle("active", on);
+      t.setAttribute("aria-selected", String(on));
+      const panel = t.getAttribute("aria-controls") && document.getElementById(t.getAttribute("aria-controls"));
+      if (panel) panel.hidden = !on && t.getAttribute("aria-controls") !== tab.getAttribute("aria-controls");
+    }
+  };
+  addEventListener("click", (e) => {
+    const tab = e.target?.closest?.(TAB);
+    if (tab && !e.defaultPrevented && !tab.matches(':disabled,[aria-disabled="true"]')) pick(tab);
+  });
+  addEventListener("keydown", (e) => {
+    const tab = e.target?.closest?.(TAB);
+    if (!tab) return;
+    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')].filter((t) => !t.matches(':disabled,[aria-disabled="true"]'));
+    const at = tabs.indexOf(tab);
+    const to = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const next = tabs[(to + tabs.length) % tabs.length];
+    next.focus();
+    pick(next);
+  });
+
+  // ── Icons: <i data-lucide="name">, drawn once Lucide has come (from a CDN the frame may load) ──────────────────
+  const icons = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  addEventListener("DOMContentLoaded", () => {
+    for (const list of document.querySelectorAll('.nav[role="tablist"]')) {
+      const tab = list.querySelector('[role="tab"][aria-selected="true"]') ?? list.querySelector('[role="tab"].active') ?? list.querySelector('[role="tab"]');
+      if (tab) pick(tab);
+    }
+    if (!document.querySelector("[data-lucide]")) return;
+    if (globalThis.lucide) return icons();
+    document.head.append(Object.assign(document.createElement("script"), { src: "https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js", onload: icons }));
   });
 })();

@@ -5,141 +5,156 @@ description: Create inline HTML diagrams, charts, comparisons or interactive wid
 
 # Inline visualizations
 
-In still.fail (EMBER/…), placed HTML attachments render in the message. An HTML code fence is only code;
-an unplaced attachment opens as a file. For a simple flow, sequence, state machine or timeline, use a Mermaid
-code fence instead: it renders in still.fail colours without a file.
+- Make one only when people need to see or explore something in the chat and it explains better than words. A table
+  someone asks for is a Markdown table; a static structure that labeled nodes and edges explain fully is a Mermaid code
+  fence (it draws in still.fail's colours without a file). Use HTML for numbers, motion, adjustable inputs and the rest.
+- A request for a site, an app page or a change to a project is not one: build that in the project.
 
 ## Post
 
 Write an HTML fragment in the session workspace, e.g. `release.html`. Attach with
 `chat_post(files=["/abs/path/release.html"])` and put `[Release](release.html)` on its own line in the text. Every
-still.fail app (web, desktop, phones) draws it there; still say its point around the link: notifications and chat
-lists show only your words, and figures are not read aloud.
+still.fail app (web, desktop, phones) draws it there. Say its point around the link in a sentence or two:
+notifications and chat lists show only your words, and figures are not read aloud. Don't repeat its data in the text.
 In Slack, attach but omit the Markdown link; files upload below the text, and still.fail's copy of the thread shows
 the file as a card that opens it, not drawn in the message. Say what the figure shows for people staying in Slack.
 
-## Components and tokens
+## Fragment
 
-Every fragment has still.fail's design tokens (`--sf-…`, below) and a few components loaded. Compose figures from
-the components and plain HTML styled with the tokens; for charts use `<sf-chart>`, not a chart library.
+- Only a fragment: no `<!doctype>`, `<html>`, `<head>` or `<body>` (a full document is drawn as written in a 16:9
+  window without any of the below). Keep it under 1 MB: aggregate or downsample big data.
+- Give its root a unique id and find things with `document.getElementById`. Check that every script runs, every
+  element it looks for exists and the main interaction updates the figure.
+- The sandbox has no fetch, XHR or WebSocket, nor the page, station or files. Scripts, styles and fonts may load only
+  from cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net, unpkg.com, fonts.googleapis.com and fonts.gstatic.com. Images
+  are data URIs, SVG or canvas.
+- Keep the figure to the figure: no explanatory paragraphs or instructions inside it, only the labels, legends and
+  values it needs, and a screen-reader summary.
 
-Atoms:
+## Design system
 
-| Element or class | What it is |
-|---|---|
-| `<sf-stack>`, `<sf-row>`, `<sf-grid>` | a column, a wrapping row, auto columns (`style="--min:240px"` sets the least width) |
-| `<sf-card title note>` | a card: its ground, an optional title and a quiet line under it |
-| `<sf-stat label value unit note tone delta delta-tone trend>` | a number with its label; `delta="+8%"` (`delta-tone="good\|bad"`), `trend="[…]"` a small line under it; `plain` drops its ground |
-| `<sf-status tone>` | a small dot and words: `ok`, `busy`, `warn`, `error`, `off`, `info` |
-| `<sf-badge tone>` | a pill: grey, or `blue`, `green`, `amber`, `red`, `purple` |
-| `<sf-button primary quiet small send>` | a button; with `send`, a click puts those words in the chat's composer |
-| `<sf-progress value max label note>` | a progress bar with what it says |
-| `<sf-note>` | quieter words: a source, an aside |
-| `<sf-table>` around a `<table>` | a table: head quieter, rows apart by room; `class="num"` on number cells sets them right |
-| `.sf-title`, `.sf-sub` | a title, the quiet line under it |
-| `.sf-segmented` of `button.sf-segment` (`aria-selected="true"` on the chosen) | a segmented choice: tabs, a pick of a few; your script switches it |
-| `.sf-input`, `.sf-select`, `.sf-label`, `label.sf-check` | fields |
+The frame loads still.fail's stylesheet: one set of tokens and a set of utility classes under the names you know from
+shadcn and Bootstrap. Use them as they are; never restyle a utility (its size, spacing, border, corner, colour or
+states) and never hard-code a colour (`#fff`, `black`, `slate-500`): light and dark follow the viewer.
 
-Charts, drawn from data in a `data` attribute as JSON (single-quote it) or a `<script type="application/json">`
-inside the element:
+### Tokens
 
-| Element | Data |
-|---|---|
-| `<sf-chart type="bar\|line\|area" unit height stacked title>` | `{"labels":[…],"values":[…]}`, or `{"labels":[…],"series":[{"name","values","tone"}]}` |
-| `<sf-chart type="hbar" unit max>` | `{"labels":[…],"values":[…]}` or `{"items":[{"label","value","tone","note"}]}`: a ranking, shares |
-| `<sf-chart type="donut\|pie" unit center>` | `{"items":[{"label","value","tone"}]}`; `center` sets the middle words |
-| `<sf-chart type="scatter" unit x-unit>` | `{"series":[{"name","points":[[x, y, "label"]]}]}` |
-| `<sf-spark data tone width height>` | `[…]`: a small trend line inline |
+- Pairs, a ground and what is on it: `--background`/`--foreground` (the page), `--card`/`--card-foreground`,
+  `--primary`/`--primary-foreground` (ink: the solid control, what is chosen), `--secondary` and `--muted` (a quiet
+  ground) with `--muted-foreground` (the one grey for secondary words), `--accent`/`--accent-foreground` (a soft
+  highlight), `--popover`/`--popover-foreground`.
+- `--border` (only for what has nothing in it: a chart's grid, an empty track), `--input`, `--ring`, `--destructive`.
+- Tones, each an ink and a ground: `--blue`, `--green`, `--yellow`, `--red`, `--purple`, `--orange` and `--blue-bg`….
+- Chart series: `--viz-series-1` (ink, for one measure or the active state) to `--viz-series-6`.
+- `--font-size-base`: everything else follows it, and a phone's is a size up.
 
-One series is drawn in ink; more take the series colours in order, with a legend. Hovering shows each value.
+### How it looks
+
+- Grey by default. Colour only what must be noticed (a failure, a warning, done) and series past the first; values,
+  labels and states that are normal stay `--foreground` or `--muted-foreground`. A status is `.viz-dot` and words.
+- What is chosen, current or pressed is ink (`--primary`), never orange. The brand's orange is only a fill the
+  stylesheet already gives (a progress bar, a checked box).
+- Set things apart with room and grounds. No borders, outlines, dividers, banners or coloured callout boxes; no
+  shadows. The figure's own surface is transparent and unframed and fills the width.
+- Type: the body size by default, `.text-small` for secondary labels, `h1` for a figure's one title and `h2` for a
+  panel's; weights 400, 500 and 600 for titles. Never set font sizes or line heights; numbers are already one width.
+
+### Surfaces and layout
+
+- `.widget`: a column for the whole figure. `.viz-grid`: equal columns as fit, stacking when narrow (2–3 at full
+  width). `.viz-row`: a wrapping row of related values or actions. `.viz-controls`: a wrapping row of controls.
+- `.card`: the only card. Use it for a number with its label, a selected item's summary, or a bounded interactive
+  field; never around a chart, a table, a map or the whole figure, never one in another, never to frame a section.
+- `.viz-stat` on a `.card`: `.viz-stat-label`, `.viz-stat-value` (a unit in `<small>`), and at most one short line
+  after it (a delta: `<span class="text-success">↑ 8%</span>`). Show 2–4 near the top only when they explain the
+  question; never invent a row of them.
+- `.viz-badge` (add `.is-green`, `.is-red`, `.is-yellow`, `.is-blue`, `.is-purple`): a display-only pill.
+- `.viz-dot` (same tones, and `.is-off`): a status dot before words.
+- `.viz-flow` of `.viz-node` (`.viz-node-title`, `.viz-node-body`; `.is-active` for the current one, a tone only for
+  one that is wrong) with `.viz-arrow` between them: a few boxes in a line.
+- `.progress` > `.progress-bar style="width:40%"`, with `role="progressbar"` and its values.
+- `.viz-dotted-background`: a quiet dot grid behind a mockup.
+
+### Controls
+
+- `.btn`; `.btn-primary` for the one main action, `.btn-secondary`, `.btn-ghost` for low emphasis; `.btn-xs`,
+  `.btn-sm`, `.btn-lg`; `.btn-block` to fill the row. `aria-pressed="true"`, `aria-selected="true"` or
+  `.is-selected` mark one chosen. `.btn.viz-tile` is a selectable cell of a dense grid.
+- `.form-label` above `.form-control` (input or textarea) or `.form-select`; `-sm`/`-xs` for smaller ones.
+  `<label class="form-check">` around `.form-check-input` and `.form-check-label`; `.form-switch`; `.form-range`
+  with its value before it.
+- Tabs, switched for you: `.nav.nav-pills[role="tablist"]` of `button.nav-link[role="tab"]` with `id`,
+  `aria-controls` and `aria-selected` (the first `.active`), and `[role="tabpanel"]` panels, the others `hidden`:
 
 ```html
-<sf-stack>
-  <sf-grid>
-    <sf-stat label="Merged" value="128" delta="+12" delta-tone="good" trend="[90,96,104,128]"></sf-stat>
-    <sf-stat label="Failing checks" value="3" tone="error" note="android twice in a row"></sf-stat>
-  </sf-grid>
-  <sf-card title="PRs merged a day" note="last two weeks">
-    <sf-chart type="bar" data='{"labels":["10/26","10/27","10/28"],"values":[7,22,24]}'></sf-chart>
-  </sf-card>
-  <sf-card title="Checks">
-    <sf-table><table>
-      <tr><th>Check</th><th>State</th><th class="num">Time</th></tr>
-      <tr><td>linux</td><td><sf-status tone="ok">passed</sf-status></td><td class="num">3:41</td></tr>
-      <tr><td>android</td><td><sf-status tone="error">failed</sf-status></td><td class="num">9:58</td></tr>
-    </table></sf-table>
-  </sf-card>
-  <sf-row>
-    <sf-button primary send="Run the failing checks again">Run again</sf-button>
-    <sf-note>From CI, every 10 minutes.</sf-note>
-  </sf-row>
-</sf-stack>
+<div class="nav nav-pills" role="tablist" aria-label="Range">
+  <button class="nav-link active" id="week" role="tab" aria-controls="week-panel" aria-selected="true" type="button">Week</button>
+  <button class="nav-link" id="month" role="tab" aria-controls="month-panel" aria-selected="false" type="button">Month</button>
+</div>
+<div id="week-panel" role="tabpanel" aria-labelledby="week">…</div>
+<div id="month-panel" role="tabpanel" aria-labelledby="month" hidden>…</div>
 ```
 
-Anything else (a comparison, a timeline, a file tree, a diff) you build from these and plain HTML, with the tokens
-and the look below. Components write no words of their own: every label is what you give them, in the chat's
-language.
+- `data-tooltip="text"` on any element shows it on hover, focus and touch; put a truncated label's full text there.
+- Icons: `<i data-lucide="search" aria-hidden="true"></i>` (Lucide's names); never draw icon SVG yourself. After adding
+  icons from a script, call `lucide.createIcons()`.
+- Native `button`, `input`, `select`, `textarea` only; essential content and actions never only on hover.
 
-## Look
+### Tables and text
 
-The components already look like still.fail; what you add must too:
+- `.table` on a semantic table (`thead` for the head), in `.table-responsive` when it may be too wide; `.table-sm`;
+  `.text-end` on number cells, `.text-center`, `.text-nowrap`.
+- `.text-small`, `.text-muted` (never for essential values), `.text-destructive` (only errors), `.text-success`,
+  `<code>`, `<pre><code>`, `.sr-only`.
 
-- Grey by default. Colour only what must be noticed (a failure, a warning, done) and chart series past the first;
-  normal values, labels and states stay grey or ink. A status is a small dot and words, not a block of colour.
-- Mark the current or chosen thing in ink, never in orange: the accent is only a fill (a progress bar, a check box).
-- Set things apart with room and grounds (cards), never frames, rules, dividers, banners or coloured callout boxes.
-- Use the type sizes as they are; numbers are already all one width.
+## Charts
 
-## Design tokens
+`<viz-chart>` draws a chart from data in its `data` attribute (JSON, single-quoted) or a
+`<script type="application/json">` inside it, in the tokens' colours, sized to its container, with values on hover:
 
-Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `black`, `slate-500`) or sizes: use
-these variables.
+| `type` | data |
+|---|---|
+| `bar`, `line`, `area` (`stacked` for bars) | `{"labels":[…],"values":[…]}` or `{"labels":[…],"series":[{"name","values","tone"}]}` |
+| `hbar` (`max`) | `{"labels":[…],"values":[…]}` or `{"items":[{"label","value","tone","note"}]}`: a ranking, shares |
+| `donut`, `pie` (`center` sets the middle words) | `{"items":[{"label","value","tone"}]}` |
+| `scatter` (`x-unit`) | `{"series":[{"name","points":[[x, y, "label"]]}]}` |
 
-- Grounds: `--sf-page` (what the figure lies on), `--sf-card`, `--sf-quiet` (under a pill or a box in a card),
-  `--sf-hover`, `--sf-selected`, `--sf-field`.
-- Words: `--sf-ink`, `--sf-muted` (the one grey for labels and notes).
-- Lines, only for what has nothing in it (a chart's grid, an empty track): `--sf-line`, `--sf-line-strong`.
-- `--sf-primary` / `--sf-on-primary` (a solid button), `--sf-accent` (fills only).
-- Tones, each an ink and a ground: `--sf-blue`, `--sf-green`, `--sf-amber`, `--sf-red`, `--sf-purple`, and
-  `--sf-blue-ground`… Series in order: `--sf-series-1` (ink) … `--sf-series-6`.
-- Type: `--sf-font`, `--sf-font-mono`; sizes with their lines: `--sf-text-caption`, `--sf-text-meta` (labels),
-  `--sf-text-ui` (controls, tables), `--sf-text-body` (what is read), `--sf-text-title`, `--sf-text-heading`,
-  `--sf-text-display` (a big number), each with `--sf-leading-…`. Weights 400, 500 to stand out, 600 for titles.
-  Nothing smaller than the caption size.
-- Corners: `--sf-r-card`, `--sf-r-field`, `--sf-r-small`; pills and dots `999px`.
-- Room: `--sf-card-pad` (20), `--sf-text-in` (10), `--sf-gap` (12), `--sf-gap-s` (6), `--sf-gap-l` (20).
-- Motion: `--sf-dur`, `--sf-ease`.
+Also `unit`, `height` and `title`. One series is ink; more take `--viz-series-2…` in order with a legend; `tone`
+(`red`, `green`, `yellow`, `blue`, `purple`) only for a series that must stand out. `<viz-spark data="[…]" tone width
+height>` is a small trend line, e.g. in a table cell.
 
-In SVG use `currentColor` or `var(--sf-…)`. For a canvas or a library that needs real colours, read them with
-`getComputedStyle(document.documentElement).getPropertyValue("--sf-series-2")` and redraw on the `ember-viz:theme`
-event.
+- Put the chart straight on the figure's surface under an `h1`/`h2` title; never in a `.card`.
+- Start from the chart for named numbers or a one-off analysis; put takeaways in your message, not in cards above it.
+- For what `<viz-chart>` does not draw (timelines of parallel work, distributions, small multiples, maps), use D3
+  (`<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>`) or handwritten SVG with the same
+  look: `var(--viz-series-n)` for marks, `var(--muted-foreground)` for axis text at 11px or more, thin `var(--border)`
+  grid lines, no frame or fill behind the plot, axis titles with units, `data-tooltip` on each mark. Size each SVG from
+  its container with a `ResizeObserver`; never scale down a fixed-width `viewBox`. For a canvas or a library that needs
+  real colours, read them with `getComputedStyle(document.documentElement).getPropertyValue("--viz-series-2")` and
+  redraw on the `ember-viz:theme` event.
 
-Codex's Visualize names also work, as aliases (`--background`, `--foreground`, `--chart-1`…, `.card`, `.btn`,
-`.btn-primary`, `.table`, `.nav-pills`, `.viz-flow`, `.viz-node`, `.viz-badge`, `.form-control`, `data-tooltip`…), so
-a figure written for it draws in still.fail's look; prefer the components.
+## Composition
 
-## Write
-
-- Fragments omit `<html>`, `<head>` and `<body>`; order `<style>`, markup, then `<script>`. Stay well under 1 MB.
-- The sandbox has no fetch, XHR, WebSocket or access to the page, station or files. Scripts/styles may load from
-  cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net or unpkg.com. Images must be data URIs, SVG or canvas; embed data.
-- Design for 736 px down to 320 px: the components wrap by themselves; avoid fixed widths and viewport heights.
-- Any element with `data-tooltip="text"` shows it on hover and focus.
-- A full document (`<!doctype>` or `<html>`) renders as written in a 16:9 window, not content-sized, without the
-  stylesheet or components: about 736×414 down to 320×180. All content and controls must scale together.
-  Full-screen pages are better attached unplaced or served via stillfail-jobs.
+- Choose the smallest composition that answers: one dominant visual, controls only when asked for or essential, one
+  mechanism per state. Never invent search, filter or reset controls, KPI rows, legends that repeat labels, or panels
+  to fill space.
+- Fill the width and work from 736 px down to 320 px: let rows wrap and grids stack; no fixed outer widths, internal
+  scrolling, `position: fixed` or viewport heights. Text never overlaps or clips.
+- A mockup of a product's screen uses that product's own colours and type, defined in the fragment
+  (`light-dark(…, …)`), never these tokens or utilities; `.viz-dotted-background` may sit behind it.
 
 ## Talking back
 
-`window.ember` (the name it had before still.fail; also named `window.openai`, as Codex's Visualize has it):
+`window.ember` (also named `window.openai`, as Codex has it):
 
 - `ember.widgetState` — what the widget kept last time it was shown (or null); `ember.setWidgetState(value)` keeps a
   JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
   should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
   `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
+  Save after meaningful interactions, never on load.
 - `ember.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
-  wrote it. Only from their click or key press (a button's handler); it never sends by itself. `<sf-button send>` does it
-  for you.
+  wrote it. Only from their click or key press; it never sends by itself. Use it for drill-downs ("explain this
+  week's spike") with the selected values in the prompt, and label the button for what it asks.
 
 Before posting a large or scripted one, check it renders: open the file in a browser (or a screenshot tool) and fix
 what does not draw or throws.

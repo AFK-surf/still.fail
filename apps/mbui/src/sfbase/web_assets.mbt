@@ -6,14 +6,13 @@
 pub let viz_css : String =
   #|/*
   #| * The stylesheet of an inline visualization (Viz.tsx, the app's viz_file.mbt): an HTML file placed in a message, drawn
-  #| * in a sandboxed frame. The page hands in still.fail's own tokens for the theme it shows as --e-* (its colours, type,
-  #| * corners); this sheet says them again as the design tokens agents write against (--sf-*), styles still.fail's
-  #| * components (components.js: <sf-…> elements) and keeps Codex's visualize.css names (--background, .btn, .card…) as
-  #| * aliases, so a figure written for that still draws. Keep it in step with station/src/skills/stillfail-viz.md.
-  #| *
-  #| * What everything looks like is still.fail's own (docs/ui-panels.md): grey unless something is wrong, what is chosen
-  #| * in ink and never the accent, things set apart by grounds and room rather than frames and lines, the app's six sizes
-  #| * of type, numbers one width.
+  #| * in a sandboxed frame. As Codex's visualize plugin does it: one token contract under the names agents know
+  #| * (--background, --foreground, --muted-foreground, --viz-series-1…) and utility classes under Bootstrap's names (.card,
+  #| * .btn, .table, .nav-pills…), the only design system a figure is written with. Their values are still.fail's: the page
+  #| * hands in its own tokens for the theme it shows as --e-* (colours, type, corners), and the utilities look like the
+  #| * app's parts (docs/ui-panels.md): grey unless something is wrong, what is chosen in ink and never the accent, things
+  #| * set apart by grounds and room rather than frames, the app's sizes of type, numbers one width. Keep it in step with
+  #| * station/src/skills/stillfail-viz.md.
   #| */
   #|@font-face {
   #|  font-family: "Inter Variable";
@@ -25,143 +24,97 @@ pub let viz_css : String =
   #|}
   #|
   #|:root {
-  #|  /* ── Design tokens ─────────────────────────────────────────────────────────────── */
-  #|
-  #|  /* Grounds: the page the figure lies on, a card on it, a quiet ground under what is in it (a pill, a node), what is
-  #|     lifted out of a tinted track, a field's. */
-  #|  --sf-page: var(--e-canvas, #fff);
-  #|  --sf-card: var(--e-paper, #f6f4ef);
-  #|  --sf-quiet: var(--e-neutral-bg, rgb(36 39 43 / .075));
-  #|  --sf-lifted: var(--e-lifted, var(--sf-page));
-  #|  --sf-field: var(--e-canvas, #fff);
-  #|  --sf-hover: var(--e-hover, rgb(36 39 43 / .065));
-  #|  --sf-selected: var(--e-selected, #ebe8e2);
-  #|  /* Words: ink, and the one grey (labels, notes, what is said under a title). */
-  #|  --sf-ink: var(--e-text, #3a3d42);
-  #|  --sf-muted: var(--e-muted, #565b62);
-  #|  /* Lines: only what has nothing in it (a chart's grid, a gauge's empty track, a step's rail). */
-  #|  --sf-line: var(--e-line, rgb(50 45 36 / .141));
-  #|  --sf-line-strong: var(--e-line-strong, #cdd0d5);
-  #|  /* The solid button's ground and words. */
-  #|  --sf-primary: var(--e-primary, #24272b);
-  #|  --sf-on-primary: var(--e-on-primary, #fff);
-  #|  /* The accent: a fill or a small mark (a progress bar, a checked box), never words or emphasis. */
-  #|  --sf-accent: var(--e-accent, #dc5929);
-  #|  /* Tones, each an ink for words and marks and a ground (that ink at an opacity) under them. Only for what must be
-  #|     noticed: a failure (red), a warning (amber), done (green), information (blue), merged (purple). */
-  #|  --sf-blue: var(--e-blue, #0047ae);
-  #|  --sf-blue-ground: var(--e-blue-bg, color-mix(in srgb, var(--sf-blue) 18%, transparent));
-  #|  --sf-green: var(--e-green, #026039);
-  #|  --sf-green-ground: var(--e-green-bg, color-mix(in srgb, var(--sf-green) 18%, transparent));
-  #|  --sf-amber: var(--e-amber, #6e4802);
-  #|  --sf-amber-ground: var(--e-amber-bg, color-mix(in srgb, var(--sf-amber) 18%, transparent));
-  #|  --sf-red: var(--e-red, #9a2830);
-  #|  --sf-red-ground: var(--e-red-bg, color-mix(in srgb, var(--sf-red) 18%, transparent));
-  #|  --sf-purple: var(--e-purple, var(--e-code-inline, #6830bf));
-  #|  --sf-purple-ground: var(--e-purple-bg, color-mix(in srgb, var(--sf-purple) 18%, transparent));
-  #|  /* Chart series in order: ink first (one series needs no colour), then the tones. */
-  #|  --sf-series-1: var(--sf-ink);
-  #|  --sf-series-2: var(--sf-blue);
-  #|  --sf-series-3: var(--sf-green);
-  #|  --sf-series-4: var(--sf-purple);
-  #|  --sf-series-5: var(--sf-amber);
-  #|  --sf-series-6: var(--sf-red);
-  #|  --sf-shadow: var(--e-shadow, rgb(0 0 0 / 10%));
-  #|
-  #|  /* Type: six roles, each a size and its line (a phone's a size up); weights 400, 500 to stand out, 600 for titles. */
-  #|  --sf-font: var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
-  #|  --sf-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  #|  --sf-text-caption: var(--e-text-caption, 11px);
-  #|  --sf-leading-caption: var(--e-leading-caption, 16px);
-  #|  --sf-text-meta: var(--e-text-meta, 12px);
-  #|  --sf-leading-meta: var(--e-leading-meta, 18px);
-  #|  --sf-text-ui: var(--e-text-ui, 13px);
-  #|  --sf-leading-ui: var(--e-leading-ui, 20px);
-  #|  --sf-text-body: var(--e-text-body, 14px);
-  #|  --sf-leading-body: var(--e-leading-body, 22px);
-  #|  --sf-text-title: var(--e-text-title, 16px);
-  #|  --sf-leading-title: var(--e-leading-title, 24px);
-  #|  --sf-text-heading: var(--e-text-heading, 22px);
-  #|  --sf-leading-heading: var(--e-leading-heading, 30px);
-  #|  --sf-text-display: var(--e-text-display, 28px);
-  #|
-  #|  /* Corners: a card's, a field's (and a box in a card), a small mark's; pills and dots are round. */
-  #|  --sf-r-card: var(--e-r-card, 20px);
-  #|  --sf-r-field: var(--e-r-field, 12px);
-  #|  --sf-r-small: calc(var(--sf-r-field) / 2);
-  #|  --sf-corner-shape: var(--e-corner-shape, round);
-  #|  /* Room: a card's padding, a row's words in from its ground, gaps between things. */
-  #|  --sf-card-pad: 20px;
-  #|  --sf-text-in: 10px;
-  #|  --sf-gap: 12px;
-  #|  --sf-gap-s: 6px;
-  #|  --sf-gap-l: 20px;
-  #|  /* Motion. */
-  #|  --sf-dur: 140ms;
-  #|  --sf-ease: cubic-bezier(.2, .7, .2, 1);
-  #|
-  #|  /* ── Codex's names, as aliases ─────────────────────────────────────────────────── */
-  #|  --background: var(--sf-page);
-  #|  --foreground: var(--sf-ink);
-  #|  --card: var(--sf-card);
-  #|  --card-foreground: var(--sf-ink);
-  #|  --popover: var(--sf-page);
-  #|  --popover-foreground: var(--sf-ink);
-  #|  --primary: var(--sf-primary);
-  #|  --primary-foreground: var(--sf-on-primary);
-  #|  --secondary: var(--sf-quiet);
-  #|  --secondary-foreground: var(--sf-ink);
-  #|  --muted: var(--sf-quiet);
-  #|  --muted-foreground: var(--sf-muted);
-  #|  --accent: var(--e-accent-bg, color-mix(in srgb, var(--sf-accent) 18%, transparent));
-  #|  --accent-foreground: var(--e-accent-text, #982e01);
-  #|  --brand: var(--sf-accent);
-  #|  --destructive: var(--sf-red);
-  #|  --border: var(--sf-line);
-  #|  --border-strong: var(--sf-line-strong);
-  #|  --input: var(--sf-line-strong);
+  #|  /* ── The agents' contract: keep in step with the skill ─────────────────────────── */
+  #|  /* Each pair is a ground and what is on it. */
+  #|  --background: var(--e-canvas, #fff);
+  #|  --foreground: var(--e-text, #3a3d42);
+  #|  --card: var(--e-paper, #f6f4ef);
+  #|  --card-foreground: var(--foreground);
+  #|  --popover: var(--e-primary, #24272b);
+  #|  --popover-foreground: var(--e-on-primary, #fff);
+  #|  /* The solid control: ink. */
+  #|  --primary: var(--e-primary, #24272b);
+  #|  --primary-foreground: var(--e-on-primary, #fff);
+  #|  /* A quiet ground (a pill, a box in a card, a secondary button) and the one grey for words. */
+  #|  --secondary: var(--e-neutral-bg, rgb(36 39 43 / .075));
+  #|  --secondary-foreground: var(--foreground);
+  #|  --muted: var(--e-neutral-bg, rgb(36 39 43 / .075));
+  #|  --muted-foreground: var(--e-muted, #565b62);
+  #|  /* A soft highlight (a selected row): grey, never the brand's orange. */
+  #|  --accent: var(--e-selected, #ebe8e2);
+  #|  --accent-foreground: var(--foreground);
+  #|  --destructive: var(--e-red, #9a2830);
+  #|  /* Lines only for what has nothing in it (a chart's grid, an empty track), a field's edge, focus. */
+  #|  --border: var(--e-line, rgb(50 45 36 / .141));
+  #|  --input: var(--e-line-strong, #cdd0d5);
   #|  --ring: var(--e-field-focus, #646970);
-  #|  --hover: var(--sf-hover);
-  #|  --selected: var(--sf-selected);
-  #|  --shadow: var(--sf-shadow);
-  #|  --blue: var(--sf-blue);
-  #|  --green: var(--sf-green);
-  #|  --orange: var(--sf-accent);
-  #|  --red: var(--sf-red);
-  #|  --purple: var(--sf-purple);
-  #|  --yellow: var(--sf-amber);
-  #|  --blue-bg: var(--sf-blue-ground);
-  #|  --green-bg: var(--sf-green-ground);
-  #|  --orange-bg: var(--accent);
-  #|  --red-bg: var(--sf-red-ground);
-  #|  --yellow-bg: var(--sf-amber-ground);
-  #|  --purple-bg: var(--sf-purple-ground);
-  #|  --chart-1: var(--sf-series-1);
-  #|  --chart-2: var(--sf-series-2);
-  #|  --chart-3: var(--sf-series-3);
-  #|  --chart-4: var(--sf-series-4);
-  #|  --chart-5: var(--sf-series-5);
-  #|  --chart-6: var(--sf-series-6);
-  #|  --font-sans: var(--sf-font);
-  #|  --font-mono: var(--sf-font-mono);
-  #|  --font-size-base: var(--sf-text-body);
-  #|  --font-size-small: var(--sf-text-meta);
-  #|  --font-size-ui: var(--sf-text-ui);
-  #|  --font-size-h1: var(--sf-text-heading);
-  #|  --font-size-h2: var(--sf-text-title);
-  #|  --font-size-h3: var(--sf-text-body);
-  #|  --font-size-display: var(--sf-text-display);
-  #|  --line-height: var(--sf-leading-body);
-  #|  --radius-card: var(--sf-r-card);
-  #|  --radius-field: var(--sf-r-field);
-  #|  --radius-small: var(--sf-r-small);
-  #|  --corner-shape: var(--sf-corner-shape);
-  #|  --dur: var(--sf-dur);
-  #|  --ease-out: var(--sf-ease);
+  #|  /* Tones, each an ink for words and marks, and its ground. */
+  #|  --blue: var(--e-blue, #0047ae);
+  #|  --green: var(--e-green, #026039);
+  #|  --yellow: var(--e-amber, #6e4802);
+  #|  --red: var(--e-red, #9a2830);
+  #|  --purple: var(--e-purple, var(--e-code-inline, #6830bf));
+  #|  --orange: var(--e-accent-text, #982e01);
+  #|  --blue-bg: var(--e-blue-bg, color-mix(in srgb, var(--blue) 18%, transparent));
+  #|  --green-bg: var(--e-green-bg, color-mix(in srgb, var(--green) 18%, transparent));
+  #|  --yellow-bg: var(--e-amber-bg, color-mix(in srgb, var(--yellow) 18%, transparent));
+  #|  --red-bg: var(--e-red-bg, color-mix(in srgb, var(--red) 18%, transparent));
+  #|  --purple-bg: var(--e-purple-bg, color-mix(in srgb, var(--purple) 18%, transparent));
+  #|  --orange-bg: var(--e-accent-bg, color-mix(in srgb, var(--orange) 18%, transparent));
+  #|  /* The brand's orange: a fill (a progress bar, a checked box), never words or emphasis. */
+  #|  --brand: var(--e-accent, #dc5929);
+  #|  /* Chart series: one measure in ink, then the tones. */
+  #|  --viz-series-1: var(--foreground);
+  #|  --viz-series-2: var(--blue);
+  #|  --viz-series-3: var(--green);
+  #|  --viz-series-4: var(--purple);
+  #|  --viz-series-5: var(--yellow);
+  #|  --viz-series-6: var(--red);
+  #|  /* Type: the body's size; the rest follow it (a phone's a size up). */
+  #|  --font-size-base: var(--e-text-body, 14px);
+  #|
+  #|  /* ── What the utilities are made of; not for agents ────────────────────────────── */
+  #|  --font-sans: var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
+  #|  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  #|  --font-size-small: var(--e-text-meta, 12px);
+  #|  --font-size-ui: var(--e-text-ui, 13px);
+  #|  --font-size-caption: var(--e-text-caption, 11px);
+  #|  --font-size-h1: var(--e-text-title, 16px);
+  #|  --font-size-h2: var(--font-size-base);
+  #|  --font-size-h3: var(--font-size-base);
+  #|  --font-size-display: var(--e-text-display, 28px);
+  #|  --line-height-normal: var(--e-leading-body, 22px);
+  #|  --line-height-small: var(--e-leading-meta, 18px);
+  #|  --line-height-ui: var(--e-leading-ui, 20px);
+  #|  --line-height-h1: var(--e-leading-title, 24px);
+  #|  /* Corners, stepping down as things nest: a card's, a box in it, a field's, a small mark's. */
+  #|  --radius-xl: var(--e-r-card, 20px);
+  #|  --radius-lg: var(--e-r-field, 12px);
+  #|  --radius-md: calc(var(--radius-lg) * .75);
+  #|  --radius-sm: calc(var(--radius-lg) / 2);
+  #|  --corner-shape: var(--e-corner-shape, round);
+  #|  --hover: var(--e-hover, rgb(36 39 43 / .065));
+  #|  --selected: var(--e-selected, #ebe8e2);
+  #|  --lifted: var(--e-lifted, var(--background));
+  #|  --shadow: var(--e-shadow, rgb(0 0 0 / 10%));
+  #|  --dur: 140ms;
+  #|  --ease-out: cubic-bezier(.2, .7, .2, 1);
+  #|
+  #|  /* Names this sheet answered to before (Codex's older ones and ember's), kept so old figures draw. */
+  #|  --chart-1: var(--viz-series-1);
+  #|  --chart-2: var(--viz-series-2);
+  #|  --chart-3: var(--viz-series-3);
+  #|  --chart-4: var(--viz-series-4);
+  #|  --chart-5: var(--viz-series-5);
+  #|  --chart-6: var(--viz-series-6);
+  #|  --border-strong: var(--input);
+  #|  --radius-card: var(--radius-xl);
+  #|  --radius-field: var(--radius-lg);
+  #|  --radius-small: var(--radius-sm);
   #|
   #|  background: transparent;
-  #|  color: var(--sf-ink);
-  #|  font: var(--sf-text-body) / var(--sf-leading-body) var(--sf-font);
+  #|  color: var(--foreground);
+  #|  font: var(--font-size-base) / var(--line-height-normal) var(--font-sans);
   #|  /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */
   #|  font-variant-numeric: tabular-nums;
   #|  -webkit-font-smoothing: antialiased;
@@ -174,213 +127,206 @@ pub let viz_css : String =
   #|html { overflow: hidden; }
   #|[hidden] { display: none !important; }
   #|body { padding: 2px; overflow-wrap: anywhere; }
-  #|h1, h2, h3, h4 { margin: 0 0 8px; font-weight: 600; }
-  #|h1 { font-size: var(--sf-text-heading); line-height: var(--sf-leading-heading); }
-  #|h2 { font-size: var(--sf-text-title); line-height: var(--sf-leading-title); }
-  #|h3, h4 { font-size: var(--sf-text-body); line-height: var(--sf-leading-body); }
-  #|p { margin: 0 0 8px; }
-  #|p:last-child { margin-bottom: 0; }
-  #|a { color: var(--sf-blue); text-decoration: none; }
-  #|a:hover { text-decoration: underline; }
-  #|code, kbd, pre { font-family: var(--sf-font-mono); font-size: .92em; }
-  #|code { padding: .1em .35em; border-radius: var(--sf-r-small); background: var(--sf-quiet); }
-  #|pre { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--sf-r-field); background: var(--sf-quiet); overflow-x: auto; }
-  #|pre code { padding: 0; background: none; }
-  #|hr { height: 0; margin: 12px 0; border: 0; }
-  #|svg { color: var(--sf-ink); }
-  #|svg text { fill: currentColor; font-family: var(--sf-font); }
+  #|h1, h2, h3, h4, h5, h6, p { margin: 0; }
+  #|h1 { font-size: var(--font-size-h1); line-height: var(--line-height-h1); font-weight: 600; }
+  #|h2, h3, h4, h5, h6 { font-size: var(--font-size-base); line-height: var(--line-height-normal); font-weight: 600; }
+  #|b, strong { font-weight: 600; }
+  #|a { color: var(--blue); text-decoration: none; cursor: pointer; }
+  #|a:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: 2px; }
+  #|code, kbd, pre { font-family: var(--font-mono); }
+  #|code:not(pre code) { padding: 1px 6px; border-radius: var(--radius-sm); background: var(--muted); font-size: .92em; }
+  #|pre { margin: 0; padding: 10px 12px; border-radius: var(--radius-lg); corner-shape: var(--corner-shape); background: var(--muted); font-size: var(--font-size-small); line-height: 20px; overflow-x: auto; }
+  #|/* No rules between things: a separator is room. */
+  #|hr { height: 0; margin: 8px 0; border: 0; }
   #|button { font: inherit; color: inherit; }
+  #|[data-lucide], .lucide { width: 16px; height: 16px; flex: none; vertical-align: -3px; stroke-width: 1.75; }
   #|
-  #|/* ── Layout ───────────────────────────────────────────────────────────────────────── */
-  #|sf-stack, .widget { display: flex; flex-direction: column; gap: var(--sf-gap); min-width: 0; }
-  #|sf-row, .viz-row, .viz-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-  #|sf-grid, .viz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(var(--min, 160px), 100%), 1fr)); gap: var(--sf-gap); }
-  #|sf-card, .card {
-  #|  display: flex; flex-direction: column; gap: var(--sf-gap); min-width: 0; padding: var(--sf-card-pad);
-  #|  border-radius: var(--sf-r-card); corner-shape: var(--sf-corner-shape); background: var(--sf-card); color: var(--sf-ink);
-  #|}
-  #|sf-card > :last-child, .card > :last-child { margin-bottom: 0; }
-  #|.sf-head { display: flex; flex-direction: column; gap: 2px; }
-  #|.sf-title { font-size: var(--sf-text-title); line-height: var(--sf-leading-title); font-weight: 600; }
-  #|.sf-sub, sf-note, .viz-note, .text-muted { color: var(--sf-muted); }
-  #|sf-note, .viz-note, .sf-sub, .text-small { font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|sf-note { display: block; }
-  #|.viz-dotted-background {
-  #|  background-image: radial-gradient(color-mix(in srgb, var(--sf-ink) 14%, transparent) 1px, transparent 1px);
-  #|  background-size: 14px 14px;
-  #|}
-  #|
-  #|/* ── Text helpers ─────────────────────────────────────────────────────────────────── */
-  #|.text-destructive { color: var(--sf-red); }
-  #|.text-warning { color: var(--sf-amber); }
-  #|.text-success { color: var(--sf-green); }
-  #|.text-brand { color: var(--accent-foreground); }
+  #|/* ── Text ─────────────────────────────────────────────────────────────────────────── */
+  #|.text-small { font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.text-muted { color: var(--muted-foreground); }
+  #|.text-destructive { color: var(--destructive); }
+  #|.text-success { color: var(--green); }
+  #|.text-warning { color: var(--yellow); }
   #|.tabular-nums { font-variant-numeric: tabular-nums; }
   #|.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   #|.cursor-interaction { cursor: pointer; }
   #|
-  #|/* ── A number with its label ──────────────────────────────────────────────────────── */
-  #|sf-stat, .viz-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  #|sf-stat { padding: 16px var(--sf-card-pad); border-radius: var(--sf-r-card); corner-shape: var(--sf-corner-shape); background: var(--sf-card); }
-  #|sf-stat[plain] { padding: 0; background: none; }
-  #|.sf-stat-label, .viz-stat-label { color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|.sf-stat-value, .viz-stat-value { font-size: var(--sf-text-display); line-height: 1.25; font-weight: 600; letter-spacing: -.01em; }
-  #|.sf-stat-unit { margin-left: 2px; color: var(--sf-muted); font-size: var(--sf-text-title); font-weight: 500; letter-spacing: 0; }
-  #|.sf-stat-note { display: flex; align-items: center; gap: 4px; color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|
-  #|/* ── Status: a small dot and words; badges: the app's pills ───────────────────────── */
-  #|sf-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
-  #|.sf-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--sf-muted); }
-  #|.sf-dot[data-tone="ok"], .sf-dot[data-tone="green"] { background: var(--sf-green); }
-  #|.sf-dot[data-tone="busy"], .sf-dot[data-tone="warn"], .sf-dot[data-tone="amber"] { background: var(--sf-amber); }
-  #|.sf-dot[data-tone="error"], .sf-dot[data-tone="red"] { background: var(--sf-red); }
-  #|.sf-dot[data-tone="info"], .sf-dot[data-tone="blue"] { background: var(--sf-blue); }
-  #|.sf-dot[data-tone="purple"] { background: var(--sf-purple); }
-  #|.sf-dot[data-tone="off"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sf-muted); }
-  #|sf-badge, .viz-badge {
-  #|  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border-radius: 999px;
-  #|  background: var(--sf-quiet); color: var(--sf-muted); font-size: var(--sf-text-meta); font-weight: 500; white-space: nowrap;
-  #|  vertical-align: middle;
+  #|/* ── Surfaces and layout ──────────────────────────────────────────────────────────── */
+  #|/* A card is its ground, no frame; one nested in another steps its corner down. */
+  #|.card {
+  #|  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px 20px;
+  #|  border-radius: var(--radius-xl); corner-shape: var(--corner-shape); background: var(--card); color: var(--card-foreground);
   #|}
-  #|:is(sf-badge, .viz-badge):is([tone="blue"], [tone="info"], .is-blue) { background: var(--sf-blue-ground); color: var(--sf-blue); }
-  #|:is(sf-badge, .viz-badge):is([tone="green"], [tone="ok"], .is-green) { background: var(--sf-green-ground); color: var(--sf-green); }
-  #|:is(sf-badge, .viz-badge):is([tone="amber"], [tone="warn"], .is-yellow) { background: var(--sf-amber-ground); color: var(--sf-amber); }
-  #|:is(sf-badge, .viz-badge):is([tone="red"], [tone="error"], .is-red) { background: var(--sf-red-ground); color: var(--sf-red); }
-  #|:is(sf-badge, .viz-badge):is([tone="purple"], .is-purple) { background: var(--sf-purple-ground); color: var(--sf-purple); }
-  #|.viz-badge.is-orange { background: var(--accent); color: var(--accent-foreground); }
+  #|.card .card { border-radius: var(--radius-lg); padding: 12px 14px; background: var(--muted); }
+  #|.widget { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  #|.viz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 12px; }
+  #|.viz-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+  #|.viz-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+  #|.viz-dotted-background {
+  #|  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 14%, transparent) 1px, transparent 1px);
+  #|  background-size: 14px 14px;
+  #|}
   #|
-  #|/* ── Tables: rows apart by room, no lines; the head quieter ───────────────────────── */
-  #|sf-table { display: block; max-width: 100%; overflow-x: auto; }
-  #|.sf-table-scroll, .table-responsive { max-width: 100%; overflow-x: auto; }
-  #|sf-table table, .table { width: 100%; border-collapse: collapse; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
-  #|:is(sf-table, .table) :is(th, td) { padding: 7px var(--sf-text-in); text-align: left; vertical-align: top; }
-  #|:is(sf-table, .table) th { color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); font-weight: 500; white-space: nowrap; }
-  #|:is(sf-table, .table) :is(th, td):first-child { padding-left: 0; }
-  #|:is(sf-table, .table) :is(th, td):last-child { padding-right: 0; }
-  #|:is(sf-table, .table) :is(td.num, th.num, [data-num]) { text-align: right; }
-  #|sf-card sf-table :is(th, td):first-child, .card .table :is(th, td):first-child { padding-left: 0; }
+  #|/* A number with its label. */
+  #|.viz-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  #|.viz-stat-label { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.viz-stat-value { font-size: var(--font-size-display); line-height: 1.25; font-weight: 600; letter-spacing: -.01em; }
+  #|.viz-stat-value small { margin-left: 2px; color: var(--muted-foreground); font-size: var(--font-size-h1); font-weight: 500; letter-spacing: 0; }
+  #|:where(.viz-stat > :not(.viz-stat-label, .viz-stat-value)) { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
   #|
-  #|/* ── Horizontal bars (a ranking, a share) ─────────────────────────────────────────── */
-  #|.sf-hbars { display: grid; grid-template-columns: minmax(0, max-content) minmax(60px, 1fr) max-content; gap: 8px 12px; align-items: center; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
-  #|.sf-bar-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #|.sf-bar-track { height: 8px; border-radius: 999px; background: var(--sf-quiet); overflow: hidden; }
-  #|.sf-bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--sf-ink); }
-  #|.sf-bar-value { color: var(--sf-muted); text-align: right; }
+  #|/* Badges, the app's pills: grey, a tone only for what must be noticed. */
+  #|.viz-badge {
+  #|  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border-radius: 999px;
+  #|  background: var(--muted); color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500;
+  #|  white-space: nowrap; vertical-align: middle;
+  #|}
+  #|.viz-badge.is-blue { background: var(--blue-bg); color: var(--blue); }
+  #|.viz-badge.is-green { background: var(--green-bg); color: var(--green); }
+  #|.viz-badge:is(.is-yellow, .is-amber) { background: var(--yellow-bg); color: var(--yellow); }
+  #|.viz-badge.is-red { background: var(--red-bg); color: var(--red); }
+  #|.viz-badge.is-purple { background: var(--purple-bg); color: var(--purple); }
+  #|.viz-badge.is-orange { background: var(--orange-bg); color: var(--orange); }
+  #|/* A status: a small dot before words. */
+  #|.viz-dot { display: inline-block; flex: none; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--muted-foreground); vertical-align: 1px; }
+  #|.viz-dot.is-green { background: var(--green); }
+  #|.viz-dot:is(.is-yellow, .is-amber) { background: var(--yellow); }
+  #|.viz-dot.is-red { background: var(--red); }
+  #|.viz-dot.is-blue { background: var(--blue); }
+  #|.viz-dot.is-off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted-foreground); }
   #|
-  #|/* ── Progress ─────────────────────────────────────────────────────────────────────── */
-  #|sf-progress { display: flex; flex-direction: column; gap: 6px; }
-  #|.sf-progress-head { display: flex; justify-content: space-between; gap: 8px; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); }
-  #|.sf-progress-head > :last-child { color: var(--sf-muted); }
-  #|.sf-progress-track, .progress { height: 6px; overflow: hidden; border-radius: 999px; background: var(--sf-line); }
-  #|.sf-progress-fill, .progress-bar { height: 100%; border-radius: inherit; background: var(--sf-accent); transition: width var(--sf-dur) var(--sf-ease); }
+  #|/* A tile in a dense grid (on a .btn): fills its cell, chosen ringed in ink. */
+  #|.btn.viz-tile { width: 100%; height: auto; min-height: 36px; padding: 6px 8px; border-color: transparent; border-radius: var(--radius-md); background: var(--muted); color: var(--foreground); }
+  #|.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) { border-color: transparent; background: var(--muted); color: var(--foreground); box-shadow: inset 0 0 0 1.5px var(--foreground); }
   #|
-  #|/* ── Boxes in a flow (Codex's names) ──────────────────────────────────────────────── */
+  #|/* Progress: a track and a fill, no edges. */
+  #|.progress { height: 6px; overflow: hidden; border-radius: 999px; background: var(--border); }
+  #|.progress-bar { height: 100%; border-radius: inherit; background: var(--brand); transition: width var(--dur) var(--ease-out); }
+  #|
+  #|/* ── Buttons: the app's pills ─────────────────────────────────────────────────────── */
+  #|.btn {
+  #|  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
+  #|  border: 1px solid var(--input); border-radius: 999px; background: var(--background); color: var(--foreground);
+  #|  font: inherit; font-size: var(--font-size-ui); font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer;
+  #|  transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+  #|}
+  #|.btn:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 6%, var(--background)); text-decoration: none; }
+  #|.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: default; }
+  #|.btn-primary, .btn:is([aria-pressed="true"], [aria-selected="true"], .is-selected) { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+  #|:is(.btn-primary, .btn:is([aria-pressed="true"], [aria-selected="true"], .is-selected)):hover:not(:disabled) { border-color: var(--e-primary-hover, var(--primary)); background: var(--e-primary-hover, var(--primary)); }
+  #|.btn-secondary { border-color: transparent; background: var(--muted); }
+  #|.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 12%, transparent); }
+  #|.btn-ghost { border-color: transparent; background: transparent; }
+  #|.btn-ghost:hover:not(:disabled) { background: var(--hover); }
+  #|.btn-lg { height: 36px; padding: 0 16px; }
+  #|.btn-sm { height: 26px; padding: 0 10px; font-size: var(--font-size-small); }
+  #|.btn-xs { height: 22px; padding: 0 8px; font-size: var(--font-size-small); }
+  #|.btn-block { display: flex; width: 100%; }
+  #|
+  #|/* ── Fields ───────────────────────────────────────────────────────────────────────── */
+  #|.form-label { display: block; margin-bottom: 4px; color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.form-control, .form-select {
+  #|  width: 100%; height: 36px; padding: 0 16px; border: 1px solid var(--input); border-radius: 999px;
+  #|  background: var(--background); color: var(--foreground); font: inherit; font-size: var(--font-size-base);
+  #|  transition: border-color var(--dur) var(--ease-out);
+  #|}
+  #|textarea.form-control { height: auto; min-height: 72px; padding: 8px 12px; border-radius: var(--radius-lg); corner-shape: var(--corner-shape); resize: vertical; }
+  #|:is(.form-control, .form-select):is(:hover, :focus) { border-color: var(--e-field-hover, var(--muted-foreground)); outline: none; }
+  #|:is(.form-control, .form-select)::placeholder { color: var(--muted-foreground); }
+  #|:is(.form-control-sm, .form-select-sm) { height: 28px; padding: 0 12px; font-size: var(--font-size-ui); }
+  #|:is(.form-control-xs, .form-select-xs) { height: 24px; padding: 0 10px; font-size: var(--font-size-small); }
+  #|.form-control-color { width: 36px; padding: 2px; border-radius: var(--radius-sm); }
+  #|.form-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-size-ui); cursor: pointer; }
+  #|.form-check-input { width: 16px; height: 16px; margin: 0; accent-color: var(--brand); cursor: pointer; }
+  #|.form-switch .form-check-input { width: 28px; }
+  #|.form-check-label { cursor: pointer; }
+  #|.form-range { width: 100%; accent-color: var(--brand); }
+  #|
+  #|/* ── Tabs: the app's segmented choice (the runtime switches them) ─────────────────── */
+  #|.nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  #|.nav-pills {
+  #|  display: inline-flex; flex-wrap: nowrap; align-self: flex-start; width: fit-content; max-width: 100%; gap: 2px; padding: 3px;
+  #|  border-radius: 999px; background: color-mix(in srgb, var(--foreground) 6%, transparent); overflow-x: auto;
+  #|}
+  #|.nav-justified { display: flex; width: auto; }
+  #|.nav-justified > * { flex: 1; }
+  #|.nav-link {
+  #|  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 12px; border: 0;
+  #|  border-radius: 999px; background: none; color: var(--muted-foreground); font: inherit; font-size: var(--font-size-ui);
+  #|  white-space: nowrap; cursor: pointer; transition: color var(--dur) var(--ease-out);
+  #|}
+  #|.nav-link:hover { color: var(--foreground); text-decoration: none; }
+  #|.nav-link:is(.active, .is-selected, [aria-selected="true"]) { color: var(--foreground); font-weight: 500; }
+  #|.nav-pills .nav-link:is(.active, .is-selected, [aria-selected="true"]) { background: var(--lifted); box-shadow: 0 0 2px var(--shadow), 0 0 0 .5px var(--border); }
+  #|.nav-link:disabled { opacity: .4; cursor: default; }
+  #|
+  #|/* ── Tables: as a message's Markdown tables ───────────────────────────────────────── */
+  #|.table-responsive { width: 100%; overflow-x: auto; }
+  #|.table { width: 100%; border-collapse: collapse; font-size: var(--font-size-ui); line-height: var(--line-height-ui); }
+  #|.table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  #|.table thead th {
+  #|  color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500;
+  #|  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  #|}
+  #|.table tbody tr:last-child :is(th, td) { border-bottom: 0; }
+  #|.table.table-sm :is(th, td) { padding: 4px 8px; }
+  #|.table :is(.text-end, .num, [align="right"]) { text-align: right; }
+  #|.table :is(.text-center, [align="center"]) { text-align: center; }
+  #|.table .text-nowrap { white-space: nowrap; }
+  #|
+  #|/* ── Boxes in a flow (ember's own) ────────────────────────────────────────────────── */
   #|.viz-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
   #|.viz-flow.is-vertical { flex-direction: column; align-items: flex-start; }
   #|.viz-node {
   #|  display: flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 10px 12px;
-  #|  border-radius: var(--sf-r-field); corner-shape: var(--sf-corner-shape); background: var(--sf-quiet);
+  #|  border-radius: var(--radius-lg); corner-shape: var(--corner-shape); background: var(--muted);
   #|}
   #|.viz-node-title { font-weight: 500; }
-  #|.viz-node-body { color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|.viz-node.is-active { background: var(--sf-primary); color: var(--sf-on-primary); }
-  #|.viz-node.is-active .viz-node-body { color: color-mix(in srgb, var(--sf-on-primary) 75%, transparent); }
-  #|.viz-node.is-blue { background: var(--sf-blue-ground); }
-  #|.viz-node.is-green { background: var(--sf-green-ground); }
-  #|.viz-node.is-red { background: var(--sf-red-ground); }
-  #|.viz-node.is-yellow { background: var(--sf-amber-ground); }
-  #|.viz-node.is-purple { background: var(--sf-purple-ground); }
+  #|.viz-node-body { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.viz-node.is-active { background: var(--primary); color: var(--primary-foreground); }
+  #|.viz-node.is-active .viz-node-body { color: color-mix(in srgb, var(--primary-foreground) 75%, transparent); }
+  #|.viz-node.is-blue { background: var(--blue-bg); }
+  #|.viz-node.is-green { background: var(--green-bg); }
+  #|.viz-node.is-red { background: var(--red-bg); }
+  #|.viz-node:is(.is-yellow, .is-amber) { background: var(--yellow-bg); }
+  #|.viz-node.is-purple { background: var(--purple-bg); }
   #|.viz-arrow {
   #|  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 40px;
-  #|  color: var(--sf-muted); font-size: var(--sf-text-meta); text-align: center;
+  #|  color: var(--muted-foreground); font-size: var(--font-size-small); text-align: center;
   #|}
   #|.viz-arrow::after { content: "→"; font-size: 16px; line-height: 1; }
   #|.viz-flow.is-vertical .viz-arrow::after { content: "↓"; }
+  #|.viz-note { color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
   #|
-  #|/* ── Buttons: the app's pills ─────────────────────────────────────────────────────── */
-  #|sf-button { display: inline-flex; }
-  #|.sf-button, .btn {
-  #|  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
-  #|  border: 1px solid var(--sf-line-strong); border-radius: 999px; background: var(--sf-field); color: var(--sf-ink);
-  #|  font: inherit; font-size: var(--sf-text-ui); font-weight: 500; white-space: nowrap; cursor: pointer;
-  #|  transition: background var(--sf-dur) var(--sf-ease), border-color var(--sf-dur) var(--sf-ease);
-  #|}
-  #|:is(.sf-button, .btn):hover:not(:disabled) { background: color-mix(in srgb, var(--sf-ink) 6%, var(--sf-field)); }
-  #|:is(.sf-button, .btn):disabled { opacity: .45; cursor: default; }
-  #|:is(.sf-button[data-primary], .btn-primary) { border-color: var(--sf-primary); background: var(--sf-primary); color: var(--sf-on-primary); }
-  #|:is(.sf-button[data-primary], .btn-primary):hover:not(:disabled) { border-color: var(--e-primary-hover, var(--sf-primary)); background: var(--e-primary-hover, var(--sf-primary)); }
-  #|:is(.sf-button[data-quiet], .btn-ghost) { border-color: transparent; background: transparent; }
-  #|:is(.sf-button[data-quiet], .btn-ghost):hover:not(:disabled) { background: var(--sf-hover); }
-  #|.btn.is-selected { border-color: var(--sf-ink); box-shadow: inset 0 0 0 .5px var(--sf-ink); }
-  #|:is(.sf-button[data-small], .btn-sm) { height: 26px; padding: 0 10px; font-size: var(--sf-text-meta); }
-  #|
-  #|/* ── A segmented choice (tabs, a pick of a few) ─────────────────────────────────────────────── */
-  #|.sf-segmented, .nav-pills {
-  #|  display: inline-flex; align-self: flex-start; width: fit-content; max-width: 100%; gap: 2px; padding: 3px; margin: 0;
-  #|  border-radius: 999px; background: color-mix(in srgb, var(--sf-ink) 6%, transparent); list-style: none;
-  #|}
-  #|.nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
-  #|.nav.nav-pills { display: inline-flex; flex-wrap: nowrap; gap: 2px; padding: 3px; }
-  #|.nav-justified { display: flex; width: auto; }
-  #|.nav-justified > * { flex: 1; }
-  #|.sf-segment, .nav-link {
-  #|  display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 12px; border: 0;
-  #|  border-radius: 999px; background: none; color: var(--sf-muted); font: inherit; font-size: var(--sf-text-ui);
-  #|  white-space: nowrap; cursor: pointer; transition: color var(--sf-dur) var(--sf-ease);
-  #|}
-  #|:is(.sf-segment, .nav-link):hover { color: var(--sf-ink); text-decoration: none; }
-  #|:is(.sf-segment, .nav-link):is([aria-selected="true"], .is-selected, .active) { color: var(--sf-ink); font-weight: 500; }
-  #|:is(.sf-segmented, .nav-pills) :is(.sf-segment, .nav-link):is([aria-selected="true"], .is-selected, .active) {
-  #|  background: var(--sf-lifted); box-shadow: 0 0 2px var(--sf-shadow), 0 0 0 .5px var(--sf-line);
-  #|}
-  #|
-  #|/* ── Forms ────────────────────────────────────────────────────────────────────────── */
-  #|.form-label, .sf-label { display: block; margin-bottom: 4px; color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|.form-control, .form-select, .sf-input, .sf-select {
-  #|  width: 100%; min-height: 36px; padding: 7px 16px; border: 1px solid var(--sf-line-strong); border-radius: 999px;
-  #|  background: var(--sf-field); color: var(--sf-ink); font: inherit; font-size: var(--sf-text-body);
-  #|}
-  #|textarea:is(.form-control, .sf-input) { min-height: 72px; padding: 8px 12px; border-radius: var(--sf-r-field); corner-shape: var(--sf-corner-shape); resize: vertical; }
-  #|:is(.form-control, .form-select, .sf-input, .sf-select):is(:hover, :focus) { border-color: var(--e-field-hover, var(--sf-muted)); outline: none; }
-  #|.form-check, .sf-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--sf-text-ui); cursor: pointer; }
-  #|.form-check-input, .sf-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--sf-accent); }
-  #|.form-check-label { cursor: pointer; }
-  #|.form-switch .form-check-input { width: 28px; }
-  #|.form-range { width: 100%; accent-color: var(--sf-accent); }
-  #|.form-control-color { width: 34px; height: 34px; padding: 2px; border: 1px solid var(--sf-line-strong); border-radius: var(--sf-r-small); background: none; }
-  #|
-  #|/* ── Charts (sf-chart): coordinate lines only, labels quiet, series by colour and legend ─ */
-  #|sf-chart { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  #|sf-chart svg { display: block; width: 100%; overflow: visible; }
-  #|.sf-chart-grid { stroke: var(--sf-line); stroke-width: 1; }
-  #|.sf-chart-axis { fill: var(--sf-muted); font-size: var(--sf-text-caption); }
-  #|.sf-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--sf-muted); font-size: var(--sf-text-meta); line-height: var(--sf-leading-meta); }
-  #|.sf-chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
-  #|.sf-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
-  #|.sf-chart-donut { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
-  #|.sf-chart-donut svg { width: 140px; height: 140px; flex: none; }
-  #|.sf-chart-donut .sf-chart-legend { flex-direction: column; flex: 1; min-width: 140px; font-size: var(--sf-text-ui); line-height: var(--sf-leading-ui); color: var(--sf-ink); }
-  #|.sf-chart-donut .sf-chart-legend > span { justify-content: space-between; gap: 12px; }
-  #|.sf-chart-donut .sf-chart-legend b { font-weight: 400; color: var(--sf-muted); }
-  #|.sf-chart-center { fill: var(--sf-ink); font-size: var(--sf-text-title); font-weight: 600; }
-  #|.sf-hit { cursor: default; }
-  #|.sf-hit:hover { opacity: .8; }
+  #|/* ── Charts (<viz-chart>, <viz-spark>): grid lines only, labels quiet, one measure in ink ─ */
+  #|.widget > :is(h1, h2, h3) + :is(viz-chart, svg, .table-responsive, .viz-flow) { margin-top: -8px; }
+  #|viz-chart { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  #|viz-chart svg { display: block; width: 100%; overflow: visible; }
+  #|viz-spark { display: inline-flex; vertical-align: middle; }
+  #|.viz-chart-title { font-weight: 600; }
+  #|.viz-chart-grid { stroke: var(--border); stroke-width: 1; }
+  #|.viz-chart-axis { fill: var(--muted-foreground); font-size: var(--font-size-caption); }
+  #|.viz-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted-foreground); font-size: var(--font-size-small); line-height: var(--line-height-small); }
+  #|.viz-chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+  #|.viz-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
+  #|.viz-chart-donut { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+  #|.viz-chart-donut svg { width: 140px; height: 140px; flex: none; }
+  #|.viz-chart-donut .viz-chart-legend { flex-direction: column; flex: 1; min-width: 140px; color: var(--foreground); font-size: var(--font-size-ui); line-height: var(--line-height-ui); }
+  #|.viz-chart-donut .viz-chart-legend > span { justify-content: space-between; gap: 12px; }
+  #|.viz-chart-donut .viz-chart-legend b { color: var(--muted-foreground); font-weight: 400; }
+  #|.viz-chart-center { fill: var(--foreground); font-size: var(--font-size-h1); font-weight: 600; }
+  #|.viz-hbars { display: grid; grid-template-columns: minmax(0, max-content) minmax(60px, 1fr) max-content; gap: 8px 12px; align-items: center; font-size: var(--font-size-ui); line-height: var(--line-height-ui); }
+  #|.viz-bar-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #|.viz-bar-track { height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  #|.viz-bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--viz-series-1); }
+  #|.viz-bar-value { color: var(--muted-foreground); text-align: right; }
+  #|.viz-hit:hover { opacity: .8; }
   #|
   #|/* The tooltip the frame draws for any element with data-tooltip (see bridge.js). */
-  #|.viz-tooltip {
-  #|  position: fixed; z-index: 10; max-width: 240px; padding: 5px 8px; border-radius: var(--sf-r-small);
-  #|  background: var(--sf-primary); color: var(--sf-on-primary); font-size: var(--sf-text-meta); line-height: 1.4;
+  #|.viz-tooltip, .tooltip {
+  #|  position: fixed; z-index: 10; max-width: 240px; padding: 5px 8px; border-radius: var(--radius-sm);
+  #|  background: var(--popover); color: var(--popover-foreground); font-size: var(--font-size-small); line-height: 1.4;
   #|  white-space: pre-line; pointer-events: none;
   #|}
-  #|
-  #|/* ── Trends ───────────────────────────────────────────────────────────────────────── */
-  #|sf-spark { display: inline-flex; vertical-align: middle; }
-  #|.sf-spark { display: block; overflow: visible; }
-  #|.sf-stat-trend { margin-top: 6px; }
-  #|.sf-stat-trend .sf-spark { width: 100%; }
-  #|.sf-delta { color: var(--sf-muted); font-weight: 500; }
-  #|.sf-delta[data-tone="good"] { color: var(--sf-green); }
-  #|.sf-delta[data-tone="bad"] { color: var(--sf-red); }
 
 ///|
 /// web/src/viz/bridge.js, as it is.
@@ -477,18 +423,15 @@ pub let viz_bridge : String =
 /// web/src/viz/components.js, as it is.
 // kept across runs: a file's words, never written
 pub let viz_components : String =
-  #|// still.fail's components for inline visualizations: a few atoms (a card, a number, a status, a button, a progress
-  #|// bar) and charts drawn from the data an agent gives them, in still.fail's look (ember-viz.css styles them and gives
-  #|// the design tokens); the rest is written with the tokens. Runs in every
-  #|// fragment's frame after the bridge (Viz.tsx, the app's viz_file.mbt). How agents use them:
-  #|// station/src/skills/stillfail-viz.md. Plain custom elements without a shadow root: the stylesheet and the theme's
-  #|// tokens reach what they draw, and charts drawn with var(--sf-…) follow the theme without being drawn again.
+  #|// What inline visualizations get beside the stylesheet (Viz.tsx, the app's viz_file.mbt), as Codex's visualize plugin
+  #|// gives its own: tabs (.nav[role="tablist"]) switched by themselves, Lucide icons (data-lucide), and still.fail's
+  #|// charts, <viz-chart> and <viz-spark>, drawn from the data an agent gives them in the theme's colours (var(--…), so they
+  #|// follow it without being drawn again). How agents use them: station/src/skills/stillfail-viz.md.
   #|(() => {
   #|  const NS = "http://www.w3.org/2000/svg";
   #|  const TONE_INK = {
-  #|    ok: "--sf-green", green: "--sf-green", busy: "--sf-amber", warn: "--sf-amber", amber: "--sf-amber",
-  #|    error: "--sf-red", red: "--sf-red", info: "--sf-blue", blue: "--sf-blue", purple: "--sf-purple", off: "--sf-muted",
-  #|    ink: "--sf-ink", muted: "--sf-muted",
+  #|    green: "--green", ok: "--green", yellow: "--yellow", amber: "--yellow", warn: "--yellow", red: "--red", error: "--red",
+  #|    blue: "--blue", info: "--blue", purple: "--purple", orange: "--orange", ink: "--foreground", muted: "--muted-foreground",
   #|  };
   #|
   #|  /** An element: tag (with .classes), attributes (on* are listeners), children (strings are text). */
@@ -513,7 +456,7 @@ pub let viz_components : String =
   #|  };
   #|  /** Puts what is given in place of an element's children, leaving out what is not there. */
   #|  const put = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== undefined && k !== null && k !== false && k !== ""));
-  #|  const ink = (tone, i = 0) => `var(${TONE_INK[tone] ?? `--sf-series-${(i % 6) + 1}`})`;
+  #|  const ink = (tone, i = 0) => `var(${TONE_INK[tone] ?? `--viz-series-${(i % 6) + 1}`})`;
   #|
   #|  /** The element's data: its `data` attribute, else a <script type="application/json"> inside it. */
   #|  const dataOf = (el) => {
@@ -522,7 +465,7 @@ pub let viz_components : String =
   #|    try {
   #|      return JSON.parse(raw);
   #|    } catch (e) {
-  #|      put(el, h("sf-note", {}, `${el.localName}: its data is not JSON (${e.message})`));
+  #|      put(el, h("p.text-small.text-muted", {}, `${el.localName}: its data is not JSON (${e.message})`));
   #|      return undefined;
   #|    }
   #|  };
@@ -539,7 +482,7 @@ pub let viz_components : String =
   #|        try {
   #|          this.draw();
   #|        } catch (e) {
-  #|          put(this, h("sf-note", {}, `${this.localName}: ${e.message}`));
+  #|          put(this, h("p.text-small.text-muted", {}, `${this.localName}: ${e.message}`));
   #|          postMessage({ emberViz: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
   #|        }
   #|      };
@@ -550,92 +493,24 @@ pub let viz_components : String =
   #|  }
   #|  const define = (name, cls) => { if (!customElements.get(name)) customElements.define(name, cls); };
   #|
-  #|  // ── Card: a ground with a title ─────────────────────────────────────────────────────
-  #|  define("sf-card", class extends Base {
-  #|    draw() {
-  #|      const title = this.getAttribute("title");
-  #|      const note = this.getAttribute("note");
-  #|      if (title || note) {
-  #|        this.removeAttribute("title"); // not a tooltip
-  #|        this.prepend(h("div.sf-head", {}, title && h("div.sf-title", {}, title), note && h("div.sf-sub", {}, note)));
-  #|      }
-  #|    }
-  #|  });
-  #|
   #|  /** A small line of values (a trend), as wide as it is given, in ink. */
   #|  const spark = (values, { w = 80, hgt = 22, tone } = {}) => {
   #|    const vs = values.map(num).filter(Number.isFinite);
-  #|    const svg = s("svg", { class: "sf-spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", width: w, height: hgt });
+  #|    const svg = s("svg", { class: "viz-spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", width: w, height: hgt });
   #|    if (vs.length < 2) return svg;
   #|    const lo = Math.min(...vs), hi = Math.max(...vs) === lo ? lo + 1 : Math.max(...vs);
   #|    const pts = vs.map((v, i) => `${(i / (vs.length - 1)) * w},${2 + (1 - (v - lo) / (hi - lo)) * (hgt - 4)}`);
-  #|    svg.append(s("polyline", { points: pts.join(" "), fill: "none", stroke: tone ? ink(tone) : "var(--sf-ink)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
+  #|    svg.append(s("polyline", { points: pts.join(" "), fill: "none", stroke: tone ? ink(tone) : "var(--viz-series-1)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
   #|    return svg;
   #|  };
   #|  const listOf = (raw) => { try { return JSON.parse(raw); } catch { return String(raw).split(/[\s,]+/).filter(Boolean); } };
   #|
-  #|  // ── A number with its label ─────────────────────────────────────────────────────────
-  #|  define("sf-stat", class extends Base {
-  #|    draw() {
-  #|      const value = this.getAttribute("value") ?? this.textContent.trim();
-  #|      const tone = this.getAttribute("tone");
-  #|      const note = this.getAttribute("note");
-  #|      const delta = this.getAttribute("delta");
-  #|      const trend = this.getAttribute("trend");
-  #|      put(this,
-  #|        h("span.sf-stat-label", {}, this.getAttribute("label") ?? ""),
-  #|        h("span.sf-stat-value", {}, /^[\s+\-]*[\d.,]+$/.test(value) && Number.isFinite(num(value)) ? fmt(num(value)) : value, this.hasAttribute("unit") && h("span.sf-stat-unit", {}, this.getAttribute("unit"))),
-  #|        (note || delta) && h("span.sf-stat-note", {},
-  #|          tone && h("i.sf-dot", { "data-tone": tone }),
-  #|          delta && h("span.sf-delta", { "data-tone": this.getAttribute("delta-tone") ?? undefined }, /^[+]/.test(delta) ? `↑ ${delta.slice(1)}` : /^[-−]/.test(delta) ? `↓ ${delta.slice(1)}` : delta),
-  #|          note && h("span", { style: tone && tone !== "off" ? `color:${ink(tone)}` : undefined }, note)),
-  #|        trend && h("span.sf-stat-trend", {}, spark(listOf(trend), { w: 120, hgt: 28, tone: tone && tone !== "off" ? tone : undefined })),
-  #|      );
-  #|    }
-  #|  });
-  #|
-  #|  // ── Status: a dot and words ─────────────────────────────────────────────────────────
-  #|  define("sf-status", class extends Base {
-  #|    draw() {
-  #|      this.prepend(h("i.sf-dot", { "data-tone": this.getAttribute("tone") ?? this.getAttribute("state") ?? "" }));
-  #|    }
-  #|  });
-  #|  define("sf-spark", class extends Base {
+  #|  define("viz-spark", class extends Base {
   #|    draw() {
   #|      put(this, spark(listOf(this.getAttribute("data") ?? this.textContent), { w: num(this.getAttribute("width")) || 80, hgt: num(this.getAttribute("height")) || 20, tone: this.getAttribute("tone") ?? undefined }));
   #|    }
   #|  });
   #|
-  #|
-  #|  // ── Progress ────────────────────────────────────────────────────────────────────────
-  #|  define("sf-progress", class extends Base {
-  #|    draw() {
-  #|      const value = num(this.getAttribute("value")) || 0;
-  #|      const max = num(this.getAttribute("max")) || 100;
-  #|      const share = Math.max(0, Math.min(1, value / max));
-  #|      const label = this.getAttribute("label");
-  #|      const said = this.getAttribute("note") ?? (max === 100 ? `${fmt(value, 1)}%` : `${fmt(value)} / ${fmt(max)}`);
-  #|      put(this, 
-  #|        (label || said) && h("div.sf-progress-head", {}, h("span", {}, label ?? ""), h("span", {}, said)),
-  #|        h("div.sf-progress-track", { role: "progressbar", "aria-valuenow": value, "aria-valuemax": max }, h("div.sf-progress-fill", { style: `width:${share * 100}%` })),
-  #|      );
-  #|    }
-  #|  });
-  #|
-  #|
-  #|  // ── Things to send: what is clicked goes into the chat's composer for the person to send ───────────────────
-  #|  const send = (prompt) => window.ember?.sendFollowUpMessage({ prompt }).catch(() => {});
-  #|
-  #|  define("sf-button", class extends Base {
-  #|    draw() {
-  #|      const words = this.getAttribute("send");
-  #|      const b = h("button.sf-button", {
-  #|        type: "button", "data-primary": this.hasAttribute("primary") || undefined, "data-quiet": this.hasAttribute("quiet") || undefined,
-  #|        "data-small": this.hasAttribute("small") || undefined, onclick: words ? () => send(words) : undefined,
-  #|      }, ...this.childNodes);
-  #|      put(this, b);
-  #|    }
-  #|  });
   #|
   #|  // ── Charts ──────────────────────────────────────────────────────────────────────────
   #|  /** Round steps for an axis from 0 (or the least, when below it) to the most. */
@@ -655,7 +530,7 @@ pub let viz_components : String =
   #|    return a >= 1e9 ? `${fmt(n / 1e9, 1)}B` : a >= 1e6 ? `${fmt(n / 1e6, 1)}M` : a >= 1e4 ? `${fmt(n / 1e3, 1)}k` : fmt(n);
   #|  };
   #|
-  #|  define("sf-chart", class extends Base {
+  #|  define("viz-chart", class extends Base {
   #|    draw() {
   #|      const d = dataOf(this);
   #|      if (!d) return;
@@ -688,8 +563,8 @@ pub let viz_components : String =
   #|      const Y = (v) => top + plotH - ((v - y0) / (y1 - y0)) * plotH;
   #|      const svg = s("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
   #|      for (const v of ys) {
-  #|        svg.append(s("line", { class: "sf-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }));
-  #|        svg.append(s("text", { class: "sf-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
+  #|        svg.append(s("line", { class: "viz-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }));
+  #|        svg.append(s("text", { class: "viz-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
   #|      }
   #|      const n = Math.max(1, labels.length);
   #|      const band = plotW / n;
@@ -697,7 +572,7 @@ pub let viz_components : String =
   #|      labels.forEach((l, i) => {
   #|        if (i % every) return;
   #|        const x = type === "bar" ? left + band * (i + .5) : left + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
-  #|        svg.append(s("text", { class: "sf-chart-axis", x, y: height - 6, "text-anchor": n > 1 && type !== "bar" && i === 0 ? "start" : n > 1 && type !== "bar" && i === n - 1 ? "end" : "middle" }, l));
+  #|        svg.append(s("text", { class: "viz-chart-axis", x, y: height - 6, "text-anchor": n > 1 && type !== "bar" && i === 0 ? "start" : n > 1 && type !== "bar" && i === n - 1 ? "end" : "middle" }, l));
   #|      });
   #|      const tip = (i, sr, v) => `${labels[i] ?? ""}${sr.name ? ` · ${sr.name}` : ""}: ${fmt(v)}${unit}`;
   #|      if (type === "bar") {
@@ -718,7 +593,7 @@ pub let viz_components : String =
   #|            const path = top_ && hgt > r
   #|              ? `M${x},${ya + hgt}V${ya + r}Q${x},${ya} ${x + r},${ya}H${x + w - r}Q${x + w},${ya} ${x + w},${ya + r}V${ya + hgt}Z`
   #|              : `M${x},${ya}h${w}v${hgt}h${-w}Z`;
-  #|            svg.append(s("path", { d: path, fill: sr.color, class: "sf-hit", "data-tooltip": tip(i, sr, v) }));
+  #|            svg.append(s("path", { d: path, fill: sr.color, class: "viz-hit", "data-tooltip": tip(i, sr, v) }));
   #|          });
   #|        });
   #|      } else {
@@ -736,22 +611,22 @@ pub let viz_components : String =
   #|          });
   #|        });
   #|      }
-  #|      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color}` }), sr.name)));
+  #|      const legend = series.length > 1 && h("div.viz-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color}` }), sr.name)));
   #|      put(this, this.title_(), svg, legend);
   #|    }
   #|    title_() {
   #|      const t = this.getAttribute("title");
   #|      if (t) this.setAttribute("data-title", t), this.removeAttribute("title");
   #|      const said = this.getAttribute("data-title");
-  #|      return said && h("div.sf-title", {}, said);
+  #|      return said && h("div.viz-chart-title", {}, said);
   #|    }
   #|    hbar(d, unit) {
   #|      const items = d.items ?? (d.labels ?? []).map((l, i) => ({ label: l, value: (d.values ?? [])[i] }));
   #|      const max = num(this.getAttribute("max")) || Math.max(0, ...items.map((it) => num(it.value) || 0)) || 1;
-  #|      put(this, this.title_(), h("div.sf-hbars", {}, items.map((it, i) => [
-  #|        h("span.sf-bar-label", {}, it.label),
-  #|        h("span.sf-bar-track", {}, h("span.sf-bar-fill", { style: `width:${Math.max(0, Math.min(100, ((num(it.value) || 0) / max) * 100))}%;background:${it.tone ? ink(it.tone) : "var(--sf-ink)"}`, "data-tooltip": `${it.label}: ${fmt(num(it.value))}${unit}` })),
-  #|        h("span.sf-bar-value", {}, it.note ?? `${fmt(num(it.value))}${unit}`),
+  #|      put(this, this.title_(), h("div.viz-hbars", {}, items.map((it, i) => [
+  #|        h("span.viz-bar-label", {}, it.label),
+  #|        h("span.viz-bar-track", {}, h("span.viz-bar-fill", { style: `width:${Math.max(0, Math.min(100, ((num(it.value) || 0) / max) * 100))}%;background:${it.tone ? ink(it.tone) : "var(--viz-series-1)"}`, "data-tooltip": `${it.label}: ${fmt(num(it.value))}${unit}` })),
+  #|        h("span.viz-bar-value", {}, it.note ?? `${fmt(num(it.value))}${unit}`),
   #|      ])));
   #|    }
   #|    scatter(d, unit, width) {
@@ -766,14 +641,14 @@ pub let viz_components : String =
   #|      const X = (v) => left + ((v - xs[0]) / (xs[xs.length - 1] - xs[0])) * pw;
   #|      const Y = (v) => top + ph - ((v - ys[0]) / (ys[ys.length - 1] - ys[0])) * ph;
   #|      const svg = s("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
-  #|      for (const v of ys) svg.append(s("line", { class: "sf-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }), s("text", { class: "sf-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
-  #|      for (const v of xs) svg.append(s("text", { class: "sf-chart-axis", x: X(v), y: height - 6, "text-anchor": "middle" }, short(v) + xunit));
+  #|      for (const v of ys) svg.append(s("line", { class: "viz-chart-grid", x1: left, x2: width - right, y1: Y(v), y2: Y(v) }), s("text", { class: "viz-chart-axis", x: left - 8, y: Y(v), "text-anchor": "end", "dominant-baseline": "middle" }, short(v) + unit));
+  #|      xs.forEach((v, i) => svg.append(s("text", { class: "viz-chart-axis", x: X(v), y: height - 6, "text-anchor": i === 0 ? "start" : i === xs.length - 1 ? "end" : "middle" }, short(v) + xunit)));
   #|      series.forEach((sr) => sr.points.forEach((p) => {
   #|        const x = num(p[0] ?? p.x), y = num(p[1] ?? p.y);
   #|        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-  #|        svg.append(s("circle", { cx: X(x), cy: Y(y), r: 4, fill: sr.color, "fill-opacity": .85, class: "sf-hit", "data-tooltip": `${p.label ?? p[2] ?? (sr.name || "")}${p.label || p[2] || sr.name ? ": " : ""}${fmt(x)}${xunit}, ${fmt(y)}${unit}` }));
+  #|        svg.append(s("circle", { cx: X(x), cy: Y(y), r: 4, fill: sr.color, "fill-opacity": .85, class: "viz-hit", "data-tooltip": `${p.label ?? p[2] ?? (sr.name || "")}${p.label || p[2] || sr.name ? ": " : ""}${fmt(x)}${xunit}, ${fmt(y)}${unit}` }));
   #|      }));
-  #|      const legend = series.length > 1 && h("div.sf-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color};border-radius:50%` }), sr.name)));
+  #|      const legend = series.length > 1 && h("div.viz-chart-legend", {}, series.map((sr) => h("span", {}, h("i", { style: `background:${sr.color};border-radius:50%` }), sr.name)));
   #|      put(this, this.title_(), svg, legend);
   #|    }
   #|    donut(d, unit) {
@@ -793,15 +668,55 @@ pub let viz_components : String =
   #|        const d_ = span >= Math.PI * 2 - 1e-6
   #|          ? `M${c - R},${c}a${R},${R} 0 1,0 ${R * 2},0a${R},${R} 0 1,0 ${-R * 2},0${r ? `M${c - r},${c}a${r},${r} 0 1,1 ${r * 2},0a${r},${r} 0 1,1 ${-r * 2},0` : ""}Z`
   #|          : `M${p(R, a + gap)}A${R},${R} 0 ${big},1 ${p(R, b - gap)}${r ? `L${p(r, b - gap)}A${r},${r} 0 ${big},0 ${p(r, a + gap)}` : `L${c},${c}`}Z`;
-  #|        svg.append(s("path", { d: d_, fill: color, "fill-rule": "evenodd", class: "sf-hit", "data-tooltip": `${it.label}: ${fmt(v)}${unit} (${fmt((v / total) * 100, 1)}%)` }));
+  #|        svg.append(s("path", { d: d_, fill: color, "fill-rule": "evenodd", class: "viz-hit", "data-tooltip": `${it.label}: ${fmt(v)}${unit} (${fmt((v / total) * 100, 1)}%)` }));
   #|        it.color = color;
   #|        a = b;
   #|      });
   #|      const center = this.getAttribute("center");
-  #|      if (r && center !== "") svg.append(s("text", { class: "sf-chart-center", x: c, y: c, "text-anchor": "middle", "dominant-baseline": "central" }, center ?? `${short(total)}${unit}`));
-  #|      const legend = h("div.sf-chart-legend", {}, items.map((it) => h("span", {}, h("span", { style: "display:inline-flex;align-items:center;gap:6px" }, h("i", { style: `background:${it.color}` }), it.label), h("b", {}, `${fmt(num(it.value))}${unit}`))));
-  #|      put(this, this.title_(), h("div.sf-chart-donut", {}, svg, legend));
+  #|      if (r && center !== "") svg.append(s("text", { class: "viz-chart-center", x: c, y: c, "text-anchor": "middle", "dominant-baseline": "central" }, center ?? `${short(total)}${unit}`));
+  #|      const legend = h("div.viz-chart-legend", {}, items.map((it) => h("span", {}, h("span", { style: "display:inline-flex;align-items:center;gap:6px" }, h("i", { style: `background:${it.color}` }), it.label), h("b", {}, `${fmt(num(it.value))}${unit}`))));
+  #|      put(this, this.title_(), h("div.viz-chart-donut", {}, svg, legend));
   #|    }
+  #|  });
+  #|
+  #|  // ── Tabs: a .nav[role="tablist"] of [role="tab"] buttons shows the panel its chosen one names ──────────────────
+  #|  const TAB = '.nav[role="tablist"] [role="tab"]';
+  #|  const pick = (tab) => {
+  #|    for (const t of tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')) {
+  #|      const on = t === tab;
+  #|      t.classList.toggle("active", on);
+  #|      t.setAttribute("aria-selected", String(on));
+  #|      const panel = t.getAttribute("aria-controls") && document.getElementById(t.getAttribute("aria-controls"));
+  #|      if (panel) panel.hidden = !on && t.getAttribute("aria-controls") !== tab.getAttribute("aria-controls");
+  #|    }
+  #|  };
+  #|  addEventListener("click", (e) => {
+  #|    const tab = e.target?.closest?.(TAB);
+  #|    if (tab && !e.defaultPrevented && !tab.matches(':disabled,[aria-disabled="true"]')) pick(tab);
+  #|  });
+  #|  addEventListener("keydown", (e) => {
+  #|    const tab = e.target?.closest?.(TAB);
+  #|    if (!tab) return;
+  #|    const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')].filter((t) => !t.matches(':disabled,[aria-disabled="true"]'));
+  #|    const at = tabs.indexOf(tab);
+  #|    const to = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  #|    if (to === undefined) return;
+  #|    e.preventDefault();
+  #|    const next = tabs[(to + tabs.length) % tabs.length];
+  #|    next.focus();
+  #|    pick(next);
+  #|  });
+  #|
+  #|  // ── Icons: <i data-lucide="name">, drawn once Lucide has come (from a CDN the frame may load) ──────────────────
+  #|  const icons = () => globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  #|  addEventListener("DOMContentLoaded", () => {
+  #|    for (const list of document.querySelectorAll('.nav[role="tablist"]')) {
+  #|      const tab = list.querySelector('[role="tab"][aria-selected="true"]') ?? list.querySelector('[role="tab"].active') ?? list.querySelector('[role="tab"]');
+  #|      if (tab) pick(tab);
+  #|    }
+  #|    if (!document.querySelector("[data-lucide]")) return;
+  #|    if (globalThis.lucide) return icons();
+  #|    document.head.append(Object.assign(document.createElement("script"), { src: "https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js", onload: icons }));
   #|  });
   #|})();
 
