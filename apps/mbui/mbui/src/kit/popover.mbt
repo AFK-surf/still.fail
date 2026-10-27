@@ -299,11 +299,8 @@ fn beside(
       match anchor_of(c, pid, anchor) {
         Some(r) => r
         // (by nothing drawn yet: a trigger come this frame, the keyboard's focus put on it as it came; shown by it the
-        // next frame, where it was drawn, never by the window's corner)
-        None => {
-          c.request_frame()
-          return
-        }
+        // next frame, where it was drawn, never by the window's corner; that frame is its coming's, `shows`)
+        None => return
       }
   }
   let went = went_side(c, pid, ar, side, along, offset)
