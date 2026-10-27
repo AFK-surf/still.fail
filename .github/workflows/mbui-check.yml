@@ -35,15 +35,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # (the app part on four runners, APP_GROUP: its runs on one runner's four cores were 188 s, each of its sweeps
+        # (the app part on five runners, APP_GROUP: its runs on one runner's four cores were 188 s, each of its sweeps
         # slowed by the eight beside it, and the job 250-330 s with its build; scripts/test.sh app_group_of says which is
         # where. Each builds sfapp's program itself; the first the small packages' too, its units kept apart from the other three's,
         # which take its when they have none of their own yet)
         include:
-          - { part: app, group: 1/4, store: app }
-          - { part: app, group: 2/4, store: app-sfapp }
-          - { part: app, group: 3/4, store: app-sfapp }
-          - { part: app, group: 4/4, store: app-sfapp }
+          - { part: app, group: 1/5, store: app }
+          - { part: app, group: 2/5, store: app-sfapp }
+          - { part: app, group: 3/5, store: app-sfapp }
+          - { part: app, group: 4/5, store: app-sfapp }
+          - { part: app, group: 5/5, store: app-sfapp }
           - { part: replay, group: "", store: replay }
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store

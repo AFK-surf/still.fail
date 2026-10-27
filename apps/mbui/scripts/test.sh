@@ -134,27 +134,23 @@ for t in ${TARGETS:-native}; do
       done
     fi
   fi
-  # Which of APP_GROUP's n runners a run is on (k of 1..n). Four (check-mbui's): each two or three of the runs that
-  # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
-  # 187 and 147, the pages' 174, contrast's 117, screens' 77, squeeze_said's 49, the packages' 10, all nine at once:
-  # the part's run 188 s). Alone on four runners (40425191188) corners in Chinese was 92 s, every other run 52 s or less:
-  # its press's room and contrast a third corners run since, on the first: on the fourth beside the pages and contrast,
-  # the three slowed each other to 85, 81 and 38 s while the first ran 38 (adb-card-direct, 40430050749). A run named
-  # nowhere here is the first's, never left out. (Screens' then on the second: beside both Chinese corners runs on the
-  # first it slowed them to 74 and 62 s, the second running 37, 40430734093.)
+  # Which of APP_GROUP's n runners a run is on (k of 1..n). Five (check-mbui's), each one sweep that takes most of a
+  # minute alone, with a short run or two beside it: two such sweeps on one runner's four cores each took 1.5 times as
+  # long (the two Chinese corners runs 77 s each, the pages 85 beside contrast's 46, against 44-48 alone: main b4967703,
+  # 40442058817; before, on one runner, all nine at once 188 s). A run named nowhere here is the first's, never left out.
   app_group_of() {
     local n=$1
     shift
-    if [ "$n" != 4 ]; then echo 1; return; fi
+    if [ "$n" != 5 ]; then echo 1; return; fi
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 1 ;;
-      "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
-      "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
+      "src/sfapp/corners_wbtest.mbt --index 1-"*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
-      "src/sfapp/contrast_wbtest.mbt  ") echo 4 ;;
+      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 5 ;;
+      "src/sfapp/contrast_wbtest.mbt  ") echo 5 ;;
+      "src/sfapp/screens_wbtest.mbt  ") echo 5 ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
   }
