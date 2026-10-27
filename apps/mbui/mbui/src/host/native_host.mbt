@@ -16,6 +16,16 @@ impl @hostapi.Host for Native with window_setup(_, min_w, min_h, w, h, inset) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_hold(_) {
+  ffi_window_hold()
+}
+
+///|
+impl @hostapi.Host for Native with window_show(_) {
+  ffi_window_show()
+}
+
+///|
 impl @hostapi.Host for Native with window_inset(_) {
   window_inset()
 }

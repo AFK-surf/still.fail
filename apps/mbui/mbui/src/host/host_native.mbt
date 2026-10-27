@@ -233,6 +233,12 @@ extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : D
 extern "C" fn ffi_window_inset() -> Int = "mb_host_window_inset"
 
 ///|
+extern "C" fn ffi_window_hold() -> Unit = "mb_host_window_hold"
+
+///|
+extern "C" fn ffi_window_show() -> Unit = "mb_host_window_show"
+
+///|
 extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
 
 ///|

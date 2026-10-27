@@ -126,6 +126,7 @@ static void paste_now(int mods) {
 }
 
 static void run_script_step(int step);
+static void window_shown_now(void);
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
@@ -300,6 +301,7 @@ static double record_t0 = -1;
   building_for = -1;
   [CATransaction commit];
   in_app_frame = NO;
+  window_shown_now();
 }
 
 // A frame drawn now and shown with the change of the window's that called for it (its size: a resize, going in and out
@@ -996,6 +998,26 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   setup_w = w;
   setup_h = h;
   setup_inset = inset;
+}
+
+// The window held out of sight as it opens (@hostapi.window_hold): put on the screen as the others are, so that its
+// display link ticks and the app draws into it, but see-through and taking no clicks till the app shows it
+// (mb_host_window_show): it comes up with the app's page drawn, not with its ground for the page's first moments.
+// Asked in a frame, it is shown as that frame ends (drawFrame: window_shown_now), the frame on it.
+static BOOL window_held, window_shown, window_to_show;
+
+void mb_host_window_hold(void) { window_held = YES; }
+
+void mb_host_window_show(void) {
+  if (window_held && !window_shown) window_to_show = YES;
+}
+
+static void window_shown_now(void) {
+  NSWindow *w = the_view.window;
+  if (!window_to_show || window_shown || !w) return;
+  window_shown = YES;
+  w.ignoresMouseEvents = NO;
+  w.alphaValue = 1;
 }
 
 // Whether the window's buttons are in the app's top row now (an inset window, not full screen nor going there).
@@ -1706,6 +1728,11 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                                 [the_view magnifyWithEvent:e];
                                                                 return nil;
                                                               }];
+    // (held: out of sight till the app shows it, mb_host_window_show)
+    if (window_held && !window_shown) {
+      w.alphaValue = 0;
+      w.ignoresMouseEvents = YES;
+    }
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     // full screen from as the system starts taking the window there, a window from as it starts bringing it back

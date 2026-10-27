@@ -1275,6 +1275,10 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
 
 // The window as the app wants it, asked before `run` (@hostapi.window_setup): with `inset`, no title bar of the
 // system's (WM_NCCALCSIZE), the app's top row is it, its buttons the app's.
+// The window held till the app shows it (@hostapi.window_hold): the system shows the app's own here, as it opens.
+void mb_host_window_hold(void) {}
+void mb_host_window_show(void) {}
+
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   setup_inset = inset != 0;
   setup_min_w = min_w;
