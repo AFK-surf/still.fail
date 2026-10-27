@@ -66,3 +66,26 @@ test "strata: a modal layer over all of the page, what is held over its scrim an
   t.frame()
   assert_true(painted_in_order([(50.0, 30.0), (70.0, 40.0), (400.0, 300.0), (40.0, 25.0), (100.0, 100.0)]))
 }
+
+///|
+test "strata: what is over the layers over a layer opened over the page, built before it or not" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(w=Px(90.0), h=Px(90.0), bg=0x336699FFL, fn() {  }) |> ignore
+        let bar = c.layer(fn() { c.box(w=Px(70.0), h=Px(40.0), bg=0x669933FFL, fn() {  }) |> ignore })
+        c.stratum(bar, Bar)
+        c.stratum(bar, OverLayers)
+        c.overlay("viewer", modal=true, fn() {
+          c.box(w=Px(100.0), h=Px(100.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.frame()
+  assert_true(painted_in_order([(90.0, 90.0), (100.0, 100.0), (70.0, 40.0)]))
+}

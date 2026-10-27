@@ -430,6 +430,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.paint_raised()
   c.paint_over_cover()
   c.raise_tops()
+  // (what is over everything, the layers over the page too)
+  c.paint_over_layers()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()

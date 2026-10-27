@@ -1638,6 +1638,20 @@ pub fn Tester::images_kept(self : Tester) -> Int {
 }
 
 ///|
+/// Every instance drawn in the last frame in the order drawn (later over earlier): its kind (0 a rect, 4 an image…),
+/// x, y, w, h and opacity.
+pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    out.push((c.inst[b + 5].to_int(), c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 11]))
+  }
+  out
+}
+
+///|
 /// The image instances drawn in the last frame: (x, y, w, h, u0, v0, du,
 /// dv, opacity).
 pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {

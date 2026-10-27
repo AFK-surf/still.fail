@@ -77,6 +77,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         chat_talk(c, src, w, r, pane, fn() {
           let bar = c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) })
           c.stratum(bar, Bar)
+          over_flight(c, bar)
           match view {
             Some(v) => bar_popovers(c, src, w, r, v, chat)
             None => ()
