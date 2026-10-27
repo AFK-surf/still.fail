@@ -1,5 +1,5 @@
 #!/bin/bash
-# A Tester's draw list (kitdemo's controls page over mini1's kept text, src/kitdemo/gallery/dl_print_wbtest.mbt) drawn
+# The references' draw list (goldens/render/controls.dl, kept: scripts/render_dl.sh) drawn
 # offscreen by mbui-render (src/render), no window: the picture and its md5, and the machine it was drawn on.
 # And a rounded clip's two draw lists (clip-cut, clip-box) drawn so, the same picture to the byte.
 #   scripts/render_offscreen.sh        out/render/{controls.dl,controls.png,clip-*.{dl,png},machine.txt}
@@ -9,9 +9,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
 O=out/render
 rm -rf $O; mkdir -p $O
-MBUI_DL_PRINT=1 moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
-  awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/controls.dl
-[ -s $O/controls.dl ] || { echo "render_offscreen: no draw list"; exit 1; }
+cp goldens/render/controls.dl $O/controls.dl
 APP=render bash scripts/mac.sh build >/dev/null
 MBUI_DL=$PWD/$O/controls.dl MBUI_DL_PNG=$PWD/$O/controls.png ./_build/native/release/build/render/render.exe
 # a rounded clip (src/kitdemo/gallery/dl_print_wbtest.mbt rounded_clip): a box filled by what it cuts, the same picture as the

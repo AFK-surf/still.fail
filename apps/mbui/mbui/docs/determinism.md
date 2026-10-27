@@ -139,7 +139,9 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   (goldens/render/mini1-*.png) are made and checked on Mini1 only, by mbui's own runner there (`mini1-mbui`, label
   `mbui-render`: the render workflow), on the macOS and GPU they were made on (goldens/render/mini1.txt); the workflow
   fails when either is another (Mini1 updated), and then every reference is made again in one PR from its artifact,
-  saying so. Other machines check draw lists only. A PR that changes references commits the workflow's artifact and
+  saying so. Other machines check draw lists only. The draw list they are of is kept beside them
+  (goldens/render/controls.dl, scripts/render_dl.sh), not printed from the controls page each run: so only a renderer
+  or the list's format changes the pictures, never a control drawn otherwise. A PR that changes references commits the workflow's artifact and
   lists each changed picture and why. (Not GitHub's hosted runners: decided against.) The runner takes no pull request
   from a fork (the job's condition) and the repository asks before running any outside contributor's workflow: the
   repository is public, and a fork's workflow on that runner would run whatever its author wrote on our machine.

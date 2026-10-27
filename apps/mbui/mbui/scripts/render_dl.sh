@@ -1,14 +1,23 @@
 #!/bin/bash
-# The draw list the renderer's references are of (kitdemo's controls page over mini1's kept text,
-# src/kitdemo/gallery/dl_print_wbtest.mbt), as a Tester prints it: into $1 (default out/render/controls.dl). Sourced by the
-# hosts' render scripts (scripts/render_android.sh, render_windows.sh, render_linux.sh, render_web.sh) from the
+# The draw list the renderer's references are of, goldens/render/controls.dl (kitdemo's controls page over mini1's kept
+# text, as a Tester printed it: src/kitdemo/gallery/dl_print_wbtest.mbt), copied into $1 (default
+# out/render/controls.dl). Kept beside the references, not printed each run: they say what each renderer draws of one
+# list, so only a renderer or the list's format (src/ui/drawlist.mbt) changes them, never a control drawn otherwise
+# (#2259's dark segmented thumb turned main's mbui-render red, its own PR not running it). A PR that changes the
+# format makes it again (render_dl_make) and the references with it. Sourced by the hosts' render scripts
+# (scripts/render_android.sh, render_windows.sh, render_linux.sh, render_web.sh, render_offscreen.sh) from the
 # repository's root.
+render_dl_make() {
+  local out=${1:-goldens/render/controls.dl}
+  MBUI_DL_PRINT=1 moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$out"
+  [ -s "$out" ] || { echo "render_dl_make: no draw list"; return 1; }
+}
+
 render_dl() {
   local out=${1:-out/render/controls.dl}
   mkdir -p "$(dirname "$out")"
-  MBUI_DL_PRINT=1 moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
-    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$out"
-  [ -s "$out" ] || { echo "render_dl: no draw list"; return 1; }
+  cp goldens/render/controls.dl "$out"
   # and lines' (src/kitdemo/gallery/dl_print_wbtest.mbt lines_shown) beside it, lines.dl: no reference, its picture checked by
   # scripts/chk lines
   MBUI_DL_PRINT=lines moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
