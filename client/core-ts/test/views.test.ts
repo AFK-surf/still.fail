@@ -211,7 +211,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "swipeArchive", "stateText", "stateLead", "stateRest", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -1465,6 +1465,8 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.equal(m[0].decision, undefined);
   assert.equal(v.decision.text, "奏 · 那 C 呢？");
   assert.equal(v.archivable, undefined);
+  // The card is in the chat: its line is not said at the end of the messages.
+  assert.equal(v.stateText, undefined);
   // What waits undecided: the page leads to it, and its post says it can be let go there; no other post does.
   assert.deepEqual(v.asks, [{ seq: 4, card: true, mine: false, text: "那 C 呢？" }]);
   assert.deepEqual(m.map((x: J) => x.asked ?? false), [false, false, false, true]);
@@ -1941,9 +1943,27 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under
   // Kept by the chat's agent: the only one, its workspace's or not.
   assert.deepEqual(v.messages.map((m: J) => m.attachments.map((a: J) => a.owner)), [["k"], [], ["k"]]);
   assert.equal(v.archivable, true);
+  // Where it stands, as its row says it: at the end of its messages too.
+  assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["已完成", "done", ""]);
   // Archived from its bar or the list: nothing offers it under its last all-done post, nor says what the check made of it.
   assert.equal(v.archiveOffered, undefined);
   assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
+});
+
+test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_row_does", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "部署一下"), { ...entry(2, "要 key"), authorKind: "agent", author: "k" }], thread: null });
+  const blocked = { ...row("k", now), thread: 7 };
+  blocked.agents[0].lastTurn = { kind: "message", declared: "block", ending: "need_help", need: "Stripe 的测试 key", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/a"), [blocked]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["需要你处理：Stripe 的测试 key", "need", "Stripe 的测试 key"]);
 });
 
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {

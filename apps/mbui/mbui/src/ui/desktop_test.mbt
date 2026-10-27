@@ -387,6 +387,48 @@ test "desktop: a drag from one paragraph into another picks the rest of the firs
 }
 
 ///|
+test "desktop: words picked in a layer over the page stay in it: a drag out of its panel picks none of the page's, nor does a press on its panel over them; a layer's empty room over the page leaves them" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.mouse_drags_lists(false)
+      c.selectable(fn() {
+        c.column(w=Fill(1.0), gap=12.0, fn() {
+          for k in 0..<8 {
+            c.rich([@ui.plain("page words \{k}")], size=15.0) |> ignore
+          }
+        })
+        |> ignore
+        // a card over the page, not modal (a link's peek): its own words, and room of its own under them
+        c.overlay("card", fn() {
+          c.box(tx=40.0, ty=60.0, w=Px(240.0), h=Px(100.0), bg=0xFFFFFFFFL, fn() {
+            c.rich([@ui.plain("card words")], size=15.0) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+        // a layer laid out over the whole window that shows nothing there (a toast's room): the page's words under it
+        c.overlay("room", escape=false, outside=false, fn() { c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore })
+        |> ignore
+      })
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.draw()
+  let (cx, cy, cw, ch) = t.run_rects("card words")[0]
+  // from the card's words down past its foot, over the page's under it
+  t.drag(cx + 2.0, cy + ch / 2.0, cx + cw / 2.0, 280.0)
+  assert_eq(t.ctx().selected_text(), "card words")
+  // a press on the card's room over the page's words picks none of them
+  t.drag(60.0, 140.0, 250.0, 150.0)
+  assert_eq(t.ctx().selected_text(), "")
+  // beside the card, the page's words are picked as ever
+  let (px, py, _, ph) = t.run_rects("page words 7")[0]
+  t.drag(px + 1.0, py + ph / 2.0, 395.0, py + ph / 2.0)
+  assert_eq(t.ctx().selected_text(), "page words 7")
+}
+
+///|
 test "desktop: words picked on down a list the wheel scrolls under the held pointer: the rows gone out of view stay picked, in order" {
   let t = @ui.Tester::new(
     fn(c) {

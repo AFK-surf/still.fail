@@ -956,6 +956,13 @@ static BOOL frame_buttons_centred(id self, SEL s) {
 @interface MBWindow : NSWindow
 @end
 @implementation MBWindow
+// A scripted run's window keeps the size it was given (MBUI_WIN) on a screen shorter than it (a virtual machine's):
+// AppKit would shrink it to the screen, and the run's page would not be the one its test replays (a 390×844 phone's).
+- (NSRect)constrainFrameRect:(NSRect)r toScreen:(NSScreen *)s {
+  if (getenv("MBUI_WIN") && (getenv("MBUI_SCRIPT") || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64")))
+    return r;
+  return [super constrainFrameRect:r toScreen:s];
+}
 + (Class)frameViewClassForStyleMask:(NSWindowStyleMask)m {
   Class base = [super frameViewClassForStyleMask:m];
   static Class ours;

@@ -200,6 +200,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "decision.card.vaultAsk.save.username",
     "decision.text",
     "asks.*.text",
+    "stateText",
+    "stateRest",
     "cacheCold.text",
     "xshare.text",
     "xshare.to.*.name",

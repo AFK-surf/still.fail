@@ -47,6 +47,7 @@ import type { ChatAsk, ChatCcTo, ChatSentElsewhere, DownloadShown, NoticeShown, 
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
+import { WaitingText } from "./ChatMark.tsx";
 import { sampleMessages } from "./samples.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
@@ -330,6 +331,11 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
     {newerPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={newerPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
   </div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
+  // Where it stands, as its row says it (the core's `stateText`), whole: done with nothing said, its word after the check.
+  const state = chat.stateText;
+  if (state) drawn.set("state", () => <div key="state" data-vk="state">
+    <WaitingText text={state} lead={chat.stateLead} rest={chat.stateRest || (chat.stateLead === "done" ? t("web-main.status.done") : chat.stateRest)} className={css.chatState} slot />
+  </div>);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {
     drawn.set(`a:${agent.key}`, () => <Activity key={`a:${agent.key}`} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />);
@@ -613,6 +619,8 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   }
   if (canNewer) items.push({ key: "newer", estimate: 30, place: false });
   for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
+  // Where it stands, said only at its end (none while an agent works).
+  if (!canNewer && chat.stateText) items.push({ key: "state", estimate: 20 });
   for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24, place: false });
 
   // What changed since it was last drawn: messages gone from an end as the core's window moved along the chat (their

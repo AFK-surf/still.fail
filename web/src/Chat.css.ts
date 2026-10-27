@@ -8,6 +8,7 @@ import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
 import { tableKey, tableScroll } from "./Prose.css.ts";
+import { leadRest, leadSlot } from "./ChatMark.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { bleedX, columns, outsetEnd, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
@@ -192,6 +193,15 @@ export const msgFiles = style({
   },
 });
 export const chatOlder = style({ display: "flex", justifyContent: "center", padding: "4px 0 8px", color: vars.muted });
+/**
+ * Where the chat stands, under its last message (the core's `stateText`: its row's second line, ChatMark.tsx WaitingText):
+ * whole, its words wrapping where the row cuts them to a line, its lead's icon level with their first line.
+ */
+export const chatState = style({ fontSize: vars.textMeta, lineHeight: "20px", color: vars.muted, vars: { "--lead-gap": "6px" } });
+globalStyle(`${chatState}[data-turn]`, { color: vars.text });
+globalStyle(`${chatState} ${leadRest}`, { overflow: "visible", whiteSpace: "normal", overflowWrap: "anywhere" });
+globalStyle(`${chatState} ${leadSlot}`, { height: 20 });
+globalStyle(`${chatState}[data-state-line]`, { alignItems: "flex-start" });
 export const chatNewer = style({ display: "flex", justifyContent: "center", padding: "8px 0 4px", color: vars.muted });
 export const msgUnsent = style({
   display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "2px", marginTop: "4px",

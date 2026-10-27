@@ -509,7 +509,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
       // held, its card and its station's as one, below)
       let b = c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, id~, fn() {
         c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, fn() {
-          agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
+            agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"), joined=true)
         })
         |> ignore
         c.box(style=if hot { agent_station_part_hot } else { agent_station_part }, fn() {
@@ -533,7 +533,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
     Some(s) =>
       c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, fn() {
         let b = c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, id~, fn() {
-          agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
+            agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"), joined=true)
         })
         c.semantics(b, Button, id~, label=said)
         let part = c.id("bar-agent-station/" + a.key)

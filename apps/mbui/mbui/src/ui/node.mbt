@@ -192,6 +192,8 @@ struct Node {
   // laid over the whole window, drawn and tapped over everything built outside one (overlay.mbt), and in it, what
   // takes every press and wheel that what lies over it does not (a modal's ground)
   mut portal : Bool
+  // a layer's own node (portal): the layer's id (overlay.mbt), 0 for any other
+  mut portal_id : Int
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
   mut shot : Bool
   /// what it shows of the frame larger (Ctx::magnified): where it reads and how much larger
@@ -384,6 +386,7 @@ fn Node::new() -> Node {
     rtl: false,
     aspect: 0.0,
     portal: false,
+    portal_id: 0,
     shot: false,
     magnify: None,
     blocks: false,
@@ -477,6 +480,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.at_b = 0.0 / 0.0
   self.moves = ""
   self.portal = false
+  self.portal_id = 0
   self.shot = false
   self.magnify = None
   self.blocks = false

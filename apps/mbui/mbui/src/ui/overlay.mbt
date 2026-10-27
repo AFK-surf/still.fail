@@ -102,6 +102,7 @@ pub fn Ctx::overlay(
   let n = self.nodes[i]
   n.layer = true
   n.portal = true
+  n.portal_id = id
   self.layers.push({
     id,
     node: i,

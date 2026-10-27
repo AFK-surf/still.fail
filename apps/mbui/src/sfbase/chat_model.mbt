@@ -522,6 +522,9 @@ pub(all) struct ChatView {
   /// says (going on reads its context again), and whether its station goes on afresh by itself (nothing to tap; else
   /// a fresh context offered)
   cache_cold : (String, String, Bool)?
+  /// where it stands, as its row's second line says it without a card waiting (the core's `stateText`, `stateLead`,
+  /// `stateRest`): said at the end of its messages
+  state : (String, String, String)?
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -624,6 +627,10 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     cache_cold: match field(s, "cacheCold") {
       Some(Object(_)) as cold => Some((text(cold, "session"), text(cold, "text"), flag(cold, "auto")))
       _ => None
+    },
+    state: match opt_text(s, "stateText") {
+      Some(words) => Some((words, text(s, "stateLead"), text(s, "stateRest")))
+      None => None
     },
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),

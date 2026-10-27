@@ -133,25 +133,31 @@ final class Keeps {
     }
 
     /**
-     * A picture into the gallery (MediaStore.Images, API 29+: no permission asked), in Pictures/ under the app's name,
-     * pending until whole; where it went said as Pictures/… and its name as MediaStore made it.
+     * A picture or a film into the gallery (MediaStore.Images or .Video, API 29+: no permission asked), in Pictures/ or
+     * Movies/ under the app's name, pending until whole; where it went said as Pictures/… or Movies/… and its name as
+     * MediaStore made it. A film by its MIME type, or its name's when none is given.
      */
     private static void photos(Keep k) {
         Activity a = Host.activity;
         ContentResolver cr = a.getContentResolver();
-        String dir = Environment.DIRECTORY_PICTURES + "/" + a.getApplicationInfo().loadLabel(a.getPackageManager());
+        String guessed = java.net.URLConnection.guessContentTypeFromName(k.name);
+        String mime = k.mime.startsWith("image/") || k.mime.startsWith("video/") ? k.mime
+                : guessed != null && (guessed.startsWith("image/") || guessed.startsWith("video/")) ? guessed : "image/png";
+        boolean film = mime.startsWith("video/");
+        String dir = (film ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES) + "/"
+                + a.getApplicationInfo().loadLabel(a.getPackageManager());
         ContentValues values = new ContentValues();
-        values.put(MediaStore.Images.Media.DISPLAY_NAME, k.name);
-        values.put(MediaStore.Images.Media.MIME_TYPE, k.mime.startsWith("image/") ? k.mime : "image/png");
-        values.put(MediaStore.Images.Media.RELATIVE_PATH, dir);
-        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, k.name);
+        values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, dir);
+        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
         Uri uri = null;
         try {
-            uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            uri = cr.insert(film ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI : MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) throw new IOException("MediaStore made no entry");
             copy(cr, uri, k);
             ContentValues whole = new ContentValues();
-            whole.put(MediaStore.Images.Media.IS_PENDING, 0);
+            whole.put(MediaStore.MediaColumns.IS_PENDING, 0);
             cr.update(uri, whole, null, null);
             String shown = nameOf(cr, uri, k.name);
             Host.log("keep: " + shown + " (" + k.size + " bytes) in " + dir);
