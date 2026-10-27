@@ -1501,6 +1501,24 @@ pub let hairline : @ui.Len = Fixed(0.5)
 /// sizes of words: what the styles' tokens are looked up in.
 pub fn ui_theme() -> @ui.Theme {
   let t = current.val
+  // (the same one while its palette and its sizes of words are: what was built in it is as it would be built again,
+  // a list's rows kept so, mbui's kept_nodes.mbt)
+  match ui_theme_made.val {
+    Some((p, tt, made)) if physical_equal(p, t.p) && physical_equal(tt, t.t) => return made
+    _ => ()
+  }
+  let made = ui_theme_of(t)
+  ui_theme_made.val = Some((t.p, t.t, made))
+  made
+}
+
+///|
+/// The theme as mbui's last made (ui_theme), and the palette and sizes of words it was made of.
+// kept across runs: worked out of a table and the palette, the same for the same
+let ui_theme_made : Ref[(Palette, Type, @ui.Theme)?] = Ref(None)
+
+///|
+fn ui_theme_of(t : Theme) -> @ui.Theme {
   let base = if t.dark { @ui.Theme::narrow_dark() } else { @ui.Theme::narrow_light() }
   // a link's ink: the accent's ink (the darker one on paper, the lighter in the dark), which reads in words; the
   // accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度)
