@@ -26,7 +26,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
-import { type AccessKind, accessKind, billedPerUse, KIMI_CODE, kimiSignedIn, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
+import { type AccessKind, accessKind, KIMI_CODE, kimiSignedIn, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
 import { type Viewer, managesStation } from "../mesh/credential.ts";
 import { maskValue, startEnv } from "../ops/agent-env.ts";
@@ -1265,8 +1265,6 @@ export class Accounts {
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
         loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home) : "",
         machine: p.machine === true,
-        // Billed per use: the pool runs a session on it only when no account paid for already can (pool.ts).
-        perUse: billedPerUse(p),
         backgroundOnMessage: p.backgroundOnMessage,
         fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,
         check: checkView,

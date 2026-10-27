@@ -58,22 +58,6 @@ test("a_station_offers_its_own_models_says_which_are_borrowed_and_lists_what_oth
   assert.deepEqual(borrowable(ws.map((s) => (s.id === STUDIO ? { ...s, overview: { ...s.overview, sharing: false } } : s)), `ws/${HERE}`, own, null, 0), []);
 });
 
-test("a_model_says_the_station_it_is_borrowed_from_when_the_station_would_run_it_there_not_on_a_key_of_its_own", () => {
-  // Its own key billed per use, and a subscription Mini1 lends it: a chat left to the station runs on the subscription.
-  const key = profile("key", ["claude-opus-5-5", "claude-sonnet-5-5"], { access: { kind: "env", provider: "custom" }, perUse: true });
-  const lent = profile("lent", ["claude-opus-5-5", "claude-fable-5-1"], { share: { id: "sh-m", role: "user", host: MINI } });
-  const ws = [station(HERE, "ccvm", [key, lent]), station(MINI, "macmini", [], { emoji: "🖥️" })];
-  const where = (here: J) => sourced(models(here, 0), here, ws).map((o: J) => [o.model, o.availability, o.from ?? null]);
-  assert.deepEqual(where(ws[0].overview), [["claude-fable-5-1", "borrowed", "macmini"], ["claude-opus-5-5", "borrowed", "macmini"], ["claude-sonnet-5-5", "here", null]]);
-  // The subscription used up, or signed out: the station runs it on the key.
-  const spent = { ...lent, quota: { state: "ok", windows: [{ label: "5h", usedPercent: 100, resetsAt: 9e12 }] } };
-  assert.deepEqual(where({ ...ws[0].overview, profiles: [key, spent] })[1], ["claude-opus-5-5", "here", null]);
-  const out = { ...lent, check: { state: "login" } };
-  assert.deepEqual(where({ ...ws[0].overview, profiles: [key, out] })[1], ["claude-opus-5-5", "here", null]);
-  // A station of before `perUse`: as before, its own key counts.
-  assert.deepEqual(where({ ...ws[0].overview, profiles: [{ ...key, perUse: undefined }, lent] })[1], ["claude-opus-5-5", "here", null]);
-});
-
 /// A model control on the first station of `ws`, its core's store and records stood in for.
 function control(ws: J[], role: string) {
   const values = new Map<string, unknown>([[`overview ws/${HERE}`, ws[0].overview], ["stations", ws]]);
