@@ -22,6 +22,9 @@ export function glyph(stations: J[], days: J[]): J {
   const connecting = stations.filter((s) => state(s) === "connecting").length;
   const failing = stations.filter((s) => state(s) === "error").length;
   const working = online.filter((s) => typeof get(s, "station") === "string" && running.includes(s.station)).length;
+  // Asleep only while the device reaches none of them as its own network is down: still.fail cloud not reached alone
+  // (its events socket dropping as the network changes) says nothing of the stations, reached without it.
+  const asleep = stations.length > 0 && stations.every((s) => state(s) === "offline" && strOf(s, "cause") === "network");
   const n = online.length + dim + failing;
   let summary: string;
   if (n === 1) {
@@ -37,7 +40,7 @@ export function glyph(stations: J[], days: J[]): J {
   // the agents at work on them all, as each station counts its own (`doing`'s `running`)
   const agents = stations.reduce((n, s) => n + (typeof get(s, "running") === "number" ? s.running : 0), 0);
   const now = agents > 0 ? t("core-views.station.running_agents", { n: agents }) : t("core-logic.looks.none_running");
-  return { online: online.length, dim, connecting, failing, working, summary, label: label.join(t("core-logic.looks.sep")), running: agents, now, unit: t("core-logic.looks.running_unit", { n: agents }) };
+  return { online: online.length, dim, connecting, asleep, failing, working, summary, label: label.join(t("core-logic.looks.sep")), running: agents, now, unit: t("core-logic.looks.running_unit", { n: agents }) };
 }
 
 /// What a station is doing, as the stations' card says it under the line of all of them (8 个 agent 正在运行): up,

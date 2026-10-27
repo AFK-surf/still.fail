@@ -137,9 +137,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const dots: Partial<Record<BarPlace, "accent" | "red">> = {};
   if ((marks?.workspaces[scope]?.decisions ?? 0) > 0) dots.decisions = "accent";
   if (chats?.trouble) dots.stations = "red";
-  const glyph = glyphCounts({ glyph: chats?.glyph }, status?.state === "trouble");
+  const glyph = glyphCounts({ glyph: chats?.glyph });
   // The stations in words (the core's), as the glyph draws them, and what is wrong with them: what Home's corner said.
-  const said = glyph.asleep ? status?.text ?? "" : chats?.glyph?.label ?? "";
+  const said = (glyph.asleep ? status?.text : undefined) || (chats?.glyph?.label ?? "");
   const stationsSaid = chats?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: chats.trouble.text }) : t("web-mobile.home.station", { said });
   const labelOf = (key: BarPlace) => (key === "stations" && said ? stationsSaid : railLabel(key));
   // Spring frames do not redraw each icon (especially the station's animated SVG).

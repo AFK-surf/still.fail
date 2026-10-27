@@ -127,8 +127,9 @@ export function useGlassBands(): (el: HTMLElement | null) => (() => void) | void
  * The stations at the top of the sidebar's foot, always: their glyph (./StationGlyph.tsx) and a line beside it, how many
  * and who works while all is well, or what is wrong (the core's `trouble`: which, or how many; red while one fails). It
  * leads to the stations. Short of a station down, the line says what the core has been waiting on for a while, or ember
- * cloud not reached (the core's `status`: what, how long, how fast; each thing on hover); that last puts the glyph to
- * sleep. Cloud not reached, it offers to try again at once; a station down does not.
+ * cloud not reached (the core's `status`: what, how long, how fast; each thing on hover). The glyph sleeps only while
+ * every station is down as the device's network is (the core's `glyph.asleep`), not for still.fail cloud alone. Cloud
+ * not reached, it offers to try again at once; a station down does not.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   // Only what it shows (the stations, their glyph and trouble): not each change of the list's rows.
@@ -136,7 +137,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
     (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
   const status = useStatus(scope);
   if (!view || view.stations.length === 0) return status?.state ? <StatusWaiting status={status} /> : null;
-  const counts = glyphCounts(view, status?.state === "trouble");
+  const counts = glyphCounts(view);
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
   const text = trouble?.text ?? waiting?.text ?? view.glyph?.summary ?? "";
@@ -168,7 +169,7 @@ export function RailStations({ scope, to, on, className }: { scope: string; to: 
   const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
     (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
   const status = useStatus(scope);
-  const counts = glyphCounts(view, status?.state === "trouble");
+  const counts = glyphCounts(view);
   const label = view?.trouble?.text ?? (status?.state ? status.text : undefined) ?? view?.glyph?.summary ?? "Station";
   return (
     <Tip label={label} side="right">
