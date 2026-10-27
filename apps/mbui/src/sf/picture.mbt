@@ -264,7 +264,10 @@ pub fn station_mark(
     }
   }
   if emoji != "" {
-    c.text(emoji, size=size * 0.9, wrap=false, line=size) |> ignore
+    // A mark keeps its natural width, including Windows' wider emoji. A column's
+    // one-line text is otherwise capped to its slot and replaced by an ellipsis.
+    let width = @ui.text_advance(emoji, size=c.sp(size * 0.9))
+    c.text(emoji, size=size * 0.9, wrap=false, line=size, w=Px(width)) |> ignore
     return
   }
   // none of its own: `none`'s icon, if given (Parts.kt StationMark's `none`)
