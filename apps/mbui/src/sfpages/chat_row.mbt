@@ -244,6 +244,8 @@ pub fn chat_row(
         end_room=if archive_key { @sf.row_keys_room(1) } else { 0.0 },
         corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
         corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
+        // (swiped in its slot: the slot's corners its)
+        slotted=swipes,
         fn() {
             // (renamed, the field takes the head's whole width, its mark's place too: rename_box)
             let tone = @sfbase.row_tone(item)

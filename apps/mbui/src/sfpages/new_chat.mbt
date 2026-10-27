@@ -227,19 +227,28 @@ fn new_narrow(
       // alone (the composer there is the chat's, under it, not to be frosted)
       let band = c.id("new/band")
       let band_room = @ui.style(pt=under, pb=if going { S0 } else { under })
-      c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
-        if !going {
-          new_notices(c, v, station, width)
-        }
-        c.box(style=@ui.style(w=Fixed(width)), fn() {
-          new_choosers(c, src, w, frame, v, station, state)
+      let mut over = -1
+      let ground = c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
+        over = c.box(style=new_over, fn() {
           if !going {
-            new_composer_place(c, src, w, frame, v, address, station, state, width)
+            new_notices(c, v, station, width)
           }
+          c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
         })
-        |> ignore
+        if !going {
+          c.box(style=@ui.style(w=Fixed(width)), fn() {
+            new_composer_place(c, src, w, frame, v, address, station, state, width)
+          })
+          |> ignore
+        }
       })
-      |> ignore
+      // as the composer changes shape (a line more or less, opened or let go), what is over it and the band's top go
+      // with its ground, on its curve, not to where they are laid out at once
+      with_composer(c, over, "new/over")
+      match composer_shape(c) {
+        Some((by, spec)) => @motion.reshape(c, ground, "new/band", by~, spec~)
+        None => ()
+      }
       if going {
         c.box(style=@ui.style(w=Fixed(width), pb=under), fn() {
           new_composer_place(c, src, w, frame, v, address, station, state, width)
@@ -502,8 +511,15 @@ fn new_wide(
     c,
     fn(col) {
       // (data-made-leave="up": out of view above as it fades)
-      new_head(c, station, state, new_scene_w, fn(i) { new_part(c, i, state, true) })
+      let head : Array[Int] = []
+      new_head(c, station, state, new_scene_w, fn(i) {
+        new_part(c, i, state, true)
+        head.push(i)
+      })
       new_composer_place(c, src, w, frame, v, address, station, state, col)
+      // the composer changing shape in the middle of the column, what is over it goes with its ground (as what is
+      // under it does: new_column)
+      head.eachi(fn(k, i) { with_composer(c, i, "new/head/\{k}") })
     },
     under=fn(col) {
       // (data-made-leave="fade": fading where it is)
@@ -551,6 +567,8 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
           c.box(style=new_under_room.then(@ui.style(min_h=Fixed(least))), fn() {
             let held = c.box(style=new_under, fn() { under(col) })
             @motion.measure(c, held, "new/under")
+            // (the composer over it changing shape: with its ground)
+            with_composer(c, held, "new/under/moves")
           })
           |> ignore
         })
@@ -1040,6 +1058,11 @@ let new_problem_box : @ui.Style = @ui.css("w=Full pt=S1_5")
 /// The foot narrow, over the scene's end: the band, and as the page becomes the chat the composer's place under it.
 // kept across runs: a value (no field of it changes)
 let new_foot : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// What is on the band over the composer: what is wrong for now, the choices.
+// kept across runs: a value (no field of it changes)
+let new_over : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// The band (mNewFoot, mNewBottom): its corners square but where it lies in a panel's.
