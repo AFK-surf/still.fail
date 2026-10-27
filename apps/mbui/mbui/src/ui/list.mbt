@@ -801,7 +801,9 @@ fn Ctx::place_list(
     }
     st.anchor_off = iy - (bottom_edge - below_top)
   }
-  st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
+  // (at its end where its last row's foot is at the view's, but for the float error of laying it there: one moved off it
+  // by less than a point, a finger's first moves, a trackpad's, is off it, and is laid where it was moved, not put back)
+  st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.001)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
   // (what the view built this frame read of how the list stood, a way back to the end, the rows in view told, is read
   // back where it was read: Ctx::list_info; a list scrolled that nothing read builds nothing again)

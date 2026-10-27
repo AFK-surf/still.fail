@@ -148,6 +148,36 @@ test "list: sticking to its end, it follows new rows until scrolled away" {
 }
 
 ///|
+/// How long a finger takes between two of its slow moves: longer than a display's frame, one drawn with no move.
+let slow_move_ms : Double = 20.0
+
+///|
+test "list: sticking to its end, a finger moving it off by less than a point a move, frames between its moves, moves it as far as the finger went" {
+  let t = @ui.Tester::new(
+    boxes(fn() { 1000 }, varied, stick_end=true),
+    w=300.0,
+    h=400.0,
+    platform=2,
+  )
+  assert_eq(bottom_of(t, 999), 400.0)
+  // past the slop, then on by a third of a point a move, slowly: frames drawn between the moves
+  t.press_at(100.0, 200.0)
+  t.move(100.0, 230.0)
+  t.run_for(slow_move_ms)
+  let from = bottom_of(t, 999)
+  for i in 1..=30 {
+    t.move(100.0, 230.0 + 0.3 * i.to_double())
+    t.run_for(slow_move_ms)
+  }
+  assert_true((bottom_of(t, 999) - from - 9.0).abs() < 0.01, msg="moved \{bottom_of(t, 999) - from}")
+  assert_true(!t.at_end())
+  // let go there: where the finger left it, not put back at the end
+  t.release(100.0, 239.0)
+  t.run_for(slow_move_ms)
+  assert_true(bottom_of(t, 999) > 400.0)
+}
+
+///|
 test "list: sticking to its end, the first frame shows the end" {
   let t = @ui.Tester::new(
     boxes(fn() { 1000 }, varied, stick_end=true),
