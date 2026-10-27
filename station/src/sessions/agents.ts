@@ -434,7 +434,7 @@ export const AgentsLive = (control: Control) =>
         env: process.env as Record<string, string | undefined>,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
-        codexRunning: (id) => !sandboxed(data) && codex.running(id),
+        codexRenewRunning: async (id) => !sandboxed(data) && (await codex.renewLogin(id)),
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),

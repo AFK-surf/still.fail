@@ -84,8 +84,9 @@ export type SharingDeps = {
   /// A Claude profile's current access token, renewed when about to run out (the accounts module's).
   /// `rejected`: the token a borrower was refused with, renewed first if it is still the current one.
   claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
-  /// Whether a Codex app-server runs on a profile here now (its login must not be renewed under it).
-  codexRunning: (profileId: string) => boolean;
+  /// Has the Codex app-server running on a profile here renew its login (it holds the refresh token, which must not be
+  /// renewed under it); false: none runs on it.
+  codexRenewRunning: (profileId: string) => Promise<boolean>;
   /// A profile's check and allowance as this station has them, its allowance asked again when old (for the stations
   /// borrowing it).
   status: (profileId: string) => Promise<{ check: Json; quota: Json }>;
@@ -806,9 +807,11 @@ export class Sharing {
     const file = p.machine === true ? codexAuthFile(this.deps.env) : join(this.home(p), "auth.json");
     let auth = JSON.parse(readFileSync(file, "utf8"));
     let expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
-    if (expiresAt - this.time.now() < CODEX_LEND_MS && !this.deps.codexRunning(p.id)) {
+    if (expiresAt - this.time.now() < CODEX_LEND_MS) {
       try {
-        auth = await this.renewCodex(file, auth);
+        // One running on it renews it itself, asked to (else it would only when its own token runs out, the station's
+        // borrowers refused till then); none, here.
+        auth = (await this.deps.codexRenewRunning(p.id)) ? JSON.parse(readFileSync(file, "utf8")) : await this.renewCodex(file, auth);
         expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
       } catch (e) {
         log.warn("share", "renewing a shared Codex login failed", { profile: p.id, error: (e as Error).message });

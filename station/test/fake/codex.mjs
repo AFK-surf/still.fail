@@ -1,5 +1,5 @@
 // A fake `codex app-server --listen stdio://`: JSON-RPC lines as the real one speaks them (initialize, thread/start,
-// thread/resume, turn/start, turn/steer, turn/interrupt, thread/unsubscribe, model/list, account/rateLimits/read) and the
+// thread/resume, turn/start, turn/steer, turn/interrupt, thread/unsubscribe, model/list, account/rateLimits/read, account/read) and the
 // notifications of a turn (turn/started, item/*, turn/completed), driven by what the input says:
 //   say:<text>    a reply                       fail:auth|rate|model   turn/completed failed with codexErrorInfo
 //   slow:<n>      n deltas, 50 ms apart          cmd                    a command with output, then a reply
@@ -188,6 +188,7 @@ function handle(msg) {
   }
   if (method === "mcpServerStatus/list") return reply({ data: [{ name: "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
   if (method === "account/rateLimits/read") return reply({ rateLimits: { primary: { usedPercent: 5 } } });
+  if (method === "account/read") return reply({ account: { type: "chatgpt", email: "a@x.test", planType: "plus" }, requiresOpenaiAuth: true });
   if (method === "model/list") {
     if (!params.cursor)
       return reply({

@@ -383,6 +383,10 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(catalog.models, ["gpt-a", "legacy"]);
     assert.deepEqual(catalog.efforts.get("gpt-a"), ["low", "high"]);
     assert.deepEqual(await d.rateLimits(p), { rateLimits: { primary: { usedPercent: 5 } } });
+    // Its login renewed by the app-server that runs on it (it holds the refresh token); none on another profile.
+    assert.equal(await d.renewLogin(p.id), true);
+    assert.deepEqual(stdin(p.dump).filter((m) => m.method === "account/read").map((m) => m.params), [{ refreshToken: true }]);
+    assert.equal(await d.renewLogin("none-runs-on-it"), false);
   });
 
   for (const crashed of [false, true]) {

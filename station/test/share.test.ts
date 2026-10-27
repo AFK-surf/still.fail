@@ -53,7 +53,7 @@ class FakeCloud {
 
 type Station = { data: string; config: ConfigFile; sharing: Sharing; lent: string[] };
 
-function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = []): Station {
+function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false): Station {
   const data = mkdtempSync(join(tmpdir(), "share-"));
   writeFileSync(join(data, "config.json"), JSON.stringify({ profiles }));
   const config = new ConfigFile(data);
@@ -74,7 +74,7 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
     agentHome: () => join(data, "agent"),
     env: {},
     claudeToken: async (p) => (lent.push(p.id), { token: `token-of-${p.id}`, expiresAt: Date.now() + 2 * 3600_000 }),
-    codexRunning: () => false,
+    codexRenewRunning,
     status: async (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
     changed: () => {},
   });
@@ -266,6 +266,28 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   auth.tokens.access_token = jwt({ exp: Math.floor(Date.now() / 1000) + 600 });
   writeFileSync(join(home, "auth.json"), JSON.stringify(auth));
   await assert.rejects(b.sharing.lendCodex({ ...copy, home }), /did not lend/);
+});
+
+test("a shared Codex login about to run out while a Codex runs on it here: that Codex is asked to renew it, then it is lent", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const jwt = (claims: object) => ["{}", JSON.stringify(claims), "s"].map((p) => Buffer.from(p).toString("base64url")).join(".");
+  const login = (seconds: number) => JSON.stringify({ tokens: { id_token: "id", access_token: jwt({ exp: Math.floor(Date.now() / 1000) + seconds }), account_id: "acct", refresh_token: "r" } });
+  const asked: string[] = [];
+  let data = "";
+  // As the app-server does: renewed, written in the profile's home.
+  const a = station(cloud, A, () => all, [CODEX], async (id) => (asked.push(id), writeFileSync(join(data, "homes", "plus", "auth.json"), login(10 * 86400)), true));
+  data = a.data;
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  mkdirSync(join(a.data, "homes", "plus"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "plus", "auth.json"), login(600));
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles[0];
+  assert.ok((await b.sharing.lendCodex({ ...copy, home: join(b.data, copy.home) })) > Date.now() + 9 * 86400_000);
+  assert.deepEqual(asked, ["plus"]);
 });
 
 test("a shared subscription moves to another station: login handed over, the old host keeps a copy", async () => {
