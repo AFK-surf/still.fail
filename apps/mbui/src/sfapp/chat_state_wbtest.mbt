@@ -43,7 +43,7 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
     }
   })
   t.keep_parts(true)
-  t.run_for(100.0)
+  t.draw()
   let (_, need_y) = t.find(need).unwrap()
   let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   assert_true(need_y > last_y)
@@ -51,8 +51,9 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
   // copy fading under nothing
   said.val = false
   t.draw()
-  for _ in 0..<6 {
-    t.run_for(50.0)
+  // (each quarter of the way its copy leaves)
+  for _ in 0..<4 {
+    t.run_for(@sf.leave_ms / 4.0)
     let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
     assert_true((y - last_y).abs() < 0.5, msg="\{y} \{last_y}")
   }
