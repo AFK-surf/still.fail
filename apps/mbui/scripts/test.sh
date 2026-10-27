@@ -107,7 +107,7 @@ for t in ${TARGETS:-native}; do
     # (kept_rows_kinds_wbtest.mbt's, every kind of message the fixtures hold opened twice, its rows kept and built,
     # in five tests: 70 of the pages' 128 s, each file run alone on CI, 2026-10-27, 40344557870; among the pages one
     # of their two processes was 207 s, the other 84; two processes of its own)
-    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2 src/sfapp/squeeze_said_wbtest.mbt:1
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
@@ -137,7 +137,9 @@ for t in ${TARGETS:-native}; do
   # Which of APP_GROUP's n runners a run is on (k of 1..n). Four (check-mbui's): each two or three of the runs that
   # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
   # 187 and 147, the pages' 174, contrast's 117, screens' 77, squeeze_said's 49, the packages' 10, all nine at once:
-  # the part's run 188 s). A run named nowhere here is the first's, never left out.
+  # the part's run 188 s). Alone on four runners (40425191188) corners in Chinese was 92 s, every other run 52 s or less:
+  # its press's room and contrast a third corners run since, on the fourth. A run named nowhere here is the first's,
+  # never left out.
   app_group_of() {
     local n=$1
     shift
@@ -145,6 +147,7 @@ for t in ${TARGETS:-native}; do
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
+      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 4 ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 1 ;;
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;

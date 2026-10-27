@@ -70,8 +70,10 @@ let corner_modes : Array[String] = [
 ]
 
 ///|
-/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's.
-fn corners_check(lang : String) -> Unit raise {
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; or
+/// (`press_room`, Chinese) a press's room and the light theme's contrast instead. Apart, a sweep each: the two together were
+/// one test of 92 s alone on CI against English's 49, the longest of the app part's runs on four runners (2026-10-27).
+fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
   let moves : Array[String] = []
@@ -81,15 +83,9 @@ fn corners_check(lang : String) -> Unit raise {
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
       let t = screen_in(mode, win, lang)
-      let faults = t.corner_faults()
-      for f in t.gap_faults() {
-        gaps.push("\{at}: \{f}")
-      }
-      // (the squeeze's on the screen at rest, before what shows only under the hand is shown; the contrast's too, in the
-      // light theme, once: contrast_wbtest.mbt)
-      let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
-      if lang == "zh" {
-        // (and a press's room, at rest and with what shows only under the hand shown: rooms_known_wbtest.mbt)
+      if press_room {
+        // (a press's room, at rest and with what shows only under the hand shown: rooms_known_wbtest.mbt; and the
+        // contrast's, in the light theme, once: contrast_wbtest.mbt)
         for f in t.room_faults() {
           rooms.push("\{at}: \{f}")
         }
@@ -100,7 +96,14 @@ fn corners_check(lang : String) -> Unit raise {
           Some(w) => wrong.push(w)
           None => ()
         }
+        continue
       }
+      let faults = t.corner_faults()
+      for f in t.gap_faults() {
+        gaps.push("\{at}: \{f}")
+      }
+      // (the squeeze's on the screen at rest, before what shows only under the hand is shown)
+      let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
       // and what it shows only under the hand (Ctx::lit_shown, hand_shown: a row's 归档), all of it at once, each fault
       // once
       for f in t.lit_all_faults() {
@@ -131,11 +134,15 @@ fn corners_check(lang : String) -> Unit raise {
       }
     }
   }
-  if lang == "zh" {
+  if press_room {
     match rooms_wrong(rooms) {
       Some(w) => wrong.push(w)
       None => ()
     }
+    if wrong.length() > 0 {
+      fail(wrong.join("\n"))
+    }
+    return
   }
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
@@ -162,4 +169,9 @@ test "corners and squeeze: every screen in every window keeps the corner rule an
 ///|
 test "corners and squeeze: every screen in every window keeps the corner rule and fits, in English" {
   corners_check("en")
+}
+
+///|
+test "a press's room and the light theme's contrast: every screen in every window, in Chinese" {
+  corners_check("zh", press_room=true)
 }
