@@ -79,11 +79,18 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     t.run_for(@kit.presence_in_ms)
     // the night's, none kept: its rings' lead
     assert_true(t.find("用 6 个 Claude 订阅账号消耗了") is Some(_))
-    for look in [("大字报", "OpenCode Go 订阅"), ("小票", "Claude 订阅 ×6"), ("终端", "still.fail fleet --week"), ("夜色", "用 6 个 Claude 订阅账号消耗了")] {
+    // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
+    // what it leaves out
+    for look in [
+      ("大字报", "489%", "OpenCode Go 订阅"),
+      ("小票", "5 个", "9 个对话正在运行"),
+      ("终端", "still.fail fetch", "10/20"),
+      ("夜色", "用 6 个 Claude 订阅账号消耗了", "5 个"),
+    ] {
       t.click(Button, label=look.0)
       t.run_for(@kit.presence_in_ms)
       assert_true(t.find(look.1) is Some(_), msg="\{(at, look)}")
-      assert_true(t.find("一生万物，万物归一") is Some(_) || t.find("# 一生万物，万物归一") is Some(_), msg="\{(at, look)}")
+      assert_true(t.find(look.2) is None, msg="\{(at, look)}")
       assert_eq(t.squeeze_faults(), [])
       assert_eq(t.corner_faults(), [])
       assert_eq(t.contrast_faults(), [])

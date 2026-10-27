@@ -3416,6 +3416,8 @@ export interface FleetDay {
 	label: string;
 	/** Its chats archived as a share of the most on a day (0 to 1). */
 	share: number;
+	/** Its chats archived, said (3 个): a receipt's line of the day. */
+	value: string;
 	today: boolean;
 }
 

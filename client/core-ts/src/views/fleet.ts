@@ -149,7 +149,7 @@ function days(usage: J, archived: number[], runs: { at: number; session: string 
     week: {
       title: t("core-logic.fleet.week"),
       stats: [chats(week), stat(tiles[2]), stat(tiles[0])],
-      days: daily.map((d) => ({ label: str(d.label) ?? "", share: count(d) / most, today: d.today === true })),
+      days: daily.map((d) => ({ label: str(d.label) ?? "", share: count(d) / most, value: t("core-logic.fleet.archived_value", { n: count(d) }), today: d.today === true })),
     },
   };
 }

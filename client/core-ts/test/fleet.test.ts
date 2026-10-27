@@ -89,7 +89,7 @@ test("the card shared says how many chats are at work now, and on how many stati
   assert.equal(v.quota[0].usedText, "50%");
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });
   assert.deepEqual(v.week.stats, [{ label: "归档的对话", value: "6 个" }, { label: "输入 token", value: "1.2M" }, { label: "折合费用", value: "$12" }]);
-  assert.deepEqual(v.week.days, [{ label: "10/25", share: 0.5, today: false }, { label: "10/26", share: 1, today: true }]);
+  assert.deepEqual(v.week.days, [{ label: "10/25", share: 0.5, value: "2 个", today: false }, { label: "10/26", share: 1, value: "4 个", today: true }]);
   // nothing of the days while they are read, or with nothing spent nor archived
   assert.deepEqual([fleetView([], [], null).today, fleetView([], [], null).week], [undefined, undefined]);
   const none = fleetView([], [], { ...usage, empty: true });

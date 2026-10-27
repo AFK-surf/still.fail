@@ -1352,7 +1352,8 @@ pub fn fixture_fleet(f : Fixture) -> Json {
     }
   }
   // each day's chats archived (57 in all, 12 today), as a share of the most on a day
-  let shares = [5.0, 7.0, 4.0, 10.0, 8.0, 11.0, 12.0].map(fn(n) { n / 12.0 })
+  let counts = [5, 7, 4, 10, 8, 11, 12]
+  let shares = counts.map(fn(n) { n.to_double() / 12.0 })
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
     "at": "10月26日 04:12",
@@ -1409,7 +1410,12 @@ pub fn fixture_fleet(f : Fixture) -> Json {
       ],
       "days": Json::array(
         shares.mapi(fn(i, x) {
-          Json::object({ "label": Json::string(labels[i]), "share": Json::number(x), "today": Json::boolean(i == 6) })
+          Json::object({
+            "label": Json::string(labels[i]),
+            "share": Json::number(x),
+            "value": Json::string("\{counts[i]} 个"),
+            "today": Json::boolean(i == 6),
+          })
         }),
       ),
     },

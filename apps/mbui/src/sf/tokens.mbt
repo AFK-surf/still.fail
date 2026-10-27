@@ -1612,16 +1612,16 @@ pub let share_poster_ink : Int64 = 0x111114FFL
 pub let share_poster_dim : Int64 = 0x111114D1L
 
 ///|
-/// Its weeks' bars' tracks, and the days' bars but today's: the black thinned on the orange.
-pub let share_poster_track : Int64 = 0x11111433L
-
-///|
 /// Its number: the scale's largest (Xl7, 72) drawn larger, as its line holds four of its figures and the percent (104);
 /// 1234% and past, 80.
 pub let share_poster_number_scale : Double = 1.45
 
 ///|
 pub let share_poster_number_less : Double = 1.12
+
+///|
+/// Its insides at least this tall: the picture 360 by 480, a portrait's three to four, as a post shows one whole.
+pub let share_poster_least_h : @ui.Len = Fixed(440.0)
 
 ///|
 /// 小票: a till's paper, its ink nearly black (15.2 to 1), said of in that ink at 62% (4.6 to 1), in the code face;
@@ -1660,17 +1660,24 @@ pub let share_terminal_dim : Int64 = 0xE6E6E69EL
 pub let share_terminal_cell : Int64 = 0xE6E6E624L
 
 ///|
-/// A meter's cell, 12 high; a day's cell, 3; its cursor a block 8 by 16, as a line of its words is tall.
-pub let share_terminal_cell_h : @ui.Len = Fixed(12.0)
-
-///|
-pub let share_terminal_day_cell_h : @ui.Len = Fixed(3.0)
-
-///|
+/// Its cursor: a block 8 by 16, as a line of its words is tall (the palette's colours as tall).
 pub let share_terminal_cursor_w : @ui.Len = Fixed(8.0)
 
 ///|
 pub let share_terminal_cursor_h : @ui.Len = Fixed(16.0)
+
+///|
+/// A line's key's column: as wide as its longest key (devices, archived) in the code face.
+pub let share_terminal_key_w : @ui.Len = Fixed(64.0)
+
+///|
+/// Its palette, as a fetch shows the terminal's: still.fail's orange, deepened and on paper, the greys from the
+/// light to the night's.
+// kept across runs: a table, never written
+pub let share_terminal_palette : Array[Int64] = [
+  share_orange, share_receipt_orange, share_receipt_ground, share_terminal_ink, share_ring_grey, 0x5A5B61FFL, 0x45464CFFL,
+  0x2E2F34FFL,
+]
 
 ///|
 /// Its window's three dots: the grey thinned.

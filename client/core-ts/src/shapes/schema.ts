@@ -2661,6 +2661,7 @@ export const SHAPES: Record<string, Shape> = {
   FleetDay: struct([
     ["label", "String"],
     ["share", "f64", { doc: "Its chats archived as a share of the most on a day (0 to 1)." }],
+    ["value", "String", { doc: "Its chats archived, said (3 个): a receipt's line of the day." }],
     ["today", "bool"],
   ]),
   ResourcesView: struct([
