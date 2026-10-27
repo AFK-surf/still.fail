@@ -61,6 +61,8 @@ fn reset() -> Unit {
   first_shown.val = false
   first_waiting.val = false
   first_has.val = 0
+  frame_bare.val = false
+  window_shown.val = false
   @sfbase.held_pictures_waiting.val = false
   drafts.clear()
   cui.attach = false
@@ -328,6 +330,7 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     return
   }
   first_waiting.val = false
+  frame_bare.val = false
   // (said by this frame's build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = false
   let ground = c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
@@ -369,6 +372,12 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
   if first_waiting.val {
     c.look(ground, { ..@ui.still_look, alpha: 0.0 })
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
+  }
+  // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
+  // the frame is on it)
+  if !frame_bare.val && !window_shown.val {
+    window_shown.val = true
+    @hostapi.window_show()
   }
   // the window's own buttons where they are the app's (Windows'), over all of it as a title bar's are
   if @ui.window_keys_own() {
@@ -773,6 +782,8 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     splash_waited.val = true
   }
   if !now && !splash_waited.val {
+    // (the ground alone: the window held is not shown for it, view_in)
+    frame_bare.val = true
     return
   }
   c.box(
@@ -898,6 +909,13 @@ let first_shown : Ref[Bool] = Ref(false)
 let first_waiting : Ref[Bool] = Ref(false)
 
 ///|
+/// Whether this frame drew the ground alone (splash), and whether the window held (host_setup) is shown (view_in).
+let frame_bare : Ref[Bool] = Ref(false)
+
+///|
+let window_shown : Ref[Bool] = Ref(false)
+
+///|
 /// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
 /// service and a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat
 /// shown already, what is beside it waited for in its tab; any other page is not waited for.
@@ -928,6 +946,9 @@ fn wide_reset() -> Unit {
 /// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
 pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
+  // out of sight till it has more than its ground to show (view_in): the first page as it is shown, else the splash
+  // once it says that it waits (splash_label_ms), not an empty window for the page's first moments
+  @hostapi.window_hold()
   if @ui.platform() == 1 {
     @ui.feel_as(2)
   }

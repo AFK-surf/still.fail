@@ -1152,6 +1152,10 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
 }
 
 // The window as the app wants it, asked before `run` (@hostapi.window_setup). It keeps the system's title bar here.
+// The window held till the app shows it (@hostapi.window_hold): the system shows the app's own here, as it opens.
+void mb_host_window_hold(void) {}
+void mb_host_window_show(void) {}
+
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   (void)inset;
   setup_min_w = min_w;

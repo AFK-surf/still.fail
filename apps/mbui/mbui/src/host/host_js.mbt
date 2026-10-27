@@ -1053,6 +1053,17 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 }
 
 ///|
+/// (a page's window is the browser's: shown as it is)
+fn window_hold() -> Unit {
+  ()
+}
+
+///|
+fn window_show() -> Unit {
+  ()
+}
+
+///|
 /// Whether the window's buttons are in the app's top row (see host_native.mbt): never in a browser.
 fn window_inset() -> Bool {
   false
