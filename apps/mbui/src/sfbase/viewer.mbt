@@ -1863,41 +1863,45 @@ pub fn Viewer::draw_flight(
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
   let bars = from.under.filter(fn(f) { f.0 < bx + bw && f.0 + f.2 > bx && f.1 < by + bh && f.1 + f.3 > by })
-  if bars.is_empty() || p >= 1.0 {
+  // a box of it, (x0 y0)–(x1 y1) in the window, in what holds it at (ox, oy), cut to it
+  let cut = fn(
+    x0 : Double,
+    y0 : Double,
+    x1 : Double,
+    y1 : Double,
+    ox : Double,
+    oy : Double,
+    radius : Double,
+    opacity : Double,
+    ground : Int64,
+    body : () -> Unit,
+  ) {
     c.layer(fn() {
-      c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, bg=ground, fn() {
-        if picture != "" {
-          c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
-        }
-      })
+      c.box(w=Px(x1 - x0), h=Px(y1 - y0), tx=x0 - ox, ty=y0 - oy, radius~, clip=true, bg=ground, opacity~, body)
       |> ignore
     })
     |> ignore
+  }
+  // the picture in a box of it at (x0, y0)
+  let shows = fn(x0 : Double, y0 : Double) {
+    fn() {
+      if picture != "" {
+        c.picture(picture, x=px - x0, y=py - y0, w=pw, h=ph, max_px=stage_px) |> ignore
+      }
+    }
+  }
+  if bars.is_empty() || p >= 1.0 {
+    cut(bx, by, bx + bw, by + bh, 0.0, 0.0, r, 1.0, ground, shows(bx, by))
     return
   }
   // the whole of it as far through as the bars over it let it show (`p`), and where no bar is, all of it over that:
   // the same picture over itself, no seam where they meet
-  let piece = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double, opacity : Double) {
-    c.layer(fn() {
-      c.box(w=Px(x1 - x0), h=Px(y1 - y0), tx=x0 - bx, ty=y0 - by, clip=true, bg=ground, opacity~, fn() {
-        if picture != "" {
-          c.picture(picture, x=px - x0, y=py - y0, w=pw, h=ph, max_px=stage_px) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-  c.layer(fn() {
-    c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, fn() {
-      piece(bx, by, bx + bw, by + bh, p)
-      for o in open_of(bx, by, bx + bw, by + bh, bars) {
-        piece(o.0, o.1, o.2, o.3, 1.0)
-      }
-    })
-    |> ignore
+  cut(bx, by, bx + bw, by + bh, 0.0, 0.0, r, 1.0, 0L, fn() {
+    cut(bx, by, bx + bw, by + bh, bx, by, 0.0, p, ground, shows(bx, by))
+    for o in open_of(bx, by, bx + bw, by + bh, bars) {
+      cut(o.0, o.1, o.2, o.3, bx, by, 0.0, 1.0, ground, shows(o.0, o.1))
+    }
   })
-  |> ignore
 }
 
 ///|
