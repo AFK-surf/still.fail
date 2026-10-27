@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { CONFIG, DevinDriver, callOf, classifyFailure, devinArgs, devinCatalog, devinData, devinKey, outcomeOf, rulesFolder, variant } from "../src/agents/devin.ts";
 import { profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
+import { allLeft } from "../src/agents/runner.ts";
 import { accessKinds, checkProfile, devinEmail, devinEmailIn, loginCommand } from "../src/accounts/profiles.ts";
 import { LoginManager, type LoginState } from "../src/accounts/login.ts";
 import { checkQuota } from "../src/accounts/quota.ts";
@@ -430,6 +431,8 @@ describe("the Devin driver", { concurrency: true }, () => {
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner with nobody reading.
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       const next = driver();
       const b = listen();
       const taken: AgentSession = await next.adopt(o, snapshot, b.push);

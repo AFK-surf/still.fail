@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { BRIDGE, DshDriver, classifyFailure, dshSetup } from "../src/agents/dsh.ts";
 import { dshRoute, profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
+import { allLeft } from "../src/agents/runner.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -289,6 +290,8 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner, saying the rest with nobody reading.
       first.detach();
+      // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)
+      await allLeft();
       await gate.open("a");
       await eventually(gate.said);
       const next = driver();

@@ -6,6 +6,7 @@ import { homedir, tmpdir } from "node:os";
 import { after, test } from "node:test";
 import { HermesDriver, hermesEnv, outcomeOf, hermesCatalog, HERMES_MODEL_LIMIT } from "../src/agents/hermes.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
+import { allLeft } from "../src/agents/runner.ts";
 import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
 import { CHAT_CREATE } from "../src/tools/chat.ts";
 import { accessKinds } from "../src/accounts/profiles.ts";
@@ -63,7 +64,7 @@ test('handover preserves partial transcript and completes the running turn once'
   const { options, events, driver } = setup(); const s = await driver.open(options, e => events.push(e));
   await s.prompt('handover');
   await until(() => events.some(e => e.type === 'live' && e.event.kind === 'delta' && e.event.text === 'first '));
-  const snapshot = s.snapshot(); s.detach();
+  const snapshot = s.snapshot(); s.detach(); await allLeft();
   const next = new HermesDriver({ data }); drivers.push(next); const after: RuntimeEvent[] = [];
   const adopted = await next.adopt(options, snapshot, e => after.push(e));
   await adopted.request('continue', '_test/continue', {});
@@ -109,7 +110,7 @@ test('crash adoption reconstructs partial text without duplicating completed ste
   const { options, events, driver } = setup(); const s = await driver.open(options, e => events.push(e));
   await s.prompt('handover');
   await until(() => events.some(e => e.type === 'live' && e.event.kind === 'delta' && e.event.text === 'first '));
-  s.detach();
+  s.detach(); await allLeft();
   const next = new HermesDriver({ data }); drivers.push(next); const after: RuntimeEvent[] = [];
   const adopted = await next.adopt({ ...options, resume: s.id() }, null, e => after.push(e));
   await adopted.request('continue', '_test/continue', {});
@@ -128,7 +129,7 @@ for (const editorNames of [false, true]) for (const recovery of ['none', 'handov
   await until(() => events.some(e => e.type === 'live' && e.event.kind === 'start' && e.event.id === 'call:lost'));
   if (recovery !== 'none') {
     const snapshot = recovery === 'handover' ? session.snapshot() : null;
-    const id = session.id(); session.detach();
+    const id = session.id(); session.detach(); await allLeft();
     const next = new HermesDriver({ data }); drivers.push(next);
     session = await next.adopt({ ...options, resume: id }, snapshot, e => events.push(e));
   }
