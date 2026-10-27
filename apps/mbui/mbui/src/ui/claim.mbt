@@ -72,6 +72,8 @@ fn claim_takes(c : Ctx, id : Int, dx : Double, dy : Double) -> Bool {
   let slop = touch_slop()
   let past = fn(along : Double, across : Double) { along.abs() > slop && along.abs() > across.abs() }
   match drags.get(id) {
+    // (one to be held first takes it by the hold alone, as it is drawn: Ctx::drag_of)
+    Some(d) if holds_first(d) => false
     Some(d) =>
       match d.axis {
         Hold => false
@@ -105,7 +107,18 @@ fn claim_down(c : Ctx, x : Double, y : Double) -> Unit {
   let chain = claim_chain(c, x, y)
   c.press_chain = chain
   c.drag_scroll = if chain.length() > 0 { chain[0] } else { 0 }
-  c.claimed = chain.length() <= 1 || !claim_waits(c, chain[0])
+  // (one alone there to be held first waits for the hold all the same: Ctx::drag_on's `hold`)
+  let alone = chain.length() <= 1 && !(chain.length() == 1 && claim_holds_first(chain[0]))
+  c.claimed = alone || !claim_waits(c, chain[0])
+}
+
+///|
+/// Whether `id` is a drag area a finger is yet to hold still before it is the press's (Ctx::drag_on's `hold`).
+fn claim_holds_first(id : Int) -> Bool {
+  match drags.get(id) {
+    Some(d) => holds_first(d)
+    None => false
+  }
 }
 
 ///|
@@ -117,6 +130,10 @@ fn claim_move(c : Ctx, x : Double, y : Double) -> Bool {
   }
   let dx = x - c.press_x
   let dy = y - c.press_y
+  // (moved off before it was held: not the press of one to be held first)
+  for id in c.press_chain {
+    hold_moved_off(id, x, y)
+  }
   for id in c.press_chain {
     if claim_waits(c, id) && claim_takes(c, id, dx, dy) {
       c.drag_scroll = id

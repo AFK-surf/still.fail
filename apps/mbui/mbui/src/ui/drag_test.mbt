@@ -293,3 +293,112 @@ test "pointer_at: each event by its own time, down, moved, up, not by the frames
   assert_eq(t.ctx().pointer_at(), start + 3.0 * gap_ms)
   t.draw()
 }
+
+///|
+/// A list of rows that scrolls up and down, a pager over it across, and a thin drag area across to be held first (a
+/// column's edge) on the list's first row; what the area was moved by, its taps and the pager's page kept.
+fn held_edge_view(
+  moved : Ref[Double],
+  taps : Ref[Int],
+  pointing? : @ui.Pointing = Finger,
+) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      let id = c.id("edge")
+      c.list("rows", 30, 40.0, fn(i) {
+        c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
+      })
+      |> ignore
+      c.layer(fn() {
+        c.drag_on(id, axis=Horizontal, hold=true)
+        c.box(left=140.0, top=0.0, w=Px(20.0), h=Px(300.0), id~, fn() {  }) |> ignore
+      })
+      |> ignore
+      match c.drag_of(id) {
+        Some(d) => {
+          moved.val = moved.val + d.take_move().0
+          if d.take_tap() {
+            taps.val += 1
+          }
+        }
+        None => ()
+      }
+    },
+    w=300.0,
+    h=300.0,
+    pointing~,
+  )
+}
+
+///|
+test "drag_on hold: a finger swiped across it at once moves it not, nor taps it" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = held_edge_view(moved, taps)
+  t.draw()
+  t.drag(150.0, 100.0, 250.0, 100.0)
+  t.draw()
+  assert_eq(moved.val, 0.0)
+  assert_eq(taps.val, 0)
+  assert_eq(t.haptics(), [])
+}
+
+///|
+test "drag_on hold: a finger scrolling up and down over it scrolls the list" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = held_edge_view(moved, taps)
+  t.draw()
+  t.drag(150.0, 250.0, 150.0, 100.0)
+  t.draw()
+  assert_true(t.list_offset() > 100.0)
+  assert_eq(moved.val, 0.0)
+  assert_eq(taps.val, 0)
+}
+
+///|
+test "drag_on hold: held still a long press's time, felt, then it follows the finger across" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = held_edge_view(moved, taps)
+  t.draw()
+  let short = @ui.long_press_ms / 8.0
+  t.press_at(150.0, 100.0)
+  t.run_for(@ui.long_press_ms - short)
+  assert_eq(t.haptics(), [])
+  t.run_for(short * 2.0)
+  assert_eq(t.haptics(), [LongPress])
+  for i in 1..=8 {
+    t.advance(@ui.input_step_ms)
+    t.touch(1, 150.0 + i.to_double() * 10.0, 100.0)
+    t.draw()
+  }
+  t.release(230.0, 100.0)
+  assert_eq(moved.val, 80.0)
+  assert_eq(taps.val, 0)
+  assert_eq(t.list_offset(), 0.0)
+}
+
+///|
+test "drag_on hold: a finger's quick tap on it is its tap" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = held_edge_view(moved, taps)
+  t.draw()
+  t.press_at(150.0, 100.0)
+  t.release(150.0, 100.0)
+  assert_eq(taps.val, 1)
+  assert_eq(moved.val, 0.0)
+}
+
+///|
+test "drag_on hold: a mouse drags it at once" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = held_edge_view(moved, taps, pointing=Mouse)
+  t.draw()
+  t.drag(150.0, 100.0, 250.0, 100.0)
+  t.draw()
+  assert_true(moved.val > 80.0)
+  assert_eq(t.haptics(), [])
+}

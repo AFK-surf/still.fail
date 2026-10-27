@@ -28,9 +28,14 @@ fn DragAxis::same(self : DragAxis, other : DragAxis) -> Bool {
 /// Where a finger has a drag area: `down` while pressed on it; `moving` once it went past the slop along the axis (from
 /// then on it is the drag's: no tap); `x0`, `y0` where it went down, `x`, `y` where it is (in the window), `dx`, `dy`
 /// since the last frame's look; `ended` once let go after moving (its speed `vx`, `vy`, px per ms), until the view
-/// takes it (Drag::take_end); `tapped` when let go without moving (at `x`, `y`), until taken (Drag::take_tap).
+/// takes it (Drag::take_end); `tapped` when let go without moving (at `x`, `y`), until taken (Drag::take_tap). `hold`:
+/// a finger holds it still long_press_ms before it drags it (Ctx::drag_on): `waits` while this press, a finger's, is
+/// to, `held` once it has.
 pub(all) struct Drag {
   axis : DragAxis
+  hold : Bool
+  mut waits : Bool
+  mut held : Bool
   mut down : Bool
   mut moving : Bool
   mut x0 : Double
@@ -53,13 +58,25 @@ let drags : Map[Int, Drag] = Map([])
 /// Box `id` a drag area along `axis` (see the file's head): the view draws the box itself, with whatever look it has
 /// (a clip, rounded corners), as `Ctx::box(id=…)` in this frame; it adds no node. What the finger does with it is
 /// `drag_of(id)`'s; where a press lands on it is where that box is drawn (its clip and its corners). A frame that says
-/// this but draws no box `id` has no drag area there: nothing to press. Told another axis, it starts anew.
-pub fn Ctx::drag_on(self : Ctx, id : Int, axis? : DragAxis = Vertical) -> Unit {
+/// this but draws no box `id` has no drag area there: nothing to press. Told another axis, it starts anew. With `hold`,
+/// a finger drags it only once held still on it long_press_ms (iOS's and Android's long press before a drag: a thin
+/// thing in reach of what is swiped or scrolled past it, a column's edge): the hold takes the press, felt, and it moves
+/// with the finger from there; one that moves past the slop before is not its (what else is under it takes it, or
+/// nothing moves), and a press let go sooner is its tap. A mouse drags it as any.
+pub fn Ctx::drag_on(
+  self : Ctx,
+  id : Int,
+  axis? : DragAxis = Vertical,
+  hold? : Bool = false,
+) -> Unit {
   match drags.get(id) {
-    Some(d) if d.axis.same(axis) => ()
+    Some(d) if d.axis.same(axis) && d.hold == hold => ()
     _ => {
       drags[id] = {
         axis,
+        hold,
+        waits: false,
+        held: false,
         down: false,
         moving: false,
         x0: 0.0,
@@ -96,10 +113,56 @@ pub fn Ctx::drag_area(
 }
 
 ///|
-/// The drag of area `id` as it is now (None: no such area drawn).
+/// The drag of area `id` as it is now (None: no such area drawn). One a finger is to hold first (Ctx::drag_on's
+/// `hold`), pressed and still: held long_press_ms since the press went down, the press is its from here (the others
+/// under it let it go, no tap), felt, moving; before then, a frame asked for when it will have been.
 pub fn Ctx::drag_of(self : Ctx, id : Int) -> Drag? {
-  ignore(self)
-  drags.get(id)
+  match drags.get(id) {
+    Some(d) => {
+      if d.down && holds_first(d) && self.down && self.press_at >= 0.0 {
+        let held = self.now() - self.press_at
+        if held >= long_press_ms {
+          d.held = true
+          d.moving = true
+          self.claimed = true
+          self.drag_scroll = id
+          for other in self.press_chain {
+            if other != id {
+              drag_cancel(other)
+            }
+          }
+          self.active = 0
+          self.dragging = true
+          self.edge = 0
+          haptic(LongPress)
+        } else {
+          self.wake_in(long_press_ms - held)
+        }
+      }
+      Some(d)
+    }
+    None => None
+  }
+}
+
+///|
+/// Whether a finger is yet to hold drag area `d` still before it drags it (Ctx::drag_on's `hold`): not its press till
+/// then.
+fn holds_first(d : Drag) -> Bool {
+  d.waits && !d.held
+}
+
+///|
+/// The finger moved past the slop from where it went down before it held a drag area that is to be held first: the
+/// press is not that area's (no tap of it, no drag).
+fn hold_moved_off(id : Int, x : Double, y : Double) -> Unit {
+  match drags.get(id) {
+    Some(d) if d.down && holds_first(d) =>
+      if ((x - d.x0) * (x - d.x0) + (y - d.y0) * (y - d.y0)).sqrt() > touch_slop() {
+        drag_cancel(id)
+      }
+    _ => ()
+  }
 }
 
 ///|
@@ -134,6 +197,9 @@ fn drag_down(id : Int, x : Double, y : Double) -> Bool {
     Some(d) => {
       d.down = true
       d.moving = false
+      // (a finger's as it went down: what the press is, whatever comes after)
+      d.waits = d.hold && pointing() is Finger
+      d.held = false
       d.x0 = x
       d.y0 = y
       d.x = x
