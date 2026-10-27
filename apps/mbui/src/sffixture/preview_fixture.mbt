@@ -60,9 +60,7 @@ pub fn fixture_preview(mode : String) -> Unit {
       if mode == "chat-preview-swipe" {
         pv_strip.pinned = Some(-150.0)
       }
-      // its bars kept up: a shot taken late (a busy machine, the browser's) sees what one taken early does
       if viewer.val is Some(v) {
-        v.rests = false
         // the song paused at 0:31 of 1:35, the same on every run
         if which.has_suffix(".m4a") {
           v.pinned = Some({

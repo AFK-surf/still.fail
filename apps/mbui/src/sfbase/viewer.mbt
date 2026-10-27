@@ -143,13 +143,6 @@ pub let show_limit : Int = 2 * 1024 * 1024
 pub let table_rows : Int = 2000
 
 ///|
-/// The bars fade after this long left alone; after a tap that brought them back, a while longer.
-pub let rest_ms : Double = 2000.0
-
-///|
-pub let tap_rest_ms : Double = 4000.0
-
-///|
 /// A finger held still this long before it is let go flings nothing (its speed is of moves long past).
 pub let swipe_still_ms : Double = 100.0
 
@@ -190,12 +183,10 @@ pub(all) struct Viewer {
   mut download_asked : Bool
   /// …or to be installed (an APK)
   mut install_after : Bool
-  /// the bars shown, and how long they stay when left alone (-1: till a tap), counted anew each time they wake
+  /// the bars shown: till a tap (a click) hides them, and another brings them back (the user, 2026-10-28)
   mut awake : Bool
-  mut rest_len : Double
-  mut rest_n : Int
-  /// whether they fade when left alone after it opens (not in the fixture's shots, which come when they come)
-  mut rests : Bool
+  /// a mouse's pointer along the top, where the bar is: there while it is, hidden or not
+  mut near_bar : Bool
   zoom : @kit.Zoom
   vzoom : @kit.Zoom
   /// 源码 rather than 预览
@@ -264,10 +255,6 @@ pub(all) struct Viewer {
   /// it was then
   mut leaving_grab : Bool
   mut left_at : Double
-  /// a desktop's mouse: where it was last frame (its moves wake the bars, preview_desk.mbt), once seen
-  mut mouse_x : Double
-  mut mouse_y : Double
-  mut mouse_seen : Bool
   /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
@@ -560,9 +547,7 @@ pub fn new_viewer(
     download_asked: false,
     install_after: false,
     awake: true,
-    rest_len: -1.0,
-    rest_n: 0,
-    rests: true,
+    near_bar: false,
     zoom: @kit.Zoom::new(),
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
     vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
@@ -611,9 +596,6 @@ pub fn new_viewer(
     },
     leaving_grab: false,
     left_at: 0.0,
-    mouse_x: 0.0,
-    mouse_y: 0.0,
-    mouse_seen: false,
     media: None,
     copied: 0,
     head_w: 0.0,
@@ -1100,7 +1082,7 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     // first, a seek far ahead one more ranged read), from the frame it was left at (the thumbnail's)
     Some(KVideo) | Some(KAudio) => {
       if v.media is None {
-        let m = @sf.new_media("preview-media", rest_ms=if bars_rest() { @kit.media_rest_ms } else { 0.0 })
+        let m = @sf.new_media("preview-media")
         let start = if v.start_at > 0.0 { v.start_at } else { 0.0 }
         v.start_at = -1.0
         m.open(
@@ -1210,8 +1192,6 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   }
   if !v.started {
     v.started = true
-    v.rest_n += 1
-    v.rest_len = if v.rests && bars_rest() { rest_ms } else { -1.0 }
     // it comes up in the keyboard's place: what was being typed into lets go of it first
     c.blur()
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
@@ -1280,11 +1260,6 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   if v.install_after && v.bytes.get() is Some(_) {
     v.install_after = false
     v.ask_install(c)
-  }
-  // the bars fade when left alone (not while it comes, nor over a page whose taps are its own; nor where they are the
-  // system's, an iPhone Duo's: there until a tap hides them, as its own apps' are)
-  if v.awake && v.rest_len > 0.0 && !@sf.native_on() && @kit.after(c, "pv-rest/\{v.rest_n}", true, v.rest_len) {
-    v.awake = false
   }
   let t = @sf.theme()
   let kind = v.shown_kind()
@@ -1467,40 +1442,21 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
 }
 
 ///|
-/// A tap on the stage shows or hides the bars.
+/// A tap (a click) on the stage shows or hides the bars: nothing else hides them.
 pub fn Viewer::toggle(self : Viewer) -> Unit {
-  if self.awake {
-    self.awake = false
-    self.rest_len = -1.0
-  } else {
-    self.wake(tap_rest_ms)
-  }
+  self.awake = !self.awake
 }
 
 ///|
-pub fn Viewer::wake(self : Viewer, ms : Double) -> Unit {
+pub fn Viewer::wake(self : Viewer) -> Unit {
   self.awake = true
-  self.rest_n += 1
-  self.rest_len = if bars_rest() { ms } else { -1.0 }
 }
 
 ///|
-/// Whether the bars fade when left alone: not in a scripted run that says so (MBUI_VIEWER_AWAKE=1: on a slow
-/// emulator a flow's next step can outlast their rest), where only a tap hides them.
-pub fn bars_rest() -> Bool {
-  if viewer_awake_env.val < 0 {
-    viewer_awake_env.val = if @ui.env("MBUI_VIEWER_AWAKE") == "1" { 1 } else { 0 }
-  }
-  viewer_awake_env.val == 0
-}
-
-///|
-pub let viewer_awake_env : Ref[Int] = { val: -1 }
-
-///|
-/// Whether the bars show: awake, or while the whole of an image comes, or over a page whose taps are its own.
+/// Whether the bars show: awake, or a mouse's pointer along the top where the bar is, or while the whole of an image
+/// comes, or over a page whose taps are its own.
 pub fn Viewer::bars_shown(self : Viewer) -> Bool {
-  self.awake || self.coming() || (self.shown_kind() == Some(KHtml) && !self.source) || marking.on
+  self.awake || self.near_bar || self.coming() || (self.shown_kind() == Some(KHtml) && !self.source) || marking.on
 }
 
 ///|
@@ -2263,7 +2219,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       // shown at once: no fade; a step wakes the bars (FilePreview.kt: LaunchedEffect(file.path) { wake() })
       n.started = true
       n.fade.set(1.0)
-      n.wake(rest_ms)
+      n.wake()
       viewer.val = Some(n)
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
@@ -2412,8 +2368,8 @@ pub fn Viewer::gestures(
     v.pinched = false
   }
   // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
-  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); the bars are the mouse's moves' (a
-  // finger's tap, on a wide touch screen too, shows or hides them)
+  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); a click on it, as a finger's tap, shows
+  // or hides the bars
   let desk = @sf.pointer_rests()
   let on_picture = match z.rect() {
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
@@ -2427,17 +2383,13 @@ pub fn Viewer::gestures(
     } else if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
-      if !desk {
-        v.toggle()
-      }
+      v.toggle()
       z.double_tap(px, py)
     } else {
       v.tap_at = at
       v.tap_x = px
       v.tap_y = py
-      if !desk {
-        v.toggle()
-      }
+      v.toggle()
     }
   }
   // the wheel: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the pointer
@@ -3093,7 +3045,6 @@ pub fn file_viewer_reset() -> Unit {
   pv_strip.pinned = None
   pv_strip.near.clear()
   near_asked.clear()
-  viewer_awake_env.val = -1
 }
 
 ///|

@@ -130,6 +130,8 @@ pub struct Media {
   priv mut fill : Bool
   priv mut sideways : Bool
   priv mut awake : Bool
+  /// a mouse's pointer over where its controls or its bar are (Media::near): they show while it is
+  priv mut near : Bool
   priv mut poke : Int
   priv mut rest_key : String
   priv mut note : MediaNote?
@@ -205,6 +207,7 @@ pub fn Media::new(
     fill: false,
     sideways: false,
     awake: true,
+    near: false,
     poke: 0,
     rest_key: "",
     note: None,
@@ -414,6 +417,22 @@ pub fn Media::wake(self : Media) -> Unit {
 }
 
 ///|
+/// Its controls hidden while shown, shown while hidden (a click on its picture).
+pub fn Media::toggle(self : Media) -> Unit {
+  if self.awake {
+    self.awake = false
+  } else {
+    self.wake()
+  }
+}
+
+///|
+/// A mouse's pointer over where its controls or its bar are (`on`): they show while it is, hidden or not.
+pub fn Media::near(self : Media, on : Bool) -> Unit {
+  self.near = on
+}
+
+///|
 /// Played, or paused (at its end: from its start again).
 pub fn Media::play_pause(self : Media) -> Unit {
   let s = self.status()
@@ -611,7 +630,7 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
       p.wake()
     }
   }
-  let target = if p.awake || phase != Playing || audio { 1.0 } else { 0.0 }
+  let target = if p.awake || p.near || phase != Playing || audio { 1.0 } else { 0.0 }
   let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(
       if target > 0.0 {
         p.wake_ms

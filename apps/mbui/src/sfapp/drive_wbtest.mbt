@@ -144,8 +144,9 @@ test "a picture goes to the preview, read by drive.read" {
     assert_eq(number(Some(p), "size"), 812345.0)
     assert_eq(number(Some(p), "mtime"), 1792300000000.0 - 812345.0)
   }
-  // its bars, left alone, go
-  t.run_for(rest_ms)
+  // left alone a while, its bars there still (only a tap hides them)
+  t.run_for(left_alone_ms)
+  assert_true(v.bars_shown())
   t.assert_idle()
 }
 

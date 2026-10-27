@@ -97,9 +97,12 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 
 ///|
 /// The bar across the window's top, in its place in the preview's layer: gone with the rest of the preview as it
-/// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
+/// fades (`shown`), and hidden by a tap (a click) on the stage till another; its tools by what it shows. A mouse's
+/// pointer along the top, where it is, shows it while it is there.
 pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = vw
+  let (_, py, _) = c.pointer()
+  v.near_bar = @sf.pointer_rests() && py >= 0.0 && py < @sf.viewer_bar_h
   // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27)
   let native = @sf.native_over_up(v.file.name)
   // read in the reader, played in the player: their own bars
@@ -108,17 +111,6 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   }
   let ink = @sf.page_viewer_ink()
   let kind = v.shown_kind()
-  // a mouse moving over it wakes what fades; resting on the bar, it stays
-  let (px, py, _) = c.pointer()
-  if @sf.pointer_rests() && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
-    v.wake(rest_ms)
-  }
-  if @sf.pointer_rests() && !v.awake && py >= 0.0 && py < @sf.viewer_bar_h && v.mouse_seen {
-    v.wake(rest_ms)
-  }
-  v.mouse_x = px
-  v.mouse_y = py
-  v.mouse_seen = true
   // Esc closes it (marking: leaves the marks first), ← and → step
   if marking.on {
     if !v.closing && c.key_pressed(@ui.key_escape) {

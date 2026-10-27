@@ -1,4 +1,8 @@
 ///|
+/// Long past any wait the viewer's bars ever had: left alone this long they are still there (only a tap hides them).
+let left_alone_ms : Double = 10000.0
+
+///|
 /// The made-up chat with one of its made-up files open in the preview (preview_fixture.mbt), the window `w` wide, on
 /// `platform`'s screen.
 fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {

@@ -85,8 +85,6 @@ pub fn bars_in(Source, String) -> (Array[Array[String]], Int32)
 
 pub let bars_picked : @ref.Ref[(Array[Array[String]], Int32)?]
 
-pub fn bars_rest() -> Bool
-
 pub fn bars_shown(@ui.Ctx) -> Bool
 
 pub fn base_name(String) -> String
@@ -1187,8 +1185,6 @@ pub let reporting_host : @ref.Ref[ReportingHost?]
 
 pub fn reset() -> Unit
 
-pub let rest_ms : Double
-
 pub fn round_rect(Double, Double, Double, Double, Double) -> Array[(Double, Double)]
 
 pub fn row_agent_groups(ChatItem) -> Array[RowAgent]
@@ -1389,8 +1385,6 @@ pub fn tagging_new() -> Tagging
 
 pub fn tagging_take(Tagging, Bytes, Bool) -> Bytes
 
-pub let tap_rest_ms : Double
-
 pub fn tap_stage(@ui.Ctx, Viewer, Int32) -> Unit
 
 pub fn tell_focus(Source, ChatRef, ChatView, Reading, Bool, Double) -> Unit
@@ -1514,8 +1508,6 @@ pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> Strin
 pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], Json?)
 
 pub let viewer : @ref.Ref[Viewer?]
-
-pub let viewer_awake_env : @ref.Ref[Int32]
 
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
@@ -3022,9 +3014,7 @@ pub(all) struct Viewer {
   mut download_asked : Bool
   mut install_after : Bool
   mut awake : Bool
-  mut rest_len : Double
-  mut rest_n : Int32
-  mut rests : Bool
+  mut near_bar : Bool
   zoom : @kit.Zoom
   vzoom : @kit.Zoom
   mut source : Bool
@@ -3069,9 +3059,6 @@ pub(all) struct Viewer {
   mut start_at : Double
   mut leaving_grab : Bool
   mut left_at : Double
-  mut mouse_x : Double
-  mut mouse_y : Double
-  mut mouse_seen : Bool
   mut media : @kit.Media?
   mut copied : Int32
   mut head_w : Double
@@ -3129,7 +3116,7 @@ pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
-pub fn Viewer::wake(Self, Double) -> Unit
+pub fn Viewer::wake(Self) -> Unit
 
 pub(all) struct Viewport {
   width : Int32

@@ -226,9 +226,10 @@ test "a file card in the chat opens its preview" {
   t.tap_text(".log")
   assert_true(viewer.val is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "build.log")
-  // the preview flown open, its bars left alone till they rest
+  // the preview flown open, and left alone a while: its bars there still (only a tap hides them)
   t.run_for(fly_open_ms)
-  t.run_for(rest_ms)
+  t.run_for(left_alone_ms)
+  assert_true(viewer.val.unwrap().bars_shown())
   t.assert_idle()
 }
 
