@@ -204,7 +204,7 @@ fn action_offered(id : String, icon : String, version? : String = "", station? :
 ///|
 /// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
 /// open chat's (find, its services, into the archive, its agents' history, its agents stopped, a file into its draft,
-/// relayed, its station updated: as its keys and its bar's offer them now), the app's newer build, the app's (a new
+/// relayed, its station updated: as its keys and its bar's offer them now), the app's newer build or looking for one, the app's (a new
 /// chat, the sidebar, settings, the shortcuts), settings' pages (only found by typing). The core names the keys'
 /// actions and finds what was typed among them (sfdesk/switcher.mbt).
 fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.Offered] {
@@ -262,6 +262,11 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
   // the app's newer build, as 更新 over the sidebar offers it (brand.mbt)
   if update.available.get() is Some(_) && !update_under_way() {
     offer(action_offered("update.app", "download", version=text(update.available.get(), "versionName"), fn() { update_install(src) }))
+  }
+  // looking for a newer build now, as the menu's 检查更新… does (its dialog: what it finds, or that there is none); found
+  // only by typing (the core's), wherever the app asks still.fail cloud for its builds
+  if update.source is Some(_) && !update_under_way() {
+    offer(action_offered("update.check", "refresh", fn() { @sfbase.update_from_menu(src) }))
   }
   offer(action_offered("chat.new", "compose", fn() { new_chat() }))
   // (the wide frame's alone)

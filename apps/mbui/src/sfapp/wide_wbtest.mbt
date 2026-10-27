@@ -227,6 +227,25 @@ test "wide: ⌘K over a chat offers what its keys and bar do (归档, 执行历�
 }
 
 ///|
+test "wide: ⌘K finds 检查更新 by its name or \"check update\", where the app asks for its builds; picked, the update dialog" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  update.source = Some({ check: fn(_, _, _) {  }, url: fn(f) { f } })
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.type_text("check update")
+  t.frame()
+  assert_true(t.find("检查更新") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.clear()
+  t.type_text("检查更新")
+  t.frame()
+  t.enter()
+  t.frame()
+  assert_true(t.find("搜索全部内容和操作") is None)
+  assert_true(update_dialog_open())
+  update.source = None
+}
+
+///|
 test "wide: the 奏 page shows the decision the core shows: a row pressed (decision.show), ⌥↓ and ⌥↑ through its list" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="decisions")
