@@ -878,6 +878,8 @@ fn new_send(
   let up = up_files(d)
   let going = going_files(d)
   let quotes = sent_quotes(d)
+  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  let marks = @sfbase.refs_sent_marks(d.key, words)
   // (its words where they were typed while the chat is made, its quotes where their cards were and its files where
   // their tiles were: carried, the composer held as tall as it is meanwhile, the new chat's and then its chat's, till
   // they set out)
@@ -891,6 +893,7 @@ fn new_send(
     hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
+    marks~,
   )
   fresh.starting.set(true)
   @sfbase.writing_starting(src, d, true)
@@ -935,7 +938,7 @@ fn new_send(
               d.key,
               station + ":" + key,
               rk,
-              sent_local(rk, None, words, up, going~, quotes~),
+              sent_local(rk, None, words, up, going~, quotes~, marks~),
               hold=fn(ms) { composer_hold(station + ":" + key, 0.0, box, ms) },
             )
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)

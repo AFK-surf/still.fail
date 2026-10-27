@@ -145,6 +145,7 @@ using @sfbase {
   read_only_words,
   sent_local,
   sent_local_gone,
+  sent_marks,
   writing_add,
   writing_drop,
   writing_take,

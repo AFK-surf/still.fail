@@ -372,7 +372,7 @@ pub fn permissions_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn person_avatar(@ui.Ctx, @sfbase.Source, String, String, String) -> Unit
 
-pub fn person_words(@ui.Ctx, String, String, found? : Array[String], peek? : ((String, String, Int32) -> Unit)?, chat_title? : (String) -> String?) -> Unit
+pub fn person_words(@ui.Ctx, String, String, found? : Array[String], peek? : ((String, String, Int32) -> Unit)?, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Unit
 
 pub let pf_card_foot : @ui.Style
 

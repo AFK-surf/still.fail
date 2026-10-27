@@ -1291,7 +1291,9 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   }
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, shown, going=uploads)
+  // (its references as the field's marks till the core makes them links: drawn as the field drew them)
+  let marks = @sfbase.refs_sent_marks(d.key, words)
+  let row = sent_local(rk, Some(v), words, shown, going=uploads, marks~)
   let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
   let chat = d.key
   flight_start(
@@ -1305,6 +1307,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     field=field_key,
     hold=fn(ms) { composer_hold(chat, room, ms) },
     desk=false,
+    marks~,
   )
   ref_field_put(d, "")
   d.files.clear()

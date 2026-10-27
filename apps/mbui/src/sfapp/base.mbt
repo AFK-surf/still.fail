@@ -388,6 +388,7 @@ pub using @sfbase {
   sending_of,
   sent_local,
   sent_local_gone,
+  sent_marks,
   type LocalSent,
   became_starts,
   fresh,

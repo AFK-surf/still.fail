@@ -256,6 +256,58 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
 }
 
 ///|
+/// The marks draft `key`'s field holds, where they are in `words` sent from it (its words trimmed, lines maybe put after
+/// them): what was sent from here draws them as the field did until the core's row has them as links (sent_local,
+/// flight_start). None where the field holds other words.
+pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
+  let f = ref_field(key)
+  let s = f.text
+  let blank = fn(i : Int) {
+    let u = s.unsafe_charcode_at(i)
+    u == 32 || u == 10 || u == 9
+  }
+  let mut lead = 0
+  while lead < s.length() && blank(lead) {
+    lead += 1
+  }
+  let mut end = s.length()
+  while end > lead && blank(end - 1) {
+    end -= 1
+  }
+  guard words.has_prefix(s.view(start_offset=lead, end_offset=end).to_string()) else { return [] }
+  f.marks.filter_map(fn(m) { if m.0 >= lead && m.1 <= end { Some((m.0 - lead, m.1 - lead)) } else { None } })
+}
+
+///|
+/// Words `s` as a field draws its marks `marks` (refs_look): each one's `[` and `]` clear, the `[` before its `@`, the
+/// rest in `accent`.
+pub fn refs_runs(s : String, marks : Array[(Int, Int)], accent : Int64) -> Array[@ui.Run] {
+  let out : Array[@ui.Run] = []
+  let mut at = 0
+  for m in marks {
+    let (a, b) = m
+    if a < at || b > s.length() || b - a < 4 {
+      continue
+    }
+    if a > at {
+      out.push(@ui.span(s.view(start_offset=at, end_offset=a).to_string()))
+    }
+    out.push(@ui.span("[", color=clear))
+    out.push(@ui.span("@" + s.view(start_offset=a + 2, end_offset=b - 1).to_string(), color=accent))
+    out.push(@ui.span("]", color=clear))
+    at = b
+  }
+  if at < s.length() {
+    out.push(@ui.span(s.view(start_offset=at).to_string()))
+  }
+  out
+}
+
+///|
+/// (no ink: a rich run's 0 is the words' own)
+let clear : Int64 = 0x00FFFFFFL
+
+///|
 /// Whether draft `key`'s field holds a mark, as the core read its words now; None while it has not read them (the words
 /// changed since it was asked).
 pub fn refs_marked(key : String) -> Bool? {

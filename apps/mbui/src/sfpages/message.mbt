@@ -384,10 +384,11 @@ pub fn person_words(
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
+  marks? : Array[(Int, Int)] = [],
 ) -> Unit {
   let p = @sf.theme().p
   c.rich(
-    @sf.found_weight(message_runs(words, p.accent, chat_title~), found),
+    @sf.found_weight(message_runs(words, p.accent, chat_title~, marks~), found),
     key="msg-words/" + key,
     style=@sf.theme().t.words,
     link_color=p.blue,
@@ -439,6 +440,7 @@ fn mine_bubble(
   found? : Array[String] = [],
   peek? : ((String, String, Int) -> Unit)? = None,
   chat_title? : (String) -> String? = fn(_) { None },
+  marks? : Array[(Int, Int)] = [],
 ) -> Unit {
   // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
   let flight = flight_here(here)
@@ -464,11 +466,11 @@ fn mine_bubble(
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
-          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~) })
+          let w = c.box(fn() { person_words(c, words, key, found~, peek~, chat_title~, marks~) })
           flight_landing_words(c, f, w)
           flight_pieces_in(c, f, bubble_node)
         }
-        None => person_words(c, words, key, found~, peek~, chat_title~)
+        None => person_words(c, words, key, found~, peek~, chat_title~, marks~)
       }
     },
   )

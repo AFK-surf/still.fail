@@ -495,7 +495,7 @@ pub let flight_carry_ms : Double
 
 pub fn flight_carry_shift(@ui.Ctx, String) -> Double
 
-pub fn flight_carry_start(@ui.Ctx, String, String, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool) -> Unit
+pub fn flight_carry_start(@ui.Ctx, String, String, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)]) -> Unit
 
 pub fn flight_carry_waiting(@ui.Ctx) -> Unit
 
@@ -537,7 +537,7 @@ pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)]) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 
@@ -809,7 +809,7 @@ pub fn menu_bar_json(Json?, Bool) -> String
 
 pub fn message_of(Json) -> Message
 
-pub fn message_runs(String, Int64, chat_title? : (String) -> String?) -> Array[@ui.Run]
+pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
 
 pub let monitor_mark : LinkMark
 
@@ -1157,7 +1157,11 @@ pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 
 pub fn refs_reset() -> Unit
 
+pub fn refs_runs(String, Array[(Int32, Int32)], Int64) -> Array[@ui.Run]
+
 pub fn refs_search(Source, String, Map[String, Json]) -> Topic
+
+pub fn refs_sent_marks(String, String) -> Array[(Int32, Int32)]
 
 pub fn relay_connect(String) -> Json?
 
@@ -1227,9 +1231,11 @@ pub fn sending_of(String) -> Array[LocalSent]
 
 pub fn sent_key(String, String) -> String
 
-pub fn sent_local(String, ChatView?, String, Array[Json], going? : Array[Json], quotes? : Array[Json]) -> String
+pub fn sent_local(String, ChatView?, String, Array[Json], going? : Array[Json], quotes? : Array[Json], marks? : Array[(Int32, Int32)]) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
+
+pub fn sent_marks(Outgoing) -> Array[(Int32, Int32)]
 
 pub fn sent_picture(String, Attachment) -> String?
 
@@ -2711,6 +2717,7 @@ pub(all) struct SendFlight {
   desk : Bool
   lines : @ui.FieldLines?
   lead : Int32
+  marks : Array[(Int32, Int32)]
   files : Array[FlyingFile]
   mut key : String
   mut placed : Bool

@@ -170,6 +170,17 @@ test "references in plain words: a still.fail link's, and one linked bare readin
 }
 
 ///|
+test "what was sent from here draws the composer's marks as the references its message will have" {
+  let accent = @sf.theme().p.accent
+  let sent = message_runs("看 @[首页] 吧", accent, marks=[(2, 7)])
+  let theirs = message_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 吧", accent)
+  assert_eq(sent.map(fn(r) { r.text }), theirs.map(fn(r) { r.text }))
+  assert_eq(sent.map(fn(r) { r.color }), theirs.map(fn(r) { r.color }))
+  // (words like a mark that the field did not hold as one stay as written)
+  assert_eq(message_runs("看 @[首页] 吧", accent).map(fn(r) { r.text }), ["看 @[首页] 吧"])
+}
+
+///|
 test "images take their own proportions before they load" {
   let a : Attachment = {
     name: "a.png",
