@@ -800,6 +800,8 @@ pub fn Ctx::rich(
   // a link held still a long press's time by a finger: told where it leads and the piece of line held (in the
   // window), once a press, and the press is the hold's (no tap of the link as it lifts); a mouse holds nothing (its
   // right click, above: Pointing)
+  // (read so: hand.mbt)
+  hand.down.get() |> ignore
   match on_link_hold {
     Some(f) if self.down && self.held_told != self.press_at && pointing() is Finger =>
       for k, r in runs {
@@ -812,7 +814,8 @@ pub fn Ctx::rich(
         if moved {
           break
         }
-        let held = self.now() - self.press_at
+        // (a moment: the frame at it woken, wake_in)
+        let held = self.clock - self.press_at
         if held < long_press_ms {
           self.wake_in(long_press_ms - held)
           break

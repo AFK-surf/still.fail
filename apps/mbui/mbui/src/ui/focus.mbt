@@ -116,12 +116,19 @@ pub fn Ctx::roving_prefer(self : Ctx, id : Int) -> Unit {
 ///|
 /// Whether `id` has the keyboard's focus.
 pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
-  id != 0 && self.focus == id
+  if id == 0 {
+    return false
+  }
+  // (read so: what reads it is built again as the focus comes to it or leaves it, hand.mbt)
+  hand.focus.has(id) |> ignore
+  self.focus == id
 }
 
 ///|
 /// Whether `id` has the focus and it shows (it came by the keyboard): where a focus ring is drawn.
 pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
+  // (shown as the keys moved it: hand.mbt)
+  hand_events_read()
   self.has_focus(id) && self.focus_visible
 }
 
@@ -139,7 +146,7 @@ pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
 ///|
 /// Whether `id` came to have the focus since the last frame (a radio's, a tab's: chosen as the arrows reach it).
 pub fn Ctx::focus_gained(self : Ctx, id : Int) -> Bool {
-  id != 0 && self.focus == id && self.focus_before != id
+  self.has_focus(id) && self.focus_before != id
 }
 
 ///|
@@ -152,6 +159,7 @@ pub fn Ctx::focus_roved_to(self : Ctx, id : Int) -> Bool {
 ///|
 /// What had the focus as the frame started (0 nothing).
 pub fn Ctx::focused_id(self : Ctx) -> Int {
+  hand.focus_id.get() |> ignore
   self.focus
 }
 
@@ -159,6 +167,9 @@ pub fn Ctx::focused_id(self : Ctx) -> Int {
 /// As the frame starts: the keys since the last one that move or use the focus, and the actions asked (see the file's
 /// head).
 fn Ctx::focus_frame_start(self : Ctx) -> Unit {
+  // (the keys, what a reader asked and the focus, read so: hand.mbt)
+  hand_events_read()
+  hand.focus_id.get() |> ignore
   self.actions.clear()
   for a in self.asked_actions {
     self.actions.push(a)

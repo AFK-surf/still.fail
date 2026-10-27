@@ -570,7 +570,7 @@ pub fn Ctx::key_catcher(self : Ctx, key : String) -> KeyCatch {
     st.keys = st.came.copy()
     st.came.clear()
   }
-  { id, focused: self.focus == id, keys: st.keys }
+  { id, focused: self.has_focus(id), keys: st.keys }
 }
 
 ///|

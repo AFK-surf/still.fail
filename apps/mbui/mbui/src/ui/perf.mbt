@@ -90,6 +90,7 @@ pub fn Tester::wanted_after(self : Tester) -> Double {
   let c = g()
   if self.fake.wants ||
     c.wants_frame ||
+    c.took_input ||
     paint_left() ||
     c.motion_left ||
     c.cycling ||
@@ -122,6 +123,9 @@ pub fn Tester::wanted_why(self : Tester) -> String {
   }
   if paint_left() {
     why.push("a frame asked for to paint: " + paint_said.val)
+  }
+  if c.took_input && !c.wants_frame {
+    why.push("an input's frame after")
   }
   if c.motion_left {
     why.push("moving: " + c.moving_now().join("; "))

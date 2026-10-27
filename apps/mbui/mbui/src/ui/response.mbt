@@ -98,13 +98,13 @@ pub fn Ctx::interact(
   let long = !holds && self.long_press(id)
   {
     id,
-    clicked: self.clicked.contains(id) || self.action_asked(id, Activate),
+    clicked: self.click_seen(id),
     long_pressed: long,
     right_clicked: self.right_clicked(id),
     hovered: self.lit(id),
-    pressed: self.active == id && self.down,
-    focused: self.focus == id,
-    focus_shown: self.focus == id && self.focus_visible,
+    pressed: self.held_down(id),
+    focused: self.has_focus(id),
+    focus_shown: self.focus_shown(id),
     gained_focus: self.focus_gained(id),
     changed: false,
     rect,
@@ -116,6 +116,10 @@ pub fn Ctx::interact(
 /// (the widget's response, its tooltip); the press is then no tap. What a finger asks a menu or a tooltip by. Like a
 /// click, an input of the frame's: the frame built again (frame_body) sees it no more, so what it opens opens once.
 pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    // (read so: hand.mbt)
+    hand.held.has(id) |> ignore
+  }
   self.long_press(id) ||
   (id != 0 && self.held_on == id && self.held_build == self.build_no && self.held_told == self.press_at)
 }
@@ -124,13 +128,17 @@ pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
 /// Whether the press under way on `id` has just been held long_press_ms without moving: then it is the hold's (no
 /// click when let go). A frame is asked for when it will have been.
 fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
+  // (read so: what reads it is built again as it is pressed or let go, hand.mbt; held long a moment, woken at)
+  if id != 0 {
+    hand.pressed.has(id) |> ignore
+  }
   if !(self.down && self.active == id && !self.dragging) || self.press_at < 0.0 {
     return false
   }
   if self.held_told == self.press_at {
     return false
   }
-  let held = self.now() - self.press_at
+  let held = self.clock - self.press_at
   if held >= long_press_ms {
     self.held_told = self.press_at
     self.held_on = id
@@ -141,4 +149,13 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
     self.wake_in(long_press_ms - held)
     false
   }
+}
+
+///|
+/// Whether a press is down on `id` (no wait for what scrolls: Ctx::pressed has it), read so (hand.mbt).
+fn Ctx::held_down(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    hand.pressed.has(id) |> ignore
+  }
+  self.active == id && self.down
 }

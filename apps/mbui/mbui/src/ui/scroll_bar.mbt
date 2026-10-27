@@ -335,9 +335,16 @@ fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
 }
 
 ///|
+/// The bars as the hand has them (near the pointer, held, let go), told as that changes (Ctx::bar_moved): what draws
+/// them (Ctx::bar_at, as the frame is painted) reads it, painted again as it changes.
+// kept across runs: only counts on
+let bars_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// What shows the bar of `id` (its list's or box's motion) told again: when it is at rest has changed. What it was
 /// said to be stays (a fling, a glide: what moves with the bar).
 fn Ctx::bar_moved(self : Ctx, id : Int) -> Unit {
+  bars_said.set(@signals.untracked(fn() { bars_said.get() }) + 1)
   let again = fn(who : Mover, m : &Moving, what : String) {
     let mut said = what
     for e in self.movers {
@@ -375,6 +382,8 @@ fn Ctx::bar_drawn(self : Ctx, id : Int) -> BarAt? {
 /// for the pointer (the frame's bars), to draw once what it holds is drawn (Ctx::paint_bar). None where nothing of it
 /// scrolls past its view, or it is one of boxes scrolled as one (drawn along the list they are in: Ctx::across_bars).
 fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
+  // (where the hand has the bars: read so)
+  bars_said.get() |> ignore
   let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, r_bl), _) = clip_at(clip_top())
   let x0 = dmax(n.x, cx0)
   let y0 = dmax(n.y, cy0)

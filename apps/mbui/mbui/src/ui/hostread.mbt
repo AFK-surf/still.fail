@@ -74,8 +74,9 @@ pub(all) enum Pointing {
 /// anything is hovered (a finger hovers over nothing: Ctx::hovered, a tooltip, a hover card), how a menu is asked for
 /// (Ctx::menu_asked), what shows only to a pointer resting on it, how a press, a drag and Enter work. Never what the
 /// window's size or the system's size classes decide (the layout: how many panes, how wide, how large the words);
-/// never these by them.
+/// never these by them. Read so: what reads it as it is built is built again as it changes (hand.mbt).
 pub fn pointing() -> Pointing {
+  hand.pointing.get() |> ignore
   match fake.val {
     Some(f) => f.pointing
     None =>

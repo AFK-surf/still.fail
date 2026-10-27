@@ -85,6 +85,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let c = g()
   let fed = inputs_since.val
   inputs_since.val = false
+  let taken = inputs_taken.val
+  inputs_taken.val = false
   in_frame.val = true
   frame_running.val = true
   paint_phase.val = 0
@@ -96,9 +98,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // clock alone: frame_watch.mbt)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
-  // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
+  // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
+  // what is built took them (inputs_taken), else as what it read changed (frame_watch.mbt)
   c.took_input = fed
-  if fed {
+  if taken {
     c.wants_frame = true
   }
   let t3 = work_now()
@@ -130,7 +133,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || bench.mode > 0 || held || paint_left() {
+  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
@@ -655,8 +658,8 @@ fn field_written() -> Unit {
 /// the one after it are the framework's to draw (inputrec.mbt `inputs_since`).
 fn input_came() -> Unit {
   inputs_since.val = true
-  // (what the frame reads of the hand: frame_watch.mbt; no event from outside for what is kept, kept_part.mbt)
-  inputs_told()
+  // (a frame owed: what it changed of the hand, what reads it reads, hand.mbt; no event from outside for what is kept,
+  // kept_part.mbt)
   h_frame_owed()
 }
 
@@ -677,6 +680,11 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   }
   took_input("pointer", h_event_time(), args)
   pointing_said_by_host(by)
+  // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
+  // moved is the hand's place, read by what reads it: hand.mbt)
+  if kind != 1 {
+    hand_event()
+  }
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
@@ -1152,7 +1160,15 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     c.active = 0
     second_ptr[2] = 0.0
   }
-  h_request_frame()
+  // (moved, nothing held down: a frame owed, what it changed of the hand read by what reads it, hand.mbt; else what
+  // the press did, come from outside what is a signal yet)
+  if kind == 1 && !c.down {
+    h_frame_owed()
+  } else {
+    // (a drag: taken by what is built, inputrec.mbt)
+    inputs_taken.val = true
+    h_request_frame()
+  }
 }
 
 ///|
@@ -1241,6 +1257,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// with no gesture.
 fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
   took_input("back", h_now(), [kind.to_double(), x, _progress, edge.to_double()])
+  hand_event()
   let c = g()
   let t = h_now()
   // from the right edge, the finger's way is mirrored
@@ -1301,6 +1318,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
+  hand_event()
   key_in(code, mods)
 }
 
@@ -1362,6 +1380,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
+  hand_event()
   let c = g()
   // the keyboard put away by the person: what has the focus lets go of it (what is composed stays, as words)
   if kind == text_keyboard_gone {
@@ -1458,6 +1477,8 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 ///|
 fn on_app_state(s : Int) -> Unit {
   took_input("app", h_now(), [s.to_double()])
+  // (what the host says of the app: come from outside, frame_watch.mbt)
+  outside_counted()
   // a scripted run stands for someone looking at the app: what the host says meanwhile (a locked screen's window
   // is covered, a task's app not active) is let be
   if driver.val is Some(d) {

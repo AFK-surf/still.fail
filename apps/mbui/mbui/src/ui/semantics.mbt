@@ -183,13 +183,15 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   ignore(self)
   self.asked_actions.push((id, action))
-  // an input, as a tap is: its frame and the one after
+  // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
+  hand_event()
   input_came()
 }
 
 ///|
 /// Whether `action` was asked of `id` for this frame.
 pub fn Ctx::action_asked(self : Ctx, id : Int, action : Action) -> Bool {
+  hand_events_read()
   for a in self.actions {
     if a.0 == id && a.1 == action {
       return true
@@ -201,6 +203,7 @@ pub fn Ctx::action_asked(self : Ctx, id : Int, action : Action) -> Bool {
 ///|
 /// The words asked to be put in `id` this frame in place of what it holds (Action::SetText), the last asked.
 pub fn Ctx::text_asked(self : Ctx, id : Int) -> String? {
+  hand_events_read()
   let mut got = None
   for a in self.actions {
     if a.0 == id && a.1 is SetText(s) {

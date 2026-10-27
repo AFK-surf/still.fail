@@ -485,6 +485,7 @@ pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
 /// window's terms: for its context menu. It counts for what is under the pointer and what holds it.
 pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
   ignore(self)
+  hand_events_read()
   for m in desk.menus {
     if m.0.contains(id) {
       return Some((m.1, m.2))
@@ -500,6 +501,7 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 /// the innermost asker's under it (a row's, not the list's it sits in, though the list is asked first: its rows are
 /// built after it), as a press goes to one target; a hold is already the target's held.
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
+  hand_events_read()
   if id != 0 {
     desk.next_askers.push(id)
   }
@@ -532,6 +534,7 @@ pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
 /// Whether anything was clicked with the secondary button since the last frame (what closes a menu as another opens).
 pub fn Ctx::any_right_click(self : Ctx) -> Bool {
   ignore(self)
+  hand_events_read()
   desk.menus.length() > 0
 }
 
@@ -558,6 +561,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
+  hand_events_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
     return false
@@ -575,6 +579,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
   ignore(self)
+  hand_events_read()
   !desk.keys.is_empty()
 }
 
@@ -582,6 +587,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
+  hand_events_read()
   if !self.keys_here() {
     return false
   }
@@ -607,6 +613,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
+  hand_events_read()
   if !self.keys_here() {
     return []
   }
@@ -622,6 +629,7 @@ pub fn Ctx::unfocus(self : Ctx) -> Unit {
 ///|
 /// Whether a field has the keyboard.
 pub fn Ctx::field_focused(self : Ctx) -> Bool {
+  hand.focus_id.get() |> ignore
   self.focus != 0 && self.editors.contains(self.focus)
 }
 
@@ -1049,7 +1057,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
 /// As a frame is laid out, before it is drawn: words being picked with the pointer held go to what is under it as
 /// this frame lays the page out (a list scrolled under it by the wheel, words come), drawn so in this frame.
 fn Ctx::select_after_layout(self : Ctx) -> Unit {
+  // (read so: hand.mbt)
+  hand.down.get() |> ignore
   if picked.dragging && self.down {
+    hand.pointer.get() |> ignore
     self.select_to(self.px, self.py)
   }
   self.select_edge()
