@@ -811,11 +811,13 @@ export class Sharing {
       try {
         // One running on it renews it itself, asked to (else it would only when its own token runs out, the station's
         // borrowers refused till then); none, here.
-        auth = (await this.deps.codexRenewRunning(p.id)) ? JSON.parse(readFileSync(file, "utf8")) : await this.renewCodex(file, auth);
-        expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
+        if (!(await this.deps.codexRenewRunning(p.id))) await this.renewCodex(file, auth);
       } catch (e) {
         log.warn("share", "renewing a shared Codex login failed", { profile: p.id, error: (e as Error).message });
       }
+      // Read again either way: Codex may have renewed it and then failed a step after (it answers with that error).
+      auth = JSON.parse(readFileSync(file, "utf8"));
+      expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
     }
     if (expiresAt - this.time.now() < CODEX_MIN_MS) throw new Error("the Codex login here runs out soon and cannot be renewed now");
     const tokens = auth.tokens ?? {};

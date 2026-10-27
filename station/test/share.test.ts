@@ -290,6 +290,29 @@ test("a shared Codex login about to run out while a Codex runs on it here: that 
   assert.deepEqual(asked, ["plus"]);
 });
 
+test("a running Codex asked to renew a shared login answers with an error after renewing it (a step after the renewal failed): the renewed login is lent", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const CODEX = { id: "plus", name: "ChatGPT Plus", runtime: "codex", access: { kind: "subscription" }, home: "homes/plus", env: {} };
+  const jwt = (claims: object) => ["{}", JSON.stringify(claims), "s"].map((p) => Buffer.from(p).toString("base64url")).join(".");
+  const login = (seconds: number) => JSON.stringify({ tokens: { id_token: "id", access_token: jwt({ exp: Math.floor(Date.now() / 1000) + seconds }), account_id: "acct", refresh_token: "r" } });
+  let data = "";
+  // As the real app-server did (account/read: "workspace routing discovery unauthorized"), its new login written first.
+  const a = station(cloud, A, () => all, [CODEX], async () => {
+    writeFileSync(join(data, "homes", "plus", "auth.json"), login(10 * 86400));
+    throw new Error("workspace routing discovery unauthorized (401)");
+  });
+  data = a.data;
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  mkdirSync(join(a.data, "homes", "plus"), { recursive: true });
+  writeFileSync(join(a.data, "homes", "plus", "auth.json"), login(600));
+  await a.sharing.shareProfile("plus", true, null);
+  await settle(a, b);
+  const copy = b.config.raw().profiles[0];
+  assert.ok((await b.sharing.lendCodex({ ...copy, home: join(b.data, copy.home) })) > Date.now() + 9 * 86400_000);
+});
+
 test("a shared subscription moves to another station: login handed over, the old host keeps a copy", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();
