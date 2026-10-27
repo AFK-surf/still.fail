@@ -1717,6 +1717,8 @@ fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
           }
         }
         f.view_covers[id] = rects
+      } else if what == 5 {
+        f.views.push("raise \{id}")
       } else {
         f.views.push("settings \{id} \{text}")
       }

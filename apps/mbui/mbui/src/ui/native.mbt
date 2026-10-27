@@ -6,7 +6,8 @@
 // picture can be, the part of it near what is seen: NativeViews.Page; c2 is still the part of all of it). What is painted
 // after it draws over the view (a bar, a video's controls, frosted or not); what is painted around it, or a clip, hides
 // the rest of it. The host places the view where its node was painted, every frame it moves (where it takes a touch),
-// and hides it on the frames it is not painted (a page gone under another, scrolled away).
+// and hides it on the frames it is not painted (a page gone under another, scrolled away). Views that show at once
+// are stacked as they were painted, the one painted last on top (`stack_views`).
 //
 // A video's bytes come only through the app: the player asks for ranges (`view_read_next`), the view's `read`
 // fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers each as its bytes come
@@ -33,6 +34,8 @@ pub struct NativeView {
   priv mut state : Int
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1
   priv mut painted : Int
+  /// where in that frame's paint it was (how many instances were before it): the views are stacked so
+  priv mut seq : Int
   priv at : FixedArray[Double]
   /// its hole as painted there (x y w h; w 0: none), to follow it to where the frame took it after (Ctx::follow_holes)
   priv hole : FixedArray[Double]
@@ -174,6 +177,10 @@ pub fn SiteReply::when_gone(self : SiteReply, f : () -> Unit) -> Unit {
 let open_views : Array[NativeView] = []
 
 ///|
+/// The views shown in the last frame, in the order the host was last told to stack them (`stack_views`).
+let stacked_views : Array[Int] = []
+
+///|
 // kept across runs: scratch the host writes into before each read, read at once: nothing is carried in it
 let read_out : FixedArray[Double] = FixedArray::make(2, 0.0)
 
@@ -211,6 +218,7 @@ fn NativeView::make(
     info: FixedArray::make(10, 0.0),
     state: 0,
     painted: -1,
+    seq: 0,
     at: FixedArray::make(9, 0.0),
     hole: FixedArray::make(4, 0.0),
     told: FixedArray::make(9, -1.0),
@@ -395,6 +403,7 @@ pub fn NativeView::close(self : NativeView) -> Unit {
   if self.id != 0 {
     h_view_close(self.id)
     open_views.retain(fn(v) { !physical_equal(v, self) })
+    stacked_views.retain(fn(id) { id != self.id })
     // a grab it was asked and had not answered is answered no more (a host tells a closed view's nothing)
     outside_end(outside_grab, self.id)
   }
@@ -728,6 +737,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
+  v.seq = self.ninst
   v.hits_before = self.next_hit_ids.length()
   // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
   // covers shows what is under the canvas, a line along the picture's edge)
@@ -783,6 +793,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     return
   }
   self.follow_holes()
+  self.stack_views()
   for v in open_views.copy() {
     if v.closed {
       continue
@@ -882,6 +893,35 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         }
       None => ()
     }
+  }
+}
+
+///|
+/// The views shown this frame stacked on the host as they were painted, the one painted last on top: where a later
+/// one's hole shows, that view is seen, not another one under the canvas there (a file's page opened over a chat with
+/// a visualization in it, the chat still painted under the page). Hosts that keep their views under the canvas stack
+/// them in the order they were opened (or first placed), which is not the order they are painted in once one is opened
+/// while another shows, or one comes back into view under another. Each shown view is raised to the top in turn
+/// (`view_tell` 5) when the order of those shown is not the one told last; one alone is over nothing.
+fn Ctx::stack_views(self : Ctx) -> Unit {
+  let shown = open_views.filter(fn(v) { !v.closed && v.id != 0 && v.painted == self.build_no })
+  shown.sort_by_key(fn(v) { v.seq })
+  let ids = shown.map(fn(v) { v.id })
+  if ids == stacked_views {
+    return
+  }
+  stacked_views.clear()
+  stacked_views.push_iter(ids.iter())
+  if ids.length() < 2 {
+    return
+  }
+  for v in shown {
+    h_view_tell(v.id, 5, "")
+  }
+  // on a run's log (MBUI_DRAW_LOG): the order told, for the host's own saying how it stacked them (VIEWSTACK) to be
+  // compared with (scripts/host_contract.sh HOST views)
+  if draw_logging() && fake.val is None {
+    h_log("VIEWSTACKTOLD " + ids.map(fn(id) { id.to_string() }).join(" "))
   }
 }
 

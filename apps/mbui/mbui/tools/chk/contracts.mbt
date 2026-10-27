@@ -116,6 +116,38 @@ fn views(args : Array[String]) -> Int {
       "told \{told.length()}, placed \{at.length()}: the app or the host said nothing",
     )
   }
+  // stacked as painted: the last order the app told (VIEWSTACKTOLD) the host's last (VIEWSTACK), of the views both
+  // name (a host's players drawn in the canvas are in no stack of its own). Android draws each view's picture in the
+  // frame, where it is painted: it says none.
+  let mut stack_told : Array[String]? = None
+  let mut stacked : Array[String]? = None
+  for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
+    match line.find("VIEWSTACKTOLD ") {
+      Some(i) => stack_told = Some(split_ws(line.view(start_offset=i + "VIEWSTACKTOLD ".length()).to_string()))
+      None =>
+        match line.find("VIEWSTACK ") {
+          Some(i) => stacked = Some(split_ws(line.view(start_offset=i + "VIEWSTACK ".length()).to_string()))
+          None => ()
+        }
+    }
+  }
+  let mut stack_said = ""
+  match (stack_told, stacked) {
+    (None, _) => bad.push("the app told no stack: its views were painted as they were opened")
+    (Some(_), None) =>
+      if args[1] != "android" {
+        bad.push("the host said not how it stacked its views")
+      }
+    (Some(t), Some(h)) => {
+      let t2 = t.filter(fn(id) { h.contains(id) })
+      let h2 = h.filter(fn(id) { t.contains(id) })
+      if t2.length() < 2 || t2 != h2 {
+        bad.push("views stacked \{h.join(" ")}, told \{t.join(" ")}")
+      } else {
+        stack_said = ", stacked as painted (\{h2.join(" ")})"
+      }
+    }
+  }
   for v, t in told {
     let a = match at.get(v) {
       Some(a) => a
@@ -143,7 +175,8 @@ fn views(args : Array[String]) -> Int {
   let first = at.values().collect()[0]
   say(
     "views contract (\{args[1]}): \{told.length()} native view put where it was told, on whole device pixels: " +
-    first.map(g6).join(" "),
+    first.map(g6).join(" ") +
+    stack_said,
   )
   0
 }

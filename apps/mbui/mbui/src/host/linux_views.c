@@ -350,7 +350,7 @@ typedef struct View {
   // a page grabbed (PNG; still_state 1 grabbing, 2 here, -1 failed)
   GBytes *still;
   int still_state;
-  struct View *next;  // as they are stacked: the last opened on top
+  struct View *next;  // as they are stacked: the last opened (or raised: view_tell 5) on top
 } View;
 
 static View *views;
@@ -1005,6 +1005,23 @@ moonbit_bytes_t mb_host_view_still(int32_t vid) {
 void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
   View *v = find(vid);
   if (!v) return;
+  if (what == 5) {
+    // raised over all the others (the app paints it after them): last in the list and among the under's children
+    View **p = &views;
+    while (*p != v) p = &(*p)->next;
+    *p = v->next;
+    v->next = NULL;
+    View **end = &views;
+    while (*end) end = &(*end)->next;
+    *end = v;
+    if (v->box) gtk_widget_insert_before(GTK_WIDGET(v->box), mb_app_under(), NULL);
+    // how they are stacked, the lowest first (scripts/host_contract.sh HOST views: as the app told, VIEWSTACKTOLD)
+    GString *line = g_string_new("VIEWSTACK");
+    for (View *o = views; o; o = o->next) g_string_append_printf(line, " %d", o->vid);
+    vlog("%s", line->str);
+    g_string_free(line, TRUE);
+    return;
+  }
   char *t = utf8(text);
   if (!t) return;
   if (what == 1) {

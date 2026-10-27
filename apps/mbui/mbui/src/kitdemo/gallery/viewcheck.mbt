@@ -7,7 +7,9 @@
 // round (view_check_round: told the host, its hole as round); MBUI_VIEWCHECK=hold leaves both on the screen once placed
 // (`VIEWCHECK placed`) for the contract's picture of those corners (Android: scripts/host_contract.sh android views),
 // with two pages far taller than a picture of them can be under them (view_check_tall), seen in their middles: one
-// placed so from the first, one only once it has loaded (view_check_grow), as a page in a message is.
+// placed so from the first, one only once it has loaded (view_check_grow), as a page in a message is. A page opened
+// after the others is painted before the round one (view_check_under): the host stacks the views as they are painted
+// (VIEWSTACK, each host's own), not as they were opened, as the app told it (VIEWSTACKTOLD), or the contract fails.
 
 ///|
 let view_check_view : Ref[@ui.NativeView?] = Ref(None)
@@ -37,6 +39,11 @@ let view_check_tall_html : String = "<html style=\"overflow:hidden\"><body style
 ///|
 /// The page's corners' radius (points): a phone's screen's, as a page laid out as one shows (still.fail's preview).
 let view_check_round : Double = 24.0
+
+///|
+/// A page opened last, painted between the video and the round page: under the round one, as a chat's page under a
+/// file's opened over it.
+let view_check_under : Ref[@ui.NativeView?] = Ref(None)
 
 ///|
 let view_check_placed : Ref[Bool] = Ref(false)
@@ -82,11 +89,21 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
   } else {
     None
   }
+  // (opened after the others, so their ids stay what the contract looks for)
+  let u = match view_check_under.val {
+    Some(u) => u
+    None => {
+      let u = @ui.NativeView::page("<html><body style=\"margin:0;background:#46a\"></body></html>")
+      view_check_under.val = Some(u)
+      u
+    }
+  }
   // (a picture fitted between pixels: 147.3625 down, 205.875 tall; a page under it, its top 410.4375 down; each tall
   // page's 60 seen from 29,900 down it, in its band of green from 29,000 to 31,000: the second's, once it has loaded)
   let seen_tall = Some((12.0, -29900.0, 366.0, 40000.0))
   c.column(fn() {
-    c.native(v, h=Px(400.0), content=Some((12.0, 147.3625, 366.0, 205.875))) |> ignore
+    c.native(v, h=Px(360.0), content=Some((12.0, 147.3625, 366.0, 205.875))) |> ignore
+    c.native(u, h=Px(40.0)) |> ignore
     c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25)), radius=view_check_round) |> ignore
     match tall {
       Some((t, g)) => {
@@ -101,8 +118,8 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
   // (each the host has, open as its host says: a page's content ready to be drawn, not loaded only (Android's
   // WebView: a picture taken once it had loaded showed its ground, white); a view it has not is not here)
   let views = match tall {
-    Some((t, g)) => [v, p, t, g]
-    None => [v, p]
+    Some((t, g)) => [v, p, t, g, u]
+    None => [v, p, u]
   }
   let open = views.iter().all(fn(x) { !x.here() || (x.state() != 0 && x.host_done()) })
   // (a host places a view as the frame that told it is painted: Android on its main thread, where the app's exit
