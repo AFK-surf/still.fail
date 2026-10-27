@@ -112,15 +112,19 @@ tools() {
   summary "- MoonBit $("$C/tools/moon/bin/moon" version | head -1); mbui $(git -C "$A" log -1 --format=%h -- mbui); tools in $(secs $t0) s"
 }
 
-# apps/mbui into WORK as git has it (a file gone goes there too), by content: a file that did not change keeps its time,
-# and moon sees it as it was; the build's outputs (ignored by git) stay. Its own link to mbui made there.
+# apps/mbui into WORK as git has it (a file gone goes there too, mbui's as well), by content: a file that did not change
+# keeps its time, and moon sees it as it was; the build's outputs (what git ignores) stay.
 copy() {
   [ "$WORK" != "$A" ] || return 0
   mkdir -p "$WORK"
+  # (WORK's mbui was once a link of its own, to a checkout beside it: mbui is apps/mbui/mbui's files now)
+  [ ! -L "$WORK/mbui" ] || rm "$WORK/mbui"
   (cd "$A" && git ls-files -z) | python3 -c '
-import os, shutil, sys
+import os, shutil, subprocess, sys
 src, dst = sys.argv[1:3]
-keep = {"out", "_build", "mbui", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
+keep = {"out", "_build", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
+# (the folders the builds write into, wherever they are: in mbui too)
+outputs = {"_build", ".mooncakes", "target", "out", "dist"}
 files = [f for f in sys.stdin.buffer.read().decode().split("\0") if f]
 for f in files:
     a, b = os.path.join(src, f), os.path.join(dst, f)
@@ -134,13 +138,20 @@ for f in files:
     if os.access(a, os.X_OK) != os.access(b, os.X_OK):
         os.chmod(b, os.stat(a).st_mode)
 tracked = set(files)
+gone = []
 for root, dirs, names in os.walk(dst):
     rel = os.path.relpath(root, dst)
-    dirs[:] = [d for d in dirs if os.path.normpath(os.path.join(rel, d)) not in keep]
+    dirs[:] = [d for d in dirs if d not in outputs and os.path.normpath(os.path.join(rel, d)) not in keep]
     for n in names:
         r = os.path.normpath(os.path.join(rel, n))
         if r not in tracked and r not in keep:
-            os.remove(os.path.join(root, n))
+            gone.append(r)
+# (what git ignores is an output, kept: a file it would track is one gone from the checkout)
+ignored = set(subprocess.run(["git", "-C", src, "check-ignore", "--no-index", "-z", "--stdin"], input="\0".join(gone).encode(),
+    capture_output=True).stdout.decode().split("\0")) if gone else set()
+for r in gone:
+    if r not in ignored:
+        os.remove(os.path.join(dst, r))
 ' "$A" "$WORK"
 }
 
