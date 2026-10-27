@@ -1,16 +1,14 @@
+import { Archive } from "@stillfail/ui/icons.tsx";
 import { useAction } from "./action.ts";
-import * as chatCss from "./styles/chat.css.ts";
+import { ComposerNotice, NoticeOffer } from "./ComposerNotice.tsx";
 import { t } from "./i18n.ts";
 
 /** Keeps the draft in place while the chat is archived; restoring can be retried after an error. */
-export function ArchiveNotice({ restore, offline, className }: { restore: () => Promise<unknown>; offline: boolean; className: string }) {
+export function ArchiveNotice({ restore, offline }: { restore: () => Promise<unknown>; offline: boolean }) {
   const operation = useAction(restore);
   const busy = operation.busy;
-  const error = operation.error?.message;
-  const run = () => { if (!offline) void operation.run(); };
-  return <div className={className} role="status">
-    {t("web-main.archived.notice")}{" "}
-    <button type="button" className={chatCss.textButton} onClick={() => void run()} disabled={busy || offline}>{busy ? t("web-main.archived.restoring") : t("web-main.archived.restore")}</button>
-    {error && <span role="alert">{error}</span>}
-  </div>;
+  return <ComposerNotice mark={<Archive size={16} />} error={operation.error?.message}
+    offer={<NoticeOffer onClick={() => { if (!offline) void operation.run(); }} disabled={busy || offline}>{busy ? t("web-main.archived.restoring") : t("web-main.archived.restore")}</NoticeOffer>}>
+    {t("web-main.archived.notice")}
+  </ComposerNotice>;
 }

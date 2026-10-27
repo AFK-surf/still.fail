@@ -53,7 +53,6 @@ export const mComposerCapsule = style({
 /** The files in it as far from its edge as from its top, rounded as its corner less that: one curve. */
 globalStyle(`${mComposerCapsule} ${composerFiles}`, { padding: `${FILES_IN - 8}px ${FILES_IN - 8}px 0` });
 globalStyle(`${mComposerCapsule} ${composerFiles} :is(${composerThumb}, ${fileCard})`, { borderRadius: `${CAPSULE - FILES_IN}px` });
-export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: vars.textCaption });
 
 /** What is said on top of the capsule (the chat's waiting): a little inset, just over it. */

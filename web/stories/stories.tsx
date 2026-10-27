@@ -474,6 +474,17 @@ const cacheCold: DemoExtension = {
     return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊约需 $1.49" } } : undefined;
   },
 };
+/** Its agent's prompt cache over and its station down: two notices over the composer, one over the other. */
+const coldOffline: DemoExtension = {
+  then: (t, value) => {
+    const cold = cacheCold.then?.(t, value);
+    return cold ? { ...(cold as ChatView), offline: true } : undefined;
+  },
+};
+/** The chat archived: its notice over the composer, with 还原对话. */
+const archivedChat: DemoExtension = {
+  then: (t, value) => t.topic === "chat" && value ? { ...(value as ChatView), archived: true } : undefined,
+};
 /** What the chat's agent and another chat's wrote each other: not in the chat (only its bar's button says how many,
  *  the core's `letters`), read in their own tab or sheet (`chatLetters`, Letters.tsx); with `open`, that tab open. */
 const letters: DemoExtension = {
@@ -826,6 +837,10 @@ export const stories: Story[] = [
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "app-chat-cache-cold", group: "应用", title: "对话 · 缓存已过期", app: true, demo: cacheCold },
   { id: "phone-chat-cache-cold", group: "手机", title: "对话 · 缓存已过期", app: true, phone: true, demo: cacheCold },
+  { id: "app-chat-cold-offline", group: "应用", title: "对话 · 缓存已过期，station 连不上", app: true, demo: coldOffline },
+  { id: "phone-chat-cold-offline", group: "手机", title: "对话 · 缓存已过期，station 连不上", app: true, phone: true, demo: coldOffline },
+  { id: "app-chat-archived", group: "应用", title: "对话 · 已归档", app: true, demo: archivedChat },
+  { id: "phone-chat-archived", group: "手机", title: "对话 · 已归档", app: true, phone: true, demo: archivedChat },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
   // A chat shared as a picture: its messages as the chat's list draws them (the visitor's in their bubble, a vault
   // request as its card), its files to tick.
