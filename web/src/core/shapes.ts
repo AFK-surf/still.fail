@@ -430,6 +430,11 @@ export interface Attachment {
 	 * picture; absent for every other file.
 	 */
 	upload?: string;
+	/**
+	 * In a chat's page: its picture (an image's thumbnail, a video's still) is kept on this device, a decode away
+	 * (the app's first page waits for it); absent for every other file.
+	 */
+	held?: boolean;
 }
 
 /** A window of a session's account running out, as its ring draws it. */

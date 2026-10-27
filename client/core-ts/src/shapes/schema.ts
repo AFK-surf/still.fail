@@ -145,6 +145,7 @@ export const SHAPES: Record<string, Shape> = {
     ["frames", opt("i64"), { client: opt("I54"), doc: "How many frames a film's picture has, as the station read them from its header." }],
     ["owner", opt("String"), { doc: "In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which\nits preview and download go through. Absent elsewhere." }],
     ["upload", opt("String"), { doc: "In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its\npicture; absent for every other file." }],
+    ["held", opt("bool"), { doc: "In a chat's page: its picture (an image's thumbnail, a video's still) is kept on this device, a decode away\n(the app's first page waits for it); absent for every other file." }],
   ]),
   Quote: struct([
     ["author", "String"],
