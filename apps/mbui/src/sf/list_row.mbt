@@ -13,8 +13,9 @@
 /// column's), as far in from the row's end and foot as makes it concentric with the row's corner (the theme's
 /// `aside_end`), its room kept at the end of the lines under the first (across the whole screen, square, the caller
 /// says it in its lines); `lines`: how many lines under its first it always has (list_row_line's), those `under` does
-/// not draw kept empty, so rows of a kind are as high whatever each says (a station's, up or away). Its box, the one
-/// pressed.
+/// not draw kept empty, so rows of a kind are as high whatever each says (a station's, up or away); `slotted`: in the
+/// slot it is moved across in (list_row_slot: a finger's swipe), whose corners are its: its own ground square, so
+/// nothing shows between it and what it uncovers beside it as it moves. Its box, the one pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -29,6 +30,7 @@ pub fn list_row(
   corner_w? : Double = 0.0,
   lines? : Int = 0,
   after? : () -> Unit = fn() {  },
+  slotted? : Bool = false,
 ) -> Int {
   let l = theme().chat_list
   let line = @ui.style(h=Fixed(l.head_h))
@@ -42,7 +44,9 @@ pub fn list_row(
     }
     lines_drawn.val = was
   }
-  c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(@ui.style(bg=Data(ground))), id~, fn() {
+  let ground = @ui.style(bg=Data(ground))
+  let ground = if slotted { ground.then(list_row_square) } else { ground }
+  c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(ground), id~, fn() {
     match mark {
       Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
       None => ()
@@ -69,6 +73,10 @@ pub fn list_row(
     after()
   })
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_row_square : @ui.Style = @ui.css("radius=Sharp")
 
 ///|
 // kept across runs: a value (no field of it changes)

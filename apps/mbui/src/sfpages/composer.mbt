@@ -64,6 +64,8 @@ priv struct Composing {
   grounds : Map[String, Int64]
   /// each quote's own picture as it was last drawn in its card, by quote: what flies from there as it is sent
   pictures : Map[String, String]
+  /// what its box last changed shape for and how, in which build (composer_shape)
+  mut shaped : (Int, String, @motion.Spec)?
 }
 
 ///|
@@ -95,6 +97,7 @@ let composing : Composing = {
   wanted: false,
   grounds: {},
   pictures: {},
+  shaped: None,
 }
 
 ///|
@@ -302,6 +305,7 @@ pub fn composer(
     @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
   }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
+  composing.shaped = Some((c.build_number(), holds, shape))
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices")] {
     if part.0 >= 0 {
       @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
@@ -314,6 +318,27 @@ pub fn composer(
   @motion.measure(c, box, "composer/content")
   if w.error != "" {
     c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
+  }
+}
+
+///|
+/// What the composer built in this build changes shape for and how (its box's reshape: `by`, `spec`), for what stands
+/// round it on its page (a new chat's choices over it, its scene): moved for that too, by the same, it goes with the
+/// box's ground in the same frames, not to its new place at once. None while it is not built in this build.
+fn composer_shape(c : @ui.Ctx) -> (String, @motion.Spec)? {
+  match composing.shaped {
+    Some((build, by, spec)) if build == c.build_number() => Some((by, spec))
+    _ => None
+  }
+}
+
+///|
+/// Node `i` keyed `key`, standing round the composer built in this build (over it, under it, beside it), moves with
+/// its box as that changes shape (composer_shape); called once the composer is built.
+fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
+  match composer_shape(c) {
+    Some((by, spec)) => @motion.layout(c, i, key, spec~, by~)
+    None => ()
   }
 }
 
