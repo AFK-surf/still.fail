@@ -1,4 +1,8 @@
 {
+  "41653ad26": {
+    "text": ["修复：后台任务浮层里展开的任务跟它那一行连成一整块，展开的内容跟任务名对齐"],
+    "parts": ["desktop"]
+  },
   "4b8437e03": {
     "parts": ["station", "web", "android", "desktop"]
   },
