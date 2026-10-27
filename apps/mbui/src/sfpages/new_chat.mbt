@@ -679,12 +679,13 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
       for combo in combos {
         let v = Some(combo)
         let selected = flag(v, "selected")
-        let id = c.id("new/combo/" + text(v, "runtime") + ":" + text(v, "model") + ":" + text(v, "effort"))
+        let id = c.id("new/combo/" + text(v, "runtime") + ":" + text(v, "model") + ":" + text(v, "effort") + ":" + text(v, "speedText"))
         if !leaving && c.clicked(id) {
           let m : Map[String, Json] = {
             "model": Json::string(text(v, "model")),
             "runtime": Json::string(text(v, "runtime")),
           }
+          m["fast"] = field(v, "fast").unwrap_or(Json::null())
           m["effort"] = match text(v, "effort") {
             "" => Json::null()
             e => Json::string(e)
@@ -711,6 +712,15 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
             c.text(text(v, "effortText"), style=words) |> ignore
           })
           |> ignore
+          match text(v, "speedText") {
+            "" => ()
+            speed =>
+              c.box(style=combo_part, fn() {
+                c.text("·", style=words) |> ignore
+                c.text(speed, style=words) |> ignore
+              })
+              |> ignore
+          }
         })
         c.semantics(chip, Button, id~, label=text(v, "label"), check=if selected { On } else { Off })
       }

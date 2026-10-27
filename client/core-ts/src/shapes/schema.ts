@@ -2064,6 +2064,8 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String", { said: true }],
   ]),
   FrequentCombo: struct([
+    ["fast", opt("bool")],
+    ["speedText", opt("String"), { doc: "Explicit speed (Fast / Standard); absent for the account default." }],
     ["model", "String"],
     ["runtime", "RuntimeKind"],
     ["effort", opt("String")],

@@ -747,7 +747,7 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   let values = new Map();
   apply(host, values);
   assert.deepEqual(v(values, 1).frequent, []);
-  await ask(host, core, ui, 2, "newChat.pick", { scope: "ws", model: "gpt-6-astra", runtime: "codex", effort: "medium" });
+  await ask(host, core, ui, 2, "newChat.pick", { scope: "ws", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: true });
   apply(host, values);
   assert.deepEqual(v(values, 1).frequent, [], "picking alone is not usage");
   core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: "high" });
@@ -767,11 +767,13 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   apply(host, values);
   const combo = v(values, 1).frequent[0];
   assert.equal(combo.model, "gpt-6-astra");
-  await ask(host, again, ui, 2, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", effort: "low" });
-  await ask(host, again, ui, 3, "newChat.pick", { scope: "ws", model: combo.model, runtime: combo.runtime, effort: combo.effort });
+  assert.equal(combo.fast, true);
+  await ask(host, again, ui, 2, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", effort: "low", fast: false });
+  await ask(host, again, ui, 3, "newChat.pick", { scope: "ws", model: combo.model, runtime: combo.runtime, effort: combo.effort, fast: combo.fast });
   apply(host, values);
   assert.equal(v(values, 1).model.model, "gpt-6-astra");
   assert.equal(v(values, 1).effort, "medium");
+  assert.equal(v(values, 1).fast, true);
   assert.equal(v(values, 1).frequent[0].selected, true);
   again.close();
 });
