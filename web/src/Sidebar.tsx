@@ -472,7 +472,7 @@ function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void 
   return (
     <Tip label={t("web-main.chat.archive")}>
       <button type="button" className={`${pageCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
-        <Archive size={16} />
+        <Archive size={14} />
       </button>
     </Tip>
   );
