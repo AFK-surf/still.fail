@@ -4,12 +4,19 @@
 
 ///|
 /// The fixture's chat (or `mode`'s) open in a window `w` × `h` of iOS (platform 1), the system's own bars or not (`able`), its column
-/// down the window's trailing edge `side` wide (0: upright, across).
-fn native_chat(w : Double, h : Double, able : Bool, side? : Double = 0.0, mode? : String = "chat") -> @ui.Tester {
+/// down the window's trailing edge `side` wide (0: upright, across), the screen's corners `corner` round.
+fn native_chat(
+  w : Double,
+  h : Double,
+  able : Bool,
+  side? : Double = 0.0,
+  mode? : String = "chat",
+  corner? : Double = 0.0,
+) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1, window_corner=corner)
   t.set_nav_able(able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.nav_push_ms)
@@ -127,6 +134,55 @@ test "an iPhone Duo on its side, the soft keyboard up: the composer whole over i
   assert_eq(send.length(), 1)
   let (_, y, _, h) = send[0].rect
   assert_true(y + h <= keyboard_top + 0.5, msg="send at \{y}..\{y + h}, keyboard at \{keyboard_top}")
+}
+
+///|
+/// The composer's box as drawn (the glass round its field) and the page it stands in (the roundest-cornered box round
+/// it, its foot left corner its own).
+fn composer_and_page(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
+  let bs = t.boxes()
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
+  let mut page : @ui.Laid? = None
+  let mut box : @ui.Laid? = None
+  for b in bs {
+    if round(b) && !b.glass && b.radii.3 > 0.0 && (page is None || page.unwrap().w < b.w) {
+      page = Some(b)
+    }
+    if round(b) && b.glass {
+      box = Some(b)
+    }
+  }
+  match (box, page) {
+    (Some(k), Some(p)) => Some((k, p))
+    _ => None
+  }
+}
+
+///|
+test "an iPhone Duo, folded or on its side: the composer's end concentric with the page's foot corner it is in, the page going on under the column past its other end" {
+  for size in [(466.0, 678.0, 70.0), (951.0, 669.0, 84.0)] {
+    // (the screen's corners as the Duo's are: 59)
+    let t = native_chat(size.0, size.1, true, side=size.2, corner=59.0)
+    t.run_for(@ui.nav_push_ms)
+    // (folded, the cards across with the list's in view: the page's brought in, as a finger does)
+    if size.0 < 600.0 {
+      t.drag(400.0, 330.0, 140.0, 330.0)
+      t.run_for(@ui.nav_push_ms * 2.0)
+    }
+    guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
+    // (the page on under the column, the composer ending before it: where the cards stand across, the list's or the
+    // page's in view)
+    assert_true(b.x + b.w <= p.x + p.w - size.2 + 0.5, msg="the composer \{b.x}..\{b.x + b.w}, the page \{p.x}..\{p.x + p.w}")
+    let concentric = @sf.capsule_in(p.radii.3, b.h)
+    let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
+    assert_true(
+      (at.0 - concentric).abs() < 0.01 && (at.1 - concentric).abs() < 0.01,
+      msg="\{size}: the capsule \{at} from the page's left and foot, concentric \{concentric}",
+    )
+    assert_eq(t.corner_faults(), [])
+  }
 }
 
 ///|
