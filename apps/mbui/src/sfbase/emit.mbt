@@ -81,6 +81,22 @@ pub(all) struct Emits {
   mut out_key : String
   /// the chat's messages as last taken (emit_take), each decided: the same version again holds none new
   mut taken : Array[Message]
+  /// how many times it changed, as a signal (Emits::changed): what reads it (a message's row, an activity's:
+  /// Emits::read) is built again as it does, kept or not (mbui's kept_nodes.mbt)
+  said : @signals.Signal[Int]
+}
+
+///|
+/// It changed (a message come to wait, a pose on to the next, one let go, where it flies from or lands): what read it
+/// is told.
+pub fn Emits::changed(self : Emits) -> Unit {
+  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+}
+
+///|
+/// What is built from it reads it so (its fields read as they are): built again as it changes.
+pub fn Emits::read(self : Emits) -> Unit {
+  self.said.get() |> ignore
 }
 
 ///|
@@ -106,6 +122,7 @@ pub fn emits_of(key : String) -> Emits {
         held_until: -1.0,
         out_key: "",
         taken: [],
+        said: @signals.signal(0),
       }
       emits[key] = e
       e
@@ -127,6 +144,7 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     return
   }
   e.taken = v.messages
+  let decided = e.decided.length()
   for m in v.messages {
     let k = seq_s(m.seq)
     if e.decided.contains(k) {
@@ -140,17 +158,22 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
       e.queue.push((m.seq, agent, pose_clock(Fold.ms(), None)))
     }
   }
+  if e.decided.length() != decided {
+    e.changed()
+  }
 }
 
 ///|
 /// Whether the message comes (or came) out of an avatar: it never rises in as others do.
 pub fn emit_goes(e : Emits, seq : Double) -> Bool {
+  e.read()
   e.decided.get(seq_s(seq)) == Some(true)
 }
 
 ///|
 /// Waiting its turn (or its avatar still on its way to it): not in the list yet.
 pub fn emit_held(e : Emits, seq : Double) -> Bool {
+  e.read()
   let k = seq_s(seq)
   if e.decided.get(k) != Some(true) || e.done.contains(k) {
     return false
@@ -163,6 +186,7 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
 
 ///|
 pub fn emit_emitting(e : Emits, seq : Double) -> Bool {
+  e.read()
   match e.current {
     Some(t) => t.seq == seq && t.pose == Spit
     None => false
@@ -172,6 +196,7 @@ pub fn emit_emitting(e : Emits, seq : Double) -> Bool {
 ///|
 /// An agent's activity folded to its avatar: from when its first message begins waiting until its last is out.
 pub fn emit_folded(e : Emits, agent : String) -> Bool {
+  e.read()
   match e.current {
     Some(t) if t.agent == agent => return true
     _ => ()
@@ -182,6 +207,7 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 ///|
 /// Agents whose activity must stay while their messages come out.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
+  e.read()
   let out : Map[String, Bool] = {}
   for q in e.queue {
     out[q.1] = true
@@ -196,6 +222,9 @@ pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
 ///|
 /// Everything waiting or coming out shows at once, where it is.
 pub fn emit_release(e : Emits) -> Unit {
+  if e.queue.length() > 0 || e.current is Some(_) || e.copied != "" {
+    e.changed()
+  }
   for q in e.queue {
     e.done[seq_s(q.0)] = true
   }
@@ -210,6 +239,7 @@ pub fn emit_release(e : Emits) -> Unit {
 
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
+  e.changed()
   if e.queue.length() == 0 {
     e.current = None
     return
@@ -269,6 +299,8 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
 pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
+  // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
+  let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
     turns.over(c, Emits, turns.moment(c))
@@ -366,6 +398,14 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     (Some(a), Some(b)) if a.pose != b.pose || a.seq != b.seq => c.moving(e.mover, e as &@ui.Moving)
     _ => ()
   }
+  let (current, copied, held, done, queue) = was_shown
+  if !physical_equal(current, e.current) ||
+    copied != e.copied ||
+    held != e.held_until ||
+    done != e.done.length() ||
+    queue != e.queue.length() {
+    e.changed()
+  }
 }
 
 ///|
@@ -393,6 +433,7 @@ pub fn emit_smooth(t : Double) -> Double {
 /// Where the flying avatar's 18 face is (its top left, in the window) and how it is scaled about its middle, or None
 /// when none flies (ChatMotion.flight): between where it set out and where it is going, both as last laid out.
 pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> (Double, Double, Double, Double)? {
+  e.read()
   let t = match e.current {
     Some(t) if t.pose != Fold => t
     _ => return None
@@ -495,6 +536,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
 /// msgRow[data-emitting] > msgMain: -16) and 12 down, unrolling from its top, both on Ease.Out over the whole; its
 /// opacity in by 35% of the time.
 pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) -> Unit {
+  e.read()
   if !emit_emitting(e, seq) {
     return
   }

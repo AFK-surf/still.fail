@@ -344,6 +344,7 @@ pub fn anim(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) ->
     a.name = key
   }
   a.used = c.frame_number()
+  @ui.built_used(fn() { a.used = @ui.current().frame_number() })
   a.step(c)
   a
 }
@@ -409,6 +410,7 @@ pub fn pressing(c : @ui.Ctx, id : Int) -> Double {
     }
   }
   a.used = c.frame_number()
+  @ui.built_used(fn() { a.used = @ui.current().frame_number() })
   a.step(c)
   if down {
     a.follow(1.0, tween(75.0, ease=Linear))

@@ -83,8 +83,11 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    press went down on, clicked, held long, the focus, the current input, where the pointer is and whether it is down,
    its discrete events, said as each frame begins, a set read by member where it is (signals' Keyed: a row pointed at
    changes as the pointer crosses its edge); `inputs_said` went, and a pointer moved over what lights nothing builds
-   nothing. Left: what scrolls (a list's place, a box scrolled sideways), what a field holds, what a pager or a menu
-   keeps of a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
+   nothing. A list's place is read as it is laid out (Ctx::place_list): what the hand does to it between frames (a
+   finger dragging it, a wheel) is said by its own signal (ListState's `hand_said`), and its own motions are stepped
+   there (a wheel's ease, a fling, a glide, an overscroll going back), so a list scrolled lays the frame out again,
+   nothing taken by what is built. Left: a box scrolled sideways, what a field holds, what a pager or a menu keeps of
+   a press, read so; then `outside_said`, the frame built after an input taken (inputrec.mbt's `inputs_taken`),
    `outside_events`, `held`, `pointed` and `came_built` go.
 4. Motions as `animated(target)`, read in the phase that uses them, unread not stepped. The frame's paint runs under a
    watch of its own (frame_watch.mbt's paint_watch): where a node is placed by the clock (Ctx::moved_by: a stack's
@@ -92,6 +95,16 @@ only with all of them green (frame_watch.mbt, `looks_check`).
    only that changed is painted again from the last build's tree, nothing built or laid out (a picture's fade too); a
    motion going that nothing reads asks for frames that do nothing. Then the rest read so: the motion package's moves
    and reshapes, the bar's springs, a hover's fade; its told moves and the movers go.
-5. What is built as a value, a list's row first (in place of kept_rows.mbt), then a pane and a page (in place of
-   kept_part.mbt).
+5. What is built as a value, a list's row first (kept_nodes.mbt, in place of kept_rows.mbt): a row is built and laid out
+   under a watch of its own and kept as its nodes, laid out, with what its build said of the frame. The frame's layout
+   runs under a watch of its own too (frame_watch.mbt's layout watch). A frame where only what its layout or a row read
+   changed is built again as it was built (what built the lists read nothing that changed, so it builds them the same)
+   and each row nothing it read changed is put back where its list lays it, neither built nor laid out; one built anew
+   (what its build read changed, an event of the hand) builds them all. What a row says of the frame that is said again
+   in no way (a layer opened over the page, how a list stands, a list or a field of its own: kept_census) builds it
+   every frame; what it read of the layout is read back as it read it. What a row or the layout read that changes before
+   it is read in the frame (what came for the frame, taken as it begins) it reads as it is, no frame after it asked for;
+   what reads a measure for its size (`measured`, `measured_size`) is told as its size changes, not as it moves (a page
+   it is on sliding in). A Tester builds each pass that kept a row once more keeping none, and the two must build and
+   say the same (rows_check). Then a pane and a page (in place of kept_part.mbt).
 6. The replay, said.mbt's recording and src/damage's comparing go; only the instances that changed are sent.

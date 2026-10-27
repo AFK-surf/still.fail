@@ -22,6 +22,7 @@ pub fn Ctx::laid_rect(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
     if !self.laid_reads.contains(id) {
       self.laid_reads[id] = (v, loc)
     }
+    row_read_laid(Rect(id, v, loc))
   }
   v
 }
@@ -42,6 +43,7 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
     if !self.size_reads.contains(id) {
       self.size_reads[id] = (v, loc)
     }
+    row_read_laid(Size(id, v, loc))
   }
   v
 }
@@ -58,6 +60,7 @@ pub fn Ctx::left_out(self : Ctx, id : Int, loc~ : SourceLoc) -> Bool {
     if !self.left_reads.contains(id) {
       self.left_reads[id] = (v, loc)
     }
+    row_read_laid(Left(id, v, loc))
   }
   v
 }

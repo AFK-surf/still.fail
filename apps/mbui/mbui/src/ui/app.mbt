@@ -133,7 +133,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() {
+  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
@@ -228,8 +228,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }
-  // (what the frame does, for whoever measures it: perf.mbt)
+  // (what the frame does, for whoever measures it: perf.mbt; the rows it keeps and builds, kept_nodes.mbt)
   perf_frame_start()
+  rows_frame_start()
   let t0 = work_now()
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
   // order it came, before anything reads it (messages.mbt)
@@ -264,6 +265,13 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.layers_opened.clear()
   while true {
     pass = pass + 1
+    // (built again in the frame, from what changed as it was built or laid out: what built its lists' rows may build
+    // them otherwise, none kept, kept_nodes.mbt)
+    if pass > 1 {
+      nodes_run.fresh = true
+    }
+    let kept0 = nodes_run.kept
+    layout_coming.val = true
     c.read_back_moved = false
     building.val = true
     c.build_no = next_build()
@@ -271,33 +279,42 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     perf_at[3] = perf_at[3] + 1
     let built_layers = c.layers.length()
     t1 = work_now()
-    // lists build their rows while laid out, and those see clicks too
-    c.layout(root, 0.0, 0.0, w, h) |> ignore
-    // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came after
-    // the page's layout: laid out over the window now, as one opened before it is; one opened in it, after it
-    let mut late = built_layers
-    while late < c.layers.length() {
-      c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
-      late = late + 1
-    }
-    // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where its
-    // box is, or built there where it cannot be (kept_part.mbt)
-    c.parts_rows_left()
-    c.parts_placed()
-    // what rows left out where they had not the room, drawn nowhere (readback.mbt)
-    c.left_out_after_layout()
-    // what covers an item, over it as laid out now (cover.mbt)
-    c.covers_after_layout()
-    // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
-    c.corners_after_layout()
-    // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
-    c.drawing_after_layout()
-    // what words marked as selectable hold, as laid out (words.mbt)
-    c.words_after_layout()
-    // what the view read of the layout as it built (a box's laid rect, a list's place), looked at again (readback.mbt)
-    c.reads_after_layout()
-    // how far what scrolls sideways can (sideways.mbt)
-    c.sideways_after_layout()
+    // laid out under a watch of its own: what only its layout reads (a list's place, its motions by the clock) lays
+    // the next frame out again, its lists' rows kept where nothing they show changed (frame_watch.mbt, kept_nodes.mbt)
+    laying.val = true
+    layout_clock_at.val = ""
+    layout_watch_of().read(fn() {
+      // lists build their rows while laid out, and those see clicks too
+      c.layout(root, 0.0, 0.0, w, h) |> ignore
+      // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came
+      // after the page's layout: laid out over the window now, as one opened before it is; one opened in it, after it
+      let mut late = built_layers
+      while late < c.layers.length() {
+        c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
+        late = late + 1
+      }
+      // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where
+      // its box is, or built there where it cannot be (kept_part.mbt)
+      c.parts_rows_left()
+      c.parts_placed()
+      // what rows left out where they had not the room, drawn nowhere (readback.mbt)
+      c.left_out_after_layout()
+      // what covers an item, over it as laid out now (cover.mbt)
+      c.covers_after_layout()
+      // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
+      c.corners_after_layout()
+      // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
+      c.drawing_after_layout()
+      // what words marked as selectable hold, as laid out (words.mbt)
+      c.words_after_layout()
+      // what the view read of the layout as it built (a box's laid rect, a list's place), looked at again
+      // (readback.mbt)
+      c.reads_after_layout()
+      // how far what scrolls sideways can (sideways.mbt)
+      c.sideways_after_layout()
+    })
+    laying.val = false
+    layout_coming.val = false
     // the focus into the layers that opened, back from those that went (overlay.mbt)
     c.layers_focus()
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
@@ -310,9 +327,18 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     desk.menus.clear()
     c.actions.clear()
     building.val = false
-    if !c.read_back_moved || pass >= frame_passes_most {
-      break
+    // (built again keeping no row, for a Tester: compared with the pass that kept them, and built once more where they
+    // part, kept_nodes.mbt)
+    if c.rows_check_end() {
+      continue
     }
+    if c.read_back_moved && pass < frame_passes_most {
+      continue
+    }
+    if c.rows_check_begin(kept0) {
+      continue
+    }
+    break
   }
   // the parts kept that this frame did not show let go (kept_part.mbt)
   parts_frame_end(c)
@@ -515,6 +541,8 @@ let building : Ref[Bool] = Ref::new(false)
 ///|
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
+  // (the rows kept as their nodes out of the frame's, for this build to make its own: kept_nodes.mbt)
+  c.rows_detach()
   c.inners.clear()
   c.inners_or.clear()
   c.moves_build_start()
@@ -686,6 +714,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   if kind != 1 {
     hand_event()
   }
+  // (a move that changed nothing but where a list stands, said by its signal: no input taken by what is built,
+  // inputrec.mbt)
+  let mut quiet = false
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
@@ -958,7 +989,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
         }
       } else if !claim_move(c, x, y) {
         // no one's yet: nothing moves
-        ()
+        quiet = true
       } else if sideways.contains(c.drag_scroll) &&
         !sideways_move(c, c.drag_scroll, x, y) {
         // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
@@ -985,11 +1016,16 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
             } else {
               c.list_drag(c.drag_scroll, -past)
             }
+          } else {
+            // (within the slop: nothing moves)
+            quiet = true
           }
         } else if pager {
           c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
         } else {
+          // (the list follows the finger: where it stands is its signal's, ListState::hand_moved)
           c.list_drag(c.drag_scroll, -(y - c.last_y))
+          quiet = true
         }
       }
       c.last_y = y
@@ -1161,9 +1197,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     c.active = 0
     second_ptr[2] = 0.0
   }
-  // (moved, nothing held down: a frame owed, what it changed of the hand read by what reads it, hand.mbt; else what
-  // the press did, come from outside what is a signal yet)
-  if kind == 1 && !c.down {
+  // (moved, nothing held down, or but a list moved by it: a frame owed, what it changed of the hand read by what reads
+  // it, hand.mbt, and of the list by what lays it out; else what the press did, come from outside what is a signal yet)
+  if kind == 1 && (!c.down || quiet) {
     h_frame_owed()
   } else {
     // (a drag: taken by what is built, inputrec.mbt)
@@ -1179,6 +1215,7 @@ fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
     Some(st) => {
       st.held = true
       self.feed(st, d, 1)
+      st.hand_moved()
     }
     None => ()
   }
@@ -1283,6 +1320,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
   if sideways.contains(target) {
     if sideways_wheel(target, dx, dy) {
+      wheel_taken()
       h_request_frame()
       return
     }
@@ -1293,27 +1331,46 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
     wheels_x[target] = wheels_x.get(target).unwrap_or(0.0) + dx
     wheel_mods[target] = mods
+    wheel_taken()
     h_request_frame()
     return
   }
   // a pinch is what holds a page's own (a picture's zoom): no list scrolls by it
   if (mods & wheel_mod_pinch) != 0 {
+    wheel_taken()
     return
   }
-  if target != 0 {
-    match c.lists.get(target) {
-      Some(st) => st.stop()
-      None => ()
+  match c.lists.get(target) {
+    Some(st) => {
+      st.stop()
+      // a wheel's notch (phase 4): eased over a few frames, as a browser does; a trackpad's (and its momentum's)
+      // follows the fingers as it comes
+      if phase == 4 {
+        c.ease_list(target, dy, h_event_time())
+      } else {
+        c.scroll_list(target, dy)
+      }
+      // (where it stands its signal's: what lays it out lays it out again, nothing taken by what is built; where parts
+      // are kept as drawn, kept_part.mbt, an event from outside for the part or the row it turns in)
+      st.hand_moved()
+      if parts_on.val {
+        inputs_taken.val = true
+        if part_under(x, y) || row_scroller_under(x, y) {
+          outside_came()
+        }
+      }
+      h_request_frame()
     }
-    // a wheel's notch (phase 4): eased over a few frames, as a browser does; a trackpad's (and its momentum's)
-    // follows the fingers as it comes
-    if phase == 4 {
-      c.ease_list(target, dy, h_event_time())
-    } else {
-      c.scroll_list(target, dy)
-    }
-    h_request_frame()
+    None => wheel_taken()
   }
+}
+
+///|
+/// A wheel turned over what is no list (what scrolls sideways, what takes the pointer, a pinch, nothing that scrolls):
+/// what it changed is no signal yet, taken by what is built (inputrec.mbt: an input taken, come from outside).
+fn wheel_taken() -> Unit {
+  inputs_taken.val = true
+  outside_came()
 }
 
 ///|

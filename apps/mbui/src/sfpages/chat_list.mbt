@@ -137,7 +137,8 @@ pub fn chat_list(
             }
             let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow, gutter~)
             let ri = row_box(c, side, top, fn() {
-              // (where a message out of a picture comes in over it: emit.mbt)
+              // (where a message out of a picture comes in over it: emit.mbt; read as it changes, Emits::read)
+              em.read()
               if keys[i] == em.out_key {
                 @motion.measure(c, c.box(fn() {  }), "emit-out/" + rk + "/" + keys[i])
               }

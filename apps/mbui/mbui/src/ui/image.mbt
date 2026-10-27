@@ -178,6 +178,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   match r {
     Some(e) => {
       e.used = self.frame_no
+      built_used(fn() { e.used = g().frame_no })
       part_image(e)
     }
     None => ()

@@ -298,8 +298,8 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         c.look(face, @ui.look(alpha=0.0))
       }
       // what it does now and how long: folded away to its width's share, cut there, faded
-      let natural = match @motion.measured_rect(c, "emit-tail/" + rk + "/" + a.key) {
-        Some(r) => r.2
+      let natural = match @motion.measured_size(c, "emit-tail/" + rk + "/" + a.key) {
+        Some((w, _)) => w
         None => 0.0
       }
       let cut = tail < 1.0 && natural > 0.0

@@ -63,6 +63,7 @@ pub fn Ctx::held(
     }
   }
   w.used = self.frame_no
+  built_used(fn() { w.used = g().frame_no })
   self.sweep_helds()
   if !on {
     w.last = -1.0

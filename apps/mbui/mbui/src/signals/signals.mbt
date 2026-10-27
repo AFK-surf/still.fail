@@ -488,6 +488,8 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     if watch_reading.depth > 0 && watch_reading.sets.length() < 4 {
       watch_reading.sets.push(loc.to_string())
     }
+    // (where, for what it tells to say: Signal::set_at)
+    set_at.val = Some(loc)
     let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
@@ -760,6 +762,14 @@ pub fn Watch::set_as_read(self : Watch) -> Array[String] {
 }
 
 ///|
+/// Whether what the read under way has read may have changed since it read it (a value it read set again as it
+/// reads, or a computed it read told as what that read was): what it makes may be from before that. Asked of nothing,
+/// no computed worked out again for it.
+pub fn Watch::changed_as_read(self : Watch) -> Bool {
+  (self.node.flags & (DIRTY | PENDING)) != 0
+}
+
+///|
 /// Whether what the watch's last read read changed since (or it was never read).
 pub fn Watch::is_stale(self : Watch) -> Bool {
   self.stale.val
@@ -776,4 +786,19 @@ pub fn Watch::touch(self : Watch) -> Unit {
 pub fn Watch::stop(self : Watch) -> Unit {
   effect_scope_oper(self.node)
   self.stale.val = true
+}
+
+///|
+/// Where a signal was last set to another value (Signal::set's caller): what a watch told as it is set says what told
+/// it (frame_watch.mbt's layout watch).
+// kept across runs: written by each set
+let set_at : Ref[SourceLoc?] = Ref(None)
+
+///|
+/// Where a signal was last set to another value, as words ("" none).
+pub fn last_set_at() -> String {
+  match set_at.val {
+    Some(l) => l.to_string()
+    None => ""
+  }
 }

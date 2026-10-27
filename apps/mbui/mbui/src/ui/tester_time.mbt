@@ -217,6 +217,12 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
         ""
       }),
     )
+  } else if layout_left() {
+    why.push(
+      "a frame asked for to lay out (" +
+      (if layout_said.val != "" { layout_said.val } else { "what a list's row read changed: \{nodes_run.told_by}" }) +
+      ")",
+    )
   } else if self.fake.wants && !c.wants_frame {
     why.push("a frame asked for between frames")
   }

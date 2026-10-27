@@ -257,7 +257,6 @@ fn parts_frame_start(c : Ctx) -> Unit {
     parts_run.steps = steps
     outside_came()
   }
-  clock_frame_start(c)
 }
 
 ///|
@@ -266,6 +265,7 @@ fn parts_frame_start(c : Ctx) -> Unit {
 fn parts_frame_end(c : Ctx) -> Unit {
   parts_gone(c)
   rows_frame_end(c)
+  rows_nodes_end(c)
   clock_frame_end(c)
 }
 
@@ -631,7 +631,7 @@ fn part_holder() -> @signals.Computed[Int]? {
 /// Whether what is built now is kept as it was built: a part's build, or a list's row's (kept_rows.mbt), a row on its own
 /// as much as one in a part (on 小屏 a chat's messages are in none): what it reads of time is followed.
 fn part_building() -> Bool {
-  part_now.part != 0 || part_now.row != 0
+  part_now.part != 0 || part_now.row != 0 || nodes_run.building is Some(_)
 }
 
 ///|
@@ -739,13 +739,14 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
 }
 
 ///|
-/// A frame begins (parts_frame_start): what read the frame told it changed, and what read a moment come.
-fn clock_frame_start(c : Ctx) -> Unit {
+/// A frame begins (frame_drawn, before what it does again is decided): what read the frame told it changed, and what
+/// read a moment come.
+fn clock_frame_start(t : Double) -> Unit {
   @signals.start_batch()
-  kept_clock.frame.set(c.frame_no)
+  kept_clock.frame.set(@signals.untracked(fn() { kept_clock.frame.get() }) + 1)
   let dues = kept_clock.dues
   let mut n = 0
-  while n < dues.length() && dues[n].at <= c.clock {
+  while n < dues.length() && dues[n].at <= t {
     dues[n].come.set(true)
     n = n + 1
   }
@@ -761,11 +762,26 @@ fn clock_frame_start(c : Ctx) -> Unit {
 
 ///|
 /// The frame is built (parts_frame_end): the moments a part or a row kept that showed reads are the host's wakes (one
-/// drawn again asks none itself, its build not run); those nothing reads let go.
+/// drawn again asks none itself, its build not run); those nothing reads let go. Not the frame's own: what reads one
+/// is built again as it comes, by what read it (its watch, told by clock_frame_start), not the frame anew.
 fn clock_frame_end(c : Ctx) -> Unit {
   kept_clock.dues.retain(fn(d) { d.come.watched() })
+  dues_wake(c)
+}
+
+///|
+/// The moments a part or a row kept waits for asked of the host: the soonest is the frame's wake, where it is sooner
+/// (a frame drawn from the last build's tree too: frame_watch.mbt).
+fn dues_wake(c : Ctx) -> Unit {
   for d in kept_clock.dues {
-    c.wake_at_time(d.at, later=d.later)
+    if d.at > c.clock {
+      if c.wake_at < 0.0 || d.at < c.wake_at {
+        c.wake_at = d.at
+      }
+      if !d.later && (c.wake_waited < 0.0 || d.at < c.wake_waited) {
+        c.wake_waited = d.at
+      }
+    }
   }
 }
 
@@ -939,7 +955,7 @@ fn Ctx::part_paint_end(self : Ctx, id : Int, node : Int, i0 : Int, p : PartPaint
 /// `k` (the one it is drawn in), what of a clip was its band's left as far off as nothing cuts (said.mbt's Moved).
 fn KeptPart::moved_by(self : KeptPart, dx : Double, dy : Double, k : Int) -> Moved {
   let (l, t, r, b) = self.band
-  { dx, dy, cut: k, band_l: l, band_t: t, band_r: r, band_b: b, node: -1 }
+  { dx, dy, cut: k, band_l: l, band_t: t, band_r: r, band_b: b, node: -1, by: 0 }
 }
 
 ///|

@@ -302,6 +302,7 @@ pub fn value(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) -
     }
   }
   v.used = c.frame_number()
+  @ui.built_used(fn() { v.used = @ui.current().frame_number() })
   v
 }
 
@@ -401,6 +402,8 @@ pub fn animate_presence(
     }
   }
   p.seen = c.build_number()
+  // (asked again by a list's row kept as its nodes, each frame it is: @ui.built_again)
+  @ui.built_again(fn(_) { p.seen = @ui.current().build_number() })
   let rt = @ui.runtime()
   match (shown, p.cur) {
     (true, None) => {
@@ -607,6 +610,11 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
   l.spec = spec
   l.by = by
   l.build = c.build_number()
+  // (asked again by a list's row kept as its nodes, of its node where it is put back: @ui.built_again)
+  @ui.built_again(fn(by) {
+    l.node = i + by
+    l.build = @ui.current().build_number()
+  })
 }
 
 ///|
