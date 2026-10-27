@@ -104,13 +104,15 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
           bar=bar_foot(),
           foot=list_foot(),
         )
-        c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
         c.layer(fn() { chat_foot(c, src, w, r, Some(v)) })
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
         flight_waiting(c, draft_key(r))
         // and the files sent with them, from their tiles to their places (flight.mbt)
         flight_files(c, draft_key(r))
+        // the bar over all of it: what flies to the list goes under it, as the list does
+        let bar = c.layer(fn() { chat_bar(c, src, w, r, v) })
+        c.over_flying(bar)
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
       }

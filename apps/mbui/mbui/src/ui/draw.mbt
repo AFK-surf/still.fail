@@ -425,8 +425,9 @@ pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
 
 ///|
 /// Node `i` drawn over its siblings (1), or over everything, the window's whole room its clip (2: what flies over
-/// bars and the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
-/// where that moves it: drawn_paint), or over the scrim of the modal layer up this frame and under what that layer
+/// the composer; in what is drawn moved by a look of its own, a list carried up, over everything of its layer
+/// where that moves it: drawn_paint; under what is said to be over it, Ctx::over_flying, and the layers opened over
+/// it, as what it lands in is), or over the scrim of the modal layer up this frame and under what that layer
 /// holds (3: what a menu is of, held, standing out of what the menu dims, as iOS's context menu has it; in its place
 /// where no layer with a scrim is up). Tapped where it is laid out, in its place among the rest.
 pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
@@ -446,6 +447,14 @@ pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
   }
   let e = self.drawn_of(j)
   e.z = z
+}
+
+///|
+/// Node `i` drawn over what flies over everything (put_over's 2) built before it, as over the rest built before it:
+/// a page's bar, over the words and files sent flying from the composer to the list under it (on their way to a
+/// place under the bar they go under it, as their place is, not over it). Painted where it is, its clip theirs.
+pub fn Ctx::over_flying(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].over_flying = true
 }
 
 ///|
