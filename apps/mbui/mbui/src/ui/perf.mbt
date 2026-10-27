@@ -35,6 +35,8 @@ pub(all) struct FramePerf {
   insts : Int
   /// a frame of its looks by the clock alone (frame_watch.mbt): nothing built, laid out or painted
   looks : Bool
+  /// a frame painted alone, from the last build's tree (frame_watch.mbt): nothing built or laid out
+  painted : Bool
   build_ms : Double
   layout_ms : Double
   paint_ms : Double
@@ -66,12 +68,13 @@ pub fn Tester::frame_perf(self : Tester) -> FramePerf {
 fn frame_perf() -> FramePerf {
   let c = g()
   {
-    nodes: if looks_drawn.val { 0 } else { c.count },
+    nodes: if looks_drawn.val || painted_alone.val { 0 } else { c.count },
     laid: commit_counts[0] - perf_at[0],
     placed: commit_counts[1] - perf_at[1],
     same: commit_counts[2] - perf_at[2],
     insts: c.ninst,
     looks: looks_drawn.val,
+    painted: painted_alone.val,
     build_ms: c.t_build,
     layout_ms: c.t_layout,
     paint_ms: c.t_paint,
@@ -85,7 +88,13 @@ fn frame_perf() -> FramePerf {
 /// frames); else the moment it asked to be woken at; +inf, none.
 pub fn Tester::wanted_after(self : Tester) -> Double {
   let c = g()
-  if self.fake.wants || c.wants_frame || c.motion_left || c.cycling || c.fiber_frame || posted_left() != "" {
+  if self.fake.wants ||
+    c.wants_frame ||
+    paint_left() ||
+    c.motion_left ||
+    c.cycling ||
+    c.fiber_frame ||
+    posted_left() != "" {
     0.0
   } else if c.wake_at > 0.0 {
     c.wake_at
@@ -110,6 +119,9 @@ pub fn Tester::wanted_why(self : Tester) -> String {
       (if c.took_input { " (an input's frame after)" } else { "" }) +
       (if c.read_back_moved { " (read back moved: \{c.read_back_key})" } else { "" }),
     )
+  }
+  if paint_left() {
+    why.push("a frame asked for to paint: " + paint_said.val)
   }
   if c.motion_left {
     why.push("moving: " + c.moving_now().join("; "))
@@ -191,6 +203,6 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   let p = frame_perf()
   h_log(
-    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} share=\{presented_share.val} passes=\{p.passes}",
+    "PERF t=\{t} work=\{work} build=\{c.t_build} layout=\{c.t_layout} paint=\{c.t_paint} present=\{present} gpu=\{h_gpu_ms()} nodes=\{p.nodes} laid=\{p.laid} insts=\{p.insts} looks=\{if p.looks { 1 } else { 0 }} painted=\{if p.painted { 1 } else { 0 }} share=\{presented_share.val} passes=\{p.passes}",
   )
 }

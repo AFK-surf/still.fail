@@ -774,7 +774,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         cn.place is Some(_) ||
         cn.tx != cn.otx ||
         cn.ty != cn.oty ||
-        cn.slide != cn.oslide {
+        cn.moved_by is Some(_) {
         up = 2
       }
       if j < kids.length() {
@@ -1001,14 +1001,78 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 }
 
 ///|
-/// How far node `n` is moved sideways by its slide (a page sliding in), `width` across: on the device's pixels, so that
-/// what it holds moves by whole pixels (its words as crisp as at rest, as a look's move is: draw.mbt), and a part kept in
-/// it is drawn again there as building it there draws it (kept_part.mbt).
-fn Ctx::slid(self : Ctx, n : Node, width : Double) -> Double {
-  if n.slide == 0.0 {
-    0.0
-  } else {
-    on_pixels(n.slide * width, self.scale)
+/// Node `i` (built this frame) placed off where its parent lays it by what `f` gives from its size (w, h) at the
+/// frame's time (a page sliding in: across by a share of its width), it and all it holds: laid out there, so drawn,
+/// tapped and found there. Read as it is laid out, not followed, and again as the frame is painted, followed there:
+/// what `f` reads (where a motion is: the clock) places it again as the next frame is painted, nothing built nor laid
+/// out (Ctx::moved_place, frame_watch.mbt). `f` gives the same for the same state and time, however often asked.
+pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
+  self.nodes[i].moved_by = Some(f)
+}
+
+///|
+/// Where node `n`, `w` by `h`, is moved off its place by what moves it (Ctx::moved_by) at the frame's time: on the
+/// device's pixels, so that what it holds moves by whole pixels (its words as crisp as at rest, as a look's move is:
+/// draw.mbt), and a part kept in it is drawn again there as building it there draws it (kept_part.mbt). Read as it is
+/// laid out, not followed: what moves it is read again, followed, as the frame is painted (Ctx::moved_place).
+fn Ctx::moved_now(self : Ctx, n : Node, w : Double, h : Double) -> Unit {
+  match n.moved_by {
+    Some(f) => {
+      let (dx, dy) = @signals.untracked(fn() { f(w, h) })
+      n.moved_x = on_pixels(dx, self.scale)
+      n.moved_y = on_pixels(dy, self.scale)
+    }
+    None => {
+      n.moved_x = 0.0
+      n.moved_y = 0.0
+    }
+  }
+}
+
+///|
+/// As the frame is painted (frame_paint), before anything of it: each node moved by what moves it (Ctx::moved_by) where
+/// that has it at the frame's time, it and all it holds placed there as laid out: what that reads followed by the
+/// paint, so that a frame where only it changed is painted again so, nothing built nor laid out (frame_watch.mbt). As
+/// the frame is laid out where it is built whole, so nothing moves then.
+fn Ctx::moved_place(self : Ctx) -> Unit {
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    match n.moved_by {
+      Some(f) => {
+        let (dx, dy) = f(n.fw, n.fh)
+        let mx = on_pixels(dx, self.scale)
+        let my = on_pixels(dy, self.scale)
+        if mx != n.moved_x || my != n.moved_y {
+          self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
+          n.moved_x = mx
+          n.moved_y = my
+        }
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+/// Node `i` and all it holds, as laid out, placed `dx` across and `dy` down from where they are: what is placed with them
+/// as they are laid out too (a field's words, where they start: layout.mbt's commit).
+fn Ctx::moved_shift(self : Ctx, i : Int, dx : Double, dy : Double) -> Unit {
+  let n = self.nodes[i]
+  n.x = n.x + dx
+  n.y = n.y + dy
+  if n.kind == kind_editor {
+    match self.editors.get(n.id) {
+      Some(st) => {
+        st.ox = st.ox + dx
+        st.oy = st.oy + dy
+      }
+      None => ()
+    }
+  }
+  let mut c = n.first
+  while c >= 0 {
+    self.moved_shift(c, dx, dy)
+    c = self.nodes[c].next
   }
 }
 
@@ -1019,8 +1083,9 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   let n = self.nodes[i]
   let f = n.fl
   n.by_size(f.width, f.height)
-  n.x = px + f.left + n.tx + self.slid(n, f.width)
-  n.y = py + f.top + n.ty
+  self.moved_now(n, f.width, f.height)
+  n.x = px + f.left + n.tx + n.moved_x
+  n.y = py + f.top + n.ty + n.moved_y
   let mut c = n.first
   while c >= 0 {
     self.replace(c, n.x, n.y)
@@ -1045,11 +1110,11 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   let f = n.fl
   if n.same && f.laid_out_at() != gen {
     n.by_size(f.width, f.height)
-    let x = px + f.left + n.tx + self.slid(n, f.width)
-    let y = py + f.top + n.ty
+    self.moved_now(n, f.width, f.height)
+    let x = px + f.left + n.tx + n.moved_x
+    let y = py + f.top + n.ty + n.moved_y
     n.otx = n.tx
     n.oty = n.ty
-    n.oslide = n.slide
     if x != n.x || y != n.y {
       commit_counts[1] = commit_counts[1] + 1
       self.replace(i, px, py)
@@ -1066,9 +1131,9 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   n.by_size(f.width, f.height)
   n.otx = n.tx
   n.oty = n.ty
-  n.oslide = n.slide
-  n.x = px + f.left + n.tx + self.slid(n, f.width)
-  n.y = py + f.top + n.ty
+  self.moved_now(n, f.width, f.height)
+  n.x = px + f.left + n.tx + n.moved_x
+  n.y = py + f.top + n.ty + n.moved_y
   n.fw = f.width
   n.fh = f.height
   let ix = n.x + n.pad_l

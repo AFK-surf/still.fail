@@ -652,7 +652,8 @@ pub fn Ctx::native(
 }
 
 ///|
-/// The native views' nodes this frame, by their index in the pool: the view, where its content is, its corners.
+/// The native views' nodes the last build made, by their index in the pool: the view, where its content is, its
+/// corners.
 let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, Double)] = Map([])
 
 ///|
@@ -778,8 +779,6 @@ fn views_arrive() -> Unit {
 /// After a frame is painted: each open view placed where it was painted (hidden where it was not), told how it
 /// stands, and the reads its player waits on handed to its `read`.
 fn Ctx::sync_views(self : Ctx) -> Unit {
-  native_nodes.clear()
-  picture_at.clear()
   if open_views.length() == 0 {
     return
   }
@@ -1222,7 +1221,7 @@ fn digits(s : String) -> Int? {
 // ── a picture at a rect of its own ─────────────────────────────────────
 
 ///|
-/// The rects pictures are drawn at this frame, by node.
+/// The rects pictures are drawn at, by node, as the last build said.
 let picture_at : Map[Int, (Double, Double, Double, Double, Int)] = Map([])
 
 ///|

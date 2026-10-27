@@ -8,6 +8,10 @@
 // The motion package (src/motion) works its looks out once a frame is laid out (on_after_layout), and draws copies
 // of what has gone under a list's rows (on_list_underlay, Drawing). At rest no look is set and painting is as it was:
 // screenshots are the same.
+//
+// A look may be worked out as the node is painted instead (Ctx::look_by: where a motion is at the frame's time, read
+// there): what it reads is followed by the frame's paint, not its build, so a frame where only that changed is painted
+// again from the tree as laid out, nothing built (frame_watch.mbt).
 
 ///|
 /// How a node is drawn, over how it is laid out: its opacity, its offset, its scale about a point of it (`ox`, `oy`:
@@ -149,6 +153,8 @@ priv struct Drawn {
   mut said_row : Int
   /// a look by the clock (Ctx::cycle_look): what it draws tagged with it as it is painted
   mut cycle : CycleLook?
+  /// a look worked out as it is painted (Ctx::look_by), after `look`
+  mut look_by : (() -> Look)?
 }
 
 ///|
@@ -302,7 +308,7 @@ fn Ctx::drawing_after_layout(self : Ctx) -> Unit {
     return
   }
   for e in dr.entries {
-    if e.look.is_still() {
+    if e.look.is_still() && e.look_by is None {
       continue
     }
     let mut p = self.nodes[e.node].parent
@@ -345,6 +351,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     row: 0,
     said_row: 0,
     cycle: None,
+    look_by: None,
   }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
@@ -374,7 +381,32 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
 }
 
 ///|
-/// Node `i` drawn with `look` and no other (what the motion package works out after layout, the app's look in it).
+/// Node `i` (built this frame) drawn with what `f` gives as it is painted, after the look it has as built: read as it
+/// is drawn, not as it is built (Compose's graphicsLayer block, read in its draw phase). What `f` reads (where a motion
+/// is, read by the clock; a signal) paints the frame again as it changes, nothing built or laid out (frame_watch.mbt):
+/// a fade, a scale, a move drawn only (one that moves where it is tapped too: Ctx::moved_by). `f` works out the same
+/// for the same state and time, painted once or more. What is built and asks where the node is drawn (Ctx::drawn_at,
+/// drawn_rect) reads it then, as it is built.
+pub fn Ctx::look_by(self : Ctx, i : Int, f : () -> Look) -> Unit {
+  let e = self.drawn_of(i)
+  e.look_by = match e.look_by {
+    Some(g) => Some(fn() { g().then(f()) })
+    None => Some(f)
+  }
+}
+
+///|
+/// How it is drawn now: its look as built, then what is worked out as it is painted (Ctx::look_by), read now.
+fn Drawn::look_now(self : Drawn) -> Look {
+  match self.look_by {
+    Some(f) => self.look.then(f())
+    None => self.look
+  }
+}
+
+///|
+/// Node `i` drawn with `look` and no other as built (what the motion package works out after layout, the app's look in
+/// it; what is worked out as it is painted, Ctx::look_by, still after it).
 pub fn Ctx::set_look(self : Ctx, i : Int, look : Look) -> Unit {
   match self.drawn_entry(i) {
     Some(e) => e.look = look
@@ -383,7 +415,7 @@ pub fn Ctx::set_look(self : Ctx, i : Int, look : Look) -> Unit {
 }
 
 ///|
-/// The look node `i` has this frame so far.
+/// The look node `i` has this frame so far, as built (what is worked out as it is painted, Ctx::look_by, after it).
 pub fn Ctx::look_of(self : Ctx, i : Int) -> Look {
   match self.drawn_entry(i) {
     Some(e) => e.look
@@ -532,7 +564,7 @@ pub fn Ctx::drawn_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) 
   let n = self.nodes[i]
   match self.drawn_entry(i) {
     Some(e) => {
-      let d = e.look
+      let d = e.look_now()
       (n.x + d.dx, n.y + d.dy, n.fw * d.sx, n.fh * d.sy)
     }
     None => (n.x, n.y, n.fw, n.fh)
@@ -550,8 +582,9 @@ pub fn Ctx::drawn_at(self : Ctx, i : Int) -> (Double, Double) {
   while p >= 0 {
     match self.drawn_entry(p) {
       Some(e) => {
-        x = x + e.look.dx
-        y = y + e.look.dy
+        let l = e.look_now()
+        x = x + l.dx
+        y = y + l.dy
       }
       None => ()
     }
@@ -612,8 +645,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     // only where it is tapped: as laid out; drawn only, nowhere
     return e.only
   }
+  let look = e.look_now()
   // a list's row built: what it draws taken as it is painted, in the band past its list's clip (kept_rows.mbt)
-  if e.row != 0 && dr.mode == 0 && e.look.is_still() && e.z == 0 && !e.only {
+  if e.row != 0 && dr.mode == 0 && look.is_still() && e.z == 0 && !e.only {
     if e.row > 0 {
       self.row_paint_record(i, e.row, alpha)
     } else {
@@ -625,14 +659,15 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if e.z == 3 && dr.scrims.is_empty() {
     e.z = 0
   }
-  let look = e.look
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh)
   if look.is_still() && e.z < 2 && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
     return false
   }
-  if dr.mode == 0 && (!look.is_still() || e.z >= 2 || cutting) {
+  // (drawn otherwise than it is tapped: moved, or over everything, or cut)
+  let apart = !look.is_still() || e.z >= 2 || cutting
+  if dr.mode == 0 && apart {
     if !e.only {
       // its tap rects, where it is laid out (what it would draw so is dropped)
       let i0 = self.ninst
@@ -709,7 +744,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     )
   }
   let was = dr.mode
-  if !look.is_still() || e.z >= 2 || e.only || cutting {
+  if apart || e.only {
     dr.mode = mode_draw
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
@@ -731,7 +766,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if moved {
     pop_clip()
   }
-  if dr.mode == mode_draw || !look.is_still() || e.z >= 2 || e.only || cutting {
+  if dr.mode == mode_draw || apart || e.only {
     // tapped as laid out, not here (drawn only, not at all)
     self.hits_cut(h0)
     self.next_scroll_ids.truncate(s0)

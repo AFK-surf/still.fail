@@ -96,7 +96,7 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
       let q = c.nodes[p]
       alpha = alpha * q.opacity
       match c.drawn_entry(p) {
-        Some(e) => alpha = alpha * e.look.alpha
+        Some(e) => alpha = alpha * e.look_now().alpha
         None => ()
       }
       if p != i && q.clip {

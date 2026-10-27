@@ -565,7 +565,8 @@ test "kept layouts: only something deep inside moving, nothing around it" {
             |> ignore
             c.box(fn() {
               let b = c.box(w=Px(30.0), h=Px(10.0), bg=0x123456FFL, fn() {  })
-              c.nodes[b].slide = if k.val % 2 == 0 { 0.0 } else { 0.5 }
+              let half = k.val % 2 != 0
+              c.moved_by(b, fn(w, _) { (if half { w * 0.5 } else { 0.0 }, 0.0) })
             })
             |> ignore
           })

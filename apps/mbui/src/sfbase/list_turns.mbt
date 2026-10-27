@@ -338,6 +338,13 @@ impl @ui.Moving for Turns with sample(self, now) {
 }
 
 ///|
+/// The turns are played on from the time they keep, as the page is built.
+impl @ui.Moving for Turns with keeps_time(self) {
+  ignore(self)
+  true
+}
+
+///|
 impl @ui.Moving for Turns with rest_at(self, now, frame) {
   // (their chat's page not shown this frame: nothing plays; shown again, its build plays them on)
   if self.stepped < frame {

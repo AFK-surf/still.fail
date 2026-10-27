@@ -218,3 +218,109 @@ test "the clock read as the view is built: each frame built whole, said where it
   assert_true(builds.val > built)
   assert_true(t.built_why().contains("the clock read at"), msg=t.built_why())
 }
+
+///|
+/// How long the mark's move takes (moved_tester).
+let moved_ms : Double = 400.0
+
+///|
+/// A word, and a mark moved across by a look worked out as it is painted, going `moved_ms` from the view's first frame
+/// (`from`); the view's builds counted.
+fn moved_tester(builds : Ref[Int], from : Ref[Double]) -> Tester {
+  Tester::new(fn(c) {
+    builds.val = builds.val + 1
+    if from.val < 0.0 {
+      from.val = c.moment()
+    }
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.text("moving", size=12.0) |> ignore
+      let mark = c.box(w=Px(20.0), h=Px(8.0), bg=0x3366CCFFL, fn() {  })
+      c.look_by(mark, fn() {
+        let p = dclamp((c.now_before(from.val + moved_ms) - from.val) / moved_ms, 0.0, 1.0)
+        look(dx=p * 100.0)
+      })
+    })
+    |> ignore
+  })
+}
+
+///|
+/// Where the mark is drawn across (the first rect of its colour).
+fn mark_x() -> Double {
+  let c = g()
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 0.0 && c.inst[b + 2] == 20.0 && c.inst[b + 3] == 8.0 {
+      return c.inst[b]
+    }
+  }
+  -1.0
+}
+
+///|
+test "a look worked out as it is painted, going: its frames painted alone, each as the frame built whole draws it" {
+  let builds = Ref(0)
+  let from = Ref(-1.0)
+  let t = moved_tester(builds, from)
+  // (built whole once more: what it laid out settled, the same twice)
+  t.clock_frame()
+  let was = paints_alone.val
+  t.clock_frame(ms=moved_ms / 4.0)
+  t.clock_frame(ms=moved_ms / 4.0)
+  // (each drawn whole as well and compared: looks_compare would have failed the test)
+  assert_eq(paints_alone.val - was, 2)
+  assert_true(t.painted_why().contains("the clock read as it was painted"), msg=t.painted_why())
+}
+
+///|
+test "a look worked out as it is painted, drawn as a host draws it: nothing built for its frames, the mark moved, then still" {
+  let builds = Ref(0)
+  let from = Ref(-1.0)
+  let t = moved_tester(builds, from)
+  t.check_looks(false)
+  t.clock_frame()
+  let built = builds.val
+  let x0 = mark_x()
+  t.clock_frame(ms=moved_ms / 2.0)
+  assert_eq(builds.val, built)
+  assert_true(painted_alone.val)
+  assert_true(mark_x() > x0, msg="the mark drawn moved on: \{x0} then, \{mark_x()} now")
+  // past its end the paint reads the clock no more: painted again once it drew the same twice, then nothing built nor
+  // painted
+  t.clock_frame(ms=moved_ms)
+  let end = mark_x()
+  t.clock_frame(ms=moved_ms / 4.0)
+  t.clock_frame(ms=moved_ms / 4.0)
+  assert_eq(builds.val, built)
+  assert_eq(mark_x(), end)
+  assert_true(end > x0)
+  assert_true(!painted_alone.val)
+  assert_true(looks_drawn.val)
+}
+
+///|
+test "a page pushed: the frames of its slide are painted alone, the one at its end built whole" {
+  let nav = Nav::new(0)
+  let builds = Ref(0)
+  let t = Tester::new(fn(c) {
+    builds.val = builds.val + 1
+    c.nav(nav, fn(i) { c.text("title \{i}", wrap=false) |> ignore }, bg=0xFFFFFFFFL) |> ignore
+  })
+  t.check_looks(false)
+  t.draw()
+  nav.push(1)
+  // (its first frames built whole: what was pushed, and laid out the same twice)
+  t.clock_frame()
+  t.clock_frame()
+  let built = builds.val
+  let was = paints_alone.val
+  t.clock_frame(ms=nav_push_ms / 4.0)
+  assert_eq(builds.val, built, msg="built: \{t.built_why()}")
+  t.clock_frame(ms=nav_push_ms / 4.0)
+  assert_eq(builds.val, built, msg="built: \{t.built_why()}")
+  assert_eq(paints_alone.val - was, 2)
+  t.run_for(nav.rest() - t.time())
+  assert_true(builds.val > built)
+  assert_eq(nav.depth(), 2)
+  t.assert_idle()
+}

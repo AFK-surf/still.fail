@@ -61,7 +61,8 @@ pub struct Stream {
 let open_streams : Array[Stream] = []
 
 ///|
-/// Where streams are drawn this frame, by node: the stream, and the rect it is drawn at (Ctx::stream's `at`).
+/// Where streams are drawn, by node, as the last build said: the stream, and the rect it is drawn at (Ctx::stream's
+/// `at`).
 let stream_nodes : Map[Int, (Stream, (Double, Double, Double, Double)?)] = Map([])
 
 ///|
@@ -422,9 +423,8 @@ fn streams_frame_start() -> Unit {
 }
 
 ///|
-/// Once the frame is painted: the frames taken in it said shown, drawn or not; where streams were drawn forgotten.
+/// Once the frame is painted: the frames taken in it said shown, drawn or not.
 fn streams_after_paint() -> Unit {
-  stream_nodes.clear()
   for s in open_streams.copy() {
     if s.acks.length() == 0 {
       continue
