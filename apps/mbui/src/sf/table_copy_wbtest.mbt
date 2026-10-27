@@ -6,15 +6,15 @@
 let copy_table : String = "| 模型 | 输入 | 输出 | 缓存读 |\n| --- | --- | --- | --- |\n| Opus 5.5 | $5 | $25 | $0.5 |\n| Sonnet 5 | $3 | $15 | $0.3 |"
 
 ///|
-/// `text` in a message's column (16 in, a chat's margin past it that its tables scroll out over: `margin`), the
-/// presenters over it.
+/// `text` in a message's column (16 in, or a chat's margin past it that its tables scroll out over, `margin`, where that
+/// is more), the presenters over it.
 fn table_tester(platform : Int, w : Double, h : Double, text? : String = copy_table, margin? : Double = 0.0) -> @ui.Tester {
   presenters_reset()
   @ui.Tester::new(
     fn(c) {
       begin(c) |> ignore
       c.with_theme(ui_theme(), fn() {
-        c.column(w=Fill(1.0), pad=16.0, fn() { markdown(c, text, bleed=margin) |> ignore }) |> ignore
+        c.column(w=Fill(1.0), pad=dmax(16.0, margin), fn() { markdown(c, text, bleed=margin) |> ignore }) |> ignore
         presented(c)
       })
     },
@@ -72,6 +72,26 @@ test "a table as wide as a phone's message: its key over nothing of it, past its
   let (kx, _, kw, _) = table_key_of(t)
   let (lx, _, lw, _) = t.rect_of("three a long").unwrap()
   assert_true(kx > lx + lw && kx + kw == 390.0 - 16.0 - table_key_gap, msg="\{(kx, kw, lx, lw)}")
+}
+
+///|
+test "a table as wide as the message on a wide chat: its key out in the margin, nothing to scroll" {
+  let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
+  let text = "| 一 | 二 | 三 |\n|---|---|---|\n| one \{long} | two \{long} | three \{long} |\n"
+  // (a message 760 wide, 160 of margin either side: Large's)
+  let t = table_tester(0, 1080.0, 800.0, text~, margin=160.0)
+  t.draw()
+  t.draw()
+  // past the table's last words, in the margin, whole
+  let (kx, _, kw, _) = table_key_of(t)
+  let (lx, ly, lw, _) = t.rect_of("three a long").unwrap()
+  assert_true(kx > lx + lw && kx >= 1080.0 - 160.0 && kx + kw <= 1080.0 - 160.0 + table_key_room, msg="\{(kx, kw, lx, lw)}")
+  // a drag moves nothing: no more to see
+  t.drag(600.0, ly, 200.0, ly)
+  t.draw()
+  t.frame()
+  let (lx2, _, _, _) = t.rect_of("three a long").unwrap()
+  assert_eq(lx2, lx)
 }
 
 ///|

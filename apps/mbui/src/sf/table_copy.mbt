@@ -14,6 +14,10 @@ let table_key_size : Double = 32.0
 let table_key_gap : Double = @ui.Space::S1_5.px()
 
 ///|
+/// The room the key takes past the table: its gap either side of it.
+let table_key_room : Double = table_key_gap + table_key_size + table_key_gap
+
+///|
 /// What scrolls of a table: it, then its key, from their tops.
 // kept across runs: a value (no field of it changes)
 let table_beside : @ui.Style = @ui.css("row align=AStart")

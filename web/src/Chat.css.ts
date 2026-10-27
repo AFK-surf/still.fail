@@ -7,9 +7,9 @@ import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
-import { tableScroll } from "./Prose.css.ts";
+import { tableKey, tableScroll } from "./Prose.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
-import { bleedX, columns, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { bleedX, columns, outsetEnd, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
 import { segments, spokesTurn, wholeRing } from "@stillfail/ui/styles/spokes.ts";
@@ -249,6 +249,14 @@ export const msgMain = style({
  * the words.
  */
 globalStyle(`${msgMain} > ${markdown} > ${tableScroll}`, { ...bleedX("var(--list-gutter, 0px)"), maxWidth: "calc(100% + 2 * var(--list-gutter, 0px))" });
+/**
+ * Its copy key out in that margin where the margin has its whole room (the wide list's: 44 at 768 of its width), so a
+ * table as wide as the message scrolls not at all for it, nor shows a bar across the pane; narrower, past its end,
+ * scrolled to (Prose.css.ts tableKey: its 6, an IconButton's 32, its 6).
+ */
+globalStyle(`${chatList} ${msgMain} > ${markdown} > ${tableScroll} > ${tableKey}`, {
+  "@container": { "(min-width: 768px)": outsetEnd(44) },
+});
 export const msgAvatarAgent = style({
   background: vars.neutralBg,
   // Slack's mark on its corner (msgAvatarSlack) is out past its round.
