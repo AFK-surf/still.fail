@@ -139,8 +139,8 @@ fn Bar::rest(self : Bar, now : Double, scrolled : Double) -> Double {
 
 ///|
 /// A bar as a frame drew it, for the pointer: what it is for (its id; `foot`: along its foot), where what scrolls shows
-/// (x0 y0 x1 y1), its thumb (x y w h), how far what scrolls goes for a point the thumb moves, and the thumb's id as a
-/// target.
+/// (x0 y0 x1 y1) and how much of its top and foot what floats over it takes (Ctx::floated, along its right), its thumb
+/// (x y w h), how far what scrolls goes for a point the thumb moves, and the thumb's id as a target.
 struct BarAt {
   id : Int
   foot : Bool
@@ -148,6 +148,8 @@ struct BarAt {
   y0 : Double
   x1 : Double
   y1 : Double
+  top_in : Double
+  foot_in : Double
   tx : Double
   ty : Double
   tw : Double
@@ -399,6 +401,8 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
       y0,
       x1,
       y1,
+      top_in: dmax(0.0, n.y + top - y0),
+      foot_in: dmax(0.0, y1 - (n.y + n.fh - foot)),
       tx: x1 - scroll_bar_inset - scroll_bar_size,
       ty,
       tw: scroll_bar_size,
@@ -458,6 +462,8 @@ fn foot_bar(
     y0,
     x1,
     y1,
+    top_in: 0.0,
+    foot_in: 0.0,
     tx,
     ty: y1 - scroll_bar_inset - scroll_bar_size,
     tw,

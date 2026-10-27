@@ -93,6 +93,10 @@ struct ListState {
   mut ease_t0 : Double
   mut ease_done : Double
   ease_mover : Mover
+  // words picked with the pointer held past its shown edge (desktop.mbt's select_edge): how fast it scrolls toward
+  // the pointer (px a ms; 0 none) and until when it has (Ctx::step_edge)
+  mut edge_v : Double
+  mut edge_t : Double
   // the size its rows are built for: the Ctx's as the list was (Ctx::sized), its rows built later, as it is laid out
   mut vw : Double
   mut vh : Double
