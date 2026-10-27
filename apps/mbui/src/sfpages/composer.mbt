@@ -47,6 +47,10 @@ priv struct Composing {
   /// whether what waits in it now was in it as the frame before drew it (the same draft): what is put in since comes in
   /// (held_coming), what a draft opened with is there at once
   mut same_draft : Bool
+  /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown the frame before)
+  mut notices_new : Bool
+  /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
+  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??)]
   /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
   /// from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -90,6 +94,8 @@ let composing : Composing = {
   draft_before: "",
   frame: -1,
   same_draft: false,
+  notices_new: false,
+  notices_said: {},
   toolbar: None,
   toolbar_before: None,
   toolbar_leaving: None,
@@ -121,6 +127,8 @@ fn composing_reset() -> Unit {
   composing.draft_before = ""
   composing.frame = -1
   composing.same_draft = false
+  composing.notices_new = false
+  composing.notices_said.clear()
   composing.restoring.clear()
   composing.restore_errors.clear()
   composing.outside = false
@@ -1814,6 +1822,14 @@ let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 /// over, with its 换新上下文 (why it failed in a toast); its station down.
 fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Double) -> Unit {
   let key = r.station + ":" + r.session
+  // (built before its composer: whether this chat's composer was drawn the frame before, as the composer has it once
+  // it is built in this frame, or as it left it)
+  let whose = "\u{1}" + r.session
+  composing.notices_new = if composing.frame == c.frame_number() {
+    composing.draft_before == whose
+  } else {
+    composing.draft == whose
+  }
   if v.archived {
     let restore = c.id("composer/restore")
     let busy = composing.restoring.contains(key)
@@ -1848,11 +1864,12 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
       @sf.t("web-main.archived.notice"),
       Some((restore, if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }, "web-main.archived.restore", busy || v.offline)),
       failed=composing.restore_errors.get(key),
+      chat=key,
     )
   }
   match v.cache_cold {
     // its station goes on afresh by itself: said, nothing to tap
-    Some((_, said, true)) if !v.archived => composer_notice(c, width, "wait", said, None)
+    Some((_, said, true)) if !v.archived => composer_notice(c, width, "wait", said, None, chat=key)
     Some((session, said, _)) if !v.archived => {
       let afresh = c.id("composer/afresh")
       let doing = "session.clear/" + r.station + "/" + session
@@ -1867,6 +1884,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
         "wait",
         said,
         Some((afresh, if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }, "web-main.chat.afresh", busy || v.offline)),
+        chat=key,
       )
     }
     _ => ()
@@ -1881,7 +1899,26 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
           @sf.t("web-main.chat.offline")
         }
     }
-    composer_notice(c, width, "unplug", said, None)
+    composer_notice(c, width, "unplug", said, None, chat=key)
+  }
+  notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline])
+}
+
+///|
+/// The notices over chat `chat`'s composer no longer said (`now`: whether each of archive, wait, unplug is), drawn as
+/// they were while they leave (composer_notice).
+fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -> Unit {
+  for i, mark in ["archive", "wait", "unplug"] {
+    if now[i] {
+      continue
+    }
+    match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
+      Some((said, offer, failed)) => {
+        let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
+        composer_notice(c, width, mark, said, offer, failed?=failed, chat~, gone=true)
+      }
+      None => ()
+    }
   }
 }
 
@@ -1897,7 +1934,20 @@ fn composer_notice(
   said : String,
   offer : (Int, String, String, Bool)?,
   failed? : String?,
+  chat? : String = "",
+  gone? : Bool = false,
 ) -> Unit {
+  // shown while its chat is, it comes in as what is put in the composer does, one its chat opens with there at once;
+  // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
+  let key = "composer/notice/" + chat + "/" + mark
+  if !gone {
+    composing.notices_said[key] = (said, offer, failed)
+  }
+  let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
+  if gone && look is None {
+    composing.notices_said.remove(key)
+    return
+  }
   let t = @sf.theme()
   let side = t.round.side + 1.0
   let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
@@ -1925,6 +1975,13 @@ fn composer_notice(
       _ => ()
     }
   })
+  match look {
+    Some(l) => {
+      c.look(b, l)
+      @motion.leaving(c, b, !gone)
+    }
+    None => ()
+  }
   // over a chat's messages, as the composer: their scroll bar keeps clear of it
   c.floats_over(b)
 }

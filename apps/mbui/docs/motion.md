@@ -99,7 +99,7 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 | 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms CSS's ease-out, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
 | 2 | a bar | in 380 ms `--m-ease`, out 300 ms | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
-| 2 | what is put in the composer: a file's card, a picture's tile, a quote's card | in 180 ms ease-out, up from 6 below (`@sf.waiting_in`); what a draft opens with is there at once | web/src/Chat.css.ts:286, 449; web/src/Jobs.css.ts:217 |
+| 2 | what is put in the composer: a file's card, a picture's tile, a quote's card; a notice over a chat's composer (archived, its cache over, its station down) | in 180 ms ease-out, up from 6 below (`@sf.waiting_in`); what a draft or a chat opens with is there at once; a notice no longer said leaves as a row does (`@sf.leave`), drawn as it was | web/src/Chat.css.ts:286, 449; web/src/Jobs.css.ts:217 |
 | 2 | a page over the whole window: a chat shared as a picture | in 140 ms ease-out, a fade (`@sf.window_page_in`); out as a dialog (`@kit.pop_out`) | web/src/FilePreview.css.ts:29 |
 | 2 | ⌘K | its scrim faded in over 120 ms, its panel grown out of 0.97 from its top over 140 ms ease-out; out at once | web/src/Switcher.css.ts:19, 25 |
 | 2 | a chat's find bar, in place of its buttons | in 120 ms ease-out, a fade (`@kit.tip_in`); out at once | web/src/ChatFind.css.ts:10 |
