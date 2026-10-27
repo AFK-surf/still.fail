@@ -772,6 +772,8 @@ pub let rest_ms : Double
 
 pub fn row_agent_groups(@sfbase.ChatItem) -> Array[@sfbase.RowAgent]
 
+pub fn row_is(@sfbase.ChatItem, @sfbase.ChatRef) -> Bool
+
 pub fn row_keys(@ui.Ctx, @sfbase.Reading, String, @sfbase.ChatView, Array[@sfbase.Entry], String, @sfbase.Turns, @sfbase.Emits, @sfbase.SendFlight?, rise_ms~ : Double) -> (Array[@sfbase.Entry], Array[String])
 
 pub fn row_name(@sfbase.ChatItem) -> String

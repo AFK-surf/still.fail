@@ -236,6 +236,14 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
 }
 
 ///|
+/// Whether `item`'s row is chat `r`'s: by its agent or its id, and a chat asked for here also by the key it went by
+/// before its station made it (`clientKey`), the key the page opened as it was sent keeps.
+pub fn row_is(item : ChatItem, r : ChatRef) -> Bool {
+  r.station == item.station &&
+  (r.session == item.session || r.session == item.id || (item.client_key != "" && r.session == item.client_key))
+}
+
+///|
 /// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
 /// its `clientKey` before and after its station makes it.
 pub fn row_name(item : ChatItem) -> String {

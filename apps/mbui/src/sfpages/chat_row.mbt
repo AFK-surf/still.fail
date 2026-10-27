@@ -804,7 +804,7 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
 /// Away from an archived chat's page if it is the one in view: to its neighbour in the list, else the list alone.
 fn leave_archived(item : ChatItem) -> Unit {
   let open = match app.nav.top() {
-    Chat(r) => r.station == item.station && (r.session == item.session || r.session == item.id)
+    Chat(r) => @sfbase.row_is(item, r)
     _ => false
   }
   if !open {
