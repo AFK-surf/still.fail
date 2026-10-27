@@ -208,11 +208,15 @@ fn outside_came() -> Unit {
 }
 
 ///|
-/// Whether parts are kept at all: on a host's frames; off in a Tester's but where a test of them says so
-/// (Tester::keep_parts), so what a test reads of a frame's nodes (its words, its boxes, its corners) reads all of it,
-/// built: what is drawn again is what was built.
+/// Whether parts are kept at all, and with them a list's rows (kept_rows.mbt): off, every frame built whole, on a
+/// host's frames as in a Tester's but where a test of them says so (Tester::keep_parts). Drawing a part or a row again
+/// from what its build and its paint drew and said, every kind of thing it may hold (a move set after it was laid out,
+/// how opaque what holds it is, what floats over it, the words a run looks for) has to be recorded and said again by
+/// hand, and each one left out shows on the screen wrongly (2026-10-27: a reshaped composer, a page sliding out, the
+/// sidebar's rows): off until what is built is a value of its own, kept by what it read, with nothing to record
+/// (docs/incremental.md).
 // kept across runs: set by each Tester (Tester::new, keep_parts)
-let parts_on : Ref[Bool] = Ref(true)
+let parts_on : Ref[Bool] = Ref(false)
 
 ///|
 /// Parts kept as a host keeps them (Ctx::kept_part), from now on, or not (every frame built whole: a Tester's own); a
