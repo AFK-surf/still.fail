@@ -56,12 +56,12 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 fn band_new_bar() -> @ui.Style {
   let lift = (band_row_h() - filter_side) / 2.0
   let top = dmax(0.0, filter_bar_in - lift)
-  band_new_bar_look.then(@ui.style(pr=@sf.room_of(filter_bar_in), pt=@sf.room_of(top)))
+  band_new_bar_look.then(@ui.style(pr=@sf.room_of(filter_bar_in), pt=@sf.room_of(top), gap=@sf.keys_gap()))
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let band_new_bar_look : @ui.Style = @ui.css("row w=Full pl=S2 pb=S1_5 gap=S1 align=ACenter")
+let band_new_bar_look : @ui.Style = @ui.css("row w=Full pl=S2 pb=S1_5 align=ACenter")
 
 ///|
 /// The filter in the closed bar, linked to the corner it stands in, the bar's top right (@ui.CornerOf: the bar's there,

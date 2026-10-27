@@ -131,14 +131,15 @@ pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> 
 
 ///|
 /// The band an action over a list stands in (Sidebar.css.ts navNew): 6 over, 2 under, as far in at its sides as the
-/// theme's band (the search's field's); what is beside the action 4 from it.
+/// theme's band (the search's field's); what is beside the action (the filter, 更新) as far from it as keys are
+/// (keys_gap: 4 with keyboard and mouse, 12 with touch).
 pub fn nav_new() -> @ui.Style {
-  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in)))
+  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in), gap=keys_gap()))
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_new_look : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S0_5 gap=S1 align=ACenter")
+let nav_new_look : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S0_5 align=ACenter")
 
 ///|
 /// The list under a sidebar's band (Sidebar.css.ts navScroll): in at its sides as the theme's sidebar's lists are, 4

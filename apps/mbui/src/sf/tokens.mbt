@@ -1908,7 +1908,13 @@ pub let bar_key_side : Double = 32.0
 /// not), `least` at least (the look's own room between them, where it has more: 2). Only the room between keys: one
 /// at a row's end stands where it stood (concentric with its corner).
 pub fn keys_gap(size? : Double = bar_key_side, least? : Double = 2.0) -> @ui.Space {
-  room(dmax(least, @ui.room_least() - size))
+  room(keys_apart(size~, least~))
+}
+
+///|
+/// keys_gap's room as a number (where it is worked into a width: a key coming in with the room before it).
+pub fn keys_apart(size? : Double = bar_key_side, least? : Double = 2.0) -> Double {
+  dmax(least, @ui.room_least() - size)
 }
 
 ///|
