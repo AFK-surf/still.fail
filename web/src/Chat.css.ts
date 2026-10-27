@@ -264,6 +264,8 @@ export const msgAvatarAgent = style({
 });
 /** A Slack person's avatar with Slack's mark on its corner (msgAvatarSlack), out past its round. */
 export const msgAvatarSlackHolder = style({ selectors: { "&[data-slack]": { overflow: "visible" } } });
+/** Their Slack picture in it, round as the holder (out past which the mark goes) no longer clips it. */
+export const msgAvatarSlackPicture = style({ display: "block", width: "18px", height: "18px", borderRadius: "50%", objectFit: "cover" });
 /** Slack's mark on the corner of an avatar, over what was said in Slack (Chat.tsx SentElsewhere). */
 export const msgAvatarSlack = style({
   position: "absolute", right: "-6px", bottom: "-6px", width: "14px", height: "14px", display: "grid", placeItems: "center",

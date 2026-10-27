@@ -867,7 +867,7 @@ pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhe
     fn() {
       if s.received {
         c.box(style=person_avatar_room, fn() {
-          person_avatar(c, src, s.by.name, s.by.name, "")
+          person_avatar(c, src, s.by.name, s.by.name, s.by.picture)
           place_corner(c, surface)
         })
         |> ignore

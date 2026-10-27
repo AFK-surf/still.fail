@@ -324,6 +324,21 @@ import { noticeOf } from "../notice.ts";
 export { noticeOf };
 const brandName = () => brand.name();
 
+/// The pictures of the Slack people a session heard, by their Slack id, as the station gives them: those who wrote in its
+/// threads (`participants`), and its threads' people and starters.
+function slackPictures(session: J, threads: J[]): Map<string, string> {
+  const pictures = new Map<string, string>();
+  const people = [...arr(get(session, "participants")), ...threads.flatMap((th) => [...arr(get(th, "people")), get(th, "creator")])];
+  for (const p of people) {
+    const id = str(get(p, "id"));
+    const picture = str(get(p, "picture"));
+    if (id === null || picture === null || picture === "" || !id.startsWith("slack:")) continue;
+    const user = id.slice(id.lastIndexOf(":") + 1);
+    if (!pictures.has(user)) pictures.set(user, picture);
+  }
+  return pictures;
+}
+
 /// The Slack workspaces a station's connects are signed in to, by team: their names and links.
 function slackWorkspaces(overview: J): Map<string, format.SlackWorkspace> {
   const workspaces = new Map<string, format.SlackWorkspace>();
@@ -1963,6 +1978,7 @@ export class Views implements Owner {
       if (said.length === 0) continue;
       const threads = arr(get(this.ok({ topic: "session", station, key }), "threads"));
       const agent = { name: str(get(a.session, "agentText")) ?? "agent", agent: key, maker: get(a.session, "maker") ?? null, runtime: get(a.session, "runtime") ?? null };
+      const pictures = slackPictures(a.session, threads);
       for (const s of said) {
         if (!s.out) {
           const id = `${s.user ?? ""} ${s.to} ${s.at}`;
@@ -1983,7 +1999,8 @@ export class Views implements Owner {
             ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
             : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
-        const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack" };
+        const picture = s.out || s.user === null ? undefined : pictures.get(s.user);
+        const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack", ...(picture !== undefined ? { picture } : {}) };
         const text = present.mentions(s.text, people.bots, people.members);
         const item: J = { key: `${key}/${s.i}/${s.k}`, after, createdAt: s.at, text, place, failed: s.failed, by };
         if (!s.out) item.received = true;
