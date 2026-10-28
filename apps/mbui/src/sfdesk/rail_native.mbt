@@ -478,7 +478,9 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id.has_prefix("ws/") {
       let ws = id.substring(start=3)
       if ws != w.id {
-        @sfpages.switch_workspace(src, ws)
+        // The frame still holds `w`: switching here would let land restore its chat into the new workspace.
+        // Change after this build, so the next frame resolves the workspace before it lands on a page.
+        c.tell("native-workspace", fn() { @sfpages.switch_workspace(src, ws) })
       }
     } else if id == "new" {
       new_chat()
