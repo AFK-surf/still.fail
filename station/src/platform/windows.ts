@@ -314,9 +314,13 @@ function startInstaller(script: string, runDir: string, env: Record<string, stri
   const hidden = join(runDir, "stillfail-update-w.exe");
   // The station's task as install.ps1 named it (windows.json: a station apart's), and " update".
   let task = "still.fail station";
+  // The station runs elevated (install.ps1 -Admin): its update task runs so too, so the installer it starts can
+  // register the logon task at RunLevel Highest again without a prompt (install-windows.ts keeps admin in windows.json).
+  let admin = false;
   try {
     const kept = JSON.parse(readFileSync(join(dirname(runDir), "windows.json"), "utf8").trim());
     if (typeof kept?.task === "string" && kept.task) task = kept.task;
+    if (kept?.admin === true) admin = true;
   } catch {}
   task += " update";
   try {
@@ -334,7 +338,7 @@ function startInstaller(script: string, runDir: string, env: Record<string, stri
     "$ps = (Get-Process -Id $PID).Path",
     `$action = New-ScheduledTaskAction -Execute ${q(hidden)} -Argument ('--run "' + $ps + '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ${q(ps1)} + '"') -WorkingDirectory ${q(runDir)}`,
     "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew",
-    "$principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited",
+    `$principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel ${admin ? "Highest" : "Limited"}`,
     `Register-ScheduledTask -TaskName ${q(task)} -Action $action -Settings $settings -Principal $principal -Force | Out-Null`,
     `Start-ScheduledTask -TaskName ${q(task)}`,
   ].join("\r\n");

@@ -54,7 +54,7 @@ export const bundledWindowsInstallScript = (lang: Lang) =>
 
 // __SAY(key, name=$variable; …) is a message (say above).
 const SCRIPT = `# still.fail station installer for Windows (cloud/src/install-windows.ts).
-param([string]$Token = '', [string]$Lock = '')
+param([string]$Token = '', [string]$Lock = '', [switch]$Admin)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $origin = '__ORIGIN__'
@@ -83,6 +83,12 @@ $apart = $null
 try { $apart = Get-Content -Raw (Join-Path $data 'windows.json') | ConvertFrom-Json } catch {}
 if ($env:STILLFAIL_TASK) { $task = $env:STILLFAIL_TASK } elseif ($apart.task) { $task = $apart.task } else { $task = 'still.fail station' }
 if ($env:STILLFAIL_BIN) { $binApart = $env:STILLFAIL_BIN } elseif ($apart.bin) { $binApart = $apart.bin } else { $binApart = $null }
+# The station's logon task runs elevated (RunLevel Highest) when asked for with -Admin, kept in windows.json so its own
+# updates stay so (station/src/platform/windows.ts reads it for the update task too). Then agents it starts inherit
+# administrator, and most UAC prompts no longer come up. -Admin needs this installer run elevated (one UAC), as
+# registering a Highest task does; on a machine whose user is not an administrator it is left Limited.
+$adminRun = $Admin -or ($apart.admin -eq $true) -or ($env:STILLFAIL_ADMIN -eq '1')
+$runLevel = if ($adminRun) { 'Highest' } else { 'Limited' }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('stillfail-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $tmp | Out-Null
 try {
@@ -115,6 +121,7 @@ if ($env:STILLFAIL_RELEASE_SHA256 -and -not $env:STILLFAIL_INSTALLER_HANDED -and
   Copy-Item -LiteralPath $itsOwn (Join-Path $keep 'install.ps1')
   $env:STILLFAIL_ARCHIVE = Join-Path $keep 'stillfail.zip'
   $env:STILLFAIL_INSTALLER_HANDED = '1'
+  if ($adminRun) { $env:STILLFAIL_ADMIN = '1' }
   & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $keep 'install.ps1') @(if ($Token) { $Token })
   $code = $LASTEXITCODE
   Remove-Item -Recurse -Force $keep -ErrorAction SilentlyContinue
@@ -327,6 +334,7 @@ WriteCmd (Join-Path $bin 'stillfail.cmd') (Join-Path $app 'bin\\stillfail.cmd')
 $kept = @{}
 if ($task -ne 'still.fail station') { $kept.task = $task }
 if ($binApart) { $kept.bin = $binApart }
+if ($adminRun) { $kept.admin = $true }
 if ($kept.Count -gt 0) { $kept | ConvertTo-Json | Set-Content -Path (Join-Path $data 'windows.json') -Encoding UTF8 }
 else { Remove-Item (Join-Path $data 'windows.json') -ErrorAction SilentlyContinue }
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -349,7 +357,7 @@ if (-not $handed) { try {
   $action = New-ScheduledTaskAction -Execute $launch -Argument $arguments -WorkingDirectory $data
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable
-  $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
+  $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel $runLevel
   Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
   Start-ScheduledTask -TaskName $task
 } catch {

@@ -36,6 +36,20 @@ test("the installer a Windows release carries is the cloud's, its cloud the one 
   assert.match(script, /if \(\$signedNode -and \(Get-FileHash -Algorithm SHA256 \(Join-Path \$part 'node\.exe'\)\)\.Hash -ne \$signedNode\) \{ Fail/);
 });
 
+test("the station's logon task runs elevated only when -Admin is asked for, and keeps it over updates", () => {
+  const script = windowsInstallScript("https://ember.test");
+  // Opt-in: the -Admin switch, STILLFAIL_ADMIN, or a windows.json that kept admin.
+  assert.match(script, /param\(\[string\]\$Token = '', \[string\]\$Lock = '', \[switch\]\$Admin\)/);
+  assert.match(script, /\$adminRun = \$Admin -or \(\$apart\.admin -eq \$true\) -or \(\$env:STILLFAIL_ADMIN -eq '1'\)/);
+  assert.match(script, /\$runLevel = if \(\$adminRun\) \{ 'Highest' \} else \{ 'Limited' \}/);
+  // The one place the run level is set is the parameter, never a hard-coded Limited/Highest.
+  assert.match(script, /-LogonType Interactive -RunLevel \$runLevel\b/);
+  assert.doesNotMatch(script, /-RunLevel (Highest|Limited)\b/);
+  // Kept in windows.json so the station's own updates stay elevated, and carried over the release handoff.
+  assert.match(script, /if \(\$adminRun\) \{ \$kept\.admin = \$true \}/);
+  assert.match(script, /if \(\$adminRun\) \{ \$env:STILLFAIL_ADMIN = '1' \}/);
+});
+
 test("the Windows installer keeps its state in its own scope", () => {
   // It runs as a script block (`& ([scriptblock]::Create(...))`): $script: and $global: there are its caller's, so a
   // function setting one leaves the installer's variable as it was.
