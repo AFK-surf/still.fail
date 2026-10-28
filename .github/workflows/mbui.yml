@@ -284,6 +284,17 @@ jobs:
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
       - uses: ./.github/actions/mbui-moonbit
+      # moon's own build of the app (apps/mbui/_build, without the programs' objects the store keeps) as main's newest run
+      # left it, as the iOS job's and check-mbui's: without, moonc made all of it again each run (the build and signing
+      # 169 s of the job's 211, main ba28c96f, 40628153347, 2026-10-28)
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
+          restore-keys: mbui-mac-moon-
       # (no Rust target: nothing is built with cargo here; native.ts adds one itself if a part must be built)
       - name: Tools
         run: |
@@ -317,6 +328,13 @@ jobs:
             .ci/mbc-store
             .ci/hbc
           key: ${{ env.STORE_KEY }}
+      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
 
   # Built with iOS 27.1's SDK: an app built with an older one runs on an iPhone Duo's inner screen letterboxed, black
   # bars either side, and is told nothing of its hinge (UIHingeInteraction, its fold's reserved regions: ios_app.m).
