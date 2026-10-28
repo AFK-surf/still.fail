@@ -114,20 +114,35 @@ id mb_views_root(CGRect frame) {
 
 // The first web view a run makes starts WebKit's processes and has the system's compositor take its layers in: on a
 // device (or a simulator) just started, a frame or more of the screen's held as it is shown, the move that brought it
-// over (a service's page sliding in beside its chat) seen to jump. Done once as the window comes up, a moment after it
-// has drawn, under the canvas where nothing of it shows, and let go once it has drawn its blank page: every page after
-// it opens on WebKit already up.
+// over (a service's page sliding in beside its chat) seen to jump. Done once as the window comes up (after the pass of
+// the run loop that put it up), under the canvas where nothing of it shows, and let go once it has drawn its blank
+// page: every page after it opens on WebKit already up.
+@interface MBWarm : NSObject <WKNavigationDelegate>
+@property(nonatomic, strong) WKWebView *web;
+@end
+@implementation MBWarm
+- (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)nav {
+  [self.web removeFromSuperview];
+  self.web.navigationDelegate = nil;
+  self.web = nil;
+}
+- (void)webView:(WKWebView *)wv didFailNavigation:(WKNavigation *)nav withError:(NSError *)error {
+  [self webView:wv didFinishNavigation:nav];
+}
+@end
+
+static MBWarm *warming;
+
 void mb_views_warm(void) {
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    if (!views_root) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (!views_root || warming) return;
     WKWebViewConfiguration *c = [WKWebViewConfiguration new];
     c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
-    WKWebView *wv = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:c];
-    [views_root addSubview:wv];
-    [wv loadHTMLString:@"<html></html>" baseURL:nil];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      [wv removeFromSuperview];
-    });
+    warming = [MBWarm new];
+    warming.web = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:c];
+    warming.web.navigationDelegate = warming;
+    [views_root addSubview:warming.web];
+    [warming.web loadHTMLString:@"<html></html>" baseURL:nil];
   });
 }
 
