@@ -13,18 +13,16 @@ export const panel = {
   // (the line over what is behind the panel, not over its own ground: on a dimmed page a line over the white was a
   // pale ring round it)
   backgroundClip: "padding-box",
-  WebkitBackdropFilter: "none",
   backdropFilter: "none",
 } as const;
 
 /** The composer's frosted ground (and the bands and bars that sit on the page with it): raised grey at 72%, blurred; no border. */
 export const glass = {
   background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
-  WebkitBackdropFilter: "blur(20px)",
   backdropFilter: "blur(20px)",
 } as const;
 
 /** Frosted glass over a picture, in the theme's colours (a viewer is light in a light app, dark in a dark one). */
 export const pictureGlass = {
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(24px) saturate(1.6)",
 };

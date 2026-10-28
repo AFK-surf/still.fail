@@ -15,12 +15,11 @@ import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
 export const glass = pictureGlass;
 /** Dark glass whatever the theme: notes written on a picture (annotate/), read over any of it. */
 export const darkGlass = {
-  background: "rgba(18, 18, 20, .62)", backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+  background: "rgba(18, 18, 20, .62)", backdropFilter: "blur(24px) saturate(1.6)",
 };
 /** The same over a page of the theme's colours (a document). */
 const pageGlass = {
   background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
-  WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 };
 
 /** A file over the whole window, its bars floating over it (as a video's player): they fade when the pointer rests. */
@@ -146,7 +145,7 @@ globalStyle(`${fpStage}[data-closes][data-zoomed]:not([data-pan]) ${fpImage}`, {
 export const fpProgress = style({
   display: "grid", gap: "8px", width: "220px", padding: "12px 14px", borderRadius: `calc(14px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
-  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textUi,
+  backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textUi,
   fontVariantNumeric: "tabular-nums", textAlign: "center", animation: `${fadeInKeyframes} 200ms ${vars.easeOut}`,
 });
 export const fpProgressText = style({});

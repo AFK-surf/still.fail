@@ -6,7 +6,7 @@ import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 /** Frosted, as the composer is. */
 const glass = {
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
   backdropFilter: "blur(20px) saturate(1.4)", boxShadow: `0 1px 3px rgb(0 0 0 / .06), 0 6px 20px ${vars.shadow}`,
 } as const;
 

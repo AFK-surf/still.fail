@@ -107,7 +107,7 @@ export const underSide = style({
 export const card = style({
   position: "absolute", inset: "0", zIndex: "1", display: "flex", flexDirection: "column", background: ground,
   touchAction: "pan-y",
-  selectors: { "&[data-dragging]": { WebkitUserSelect: "none", userSelect: "none" } },
+  selectors: { "&[data-dragging]": { userSelect: "none" } },
 });
 /** A copy of it on its way off (Decisions.tsx leave), over the next one, taking nothing. */
 export const ghost = style({ zIndex: "2", pointerEvents: "none" });

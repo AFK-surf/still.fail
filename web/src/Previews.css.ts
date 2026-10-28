@@ -43,7 +43,7 @@ export const frame = style({
   },
 });
 const glass = {
-  background: `color-mix(in srgb, ${vars.raised} var(--pv-glass), transparent)`, WebkitBackdropFilter: "blur(16px) saturate(1.8)",
+  background: `color-mix(in srgb, ${vars.raised} var(--pv-glass), transparent)`,
   backdropFilter: "blur(16px) saturate(1.8)",
 } as const;
 /** Over a small one's page: its corners and a slight shadow (no edge), its name in a glass capsule, and on hover

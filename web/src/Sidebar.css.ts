@@ -18,7 +18,7 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 export const sidebar = style({
   background: vars.sidebar, display: "flex", flexDirection: "column", minHeight: 0, position: "relative",
   // The sidebar is for going places, not for copying: nothing in it is selected (its fields still are) or dragged off.
-  WebkitUserSelect: "none", userSelect: "none",
+  userSelect: "none",
   "@media": {
     [wide]: {
       selectors: { '[data-sidebar="closed"] &, [data-sidebar-moving] &': { overflow: "hidden" } },
@@ -36,7 +36,7 @@ globalStyle(`${dock} > ${sidebar}`, {
 globalStyle(`:root:not([data-sidebar="closed"]) ${dock} > ${sidebar}`, {
   "@media": { [wide]: { ...outsetStart(8), width: `calc(${fallbackVar(vars.sidebarW, "240px")} + 8px)` } },
 });
-globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
+globalStyle(`${sidebar} :is(input, textarea)`, { userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
 globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: fallbackVar(vars.sidebarW, "240px") } } });
@@ -60,7 +60,7 @@ export const brandCompact = style({ height: 48, padding: "0 16px" });
  * sets their heights, `--nav-top` and `--nav-foot`, for the lists to start and end clear of them). */
 const band = {
   position: "relative", zIndex: 1, flex: "none",
-  background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, backdropFilter: "blur(20px)",
   // With the sidebar's ground as it closes to the bar (shell.css.ts dock): moved with it (brand.tsx moveSidebar).
 } as const;
 export const navTop = style(band);

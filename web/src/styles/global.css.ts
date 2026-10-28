@@ -296,8 +296,8 @@ const STROKE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 globalStyle("mark[data-stroke]", { position: "relative" });
 globalStyle("mark[data-stroke]::after", {
   content: '""', position: "absolute", left: "-2px", right: "-2px", top: "calc(100% - 5px)", height: "6px", pointerEvents: "none",
-  background: vars.accent, maskImage: STROKE, WebkitMaskImage: STROKE, maskSize: "100% 100%", WebkitMaskSize: "100% 100%",
-  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", clipPath: "inset(0 100% 0 0)",
+  background: vars.accent, maskImage: STROKE, maskSize: "100% 100%",
+  maskRepeat: "no-repeat", clipPath: "inset(0 100% 0 0)",
   animation: `${strokeRevealKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) calc(var(--n, 0) * 180ms) forwards`,
 });
 globalStyle(`${STILL} mark[data-stroke]::after`, stillAtOnce);

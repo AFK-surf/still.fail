@@ -283,17 +283,21 @@ export function OneComputer(props: DemoProps) {
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
     const resized = () => { leave(); ask(); };
-    // The rows drawn again in the air when the app is drawn otherwise: in the other theme (once it has taken it).
+    // The rows drawn again in the air when the app is drawn otherwise: in the other theme (once it has taken it), or in
+    // its own type once that has come (read before, a row keeps the widths the stand-in type gave its parts, and its
+    // words are cut short in them).
     const restyled = () => requestAnimationFrame(() => requestAnimationFrame(resized));
     const themes = new MutationObserver(restyled), dark = matchMedia("(prefers-color-scheme: dark)");
     themes.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     dark.addEventListener("change", restyled);
+    document.fonts.addEventListener("loadingdone", restyled);
     draw();
     addEventListener("scroll", ask, { passive: true });
     addEventListener("resize", resized);
     return () => {
       themes.disconnect();
       dark.removeEventListener("change", restyled);
+      document.fonts.removeEventListener("loadingdone", restyled);
       removeEventListener("scroll", ask);
       removeEventListener("resize", resized);
       cancelAnimationFrame(asked);

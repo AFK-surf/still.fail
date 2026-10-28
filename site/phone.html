@@ -10,6 +10,9 @@
 <script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <!-- The site's page changes its theme as this page's opener does: the choice is kept in the same storage. -->
 <script>addEventListener("storage",function(e){if(e.key!=="stillfail.site.theme")return;var t=e.newValue,r=document.documentElement;if(t==="system")delete r.dataset.theme;else r.dataset.theme=t==="dark"?"dark":"light"})</script>
+<!-- With a mouse, scrollbars float and take no room, as the demo's app has them once it runs (web/src/scrollbars.ts):
+     so before the first paint, or its opening frame is laid out narrower than the app that takes it over. -->
+<script>if(matchMedia("(pointer: fine)").matches)document.documentElement.dataset.floatingScrollbars=""</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body style="margin:0;overflow:hidden">

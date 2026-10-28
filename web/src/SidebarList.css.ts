@@ -50,7 +50,7 @@ export const fill = style({ flex: 1, ...ellipsis });
  */
 export const phone = style({
   display: "flex", alignItems: "flex-start", gap: 8, boxSizing: "border-box", minHeight: 0, padding: "10px 16px 10px 22px",
-  color: "var(--m-ink)", lineHeight: "22px", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none",
+  color: "var(--m-ink)", lineHeight: "22px", userSelect: "none", WebkitTouchCallout: "none",
   "@media": {
     "(pointer: coarse)": { selectors: { "&:active": { background: "color-mix(in srgb, var(--m-ink) 5%, transparent)" } } },
     "(hover: hover) and (pointer: fine)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--m-ink) 4%, transparent)" } } },

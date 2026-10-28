@@ -11,11 +11,11 @@ export const mScroll = style({
 });
 /** Frosted glass: a bar at the top of a page over the list running under it, a hairline along its bottom. */
 export const mGlass = style({
-  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)",
+  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)",
   backdropFilter: "blur(24px)", boxShadow: "inset 0 -0.5px 0 var(--m-line)",
 });
 /** A capsule floating over the list: raised and frosted, as the wide screen's composer (its ground, `--raised`, and shadow). */
 export const mFloating = style({
-  border: "0", background: "color-mix(in srgb, var(--raised) 72%, transparent)", WebkitBackdropFilter: "blur(20px)",
+  border: "0", background: "color-mix(in srgb, var(--raised) 72%, transparent)",
   backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });

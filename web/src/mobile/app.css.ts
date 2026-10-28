@@ -72,7 +72,7 @@ export const mRecent = style({
   position: "absolute", left: "10px", bottom: "calc(72px + var(--m-foot))", display: "flex", flexDirection: "column",
   width: "min(340px, calc(100vw - 20px))", maxHeight: "min(560px, calc(100vh - 100px - var(--m-foot)))", overflow: "hidden",
   borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: "color-mix(in srgb, var(--m-surface) 88%, transparent)", WebkitBackdropFilter: "blur(24px)",
+  background: "color-mix(in srgb, var(--m-surface) 88%, transparent)",
   backdropFilter: "blur(24px)", boxShadow: "0 14px 44px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .06)",
   transformOrigin: "26px calc(100% + 36px)", opacity: "0", transform: "scale(.6)",
   transition: "opacity 160ms, transform 200ms var(--m-ease)",
@@ -90,7 +90,7 @@ export const mSheet = style({
   position: "absolute", left: "0", right: "0", bottom: "0", display: "flex", flexDirection: "column",
   boxSizing: "border-box", maxHeight: "94vh", maxWidth: "680px", marginInline: "auto", paddingBottom: "var(--m-foot)",
   borderRadius: `calc(26px * ${vars.cornerScale}) calc(26px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
-  background: "color-mix(in srgb, var(--m-surface) 80%, transparent)", WebkitBackdropFilter: "blur(28px)",
+  background: "color-mix(in srgb, var(--m-surface) 80%, transparent)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
   // Its height is moved from script (app.tsx SheetHost): on from where a finger lets go of it, at that speed.
   transition: "transform 300ms var(--m-ease)",
@@ -108,7 +108,7 @@ export const mGrab = style({
 export const mSheetHead = style({ display: "flex", alignItems: "center", padding: "4px 18px 10px" });
 export const mMenuLayer = style({ zIndex: "55" });
 export const mMenu = style({
-  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+  userSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-surface)",
   boxShadow: "0 12px 36px rgba(0, 0, 0, .25)", overflow: "hidden", transformOrigin: "0 0", opacity: "0",

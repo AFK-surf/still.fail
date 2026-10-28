@@ -46,7 +46,7 @@ globalStyle(":root[data-theme-switching] *, :root[data-theme-switching] *::befor
 
 export const nav = style({
   position: "sticky", top: "0", zIndex: "10", borderBottom: `1px solid ${LINE}`,
-  background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
 /** The name in the bar, as the wordmark draws it (web/public/wordmark.svg): Inter Bold, its dot still.fail's orange and
@@ -69,7 +69,7 @@ export const menu = style({ position: "relative" });
 export const menuCard = style({
   position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridAutoFlow: "column", gridAutoColumns: "1fr", gap: "6px",
   padding: "6px", borderRadius: "20px", whiteSpace: "nowrap",
-  background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
   boxShadow: `0 16px 48px -16px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
   opacity: 0, visibility: "hidden", transform: "translate(-50%, -6px)", transition: `opacity .2s, transform .25s ${vars.easeOut}, visibility 0s .25s`,
   selectors: {
@@ -227,9 +227,11 @@ const type = keyframes({ from: { width: "0" }, to: { width: "var(--chars)" } });
 const blink = keyframes({ "50%": { borderColor: "transparent" } });
 export const typed = style({
   display: "inline-block", verticalAlign: "bottom", overflow: "hidden", whiteSpace: "nowrap", borderRight: `2px solid ${ORANGE}`,
-  // Typed as the terminal comes up the screen (where there are no scroll-driven animations, typed at once).
+  // Typed as the terminal comes up the screen (where there are no scroll-driven animations, typed at once), done a
+  // little after it is all in view: the page ends not far under it, so how far it can go up the screen is that much
+  // (its install section's foot and the footer: 200px and more), not a share of the screen's height.
   animation: `${type} linear both, ${blink} .9s step-end infinite`, animationTimingFunction: "steps(var(--steps)), step-end",
-  animationTimeline: "view(), auto", animationRange: "entry 80% cover 42%, normal",
+  animationTimeline: "view(), auto", animationRange: "entry 60% contain 50px, normal",
   "@media": { [STILL]: { animation: "none", width: "var(--chars)" } },
 });
 const appear = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
@@ -237,9 +239,9 @@ export const output = style({
   display: "block", color: DIM, animation: `${appear} linear both`, animationTimeline: "view()",
   selectors: {
     "&[data-ok]": { color: "#7FD4A1" },
-    "&[data-at=\"1\"]": { animationRange: "cover 44% cover 47%" },
-    "&[data-at=\"2\"]": { animationRange: "cover 48% cover 51%" },
-    "&[data-at=\"3\"]": { animationRange: "cover 52% cover 55%" },
+    "&[data-at=\"1\"]": { animationRange: "contain 70px contain 90px" },
+    "&[data-at=\"2\"]": { animationRange: "contain 100px contain 120px" },
+    "&[data-at=\"3\"]": { animationRange: "contain 130px contain 150px" },
   },
   "@media": { [STILL]: { animation: "none", opacity: 1 } },
 });

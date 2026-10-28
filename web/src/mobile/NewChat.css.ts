@@ -14,7 +14,7 @@ export const mNewBody = style({
 /** A band of glass from the choices to the screen's end (the composer on it too), with no line: what runs under it is frosted all over. */
 export const mNewFoot = style({
   position: "absolute", left: "0", right: "0", bottom: "0", paddingBottom: "var(--m-new-bottom)", display: "flex", flexDirection: "column",
-  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
+  background: "color-mix(in srgb, var(--m-bg) 70%, transparent)", backdropFilter: "blur(24px)",
 });
 export const mNewProblem = style({
   marginTop: "6px !important", fontSize: `${vars.textMeta} !important`, color: "var(--m-red)",
