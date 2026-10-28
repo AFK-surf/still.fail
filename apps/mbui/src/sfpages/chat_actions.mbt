@@ -128,7 +128,7 @@ pub fn chat_actions(
     Some(p) => {
       let key = "pin/" + a.station + "/" + a.session
       mine.push(
-        action_of("pin", "pin", @sf.t(if p { "web-main.chat.unpin" } else { "web-main.chat.pin" }), busy=doing(key), fn() {
+        { ..action_of("pin", "pin", @sf.t(if p { "web-main.chat.unpin" } else { "web-main.chat.pin" }), busy=doing(key)), run: fn() {
           act(
             src,
             @sf.t(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
@@ -136,18 +136,18 @@ pub fn chat_actions(
             "chat.pin",
             { "station": Json::string(a.station), "session": Json::string(a.session), "pinned": Json::boolean(!p) },
           )
-        }),
+        } },
       )
     }
     None => ()
   }
   if a.archivable {
-    mine.push(action_of("rename", "edit", @sf.t("web-main.chat.rename"), rename))
+    mine.push({ ..action_of("rename", "edit", @sf.t("web-main.chat.rename")), run: rename })
   }
   match a.thread {
     Some(th) if a.archivable && a.pinned != Some(true) =>
       mine.push(
-        action_of("keep", "shield-check", @sf.t(if a.kept { "web-main.chat.unkeep" } else { "web-main.chat.keep" }), fn() {
+        { ..action_of("keep", "shield-check", @sf.t(if a.kept { "web-main.chat.unkeep" } else { "web-main.chat.keep" })), run: fn() {
           act(
             src,
             @sf.t(if a.kept { "web-main.chat.unkeep.what" } else { "web-main.chat.keep.what" }),
@@ -156,46 +156,50 @@ pub fn chat_actions(
             { "station": Json::string(a.station), "thread": Json::number(th), "kept": Json::boolean(!a.kept) },
             done=@sf.t(if a.kept { "web-main.chat.unkeep.done" } else { "web-main.chat.keep.done" }),
           )
-        }),
+        } },
       )
     _ => ()
   }
   let copies : Array[ChatAction] = []
   let link = @sfbase.chat_link(a.station, a.session)
   if link != "" {
-    copies.push(action_of("link", "copy", @sf.t("web-main.chat.copyLink"), fn() { @sfbase.copy_chat_link(@ui.current(), a.title, link) }))
+    copies.push({ ..action_of("link", "copy", @sf.t("web-main.chat.copyLink")), run: fn() {
+      @sfbase.copy_chat_link(@ui.current(), a.title, link)
+    } })
   }
   copies.push(
-    action_of("transcript", "file", @sf.t("web-main.chat.copyTranscript"), fn() {
+    { ..action_of("transcript", "file", @sf.t("web-main.chat.copyTranscript")), run: fn() {
       let keys = if a.agents.is_empty() { [a.session] } else { a.agents }
       // (asked of its station once the frame it was chosen in is built)
       let c = @ui.current()
       c.after_build("chat/transcripts", fn() { copy_transcripts(c, src, a.station, keys) })
-    }),
+    } },
   )
   let elsewhere : Array[ChatAction] = []
   // relayed to a channel (docs/relay.md): a chat with an agent to go on there
   match a.thread {
     Some(th) if a.relayable =>
-      elsewhere.push(action_of("relay", "arrow-up-right", @sf.t("web-main.relay.action"), fn() { open_relay(src, r, th, from~) }))
+      elsewhere.push({ ..action_of("relay", "arrow-up-right", @sf.t("web-main.relay.action")), run: fn() {
+        open_relay(src, r, th, from~)
+      } })
     _ => ()
   }
   if a.slack != "" {
     elsewhere.push(
-      action_of("slack", "external", @sf.t("web-pages.chat.openInSlack"), fn() {
+      { ..action_of("slack", "external", @sf.t("web-pages.chat.openInSlack")), run: fn() {
         if !@sfbase.open_slack(a.slack_app, a.slack) {
           @sfbase.toast_later(@sf.t("android-chat.link.failed"))
         }
-      }),
+      } },
     )
   }
   if a.feishu != "" {
     elsewhere.push(
-      action_of("feishu", "external", @sf.t("web-pages.chat.openInFeishu"), fn() {
+      { ..action_of("feishu", "external", @sf.t("web-pages.chat.openInFeishu")), run: fn() {
         if !@ui.open_url(a.feishu) {
           @sfbase.toast_later(@sf.t("android-chat.link.failed"))
         }
-      }),
+      } },
     )
   }
   let shares : Array[ChatAction] = []
@@ -203,26 +207,30 @@ pub fn chat_actions(
     Some(th) => {
       if a.xshare {
         shares.push(
-          action_of(
-            "xshare",
-            "users",
-            @sf.t("web-pages.chat.xshare"),
-            end=a.xshare_text,
-            busy=a.xshare_session != "" && doing(xshare_key(a.station, a.xshare_session)),
-            may=a.xshare_may,
-            fn() { open_xshare(src, r, Some(th), from~) },
-          ),
+          {
+            ..action_of(
+              "xshare",
+              "users",
+              @sf.t("web-pages.chat.xshare"),
+              end=a.xshare_text,
+              busy=a.xshare_session != "" && doing(xshare_key(a.station, a.xshare_session)),
+              may=a.xshare_may,
+            ),
+            run: fn() { open_xshare(src, r, Some(th), from~) },
+          },
         )
       }
       if a.publish {
-        shares.push(action_of("publish", "photo", @sf.t("web-pages.chat.shareImage"), fn() { open_publish(src, r, th) }))
+        shares.push({ ..action_of("publish", "photo", @sf.t("web-pages.chat.shareImage")), run: fn() {
+          open_publish(src, r, th)
+        } })
       }
     }
     None => ()
   }
   let last : Array[ChatAction] = []
   if a.archivable {
-    last.push(action_of("archive", "archive", @sf.t("web-main.chat.archive"), archive))
+    last.push({ ..action_of("archive", "archive", @sf.t("web-main.chat.archive")), run: archive })
   }
   [mine, copies, elsewhere, shares, last].filter(fn(g) { !g.is_empty() })
 }
@@ -243,16 +251,10 @@ pub fn chat_menu_items(groups : Array[Array[ChatAction]]) -> Array[@sf.MenuItem?
 }
 
 ///|
-fn action_of(
-  key : String,
-  icon : String,
-  label : String,
-  run : () -> Unit,
-  end? : String = "",
-  busy? : Bool = false,
-  may? : Bool = true,
-) -> ChatAction {
-  { key, icon, label, end, busy, may, run }
+/// One of them, what doing it does given beside it (`{ ..action_of(…), run }`: a callback handed to a function would
+/// be taken for one run as the menu builds, detlint's build-effect).
+fn action_of(key : String, icon : String, label : String, end? : String = "", busy? : Bool = false, may? : Bool = true) -> ChatAction {
+  { key, icon, label, end, busy, may, run: fn() {  } }
 }
 
 ///|
