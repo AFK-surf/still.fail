@@ -41,7 +41,7 @@ pub fn Ctx::magnified(
   round? : Radius = Full,
 ) -> Int {
   let i = self.box(style=style(w=Fixed(w), h=Fixed(h), radius=round, clip=true), fn() {  })
-  self.nodes[i].magnify = Some((x, y, zoom))
+  self.nodes[i].paints = Some(fn(n, alpha) { self.paint_magnified(n, (x, y, zoom), alpha) })
   i
 }
 

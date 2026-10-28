@@ -17,6 +17,20 @@ fn circle_radius() -> Double {
 }
 
 ///|
+/// Whether this frame draws a rect of the grey `v` (each channel, of 255).
+fn ground_drawn(v : Int) -> Bool {
+  let c = g()
+  let x = v.to_double() / 255.0
+  for k in 0..<c.ninst {
+    let q = k * inst_size
+    if c.inst[q + 5] == 0.0 && (c.inst[q + 8] - x).abs() < 0.002 && (c.inst[q + 9] - x).abs() < 0.002 {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// A window drawn in the theme `dark` says, with a box of its ground.
 fn themed_page(dark : Ref[Bool]) -> (Ctx) -> Unit {
   fn(c) {
@@ -44,6 +58,8 @@ test "a change of theme spreads from where it was asked, from the frame first dr
   t.run_for(reveal_ms / 2.0)
   let half = circle_radius()
   assert_true(half > first)
+  // the window as it was under it (its light ground), the window as it is in it (its dark one)
+  assert_true(ground_drawn(0xEE) && ground_drawn(0x11))
   // (as far as the corner furthest from where it spreads: 300 across, 250 down)
   assert_true(half < (300.0 * 300.0 + 250.0 * 250.0).sqrt())
   // (cut to the circle where it is past the window's edges too, not to the square it leaves within them)
@@ -58,7 +74,7 @@ test "a change of theme spreads from where it was asked, from the frame first dr
   assert_true(past)
   t.run_for(reveal_ms / 2.0)
   assert_eq(circle_radius(), -1.0)
-  assert_eq(reveal.key, "")
+  assert_false(reveal.on)
 }
 
 ///|
@@ -93,9 +109,21 @@ test "a reveal asked with no change of theme is let go" {
   let t = Tester::new(themed_page(dark), w=400.0, h=300.0)
   t.frame()
   g().reveal_from(100.0, 50.0, dark=fn() { dark.val })
-  assert_true(reveal.key != "")
+  assert_true(reveal.on)
   t.run_for(reveal_wait_most + 100.0)
   t.frame()
-  assert_eq(reveal.key, "")
+  assert_false(reveal.on)
   assert_eq(circle_radius(), -1.0)
+}
+
+///|
+test "at a large window's size too, the old window is drawn again under the circle from the frame it sets out" {
+  let dark = Ref(false)
+  let t = Tester::new(themed_page(dark), w=1512.0, h=982.0)
+  t.frame()
+  g().reveal_from(700.0, 300.0, dark=fn() { dark.val })
+  dark.val = true
+  t.frame()
+  assert_true(reveal.start >= 0.0)
+  assert_true(ground_drawn(0xEE) && ground_drawn(0x11))
 }

@@ -1141,20 +1141,27 @@ fn Ctx::part_paint_again(self : Ctx, i : Int, st : KeptPart) -> Unit {
 /// Part or row `st` drawn again: its instances as its build drew them, where they were, its shapes' pieces among this
 /// frame's, its glass frosting captures of this frame's.
 fn Ctx::insts_again(self : Ctx, st : KeptPart) -> Unit {
-  let count = st.floats / inst_size
+  self.insts_replay(st.insts, st.floats, st.segs)
+  // (its looks by the clock, going on from where their cycles are now: cycle_look.mbt)
+  for tag, cy in st.cycles {
+    cycle_frame[tag] = cy
+  }
+}
+
+///|
+/// Instances painted before (the first `floats` numbers of `insts`, the pieces of their shapes `segs`) drawn again,
+/// where they were: their shapes' pieces among this frame's, their glass frosting captures of this frame's.
+fn Ctx::insts_replay(self : Ctx, insts : FixedArray[Double], floats : Int, segs : Array[Double]) -> Unit {
+  let count = floats / inst_size
   while (self.ninst + count + 1) * inst_size > self.inst.length() {
     self.grow()
   }
   let i0 = self.ninst
   let a = self.inst
   let base = i0 * inst_size
-  st.insts.blit_to(a, len=st.floats, dst_offset=base)
+  insts.blit_to(a, len=floats, dst_offset=base)
   let seg0 = (self.segs.length() / 4).to_double()
-  self.segs.append(st.segs)
-  // (its looks by the clock, going on from where their cycles are now: cycle_look.mbt)
-  for tag, cy in st.cycles {
-    cycle_frame[tag] = cy
-  }
+  self.segs.append(segs)
   let caps : Map[Int, Int] = {}
   for j in 0..<count {
     let b = base + j * inst_size
