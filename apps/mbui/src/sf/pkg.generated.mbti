@@ -1418,6 +1418,8 @@ pub fn presenters_reset() -> Unit
 
 pub fn presenting() -> Bool
 
+pub fn presenter_visible() -> Bool
+
 pub fn press_ripple(@ui.Ctx, Int32, Double) -> Unit
 
 pub fn prev_in(String, Array[String]) -> String?

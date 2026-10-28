@@ -747,6 +747,12 @@ pub fn presenting() -> Bool {
 }
 
 ///|
+/// Whether a presenter still occupies the screen, including its declared exit transition.
+pub fn presenter_visible() -> Bool {
+  !presented_now.is_empty()
+}
+
+///|
 /// Closes everything presented, each going as it goes (a page opened from a link over all of it).
 pub fn close_all_presented() -> Unit {
   close_from(0)
@@ -1089,6 +1095,7 @@ fn pick_popover(
 fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   let close = fn() { done_with(c, p, fn() {  }) }
+  let mut drawn = false
   let r = @kit.popover(
     c,
     key,
@@ -1102,6 +1109,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     modal=true,
     focus=x.focus,
     look=fn(c, s, inner) {
+      drawn = true
       beside_given.val = s
       // (a share of the window no taller than the room it has)
       let h : @ui.Size = if x.tall > 0.0 { Px(dmin(x.tall * wh_of(c), s.room)) } else { Auto }
@@ -1159,7 +1167,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       }
     },
   )
-  (r.value, p.open)
+  (r.value, drawn)
 }
 
 ///|
