@@ -3476,7 +3476,7 @@ data class LockDraftStation (
 	val id: String,
 	val name: String,
 	val version: String? = null,
-	/// `ok` (it understands a lock), `old` (too old), `offline`, `asking`.
+	/// `ok` (it understands a lock), `old` (too old), `offline`, `other` (it keeps another lock: reset it first), `asking`.
 	val state: String,
 	val on: Boolean,
 	val fixed: Boolean

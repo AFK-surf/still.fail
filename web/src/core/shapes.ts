@@ -4419,7 +4419,7 @@ export interface LockDraftStation {
 	id: string;
 	name: string;
 	version?: string;
-	/** `ok` (it understands a lock), `old` (too old), `offline`, `asking`. */
+	/** `ok` (it understands a lock), `old` (too old), `offline`, `other` (it keeps another lock: reset it first), `asking`. */
 	state: string;
 	on: boolean;
 	fixed: boolean;

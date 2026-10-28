@@ -131,7 +131,8 @@ test("a station that refuses this device though the lock names it has not heard 
 test("a device the lock names without its signing key signs nothing: the cloud gets no entry the stations would refuse", async () => {
   // This app is in the lock without its key (put in before it kept one), and keeps one now; an older device approved a
   // request so, the cloud kept it, and every station refused it and all after it (2026-10-24).
-  const r = await rig(() => ({ ws: genesis("ws", elsewhere(), false, [], {}, ME, [{ id: ME, sub: "s1", kind: "app", label: "this" }]) }));
+  const owner = elsewhere();
+  const r = await rig(() => ({ ws: genesis("ws", owner, false, [], {}, ME, [{ id: "ef".repeat(32), sub: "s1", kind: "app", label: "owner's", sign_key: owner.id }, { id: ME, sub: "s1", kind: "app", label: "this" }]) }));
   r.cloud.requests.set("ws", [phoneRequest]);
   await assert.rejects(r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) }), (e: { code: string }) => e.code === "lock_no_signer");
   assert.deepEqual(r.cloud.posted, []);
