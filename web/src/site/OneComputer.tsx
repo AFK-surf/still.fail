@@ -133,6 +133,35 @@ function drawnAs(row: HTMLElement, sheet: string[]): HTMLElement {
   return out;
 }
 
+/**
+ * A phone showing what it is for: the phone's app at its page (site/phone.html?at=), asked for once it is near the
+ * screen, by the page's script (as the one beside the computer is): nothing of it is read while the page loads.
+ */
+function FeaturePhone({ at, title }: { at: string; title: string }) {
+  const lang = useSiteLang();
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const el = frame.current;
+    if (!el) return;
+    const near = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      near.disconnect();
+      el.src = `${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(at)}`;
+    }, { rootMargin: "600px 0px" });
+    near.observe(el);
+    return () => near.disconnect();
+  }, [at, lang]);
+  return (
+    <div className={css.featurePhone}>
+      <div className={css.featureShell}>
+        <i className={css.oneKeys} />
+        <i className={css.oneIsland} />
+        <iframe ref={frame} className={css.onePhoneScreen} data-at={at} width={PHONE.w} height={FEATURE_H} title={title} tabIndex={-1} inert />
+      </div>
+    </div>
+  );
+}
+
 export function OneComputer(props: DemoProps) {
   const say = useSay(), lang = useSiteLang();
   // The workspace's machines, by the names the demo's stations have in the page's language.
@@ -358,20 +387,12 @@ export function OneComputer(props: DemoProps) {
       <section className={css.section}>
         <div className={css.wrap}>
           <h2 className={css.headingTitle}>{say.scenesTitle}</h2>
-          {/* Each on the phone's app, at its page (site/phone.html?at=): a picture of it at work, taking no input, so
-              that the page scrolls on over it; what is not here yet, in words alone. */}
+          {/* Each on the phone's app, at its page (FeaturePhone): a picture of it at work, taking no input, so that the
+              page scrolls on over it; what is not here yet, in words alone. */}
           <ol className={`${css.links} ${css.scenes}`}>
             {say.scenes.map((p, k) => (
               <li key={p.title} className={css.link} data-soon={p.soon || undefined}>
-                {p.at ? (
-                  <div className={css.featurePhone}>
-                    <div className={css.featureShell}>
-                      <i className={css.oneKeys} />
-                      <i className={css.oneIsland} />
-                      <iframe className={css.onePhoneScreen} src={`${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(p.at)}`} width={PHONE.w} height={FEATURE_H} title={p.title} tabIndex={-1} loading="lazy" inert />
-                    </div>
-                  </div>
-                ) : null}
+                {p.at ? <FeaturePhone at={p.at} title={p.title} /> : null}
                 <span className={css.linkNumber}>{String(k + 1).padStart(2, "0")}{p.soon ? ` · ${say.soon}` : ""}</span>
                 <h3 className={css.linkTitle}>{p.title}</h3>
                 <p className={css.linkText}>{p.text}</p>
