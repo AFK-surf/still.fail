@@ -259,11 +259,25 @@ static UIImage *nav_letter(NSString *title, CGFloat size) {
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return the_controller.supportedInterfaceOrientations; }
 @end
 
+// The visual capsule follows the app's header height; its touch target remains at least 44 points high.
+@interface MBFloatingButton : UIButton
+@property(nonatomic) BOOL inputBlocked;
+@end
+@implementation MBFloatingButton
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+  if (self.inputBlocked) return NO;
+  return CGRectContainsPoint(CGRectInset(self.bounds, -MAX(0, (44 - self.bounds.size.width) / 2),
+                                        -MAX(0, (44 - self.bounds.size.height) / 2)), point);
+}
+@end
+
 API_AVAILABLE(ios(18.0))
 @interface MBTabs : UITabBarController <UITabBarControllerDelegate>
 @property(nonatomic, copy) NSString *spec;
 @property(nonatomic, copy) NSString *tabsKey;
 @property(nonatomic, copy) NSString *action;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, UIButton *> *floatingButtons;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *floatingKeys;
 @property(nonatomic) BOOL shown;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UINavigationController *> *navs;
 // (a tab chosen by the app, not the person: not said back)
@@ -275,20 +289,6 @@ API_AVAILABLE(ios(18.0))
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *icons;
 @end
 
-// The action's tab's icon (nav_tabs): a disc of the accent as large as its glass leaves, its icon white on it, the
-// one thing on the bar so filled (the user, 2026-10-28: 新建对话按钮橙色实心).
-static const CGFloat nav_action_side = 44;
-static UIImage *nav_action_disc(NSString *icon, UIColor *accent) {
-  CGFloat d = nav_action_side, g = 24;
-  UIImage *glyph = [nav_icon(icon, g) imageWithTintColor:UIColor.whiteColor];
-  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(d, d)];
-  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-    [accent setFill];
-    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, d, d)] fill];
-    [glyph drawInRect:CGRectMake((d - g) / 2, (d - g) / 2, g, g)];
-  }];
-  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
-}
 
 static UIViewController *the_root;
 
@@ -332,6 +332,27 @@ static UIColor *nav_rgba(id v) {
 // The title of what is up over the whole window (a picture's name) over it: on a glass of its own, as the bar's items
 // are (iOS 26's UIGlassEffect, a capsule round the words), not bare words over the picture (the user, 2026-10-27); iOS
 // 18's bar its words. None: none.
+// Native menus share the same rows whether anchored to a bar item or a content button.
+static UIMenu *nav_menu(NSArray<NSDictionary *> *rows, void (^chosen)(NSString *)) {
+  NSMutableArray<UIMenuElement *> *groups = [NSMutableArray array];
+  NSMutableArray<UIMenuElement *> *actions = [NSMutableArray array];
+  void (^close)(void) = ^{
+    if (actions.count) [groups addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
+        options:UIMenuOptionsDisplayInline children:[actions copy]]];
+    [actions removeAllObjects];
+  };
+  for (NSDictionary *m in rows) {
+    NSString *ident = m[@"id"];
+    if ([ident isEqualToString:@"-"]) { close(); continue; }
+    UIImage *img = [m[@"icon"] length] ? nav_any(m[@"icon"], 22) : nil;
+    UIAction *action = [UIAction actionWithTitle:m[@"title"] image:img identifier:nil handler:^(UIAction *a) { chosen(ident); }];
+    action.state = [m[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
+    [actions addObject:action];
+  }
+  close();
+  return [UIMenu menuWithChildren:groups];
+}
+
 static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   item.title = nil;
   item.titleView = nil;
@@ -377,7 +398,9 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   CGRect r = CGRectZero;
   if (v && self.action.length && !self.tabBarHidden)
     for (UITab *t in self.tabs)
-      if ([t.identifier isEqualToString:self.action]) r = [t frameInView:v];
+      if ([t.identifier isEqualToString:self.action]) {
+        r = [t frameInView:v];
+      }
   if (CGRectIsNull(r) || CGRectIsInfinite(r)) r = CGRectZero;
   static CGRect said;
   if (CGRectEqualToRect(r, said)) return;
@@ -461,38 +484,13 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       // (with a menu: its rows, the one checked so, each said as chosen)
       NSArray *rows = d[@"menu"];
       if (rows.count) {
-        // (rows in groups, a line between them where a row is "-"; each its icon, if it says one)
-        NSMutableArray<UIMenuElement *> *groups = [NSMutableArray array];
-        NSMutableArray<UIMenuElement *> *acts = [NSMutableArray array];
-        void (^close)(void) = ^{
-          if (acts.count) [groups addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil
-                                                          options:UIMenuOptionsDisplayInline children:[acts copy]]];
-          [acts removeAllObjects];
-        };
-        for (NSDictionary *m in rows) {
-          NSString *row = m[@"id"];
-          if ([row isEqualToString:@"-"]) {
-            close();
-            continue;
-          }
-          NSString *mi = m[@"icon"];
-          UIImage *img = [mi length] ? nav_any(mi, 22) : nil;
-          // (said with where its menu's item is, as the item's own press is: what it opens a popover at it)
-          UIAction *x = [UIAction actionWithTitle:m[@"title"] image:img identifier:nil handler:^(UIAction *a) {
-            UIBarButtonItem *it = drawn;
-            UIView *v = the_view;
-            if (it && v) {
-              CGRect r = [it frameInView:v];
-              say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
-            } else {
-              say_system(@{@"nav" : row});
-            }
-          }];
-          x.state = [m[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
-          [acts addObject:x];
-        }
-        close();
-        b = [[UIBarButtonItem alloc] initWithImage:icon menu:[UIMenu menuWithChildren:groups]];
+        UIMenu *menu = nav_menu(rows, ^(NSString *row) {
+          UIBarButtonItem *it = drawn;
+          UIView *v = the_view;
+          CGRect r = it && v ? [it frameInView:v] : CGRectZero;
+          say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+        });
+        b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
         b.title = d[@"title"];
         drawn = b;
       }
@@ -554,8 +552,102 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   }
   return nav;
 }
+// The app reserves only the geometry. UIKit owns the glass, press feedback, title, image and popup menu.
+- (void)floatingItems:(NSArray<NSDictionary *> *)items ink:(UIColor *)ink {
+  if (!self.floatingButtons) {
+    self.floatingButtons = [NSMutableDictionary dictionary];
+    self.floatingKeys = [NSMutableDictionary dictionary];
+  }
+  NSMutableSet<NSString *> *live = [NSMutableSet set];
+  for (NSDictionary *f in items) {
+    NSDictionary *d = f[@"item"];
+    NSString *ident = d[@"id"];
+    if (!ident.length || !the_view) continue;
+    [live addObject:ident];
+    UIButton *button = self.floatingButtons[ident];
+    if (!button) {
+      button = [MBFloatingButton buttonWithType:UIButtonTypeSystem];
+      __weak UIButton *pressed = button;
+      [button addAction:[UIAction actionWithHandler:^(UIAction *action) {
+        UIButton *b = pressed;
+        if (b.menu) return;
+        CGRect r = [b convertRect:b.bounds toView:the_view];
+        say_system(@{@"nav": ident, @"at": @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+      }] forControlEvents:UIControlEventTouchUpInside];
+      button.accessibilityIdentifier = ident;
+      self.floatingButtons[ident] = button;
+    }
+    if (button.superview != the_view) [the_view addSubview:button];
+    button.frame = CGRectMake([f[@"x"] doubleValue], [f[@"y"] doubleValue], [f[@"w"] doubleValue], [f[@"h"] doubleValue]);
+    BOOL blocked = [f[@"blocked"] boolValue];
+    ((MBFloatingButton *)button).inputBlocked = blocked;
+    button.accessibilityElementsHidden = blocked;
+    // Keep the live glass stable while a canvas presenter opens. Its backdrop already
+    // changes with the presenter; an extra opacity jump makes every sibling flash.
+    NSString *key = [NSString stringWithFormat:@"%@/%@", d, ink];
+    if (![self.floatingKeys[ident] isEqualToString:key]) {
+      self.floatingKeys[ident] = key;
+      BOOL withTitle = [d[@"prominent"] boolValue];
+      UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+#ifdef __IPHONE_26_0
+      if (@available(iOS 26.0, *)) {
+        config = [UIButtonConfiguration glassButtonConfiguration];
+      }
+#endif
+      config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+      config.baseForegroundColor = ink;
+      BOOL dot = [d[@"dot"] boolValue];
+      config.contentInsets = withTitle ? NSDirectionalEdgeInsetsMake(0, 8, 0, dot ? 24 : 8) : NSDirectionalEdgeInsetsZero;
+      config.imagePadding = withTitle ? 6 : 0;
+      if (withTitle) {
+        config.titleLineBreakMode = NSLineBreakByTruncatingTail;
+        config.attributedTitle = [[NSAttributedString alloc] initWithString:d[@"title"] attributes:@{
+          NSFontAttributeName: [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]
+        }];
+      }
+      button.contentHorizontalAlignment = withTitle ? UIControlContentHorizontalAlignmentLeading : UIControlContentHorizontalAlignmentCenter;
+      __weak UIButton *weak = button;
+      __weak MBTabs *owner = self;
+      NSString *icon = d[@"icon"];
+      config.image = nav_any_then(icon, 24, ^{
+        UIButton *b = weak;
+        if (!b || ![owner.floatingKeys[ident] isEqualToString:key]) return;
+        UIButtonConfiguration *next = b.configuration;
+        next.image = nav_any(icon, 24);
+        b.configuration = next;
+      });
+      button.configuration = config;
+      button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+      button.titleLabel.numberOfLines = 1;
+      button.accessibilityLabel = d[@"title"];
+      button.showsMenuAsPrimaryAction = [d[@"menu"] count] > 0;
+      button.menu = [d[@"menu"] count] ? nav_menu(d[@"menu"], ^(NSString *row) {
+        UIButton *b = weak;
+        CGRect r = b && the_view ? [b convertRect:b.bounds toView:the_view] : CGRectZero;
+        say_system(@{@"nav": row, @"at": @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+      }) : nil;
+      UIView *badge = [button viewWithTag:71];
+      if (!badge) {
+        badge = [UIView new]; badge.tag = 71;
+        badge.userInteractionEnabled = NO;
+        badge.backgroundColor = UIColor.systemBlueColor;
+        badge.layer.cornerRadius = 3;
+        [button addSubview:badge];
+      }
+      badge.hidden = !dot;
+    }
+    [button viewWithTag:71].frame = CGRectMake(button.bounds.size.width - 18, (button.bounds.size.height - 6) / 2, 6, 6);
+  }
+  for (NSString *ident in [self.floatingButtons.allKeys copy]) {
+    if ([live containsObject:ident]) continue;
+    [self.floatingButtons[ident] removeFromSuperview];
+    [self.floatingButtons removeObjectForKey:ident];
+    [self.floatingKeys removeObjectForKey:ident];
+  }
+}
 // No tabs: one tab, the bar hidden, the app's controller in it.
 - (void)applyNone {
+  [self floatingItems:@[] ink:UIColor.labelColor];
   UINavigationController *nav = [self navFor:@""];
   if (self.tabsKey.length || !self.tabs.count) {
     self.tabsKey = @"";
@@ -603,13 +695,14 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   self.tabBar.tintColor = accent;
   self.view.tintColor = accent;
   self.tabBar.unselectedItemTintColor = ink;
+  [self floatingItems:bare ? @[] : b[@"floating"] ink:ink];
   // the tabs again only as they change (their ids, words and icons)
   NSMutableString *key = [NSMutableString string];
   // (an icon that changes, the stations' at a glance, drawn again in place: below)
   // (and words that change, the workspace's name on 我的: set in place too. A tab made again over its controller, while
   // the one before still has it, is refused: UIKit's "cannot be shared between multiple UITab", the app stopped)
   for (NSDictionary *t in places) [key appendFormat:@"%@\x1e", t[@"id"]];
-  if (act) [key appendFormat:@"!%@\x1f%@\x1f%@", act[@"id"], act[@"title"], act[@"icon"]];
+  if (act) [key appendFormat:@"!%@\x1f%@\x1f%@\x1f%@", act[@"id"], act[@"title"], act[@"icon"], b[@"chosen_ink"]];
   if (![key isEqualToString:self.tabsKey]) {
     self.tabsKey = key;
     NSMutableArray<UITab *> *made = [NSMutableArray array];
@@ -619,11 +712,11 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
                                 viewControllerProvider:^(UITab *x) { return nav; }]];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
-    // glass, a disc of the accent filling it, its icon white on it: never chosen, shouldSelectTab says it)
+    // glass, with an accent glyph: never chosen, shouldSelectTab says it)
     self.action = act[@"id"];
     if (act) {
       UINavigationController *own = [self navFor:act[@"id"]];
-      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:nav_action_disc(act[@"icon"], accent) identifier:act[@"id"]
+      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:[nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal] identifier:act[@"id"]
                        viewControllerProvider:^(UITab *t) { return own; }];
       x.preferredPlacement = UITabPlacementPinned;
       [made addObject:x];

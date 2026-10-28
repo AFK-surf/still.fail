@@ -214,7 +214,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   let lines : Array[Line] = [Top]
   // its search at its top where the screen has no keys for ⌘K (touch's: the theme's), out of view until
   // scrolled to (Home.kt top), while it has rows to look in
-  if !@sf.theme().chat_list.keys {
+  if !@sf.theme().chat_list.keys && !@sf.native_able() {
     match view {
       Some({ note: Some({ empty: true, .. }), .. }) | None => ()
       Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c, frame.at) }, tucked: true }))

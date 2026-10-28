@@ -74,19 +74,18 @@ pub fn switch_workspace(src : Source, ws : String) -> Unit {
 // ── the workspaces ─────────────────────────────────────────────────────
 
 ///|
-/// The workspaces (WorkspacesSheet), opened by `from` (its name over the chats): 70% of the window, dragged between
-/// half and nearly all of it as a sheet; the one in view and the others as they are each frame.
-pub fn open_workspaces(src : Source, from : @sf.Anchor) -> Unit {
+/// The workspace sheet; compact headings may request a content-sized panel instead of the usual tall list.
+pub fn open_workspaces(src : Source, from : @sf.Anchor, compact? : Bool = false) -> Unit {
   @sf.panel(
     @sf.t("android-misc.workspace.sheet.title"),
     fn(c, close) {
       match @sfbase.workspace_in_view(src) {
-        (Some(w), all, _, _) => workspaces_list(c, src, w, all, close)
+        (Some(w), all, _, _) => workspaces_list(c, src, w, all, close, compact~)
         _ => ()
       }
     },
     from~,
-    tall=workspaces_tall,
+    tall=if compact { 0.0 } else { workspaces_tall },
     grows=true,
   )
 }
@@ -97,10 +96,10 @@ let workspaces_tall : Double = 0.7
 ///|
 /// The list: the one in use (checked) on a card, the invitations waiting, the others to switch to, then signing in
 /// another account and a new one.
-fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit) -> Unit {
+fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit, compact~ : Bool) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
-  c.box(style=ws_list, fn() {
+  c.box(style=if compact { ws_list_compact } else { ws_list }, fn() {
     ws_label(c, @sf.t("android-misc.workspace.current"))
     c.box(style=ws_current, fn() {
       c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
@@ -152,6 +151,10 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
 /// The list: what it holds, 24 over its foot, cut at its edges.
 // kept across runs: a value (no field of it changes)
 let ws_list : @ui.Style = @ui.css("w=Full h=Full pb=S6 clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_list_compact : @ui.Style = @ui.css("w=Full pb=S3")
 
 ///|
 /// The one in use: on a card 12 in from the sides, 4 under its label, 16 over what follows.

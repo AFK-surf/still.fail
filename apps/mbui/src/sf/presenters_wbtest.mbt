@@ -9,6 +9,25 @@ let phone : (Int, Double, Double) = (2, 390.0, 844.0)
 let desk : (Int, Double, Double) = (0, 1280.0, 800.0)
 
 ///|
+test "an anchored panel animates both entering and leaving before its presenter is removed" {
+  let t = presenting_tester(desk, fn(from) {
+    panel("动画面板", from~, fn(c, _) { c.text("面板内容") |> ignore })
+  })
+  t.tap_text("打开")
+  t.run_for(@kit.pop_ms / 2.0)
+  let (_, _, entering) = t.look_of("面板内容").unwrap()
+  assert_true(entering > 0.0 && entering < 1.0)
+  t.run_for(@kit.pop_ms)
+  close_presented()
+  t.frame()
+  t.run_for(@kit.pop_out_ms / 2.0)
+  let (_, _, leaving) = t.look_of("面板内容").unwrap()
+  assert_true(leaving > 0.0 && leaving < 1.0)
+  t.run_for(@kit.pop_out_ms)
+  assert_true(t.look_of("面板内容") is None)
+}
+
+///|
 /// A page with one button, 打开 (`at` its top, its middle, or its foot as a composer's choices are), that opens what
 /// `open` presents (given what opened it), and the host over it.
 fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.Ctx) -> Unit {

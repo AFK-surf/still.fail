@@ -22,11 +22,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // shown in the workspace, on the line of the page's title beside it: rail_native.mbt)
         if @sf.native_on() {
           // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
-          c.box(style=band_title_row.then(@ui.style(h=Fixed(@sf.band_row_h()))), fn() {
-            let shown = list_place(list_mode(src, w))
-            c.text(if shown == "chats" { @sf.t("web-main.filter.chats.all") } else { filter_named(shown) }, style=chat_title_words) |> ignore
-          })
-          |> ignore
+          workspace_heading(c, src, w)
         } else if band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
@@ -45,6 +41,9 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if update_shown() {
         update_in_row(c, src)
       }
+      if @sf.native_on() {
+        sidebar_glass(c, "sidebar/search", @sf.t("android-chat.search.field"), "search", [])
+      }
       match view {
         // (never lit for the list shown: asked 2026-10-27)
         Some(v) if v.stations > 0 => filter_button(c, src, w, list_place(list_mode(src, w)), in_bar)
@@ -59,6 +58,26 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   })
   // over the lists: their scroll bar keeps clear of it (the web's --nav-top)
   c.floats_over(band)
+}
+
+///|
+/// The workspace icon and name share one native glass capsule.
+fn workspace_heading(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let id = c.id("side/workspaces")
+  let size = @sf.band_row_h()
+  let b = c.box(style=@ui.style(w=Full, h=Fixed(size)), id~, fn() {  })
+  native_workspace(c, src, w, b, id)
+  c.semantics(b, Button, id~, label=w.name)
+}
+
+///|
+/// Icon-only controls in the same native glass as the workspace switch.
+fn sidebar_glass(c : @ui.Ctx, key : String, title : String, icon : String, menu : Array[(String, String, Bool, String)]) -> Unit {
+  let id = c.id(key)
+  let size = @sf.band_row_h()
+  let b = c.box(style=@ui.style(w=Fixed(size), h=Fixed(size)), id~, fn() { })
+  native_sidebar_items[id] = { id: key, title, icon: @sf.icon_path(icon), dot: false, prominent: false, menu }
+  c.semantics(b, Button, id~, label=title)
 }
 
 ///|
@@ -93,6 +112,13 @@ let filter_bar_in : Double = 6.0
 /// across) in its top right corner on the tape's line, concentric with it (@sf.line_end_in, band_new_tape_over), under
 /// the band's top row; where the corner is too square for that (it follows a round window), clear of it.
 fn band_new_tape() -> @ui.Style {
+  if @sf.native_on() {
+    // The glass's outside edge follows the day heading's words, including the
+    // list row's inner padding, not just the card's outer content margin.
+    let list = @sf.theme().chat_list
+    let inset = @sf.room_of(list.band_in + list.heading_in)
+    return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
+  }
   let corner = @sf.tape_side_corners()[1].radius()
   nav_new().then(
     @ui.style(
@@ -216,6 +242,15 @@ fn filter_button(
   shown : String,
   in_bar : Bool,
 ) -> Unit {
+  if @sf.native_on() {
+    let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
+      ("watching", "web-main.filter.watching"), ("decisions", "web-main.decisions.title"),
+      ("archive", "web-main.filter.archived")].map(fn(p) {
+        ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == (if shown == "chats" { "all" } else { shown }), "")
+      })
+    sidebar_glass(c, "sidebar/filter", @sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]), "filter", rows)
+    return
+  }
   let t = @sf.theme()
   let id = c.id("side/filter")
   // its menu (sfpages' filter_menu): a filter its list, 奏 its place, 已归档 the archive's list (rail_go)
@@ -263,9 +298,3 @@ let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justif
 fn filter_box_bar() -> @ui.Style {
   filter_box.then(@ui.style(radius=Linked(filter_bar_link())))
 }
-
-
-///|
-/// The list card's title beside the system's tab bar (the list shown), as a page's title: its bar's words.
-// kept across runs: a value (no field of it changes)
-let band_title_row : @ui.Style = @ui.css("row w=Full pl=S3 align=ACenter")

@@ -41,15 +41,20 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end
   match here.view.state_ask {
     Some(seq) if turn => {
-      c.box(style=need_card, fn() {
-        c.box(style=need_card_words, label=words, fn() {
+      let stacked = @sf.native_on() && c.width <= chat_narrow_w
+      c.box(style=if stacked { need_card_stacked } else { need_card }, fn() {
+        c.box(style=if stacked { need_card_words_stacked } else { need_card_words }, label=words, fn() {
           c.box(style=look.state_slot, fn() { lead_icon(c, lead, p.text) }) |> ignore
           if rest != "" {
             c.text(rest, style=said) |> ignore
           }
         })
         |> ignore
-        ask_dismiss(c, src, here, seq, true, false, at_end=true)
+        if stacked {
+          c.box(style=need_card_actions, fn() { ask_dismiss(c, src, here, seq, true, false, at_end=true) }) |> ignore
+        } else {
+          ask_dismiss(c, src, here, seq, true, false, at_end=true)
+        }
       })
       |> ignore
       return
@@ -621,3 +626,15 @@ let need_card : @ui.Style = @ui.css("row w=Full px=S3 gap=S2 radius=Xl align=ACe
 ///|
 // kept across runs: a value (no field of it changes)
 let need_card_words : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let need_card_stacked : @ui.Style = @ui.css("w=Full px=S3 pt=S3 pb=S1 radius=Xl bg=A(Fg,O5)")
+
+///|
+// kept across runs: a value (no field of it changes)
+let need_card_words_stacked : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let need_card_actions : @ui.Style = @ui.css("row w=Full justify=JEnd")

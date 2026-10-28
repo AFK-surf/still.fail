@@ -33,7 +33,7 @@ test "an iPhone Duo on its side: the places and the chat's actions handed to the
   t.run_for(@ui.nav_push_ms)
   t.assert_idle()
   let said = t.nav_said()
-  for id in ["place/chats", "place/files", "place/stations", "act/attention", "act/workspaces", "\"new\"", "page/chat/info", "page/chat/history"] {
+  for id in ["place/chats", "place/files", "place/stations", "act/attention", "\"new\"", "page/chat/info", "page/chat/history"] {
     if !said.contains(id) {
       fail("the bars handed hold no \{id}: \{said}")
     }
@@ -61,7 +61,7 @@ test "an iPhone Duo upright: the same frame, the actions across the top (the bel
   let t = native_chat(669.0, 951.0, true)
   let said = t.nav_said()
   assert_true(said.contains("lead/attention"))
-  assert_true(said.contains("lead/workspaces"))
+  assert_false(said.contains("lead/workspaces"))
   assert_true(@sf.native_on())
   assert_false(@sf.native_side())
   assert_eq(@sf.native_clear(), 0.0)
@@ -252,14 +252,14 @@ test "an iPhone Duo folded, its outer screen on its side: the cards' corners eac
 }
 
 ///|
-test "an iPhone Duo folded, its outer screen: the bell and the workspaces in the system's short column, a page's actions its own" {
+test "an iPhone Duo folded: the bell and complete chat menu in the system column, the workspace in the list" {
   let t = native_chat(466.0, 678.0, true, side=70.0)
   let said = t.nav_said()
-  // (one of the app's own in each of the column's bars is all it shows: the bell the toolbar's, the workspaces the
-  // navigation bar's)
+  // The short column keeps the bell; the workspace switch now belongs to the list heading.
   assert_true(said.contains("act/attention"))
-  assert_true(said.contains("lead/workspaces"))
-  assert_false(said.contains("page/"))
+  assert_false(said.contains("lead/workspaces"))
+  assert_true(said.contains("page/chat/info"))
+  assert_false(said.contains("page/chat/history"))
 }
 
 ///|
@@ -311,11 +311,13 @@ test "an iPhone Duo on its side or upright, whatever the sidebar's width: the si
       t.frame()
       // the sidebar in use, what shows of the page beside it a press to bring it over
       assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+      assert_true(t.nav_said().contains("workspace-switch"), msg=at)
       guard covered(t, "收起侧边栏") is Some((px, _)) else { fail("\{at}: the page beside the sidebar not to be brought over") }
       // pressed: the page in use, the sidebar a strip at the window's left
       t.tap(px + 20.0, 400.0)
       t.run_for(@sfdesk.side_move_ms)
       assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+      assert_false(t.nav_said().contains("workspace-switch"), msg=at)
       assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), @sfdesk.tape_shows), msg=at)
     }
   }
@@ -390,28 +392,29 @@ test "an iPhone Duo: a chat's actions each its own in the system's bars, its his
   let t = native_chat(669.0, 951.0, true)
   let id = "page/chat/history"
   assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-open")))
-  assert_true(nav_icon_of(t, "page/chat/info") is Some(_))
+  assert_eq(nav_icon_of(t, "page/chat/info"), Some(@sf.icon_path("more")))
   t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
   t.run_for(@ui.nav_push_ms)
   assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-close")))
   // (none of the chat's own buttons by its title: its ⋯)
   assert_true(said_at(t, @sf.t("web-pages.chat.info")) is None)
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
 }
 
 ///|
-/// Whether the workspaces' button the app handed the system's bars has its dot.
+/// The single workspace entry retains unread and invitation indicators.
 fn workspaces_dot(t : @ui.Tester) -> Bool raise {
-  guard @json.parse(t.nav_said()) is Object(bar) else { fail("the bars said are no object") }
-  guard bar.get("groups") is Some(Array(groups)) else { fail("the bars said hold no groups") }
-  for g in groups {
-    guard g is Object(g) && g.get("items") is Some(Array(items)) else { continue }
-    for i in items {
-      if i is Object(i) && i.get("id") is Some(String(id)) && id.has_suffix("/workspaces") {
-        return i.get("dot") is Some(True)
-      }
+  guard @json.parse(t.nav_said()) is Object(bar) else { fail("no bar") }
+  guard bar.get("floating") is Some(Array(items)) else { fail("no floating controls") }
+  for i in items {
+    let item = field(Some(i), "item")
+    if text(item, "id") == "workspace-switch" {
+      return field(item, "dot") is Some(True)
     }
   }
-  fail("the bars said hold no workspaces' button")
+  fail("no workspace heading")
 }
 
 ///|
@@ -449,7 +452,7 @@ fn composer_w(t : @ui.Tester) -> Double {
 }
 
 ///|
-test "an iPhone Duo on its side: a service's link tapped, the side panel comes over and the page narrows with the tape's move, not at once before it" {
+test "an iPhone Duo on its side: details come over without taking another strip from chat beside the system column" {
   let (w, h, side) = (951.0, 669.0, 84.0)
   let t = native_chat(w, h, true, side~, mode="chat-info", corner=59.0)
   let src = fixture("chat-info")
@@ -460,8 +463,8 @@ test "an iPhone Duo on its side: a service's link tapped, the side panel comes o
   let first = composer_w(t)
   t.run_for(@sfdesk.side_move_ms)
   let to = composer_w(t)
-  assert_true(to < from - 20.0, msg="the page narrowed beside the panel: \{from} to \{to}")
-  assert_true(from - first < (from - to) / 3.0, msg="at once: \{from}, then \{first} in the move's first frame, \{to} at its end")
+  assert_true((to - from).abs() < 0.5, msg="chat keeps its width: \{from} to \{to}")
+  assert_true((first - from).abs() < 0.5, msg="no intermediate squeeze: \{from} to \{first}")
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
 }
 
@@ -582,4 +585,132 @@ test "Duo inline HTML expanded uses the image viewer native bars and closes back
   t.frame()
   assert_true(@sfbase.viz_full.val is None)
   assert_true(t.nav_said().contains("\"bare\":false"))
+}
+
+///|
+test "Duo workspace heading opens the existing panel without a duplicate menu" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  assert_false(t.nav_said().contains("act/workspaces"))
+  assert_true(t.nav_said().contains("workspace-switch"), msg=t.nav_said())
+  assert_false(t.nav_said().contains("workspaces/manage"))
+  t.frame()
+  assert_true(t.nav_said().contains("workspace-switch"), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"workspace-switch\"}")
+  t.frame()
+  assert_true(t.nav_said().contains("workspace-switch"))
+  assert_true(t.nav_said().contains("sidebar/search"))
+  t.run_for(@kit.pop_ms / 2.0)
+  assert_true(t.nav_said().contains("workspace-switch"))
+  assert_true(t.nav_said().contains("sidebar/search"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(@sf.presenting())
+  let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
+  assert_true(panels.length() > 0)
+  for p in panels {
+    assert_true(p.rect.3 < 400.0, msg="short workspace list stretched to \{p.rect.3}")
+  }
+  assert_true(t.nav_said().contains("workspace-switch"))
+  assert_true(t.nav_said().contains("sidebar/search"))
+  assert_true(t.nav_said().contains("sidebar/filter/mine"))
+  assert_true(t.nav_said().contains("\"blocked\":true"))
+  @sf.close_all_presented()
+  t.frame()
+  t.run_for(@kit.pop_out_ms / 2.0)
+  for id in ["workspace-switch", "sidebar/search", "sidebar/filter/mine"] {
+    assert_true(t.nav_said().contains(id), msg="missing during panel exit: \{id}")
+  }
+  assert_true(t.nav_said().contains("\"blocked\":true"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.nav_said().contains("workspace-switch"))
+  assert_false(t.nav_said().contains("\"blocked\":true"))
+}
+
+///|
+test "Duo glass search opens the finder and hides the sidebar's native controls" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  assert_true(t.nav_said().contains("sidebar/search"))
+  assert_true(t.nav_said().contains("sidebar/filter/mine"))
+  t.post(@hostapi.system_channel, "{\"nav\":\"sidebar/filter/mine\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.filters.get("ws1"), Some("mine"))
+  t.post(@hostapi.system_channel, "{\"nav\":\"sidebar/search\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(@sfdesk.switcher_open())
+  assert_false(t.nav_said().contains("sidebar/search"))
+  assert_false(t.nav_said().contains("workspace-switch"))
+}
+
+///|
+test "Duo sidebar glass circles share a baseline and keep their inset with a large outer corner" {
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let mut first_x : Double? = None
+    for corner in [28.0, 59.0] {
+      let t = native_chat(size.0, size.1, true, side=size.2, corners=[corner, corner, corner, corner])
+      let spec = @json.parse(t.nav_said())
+      let circles = items(Some(spec), "floating")
+      assert_eq(circles.length(), 3)
+      let x = number(Some(circles[0]), "x")
+      guard t.words().filter(fn(word) { word.0 == "今天" }) is [(_, heading_x, _, _, _, _), ..] else {
+        fail("day heading not drawn")
+      }
+      assert_true((x - heading_x).abs() < 0.5, msg="glass edge \{x}, day heading \{heading_x}")
+      match first_x {
+        Some(was) => assert_true((x - was).abs() < 0.5, msg="workspace shifted from \{was} to \{x}")
+        None => first_x = Some(x)
+      }
+      let y = number(Some(circles[0]), "y")
+      for circle in circles {
+        assert_true((number(Some(circle), "y") - y).abs() < 0.5)
+        if text(field(Some(circle), "item"), "id") != "workspace-switch" {
+          assert_eq(number(Some(circle), "w"), number(Some(circle), "h"))
+        }
+      }
+    }
+  }
+}
+
+///|
+test "Duo files and settings have no legacy workspace switch" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  for id in ["place/files", "settings"] {
+    t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
+    t.run_for(@ui.nav_push_ms)
+    assert_false(t.nav_said().contains("act/workspaces"))
+    assert_false(t.nav_said().contains("lead/workspaces"))
+  }
+}
+
+///|
+test "non-native workspace panels retain their existing tall layout" {
+  for platform in [0, 2] {
+    let t = native_chat(951.0, 669.0, false, platform~)
+    @sfpages.open_workspaces(fixture("chat"), At(32.0, 16.0, 150.0, 38.0))
+    t.run_for(@ui.nav_push_ms)
+    let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
+    assert_true(panels.length() > 0)
+    assert_true(panels[0].rect.3 >= 450.0, msg="non-native panel height changed: \{panels[0].rect.3}")
+  }
+}
+
+///|
+test "Duo narrow chat reminder puts dismiss below its words" {
+  let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-need")
+  @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
+  t.frame()
+  t.run_for(@sfdesk.side_move_ms)
+  let (_, y) = t.find_last("忽略").unwrap()
+  let (_, sy, _, sh) = t.rect_of(@sffixture.need_state.2).unwrap()
+  assert_true(y >= sy + sh, msg="dismiss below the complete reminder text")
+}
+
+///|
+test "Duo short system column keeps the complete chat menu reachable" {
+  let t = native_chat(469.0, 681.0, true, side=84.0)
+  @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
+  t.frame()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(nav_icon_of(t, "page/chat/info"), Some(@sf.icon_path("more")))
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
 }
