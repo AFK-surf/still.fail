@@ -892,6 +892,24 @@ export class Remote {
     return { ...roster, stations: listed };
   }
 
+  /// The id of the station an agent names: station_list shows each by its name and its id, and either is taken. A name
+  /// no station of the workspace has (a station of another workspace this one shares chats with is named by its id)
+  /// goes on as given, to be refused or reached as an id.
+  private async stationNamed(workspace: string, named: string): Promise<string> {
+    if (named === "") return named;
+    let stations: Json[] = [];
+    try {
+      const roster = await this.ask("", { method: "peers", workspace });
+      if (Array.isArray(roster?.stations)) stations = roster.stations;
+    } catch {
+      return named;
+    }
+    if (stations.some((s) => text(s, "id") === named)) return named;
+    const same = stations.filter((s) => text(s, "name").toLowerCase() === named.toLowerCase());
+    if (same.length > 1) throw new Error(`${same.length} stations are named ${named}; give the id station_list shows for the one meant`);
+    return same.length === 1 ? text(same[0], "id") : named;
+  }
+
   /// This station's id (mesh/cloud.json), "" when it has none.
   private ownId(): string {
     try {
@@ -1641,16 +1659,15 @@ export class Remote {
   async tool(tool: string, session: string, args: Json): Promise<Json> {
     const row = this.store.getSession(session);
     if (!row) throw new Error("unknown session");
-    const station = text(args, "station");
+    const workspace = this.workspace(row.ws ?? null);
+    const station = await this.stationNamed(workspace, text(args, "station"));
     if (tool === "station_list") {
-      const workspace = this.workspace(row.ws ?? null);
       if (station === "") return this.listStations(workspace);
       return detailed(station === this.ownId() ? await this.describe() : await this.ask(station, { method: "describe", workspace }));
     }
     const key = text(args, "key");
     const listing = tool === "station_task" && field(args, "action") === "list";
     if (station === "" || (key === "" && !listing)) throw new Error("station and key are required (list needs only station)");
-    const workspace = this.workspace(row.ws ?? null);
     if (!listing) this.recordUse(workspace, session, station);
     const request: Json = { workspace, session, key };
     if (tool === "station_task") {
