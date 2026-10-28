@@ -247,11 +247,11 @@ pub fn screen_page(
           c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
         }
         if s.driving() && typing {
-          c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore })
+          c.layer(fn() { c.box(style=screen_foot_center.then(@sf.sides_clear(@ui.Space::S2.px())), fn() { keys_capsule(c, s, u) }) |> ignore })
           |> ignore
         }
         c.layer(fn() {
-          c.box(style=screen_top_end, fn() { full_tools(c, s, u, typing, catcher, close) }) |> ignore
+          c.box(style=screen_top_end.then(@sf.sides_clear(@ui.Space::S3.px())), fn() { full_tools(c, s, u, typing, catcher, close) }) |> ignore
         })
         |> ignore
       })
