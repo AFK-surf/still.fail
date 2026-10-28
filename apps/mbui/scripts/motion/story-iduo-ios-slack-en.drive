@@ -1,0 +1,43 @@
+# Film 5 of still.fail in use on the iPhone Duo simulator, in English: a chat that came from Slack (someone there @'d the
+# agent), picked up on the phone: read on the outer screen, unfolded, answered; the agent's fix goes back to the thread
+# and its asker answers from Slack (story scripts/story/iduo-slack-en.json, FILM_LANG=en FILM_STORY=iduo-slack-en).
+timeout 45000
+until Message
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1800
+# (the list open over the chat as the outer screen lights: the chat from Slack at its top, tapped)
+at tap=row
+tap Checkout fails for EU cards
+wait 900
+# (shown beside the list, the list still in use: the chat tapped where it shows at the right, brought over)
+at tap=chat
+tapxy 430 330
+wait 600
+at read
+wait 3600
+at unfold
+log UNFOLD
+wait 4000
+at tap=发消息
+tap Message
+wait 600
+at keys
+keys Go ahead, and let Ana know when it's live
+wait 600
+at tap=send
+tap icon:arrow-up
+wait 400
+at working
+until Fixed and live
+at answer
+wait 1200
+# (read a while with the keyboard up, as one leaves it after sending; the list tapped to put it away)
+at tap=list
+tapxy 560 260
+until French card
+at merged
+wait 3400
+at end
+exit

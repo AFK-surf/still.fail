@@ -1,0 +1,99 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- Film 5's Slack, as the iPhone's Slack shows a thread (made-up words, drawn here: the simulator has no Slack), on the
+     iPhone Duo's outer screen (466 x 678 points; the system's column of the camera, the time and the battery at its right).
+     window.at(t) shows it `t` seconds into its part of the film: the asker's message, the agent's answer coming in under
+     it. compose_sim.mjs takes its frames (FILM_PRE). -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=block">
+<style>
+*{margin:0;box-sizing:border-box}
+html,body{width:466px;height:678px;overflow:hidden;background:#fff;-webkit-font-smoothing:antialiased}
+body{font-family:Lato,-apple-system,sans-serif;color:#1d1c1d;position:relative}
+#app{position:absolute;left:0;top:0;bottom:0;right:80px}
+header{height:92px;padding:30px 12px 0 8px;display:flex;align-items:flex-start;border-bottom:1px solid #e8e8e8}
+header .back{width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:-2px}
+header .title{flex:1;text-align:center;margin-right:36px}
+header .title b{display:block;font-size:17px;font-weight:900;letter-spacing:0}
+header .title span{display:block;font-size:13px;color:#616061;margin-top:2px}
+main{padding:14px 14px 0 14px}
+.msg{display:flex;gap:10px;padding:6px 0}
+.av{width:38px;height:38px;border-radius:9px;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px}
+.av.ana{background:linear-gradient(140deg,#e8a26b,#c9663d)}
+.av.app{background:#5b45e0;font-size:19px;font-weight:800;letter-spacing:-.5px}
+.body{flex:1;min-width:0}
+.who{display:flex;align-items:baseline;gap:6px;line-height:20px}
+.who b{font-size:15.5px;font-weight:900;letter-spacing:0}
+.who .badge{font-size:10px;font-weight:700;color:#616061;background:#ebebeb;border-radius:3px;padding:1px 4px;letter-spacing:.3px}
+.who time{font-size:12.5px;color:#616061}
+.text{font-size:15.5px;line-height:22px;margin-top:2px;letter-spacing:0}
+.at{color:#1264a3;background:rgba(29,155,209,.1);border-radius:3px;padding:0 2px}
+.ctx{font-size:12.5px;color:#616061;margin-top:4px;display:flex;align-items:center;gap:5px}
+.ctx img{width:13px;height:13px}
+.btn{display:inline-block;margin-top:9px;border:1px solid #d6d6d6;border-radius:8px;padding:6px 13px;font-size:14px;font-weight:700;color:#1d1c1d;background:#fff}
+.btn.pressed{background:#f1f1f1}
+.rule{display:flex;align-items:center;gap:10px;margin:10px 0 4px;font-size:13px;color:#616061}
+.rule::after{content:"";flex:1;height:1px;background:#e8e8e8}
+.reply{transition:none}
+footer{position:absolute;left:0;right:0;bottom:0;padding:8px 10px 22px;background:linear-gradient(rgba(255,255,255,0),#fff 30%)}
+.also{font-size:13px;color:#616061;display:flex;align-items:center;gap:7px;padding:0 6px 8px}
+.also i{width:15px;height:15px;border:1.5px solid #b5b5b5;border-radius:4px;display:inline-block}
+.bar{display:flex;align-items:center;gap:8px}
+.glass{background:rgba(246,246,248,.92);border:1px solid rgba(0,0,0,.07);box-shadow:0 2px 10px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.9)}
+.plus{width:42px;height:42px;border-radius:21px;display:flex;align-items:center;justify-content:center;flex:none}
+.plus svg{width:22px;height:22px;color:#1d1c1d}
+.field{flex:1;height:42px;border-radius:21px;display:flex;align-items:center;padding:0 8px 0 16px;font-size:15.5px;color:#868686}
+.field svg{width:22px;height:22px;margin-left:auto;color:#616061}
+/* the system's column (the camera, the time, the battery): as iOS draws it over the app on the outer screen */
+#sys{position:absolute;left:0;top:0;width:466px;height:678px;pointer-events:none}
+#sys .pill{position:absolute;left:391px;top:56px;width:54px;height:102px;border-radius:0 0 27px 27px;background:linear-gradient(rgba(244,244,244,0),#f2f2f2 22%)}
+#sys .cam{position:absolute;left:399px;top:28px;width:38px;height:38px;border-radius:50%;background:#000}
+#sys .time{position:absolute;left:390px;width:56px;top:83px;text-align:center;font:600 18.5px -apple-system,"SF Pro Text";letter-spacing:-.3px;color:#000}
+#sys svg{position:absolute;left:398px;top:110px}
+</style></head><body>
+<div id="app">
+  <header>
+    <div class="back"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1d1c1d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+    <div class="title"><b>Thread</b><span># support</span></div>
+  </header>
+  <main>
+    <div class="msg">
+      <div class="av ana">A</div>
+      <div class="body">
+        <div class="who"><b>Ana Costa</b><time>9:29 AM</time></div>
+        <div class="text"><span class="at">@still.fail</span> checkout is failing for some customers in the EU, they get a 500 after entering their card. Can you look?</div>
+      </div>
+    </div>
+    <div class="rule" id="count">1 reply</div>
+    <div class="msg reply" id="r1">
+      <div class="av app">S.</div>
+      <div class="body">
+        <div class="who"><b>still.fail</b><span class="badge">APP</span><time>9:33 AM</time></div>
+        <div class="text">Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. Since it touches payments, I'll wait for Lin to say go.</div>
+        <div class="ctx">Claude · on Studio</div>
+        <div class="btn" id="open">Open in still.fail</div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="also"><i></i>Also send to # support</div>
+    <div class="bar">
+      <div class="plus glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <div class="field glass">Reply…<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0012 0M12 17v3"/></svg></div>
+    </div>
+  </footer>
+</div>
+<div id="sys"><div class="pill"></div><div class="cam"></div><div class="time">9:41</div>
+  <svg width="40" height="40" viewBox="0 0 32 32"><path d="M7 25 A12 12 0 1 1 25 25" fill="none" stroke="#34c759" stroke-width="2.6" stroke-linecap="round"/><path d="M14.5 5.5l2.2-3.2-.4 2.6h1.7l-2.2 3.2.4-2.6z" fill="#8e8e93"/><path d="M9.6 15.6a9 9 0 0112.8 0M11.8 17.8a5.9 5.9 0 018.4 0M14 20a2.8 2.8 0 014 0" fill="none" stroke="#000" stroke-width="1.9" stroke-linecap="round"/><circle cx="12.5" cy="27.5" r="1.3"/><circle cx="16" cy="28.5" r="1.3"/><circle cx="19.5" cy="27.5" r="1.3"/></svg>
+</div>
+<script>
+// t seconds in: the agent's answer in from `answer`, sliding up and fading in over 0.3 s; the button pressed from `press`
+window.at = (t, { answer = 0.8, press = 99 } = {}) => {
+  const r = document.getElementById('r1'), k = Math.max(0, Math.min(1, (t - answer) / 0.3));
+  const e = 1 - (1 - k) ** 3;
+  r.style.opacity = e;
+  r.style.transform = `translateY(${(1 - e) * 14}px)`;
+  document.getElementById('count').style.opacity = e;
+  document.getElementById('open').classList.toggle('pressed', t >= press);
+};
+window.at(9);
+</script>
+</body></html>

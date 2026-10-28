@@ -152,6 +152,37 @@ const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, de
 page.on('pageerror', (e) => console.error('3d:', e.message));
 await page.goto(`${base}duo3d/film.html`);
 await page.waitForFunction(() => window.ready3d === true, null, { timeout: 120000 });
+// FILM_DESK: a computer's window beside the phone (the film's desktop Slack, slack/desk/desk.html: build.mjs), its
+// states at the marks FILM_DESK_MARKS names ({"ana": "start+0.4", …}: what of it shows from then, window.at's marks),
+// each made once as it shows, the phone over to the right
+const DESK = process.env.FILM_DESK || '';
+const deskStates = [];
+if (DESK) {
+  const named = JSON.parse(process.env.FILM_DESK_MARKS || '{}');
+  const at = Object.fromEntries(Object.entries(named).map(([k, v]) => [k, when(v)]));
+  const times = [-1e9, ...Object.values(at).sort((a, b) => a - b)];
+  mkdirSync(join(frames, 'desk'), { recursive: true });
+  const dp = await browser.newPage({ viewport: { width: 1272, height: 813 }, deviceScaleFactor: 3 });
+  await dp.goto(`${base}${DESK}`, { waitUntil: 'load', timeout: 120000 });
+  await dp.evaluate(() => document.fonts.ready);
+  for (const [k, t0] of times.entries()) {
+    await dp.evaluate(([t, m]) => window.at(t, m), [t0 + 1e-3, at]);
+    await new Promise((r) => setTimeout(r, 300));
+    const file = join(frames, 'desk', `${k}.jpg`);
+    await dp.screenshot({ path: file, type: 'jpeg', quality: 92 });
+    deskStates.push({ t: t0, url: `${base}frames/desk/${k}.jpg` });
+  }
+  await dp.close();
+}
+// (FILM_DESK_VIEW: how the two are framed as the film goes, by its marks: iduo-slack-desk-view.js)
+const views = process.env.FILM_DESK_VIEW ? (await import(pathToFileURL(join(here, process.env.FILM_DESK_VIEW)))).default(marks) : null;
+const deskAt = (t) => {
+  let k = 0;
+  while (k + 1 < deskStates.length && deskStates[k + 1].t <= t) k++;
+  const fade = k === 0 ? 1 : Math.min(1, Math.max(0, (t - deskStates[k].t) / 0.25));
+  const [ds, dx, dy, vx] = views ? keyed(views, t) : [1, 0, 0, 470];
+  return { now: deskStates[k].url, was: deskStates[Math.max(0, k - 1)].url, fade, ds, dx, dy, vx };
+};
 async function draw(t) {
   const a = angleAt(t);
   const s = {
@@ -159,12 +190,24 @@ async function draw(t) {
     inner: a > 0 ? `${base}frames/inner/${innerAt(t)}.jpg` : null,
   };
   const tc = { outer: t < U ? touchesAt(t, OUTER) : [], inner: t > U ? touchesAt(t, INNER) : [] };
-  await page.evaluate(async ([s, angle, cam, endT, tc]) => {
+  const desk = DESK ? deskAt(t) : null;
+  await page.evaluate(async ([s, angle, cam, endT, tc, desk]) => {
+    if (desk) {
+      const d = document.getElementById('desk'), a = document.getElementById('desk0'), b = document.getElementById('desk1');
+      d.style.display = 'block';
+      document.getElementById('viewport').style.transform = `translateX(${desk.vx}px)`;
+      d.style.transformOrigin = '0 0';
+      d.style.transform = `translate(${desk.dx}px, ${desk.dy}px) scale(${desk.ds})`;
+      const load = (img, url) => img.src === url ? null : new Promise((ok) => { img.onload = ok; img.src = url; });
+      await Promise.all([load(a, desk.was), load(b, desk.now)]);
+      b.style.opacity = String(desk.fade);
+    }
     await window.frame3d({ outer: s.outer, inner: s.inner, angle, cam, touches: tc });
     const e = Math.min(1, Math.max(0, endT));
     document.getElementById('viewport').style.opacity = String(1 - e);
+    document.getElementById('desk').style.opacity = String(1 - e);
     document.getElementById('end').style.opacity = String(Math.min(1, Math.max(0, (endT - .55) / .9)));
-  }, [s, a, keyed(cams, t), (t - END) / .9, tc]);
+  }, [s, a, keyed(cams, t), (t - END) / .9, tc, desk]);
 }
 if (stills.length) {
   mkdirSync(join(app, 'out/stills'), { recursive: true });

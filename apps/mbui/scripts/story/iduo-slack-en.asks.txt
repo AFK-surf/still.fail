@@ -1,0 +1,5 @@
+kept-answers-ask {"call":"markdown","text":"Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. Ana, can you try once more?"}
+kept-answers-ask {"call":"markdown","text":"Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. It's a one-line fix in the payment flow. Since it touches payments, I'll wait for Lin to say go."}
+kept-answers-ask {"call":"markdown","text":"Lin gave the go-ahead. Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. @Ana Costa can you try once more?"}
+kept-answers-ask {"call":"words","key":"{\"call\":\"ref.at\",\"text\":\"Go ahead, and let Ana know when it's live\",\"caret\":41}"}
+kept-answers-ask {"call":"words","key":"{\"call\":\"ref.pasted\",\"text\":\"Go ahead, and let Ana know when it's live\",\"here\":\"ws1/st1\"}"}

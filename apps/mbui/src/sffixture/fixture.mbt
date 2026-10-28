@@ -532,6 +532,8 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       })
     }
   }
+  // (a told story's chat's row as it says it: story_fixture.mbt)
+  let today = if f.mode == "chat-story" { today.map(story_row) } else { today }
   let keep = fn(items : Array[Json]) -> Json {
     Json::array(items.filter(fn(r) { !f.archived.contains(text(Some(r), "id")) }))
   }

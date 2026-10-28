@@ -39,17 +39,22 @@ pub fn story_chat(story : Json) -> Json {
   let messages = before.mapi(fn(i, b) {
     let kind = text(Some(b), "kind")
     let more : Map[String, Json] = { "attachments": Json::array(story_files(b)) }
-    if kind == "person" {
+    // (a person's: the viewer's, or another's by their name, `by`: one in the Slack thread it came from)
+    let by = text(Some(b), "by")
+    if kind == "person" && by == "" {
       more["mine"] = Json::boolean(true)
       more["author"] = Json::string("lin@example.com")
     }
-    msg(i + 1, kind, if kind == "agent" { claude } else { by_person("林") }, text(Some(b), "text"), text(Some(b), "when"), more)
+    let who = if kind == "agent" { claude } else if by != "" { by_person(by) } else { by_person("林") }
+    msg(i + 1, kind, who, text(Some(b), "text"), text(Some(b), "when"), more)
   })
   {
     "archived": false,
     "me": { "email": "lin@example.com" },
     "thread": { "id": 7, "unread": 0 },
     "title": Json::string(text(Some(story), "title")),
+    // (one that came from Slack: the channel it was asked in, `place`)
+    "place": Json::string(text(Some(story), "place")),
     "people": [],
     "agents": [
       {
@@ -153,7 +158,11 @@ fn story_play(list : String, n : Int) -> Unit {
               more["card"] = { "type": "options", "vault": Json::string(text(Some(ask), "request")), "vaultAsk": ask }
             None => ()
           }
-          fc.sent.push(msg(seq, "agent", by_agent("anthropic", "claude", session), text(Some(p), "text"), "刚刚", more))
+          // (another person's, `by`: one in the Slack thread the chat came from)
+          match text(Some(p), "by") {
+            "" => fc.sent.push(msg(seq, "agent", by_agent("anthropic", "claude", session), text(Some(p), "text"), "刚刚", more))
+            by => fc.sent.push(msg(seq, "person", by_person(by), text(Some(p), "text"), "刚刚", more))
+          }
         }
         None => ()
       }
@@ -186,6 +195,28 @@ pub fn story_on_answer(f : Fixture, seq : Int, label : String) -> Unit {
   f.changed()
   story_play("answered", story_answered.val)
   story_answered.val += 1
+}
+
+///|
+/// The story's chat's row in the list as it says it (`row`: what of the row it says, over the first row's: its title,
+/// that it came from Slack, its last words), else as it is.
+///   "row": { "title": …, "connect": "slack-1", "originText": "Slack · Acme · #support", "last": "…", "unread": true }
+pub fn story_row(r : Json) -> Json {
+  guard text(Some(r), "id") == "c1" && field(fix_story.val, "row") is Some(Object(over)) else { return r }
+  guard r is Object(m) else { return r }
+  let o = m.copy()
+  for k, v in over {
+    o[k] = match (k, v) {
+      ("last", String(words)) => last(words)
+      _ => v
+    }
+  }
+  if over.contains("last") {
+    for k in ["state", "tone", "stateText", "stateLead", "stateRest"] {
+      o.remove(k)
+    }
+  }
+  Json::object(o)
 }
 
 ///|
