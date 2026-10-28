@@ -1264,6 +1264,8 @@ let en : Map[String, String] = {
   "web-pages.notifications.ways.bell": "Bell",
   "web-pages.notifications.ways.banner": "Banners",
   "web-pages.notifications.ways.title": "How you're notified",
+  "web-pages.notifications.workspaces.note": "Workspaces turned off send no notifications and add nothing to the badge",
+  "web-pages.notifications.workspaces.title": "Workspaces",
   "web-pages.permissions.allow": "Allow",
   "web-pages.permissions.lead": "System permissions {name} uses on this device; changes in system settings appear here immediately",
   "web-pages.permissions.notify.name": "Notifications",

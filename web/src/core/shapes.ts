@@ -5266,6 +5266,16 @@ export interface NotifyKinds {
 	message?: boolean;
 }
 
+/** A workspace on the notifications page (`notify` `workspaces`). */
+export interface NotifyWorkspace {
+	id: string;
+	name: string;
+	emoji?: string;
+	icon?: string;
+	/** Heard of on this device (not in `muted`). */
+	on: boolean;
+}
+
 /**
  * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
  * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
@@ -5278,6 +5288,13 @@ export interface NotifyView {
 	kinds?: NotifyKinds;
 	/** Notices say what was said (on by default); off, only what kind of thing happened. */
 	preview?: boolean;
+	/**
+	 * The workspaces not heard of on this device (`notify.set {workspaces}`): no notice of theirs
+	 * shown or pushed, nothing of theirs on the app's badge. Each one is heard of unless turned off.
+	 */
+	muted?: string[];
+	/** The workspaces the accounts are in, in the order their `/v1/me` list them, each heard of or not. */
+	workspaces?: NotifyWorkspace[];
 	/**
 	 * Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |
 	 * default (not asked yet) | unknown (none said, or no way to tell).
