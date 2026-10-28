@@ -90,7 +90,7 @@ void mb_views_snap_all(void);
 // under it (flipped on macOS: coordinates from the top left, as the app's)
 id mb_views_root(CGRect frame);
 // WebKit started before the first page is asked for (apple_views.m): its first web view made and shown under the canvas
-// as the window comes up, let go once it has drawn.
+// a moment after the window is up, let go once it has drawn.
 void mb_views_warm(void);
 // whether the pointer at (x, y) (the app's points) goes to a web view under
 // the canvas (the canvas's view lets it through)
