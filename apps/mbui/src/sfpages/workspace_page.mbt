@@ -188,16 +188,13 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
   })
   // how its members' devices reach its stations: one row, how many ways are turned off at its end; pressed, its relays
   // and the ways in a panel (ws_ways_panel)
-  let off = items(v, "ways").filter(fn(w) { !flag(Some(w), "on") }).length()
-  if manager || relays.length() > 0 || off > 0 {
+  // (the core's `workspaceWays`, from what `/v1/me` said: there at once, the workspace not read again for it)
+  let ways = (core.topic)("workspaceWays", { "workspace": str(ws) }).value
+  let off = number(ways, "off")
+  if manager || relays.length() > 0 || off > 0.0 {
     blocks.push(fn() {
       @sf.group(c, fn() {
-        let value = if off == 0 {
-          @sf.t("android-settings.ways.allOn")
-        } else {
-          @sf.t("android-settings.ways.someOff", args=[("n", off.to_string())])
-        }
-        if @sf.link_row(c, "ws-ways", @sf.t("android-settings.ways.title"), value~) {
+        if @sf.link_row(c, "ws-ways", @sf.t("android-settings.ways.title"), value=text(ways, "offLabel")) {
           ws_ways_panel(core, here, Of(c.id("ws-ways")))
         }
       })
@@ -392,8 +389,8 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     let role = text(v, "role")
     let manager = role == "owner" || role == "admin"
     let ws = text(v, "id")
-    let relays = strings(v, "relays")
-    let ways = items(v, "ways")
+    let ways = items((core.topic)("workspaceWays", { "workspace": str(ws) }).value, "ways")
+    let relays = ways.filter(fn(w) { flag(Some(w), "own") }).map(fn(w) { text(Some(w), "id") })
     let busy = is_doing(core, ["workspace.setWay"], [("workspace", ws)])
     let turn = fn(w : Json, title : String, note : String) {
       let id = text(Some(w), "id")
@@ -414,8 +411,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     ws_way_label(c, @sf.t("android-settings.ways.ours", args=[("app", "still.fail")]))
     for w in ways {
       if text(Some(w), "kind") == "relay" && !flag(Some(w), "own") {
-        let named = text(Some(w), "name")
-        turn(w, if named != "" { named } else { host(text(Some(w), "id")) }, "")
+        turn(w, text(Some(w), "name"), "")
       }
     }
     // its own: removed, added (one not wanted is taken away, not turned off)

@@ -41,6 +41,7 @@ import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
+import { waysView, type WaysView } from "./ways.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
@@ -61,7 +62,7 @@ const DAY_MS = 86_400_000;
 /// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
 export const HEAD = 80;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -448,6 +449,9 @@ export type ViewsEnv = {
   /// How agents' requests about vault items are answered on this device, from the vault as the core holds it
   /// (views/vault.ts askAnswers): each `{answer, lasts?}`, in the order asked.
   vaultAnswers?: (workspace: string, asks: VaultAskOf[]) => J[];
+  /// How a workspace's members' devices reach its stations (views/ways.ts), from `/v1/me`; undefined while no account's
+  /// is held.
+  ways?: (workspace: string) => WaysView | undefined;
 };
 
 /// An agent's request about a vault item a card names (`card.vault`), and whether it is one to keep a secret.
@@ -483,6 +487,16 @@ export function envOf(core: Inner): ViewsEnv {
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
     vaultAnswers: (workspace, asks) => askAnswers(core, workspace, asks),
     heard: (workspace) => core.attention?.attend.heard(workspace) ?? true,
+    ways: (workspace) => {
+      for (const account of core.accounts.list()) {
+        const me = core.data.record("me", account.sub);
+        const relays = arr(get(me, "relay_urls")).filter((u): u is string => typeof u === "string");
+        if (relays.length === 0) continue;
+        const names = get(me, "relay_names");
+        return waysView(relays, isObject(names) ? names : {}, core.cloudSync.workspaceRelays(workspace), core.cloudSync.workspaceOff(workspace));
+      }
+      return undefined;
+    },
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -812,6 +826,9 @@ export class Views implements Owner {
         ];
       case "workspaceMarks":
         return this.#marksSources();
+      // (what `/v1/me` says, as the workspaces list is made from it)
+      case "workspaceWays":
+        return [{ topic: "workspaces" }];
       case "agentCard":
         return [
           { topic: "live", station, key: view.key },
@@ -1192,6 +1209,10 @@ export class Views implements Owner {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
         if (chat === undefined || !("ok" in chat)) return chat;
         return { ok: near(chat.ok, view.path as string) };
+      }
+      case "workspaceWays": {
+        const ways = this.#core.ways?.(view.workspace as string);
+        return ways === undefined ? undefined : { ok: ways };
       }
       case "adminList":
       case "adminItem":

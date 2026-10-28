@@ -614,8 +614,6 @@ let en : Map[String, String] = {
   "android-settings.ways.tailnet": "Tailscale",
   "android-settings.ways.tailnetNote": "On the same tailnet",
   "android-settings.ways.title": "Connections",
-  "android-settings.ways.allOn": "All on",
-  "android-settings.ways.someOff": "{n} off",
   "android-settings.ways.straight": "Direct",
   "android-settings.renamed": "Renamed",
   "android-settings.run.account": "Account",

@@ -1996,6 +1996,18 @@ export const SHAPES: Record<string, Shape> = {
     ["badge", "u32", { default: true, doc: "What the app's badge says (the Dock's): every workspace's `badge`." }],
     ["badgeKinds", "BadgeKinds", { default: true, doc: "What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says." }],
   ], { doc: "What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):\nby workspace id; and of those other than the one in view, the most urgent." }),
+  WorkspaceWaysView: struct([
+    ["ways", vec("WayRow")],
+    ["off", "u32", { doc: "How many are turned off." }],
+    ["offLabel", "String", { doc: "全部开启, 已关闭 2 项: the workspace page's 连接方式 row says it." }],
+  ], { doc: "How a workspace's members' devices reach its stations (the `workspaceWays` view, views/ways.ts): still.fail's relays,\nthe workspace's own, the ways straight to a station; each on or turned off. From `/v1/me`, kept on the device." }),
+  WayRow: struct([
+    ["id", "String", { doc: "A relay's URL, or the kind (lan, tailnet, direct): what `workspace.setWay` is given." }],
+    ["kind", "String", { doc: "relay | lan | tailnet | direct" }],
+    ["name", "String", { doc: "A relay's: what still.fail calls it (北京), or its host. Empty for a kind." }],
+    ["own", "bool", { doc: "A relay of the workspace's own." }],
+    ["on", "bool"],
+  ], { doc: "One way to a workspace's stations." }),
   WorkspaceMark: struct([
     ["alert", "u32"],
     ["unread", "u32"],
@@ -3661,6 +3673,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   doing: "DoingView",
   adbShare: "AdbShareView",
   workspaceMarks: "WorkspaceMarksView",
+  workspaceWays: "WorkspaceWaysView",
   decisions: "DecisionsView",
   lock: "LockView",
   lockDraft: "LockDraftView",

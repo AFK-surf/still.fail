@@ -5,9 +5,10 @@ import { useDoing } from "../doing.ts";
 import { parseEmails, useSlackPeople } from "../cloud/adding.ts";
 import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
-import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, type Role, type WayView, type WorkspaceView } from "../cloud/api.ts";
+import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
 import { useTopic } from "../core/react.ts";
-import { ROLE_HINT, ROLE_LABEL, sampleWorkspace, wayWords, waysValue } from "../cloud/settings.tsx";
+import { ROLE_HINT, ROLE_LABEL, sampleWorkspace, useWays, wayWords } from "../cloud/settings.tsx";
+import type { WayRow } from "../core/shapes.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Check, ChevronRight, UserPlus } from "@stillfail/ui/icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
@@ -51,6 +52,7 @@ function WorkspaceShown({ view }: { view: WorkspaceView }) {
   const app = useApp();
   const me = app.entry.account;
   const doing = useDoingList();
+  const ways = useWays(view.id);
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true, atOnce: "web-mobile.workspace.leaveFailed",
@@ -108,11 +110,11 @@ function WorkspaceShown({ view }: { view: WorkspaceView }) {
           </ListRow>
         ))}
       </ListCard>
-      {(manager || (view.relays ?? []).length > 0 || (view.ways ?? []).some((w) => !w.on)) && (
+      {(manager || (view.relays ?? []).length > 0 || (ways?.off ?? 0) > 0) && (
         <>
           <div className={css.mGap} />
           <ListCard>
-            <GoRow title={t("android-settings.ways.title")} value={waysValue(view)} onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <WaysSheet id={view.id} manager={manager} /> })} />
+            <GoRow title={t("android-settings.ways.title")} value={ways?.offLabel} onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <WaysSheet id={view.id} manager={manager} /> })} />
           </ListCard>
         </>
       )}
@@ -167,11 +169,11 @@ function WaysSheet({ id, manager }: { id: string; manager: boolean }) {
   const view = useWorkspace(id).value;
   const doing = useDoingList();
   if (!view) return null;
-  const ways = view.ways ?? [];
+  const ways = useWays(id)?.ways ?? [];
   const asked = (way: string) => doing.find((d) => !failed(d) && doingMatches(d, "workspace.setWay", { account: me.sub, workspace: view.id, way }));
   const busy = ways.some((w) => asked(w.id) !== undefined);
   const set = (way: string, on: boolean) => { cloud.setWay(me.sub, view.id, way, on).catch((e: Error) => app.toast(t("android-misc.act.failed", { what: t("android-settings.ways.setWhat"), error: e.message }))); };
-  const row = (w: WayView, title: string, note?: string) => {
+  const row = (w: WayRow, title: string, note?: string) => {
     const a = asked(w.id);
     const on = a !== undefined ? a.params.on === "true" : w.on;
     return (
@@ -187,7 +189,7 @@ function WaysSheet({ id, manager }: { id: string; manager: boolean }) {
       <SheetHead title={t("android-settings.ways.title")} />
       <p className={css.mLead}>{t("android-settings.ways.lead")}</p>
       <SectionHeader title={t("android-settings.ways.ours", { app: NAME })} start={24} />
-      <ListCard>{ways.filter((w) => w.kind === "relay" && !w.own).map((w) => row(w, w.name ?? w.id.replace(/^https?:\/\//, "")))}</ListCard>
+      <ListCard>{ways.filter((w) => w.kind === "relay" && !w.own).map((w) => row(w, w.name))}</ListCard>
       <Relays view={view} manager={manager} />
       <SectionHeader title={t("android-settings.ways.straight")} start={24} />
       <ListCard>{ways.filter((w) => w.kind !== "relay").map((w) => { const { title, note } = wayWords(w); return row(w, title, note); })}</ListCard>

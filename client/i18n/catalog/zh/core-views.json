@@ -234,6 +234,8 @@
   "core-views.present.net.choosing": "正在选择线路",
   "core-views.present.net.direct": "直连",
   "core-views.present.net.tailnet": "Tailscale",
+  "core-views.ways.all_on": "全部开启",
+  "core-views.ways.some_off": "已关闭 {n} 项",
   "core-views.present.net.loss": "丢包 {percent}%",
   "core-views.present.net.relay": "中继",
   "core-views.present.net.relay_host": "中继 {host}",
