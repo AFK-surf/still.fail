@@ -769,7 +769,6 @@ static MBController *the_controller;
   the_view.opaque = NO;  // the native views under it show through its holes
   UIView *under = mb_views_root(CGRectZero);
   under.translatesAutoresizingMaskIntoConstraints = NO;
-  mb_views_warm();
   MBTakeTouch *take = [[MBTakeTouch alloc] initWithTarget:nil action:nil];
   take.canvas = the_view;
   take.delegate = take;
