@@ -1839,6 +1839,13 @@ pub fn sideways() -> Bool {
 }
 
 ///|
+/// Whether the app has turned the device sideways itself (set_sideways on): a film or a screen over all of the window,
+/// to its edges, under what the system has at its sides (@ui.system_bars `left` and `right`, a phone's cutout) too.
+pub fn turned_sideways() -> Bool {
+  sideways_now.val
+}
+
+///|
 // kept across runs: put back as a host is set
 let sideways_now : Ref[Bool] = { val: false }
 

@@ -22,6 +22,31 @@ test "the player left: where it was kept on the device (drive.place), its view c
 }
 
 ///|
+test "turned sideways, the film over the whole window: its bars clear of a cutout at the side, the page none beside it" {
+  let t = drive_tester("player-video")
+  let m = match app.nav.top() {
+    DrivePlay(at) => @sf.playing_for(reader_key(at)).media
+    _ => fail("not the player")
+  }
+  m.toggle_sideways()
+  t.resize(844.0, 390.0)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":0,\"left\":47,\"right\":0}}")
+  t.frame()
+  // the film from the screen's one edge to the other, under the cutout too (its black there, not the page's paper)
+  let placed = t.views().filter(fn(l) { l.has_prefix("place ") })
+  match placed.last() {
+    Some(l) => assert_true(l.contains(" in 0 0 844 390"), msg=l)
+    None => fail("the film not placed")
+  }
+  // the name in the bar at the top past the cutout and the bar's own 8 in
+  match t.rect_of("第02集.mp4") {
+    Some((x, _, _, _)) => assert_true(x >= 47.0 + 8.0)
+    None => fail("no name")
+  }
+  m.upright()
+}
+
+///|
 test "a video's row on a folder's page plays it" {
   let t = drive_tester("drive")
   t.tap_text("演示录屏.mp4")

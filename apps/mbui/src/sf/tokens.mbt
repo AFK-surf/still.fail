@@ -712,6 +712,15 @@ pub fn system_top_room(more : Double) -> @ui.Space {
 }
 
 ///|
+/// `more` in from either side, and past what the system has at the window's sides while the app has turned the device
+/// sideways (@hostapi.turned_sideways: a film or a screen over all of the window, a phone's cutout over its edge; else
+/// the shell keeps the page beside them), as a style's room: where what floats over such a page stands.
+pub fn sides_clear(more : Double) -> @ui.Style {
+  let b = if @hostapi.turned_sideways() { @ui.system_bars() } else { { top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 } }
+  @ui.style(pl=room(more + dmax(0.0, b.left)), pr=room(more + dmax(0.0, b.right)))
+}
+
+///|
 /// How far under a page's bar what is drawn from the page's top stands (the bar 45, in a panel of its own as much taller
 /// as puts its buttons in the panel's corner concentric with it: tape_bar_over).
 pub fn under_bar_room() -> @ui.Space {

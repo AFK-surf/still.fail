@@ -1,8 +1,9 @@
 // What the system has at the window's sides (@ui.system_bars `left` and `right`: iOS's view runs from side to side,
 // and an iPhone Duo's outer screen has its status bar down its right side, iOS 27.1; a phone on its side its cutout):
 // the app's pages beside it, the page's paper under it (a top bar has no line along its foot to carry under it: its
-// frost over the paper alone is the paper). Android keeps a cutout at a side out of the view: nothing is said there,
-// nothing done.
+// frost over the paper alone is the paper). Turned sideways for a film or a screen over all of it
+// (@hostapi.turned_sideways) it is over the whole window, its black to the screen's edges as a film app's is, what
+// floats over it keeping clear of the sides itself (@sf.sides_clear).
 
 ///|
 /// `body` (the app) beside what the system has at the window's sides, the page's paper under that; `body` alone when
@@ -22,7 +23,7 @@ fn beside_bars(c : @ui.Ctx, body : () -> Unit) -> Unit {
     body()
     return
   }
-  if left == 0.0 && right == 0.0 {
+  if (left == 0.0 && right == 0.0) || @hostapi.turned_sideways() {
     body()
     return
   }

@@ -1512,7 +1512,7 @@ fn phone_player(
     // the bar at the top: back, the name, which of the folder's it is, 选集
     c.layer(fn() {
       c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
-      let n = c.box(style=phone_head_place, fn() {
+      let n = c.box(style=phone_head_place.then(sides_clear(@ui.Space::S2.px())), fn() {
         c.box(style=phone_head_box.then(@ui.style(bg=Data(ink.ground))), fn() {
           // (said 返回 to a screen reader, as a phone's way back is; where to is the name beside it)
           if phone_key(c, key + "/back", "chevron-left", live, t("common.back"), ink) {
@@ -1542,7 +1542,7 @@ fn phone_player(
     // the controls at the foot
     c.layer(fn() {
       c.box(style=desk_grow_full_h, fn() {  }) |> ignore
-      let n = c.box(style=phone_foot_place, fn() {
+      let n = c.box(style=phone_foot_place.then(sides_clear(@ui.Space::S2.px())), fn() {
         phone_controls(c, v, p, s, f, fr, picture, many, prev, next, go, live, ink)
       })
       c.look(n, @ui.look(alpha=shown))

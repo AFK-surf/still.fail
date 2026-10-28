@@ -120,10 +120,11 @@ public class MainActivity extends Activity {
                 sayBars(bars);
                 bars = Insets.NONE;
             } else if (edge) {
-                // edge to edge, as Android's app is: its pages run under the status bar and the navigation bar, each
-                // padded by what the bars cover (`bars`, top and bottom); a cutout at a side kept out of the view
-                sayBars(Insets.of(0, bars.top, 0, bars.bottom));
-                bars = Insets.of(bars.left, 0, bars.right, 0);
+                // edge to edge, as Android's app is and iOS's: its pages run under the status bar, the navigation bar
+                // and a cutout at a side (a phone turned sideways), each padded by what they cover (`bars`): what is
+                // under them the app's own (a film's black to the screen's edges), not the window's ground beside it
+                sayBars(bars);
+                bars = Insets.NONE;
             }
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) view.getLayoutParams();
             if (p.leftMargin != bars.left || p.topMargin != bars.top
@@ -191,6 +192,13 @@ public class MainActivity extends Activity {
         // system's windows and, the soft input adjusting nothing, kept the keyboard's from the view: its height never
         // told, the composer under it (scripts/android-keyboard.sh on CI's API 34 emulator, run 39528189692)
         getWindow().setDecorFitsSystemWindows(false);
+        // the window into a cutout at a side as well (a phone turned sideways), as Android 15 and later have it for an app
+        // targeting them: before it the system kept that edge black, whatever the app had beside it
+        if (edge) {
+            android.view.WindowManager.LayoutParams a = getWindow().getAttributes();
+            a.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(a);
+        }
         // the bars' icons as dark as the ground under them is light, the system's (the root's above) until the app says
         // its own (Host.setDark): dark icons on a dark ground till then, they showed a moment late as the app opened
         WindowInsetsController c = getWindow().getInsetsController();
