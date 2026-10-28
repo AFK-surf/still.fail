@@ -43,7 +43,9 @@ static struct {
   sf_engine *engine;
   mb_core_message_fn on_message;
   void *ctx;
-  int alone;  // started for a push, no app's yet
+  int alone;  // started for a push or ahead of the app (StillfailApp), no app's yet
+  char origin[512];  // the still.fail cloud it was started with, and its channel
+  int beta;
 } A;
 
 // starting, taking and stopping a core: the app's (GL) thread and a push's
@@ -350,6 +352,8 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
   jsize size = (*env)->GetArrayLength(env, script);
   jbyte *code = (*env)->GetByteArrayElements(env, script, NULL);
   sf_engine_host host = {NULL, engine_say, engine_app_call, engine_log, engine_thread, engine_app_sync};
+  snprintf(A.origin, sizeof A.origin, "%s", cloud_origin);
+  A.beta = beta;
   A.engine = sf_engine_start((const uint8_t *)code, (size_t)size, "core.hbc", data_dir, cloud_origin, beta, "android", &host);
   (*env)->ReleaseByteArrayElements(env, script, code, JNI_ABORT);
   if (!A.engine) {
@@ -368,8 +372,17 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
   (*env)->DeleteLocalRef(env, dir);
 }
 
+static void core_stop(void);
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   pthread_mutex_lock(&A_lock);
+  // one started ahead with another still.fail cloud or channel than the app's (a run given its own): not the app's
+  if (A.engine && !A.on_message && (strcmp(A.origin, cloud_origin) != 0 || A.beta != beta)) {
+    CORE_LOG("core: the one started with %s%s stopped, the app's is %s%s", A.origin, A.beta ? " (beta)" : "",
+             cloud_origin, beta ? " (beta)" : "");
+    core_stop();
+    A.alone = 0;
+  }
   if (!A.engine) {
     core_start(data_dir, cloud_origin, beta, on_message, ctx);
   } else if (!A.on_message) {
