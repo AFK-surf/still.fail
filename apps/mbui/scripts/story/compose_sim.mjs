@@ -156,7 +156,7 @@ await page.goto(`${base}duo3d/film.html`);
 await page.waitForFunction(() => window.ready3d === true, null, { timeout: 120000 });
 // FILM_DESK: a computer's window beside the phone (the film's desktop Slack, slack/desk/desk.html: build.mjs), its
 // states at the marks FILM_DESK_MARKS names ({"ana": "start+0.4", …}: what of it shows from then, window.at's marks),
-// each made once as it shows, the phone over to the right
+// each made once and shown from its moment on, at once, the phone over to the right
 const DESK = process.env.FILM_DESK || '';
 const deskStates = [];
 if (DESK) {
@@ -181,7 +181,8 @@ const views = process.env.FILM_DESK_VIEW ? (await import(pathToFileURL(join(here
 const deskAt = (t) => {
   let k = 0;
   while (k + 1 < deskStates.length && deskStates[k + 1].t <= t) k++;
-  const fade = k === 0 ? 1 : Math.min(1, Math.max(0, (t - deskStates[k].t) / 0.25));
+  // (in at once, as Slack shows what comes: no fading)
+  const fade = 1;
   const [ds, dx, dy, vx] = views ? keyed(views, t) : [1, 0, 0, 470];
   return { now: deskStates[k].url, was: deskStates[Math.max(0, k - 1)].url, fade, ds, dx, dy, vx };
 };
