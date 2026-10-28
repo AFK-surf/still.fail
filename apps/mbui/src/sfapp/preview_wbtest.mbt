@@ -937,3 +937,29 @@ fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
   }
   c.box(style=@ui.style(w=Fixed(300.0)), fn() { @sfpages.message_files(c, src, here, [a], false) }) |> ignore
 }
+
+///|
+test "marking: a note written and done, the picture put in the chat: its quote there says it, no field takes the keyboard" {
+  let t = preview_tester("step", w=951.0, platform=2)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", a, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(fly_open_ms)
+  marks_start()
+  t.draw()
+  let v = viewer.val.unwrap()
+  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let k = w / v.zoom.nw
+  t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
+  t.run_for(note_pop_ms)
+  t.type_text("这里对齐")
+  let tick = t.locate("icon:check")
+  t.tap(tick[0].0, tick[0].1)
+  t.draw()
+  let (px, py, pw, ph) = t.rect_of("添加到对话").unwrap()
+  t.tap(px + pw / 2.0, py + ph / 2.0)
+  // the viewer closed back to the chat, the quote of the mark in its composer with what its note said
+  t.run_for(fly_close_ms)
+  assert_true(viewer.val is None)
+  assert_true(t.semantics().iter().any(fn(s) { s.value == "这里对齐" }))
+  assert_false(t.ctx().field_focused())
+}
