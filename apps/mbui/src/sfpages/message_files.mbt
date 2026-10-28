@@ -247,16 +247,16 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let thumb = here.station + "/" + owner + "/" + a.path
   file_menu(c, open, key, quote=quote_of(here, a, owner, by))
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
-  // what it waits on take, the box's corners cutting it only where it reaches them (imageBox.ts letterbox)
+  // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
+  // what holds it where it is in a corner of that, a quote's card)
   let (sw, sh) = picture_share(a, image_least)
   let (pw, ph) = (w * sw, h * sh)
-  let corner = if letterbox { 0.0 } else { @sf.message_file_corner }
   let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
   let picture = fn() {
     if key != "" && sent is None {
-      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=corner, held=src.images.held(id))
+      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=0.0, held=src.images.held(id))
     } else if key != "" {
-      c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, radius=corner, bg=0L, fade=false) |> ignore
+      c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
     } else if likeness != "" {
       c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
     }
@@ -426,7 +426,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
     if still != "" && still != "!" {
       c.layer(fn() {
-        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, radius=@sf.message_file_corner, bg=0L)
+        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=0L)
         |> ignore
       })
       |> ignore
@@ -702,9 +702,10 @@ let files_column_end : @ui.Style = @ui.css("w=Full gap=S1_5 align=AEnd")
 let files_row : @ui.Style = @ui.css("row gap=S1_5 align=AStart")
 
 ///|
-/// An image's box (msgImage): clipped to its corners; the neutral ground while it waits.
+/// An image's box (msgImage): clipped to its corners (in a corner of what holds it, a quote's card, concentric with
+/// that one); the neutral ground while it waits.
 // kept across runs: a value (no field of it changes)
-let image_frame : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=true)
+let image_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -728,7 +729,7 @@ let no_preview_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted,
 /// A video's box (msgVideo): black, clipped to its corners; its play mark 40 round in its middle on black at 65%
 /// (msgVideoPlay); its name at its foot 6 by 8 in on the same (msgVideoName), 12, white, cut short; a bar 4 under it.
 // kept across runs: a value (no field of it changes)
-let video_frame : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=true, bg=@sf.video_ground)
+let video_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true, bg=@sf.video_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
