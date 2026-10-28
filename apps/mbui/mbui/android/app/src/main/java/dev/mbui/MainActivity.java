@@ -24,6 +24,8 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         // this build's code in memory before the drawing thread comes to it (a build just installed has none of it)
         ReadAhead.start(this);
+        // the GPU's driver and the codecs' list ready before the drawing thread's first frames ask for them
+        WarmUp.start();
         Host.log("activity onCreate " + (saved != null ? "(restored)" : ""));
         Host.activity = this;
         // a phone upright only (Host.upright), but while the app turns it for a film

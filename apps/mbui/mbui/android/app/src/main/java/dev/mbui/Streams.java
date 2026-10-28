@@ -71,8 +71,9 @@ final class Streams {
     }
     private static int nextId;
 
-    /** Whether there is an H.264 decoder here at all (else the app asks for JPEG only). */
-    static boolean h264Here() {
+    /** Whether there is an H.264 decoder here at all (else the app asks for JPEG only): found once (WarmUp, as the app
+     * starts; the drawing thread waits for it if it asks first). */
+    static synchronized boolean h264Here() {
         if (h264Known == 0) {
             boolean any = false;
             try {
