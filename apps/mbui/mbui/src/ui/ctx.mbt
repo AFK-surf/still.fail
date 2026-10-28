@@ -1908,7 +1908,35 @@ fn hit_at(
     }
     k = k - 1
   }
+  // a column's edge drawn over a list's bar: the bar's thumb, shown, takes the pointer where it is (its edge the edge's
+  // elsewhere: a strip either side of its line, as the web's)
+  if k > 0 && as_drawn(ids[k]) {
+    let bars = g().bars
+    let mut j = k - 1
+    while j >= 0 {
+      let r = j * 4
+      if x >= rects[r] &&
+        x < rects[r + 2] &&
+        y >= rects[r + 1] &&
+        y < rects[r + 3] &&
+        bars.iter().any(fn(b) { b.thumb == ids[j] }) &&
+        in_round_clip(clips, j, x, y) {
+        return j
+      }
+      j = j - 1
+    }
+  }
   k
+}
+
+///|
+/// Whether target `id` is pressed only where it is drawn, no room grown round it (press_reach, rooms.mbt): a column's
+/// edge, its pointer's shape a resize (the user, 2026-10-28: 左右各 6px, 同 web).
+fn as_drawn(id : Int) -> Bool {
+  match desk.cursors.get(id) {
+    Some(k) => k == Cursor::ResizeX.code() || k == Cursor::ResizeY.code()
+    None => false
+  }
 }
 
 ///|
@@ -2011,7 +2039,12 @@ fn press_reach(
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     let (w, h) = (x1 - x0, y1 - y0)
-    if points.contains(ids[k]) || g().passes.contains(ids[k]) || w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+    if points.contains(ids[k]) ||
+      g().passes.contains(ids[k]) ||
+      as_drawn(ids[k]) ||
+      w <= 0.0 ||
+      h <= 0.0 ||
+      (w >= least && h >= least) {
       continue
     }
     // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window

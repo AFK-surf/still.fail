@@ -115,8 +115,10 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
     }
     // (a part of what holds it, a row's state line, its station's mark, is only pointed at, Ctx::box's `points`: a
     // press on it is what holds it's, no target of its own; a ground is no control, Ctx::cursor's Arrow: a stage, the
-    // room round a list's rows, a message's words a hold picks in)
-    if self.takes_at(i) && desk.cursors.get(self.nodes[i].id) != Some(Cursor::Arrow.code()) {
+    // room round a list's rows, a message's words a hold picks in; a column's edge is pressed as drawn, as_drawn)
+    if self.takes_at(i) &&
+      desk.cursors.get(self.nodes[i].id) != Some(Cursor::Arrow.code()) &&
+      !as_drawn(self.nodes[i].id) {
       takes[i] = true
       if whole[i] {
         targets.push(i)
