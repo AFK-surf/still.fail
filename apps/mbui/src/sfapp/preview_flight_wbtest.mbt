@@ -24,7 +24,12 @@ fn flight_photo() -> Attachment {
 /// The photo's message `shift` down the window with the viewer over it; sent from here (its message drawing the picture
 /// picked, `sent-key`), the station's thumbnail never coming; its whole, asked of the station, held until `held` is
 /// called.
-fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], bar? : Bool = false) -> @ui.Tester {
+fn photo_sent(
+  shift : Ref[Double],
+  held : Ref[(() -> Unit)?],
+  bar? : Bool = false,
+  cut? : Double = 0.0,
+) -> @ui.Tester {
   reset()
   let a = flight_photo()
   @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
@@ -42,7 +47,9 @@ fn photo_sent(shift : Ref[Double], held : Ref[(() -> Unit)?], bar? : Bool = fals
   }
   let t = @ui.Tester::new(
     fn(c) {
-      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      // (in a card `cut` tall, its foot cutting the picture, where one is)
+      let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
+      c.box(style=card, fn() {
         c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
         chat_file(c, src, a)
       })
@@ -190,6 +197,30 @@ test "the chat's bars over the picture flying back into it, coming back as it la
   let order = t.drawn_order()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
   assert_true(bar is Some(b) && order[b].5 > 0.99, msg="\{order}")
+}
+
+///|
+test "a picture cut by its card's foot: what shows of it said as where it shows, the flight cut there as it lands" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(0.0), held, cut=150.0)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let th = thumb_of(t.ctx(), id).unwrap()
+  assert_true(th.h > 150.0, msg="\{th.h}")
+  // its box whole, what shows of it cut at the card's foot
+  match th.seen {
+    Some((_, y, _, h)) => assert_true((y + h - 150.0).abs() < 0.5, msg="\{th.seen}")
+    None => fail("nothing said of what shows of it")
+  }
+  let at = t.locate("img:sent-key")
+  t.tap(at[0].0, at[0].1)
+  t.run_for(fly_open_ms)
+  t.back()
+  // (what showed of it, hidden while the picture is out, kept from before)
+  t.run_for(fly_close_ms / 2.0)
+  match pv_leaving.val.unwrap().fly_from {
+    Some({ seen: Some((_, y, _, h)), .. }) => assert_true((y + h - 150.0).abs() < 0.5)
+    other => fail("\{other.map(fn(f) { f.seen })}")
+  }
 }
 
 ///|

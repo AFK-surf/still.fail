@@ -103,6 +103,12 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = vw
   let (_, py, _) = c.pointer()
   v.near_bar = @sf.pointer_rests() && py >= 0.0 && py < @sf.viewer_bar_h
+  // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
+  // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back
+  // over it the while: @sfbase.over_flight), not a column bare till it lands and filled at once after
+  if v.closing && @sf.native_on() {
+    return
+  }
   // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27)
   let native = @sf.native_over_up(v.file.name)
   // read in the reader, played in the player: their own bars

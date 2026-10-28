@@ -276,6 +276,9 @@ pub(all) struct Thumb {
   letterbox : Bool
   /// the picture it shows (its image's key), what the viewer shows of it until it has the whole: "" none of its own
   picture : String
+  /// the part of its box that shows, cut by what it is in (its list, its card), where that was last drawn: what the
+  /// picture flying back into it is cut to as it lands, as the thumbnail is
+  seen : (Double, Double, Double, Double)?
 }
 
 ///|
@@ -284,6 +287,8 @@ pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
   picture : String
+  /// its node's id, where it is pressed (0 none): where it showed, cut, as the last frame drew it (Ctx::rect_of)
+  id : Int
 }
 
 ///|
@@ -421,7 +426,7 @@ pub fn note_thumb(
   letterbox? : Bool = false,
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, picture }
+  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node) }
 }
 
 ///|
@@ -459,7 +464,16 @@ pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
 pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
   match (pv_thumbs.get(id), @motion.measured_rect(c, "pv-thumb/" + id)) {
     (Some(l), Some((x, y, w, h))) if w > 0.0 && h > 0.0 && x < c.width && x + w > 0.0 && y < c.height && y + h > 0.0 =>
-      Some({ x, y, w, h, radius: l.radius, letterbox: l.letterbox, picture: l.picture })
+      Some({
+        x,
+        y,
+        w,
+        h,
+        radius: l.radius,
+        letterbox: l.letterbox,
+        picture: l.picture,
+        seen: if l.id != 0 { c.rect_of(l.id) } else { None },
+      })
     _ => None
   }
 }
@@ -1846,9 +1860,12 @@ pub fn Viewer::draw_flight(
   p : Double,
   ground? : Int64 = 0L,
 ) -> Unit {
-  match thumb_of(c, self.id()) {
-    Some(t) => self.fly_from = Some(t)
-    None => ()
+  match (thumb_of(c, self.id()), self.fly_from) {
+    // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
+    (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
+      self.fly_from = Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
+    (Some(t), _) => self.fly_from = Some(t)
+    (None, _) => ()
   }
   let from = match self.fly_from {
     Some(t) => t
@@ -1866,11 +1883,18 @@ pub fn Viewer::draw_flight(
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
+  // cut, at the thumbnail, as the thumbnail is by what it is in (its card's edge), the stage whole at the other end
+  let (sx, sy, sw, sh) = from.seen.unwrap_or((from.x, from.y, from.w, from.h))
+  let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
+  let (cw, ch) = (along(sx + sw, c.width) - cx, along(sy + sh, c.height) - cy)
   c.layer(fn() {
-    c.box(w=Px(bw), h=Px(bh), tx=bx, ty=by, radius=r, clip=true, bg=ground, fn() {
-      if picture != "" {
-        c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
-      }
+    c.box(style=@ui.style(w=Fixed(cw), h=Fixed(ch), clip=true), tx=cx, ty=cy, fn() {
+      c.box(w=Px(bw), h=Px(bh), tx=bx - cx, ty=by - cy, radius=r, clip=true, bg=ground, fn() {
+        if picture != "" {
+          c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
