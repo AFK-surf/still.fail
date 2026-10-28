@@ -1375,7 +1375,6 @@ pub let svc_presets : Array[(String, Int32, Int32)]
 
 pub let svc_viewports : Map[String, Viewport?]
 
-pub let swipe_still_ms : Double
 
 pub let table_rows : Int32
 

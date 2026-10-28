@@ -143,10 +143,6 @@ pub let show_limit : Int = 2 * 1024 * 1024
 pub let table_rows : Int = 2000
 
 ///|
-/// A finger held still this long before it is let go flings nothing (its speed is of moves long past).
-pub let swipe_still_ms : Double = 100.0
-
-///|
 /// Dark whatever the theme, as a viewer of pictures: its text, what is quieter, its canvas.
 pub let dark_text : Int64 = 0xF4F4F5FFL
 
@@ -225,9 +221,6 @@ pub(all) struct Viewer {
   mut pinned : @kit.MediaStatus?
   /// what it steps through (an image): its chat's images, a folder's
   steps : Stepping
-  // a finger's speed sideways (px/ms) and when it was last measured, for a swipe let go
-  mut vx : Double
-  mut vt : Double
   /// a finger moving it sideways to the one before or after (fitted, not zoomed)
   mut swiping : Bool
   /// where the finger went down
@@ -610,8 +603,6 @@ pub fn new_viewer(
     reads: @signals.signal(0),
     pinned: None,
     steps,
-    vx: 0.0,
-    vt: -1.0,
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
@@ -2260,10 +2251,10 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
         }
         _ => None
       }
-      // shown at once: no fade; a step wakes the bars (FilePreview.kt: LaunchedEffect(file.path) { wake() })
+      // shown at once: no fade; its bars as they were (only a tap hides or shows them, the user 2026-10-28)
       n.started = true
       n.fade.set(1.0)
-      n.wake()
+      n.awake = self.awake
       viewer.val = Some(n)
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
@@ -2308,6 +2299,11 @@ pub fn Viewer::gestures(
       v.pinch_x = cx
       v.pinch_y = cy
       v.pinched = true
+      // a second finger as one swipes: the strip goes back (FilePreview.kt), not left between two pictures
+      if v.swiping {
+        v.swiping = false
+        strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0))
+      }
       // one finger again after it: followed from where it is then
       v.held = false
       return
@@ -2319,23 +2315,20 @@ pub fn Viewer::gestures(
       let dx = px - v.last_x
       let dy = py - v.last_y
       v.moved = v.moved + dx.abs() + dy.abs()
-      // its speed sideways, for a swipe let go (the latest moves count most)
-      if v.vt >= 0.0 && at > v.vt {
-        v.vx = v.vx * 0.5 + dx / (at - v.vt) * 0.5
-      }
-      v.vt = at
       if z.zoomed() {
         // zoomed in: it goes with the finger (at once after a pinch, the press moved already)
         if (v.moved > 8.0 || v.pinched) && (dx != 0.0 || dy != 0.0) {
           v.drag_zoomed(z, strip, dx, dy, has_before, has_after)
         }
       } else {
-        // fitted, one finger sideways moves the strip (FilePreview.kt swipe): past the first or the last it gives
-        // only a third as much
+        // fitted, one finger sideways moves the strip (FilePreview.kt swipe), under the finger from where it went
+        // down (the way to the slop too): past the first or the last it gives only a third as much
+        let mut dx = dx
         if !v.swiping && v.moved > 8.0 && (px - v.down_x).abs() > (py - v.down_y).abs() &&
           (has_before || has_after) && !v.pinched {
           v.swiping = true
           pv_strip.leaving = None
+          dx = px - v.down_x
         }
         if v.swiping {
           let next = strip.get() + dx
@@ -2347,10 +2340,8 @@ pub fn Viewer::gestures(
       }
     } else {
       v.held = true
-      v.vx = 0.0
-      v.vt = at
-      v.down_x = px
-      v.down_y = py
+      v.down_x = c.press_x
+      v.down_y = c.press_y
       if !v.pinched {
         v.moved = 0.0
         // flinging, it stops where it is, and the press taps nothing (as a list moving on its own)
@@ -2363,10 +2354,9 @@ pub fn Viewer::gestures(
     v.last_x = px
     v.last_y = py
   } else {
-    // held still a while before it was let go: no speed left (its frames come only as it moves)
-    if v.held && at - v.vt > swipe_still_ms {
-      v.vx = 0.0
-    }
+    // how fast it was let go sideways (px/ms): the press's own events by their times, as a list's fling (held still
+    // a while first, none)
+    let vx = c.pointer_velocity().0
     // let go further sideways than its frames showed (a slow frame took the whole swipe, down and up in one or two
     // frames): from where it went down to where it was let go, as a swipe
     if (v.held || c.clicked(stage)) && !v.swiping && !z.zoomed() && !v.pinched && (has_before || has_after) {
@@ -2376,7 +2366,6 @@ pub fn Viewer::gestures(
         let none = if tx > 0.0 { !has_before } else { !has_after }
         strip.snap(strip.get() + (if none { tx / 3.0 } else { tx }))
         v.moved = tx.abs() + ty.abs()
-        v.vx = tx / dmax(16.0, at - c.press_at)
         v.swiping = true
         v.held = true
         pv_strip.leaving = None
@@ -2393,11 +2382,11 @@ pub fn Viewer::gestures(
       let dx = strip.get()
       let far = dx.abs() > dmin(80.0, c.width / 5.0)
       let from_edge = !z.zoomed() || (if dx > 0.0 { v.at_left } else { v.at_right })
-      let flung = from_edge && v.vx.abs() > 0.3 && (v.vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
+      let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
       if dx != 0.0 && (far || flung) {
-        v.go(c, src, if dx > 0.0 { -1 } else { 1 }, v.vx * 1000.0)
+        v.go(c, src, if dx > 0.0 { -1 } else { 1 }, vx * 1000.0)
       } else {
-        strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity=v.vx * 1000.0)
+        strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity=vx * 1000.0)
       }
     } else if v.held && z.zoomed() && (v.moved > 8.0 || v.pinched) {
       // zoomed in, let go moving: on at the finger's speed, slowing, to a stop or its edge
@@ -2409,6 +2398,10 @@ pub fn Viewer::gestures(
   }
   let pinched = v.pinched
   if !c.pressed(stage) {
+    // pinched smaller than fitted and let go: back to fitted (as a photo app's)
+    if pinched && z.scale < z.fit() {
+      z.reset()
+    }
     v.pinched = false
   }
   // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
