@@ -180,6 +180,8 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   assert.equal(releaseType("android/mbui/latest.json"), "application/json");
   assert.equal(releaseType("android/stillfail-mbui-1300.apk"), "application/vnd.android.package-archive");
   assert.equal(releaseType("android/mbui/stillfail-mbui-1300.apk"), null);
+  assert.equal(releaseType("site/film-en-1.mp4"), "video/mp4");
+  assert.equal(releaseType("site/film.mp4"), null);
   assert.equal(releaseType("mac/mbui/latest.json"), "application/json");
   assert.equal(releaseType("mac/stillfail-mbui-1300-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("mac/stillfail-mbui-1300.zip"), null);

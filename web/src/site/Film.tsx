@@ -1,14 +1,14 @@
 // The film: still.fail at work, from a message on a phone to the change merged. Its file is the releases bucket's
-// (served by cloud at /releases/site/…, byte ranges and all: too large for the site's own files), read only once it is
-// near; it plays, without sound, while it is in view (a picture where less motion is asked for), and the visitor turns
-// its sound on or off.
+// (served by cloud at /releases/site/film-<lang>-<n>.mp4, byte ranges and all, kept by browsers for good: too large
+// for the site's own files; a new cut is a new number), read only once it is near; it plays, without sound, while it
+// is in view (a picture where less motion is asked for), and the visitor turns its sound on or off.
 import { useEffect, useRef, useState } from "react";
 import { Volume, VolumeX } from "@stillfail/ui/icons.tsx";
 import * as css from "./site.css.ts";
 import { useSay } from "./words.ts";
 
 /** The film and the picture shown before it plays (web/public). */
-export const FILM = { src: "https://app.still.fail/releases/site/film-en.mp4", poster: "/film-poster.jpg", w: 2560, h: 1440 };
+export const FILM = { src: "https://app.still.fail/releases/site/film-en-1.mp4", poster: "/film-poster.jpg", w: 2560, h: 1440 };
 
 export function Film() {
   const say = useSay();

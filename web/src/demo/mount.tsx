@@ -80,13 +80,13 @@ export const HELD = Symbol("held");
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
-  const value = chineseValueOf(topic);
-  // On the site's English page, what the demo makes up is said in English too (english.ts).
-  return language === "en" && value !== HELD ? inEnglish(value) : value;
+  const made = extendedValueOf(topic);
+  // On the site's English page, what the demo makes up is said in English too (english.ts), the agents' prose before
+  // it is read as Markdown (so that what is read is what is shown).
+  return withProse(topic, language === "en" && made !== HELD ? inEnglish(made) : made);
 }
 
-function chineseValueOf(topic: Topic): unknown {
-  const value = extendedValueOf(topic);
+function withProse(topic: Topic, value: unknown): unknown {
   if (topic.topic !== "chat" || !value || value instanceof CoreError || value === HELD) return value;
   const chat = value as ChatView;
   // Like the real core, send prose with the message, before the row's first layout. Stories may change its words
