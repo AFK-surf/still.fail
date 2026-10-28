@@ -393,3 +393,13 @@ test "inline HTML type follows the system font scale without WebKit text inflati
   assert_true(body(before) != body(sizes.val))
   assert_true(viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL).contains("-webkit-text-size-adjust:100%"))
 }
+
+
+///|
+test "expanded fragments scroll while their inline copies grow with their content" {
+  let content = "<p>用于验证长文档滚动的正文。</p>".repeat(100)
+  let inline_doc = viz_document(content, None, false, 0xFFFFFFFFL)
+  let full_doc = viz_document(content, None, false, 0xFFFFFFFFL, scroll=true)
+  assert_false(inline_doc.contains("<style>html{overflow:auto}</style>"))
+  assert_true(full_doc.contains("<style>html{overflow:auto}</style>"))
+}

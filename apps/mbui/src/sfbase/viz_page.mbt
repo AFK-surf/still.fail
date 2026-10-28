@@ -134,7 +134,7 @@ pub fn viz_frame(
     Some(f) => f
     None => {
       let page = !viz_is_fragment(html)
-      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground) }
+      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill) }
       let cell : Ref[VizFrame?] = Ref(None)
       let view = @ui.NativeView::page(doc, said=fn(w) {
         match cell.val {
