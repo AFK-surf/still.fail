@@ -1221,6 +1221,8 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
+// Let turn as held (@hostapi.set_turnable): a window does not turn, and is not held upright.
+int32_t mb_host_set_turnable(int32_t on) { (void)on; return 0; }
 
 // Notifications (notify.mbt): the system's toasts, win_notify.cpp.
 

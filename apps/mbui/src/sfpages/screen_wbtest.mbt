@@ -819,6 +819,20 @@ test "out of sight the view is let go of, the last frame kept; back in sight it 
 }
 
 ///|
+test "while it is looked at a phone may turn as it is held (the system's turn button with the rotation lock on); out of sight, upright only" {
+  let r = screen_rig()
+  r.live()
+  assert_true(r.ui().turnable)
+  r.t.app_state(false, false)
+  r.t.draw()
+  assert_true(!r.ui().turnable)
+  r.t.app_state(true, true)
+  r.t.draw()
+  assert_true(r.ui().turnable)
+  screen_done(r.t)
+}
+
+///|
 /// Live and driven, a station that carries the clipboard both ways and takes files.
 fn driven(r : ScreenRig) -> Unit {
   r.live(others=[], clipboard=["text", "png"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })

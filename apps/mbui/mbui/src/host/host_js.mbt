@@ -485,6 +485,13 @@ fn set_sideways(on : Bool) -> Unit {
   ignore(on)
 }
 
+///|
+/// A phone let turn as held (see host_native.mbt): a browser's page does not turn.
+fn set_turnable(on : Bool) -> Bool {
+  ignore(on)
+  false
+}
+
 
 ///|
 /// Shared out (see host_native.mbt): the browser's page here has no share sheet of its own.
