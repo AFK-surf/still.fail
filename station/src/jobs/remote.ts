@@ -17,7 +17,7 @@ import {
   appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync,
   readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
-import { link, open, readFile, readdir, rename, rm } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { relativeParts } from "../ops/paths.ts";
@@ -269,6 +269,7 @@ export class Remote {
   /// sweeps now and hourly.
   private started(): void {
     void this.resume().catch(() => undefined);
+    void this.movePrepared().catch(() => undefined);
     void this.pushMissed().catch(() => undefined);
     void this.run(
       Effect.promise(() => this.sweep(this.store.now())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
@@ -706,6 +707,32 @@ export class Remote {
     }
   }
 
+  /// A session's prepared tasks' directories and what they bring back, as this station has them: one directory per
+  /// session, so closing one removes its own without reading the others' (2,875 on ccvm, each read on the station's
+  /// thread at every close, 24 seconds held while memory was short).
+  private preparedDir(session: string): string {
+    return join(this.root, "prepared", hash(session));
+  }
+
+  /// Prepared records from before they were kept by session (remote/prepared/<hash>.json) moved into their session's,
+  /// read off the thread.
+  private async movePrepared(): Promise<void> {
+    const dir = join(this.root, "prepared");
+    for (const name of await readdir(dir).catch(() => [] as string[])) {
+      if (this.stopped) return;
+      if (!name.endsWith(".json")) continue;
+      const file = join(dir, name);
+      const v = await readJsonSoon(file).catch(() => null);
+      const session = text(v, "session");
+      if (session === "") {
+        await rm(file, { force: true }).catch(() => undefined);
+        continue;
+      }
+      await mkdir(this.preparedDir(session), { recursive: true }).catch(() => undefined);
+      await rename(file, join(this.preparedDir(session), name)).catch(() => undefined);
+    }
+  }
+
   usedPath(session: string): string {
     return join(this.root, "used", `${hash(session)}.json`);
   }
@@ -765,12 +792,8 @@ export class Remote {
         } catch {}
       }
     })();
-    for (const name of this.list(join(this.root, "prepared"))) {
-      const file = join(this.root, "prepared", name);
-      try {
-        if (text(readJson(file), "session") === session) rmSync(file, { force: true });
-      } catch {}
-    }
+    // Its prepared tasks are in a directory of their own: removed whole, off the thread.
+    void rm(this.preparedDir(session), { recursive: true, force: true }).catch(() => undefined);
     this.closer(path);
   }
 
@@ -1679,7 +1702,8 @@ export class Remote {
       // Said only when so: a task prepared before keeps the same inputs.
       if (field(args, "screen") === true) request.spec.screen = true;
       // A task's directory and what it brings back, as this station has them (remote/prepared).
-      const prepared = join(this.root, "prepared", `${hash([workspace, session, station, key])}.json`);
+      const preparedName = `${hash([workspace, session, station, key])}.json`;
+      const prepared = join(this.preparedDir(session), preparedName);
       if (action === "prepare") {
         const dir = field(args, "dir");
         const back = field(args, "back");
@@ -1706,7 +1730,10 @@ export class Remote {
           request.spec.back = back;
         }
         const answer = await this.ask(station, request);
-        if (dir !== null || back !== null) writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
+        if (dir !== null || back !== null) {
+          mkdirSync(this.preparedDir(session), { recursive: true });
+          writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
+        }
         return answer;
       }
       let synced: Synced | null = null;
@@ -1714,7 +1741,12 @@ export class Remote {
         let local: Json = null;
         try {
           local = readJson(prepared);
-        } catch {}
+        } catch {
+          // Not moved into its session's directory yet (movePrepared).
+          try {
+            local = readJson(join(this.root, "prepared", preparedName));
+          } catch {}
+        }
         if (typeof local?.dir === "string") {
           const dir: string = local.dir;
           const id = hash([workspace, session, station, dir]);
