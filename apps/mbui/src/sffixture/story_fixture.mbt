@@ -10,7 +10,10 @@
 //               {"at": 3000, "post": {"text": …, "files": […], "placed": […], "options": [{"label", "detail",
 //                "recommended"}], "ending": "all_done"}}]],
 //     "answered": [[…]],
-//     "pictures": {"before.png": "<base64>"} }
+//     "pictures": {"before.png": "<base64>"},
+//     "words": {"整理发布清单": "Release checklist", …} }
+// A story told in another language says the made-up chats' words in it (`words`: each of their words as a whole, its
+// own; the app's own words are its locale's, MBUI_LOCALE).
 
 ///|
 /// The story told (none: the made-up chats as they are).
@@ -174,4 +177,37 @@ pub fn story_on_answer(f : Fixture, seq : Int, label : String) -> Unit {
   f.changed()
   story_play("answered", story_answered.val)
   story_answered.val += 1
+}
+
+///|
+/// `v` with the made-up chats' words as the story says them in its language (its `words`: each string of `v` that is
+/// one of them, whole), where it says any.
+pub fn story_words(v : Json) -> Json {
+  let words = match fix_story.val {
+    Some(Object(o)) =>
+      match o.get("words") {
+        Some(Object(w)) => w
+        _ => return v
+      }
+    _ => return v
+  }
+  fn go(v : Json) -> Json {
+    match v {
+      String(s) =>
+        match words.get(s) {
+          Some(String(t)) => Json::string(t)
+          _ => v
+        }
+      Array(a) => Json::array(a.map(go))
+      Object(o) => {
+        let out : Map[String, Json] = Map([])
+        for k, x in o {
+          out[k] = go(x)
+        }
+        Json::object(out)
+      }
+      _ => v
+    }
+  }
+  go(v)
 }

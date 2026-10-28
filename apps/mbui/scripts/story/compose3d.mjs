@@ -10,11 +10,18 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { filmSound } from './sound.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const app = join(here, '../..');
 const [name, ...stills] = process.argv.slice(2);
 const FFMPEG = '/opt/homebrew/bin/ffmpeg', FPS = 60;
 const ASSETS = process.env.DUO_ASSETS || join(app, 'out/duo3d-assets');
+// the phone (FILM_DEVICE: iduo, Apple's model in duo3d; zfold, a Galaxy Z Fold made in zfold3d), the words' language
+// (FILM_LANG: en for English's keyboard), drawn at 4K (FILM_SCALE 2: 3840 x 2160, and 2K from it; 1: 1080p)
+const DEVICE = process.env.FILM_DEVICE || 'iduo';
+const MODEL = DEVICE === 'zfold' ? 'zfold3d' : 'duo3d';
+const SCALE = Number(process.env.FILM_SCALE || 2);
+const SHEET = DEVICE === 'zfold' ? [1969, 2520 + 2184] : [2857, 2038 + 2011];
 const film = join(app, `out/film/story-${name}.mp4`);
 const log = readFileSync(join(app, `out/story/${name}.log`), 'utf8');
 const T0 = 1000;
@@ -72,9 +79,9 @@ const { chromium } = require('playwright-core');
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 
 // ---- the screens, each as compose.html draws it ----
-const sp = await browser.newPage({ viewport: { width: 2857, height: 2038 + 2011 }, deviceScaleFactor: 1 });
+const sp = await browser.newPage({ viewport: { width: SHEET[0], height: SHEET[1] }, deviceScaleFactor: 1 });
 sp.on('pageerror', (e) => console.error('screens:', e.message));
-await sp.addInitScript((story) => { window.STORY = story; window.SHOTS = { cam: [[0, 1, 0, 0]], spot: [[0, 0, 0, 1, 1, 0]] }; }, { marks, taps, kbs, nav, device: 'iduo', screens: true });
+await sp.addInitScript((story) => { window.STORY = story; window.SHOTS = { cam: [[0, 1, 0, 0]], spot: [[0, 0, 0, 1, 1, 0]] }; }, { marks, taps, kbs, nav, device: DEVICE, lang: process.env.FILM_LANG || 'zh', screens: true });
 await sp.goto(`${base}compose.html`);
 await sp.waitForFunction(() => window.ready === true);
 const box = await sp.evaluate(() => window.SCREENS);
@@ -88,10 +95,10 @@ async function drawScreens(f) {
 }
 
 // ---- the phone ----
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: SCALE });
 page.on('pageerror', (e) => console.error('3d:', e.message));
 page.on('console', (m) => { if (m.type() === 'error') console.error('3d console:', m.text()); });
-await page.goto(`${base}duo3d/film.html`);
+await page.goto(`${base}${MODEL}/film.html`);
 await page.waitForFunction(() => window.ready3d === true, null, { timeout: 120000 });
 async function draw(f) {
   const t = f / FPS;
@@ -112,9 +119,14 @@ if (want) {
     console.log('still', i + 1, t);
   }
 } else {
-  const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-movflags', '+faststart', join(app, `out/film/promo3d-${name}.mp4`)], { stdio: ['pipe', 'inherit', 'inherit'] });
   const n = Math.round(marks.end * FPS);
+  // its sound on the same marks (sound.mjs), as loud as films are played
+  const wav = join(app, `out/film/promo3d-${name}.wav`);
+  filmSound({ seconds: n / FPS, marks, taps: taps.map((k) => k.t), unfold: U, flip: FLIP, end: END, out: wav + '.raw.wav' });
+  execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', wav + '.raw.wav', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', wav]);
+  const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-i', wav,
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'aac', '-b:a', '192k', '-shortest',
+    '-movflags', '+faststart', join(app, `out/film/promo3d-${name}.mp4`)], { stdio: ['pipe', 'inherit', 'inherit'] });
   for (let f = 0; f < n; f++) {
     await draw(f);
     const jpg = await page.screenshot({ type: 'jpeg', quality: 93 });
@@ -125,6 +137,12 @@ if (want) {
   }
   ff.stdin.end();
   await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
+  // and at 2K (2560 × 1440), from it
+  if (SCALE >= 2) {
+    execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, `out/film/promo3d-${name}.mp4`), '-vf', 'scale=2560:1440:flags=lanczos',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'copy', '-movflags', '+faststart',
+      join(app, `out/film/promo3d-${name}-2k.mp4`)]);
+  }
 }
 await browser.close();
 server.close();

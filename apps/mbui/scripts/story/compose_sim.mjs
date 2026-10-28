@@ -13,7 +13,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { filmSound } from './sound.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const app = join(here, '../..');
-const rec = join(here, 'rec');
+// (FILM_REC: another take's recordings, rec-en's the English film's; FILM_NAME what the film is called in out/film)
+const rec = join(here, process.env.FILM_REC || 'rec');
+const NAME = process.env.FILM_NAME || 'promo3d-sim';
 const stills = process.argv.slice(2);
 const FFMPEG = '/opt/homebrew/bin/ffmpeg', FPS = 60;
 const ASSETS = process.env.DUO_ASSETS || join(app, 'out/duo3d-assets');
@@ -74,7 +76,7 @@ function touchesAt(t, size) {
 const taps = touches.map((k) => k.t + 0.08);
 
 // ---- the recordings' frames at 60 a second, the inner one turned upright (as the screen is held: landscape) ----
-const frames = join(app, 'out/sim-frames');
+const frames = join(app, 'out/sim-frames', process.env.FILM_REC || 'rec');
 const need = (k) => !existsSync(join(frames, k, '1.jpg'));
 for (const [k, vf] of [['outer', `fps=${FPS}`], ['inner', `transpose=1,fps=${FPS}`]]) {
   if (!need(k)) continue;
@@ -140,19 +142,19 @@ if (stills.length) {
   mkdirSync(join(app, 'out/stills'), { recursive: true });
   for (const [i, a] of stills.entries()) {
     await draw(when(a));
-    await page.screenshot({ path: join(app, `out/stills/promo3d-sim-${i + 1}.png`) });
+    await page.screenshot({ path: join(app, `out/stills/${NAME}-${i + 1}.png`) });
     console.log('still', i + 1, a, when(a).toFixed(2));
   }
 } else {
   const n = Math.round((END + 1.5) * FPS);
   // its sound, on the same marks (sound.mjs)
-  const wav = join(app, 'out/film/promo3d-sim.wav');
+  const wav = join(app, 'out/film/' + NAME + '.wav');
   filmSound({ seconds: n / FPS, marks, taps, unfold: U, flip: FLIP, end: END, out: wav + '.raw.wav' });
   // (as loud as films are played: -16 LUFS)
   execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', wav + '.raw.wav', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', wav]);
   const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-i', wav,
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'aac', '-b:a', '192k', '-shortest',
-    '-movflags', '+faststart', join(app, 'out/film/promo3d-sim.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
+    '-movflags', '+faststart', join(app, 'out/film/' + NAME + '.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
   for (let f = 0; f < n; f++) {
     await draw(f / FPS);
     const jpg = await page.screenshot({ type: 'jpeg', quality: 93 });
@@ -163,9 +165,9 @@ if (stills.length) {
   await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
   // and at 2K (2560 × 1440), from it
   if (SCALE >= 2) {
-    execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, 'out/film/promo3d-sim.mp4'), '-vf', 'scale=2560:1440:flags=lanczos',
+    execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, 'out/film/' + NAME + '.mp4'), '-vf', 'scale=2560:1440:flags=lanczos',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'copy', '-movflags', '+faststart',
-      join(app, 'out/film/promo3d-sim-2k.mp4')]);
+      join(app, 'out/film/' + NAME + '-2k.mp4')]);
   }
 }
 await browser.close();

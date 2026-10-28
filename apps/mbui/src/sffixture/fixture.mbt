@@ -689,7 +689,8 @@ let fixture_answers : Map[String, Topic] = {}
 ///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
 fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], version : Int) -> Topic {
-  let value = fixture_topic_inner(f, name, params)
+  // (a told story in another language: the made-up chats' words in it, story_words)
+  let value = fixture_topic_inner(f, name, params).map(story_words)
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
   // `stationNet` view of its own (the made-up stations say both as `net`)
   let value = match name {

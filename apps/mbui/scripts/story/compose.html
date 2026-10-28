@@ -41,6 +41,13 @@ const DEVICES = {
     closed: { back: 'device/closed-back.png', w: 1236, h: 2495, sx: 84, sy: 66, sw: 1080, sh: 2364, r: 112, win: [411, 900], top: 36, cam: [541, 77, 30], pad: [24, 22] },
     open: { back: 'device/default-back.png', w: 2201, h: 2268, sx: 62, sy: 58, sw: 2076, sh: 2152, r: 150, win: [791, 820], top: 32, cam: [1942, 81, 32], pad: [26, 74] },
   },
+  // a Galaxy Z Fold (Z Fold7's screens: the cover one 1080 x 2520, the inner one 1968 x 2184, at 2.625 a point): its
+  // screens alone, for the 3D model of it (zfold3d); no device art of it here
+  zfold: {
+    dp: 2.625, kb: 290, hinge: 984, ck: 1, cy: 0, look: 'gboard',
+    closed: { back: '', over: true, w: 1080, h: 2520, sx: 0, sy: 0, sw: 1079, sh: 2520, r: 0, win: [411, 960], top: 36, pad: [24, 22] },
+    open: { back: '', over: true, w: 1969, h: 2184, sx: 0, sy: 0, sw: 1969, sh: 2184, r: 0, win: [750, 832], top: 32, pad: [26, 26] },
+  },
   iduo: {
     dp: 3, kb: 300, hinge: 1546, ck: 0.982, cy: 46, look: 'ios',
     closed: { back: 'device/iduo-outer.png', over: true, w: 1574, h: 2194, sx: 86, sy: 78, sw: 1402, sh: 2038, r: 0, win: [466, 678], top: 0, side: 44, pad: [0, 0] },
@@ -117,7 +124,15 @@ if (D.look === 'ios') {
 }
 const cands = kb.querySelector('.cands');
 const keys = {}; kb.querySelectorAll('.k').forEach((k) => { keys[k.dataset.k] = k; });
-const TYPED = [['登录页', 'dengluye', '登录|登陆|灯'], ['暗色模式下', 'anse moshi xia', '暗色|按|案'], ['按钮看不清', 'anniu kan bu qing', '按钮|安妞|暗'], ['，修一下', 'xiuyixia', '修一下|休息下|修']];
+// what is typed: each word, the keys pressed for it, its candidates (in English (STORY.lang en): its letters, the words
+// Gboard suggests; its space bar and stop the English keyboard's)
+const TYPED = S.lang === 'en'
+  ? [['The sign-in', 'the sign in', 'sign-in|sign|signing'], [' button is hard', 'button is hard', 'hard|harder|hardly'], [' to see in dark', 'to see in dark', 'dark|darker|darkness'], [' mode, fix it', 'mode fix it', 'it|it.|its']]
+  : [['登录页', 'dengluye', '登录|登陆|灯'], ['暗色模式下', 'anse moshi xia', '暗色|按|案'], ['按钮看不清', 'anniu kan bu qing', '按钮|安妞|暗'], ['，修一下', 'xiuyixia', '修一下|休息下|修']];
+if (S.lang === 'en') {
+  if (keys['␣']) keys['␣'].textContent = 'English';
+  if (keys['。']) keys['。'].textContent = '.';
+}
 
 // ---- easing and keyframes ----
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -183,8 +198,8 @@ window.render = async function (t, frameUrl, closedUrl) {
       const letters = py.replace(/ /g, '');
       const n = Math.floor(clamp((t - from) / (at - from - .06)) * letters.length);
       const k = keys[letters[Math.min(n, letters.length - 1)]]; if (k && n < letters.length) k.classList.add('on');
-      shown = `<span class="py">${py.split(' ').join("'").slice(0, n + py.split(' ').length)}</span>` + cs.split('|').map((c, j) => j ? `<span>${c}</span>` : `<b style="font-weight:500">${c}</b>`).join('');
-    } else if (t >= at && t < at + .5) shown = '<span>的</span><span>了</span><span>吗</span><span>，</span>';
+      shown = (S.lang === 'en' ? '' : `<span class="py">${py.split(' ').join("'").slice(0, n + py.split(' ').length)}</span>`) + cs.split('|').map((c, j) => j ? `<span>${c}</span>` : `<b style="font-weight:500">${c}</b>`).join('');
+    } else if (t >= at && t < at + .5) shown = S.lang === 'en' ? '<span>the</span><span>to</span><span>and</span>' : '<span>的</span><span>了</span><span>吗</span><span>，</span>';
   }
   if (t >= M['tap=send'] - .12 && t < M['tap=send']) keys['↵'].classList.add('on');
   cands.innerHTML = shown;
@@ -225,7 +240,8 @@ window.render = async function (t, frameUrl, closedUrl) {
 // frame, FILM NAV): a column of its glass down each screen's trailing edge, its status at the top, the page's actions,
 // the app's places (the chosen one in its ink), the prominent one at the foot; their icons drawn as the host draws them
 // (mbui/src/host/ios_nav.h nav_icon: lines, shapes, fills and cut-outs on a 24 grid)
-const NAVS = (S.nav || []).map(([f, json]) => [f, JSON.parse(json)]);
+// (an iPhone Duo's alone: elsewhere the app's own bars, the system's status bar over it)
+const NAVS = (S.device === 'iduo' ? S.nav || [] : []).map(([f, json]) => [f, JSON.parse(json)]);
 const navAt = (t) => { let n = null; for (const [f, v] of NAVS) if (f / 60 <= t + 1e-6) n = v; return n; };
 const rgba = (u) => `rgba(${(u >>> 24) & 255},${(u >>> 16) & 255},${(u >>> 8) & 255},${((u & 255) / 255).toFixed(3)})`;
 function navIcon(g, data, x, y, size, color) {

@@ -96,6 +96,25 @@ export function filmSound({ seconds, marks, taps, unfold, flip, end, out }) {
     const lp = biquad('bp', 2400, 1.2), rr = noise(Math.round(t0 * 1000));
     add(t0, 0.03, (t) => (lp(rr()) * 2 + Math.sin(2 * Math.PI * 1800 * t) * 0.5) * Math.exp(-t * 220), 0.32);
   }
+  // typing: a key's tick for each key pressed, the words of each `type=` mark coming in over the time before the next
+  // mark (a character of Chinese some three keys of its pinyin, one of a Latin script one), a little uneven
+  {
+    const names = Object.keys(marks).filter((k) => k.startsWith('type=')).sort((a, b) => marks[a] - marks[b]);
+    const all = Object.values(marks).sort((a, b) => a - b);
+    const rr = noise(31);
+    for (const k of names) {
+      const t0 = marks[k], words = k.slice(5);
+      const next = all.find((t) => t > t0 + 1e-3) ?? t0 + 0.5;
+      const keys = [...words].reduce((n, ch) => n + (/[\u3400-\u9fff]/.test(ch) ? 3 : /\s/.test(ch) ? 1 : 1), 0);
+      const span = Math.max(0.15, Math.min(next - t0 - 0.05, keys * 0.11));
+      for (let i = 0; i < keys; i++) {
+        const tk = t0 - span + span * (i + 0.5 * (1 + 0.6 * (rr() * 0.5))) / keys;
+        const bp = biquad('bp', 3200 + 900 * rr(), 1.6), lp = biquad('lp', 900, 0.8), r2 = noise(Math.round(tk * 997));
+        add(tk, 0.035, (t) => (bp(r2()) * 1.6 + lp(r2()) * 0.8) * Math.exp(-t * 160) * Math.min(1, t / 0.0008), 0.22,
+          0.15 * (rr() * 0.5));
+      }
+    }
+  }
   // the words sent: a whoosh going up
   {
     const t0 = marks['tap=send'] + 0.08, len = 0.38, rr = noise(11);

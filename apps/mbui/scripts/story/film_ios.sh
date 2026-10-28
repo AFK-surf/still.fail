@@ -15,6 +15,16 @@ screens() {
   echo "film_ios: outer $OUTER, inner $INNER"
 }
 screens
+# the simulator's language (its keyboard with it) as the film's: FILM_LANG=en English, Chinese else; set anew, the
+# simulator started over for it to take
+want_lang=$([ "${FILM_LANG:-zh}" = en ] && echo en-US || echo zh-Hans-CN)
+want_locale=$([ "${FILM_LANG:-zh}" = en ] && echo en_US || echo zh_CN)
+if ! xcrun simctl spawn $ID defaults read -g AppleLanguages 2>/dev/null | grep -q "\"$want_lang\""; then
+  echo "film_ios: the simulator in $want_lang"
+  xcrun simctl spawn $ID defaults write -g AppleLanguages -array "$want_lang"
+  xcrun simctl spawn $ID defaults write -g AppleLocale "$want_locale"
+  xcrun simctl shutdown $ID; xcrun simctl boot $ID; xcrun simctl bootstatus $ID > /dev/null 2>&1; sleep 8; screens
+fi
 mkdir -p out/story out/film
 # the display tool's client: its entitlement in __TEXT,__entitlements, as the simulator reads an app's
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
@@ -37,10 +47,14 @@ if opened; then
 fi
 rm -f /tmp/sf-film-inner-$$.png
 [ "${2:-}" = build ] && { bash scripts/ios.sh build > out/story/ios-build.log 2>&1 || { tail -30 out/story/ios-build.log; exit 1; }; tail -1 out/story/ios-build.log; }
-[ -f out/story/iduo.json ] || cp scripts/story/iduo.built.json out/story/iduo.json 2>/dev/null || python3 scripts/story/make.py iduo.json "$D/out/story/iduo.json" || exit 1
-export SIMCTL_CHILD_MBUI_STORY_B64=$(base64 -i out/story/iduo.json | tr -d '\n')
+# the story: FILM_STORY (iduo by default; iduo-en English), its pictures in it (made by make.py, kept built beside it)
+story=${FILM_STORY:-iduo}
+[ -f out/story/$story.json ] || cp scripts/story/$story.built.json out/story/$story.json 2>/dev/null || python3 scripts/story/make.py $story.json "$D/out/story/$story.json" || exit 1
+export SIMCTL_CHILD_MBUI_STORY_B64=$(base64 -i out/story/$story.json | tr -d '\n')
 export SIMCTL_CHILD_MBUI_DRIVE_B64=$(base64 -i scripts/motion/$drive.drive | tr -d '\n')
 export SIMCTL_CHILD_MBUI_FIXTURE=chat-story
+# (the app's words in the film's language: its device's locale, as the host would say it)
+export SIMCTL_CHILD_MBUI_LOCALE=$([ "${FILM_LANG:-zh}" = en ] && echo en-US || echo zh-CN)
 xcrun simctl status_bar $ID override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 >/dev/null 2>&1
 LOG=$D/out/ios/app.log
 # (the simulator records one screen at a time: the outer one till the unfold, the inner one from just before it; when

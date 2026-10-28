@@ -1,0 +1,54 @@
+DRIVE start: 57 lines
+ios: thermal state 0
+ios: size classes compact wide, regular high
+ios: launched
+ios: inactive
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+ios: active
+DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
+ios: the screen's corner 0 8.0
+ios: the screen's corner 1 59.0
+ios: the screen's corner 2 59.0
+ios: the screen's corner 3 8.0
+theme: light
+DRIVE ok until Message (0 ms)
+ios: first frame 466x678 @3x in 216 ms
+ios: hinge closed, 0 division(s)
+DRIVE AT 629360201.5428334 start
+DRIVE AT 629361701.7676668 tap=chat
+DRIVE tapxy 430 330 at 430,330
+DRIVE AT 629362937.9690002 tap=发消息
+DRIVE tap Message at 215,630
+DRIVE AT 629363938.2354585 type=The sign-in
+DRIVE AT 629364671.5452918 type= button is hard
+DRIVE AT 629365504.8462919 type= to see in dark
+DRIVE AT 629366288.1203752 type= mode, fix it
+DRIVE AT 629366971.5040418 tap=send
+DRIVE tap icon:arrow-up at 350,342
+SAID sent row in the list o:out1
+DRIVE AT 629367534.8079169 kb-down
+DRIVE tapxy 250 140 at 250,140
+DRIVE AT 629368171.6074585 working
+DRIVE ok until Sign out (4978 ms)
+DRIVE AT 629375152.2840002 answer
+DRIVE AT 629376656.5220418 unfold
+DRIVE LOG UNFOLD
+ios: hinge half, 0 division(s)
+ios: size classes expanded wide, regular high
+ios: the screen's corner 0 55.0
+ios: the screen's corner 1 55.0
+ios: the screen's corner 2 55.0
+ios: the screen's corner 3 55.0
+ios: hinge open, 0 division(s)
+DRIVE AT 629381157.4308335 pic
+DRIVE tap img:after at 511,583
+DRIVE AT 629383190.2298335 back
+DRIVE AT 629384172.8537502 scroll
+DRIVE dragon 0 -320 450 Sign out from 440,353
+DRIVE AT 629385568.2125417 tap=合并
+DRIVE tap =Merge at 524,507
+DRIVE ok until 4f2a9c1 (3201 ms)
+DRIVE AT 629388788.2898334 merged
+DRIVE AT 629391990.5419585 end
+DRIVE PASS

@@ -3,10 +3,17 @@ import base64, json, os, subprocess, sys
 here = os.path.dirname(os.path.abspath(__file__))
 chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 story = json.load(open(os.path.join(here, sys.argv[1])))
+# (a story in English: its pictures' names and the page's words in it)
+en = story.get("lang") == "en"
+words = {"登录 Acme": "Sign in to Acme", "欢迎回来": "Welcome back", "登录": "Sign in", "忘记密码？": "Forgot password?"}
 pics = {}
-for name, kind in (("改前.png", "before"), ("改后.png", "after")):
+for name, kind in ((("before.png" if en else "改前.png"), "before"), (("after.png" if en else "改后.png"), "after")):
     html = os.path.join(here, f"_{kind}.html")
-    open(html, "w").write(open(os.path.join(here, "login.html")).read().replace("KIND", kind))
+    page = open(os.path.join(here, "login.html")).read().replace("KIND", kind)
+    if en:
+        for zh, w in words.items():
+            page = page.replace(">" + zh + "<", ">" + w + "<")
+    open(html, "w").write(page)
     out = os.path.join(here, f"_{kind}.png")
     subprocess.run([chrome, "--headless=new", "--hide-scrollbars", f"--screenshot={out}", "--window-size=390,780",
                     "--force-device-scale-factor=2", "file://" + html], check=True, capture_output=True)

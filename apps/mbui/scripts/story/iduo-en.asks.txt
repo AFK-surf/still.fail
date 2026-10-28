@@ -1,0 +1,6 @@
+kept-answers-ask {"call": "markdown", "text": "Uploading an avatar on the settings page sometimes spins forever"}
+kept-answers-ask {"call": "markdown", "text": "Photos were uploaded without compression. They're now downscaled to 1080p first, so a 6 MB photo becomes about 300 KB."}
+kept-answers-ask {"call": "markdown", "text": "Nice. Swap the home page spinner for skeletons while you're at it"}
+kept-answers-ask {"call": "markdown", "text": "Done: all three home sections show skeletons until their data arrives. Merged into main (`7c1e0a2`)."}
+kept-answers-ask {"call": "markdown", "text": "Found it: the sign-in button's text and background were hard-coded dark, so in dark mode it blends into the page. It now uses the theme's colors, and I measured the contrast on all four pages that use it:\n\n| Page | Button | Light | Dark (before) | Dark (after) | Tests |\n|:--|:--|--:|--:|--:|:-:|\n| Sign in | Sign in | 7.8 | 1.1 | 7.2 | ✅ |\n| Sign up | Create account | 7.8 | 1.1 | 7.2 | ✅ |\n| Reset password | Send code | 7.8 | 1.3 | 7.2 | ✅ |\n| Settings | Sign out | 6.9 | 1.2 | 6.5 | ✅ |\n\nAnything above 4.5 is readable, and all four pass now. The sign-in page before and after:"}
+kept-answers-ask {"call": "markdown", "text": "Merged into main (`4f2a9c1`). The beta is on its way."}
