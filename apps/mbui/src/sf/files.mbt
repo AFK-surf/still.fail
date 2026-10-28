@@ -638,7 +638,16 @@ pub fn quote_card(
     })
     |> ignore
     match picture {
-      Some(f) => c.box(style=if composer { quote_picture_composer } else { quote_picture }, f) |> ignore
+      Some(f) => {
+        // (last in its card, nothing said under it: as far from its foot as from its side)
+        let last = comment_field is None && comment == ""
+        let look = match (composer, last) {
+          (true, _) => quote_picture_composer
+          (false, true) => quote_picture_last
+          (false, false) => quote_picture
+        }
+        c.box(style=look, f) |> ignore
+      }
       None => ()
     }
     match comment_field {
@@ -851,6 +860,11 @@ let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibo
 /// quoteCardPicture: 6 over it, 11 in (in the composer 16).
 // kept across runs: a value (no field of it changes)
 let quote_picture : @ui.Style = @ui.style(row=true, px=room(quote_in), pt=S1_5)
+
+///|
+/// Last in its card (nothing said of it): as far over its foot as in from its side.
+// kept across runs: a value (no field of it changes)
+let quote_picture_last : @ui.Style = quote_picture.then(@ui.style(pb=room(quote_in)))
 
 ///|
 // kept across runs: a value (no field of it changes)
