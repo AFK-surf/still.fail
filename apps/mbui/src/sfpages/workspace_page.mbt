@@ -387,7 +387,7 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
 /// Tailscale, a path punched through), each on or off. Its managers' to change; the others see them. Read live: what
 /// a change brings back shows at once.
 fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
-  @sf.panel(@sf.t("android-settings.ways.title"), from~, description=@sf.t("android-settings.ways.lead"), fn(c, close) {
+  @sf.panel(@sf.t("android-settings.ways.title"), from~, form=true, description=@sf.t("android-settings.ways.lead"), fn(c, close) {
     let v = workspace_view(core, here).value
     let role = text(v, "role")
     let manager = role == "owner" || role == "admin"
