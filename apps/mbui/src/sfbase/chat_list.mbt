@@ -56,6 +56,9 @@ pub(all) struct Reading {
   /// the chat's latest page asked for in place of a window short of its end (chat_latest): the list goes to its end
   /// as it comes
   mut latest_asked : Bool
+  /// its end asked for where the list is not built (an option picked in one of its rows: decision.mbt, where its key
+  /// names no list): gone to as what follows the list is built (list_after)
+  mut end_asked : Bool
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
   /// the newest message seen whole on this visit (-1 none): read up to there
@@ -187,6 +190,7 @@ pub fn reading_of(key : String) -> Reading {
         asked: @signals.signal(-1.0),
         asked_newer: -1.0,
         latest_asked: false,
+        end_asked: false,
         told: "",
         seen_whole: -1.0,
         top_seq: -1.0,
@@ -1599,6 +1603,11 @@ pub fn list_after(
         }
       }
       _ => ()
+    }
+    // its end asked for from one of its rows: gone to, gliding
+    if rd.end_asked {
+      rd.end_asked = false
+      c.list_to_end(key)
     }
     // the chat's latest page come in place of a window short of its end, asked for (chat_latest): at its end at once
     if rd.latest_asked && !v.newer {
