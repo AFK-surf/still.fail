@@ -231,6 +231,9 @@ pub(all) struct Viewer {
   mut at_right : Bool
   /// the finger came down on it flinging, and stopped it there: no tap
   mut caught : Bool
+  /// where the strip was as the finger went down (a slide still going on caught there): what the swipe let go is
+  /// measured from
+  mut strip_down : Double
   /// its flight from the chat's thumbnail (or back into it): whether it flies, how far (0 the thumbnail … 1 the
   /// stage, a motion), back or not, from where
   mut flies : Bool
@@ -609,6 +612,7 @@ pub fn new_viewer(
     at_left: false,
     at_right: false,
     caught: false,
+    strip_down: 0.0,
     flies: false,
     fly: @motion.Value::new(0.0),
     fly_back: false,
@@ -2344,8 +2348,15 @@ pub fn Viewer::gestures(
       v.down_y = c.press_y
       if !v.pinched {
         v.moved = 0.0
-        // flinging, it stops where it is, and the press taps nothing (as a list moving on its own)
+        // flinging, or sliding to the one beside it, it stops where it is, and the press taps nothing (as a list
+        // moving on its own)
         v.caught = z.stop_fling()
+        let s = strip.get()
+        if s != 0.0 {
+          strip.snap(s)
+          v.caught = true
+        }
+        v.strip_down = s
       }
       let (x, _, w, _) = z.rect().unwrap_or((0.0, 0.0, 0.0, 0.0))
       v.at_left = x >= -0.5
@@ -2363,6 +2374,9 @@ pub fn Viewer::gestures(
       let tx = px - c.press_x
       let ty = py - c.press_y
       if tx.abs() > 8.0 && tx.abs() > ty.abs() {
+        if !v.held {
+          v.strip_down = strip.get()
+        }
         let none = if tx > 0.0 { !has_before } else { !has_after }
         strip.snap(strip.get() + (if none { tx / 3.0 } else { tx }))
         v.moved = tx.abs() + ty.abs()
@@ -2375,16 +2389,23 @@ pub fn Viewer::gestures(
       // (down and up between two frames, never seen held)
       v.caught = z.stop_fling()
     }
-    if v.held && v.swiping && (!z.zoomed() || strip.get() != 0.0) {
-      // let go: far enough (80, or a fifth of the stage) or flung that way, the one beside it; else back (zoomed in,
-      // flung only from an edge it was at as the finger went down: a quick move that came to its edge on the way goes
-      // as far as it pulled)
-      let dx = strip.get()
+    let s = strip.get()
+    if v.held && (v.swiping || s != 0.0) && (!z.zoomed() || s != 0.0) {
+      // let go: from the picture nearest as the finger went down (a slide it caught may have had the one before or
+      // after mostly in), this press's way far enough (80, or a fifth of the stage) or flung that way, the one beside
+      // it; else that one (zoomed in, flung only from an edge it was at as the finger went down)
+      let width = c.width + slide_gap
+      let base = if v.strip_down > width / 2.0 { -1 } else if v.strip_down < -width / 2.0 { 1 } else { 0 }
+      let dx = s - v.strip_down
       let far = dx.abs() > dmin(80.0, c.width / 5.0)
       let from_edge = !z.zoomed() || (if dx > 0.0 { v.at_left } else { v.at_right })
       let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
-      if dx != 0.0 && (far || flung) {
-        v.go(c, src, if dx > 0.0 { -1 } else { 1 }, vx * 1000.0)
+      let step = if dx != 0.0 && (far || flung) { if dx > 0.0 { -1 } else { 1 } } else { 0 }
+      let to = base + step
+      if to < 0 {
+        v.go(c, src, -1, vx * 1000.0)
+      } else if to > 0 {
+        v.go(c, src, 1, vx * 1000.0)
       } else {
         strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity=vx * 1000.0)
       }
@@ -2452,7 +2473,9 @@ pub fn Viewer::gestures(
 ///|
 /// One finger moving a zoomed picture by (dx, dy): it goes with the finger; at its edge, what of the way across it
 /// cannot go pulls in the one beside it (the strip, as a swipe does it fitted: past the first or the last a third as
-/// far), and the finger going back takes the strip back first.
+/// far), but only from an edge it was at as the finger went down: a press that brings it to its edge stops there, and
+/// another from there goes on to the one beside it (the user, 2026-10-28); the finger going back takes the strip back
+/// first.
 pub fn Viewer::drag_zoomed(
   self : Viewer,
   z : @kit.Zoom,
@@ -2479,7 +2502,8 @@ pub fn Viewer::drag_zoomed(
   let x0 = z.x
   z.pan(across, dy)
   let left = across - (z.x - x0)
-  if left.abs() > 0.001 && (has_before || has_after) {
+  let from_edge = if left > 0.0 { self.at_left } else { self.at_right }
+  if left.abs() > 0.001 && (has_before || has_after) && from_edge {
     if !self.swiping {
       self.swiping = true
       pv_strip.leaving = None
