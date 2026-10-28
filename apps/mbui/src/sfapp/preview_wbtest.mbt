@@ -711,6 +711,7 @@ test "a swipe back as the step to the next still slides: a finger catches it the
   assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
   // and a finger down on a slide and up again: it stays at the one nearest, no tap of it
   t.drag(300.0, 422.0, 100.0, 422.0)
+  t.run_for(@ui.input_step_ms)
   let awake = viewer.val.unwrap().awake
   t.touch(0, 195.0, 422.0)
   t.draw()
