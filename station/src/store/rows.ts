@@ -225,7 +225,9 @@ export type StoreChange =
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
   /// Model calls were recorded (store/usage.ts), of these sessions.
-  | { type: "usage"; sessions: string[] };
+  | { type: "usage"; sessions: string[] }
+  /// A session went on in another runtime session, or in none (its context cleared): where its context stands changed.
+  | { type: "conversation"; key: string };
 
 // ── words ──
 

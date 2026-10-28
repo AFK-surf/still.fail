@@ -1049,11 +1049,12 @@ export class SessionActor {
       if (wasCleared) this.afresh = this.deps.cleared?.(this.key, this.readBack) ?? (this.readBack ? afreshNote(this.key, []) : cleared(this.key, []));
       this.readBack = false;
     }
+    // Recorded before it is the one gone on with: its conversation's calls are those from then (store.ts `conversationSince`).
+    this.deps.ranIn?.(this.key, agent.id(), profile.id);
     if (row.runtimeSessionId !== agent.id()) {
       store.setRuntimeSessionId(this.key, agent.id());
       if (row.runtimeSessionId || wasCleared) this.deps.live?.moved?.(this.key);
     }
-    this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.stopped = [];
     if (stopped.length > 0) this.stoppedNote = backgroundStopped(stopped, resumable);
     this.agent = { generation, session: agent };

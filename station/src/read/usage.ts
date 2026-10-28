@@ -149,10 +149,11 @@ export type SessionUsage = Counted & {
 /// A session's usage before a call of it is recorded.
 export const noUsage = (): SessionUsage => ({ modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, cost: 0, unpricedCalls: 0, model: null, contextWindow: null });
 
-/// What usage reads of a session's calls (store.ts `usageOfSession`, `lastContexts`).
+/// What usage reads of a session's calls (store.ts `usageOfSession`, `lastContexts`, `conversationSince`).
 type SessionCalls = {
   usageOfSession(session: string): UsageGroup[];
   lastContexts(session: string, limit: number): ContextCall[];
+  conversationSince(session: string): number | null;
 };
 
 /// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
@@ -162,14 +163,19 @@ const CACHE_LONG_MS = 60 * 60_000;
 /// The calls looked back on for what was last written to the cache (one may write nothing: all of it read).
 const CACHE_CALLS = 5;
 
-/// A session's usage now (SessionUsage), from what is recorded of its calls; none before one is.
+/// A session's usage now (SessionUsage), from what is recorded of its calls; none before one is. Where its context
+/// stands (what it holds, when its cache is over, what reading it again costs) is of the conversation it goes on with
+/// (store.ts `conversationSince`): none once its context is cleared, until that conversation's first call.
 export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
   const counted = sessionUsage(s.usageOfSession(key));
   if (counted.modelCalls === 0) return null;
-  const calls = s.lastContexts(key, CACHE_CALLS);
+  const all = s.lastContexts(key, CACHE_CALLS);
+  const out: SessionUsage = { ...counted, model: all.at(-1)?.model ?? null, contextWindow: all.at(-1)?.window ?? null };
+  const since = s.conversationSince(key);
+  const calls = since === null ? [] : all.filter((c) => c.at >= since);
   const last = calls.at(-1);
-  const out: SessionUsage = { ...counted, model: last?.model ?? null, ...(last?.context != null ? { contextTokens: last.context } : {}), contextWindow: last?.window ?? null };
   if (last === undefined) return out;
+  if (last.context !== null) out.contextTokens = last.context;
   out.lastCallAt = last.at;
   // A read keeps it for as long again as it was written for: as the latest write asked.
   const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
