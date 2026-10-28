@@ -321,6 +321,8 @@ priv struct LooksBase {
   mut left : Bool
   mut told_same : Bool
   mut wake : Double
+  /// where `wake` was asked (said with why the frame it comes in is built: built_why)
+  mut wake_by : String
   /// when the frame was last built whole (ms)
   mut built_at : Double
   /// whether it drew what the frame painted before it drew (`built`: there was one): what a paint leaves for the next
@@ -339,6 +341,7 @@ let looks_base : LooksBase = {
   left: false,
   told_same: false,
   wake: -1.0,
+  wake_by: "",
   built_at: -1.0,
   built: false,
   settled: false,
@@ -423,6 +426,7 @@ fn looks_reset() -> Unit {
   looks_base.left = false
   looks_base.told_same = false
   looks_base.wake = -1.0
+  looks_base.wake_by = ""
   looks_base.built = false
   looks_base.settled = false
   paint_base.had = false
@@ -444,6 +448,7 @@ fn looks_reset() -> Unit {
 fn looks_frame_start() -> Unit {
   looks_base.ok = false
   looks_base.wake = -1.0
+  looks_base.wake_by = ""
   clock_read_at.val = ""
   wall_read.val = false
 }
@@ -451,7 +456,7 @@ fn looks_frame_start() -> Unit {
 ///|
 /// A wake at `t` asked (Ctx::wake_at_time): the looks' own, as they are applied; the paint's, as the frame is painted;
 /// else the soonest anything else asked for: each kept for the frames to come that do not do again what asked it.
-fn looks_wake(t : Double) -> Unit {
+fn looks_wake(t : Double, loc : SourceLoc) -> Unit {
   let soonest = fn(w : Double) { w < 0.0 || t < w }
   if in_looks.val {
     if soonest(looks_own.wake) {
@@ -463,6 +468,7 @@ fn looks_wake(t : Double) -> Unit {
     }
   } else if soonest(looks_base.wake) {
     looks_base.wake = t
+    looks_base.wake_by = loc.to_string()
   }
 }
 
@@ -749,7 +755,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   } else if !looks_base.told_same {
     "it told outside otherwise"
   } else if looks_base.wake >= 0.0 && t >= looks_base.wake {
-    "a moment it waits for came"
+    "a moment it waits for came, asked at \{looks_base.wake_by}"
   } else {
     ""
   }
