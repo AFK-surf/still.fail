@@ -1196,6 +1196,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
+    // Studio's programs granted its data (sfpages/station_outflow.mbt, docs/data-outflow.md): Comma's
+    "outflowGrants" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
+      Some(
+        obj([
+          ("supported", Json::boolean(true)),
+          (
+            "grants",
+            [
+              obj([
+                ("id", str("g1")),
+                ("program", str("Comma")),
+                ("signed", Json::boolean(true)),
+                ("signedText", str("签名：Developer ID Application: AFK Inc. (D9AAN3VJK8)")),
+                ("scopes", [obj([("id", str("usage")), ("text", str("token 用量和金额"))]), obj([("id", str("chats")), ("text", str("chat 和它们的状态"))])]),
+                ("grantedText", str("昨天 14:02 授权")),
+                ("lastReadText", str("最近读取 今天 09:30")),
+              ]),
+            ],
+          ),
+        ]),
+      )
     // Studio's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
     "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>

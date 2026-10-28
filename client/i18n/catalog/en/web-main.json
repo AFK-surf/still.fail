@@ -887,5 +887,13 @@
   "web-main.relay.change": "Change",
   "web-main.relay.bots": "Which bot",
   "web-main.relay.via": "{bot} replies there",
-  "web-main.relay.goTo": "Relay to {place}"
+  "web-main.relay.goTo": "Relay to {place}",
+  "web-main.outflow.title": "Data outflow",
+  "web-main.outflow.lead": "Programs on this computer you allowed to read your still.fail data. Revoked, their next read is refused.",
+  "web-main.outflow.and": ", ",
+  "web-main.outflow.unsigned": "Unsigned",
+  "web-main.outflow.revoke": "Revoke",
+  "web-main.outflow.revokeConfirm": "Revoke {program}'s access?",
+  "web-main.outflow.revokeBody": "Its reads are refused from now on; to give it again, it asks again and you confirm on this computer.",
+  "web-main.outflow.revoked": "{program}'s access revoked"
 }

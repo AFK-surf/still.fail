@@ -1964,4 +1964,12 @@ let zh : Map[String, String] = {
   "web-pages.stations.network.note": "控制此 station 的数据发送方式，重启 station 后生效。BBR 在部分连接上可能明显变慢，通常无需修改。",
   "web-pages.stations.network.what": "修改网络设置",
   "web-pages.stations.network.saved": "已保存，重启 station 后生效",
+  "web-main.outflow.title": "数据外流",
+  "web-main.outflow.lead": "这台电脑上经你授权、可以读取 still.fail 数据的程序。取消后它下一次读取就会被拒绝。",
+  "web-main.outflow.and": "、",
+  "web-main.outflow.unsigned": "未签名",
+  "web-main.outflow.revoke": "取消授权",
+  "web-main.outflow.revokeConfirm": "取消 {program} 的授权？",
+  "web-main.outflow.revokeBody": "它之后读取会被拒绝；要再给，得让它重新申请，你在这台电脑上再确认一次。",
+  "web-main.outflow.revoked": "已取消 {program} 的授权",
 }

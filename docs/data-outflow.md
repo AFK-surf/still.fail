@@ -80,12 +80,15 @@ station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权
 - 每次读取记一笔（哪份授权、什么时候、读了哪类、多少行），每份授权留最近 100 笔，在「数据外流」页能看到。
 - station 只存 token 的 SHA-256。
 
-## 还没做的
+## 做了什么、还没做的
 
-本稿描述的全部。分两步：
+做了（still.fail）：本机 socket、申请方核实（mesh 插件 `peerProcess` 取对端审计令牌、Helper 查签名；macOS 自己的程序没有 Team ID，
+按 Apple 的锚点记作 `Apple`）、Helper 的授权窗口（still.fail 的样子：白底圆角面板、墨色主按钮）、授权和 token 的存储、两个读取接口、
+管理 API、core 的 `outflowGrants` 话题和 `outflow.revoke`、app 里 station 设置页的「数据外流」一节（列出、取消前先问）。
+申请方等着的时候断开，窗口关掉，什么也不给。
 
-1. still.fail：本机 socket、申请方核实（mesh 插件取对端、Helper 查签名）、Helper 的授权窗口、授权和 token 的存储、两个读取接口、
-   管理 API、core 话题、客户端的「数据外流」页。
-2. Comma（AFK-surf/Cue）：Comma station 的申请、token 交给 Salix 加密保存、按 token 读取并交给 CFT。
+还没做：
 
-Windows 和 Linux 上的授权窗口没有设计（Helper 只有 macOS）：那里先回 `unsupported`。
+- Comma（AFK-surf/Cue）：Comma station 的申请、token 交给 Salix 加密保存、按 token 读取并交给 CFT。
+- 网页版的「数据外流」页（网页不在那台机器上，取消授权先在 app 里做）。
+- Windows 和 Linux 上的授权窗口（Helper 只有 macOS）：那里申请回 `501 unsupported`。

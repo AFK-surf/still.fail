@@ -1944,3 +1944,11 @@ web-pages.stations.network.bbr
 web-pages.stations.network.note
 web-pages.stations.network.what
 web-pages.stations.network.saved
+web-main.outflow.title
+web-main.outflow.lead
+web-main.outflow.and
+web-main.outflow.unsigned
+web-main.outflow.revoke
+web-main.outflow.revokeConfirm
+web-main.outflow.revokeBody
+web-main.outflow.revoked
