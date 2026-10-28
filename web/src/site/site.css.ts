@@ -61,37 +61,47 @@ export const titleDot = style({ color: ORANGE });
 // The logo on the left, the rest of the bar on the right.
 globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
-// The downloads for the device the page is on (data-platform on the root): none shows without it (an iPhone).
-export const forAndroid = style({ display: "none", selectors: { ":root[data-platform=\"android\"] &": { display: "inline" } } });
-export const forComputer = style({ display: "none", selectors: { ":root:is([data-platform=\"mac\"], [data-platform=\"desktop\"]) &": { display: "inline-block" } } });
 globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: vars.textTitle });
 /** A link in the bar that is a mark (GitHub's): as wide as the mark, as tall as the theme switch beside it. */
 export const navMark = style({ display: "grid", placeItems: "center", width: "24px", height: "36px" });
-globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", background: "none", font: "inherit", cursor: "default" });
 
-/** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */
-export const menu = style({ position: "relative" });
-export const menuCard = style({
-  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridAutoFlow: "column", gridAutoColumns: "1fr", gap: "6px",
-  padding: "6px", borderRadius: "20px", whiteSpace: "nowrap",
-  background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
-  boxShadow: `0 16px 48px -16px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
-  opacity: 0, visibility: "hidden", transform: "translate(-50%, -6px)", transition: `opacity .2s, transform .25s ${vars.easeOut}, visibility 0s .25s`,
-  selectors: {
-    // The gap between the word and the card keeps it open on the way down.
-    "&::before": { content: "\"\"", position: "absolute", left: 0, right: 0, bottom: "100%", height: "14px" },
-    [`${menu}:hover &, ${menu}:focus-within &`]: { opacity: 1, visibility: "visible", transform: "translate(-50%, 0)", transition: `opacity .2s, transform .25s ${vars.easeOut}` },
-  },
+// ---- Downloads (Site.tsx Downloads) ----
+
+// Gone to from the bar's 下载 (Download): its title clear of the bar.
+globalStyle("#download", { scrollMarginTop: "64px" });
+/** Its title, and the button for this device's app beside it (under it on a narrow screen). */
+export const downloadHead = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "24px", flexWrap: "wrap",
 });
-export const menuItem = style({
-  display: "grid", gridTemplateRows: "auto 1fr auto", justifyItems: "start", gap: "2px", width: "150px", minHeight: "178px", padding: "14px",
-  borderRadius: "15px", fontSize: vars.textUi, color: DIM, transition: "background .2s",
-  selectors: { "a&:hover": { background: CARD } },
+export const downloadMain = style({ display: "flex" });
+/** Each device's button: the one for the device the page is on shows (data-platform on the root; a computer not a
+ *  Mac's is taken for Windows', a device none is made for opens the web app). */
+export const downloadFor = style({ display: "none" });
+const MAIN_FOR = { mac: ["mac"], windows: ["windows", "desktop"], android: ["android"] } as const;
+for (const [key, platforms] of Object.entries(MAIN_FOR)) {
+  globalStyle(`${platforms.map((p) => `:root[data-platform="${p}"] ${downloadFor}[data-for="${key}"]`).join(", ")}`, { display: "flex" });
+}
+globalStyle(`:root:not(:is([data-platform="mac"], [data-platform="windows"], [data-platform="desktop"], [data-platform="android"])) ${downloadFor}[data-for="other"]`, { display: "flex" });
+/** Every app, four across (two on a narrower screen), each a card that is its link. */
+export const downloads = style({
+  display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", margin: "40px auto 0", listStyle: "none",
+  "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
-globalStyle(`${menuItem} > b`, { fontSize: vars.textTitle, fontWeight: "600", color: FG, letterSpacing: "-.01em" });
-export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "500" });
+export const download = style({
+  display: "flex", flexDirection: "column", gap: "4px", height: "100%", minHeight: "180px", padding: "20px", boxSizing: "border-box",
+  borderRadius: vars.rCard, background: CARD, color: "var(--s-muted)", fontSize: vars.textUi, transition: "background .2s",
+  selectors: { "&:hover": { background: ink(6) } },
+});
+globalStyle(`${download} > b`, { fontSize: vars.textHeading, fontWeight: "600", color: FG, letterSpacing: "-.01em" });
+/** Where it goes, at the card's foot. */
+export const downloadGo = style({ marginTop: "auto", paddingTop: "16px", color: FG, fontWeight: "500" });
+/** The code to scan for the Android app, with its word: on a computer only (on a phone the card is the link). */
+export const scanOnComputer = style({
+  display: "flex", alignItems: "center", gap: "12px", marginTop: "8px",
+  selectors: { ':root:is([data-platform="android"], [data-platform="ios"]) &': { display: "none" } },
+});
 /** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
-export const scanCode = style({ display: "block", width: "122px", height: "122px", padding: "8px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
+export const scanCode = style({ display: "block", flex: "none", width: "88px", height: "88px", padding: "6px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
 
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
 export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });

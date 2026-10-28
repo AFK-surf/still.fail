@@ -95,6 +95,36 @@ export function Promises() {
   );
 }
 
+/** The app to download first, by the device the page is on (data-platform on the root, set before the first paint by
+ *  site/index.html): its button shown, the others' not (site.css.ts downloadMain). A device none is made for (an
+ *  iPhone, Linux) opens the web app. */
+const MAIN = [["mac", MAC], ["windows", WINDOWS], ["android", ANDROID], ["other", APP]] as const;
+
+/** The apps: a button for this device's, then every one. */
+function Downloads() {
+  const say = useSay();
+  const d = say.downloads;
+  return (
+    <section id="download" className={css.section}>
+      <div className={`${css.wrap} ${css.downloadHead}`}>
+        <h2 className={css.headingTitle}>{d.title}</h2>
+        <div className={css.downloadMain}>
+          {MAIN.map(([key, href]) => <span key={key} className={css.downloadFor} data-for={key}><Button href={href} kind="primary" large>{d.main[key]}</Button></span>)}
+        </div>
+      </div>
+      <ul className={`${css.wrap} ${css.downloads}`}>
+        <li><a className={css.download} href={MAC}><b>Mac</b><span>{say.appleSilicon}</span><span className={css.downloadGo}>{say.downloadGo}</span></a></li>
+        <li><a className={css.download} href={WINDOWS}><b>Windows</b><span>x64</span><span className={css.downloadGo}>{say.downloadGo}</span></a></li>
+        {/* A code to scan where the page is on a computer; on a phone, the link. */}
+        <li><a className={css.download} href={ANDROID}><b>Android</b>
+          <span className={css.scanOnComputer}><img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />{say.androidScan}</span>
+          <span className={css.downloadGo}>{d.apk}</span></a></li>
+        <li><a className={css.download} href={APP}><b>{d.phones}</b><span>{d.phonesNote}</span><span className={css.downloadGo}>{d.openWeb}</span></a></li>
+      </ul>
+    </section>
+  );
+}
+
 // ---- The rest ----
 
 export function Site({ mountDemo, demo, lang = "zh" }: DemoProps & { lang?: SiteLang }) {
@@ -111,24 +141,8 @@ function Page({ mountDemo, demo }: DemoProps) {
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
           <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><span>{NAME.head}<span className={css.brandDot}>.</span>{NAME.tail.slice(1)}</span></a>
-          {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
-              Android the app itself; on a computer a card under the word, with the Mac's, Windows' and a code to scan for Android. */}
-          <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>{say.download}</a>
-          <span className={`${css.menu} ${css.forComputer}`}>
-            <button type="button" className={css.navLink}>{say.download}</button>
-            <span className={css.menuCard}>
-              <a className={css.menuItem} href={MAC}>
-                <b>Mac</b><span>{say.appleSilicon}</span><span className={css.menuGo}>{say.downloadGo}</span>
-              </a>
-              <a className={css.menuItem} href={WINDOWS}>
-                <b>Windows</b><span>x64</span><span className={css.menuGo}>{say.downloadGo}</span>
-              </a>
-              <span className={css.menuItem}>
-                <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />
-                <span>{say.androidScan}</span>
-              </span>
-            </span>
-          </span>
+          {/* The apps: their section, on every device. */}
+          <a className={css.navLink} href="#download">{say.download}</a>
           {/* The page in the other language (on a phone, in the footer: the bar has no room). */}
           <a className={`${css.navLink} ${css.navButton}`} href={say.otherHref} lang={lang === "en" ? "zh" : "en"} onClick={chooseLang(lang === "en" ? "zh" : "en")}>{say.other}</a>
           {/* Its code, a mark the bar keeps on a phone too. */}
@@ -140,6 +154,8 @@ function Page({ mountDemo, demo }: DemoProps) {
 
       <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
       <div className={css.idea} data-idea="2"><Distance {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
+
+      <Downloads />
 
       <section id="start" className={css.section}>
         <div className={`${css.wrap} ${css.install}`}>
