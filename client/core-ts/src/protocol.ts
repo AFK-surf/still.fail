@@ -59,6 +59,7 @@ export const TOPICS: Record<string, Spec> = {
   host: { station: S },
   footprint: { station: S },
   memory: { station: S },
+  outflowGrants: { station: S },
   net: { station: S },
   way: { station: S },
   threads: { station: S },
@@ -198,7 +199,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "outflowGrants", "linkPreview", "filePeek"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

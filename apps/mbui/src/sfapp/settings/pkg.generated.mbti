@@ -88,6 +88,8 @@ pub fn fixture_desk() -> String
 
 pub fn fixture_followed() -> Unit
 
+pub fn fixture_outflow(Bool) -> Unit
+
 pub fn fixture_page(String) -> String
 
 pub fn fixture_pair_ended() -> String

@@ -1996,4 +1996,11 @@ let en : Map[String, String] = {
   "web-pages.stations.network.note": "Controls how this station sends data. Takes effect after restarting the station. BBR can be much slower on some connections; usually no change is needed.",
   "web-pages.stations.network.what": "change network settings",
   "web-pages.stations.network.saved": "Saved; takes effect after restarting the station",
+  "web-main.outflow.title": "Data outflow",
+  "web-main.outflow.lead": "Programs on this computer you allowed to read your still.fail data. Revoked, their next read is refused.",
+  "web-main.outflow.and": ", ",
+  "web-main.outflow.revoke": "Revoke",
+  "web-main.outflow.revokeConfirm": "Revoke {program}'s access?",
+  "web-main.outflow.revokeBody": "Its reads are refused from now on; to give it again, it asks again and you confirm on this computer.",
+  "web-main.outflow.revoked": "{program}'s access revoked",
 }

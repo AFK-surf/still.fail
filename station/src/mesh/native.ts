@@ -75,6 +75,9 @@ export type Mesh = {
   /// local_links.rs `prepare`: the text with local links made attachments, and the attachments' paths; throws its refusal.
   prepareLocalLinks(text: string, paths: string[], workspace: string): { text: string; paths: string[] };
   /// usage.rs `process_usage`: what each pid has used so far, null where not read. Absent from an addon from before.
+  /// local.rs `peer_process`: the process at the other end of a connected Unix socket (its pid; on macOS its audit token,
+  /// hex), null when the system does not say. Absent from an addon from before.
+  peerProcess?(fd: number): { pid: number; auditToken: string | null } | null;
   processUsage?(pids: number[]): ({ cpuNs: number; footprint: number; wakeups: number; energyNj: number; diskRead?: number; diskWritten?: number } | null)[];
 };
 

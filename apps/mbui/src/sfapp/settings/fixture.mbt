@@ -16,6 +16,8 @@ priv struct SettingsFixture {
   /// the station going on afresh by itself once a session's cache is over
   mut congestion : String
   mut afresh : Bool
+  /// a program granted Studio's data (docs/data-outflow.md: its overview's `outflowGrants`), as a test sets it
+  mut outflow : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
@@ -61,6 +63,7 @@ let fx : SettingsFixture = {
   auto: false,
   congestion: "cubic",
   afresh: false,
+  outflow: false,
   none: false,
   login: "",
   login_station: false,
@@ -138,6 +141,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.afresh = false
+  fx.outflow = false
   fx.congestion = "cubic"
   fx.none = false
   fx_adb.val = ""
@@ -195,6 +199,12 @@ pub fn fixture_followed() -> Unit {
 /// How the new device's prompt went (`lockPrompt.deny` "deny", `lockPrompt.hide` "hide"; "" while it is up).
 pub fn fixture_pair_ended() -> String {
   fx.pair_ended
+}
+
+///|
+/// Studio with a program granted its data (its page's 数据外流), or not.
+pub fn fixture_outflow(on : Bool) -> Unit {
+  fx.outflow = on
 }
 
 ///|
@@ -903,6 +913,7 @@ fn fx_station(address : String) -> Json {
           ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
           ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
           ("network", obj([("congestion", str(fx.congestion))])),
+          ("outflowGrants", Json::number(if fx.outflow { 1.0 } else { 0.0 })),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
@@ -1196,6 +1207,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
+    // Studio's programs granted its data (sfpages/station_outflow.mbt, docs/data-outflow.md): Comma's
+    "outflowGrants" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
+      Some(
+        obj([
+          ("supported", Json::boolean(true)),
+          (
+            "grants",
+            [
+              obj([
+                ("id", str("g1")),
+                ("program", str("Comma")),
+                ("signed", Json::boolean(true)),
+                ("signedText", str("签名：Developer ID Application: AFK Inc. (D9AAN3VJK8)")),
+                ("scopes", [obj([("id", str("usage")), ("text", str("token 用量和金额"))]), obj([("id", str("chats")), ("text", str("chat 和它们的状态"))])]),
+                ("grantedText", str("昨天 14:02 授权")),
+                ("lastReadText", str("最近读取 今天 09:30")),
+              ]),
+            ],
+          ),
+        ]),
+      )
     // Studio's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
     "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>

@@ -30,7 +30,7 @@ import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
@@ -378,6 +378,33 @@ export class StationsSync {
         link.memory.set(MEMORY, answer.success);
         this.onChange(address, "log", key);
       } else if (answer.failure.status !== undefined && !link.memory.has(MEMORY)) {
+        link.errors.set(key, answer.failure);
+        this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic, docs/data-outflow.md),
+  /// read each time a page shows them; then as the station tells (`outflow-grants`). A station from before: none.
+  outflowShown(address: string): void {
+    this.#enqueue(address, "outflowGrants", Priority.shown, this.#outflow(address));
+  }
+
+  #outflow(address: string): Effect.Effect<void, CoreError> {
+    const key = topicKey({ topic: "outflowGrants", station: address });
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/outflow/grants", null, { quiet: true }));
+      if (answer._tag === "Success") {
+        link.errors.delete(key);
+        link.memory.set(OUTFLOW, answer.success);
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status === 404) {
+        link.errors.delete(key);
+        link.memory.set(OUTFLOW, { unsupported: true });
+        this.onChange(address, "log", key);
+      } else if (answer.failure.status !== undefined && !link.memory.has(OUTFLOW)) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }
@@ -1026,6 +1053,14 @@ export class StationsSync {
         if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
         return;
       }
+      // The programs granted the station's data changed, or read it (docs/data-outflow.md).
+      case "outflow-grants": {
+        const link = this.#links.get(address);
+        if (!link || !Array.isArray(get(data, "grants"))) return;
+        link.memory.set(OUTFLOW, data);
+        this.onChange(address, "log", topicKey({ topic: "outflowGrants", station: address }));
+        return;
+      }
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {
         const link = this.#links.get(address);
@@ -1349,6 +1384,9 @@ export class StationsSync {
         // What the agents' memory says of it changed (a skill shared or no longer): read again where it is shown or held.
         case "memory":
           if (this.#core.store.inUse({ topic: "memory", station: address }) || this.#links.get(address)?.memory.has(MEMORY)) reads.push(["memory", this.#memory(address)]);
+          break;
+        case "outflowGrants":
+          reads.push(["outflowGrants", this.#outflow(address)]);
           break;
         case "identity":
           read("overview", { topic: "overview", station: address }, "/overview");

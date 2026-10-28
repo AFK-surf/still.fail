@@ -580,8 +580,8 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
 // ── Settings ────────────────────────────────────────────────────────────
 
 ///|
-/// What it is let do and set to (Settings): the grants macOS gives it, the tools logged in on it, its agents'
-/// variables, what its search finds, the workspaces it is in.
+/// What it is let do and set to (Settings): the grants macOS gives it, the tools logged in on it, the programs of its
+/// machine granted its data, its agents' variables, what its search finds, the workspaces it is in.
 fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array[() -> Unit] {
   let address = text(s, "station")
   let o = field(s, "overview")
@@ -592,6 +592,11 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
+  // (asked for only when the station's overview says there are some)
+  match field(o, "outflowGrants") {
+    Some(Number(n, ..)) if n > 0.0 => out.push(fn() { station_outflow(c, core, address) })
+    _ => ()
+  }
   match field(o, "agentEnv") {
     Some(Array(env)) => out.push(fn() { station_env(c, core, address, env, manager) })
     _ => ()

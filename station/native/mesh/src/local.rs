@@ -184,3 +184,50 @@ pub fn prepare_local_links(text: String, paths: Vec<String>, workspace: String) 
     }
     Ok(Prepared { text: result, paths })
 }
+
+/// The process at the other end of a connected Unix socket (docs/data-outflow.md): its pid, and on macOS its audit
+/// token (`LOCAL_PEERTOKEN`, hex: the pid with its generation, which the code signature is looked up by so a pid used
+/// again by another process is not mistaken for it). Taken when the other end connected, not now.
+#[napi(object)]
+pub struct PeerProcess {
+    pub pid: u32,
+    pub audit_token: Option<String>,
+}
+
+/// The other end of the socket `fd`; none when it is not a Unix socket's or the system does not say.
+#[napi]
+pub fn peer_process(fd: i32) -> Option<PeerProcess> {
+    peer(fd)
+}
+
+#[cfg(target_os = "macos")]
+fn peer(fd: i32) -> Option<PeerProcess> {
+    // <sys/un.h>: SOL_LOCAL, LOCAL_PEERPID, LOCAL_PEERTOKEN.
+    const SOL_LOCAL: libc::c_int = 0;
+    const LOCAL_PEERPID: libc::c_int = 0x002;
+    const LOCAL_PEERTOKEN: libc::c_int = 0x006;
+    let mut pid: libc::pid_t = 0;
+    let mut len = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
+    if unsafe { libc::getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &mut pid as *mut _ as *mut libc::c_void, &mut len) } != 0 || pid <= 0 {
+        return None;
+    }
+    let mut token = [0u8; 32];
+    let mut len = token.len() as libc::socklen_t;
+    let ok = unsafe { libc::getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, token.as_mut_ptr() as *mut libc::c_void, &mut len) } == 0 && len as usize == token.len();
+    Some(PeerProcess { pid: pid as u32, audit_token: ok.then(|| hex::encode(token)) })
+}
+
+#[cfg(target_os = "linux")]
+fn peer(fd: i32) -> Option<PeerProcess> {
+    let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
+    let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    if unsafe { libc::getsockopt(fd, libc::SOL_SOCKET, libc::SO_PEERCRED, &mut cred as *mut _ as *mut libc::c_void, &mut len) } != 0 || cred.pid <= 0 {
+        return None;
+    }
+    Some(PeerProcess { pid: cred.pid as u32, audit_token: None })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn peer(_fd: i32) -> Option<PeerProcess> {
+    None
+}

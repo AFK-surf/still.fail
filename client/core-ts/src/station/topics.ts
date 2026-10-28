@@ -21,7 +21,8 @@ import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords, isLetter, members } from "../views/views.ts";
-import { type Link, MEMORY, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { type Link, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
+import { grantsShown } from "./outflow.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
 import * as looks from "../looks.ts";
@@ -41,7 +42,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "outflowGrants", "linkPreview", "filePeek"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -200,6 +201,8 @@ export class StationTopics implements Owner {
     if (topic.topic === "stationSearch") this.#sync.searchShown(topic);
     // The agents' memory: read each time it is shown (agents write it as they work), what was read last shown meanwhile.
     if (topic.topic === "memory") this.#sync.memoryShown(station);
+    // The programs granted the station's data: read each time shown, then as the station tells.
+    if (topic.topic === "outflowGrants") this.#sync.outflowShown(station);
     // What a web link in a message is: read each time its card shows (a pull request's state moves), what was read
     // last shown meanwhile.
     if (topic.topic === "linkPreview") this.#sync.linkPreviewShown(station, topic.url as string);
@@ -300,6 +303,16 @@ export class StationTopics implements Owner {
           const shown = structuredClone(v);
           looks.answer("GET", "/memory", shown);
           return { ok: shown };
+        }
+        if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
+        return error ? { err: error } : undefined;
+      }
+      case "outflowGrants": {
+        // As the station said it last (kept), the times in words; nothing read yet, as `memory`.
+        const v = link?.memory.get(OUTFLOW);
+        if (v !== undefined) {
+          const now = this.#core.host.nowMs();
+          return { ok: grantsShown(v, now, this.#core.host.utcOffsetMin(now)) };
         }
         if (link && down(link.state)) return { err: new CoreError("offline", downWords(link.state, this.#core.views.stationName(station))) };
         return error ? { err: error } : undefined;

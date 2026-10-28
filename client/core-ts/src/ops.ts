@@ -22,6 +22,8 @@ export type Effect =
   | { kind: "job" }
   /// The agents' memory (the `memory` topic): read again.
   | { kind: "memory" }
+  /// The programs granted the station's data (the `outflowGrants` topic, docs/data-outflow.md): read again.
+  | { kind: "outflowGrants" }
   | { kind: "identity" }
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
@@ -146,6 +148,7 @@ export const PARAMS: Record<string, string> = {
   "screen.close": "screen:string",
   "job.clearEnded": "session:string",
   "memory.get": "",
+  "outflow.revoke": "id:string",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -516,6 +519,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
+    // A program's grant of the station's data revoked (docs/data-outflow.md): its next read is refused.
+    case "outflow.revoke":
+      return op("DELETE", () => `/outflow/grants/${p.at("id")}`, null, { kind: "outflowGrants" });
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
