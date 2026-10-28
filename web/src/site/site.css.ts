@@ -63,6 +63,8 @@ export const navLink = style({ transition: "color .2s", selectors: { "&:hover": 
 export const forAndroid = style({ display: "none", selectors: { ":root[data-platform=\"android\"] &": { display: "inline" } } });
 export const forComputer = style({ display: "none", selectors: { ":root:is([data-platform=\"mac\"], [data-platform=\"desktop\"]) &": { display: "inline-block" } } });
 globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: vars.textTitle });
+/** A link in the bar that is a mark (GitHub's): as tall as the theme switch beside it, the mark in its middle. */
+export const navMark = style({ display: "grid", placeItems: "center", width: "36px", height: "36px" });
 globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", background: "none", font: "inherit", cursor: "default" });
 
 /** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */

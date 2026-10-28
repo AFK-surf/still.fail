@@ -8,6 +8,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject }
 import type { DemoOptions, MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
+import { GitHubMark } from "@stillfail/ui/brands.tsx";
 import { OneComputer } from "./OneComputer.tsx";
 import { Distance } from "./Distance.tsx";
 import { SiteLangContext, useSay, useSiteLang, type SiteLang } from "./words.ts";
@@ -25,6 +26,8 @@ const MAC = `https://app.still.fail/releases/latest/${BETA ? "mac-beta" : "mac"}
 const WINDOWS = `https://app.still.fail/releases/latest/${BETA ? "win-beta" : "win"}`;
 const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
+/** Its code. */
+const GITHUB = "https://github.com/AFK-surf/still.fail";
 
 /** A link as a button; with `then`, its words roll up on hover and those take their place (site.css.ts). */
 export function Button({ href, kind, large, then, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; then?: string; children: ReactNode; className?: string }) {
@@ -128,6 +131,8 @@ function Page({ mountDemo, demo }: DemoProps) {
           </span>
           {/* The page in the other language (on a phone, in the footer: the bar has no room). */}
           <a className={`${css.navLink} ${css.navButton}`} href={say.otherHref} lang={lang === "en" ? "zh" : "en"} onClick={chooseLang(lang === "en" ? "zh" : "en")}>{say.other}</a>
+          {/* Its code, a mark the bar keeps on a phone too. */}
+          <a className={`${css.navLink} ${css.navMark}`} href={GITHUB} aria-label="GitHub" title="GitHub"><GitHubMark size={20} /></a>
           <ThemeSwitch />
           <Button href={APP} kind="primary" className={css.navButton}>{say.open} {NAME.head + NAME.tail}</Button>
         </div>
@@ -159,7 +164,7 @@ function Page({ mountDemo, demo }: DemoProps) {
           <a className={css.navLink} href={MAC}>Mac</a>
           <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
-          <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
+          <a className={css.navLink} href={GITHUB}>GitHub</a>
           {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
           <a className={css.navLink} href={`${say.legal}/terms`}>{say.terms}</a>
           <a className={css.navLink} href={`${say.legal}/privacy`}>{say.privacy}</a>
