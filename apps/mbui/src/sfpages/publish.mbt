@@ -55,11 +55,17 @@ pub fn publish_reset() -> Unit {
 }
 
 ///|
-/// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview).
-pub fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
+/// Opened for chat `r`'s `thread`: what the picture would hold asked now (usePublishPreview); with `turn` (a
+/// message's seq), the turn of that message alone (a message's menu's 分享这一轮).
+pub fn open_publish(src : Source, r : ChatRef, thread : Double, turn? : Double? = None) -> Unit {
   publish_reset()
   publishing.of.set(Some((r, thread)))
-  (src.call)("chat.publishPreview", { "station": Json::string(r.station), "thread": Json::number(thread) }, fn(res) {
+  let asked : Map[String, Json] = { "station": Json::string(r.station), "thread": Json::number(thread) }
+  match turn {
+    Some(n) => asked["turn"] = Json::number(n)
+    None => ()
+  }
+  (src.call)("chat.publishPreview", Json::object(asked), fn(res) {
     match publishing.of.get() {
       Some((o, th)) if o.station == r.station && th == thread =>
         match res {
@@ -97,6 +103,24 @@ pub fn publish_set(r : ChatRef, thread : Double, preview : Json) -> Unit {
 /// Whether attachment `k` is left out of the picture (tests).
 pub fn publish_left_out(k : String) -> Bool {
   publishing.off.contains(k)
+}
+
+///|
+/// What leaves message `seq` out of the picture in `off` (its attachments are there by their `k`).
+fn message_k(seq : Double) -> String {
+  "m:" + seq_s(seq)
+}
+
+///|
+/// Whether message `seq` is left out of the picture (tests).
+pub fn publish_message_left_out(seq : Double) -> Bool {
+  publishing.off.contains(message_k(seq))
+}
+
+///|
+/// How many of the preview's messages go in the picture (none ticked: nothing to take).
+fn publish_kept(p : Json?) -> Int {
+  items(p, "list").filter(fn(j) { !publishing.off.contains(message_k(number(Some(j), "seq"))) }).length()
 }
 
 ///|
@@ -194,9 +218,9 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
           @sf.page_viewer_ink(),
           if shown { @sf.t("common.copied") } else { label },
           busy=publishing.busy.get(),
-          disabled=p is None || messages.length() == 0,
+          disabled=p is None || publish_kept(p) == 0,
         )
-        if acted && p is Some(_) && messages.length() > 0 {
+        if acted && p is Some(_) && publish_kept(p) > 0 {
           publish_go(c)
         }
         if closed {
@@ -243,11 +267,34 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
     c.box(style=if narrow { publish_list_narrow } else { publish_list }, fn() {
       for j in items(p, "list") {
         let m = picture_message(@sfbase.message_of(j), taking)
-        c.box(style=publish_said, fn() {
+        let k = message_k(m.seq)
+        let on = !publishing.off.contains(k)
+        if taking && !on {
+          continue
+        }
+        let said = c.box(style=publish_said, fn() {
           // (its files drawn each to tick: file_item asks picturing)
           picturing.val = Some((m.seq, taking))
           message_row(c, src, here, m)
           picturing.val = None
+          // on the page its box to tick, at the top of its other side: the end of its head's line, the start of the
+          // viewer's own (theirs at the end)
+          if !taking {
+            c.layer(fn() {
+              c.box(style=if m.mine { publish_message_tick_mine } else { publish_message_tick }, fn() {
+                let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message")).value
+                if (now == On) != on {
+                  if now == On {
+                    publishing.off.remove(k)
+                  } else {
+                    publishing.off[k] = true
+                  }
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          }
           match hidden.get(m.seq) {
             Some(h) if !taking =>
               c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
@@ -258,7 +305,9 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
             _ => ()
           }
         })
-        |> ignore
+        if !on {
+          c.look(said, @ui.look(alpha=publish_off_alpha))
+        }
       }
     })
     |> ignore
@@ -468,6 +517,16 @@ let publish_list_narrow : @ui.Style = @ui.style(w=Full, gap=@sf.room_of(list_gap
 /// A message and, under it, how much was hidden in it (6 under).
 // kept across runs: a value (no field of it changes)
 let publish_said : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+/// A message's box to tick: over it, at the top of the side its words leave (its head's end; the viewer's own, its
+/// start).
+// kept across runs: a value (no field of it changes)
+let publish_message_tick : @ui.Style = @ui.css("w=Full align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_message_tick_mine : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
 /// An attachment to tick (file), its box at its end (tick).

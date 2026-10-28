@@ -126,7 +126,7 @@ export type Call =
   | { kind: "chatOutsideShare"; station: string; text: string }
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
   /// A chat made public (views/publish.ts): what a snapshot would hold, one kept, one revoked.
-  | { kind: "chatPublishPreview"; station: string; thread: number }
+  | { kind: "chatPublishPreview"; station: string; thread: number; turn: number | null }
   | { kind: "chatPublish"; station: string; thread: number; upto: number; files: string[] }
   | { kind: "chatUnpublish"; station: string; thread: number | null; id: string }
   | { kind: "chatRefsKeep"; links: [string, string][] }
@@ -738,8 +738,9 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       const p = read(params, [
         ["station", S, "req"],
         ["thread", "u64", "req"],
+        ["turn", "u64", "opt"],
       ]);
-      return { kind: "chatPublishPreview", station: p.station as string, thread: p.thread as number };
+      return { kind: "chatPublishPreview", station: p.station as string, thread: p.thread as number, turn: p.turn as number | null };
     }
     case "chat.publish": {
       const p = read(params, [

@@ -416,6 +416,11 @@ export const quotePop = style({
     "&:hover": { background: vars.primaryHover },
   },
 });
+/** Words picked with a turn to share (useSelectionQuote's `onShare`): its two pills side by side, 6 apart, where one is. */
+export const quotePops = style({
+  position: "fixed", zIndex: "40", transform: "translate(-50%, calc(-100% - 8px))", display: "flex", gap: "6px",
+});
+globalStyle(`${quotePops} > ${quotePop}`, { position: "static", transform: "none" });
 /** An image of a message quoted, in the composer's quote card: as small as a picked one, the station's picture. */
 export const quoteThumb = style({
   cornerShape: vars.cornerShape, display: "block", width: "64px", height: "64px", borderRadius: vars.rField, overflow: "hidden",

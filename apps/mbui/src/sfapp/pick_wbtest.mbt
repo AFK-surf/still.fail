@@ -83,6 +83,20 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
 }
 
 ///|
+test "分享这一轮 on the bar lets go and shares the message's turn as a picture (chat.publishPreview by its seq)" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.tap_text("分享这一轮")
+  assert_eq(pk.ts, "")
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
+  assert_eq(number(Some(asked[0].params), "thread"), 7.0)
+  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+}
+
+///|
 test "a handle moves its end: the passage's end follows the finger" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

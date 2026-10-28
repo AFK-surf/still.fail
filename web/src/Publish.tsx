@@ -25,15 +25,18 @@ import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** A preview as asked (`chat.publishPreview`): being read, read, or why not. */
 export type Previewed = { reading: true } | { ok: PublishPreview } | { error: string };
 
-/** What a snapshot of the chat would hold now, asked once as the panel opens (nothing is kept until it is published). */
-export function usePublishPreview(station: string, thread: number): Previewed {
+/**
+ * What a snapshot of the chat would hold now, asked once as the panel opens (nothing is kept until it is published);
+ * with `turn` (a message's n), that message's turn alone.
+ */
+export function usePublishPreview(station: string, thread: number, turn?: number): Previewed {
   const call = useStationCall(station);
   const [shown, setShown] = useState<Previewed>({ reading: true });
   useEffect(() => {
     let gone = false;
-    stationApi(call).publishPreview(thread).then((ok) => { if (!gone) setShown({ ok }); }, (e: unknown) => { if (!gone) setShown({ error: failure(e) }); });
+    stationApi(call).publishPreview(thread, turn).then((ok) => { if (!gone) setShown({ ok }); }, (e: unknown) => { if (!gone) setShown({ error: failure(e) }); });
     return () => { gone = true; };
-  }, [call, thread]);
+  }, [call, thread, turn]);
   return shown;
 }
 
@@ -43,7 +46,8 @@ export function useCopyLink(): (link: string) => void {
   return (link) => void navigator.clipboard.writeText(link).then(() => toast(t("common.link.copied")), (e: unknown) => toast(t("common.link.copyFailed", { error: failure(e) })));
 }
 
-/** Which attachments the picture leaves out (all are in at first), and how one is ticked or unticked. */
+/** Which attachments and messages the picture leaves out (all are in at first: an attachment by its `k`, a message by
+ * messageKey), and how one is ticked or unticked. */
 export type Ticking = { off: ReadonlySet<string>; toggle(k: string): void };
 
 /** The attachments left out, one more ticked or unticked. */
@@ -52,12 +56,20 @@ export function useTicking(): Ticking {
   return { off, toggle: (k) => setOff((was) => { const next = new Set(was); if (next.has(k)) next.delete(k); else next.add(k); return next; }) };
 }
 
+/** What leaves message `seq` out of the picture in Ticking's `off`. */
+const messageKey = (seq: number) => `m:${seq}`;
+
+/** How many of the preview's messages go in the picture (none ticked: nothing to take). */
+export function keptCount(preview: PublishPreview, ticking: Ticking): number {
+  return preview.list.filter((m) => !ticking.off.has(messageKey(m.seq))).length;
+}
+
 /**
  * The picture as it would be, on the page's ground: the chat's name, its messages as the chat's list draws them (its
  * rows, as a message out of its chat is drawn: StaticMessage; the viewer's own in their bubbles at the end, an agent's
  * cards as cards; their heads in line with their pictures where the list has them so, `inline`: the phone's), still.fail's
- * mark and name at its foot. What is only for the one sharing it (each attachment's box to tick, one left out, how much
- * was hidden in a message) is marked `data-shot-off`: the picture taken (takePicture) leaves it out.
+ * mark and name at its foot. What is only for the one sharing it (each message's and attachment's box to tick, one left
+ * out, how much was hidden in a message) is marked `data-shot-off`: the picture taken (takePicture) leaves it out.
  */
 export function PublishPicture({ preview, ticking, paper, inline = false }: { preview: PublishPreview; ticking: Ticking; paper: RefObject<HTMLDivElement | null>; inline?: boolean }) {
   const hidden = new Map(preview.messages.map((m) => [m.n, m.hiddenText]));
@@ -65,18 +77,24 @@ export function PublishPicture({ preview, ticking, paper, inline = false }: { pr
     <div ref={paper} className={css.paper} data-inline={inline || undefined}>
       {preview.title && <h2 className={css.title}>{preview.title}</h2>}
       <div className={`${css.list} ${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} data-inline={inline || undefined}>
-        {preview.list.map((m) => (
-          <div key={m.seq} className={css.said}>
-            {/* Its files each to tick, as it has them (by its n and where each is: the preview's `files`). */}
-            <FileTick.Provider value={(file, sessionKey) => {
-              const f = preview.files.find((x) => x.n === m.seq && x.file.path === file.path);
-              return f ? <FileToggle file={f} sessionKey={sessionKey} ticking={ticking} /> : <FileLook sessionKey={sessionKey} file={file} />;
-            }}>
-              <StaticMessage message={m} keeper={m.by.agent ?? preview.files[0]?.file.owner ?? ""} />
-            </FileTick.Provider>
-            {hidden.get(m.seq) && <div className={css.note} data-mine={m.mine || undefined} data-shot-off=""><ShieldCheck size={13} />{hidden.get(m.seq)}</div>}
-          </div>
-        ))}
+        {preview.list.map((m) => {
+          const off = ticking.off.has(messageKey(m.seq));
+          return (
+            <div key={m.seq} className={css.said} data-off={off || undefined} data-shot-off={off ? "" : undefined}>
+              {/* Its box to tick, at the top of the side its words leave: its head's end, the start of the viewer's own. */}
+              <input type="checkbox" className={css.messageTick} data-mine={m.mine || undefined} checked={!off} onChange={() => ticking.toggle(messageKey(m.seq))}
+                aria-label={t("web-pages.chat.publish.message")} data-shot-off="" />
+              {/* Its files each to tick, as it has them (by its n and where each is: the preview's `files`). */}
+              <FileTick.Provider value={(file, sessionKey) => {
+                const f = preview.files.find((x) => x.n === m.seq && x.file.path === file.path);
+                return f ? <FileToggle file={f} sessionKey={sessionKey} ticking={ticking} /> : <FileLook sessionKey={sessionKey} file={file} />;
+              }}>
+                <StaticMessage message={m} keeper={m.by.agent ?? preview.files[0]?.file.owner ?? ""} />
+              </FileTick.Provider>
+              {hidden.get(m.seq) && <div className={css.note} data-mine={m.mine || undefined} data-shot-off=""><ShieldCheck size={13} />{hidden.get(m.seq)}</div>}
+            </div>
+          );
+        })}
       </div>
       <div className={css.foot}><Mark size={16} />still.fail</div>
     </div>
@@ -151,8 +169,8 @@ export function savePicture(png: Blob): void {
  * much was hidden, and at its end the button 复制图片 in words (已复制 a moment after; 2026-10-26: 「pc 也用文字按钮，不要用
  * 图标」).
  */
-export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
-  const preview = usePublishPreview(station, thread);
+export function PublishDialog({ station, thread, turn, onClose }: { station: string; thread: number; turn?: number; onClose(): void }) {
+  const preview = usePublishPreview(station, thread, turn);
   const ticking = useTicking();
   const paper = useRef<HTMLDivElement | null>(null);
   const copy = useCopyPicture();
@@ -162,7 +180,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   useBackClose(true, onClose);
   const p = "ok" in preview ? preview.ok : null;
   const go = () => {
-    if (!paper.current || taking) return;
+    if (!paper.current || taking || !p || keptCount(p, ticking) === 0) return;
     setTaking(true);
     void copy(paper.current).then((done) => {
       if (done) {
@@ -183,7 +201,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     );
   }
   const tool = (
-    <Button variant="primary" busy={taking} disabled={!p || p.list.length === 0} onClick={go}>
+    <Button variant="primary" busy={taking} disabled={!p || keptCount(p, ticking) === 0} onClick={go}>
       {copied ? t("common.copied") : t("desktop.contextMenu.copyImage")}
     </Button>
   );

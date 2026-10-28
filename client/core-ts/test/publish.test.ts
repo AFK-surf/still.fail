@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { HttpRequest } from "../src/host.ts";
 import { jsonResponse, type FakeHost } from "../src/testing.ts";
-import { linkOf, linkStation, previewShown } from "../src/views/publish.ts";
+import { linkOf, linkStation, previewShown, turnOf } from "../src/views/publish.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { base, started, stationReplies, status, threadView } from "./station-fixture.ts";
 
@@ -239,6 +239,60 @@ test("a_previews_messages_are_the_chats_as_its_page_draws_them_cards_and_the_vie
   call(core, ui, 3, "chat.publishPreview", { station: "ws/st", thread: 7 });
   await host.settle();
   assert.deepEqual(answerOf(host, values, 3).ok.list.map((m: J) => [m.seq, m.mine, m.text]), [[3, true, "key: [已隐藏]"]]);
+  core.close();
+});
+
+test("a_turn_is_the_persons_words_that_began_it_and_all_said_after_them_until_a_person_speaks_again", () => {
+  const said = (kinds: string) => [...kinds].map((k, i) => ({ n: i + 1, authorKind: k === "p" ? "person" : k === "s" ? "stillfail" : "agent" }));
+  // asked twice, answered, a notice, answered again; then asked anew
+  const chat = said("ppasapa");
+  for (const n of [1, 2, 3, 4, 5]) assert.deepEqual(turnOf(chat, n), { from: 1, upto: 5 }, `from message ${n}`);
+  assert.deepEqual(turnOf(chat, 7), { from: 6, upto: 7 });
+  // an agent's words before anyone asked: from them on; a question not answered yet: itself
+  assert.deepEqual(turnOf(said("aap"), 2), { from: 1, upto: 2 });
+  assert.deepEqual(turnOf(said("ap"), 2), { from: 2, upto: 2 });
+  assert.equal(turnOf(chat, 9), null);
+});
+
+test("a_turns_preview_holds_its_messages_their_attachments_and_edits_alone", async () => {
+  const { host, core } = await setUp();
+  stationReplies(host, (req) => {
+    if (!(req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish/preview`)) return undefined;
+    const message = (n: number, authorKind: string, text: string) => ({ kind: "message", n, at: n, ts: `t${n}`, thread: 7, authorKind, author: authorKind === "person" ? "a@x.com" : "s-1", text, attachments: [], quotes: [] });
+    return {
+      upto: 5, title: "部署",
+      entries: [
+        { n: 2, at: 2, authorKind: "person", author: "安", text: "先查日志", files: [] },
+        { n: 3, at: 3, authorKind: "person", author: "安", text: "key: [已隐藏]", files: [] },
+        { n: 4, at: 4, authorKind: "agent", author: "Claude", text: "好了", files: ["f0"] },
+        { n: 5, at: 5, authorKind: "person", author: "安", text: "谢谢", files: ["f1"] },
+      ],
+      redacted: [{ n: 3, count: 1 }],
+      files: [
+        { k: "f0", name: "a.png", size: 1, type: "image/png", n: 4, path: "/w/uploads/a.png", owner: "s-1" },
+        { k: "f1", name: "b.png", size: 1, type: "image/png", n: 5, path: "/w/uploads/b.png", owner: "s-1" },
+      ],
+      views: {
+        entries: [message(2, "person", "先查日志"), message(3, "person", "key: [已隐藏]"), message(4, "agent", "好"),
+          { kind: "edit", n: 6, target: 4, at: 6, thread: 7, authorKind: "agent", author: "s-1", text: "好了", attachments: [], quotes: [] }, message(5, "person", "谢谢")],
+        hidden: [{ n: 3, count: 1 }],
+      },
+    };
+  });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  call(core, ui, 2, "chat.publishPreview", { station: "ws/st", thread: 7, turn: 4 });
+  await host.settle();
+  const answered = answerOf(host, values, 2).ok;
+  assert.equal(answered.upto, 4);
+  assert.deepEqual(answered.list.map((m: J) => [m.seq, m.text]), [[2, "先查日志"], [3, "key: [已隐藏]"], [4, "好了"]]);
+  assert.deepEqual(answered.messages.map((m: J) => m.n), [2, 3, 4]);
+  assert.deepEqual(answered.files.map((f: J) => f.k), ["f0"]);
+  assert.equal(answered.hidden, 1);
+  // The station is asked for the chat as ever: the turn is cut out of it here.
+  assert.deepEqual(asked(host, "/threads/7/publish").map((r) => r.body), [{ names: { "a@x.com": "安", "b@x.com": "Bo" } }]);
   core.close();
 });
 

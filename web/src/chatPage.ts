@@ -17,6 +17,8 @@ export interface ChatPageActions {
   find?(): void;
   /** The chat archived, as its bar's 归档 does (asking first while one of its agents keeps watch). */
   archive(): void;
+  /** The turn of message `seq` shared as a picture, as the chat's own 分享图片 shares it. */
+  share?(seq: number): void;
 }
 
 const pages = new Map<string, { current: ChatPageActions }>();
@@ -42,4 +44,5 @@ export const chatPage = {
   jobs: (chat: string, job?: string) => pages.get(chat)?.current.jobs?.(job),
   find: (chat: string) => pages.get(chat)?.current.find?.(),
   archive: (chat: string) => pages.get(chat)?.current.archive(),
+  share: (chat: string, seq: number) => pages.get(chat)?.current.share?.(seq),
 };

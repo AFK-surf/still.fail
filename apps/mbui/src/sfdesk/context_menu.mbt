@@ -1,13 +1,15 @@
 // What a right click in the desktop's window offers, as the desktop app's own (ember apps/desktop/src/context-menu.mts:
 // Electron shows none of its own): a link's (在浏览器中打开链接 and 复制链接), an image's (复制图片), then the words: a
 // field's editing (剪切, 复制, 粘贴, 全选, each as it can be done now), elsewhere the words picked (复制); a line between
-// them; nothing where there is none of these (the page's ground). The library's menu (@sf.dropdown) at the pointer.
+// them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked, 分享这一轮
+// at its end (its turn shared as a picture: sfbase's share_offered). The library's menu (@sf.dropdown) at the pointer.
 
 ///|
 /// The menu while it is open: where (the pointer), the link right clicked ("" none), the image (its source, "" none),
 /// the field (its id, 0 none), the words picked then ("" none), and the frame something in the page opened it in (the
-/// page's right click under it, the same, opens nothing else). What is under way once chosen: the clipboard read for
-/// 粘贴 (into that field), the image's pixels read for 复制图片.
+/// page's right click under it, the same, opens nothing else), and what shares the turn of the message right clicked
+/// (None: none). What is under way once chosen: the clipboard read for 粘贴 (into that field), the image's pixels read
+/// for 复制图片.
 pub struct ContextMenu {
   mut open : Bool
   mut x : Double
@@ -18,6 +20,7 @@ pub struct ContextMenu {
   mut words : String
   mut frame : Int
   mut copying : String
+  mut share : (() -> Unit)?
 }
 
 ///|
@@ -31,6 +34,7 @@ pub let context : ContextMenu = {
   words: "",
   frame: -1,
   copying: "",
+  share: None,
 }
 
 ///|
@@ -38,6 +42,7 @@ fn context_reset() -> Unit {
   context.open = false
   context.frame = -1
   context.copying = ""
+  context.share = None
 }
 
 ///|
@@ -72,6 +77,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
   context.field = 0
   context.words = c.selected_text()
   context.frame = c.frame_number()
+  context.share = None
 }
 
 ///|
@@ -99,6 +105,23 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.field = id
       context.words = ""
       context.frame = c.frame_number()
+      context.share = None
+    }
+    None => ()
+  }
+  // a message right clicked: its turn offered with what else is there (its link, its picture, the words picked: told
+  // the menu in the same frame), or alone. (A chat's list is built after the frame's overlays: an offer of the frame
+  // before is taken as it comes.)
+  match @sfbase.share_offered.val {
+    Some((at, x, y, go)) => {
+      @sfbase.share_offered.val = None
+      // (not over a field right clicked)
+      if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
+        if context.frame != at {
+          context_at(c, x, y)
+        }
+        context.share = Some(go)
+      }
     }
     None => ()
   }
@@ -136,6 +159,10 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       group()
       entries.push(@kit.menu_item("copy", label=@sf.t("desktop.contextMenu.copy")))
     }
+    if context.share is Some(_) {
+      group()
+      entries.push(@kit.menu_item("share-turn", label=@sf.t("web-main.chat.shareTurn")))
+    }
   }
   if entries.is_empty() {
     context.open = false
@@ -156,6 +183,11 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     Some("copy-link") => c.copy_text(context.link)
     Some("copy") => c.copy_text(context.words)
     Some("copy-image") => context.copying = context.image
+    Some("share-turn") =>
+      match context.share {
+        Some(go) => go()
+        None => ()
+      }
     Some("cut") => c.field_edit(field, @hostapi.text_menu_cut)
     Some("copy-field") => c.field_edit(field, @hostapi.text_menu_copy)
     Some("select-all") => c.field_edit(field, @hostapi.text_menu_select_all)

@@ -11,7 +11,7 @@ import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { CacheColdNotice } from "./CacheColdNotice.tsx";
 import { ComposerNotice, ComposerNotices } from "./ComposerNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, PlayMark, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Photo, PlayMark, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -141,7 +141,9 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(rows.virtual, chat);
   // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
-  const quoting = useSelectionQuote(list, (quote, file) => offerToDraft(draftKey, { files: [], quotes: [], quote, ...(file ? { quotedFile: file } : {}) }));
+  // Its turn shared as a picture from there, by the page open for it.
+  const quoting = useSelectionQuote(list, (quote, file) => offerToDraft(draftKey, { files: [], quotes: [], quote, ...(file ? { quotedFile: file } : {}) }),
+    (seq) => chatPage.share(draftKey, seq));
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
@@ -454,11 +456,12 @@ export interface ImageQuoting {
 
 /**
  * Selecting words inside one message of the list offers to quote them (`onQuote`), in a small button over the
- * selection; an image of one (`images`, for its files' boxes), a button over its corner, or holding it, quotes the
- * image (its file going again with the message). Answers what the list takes to watch the selection, and the button.
+ * selection, and beside it to share the message's turn as a picture (`onShare`, by its n); an image of one (`images`,
+ * for its files' boxes), a button over its corner, or holding it, quotes the image (its file going again with the
+ * message). Answers what the list takes to watch the selection, and the buttons.
  */
-export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">, file?: Attachment) => void) {
-  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number; file?: Attachment } | null>(null);
+export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">, file?: Attachment) => void, onShare?: (seq: number) => void) {
+  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number; file?: Attachment; seq?: number } | null>(null);
   const latest = useRef(onQuote);
   latest.current = onQuote;
   const [images] = useState((): ImageQuoting => {
@@ -494,18 +497,30 @@ export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: 
     if (!from || !list.current?.contains(from)) return setPicked(null);
     const rect = range.getBoundingClientRect();
     const role = from.dataset.role === "agent" ? "agent" as const : "person" as const;
-    setPicked({ quote: { author: from.dataset.author!, text, ...(from.dataset.ts ? { ts: from.dataset.ts } : {}), role }, x: rect.left + rect.width / 2, y: rect.top });
+    // (a message's row by its n: `m:<n>`; one not sent yet has none)
+    const seq = /^m:(\d+)$/.exec(from.dataset.vk ?? "")?.[1];
+    setPicked({ quote: { author: from.dataset.author!, text, ...(from.dataset.ts ? { ts: from.dataset.ts } : {}), role }, x: rect.left + rect.width / 2, y: rect.top, ...(seq ? { seq: Number(seq) } : {}) });
   };
+  const quote = picked && (
+    <button type="button" className={picked.file ? `${css.quotePop} ${css.quoteImagePop}` : css.quotePop} style={{ left: picked.x, top: picked.y }}
+      onMouseDown={(e) => e.preventDefault()} onMouseLeave={picked.file ? (e) => images.off(e.relatedTarget) : undefined}
+      onClick={() => { onQuote(picked.quote, picked.file); setPicked(null); if (!picked.file) window.getSelection()?.removeAllRanges(); }}>
+      <QuoteIcon size={12} strokeWidth={2.2} />{t("web-main.chat.quote")}
+    </button>
+  );
+  const seq = picked?.seq;
   return {
     listProps: { onMouseUp: () => { setTimeout(pick, 0); }, onScroll: () => setPicked(null) },
     images,
-    pop: picked && (
-      <button type="button" className={picked.file ? `${css.quotePop} ${css.quoteImagePop}` : css.quotePop} style={{ left: picked.x, top: picked.y }}
-        onMouseDown={(e) => e.preventDefault()} onMouseLeave={picked.file ? (e) => images.off(e.relatedTarget) : undefined}
-        onClick={() => { onQuote(picked.quote, picked.file); setPicked(null); if (!picked.file) window.getSelection()?.removeAllRanges(); }}>
-        <QuoteIcon size={12} strokeWidth={2.2} />{t("web-main.chat.quote")}
-      </button>
-    ),
+    pop: picked && !picked.file && seq !== undefined && onShare ? (
+      <div className={css.quotePops} style={{ left: picked.x, top: picked.y }}>
+        {quote}
+        <button type="button" className={css.quotePop} onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { setPicked(null); window.getSelection()?.removeAllRanges(); onShare(seq); }}>
+          <Photo size={12} />{t("web-main.chat.shareTurn")}
+        </button>
+      </div>
+    ) : quote,
   };
 }
 
