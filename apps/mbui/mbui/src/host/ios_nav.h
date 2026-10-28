@@ -79,18 +79,29 @@ static UIImage *nav_icon(NSString *data, CGFloat size) {
   return [img imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
-// People as an icon (`avatars:` then each `rrggbbaa,letter` apart by `;`, at most three): their discs, each its letter
-// in white on its colour, the ones after a little over the one before, in their own colours (not the bar's tint).
-static UIImage *nav_avatars(NSString *spec, CGFloat size) {
-  NSArray<NSString *> *each = [[spec substringFromIndex:8] componentsSeparatedByString:@";"];
+// People as an icon (`avatars:` then each `rrggbbaa,letter` (an alpha of 0: no disc, the letter alone) apart by `\x1d`, at most three; `\x1f` and a picture's
+// address after one that has one): their discs, each its picture once loaded (`then` told), else its letter in white
+// on its colour, the ones after a little over the one before, in their own colours (not the bar's tint).
+static UIImage *nav_picture(NSString *url, CGFloat size, BOOL round, void (^then)(void));
+static UIImage *nav_avatars(NSString *spec, CGFloat size, void (^then)(void)) {
+  NSArray<NSString *> *each = [[spec substringFromIndex:8] componentsSeparatedByString:@"\x1d"];
   NSUInteger n = MIN(each.count, (NSUInteger)3);
   if (!n) return nil;
   CGFloat d = size, step = size * 0.6, ring = 1.5;
   CGSize all = CGSizeMake(d + step * (n - 1), d);
+  NSMutableArray *faces = [NSMutableArray array];
+  for (NSUInteger i = 0; i < n; i++) {
+    NSRange pic = [each[i] rangeOfString:@"\x1f"];
+    UIImage *got = pic.location == NSNotFound ? nil : nav_picture([each[i] substringFromIndex:pic.location + 1], d, YES, then);
+    [faces addObject:got ?: NSNull.null];
+  }
   UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:all];
   UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
     for (NSUInteger i = 0; i < n; i++) {
-      NSArray<NSString *> *p = [each[i] componentsSeparatedByString:@","];
+      NSString *one = each[i];
+      NSRange pic = [one rangeOfString:@"\x1f"];
+      if (pic.location != NSNotFound) one = [one substringToIndex:pic.location];
+      NSArray<NSString *> *p = [one componentsSeparatedByString:@","];
       if (p.count < 2) continue;
       unsigned long long c = strtoull(p[0].UTF8String, NULL, 16);
       UIColor *ground = [UIColor colorWithRed:((c >> 24) & 0xFF) / 255.0 green:((c >> 16) & 0xFF) / 255.0
@@ -98,10 +109,18 @@ static UIImage *nav_avatars(NSString *spec, CGFloat size) {
       CGRect disc = CGRectMake(step * i, 0, d, d);
       // (cut out of the one before by a ring, as the app's stack has them)
       if (i > 0) [[UIBezierPath bezierPathWithOvalInRect:CGRectInset(disc, -ring, -ring)] fillWithBlendMode:kCGBlendModeClear alpha:1];
-      [ground setFill];
-      [[UIBezierPath bezierPathWithOvalInRect:disc] fill];
-      NSString *letter = p[1];
-      UIFont *font = [UIFont systemFontOfSize:d * 0.5 weight:UIFontWeightSemibold];
+      if (faces[i] != NSNull.null) {
+        [(UIImage *)faces[i] drawInRect:disc];
+        continue;
+      }
+      // (a colour of no alpha: the letter (an emoji) on the glass alone, larger)
+      BOOL bare = (c & 0xFF) == 0;
+      if (!bare) {
+        [ground setFill];
+        [[UIBezierPath bezierPathWithOvalInRect:disc] fill];
+      }
+      NSString *letter = [[p subarrayWithRange:NSMakeRange(1, p.count - 1)] componentsJoinedByString:@","];
+      UIFont *font = [UIFont systemFontOfSize:d * (bare ? 0.62 : 0.5) weight:UIFontWeightSemibold];
       NSDictionary *attrs = @{NSFontAttributeName : font, NSForegroundColorAttributeName : UIColor.whiteColor};
       CGSize s = [letter sizeWithAttributes:attrs];
       [letter drawAtPoint:CGPointMake(CGRectGetMidX(disc) - s.width / 2, CGRectGetMidY(disc) - s.height / 2) withAttributes:attrs];
@@ -132,47 +151,8 @@ static UIImage *nav_badge(NSString *spec, CGFloat size) {
   return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
-// A workspace's mark (`badge:rrggbbaa,letter`) as a bar's button has it: its colour, the glass's tint (the system's
-// prominent glass, filled with it), and its letter (or emoji) in white, alone (the user, 2026-10-27: filling its glass,
-// still glass).
-static UIColor *nav_badge_tint(NSString *spec) {
-  NSArray<NSString *> *p = [[spec substringFromIndex:6] componentsSeparatedByString:@","];
-  if (p.count < 2) return nil;
-  unsigned long long c = strtoull(p[0].UTF8String, NULL, 16);
-  return [UIColor colorWithRed:((c >> 24) & 0xFF) / 255.0 green:((c >> 16) & 0xFF) / 255.0 blue:((c >> 8) & 0xFF) / 255.0 alpha:1];
-}
-
-static UIImage *nav_badge_glyph(NSString *spec, CGFloat size) {
-  NSArray<NSString *> *p = [[spec substringFromIndex:6] componentsSeparatedByString:@","];
-  if (p.count < 2) return nil;
-  NSString *letter = [[p subarrayWithRange:NSMakeRange(1, p.count - 1)] componentsJoinedByString:@","];
-  UIFont *font = [UIFont systemFontOfSize:size * 0.75 weight:UIFontWeightSemibold];
-  NSDictionary *attrs = @{NSFontAttributeName : font, NSForegroundColorAttributeName : UIColor.whiteColor};
-  CGSize s = [letter sizeWithAttributes:attrs];
-  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
-  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-    [letter drawAtPoint:CGPointMake((size - s.width) / 2, (size - s.height) / 2) withAttributes:attrs];
-  }];
-  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
-}
-
-// The side of a workspace's picture on the bar's button, a disc on its glass: as large as the bar draws an image (the
-// glass larger round it, tinted as the picture is).
-static const CGFloat nav_mark_picture = 34;
-
-// A picture's colour, all of it as one (its glass's tint).
-static UIColor *nav_mean(UIImage *img) {
-  unsigned char px[4] = {0};
-  CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
-  CGContextRef c = CGBitmapContextCreate(px, 1, 1, 8, 4, rgb, kCGImageAlphaPremultipliedLast);
-  CGColorSpaceRelease(rgb);
-  if (!c) return nil;
-  CGContextSetInterpolationQuality(c, kCGInterpolationMedium);
-  CGContextDrawImage(c, CGRectMake(0, 0, 1, 1), img.CGImage);
-  CGContextRelease(c);
-  if (!px[3]) return nil;
-  return [UIColor colorWithRed:px[0] / (CGFloat)px[3] green:px[1] / (CGFloat)px[3] blue:px[2] / (CGFloat)px[3] alpha:1];
-}
+// The side of a workspace's mark on the bar's button (nav_avatars): the glass a thin ring round it.
+static const CGFloat nav_face = 40;
 
 // A picture by its address (an https link, a data: URL) as a mark: rounded, in its own colours; loaded once, kept by
 // its address (nil while it comes: `then` is told once it is here, each asker's, not the first's alone: the bars are
@@ -238,7 +218,7 @@ static UIImage *nav_any_then(NSString *icon, CGFloat size, void (^then)(void)) {
     if (got) return got;
     icon = [icon substringToIndex:pic.location];
   }
-  if ([icon hasPrefix:@"avatars:"]) return nav_avatars(icon, size);
+  if ([icon hasPrefix:@"avatars:"]) return nav_avatars(icon, size, then);
   if ([icon hasPrefix:@"badge:"]) return nav_badge(icon, size);
   return nav_icon(icon, size);
 }
@@ -294,6 +274,21 @@ API_AVAILABLE(ios(18.0))
 // the icon each tab was drawn with, by its id (drawn again only as it changes)
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *icons;
 @end
+
+// The action's tab's icon (nav_tabs): a disc of the accent as large as its glass leaves, its icon white on it, the
+// one thing on the bar so filled (the user, 2026-10-28: 新建对话按钮橙色实心).
+static const CGFloat nav_action_side = 44;
+static UIImage *nav_action_disc(NSString *icon, UIColor *accent) {
+  CGFloat d = nav_action_side, g = 24;
+  UIImage *glyph = [nav_icon(icon, g) imageWithTintColor:UIColor.whiteColor];
+  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(d, d)];
+  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
+    [accent setFill];
+    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, d, d)] fill];
+    [glyph drawInRect:CGRectMake((d - g) / 2, (d - g) / 2, g, g)];
+  }];
+  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+}
 
 static UIViewController *the_root;
 
@@ -425,24 +420,21 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       // (a picture the host loads: drawn in once it is here, on the item made, while it is shown)
       __block __weak UIBarButtonItem *drawn = nil;
       NSString *spec = d[@"icon"];
-      // (a workspace's mark filling its glass, still glass: with no picture, the glass in its colour and its letter on
-      // it; with one, the picture a disc as large as the bar draws one, on a glass of its colour: the user, 2026-10-27)
-      UIColor *tint = nil;
-      NSString *picture = nil, *mark = spec;
+      // (a workspace's mark a disc nearly the glass's own size, on the glass as it is: its picture once here, else its
+      // letter on its colour, an emoji alone with no colour round it: the user, 2026-10-28)
       if ([spec hasPrefix:@"badge:"]) {
         NSRange pic = [spec rangeOfString:@"\x1e"];
-        if (pic.location == NSNotFound) tint = nav_badge_tint(spec);
-        else {
-          picture = [spec substringFromIndex:pic.location + 1];
-          mark = [spec substringToIndex:pic.location];
-        }
+        NSString *mark = pic.location == NSNotFound ? [spec substringFromIndex:6] : [spec substringWithRange:NSMakeRange(6, pic.location - 6)];
+        NSRange comma = [mark rangeOfString:@","];
+        if (comma.location != NSNotFound && comma.location + 1 < mark.length &&
+            ![NSCharacterSet.alphanumericCharacterSet characterIsMember:[mark characterAtIndex:comma.location + 1]])
+          mark = [@"00000000" stringByAppendingString:[mark substringFromIndex:comma.location]];
+        spec = pic.location == NSNotFound ? [@"avatars:" stringByAppendingString:mark]
+                                          : [NSString stringWithFormat:@"avatars:%@\x1f%@", mark, [spec substringFromIndex:pic.location + 1]];
       }
-      UIImage *icon = tint ? nav_badge_glyph(spec, 24)
-                      : picture ? nav_picture(picture, nav_mark_picture, YES, ^{
-                          UIImage *got = nav_picture(picture, nav_mark_picture, YES, nil);
-                          drawn.image = got;
-                          drawn.tintColor = nav_mean(got) ?: drawn.tintColor;
-                        }) ?: nav_badge(mark, nav_mark_picture)
+      UIImage *icon = [spec hasPrefix:@"avatars:"] ? nav_avatars(spec, nav_face, ^{
+                        drawn.image = nav_avatars(spec, nav_face, nil);
+                      })
                       : [spec length] ? nav_any_then(spec, 24, ^{
                           drawn.image = nav_any(spec, 24);
                         })
@@ -485,8 +477,16 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           }
           NSString *mi = m[@"icon"];
           UIImage *img = [mi length] ? nav_any(mi, 22) : nil;
+          // (said with where its menu's item is, as the item's own press is: what it opens a popover at it)
           UIAction *x = [UIAction actionWithTitle:m[@"title"] image:img identifier:nil handler:^(UIAction *a) {
-            say_system(@{@"nav" : row});
+            UIBarButtonItem *it = drawn;
+            UIView *v = the_view;
+            if (it && v) {
+              CGRect r = [it frameInView:v];
+              say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+            } else {
+              say_system(@{@"nav" : row});
+            }
           }];
           x.state = [m[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
           [acts addObject:x];
@@ -498,9 +498,9 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       }
 #ifdef __IPHONE_26_0
       if (@available(iOS 26.0, *)) {
-        if (prominent || tint || picture) {
+        if (prominent) {
           b.style = UIBarButtonItemStyleProminent;
-          b.tintColor = tint ?: picture ? (nav_mean(icon) ?: nav_badge_tint(mark)) : accent;
+          b.tintColor = accent;
         } else {
           b.tintColor = ink;
         }
@@ -619,11 +619,11 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
                                 viewControllerProvider:^(UITab *x) { return nav; }]];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
-    // glass, its icon in the accent: never chosen, shouldSelectTab says it)
+    // glass, a disc of the accent filling it, its icon white on it: never chosen, shouldSelectTab says it)
     self.action = act[@"id"];
     if (act) {
       UINavigationController *own = [self navFor:act[@"id"]];
-      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:[[nav_icon(act[@"icon"], 26) imageWithTintColor:accent] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] identifier:act[@"id"]
+      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:nav_action_disc(act[@"icon"], accent) identifier:act[@"id"]
                        viewControllerProvider:^(UITab *t) { return own; }];
       x.preferredPlacement = UITabPlacementPinned;
       [made addObject:x];

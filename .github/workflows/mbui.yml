@@ -522,21 +522,6 @@ jobs:
           (cd client/core-ts && quiet pnpm install --frozen-lockfile --prefer-offline)
           (cd cloud && quiet pnpm install --frozen-lockfile --prefer-offline)
           (cd station && quiet pnpm install --frozen-lockfile --prefer-offline && quiet pnpm run build)
-      # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
-      - name: The order of names (win.sh collate)
-        run: bash apps/mbui/scripts/win.sh collate
-      # what still.fail's desktop app kept sealed, opened by the app built in its place (src/host/win_electron_sealed.h)
-      - name: The desktop app's sealed values (win.sh sealed)
-        run: bash apps/mbui/scripts/win.sh sealed
-      - name: The core's bytecode (Hermes)
-        run: |
-          bash apps/mbui/scripts/win.sh core
-          [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.HBC_KEY != '' && env.HBC_KEY != steps.hbc.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: .ci/hbc
-          key: ${{ env.HBC_KEY }}
       # The test station's natives (e2e/win.sh: mesh and runner, win32-x64), by their keys. A change to one of them is in
       # no release yet and is built only by the pipeline's natives job (a Mac's cross-build: this machine has no zig):
       # then its end is waited for (an outside wait, its job's own state), and a branch takes what it built (its run's
@@ -567,12 +552,24 @@ jobs:
             echo "STILLFAIL_NATIVE_INBOX=$RUNNER_TEMP/natives" >> "$GITHUB_ENV"
           fi
       # The still.fail the e2e flow signs in against (its cloud, relay, station and chat: ~13 s of the flow's ~18, none
-      # of it the app's) made while cl compiles the app; the flow waits for the app (E2E_APP: "Build (APP=stillfail)"
-      # says it is whole), then runs it. Waited for at the end, with the installer's put (main's) and the cache's save beside it.
+      # of it the app's) made while cl compiles the app and the core's bytecode is made: started as soon as the packages
+      # are (the cloud's, the station's dist) and the station's natives, not after the checks below (it was ~30 s of the
+      # job's ~185-215 behind them, 2026-10-28, 40638451981); the flow waits for the app (E2E_APP: "Build
+      # (APP=stillfail)" says it is whole), then runs it. Waited for at the end, with the installer's put (main's), the
+      # cache's save and the order of names' and the sealed values' checks beside it.
       - name: The e2e flow started (e2e/win.sh, the app waited for)
         run: |
           E=$RUNNER_TEMP/e2e; mkdir -p "$E"
           nohup bash -c 'E2E_APP="$0/app" bash apps/mbui/e2e/win.sh > "$0/log" 2>&1; echo $? > "$0/status"' "$E" > /dev/null 2>&1 &
+      - name: The core's bytecode (Hermes)
+        run: |
+          bash apps/mbui/scripts/win.sh core
+          [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
+      - if: github.ref == 'refs/heads/main' && env.HBC_KEY != '' && env.HBC_KEY != steps.hbc.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/hbc
+          key: ${{ env.HBC_KEY }}
       - name: Build (APP=stillfail)
         run: |
           B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e
@@ -598,6 +595,13 @@ jobs:
         run: |
           bash apps/mbui/scripts/win.sh setup
           bash apps/mbui/e2e/win/setup.sh "$(ls apps/mbui/out/setup/stillfail-setup-*.exe)"
+      # (these two checks need nothing of the app's or the e2e flow's: done while the e2e flow runs, not before it)
+      # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
+      - name: The order of names (win.sh collate)
+        run: bash apps/mbui/scripts/win.sh collate
+      # what still.fail's desktop app kept sealed, opened by the app built in its place (src/host/win_electron_sealed.h)
+      - name: The desktop app's sealed values (win.sh sealed)
+        run: bash apps/mbui/scripts/win.sh sealed
       # out before the e2e flow ends (its tests hold nothing back): signed, put, checked, then its feed, beside the
       # cache's save and the e2e flow (one after another they were ~6 + 13 + 17 s after the build, 2026-10-24,
       # 40064767331; the put mostly waiting on the network)

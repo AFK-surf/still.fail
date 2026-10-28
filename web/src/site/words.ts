@@ -5,7 +5,13 @@ import { createContext, useContext } from "react";
 export type SiteLang = "zh" | "en";
 
 const ZH = {
-  download: "下载", open: "打开", appleSilicon: "Apple 芯片", downloadGo: "下载 →", androidQr: "下载 Android 版的二维码", androidScan: "Android 扫码下载",
+  download: "下载", open: "打开", androidQr: "下载 Android 版的二维码", androidScan: "扫码下载 Android 版",
+  /** The downloads (Site.tsx Downloads): its title, every app in a line, and the button for the device the page is on. */
+  downloads: {
+    title: "下载 still.fail",
+    main: { mac: "下载 Mac 版", windows: "下载 Windows 版", android: "下载 Android 版", other: "打开网页版" },
+    all: "全部版本", web: "网页版",
+  },
   other: "English", otherHref: "/en/",
   title: "One devices.",
   start: "开始使用",
@@ -31,7 +37,12 @@ const ZH = {
 };
 
 const EN: typeof ZH = {
-  download: "Download", open: "Open", appleSilicon: "Apple silicon", downloadGo: "Download →", androidQr: "A code to scan for the Android app", androidScan: "Scan for Android",
+  download: "Download", open: "Open", androidQr: "A code to scan for the Android app", androidScan: "Scan for Android",
+  downloads: {
+    title: "Download still.fail",
+    main: { mac: "Download for Mac", windows: "Download for Windows", android: "Download for Android", other: "Open the web app" },
+    all: "Every version", web: "Web app",
+  },
   other: "中文", otherHref: "/",
   title: "One devices.",
   start: "Get started",

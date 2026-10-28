@@ -33,7 +33,7 @@ test "an iPhone Duo on its side: the places and the chat's actions handed to the
   t.run_for(@ui.nav_push_ms)
   t.assert_idle()
   let said = t.nav_said()
-  for id in ["place/chats", "place/files", "place/stations", "act/attention", "act/workspaces", "\"new\"", "page/info", "page/who/agent/"] {
+  for id in ["place/chats", "place/files", "place/stations", "act/attention", "act/workspaces", "\"new\"", "page/chat/info", "page/chat/history"] {
     if !said.contains(id) {
       fail("the bars handed hold no \{id}: \{said}")
     }
@@ -69,6 +69,17 @@ test "an iPhone Duo upright: the same frame, the actions across the top (the bel
 }
 
 ///|
+test "an iPhone Duo upright: the system's tabs across its foot in the bars' room, the cards and the composer over them, not under" {
+  let t = native_chat(669.0, 951.0, true)
+  // (its floating tab bar and the home indicator's line: the safe area's foot)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":59,\"bottom\":90,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.nav_push_ms)
+  guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
+  assert_true(p.y + p.h <= 951.0 - 90.0 + 0.5, msg="the page's foot at \{p.y + p.h}")
+  assert_true(b.y + b.h <= 951.0 - 90.0, msg="the composer's foot at \{b.y + b.h}")
+}
+
+///|
 test "an iPhone, a phone or any other device with no bars of the system's for the app: nothing of the Duo's, the frame as it was" {
   for size in [(390.0, 844.0), (951.0, 669.0)] {
     let t = native_chat(size.0, size.1, false)
@@ -94,7 +105,7 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
     }
   }
   // (none of the tabs' own buttons while it is up: the chat's, the bell)
-  assert_false(said.contains("page/info"))
+  assert_false(said.contains("page/chat/"))
   // (its name in the system's bar, not in one of its own)
   assert_true(t.find("界面草图.png") is None)
   // (the picture and its ways before and after clear of the system's column)
@@ -344,4 +355,45 @@ test "an iPhone Duo on its side: a service alone in the side panel a card in it,
   assert_true(r3 > r0 + 1.0, msg="its corners \{(r0, r1, r2, r3)}")
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("place ") && s.contains(" round \{r0} \{r1} \{r2} \{r3}") }), msg="told the host each")
   assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// The icon of the item of the bars handed last whose id is `id` (None: no such item).
+fn nav_icon_of(t : @ui.Tester, id : String) -> String? {
+  let mut found : String? = None
+  fn walk(j : Json) -> Unit {
+    match j {
+      Object(m) => {
+        if m.get("id") is Some(String(s)) && s == id && found is None {
+          found = match m.get("icon") {
+            Some(String(i)) => Some(i)
+            _ => Some("")
+          }
+        }
+        for _, v in m {
+          walk(v)
+        }
+      }
+      Array(a) =>
+        for v in a {
+          walk(v)
+        }
+      _ => ()
+    }
+  }
+  walk(@json.parse(t.nav_said()) catch { _ => Json::null() })
+  found
+}
+
+///|
+test "an iPhone Duo: a chat's actions each its own in the system's bars, its history's switch the panel's icon open once that is open beside the chat" {
+  let t = native_chat(669.0, 951.0, true)
+  let id = "page/chat/history"
+  assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-open")))
+  assert_true(nav_icon_of(t, "page/chat/info") is Some(_))
+  t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-close")))
+  // (none of the chat's own buttons by its title: its ⋯)
+  assert_true(said_at(t, @sf.t("web-pages.chat.info")) is None)
 }

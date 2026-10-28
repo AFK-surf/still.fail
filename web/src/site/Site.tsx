@@ -8,6 +8,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject }
 import type { DemoOptions, MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
+import { GitHubMark } from "@stillfail/ui/brands.tsx";
 import { OneComputer } from "./OneComputer.tsx";
 import { Distance } from "./Distance.tsx";
 import { SiteLangContext, useSay, useSiteLang, type SiteLang } from "./words.ts";
@@ -25,6 +26,8 @@ const MAC = `https://app.still.fail/releases/latest/${BETA ? "mac-beta" : "mac"}
 const WINDOWS = `https://app.still.fail/releases/latest/${BETA ? "win-beta" : "win"}`;
 const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
+/** Its code. */
+const GITHUB = "https://github.com/AFK-surf/still.fail";
 
 /** A link as a button; with `then`, its words roll up on hover and those take their place (site.css.ts). */
 export function Button({ href, kind, large, then, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; then?: string; children: ReactNode; className?: string }) {
@@ -92,6 +95,35 @@ export function Promises() {
   );
 }
 
+/** The app to download first, by the device the page is on (data-platform on the root, set before the first paint by
+ *  site/index.html): its button shown, the others' not (site.css.ts downloadMain). A device none is made for (an
+ *  iPhone, Linux) opens the web app. */
+const MAIN = [["mac", MAC], ["windows", WINDOWS], ["android", ANDROID], ["other", APP]] as const;
+
+/** The apps, in a band: its title with a line of every app under it; the button for this device's, and on a computer
+ *  a code to scan for the Android app. */
+function Downloads() {
+  const say = useSay();
+  const d = say.downloads;
+  return (
+    <section id="download" className={css.section}>
+      <div className={`${css.wrap} ${css.downloadBand}`}>
+        <div>
+          <h2 className={css.headingTitle}>{d.title}</h2>
+          <p className={css.downloadAll}>
+            <span>{d.all}</span>
+            <a href={MAC}>Mac</a><a href={WINDOWS}>Windows</a><a href={ANDROID}>Android</a><a href={APP}>{d.web}</a>
+          </p>
+        </div>
+        <div className={css.downloadMain}>
+          <span className={css.scanOnComputer}><img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />{say.androidScan}</span>
+          {MAIN.map(([key, href]) => <span key={key} className={css.downloadFor} data-for={key}><Button href={href} kind="primary" large>{d.main[key]}</Button></span>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---- The rest ----
 
 export function Site({ mountDemo, demo, lang = "zh" }: DemoProps & { lang?: SiteLang }) {
@@ -108,26 +140,12 @@ function Page({ mountDemo, demo }: DemoProps) {
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
           <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><span>{NAME.head}<span className={css.brandDot}>.</span>{NAME.tail.slice(1)}</span></a>
-          {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
-              Android the app itself; on a computer a card under the word, with the Mac's, Windows' and a code to scan for Android. */}
-          <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>{say.download}</a>
-          <span className={`${css.menu} ${css.forComputer}`}>
-            <button type="button" className={css.navLink}>{say.download}</button>
-            <span className={css.menuCard}>
-              <a className={css.menuItem} href={MAC}>
-                <b>Mac</b><span>{say.appleSilicon}</span><span className={css.menuGo}>{say.downloadGo}</span>
-              </a>
-              <a className={css.menuItem} href={WINDOWS}>
-                <b>Windows</b><span>x64</span><span className={css.menuGo}>{say.downloadGo}</span>
-              </a>
-              <span className={css.menuItem}>
-                <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />
-                <span>{say.androidScan}</span>
-              </span>
-            </span>
-          </span>
+          {/* The apps: their section, on every device. */}
+          <a className={css.navLink} href="#download">{say.download}</a>
           {/* The page in the other language (on a phone, in the footer: the bar has no room). */}
           <a className={`${css.navLink} ${css.navButton}`} href={say.otherHref} lang={lang === "en" ? "zh" : "en"} onClick={chooseLang(lang === "en" ? "zh" : "en")}>{say.other}</a>
+          {/* Its code, a mark the bar keeps on a phone too. */}
+          <a className={`${css.navLink} ${css.navMark}`} href={GITHUB} aria-label="GitHub" title="GitHub"><GitHubMark size={20} /></a>
           <ThemeSwitch />
           <Button href={APP} kind="primary" className={css.navButton}>{say.open} {NAME.head + NAME.tail}</Button>
         </div>
@@ -135,6 +153,8 @@ function Page({ mountDemo, demo }: DemoProps) {
 
       <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
       <div className={css.idea} data-idea="2"><Distance {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
+
+      <Downloads />
 
       <section id="start" className={css.section}>
         <div className={`${css.wrap} ${css.install}`}>
@@ -159,7 +179,7 @@ function Page({ mountDemo, demo }: DemoProps) {
           <a className={css.navLink} href={MAC}>Mac</a>
           <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
-          <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
+          <a className={css.navLink} href={GITHUB}>GitHub</a>
           {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
           <a className={css.navLink} href={`${say.legal}/terms`}>{say.terms}</a>
           <a className={css.navLink} href={`${say.legal}/privacy`}>{say.privacy}</a>

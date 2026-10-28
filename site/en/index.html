@@ -18,9 +18,10 @@
 <!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: light when none was;
      "system" leaves it to the system. The demo's app follows the same data-theme. -->
 <script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
-<!-- What the visitor is on, for the downloads to offer (web/src/site/Site.tsx): mac, android, ios, or desktop (the
-     rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
-<script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
+<!-- What the visitor is on, for the download to offer first (web/src/site/Site.tsx Downloads): mac, windows, android,
+     ios, linux, or desktop (another computer). An iPad says it is a Mac, and has a touch screen. A preview can ask for
+     one with ?platform=. -->
+<script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Windows/.test(u)?"windows":/Mobi/i.test(u)?"":/Linux|X11|CrOS/.test(u)?"linux":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
 <!-- Which idea of the page shows (web/src/site/Site.tsx): ?v=2 the second, else the first. -->
 <script>document.documentElement.dataset.v=new URLSearchParams(location.search).get("v")==="2"?"2":"1"</script>
 <!-- With a mouse, scrollbars float and take no room, as the demo's app has them once it runs (web/src/scrollbars.ts):

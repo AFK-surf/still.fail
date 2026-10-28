@@ -799,9 +799,10 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 ///|
 /// What a write said (sfbase's toasts), where the frame has it: the wide frame's 24 over the window's foot (the web's),
 /// the narrow one's over the foot, clear of the bar and the action standing over it (bar_room above it) and above the
-/// navigation bar the view reaches under (Sheet.kt's navigationBars padding).
+/// navigation bar the view reaches under (Sheet.kt's navigationBars padding); over the system's tabs across the foot
+/// where they are (an iPhone Duo upright: @sf.native_foot).
 fn toast(c : @ui.Ctx) -> Unit {
-  @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom } else { bar_room + nav_foot() })
+  @sfbase.toasts(c, if @sfdesk.is_wide(c) { @sf.toast_bottom + @sf.native_foot() } else { bar_room + nav_foot() })
 }
 
 ///|
