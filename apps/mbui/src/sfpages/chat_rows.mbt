@@ -38,29 +38,50 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   let look = @sf.theme().chat_list
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
-  // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end
-  match here.view.state_ask {
-    Some(seq) if turn => {
-      let stacked = @sf.native_on() && c.width <= chat_narrow_w
-      // (an options card's frame and its row's room, @sf.ask_line_card: its corner and its sides the options')
-      @sf.ask_line_card(c, column=stacked, fn() {
-        c.box(style=need_card_words, label=words, fn() {
-          c.box(style=look.state_slot, fn() { lead_icon(c, lead, p.text) }) |> ignore
-          if rest != "" {
-            c.text(rest, style=said) |> ignore
-          }
-        })
-        |> ignore
-        if stacked {
-          c.box(style=need_card_actions, fn() { ask_dismiss(c, src, here, seq, true, false, at_end=true) }) |> ignore
-        } else {
-          ask_dismiss(c, src, here, seq, true, false, at_end=true)
-        }
-      })
-      |> ignore
+  // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end; let go (the core
+  // says so at once), the card goes as a post's answered options do (fading to 90%, its room closing on the rows'
+  // spring) and the line saying it was let go fades in after it in its place (vault_ask_card's)
+  let asking = match here.view.state_ask {
+    Some(seq) if turn => Some(seq)
+    _ => None
+  }
+  match (here.list, here.view.thread) {
+    (Some(l), Some(thread)) if asking is Some(_) || lead == "dismissed" => {
+      let key = here.station + "/" + thread.to_int().to_string()
+      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_), close_turn_ms)
+      let at = l.turns.started_at("need/" + key)
+      let start_at = if at >= 0.0 { Some(at) } else { None }
+      under_post(
+        c,
+        "need-card/" + key,
+        open,
+        exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+        close=close_gap,
+        start_at?,
+        fn() { need_card(c, src, here, words, rest, asking) },
+      )
+      under_post(
+        c,
+        "need-ended/" + key,
+        lead == "dismissed" && !open,
+        start_at?,
+        enter=@motion.trans(
+          fade=0.0,
+          spec=@motion.Snap(0.0),
+          fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+        ),
+        open=close_gap,
+        exit=@motion.trans(spec=@motion.Snap(0.0)),
+        close=@motion.Snap(0.0),
+        fn() { c.text(words, style=said) |> ignore },
+      )
       return
     }
-    _ => ()
+    _ =>
+      if asking is Some(_) {
+        need_card(c, src, here, words, rest, asking)
+        return
+      }
   }
   match lead {
     "need" | "done" | "wait" | "watch" =>
@@ -78,6 +99,38 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
     Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false) }) |> ignore
     None => ()
   }
+}
+
+///|
+/// What the chat needs of the viewer as a card (chat_state): the bell and its words in the ink, 忽略 at its end (under
+/// them where a native narrow chat has little room); `seq` the post that asks, None as the card goes (its 忽略 drawn,
+/// nothing left to let go).
+fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest : String, seq : Double?) -> Unit {
+  let look = @sf.theme().chat_list
+  let said = look.state_turn.then(chat_state_wraps)
+  let stacked = @sf.native_on() && c.width <= chat_narrow_w
+  let dismiss = fn() {
+    match seq {
+      Some(seq) => ask_dismiss(c, src, here, seq, true, false, at_end=true)
+      None => c.text(@sf.t("web-main.chat.asks.dismiss"), style=look.state_quiet.then(dismiss_end)) |> ignore
+    }
+  }
+  // (an options card's frame and its row's room, @sf.ask_line_card: its corner and its sides the options')
+  @sf.ask_line_card(c, column=stacked, fn() {
+    c.box(style=need_card_words, label=words, fn() {
+      c.box(style=look.state_slot, fn() { lead_icon(c, "need", @sf.theme().p.text) }) |> ignore
+      if rest != "" {
+        c.text(rest, style=said) |> ignore
+      }
+    })
+    |> ignore
+    if stacked {
+      c.box(style=need_card_actions, dismiss) |> ignore
+    } else {
+      dismiss()
+    }
+  })
+  |> ignore
 }
 
 ///|

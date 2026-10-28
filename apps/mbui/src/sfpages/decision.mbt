@@ -346,7 +346,7 @@ fn ask_dismiss(
   }
   let k = seq_key(here.station, thread, seq)
   // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
-  // (at the end of a card, no motion of its own: gone at once when let go, the card staying until the core says so)
+  // (at the end of a card, no motion of its own: the card's, as the core says it let go)
   let (mine, own_at) = match here.list {
     Some(l) if !at_end =>
       (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms), l.turns.started_at("dismiss/" + k))
@@ -369,15 +369,18 @@ fn ask_dismiss(
     })
   }
   let hot = shown && c.hovered(id)
+  // (at the end of the card: there until the card goes, as the core says it let go; pressed once)
   if at_end {
-    if shown {
+    if asking {
       let words = @sf.t("web-main.chat.asks.dismiss")
       // (on the line's own leading, level with its first line; a press reaches it from round it, press_reach)
       let look = @sf.theme().chat_list
-      let b = c.box(id~, fn() {
+      let b = c.box(id=if shown { id } else { 0 }, fn() {
         c.text(words, style=(if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)) |> ignore
       })
-      c.semantics(b, Button, id~, label=words)
+      if shown {
+        c.semantics(b, Button, id~, label=words)
+      }
     }
     return
   }

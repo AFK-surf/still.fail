@@ -259,6 +259,17 @@ export function letGo(row: J): boolean {
   return d !== null && dismissed(d);
 }
 
+/// `row` with what it asks let go (its card, or what its agent needs a person for), as its station says it once told
+/// (`dismissed`): the viewer's 忽略 said at once.
+export function withLetGo(row: J): J {
+  const v = structuredClone(row);
+  // (the one ofRow and asked read: a card, else a decision, else what its agent needs)
+  if (isObject(v.card) && u64(v.card.seq) !== undefined && isObject(v.card.card)) v.card.dismissed = true;
+  else if (isObject(v.decision) && u64(v.decision.seq) !== undefined) v.decision.dismissed = true;
+  else if (isObject(v.need)) v.need.dismissed = true;
+  return v;
+}
+
 /// A row's mark, the most urgent first.
 export function tone(row: J): string | null {
   const state = str(get(row, "state"));

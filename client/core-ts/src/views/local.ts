@@ -65,7 +65,7 @@ export type LocalChange =
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
   | { kind: "archiving" }
-  | { kind: "letGo" }
+  | { kind: "letGo"; station: string; thread: number }
   /// A vault request decided here (`request`): its card off the 奏 page, how it went on its card in its chat.
   | { kind: "vault"; request: string };
 
@@ -569,7 +569,7 @@ export class Local {
   /// it stays off until its station's rows change from how they were then (`rev`), which then say it is dismissed.
   letGo(station: string, thread: number, seq: number): void {
     this.#lettingGo.push({ station, thread, seq });
-    this.onChange({ kind: "letGo" });
+    this.onChange({ kind: "letGo", station, thread });
   }
 
   letGoEnded(station: string, thread: number, seq: number, ok: boolean, rev: number): void {
@@ -578,7 +578,7 @@ export class Local {
     if (ok) this.#lettingGo[i] = { ...this.#lettingGo[i], done: rev };
     else {
       this.#lettingGo.splice(i, 1);
-      this.onChange({ kind: "letGo" });
+      this.onChange({ kind: "letGo", station, thread });
     }
   }
 
