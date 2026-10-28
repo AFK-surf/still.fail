@@ -362,7 +362,11 @@ fn rail_nav(src : Source, w : Workspace, all : Array[Workspace], card : Array[@h
   // (on the outer screen's short column, the navigation bar's, the bell the toolbar's: one of the app's own in each
   // is all the system shows there, the rest folded into a menu of its own: column_short)
   let ws_at = if column_short.val { "lead/" } else { at }
-  tabs.push({ ..item(ws_at + "workspaces", w.name, "user"), icon: ws_badge(w), menu: rows })
+  // (a dot on it while another workspace has something waiting, as the phone's top bar marks it (home.mbt's
+  // others_mark), or an invitation does: the user 2026-10-28)
+  let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
+  let elsewhere = others || @sfpages.invitations_waiting(src).length() > 0
+  tabs.push({ ..item(ws_at + "workspaces", w.name, "user"), icon: ws_badge(w), dot: elsewhere, menu: rows })
   // (待处理 a popover over the page, as the bell's: pressed, never chosen; in the column down the side, upright at the
   // bar's lead, left of the top, on the status bar's row: the user 2026-10-27)
   tabs.push({ ..item(at + "attention", rail_label(src, "attention"), "bell"), dot: bell_lit(src, w) })
