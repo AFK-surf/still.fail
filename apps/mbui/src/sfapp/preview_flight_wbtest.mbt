@@ -29,6 +29,7 @@ fn photo_sent(
   held : Ref[(() -> Unit)?],
   bar? : Bool = false,
   cut? : Double = 0.0,
+  listed? : Bool = false,
 ) -> @ui.Tester {
   reset()
   let a = flight_photo()
@@ -49,11 +50,14 @@ fn photo_sent(
     fn(c) {
       // (in a card `cut` tall, its foot cutting the picture, where one is)
       let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
-      c.box(style=card, fn() {
+      // (in a chat's list, the composer's room at its foot, where it is one)
+      let list = c.box(style=card, fn() {
         c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
-        chat_file(c, src, a)
+        chat_file(c, src, a, list=if listed { "test-list" } else { "" })
       })
-      |> ignore
+      if listed {
+        note_list(c, list, "test-list", 0.0, if bar { flight_bar_h } else { 0.0 })
+      }
       // (a composer over the chat's foot, as a chat's page has it)
       if bar {
         let foot = c.layer(fn() {
@@ -197,6 +201,35 @@ test "the chat's bars over the picture flying back into it, coming back as it la
   let order = t.drawn_order()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
   assert_true(bar is Some(b) && order[b].5 > 0.99, msg="\{order}")
+}
+
+///|
+test "a picture under the composer goes out from under it at its own size first, then grows; back the same way" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(640.0), held, bar=true, listed=true)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let th = thumb_of(t.ctx(), id).unwrap()
+  let foot = 844.0 - flight_bar_h
+  assert_true(th.y + th.h > foot + 20.0, msg="\{th.y} \{th.h}")
+  let clear = (th.x, foot - 12.0 - th.h, th.w, th.h)
+  let at = t.locate("img:sent-key")
+  t.tap(at[0].0, (th.y + foot) / 2.0)
+  let v = viewer.val.unwrap()
+  // out from under the composer: its own size, wholly over it, the composer whole over the list meanwhile
+  t.run_for(fly_lift_ms)
+  assert_true(drawn_at(t, clear), msg="\{t.drawn_images()}")
+  assert_eq(v.flying(), 0.0)
+  // then grown to its place on the stage
+  t.run_for(fly_open_ms)
+  let to = v.zoom.rect().unwrap()
+  assert_true(drawn_at(t, to))
+  // back: shrunk to where it went out to, then in under the composer to its thumbnail
+  t.back()
+  t.run_for(fly_close_ms)
+  assert_true(drawn_at(t, clear), msg="\{t.drawn_images()}")
+  t.run_for(fly_lift_ms)
+  assert_true(pv_leaving.val is None)
+  assert_true(drawn_at(t, (th.x, th.y, th.w, th.h)))
 }
 
 ///|

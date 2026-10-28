@@ -293,7 +293,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~)
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~, list=list_of(here))
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
@@ -460,7 +460,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     |> ignore
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~)
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here))
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
@@ -764,3 +764,12 @@ let reveal_ground : @ui.Style = @ui.css("bg=Neutral")
 ///|
 // kept across runs: a value (no field of it changes)
 let reveal_frost : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The chat's list a message's file is in (its key: @sfbase.note_list), "" out of one.
+fn list_of(here : MessageHere) -> String {
+  match here.list {
+    Some(l) => l.rk
+    None => ""
+  }
+}

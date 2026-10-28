@@ -240,6 +240,10 @@ pub(all) struct Viewer {
   fly : @motion.Value
   mut fly_back : Bool
   mut fly_from : Thumb?
+  /// the share of the flight's way (`fly`, at an even pace) that is its thumbnail going out from under the chat's bar
+  /// or composer, at its own size, to where they hide none of it, before it grows (or after it has shrunk, going
+  /// back): 0 when nothing hides it
+  mut fly_lift : Double
   /// a video going back: where its player last drew its picture (as a finger left it, zoomed in or taken down), what
   /// it flies back from
   mut fly_to : (Double, Double, Double, Double)?
@@ -275,6 +279,9 @@ pub(all) struct Thumb {
   /// the part of its box that shows, cut by what it is in (its list, its card), where that was last drawn: what the
   /// picture flying back into it is cut to as it lands, as the thumbnail is
   seen : (Double, Double, Double, Double)?
+  /// where its list shows it with nothing over it (under the chat's bar, over its composer: note_list), top and
+  /// bottom; None, nothing is drawn over it (a composer's tile)
+  clear : (Double, Double)?
 }
 
 ///|
@@ -285,6 +292,8 @@ pub(all) struct ThumbLook {
   picture : String
   /// its node's id, where it is pressed (0 none): where it showed, cut, as the last frame drew it (Ctx::rect_of)
   id : Int
+  /// the list it is in (note_list), "" none
+  list : String
 }
 
 ///|
@@ -412,7 +421,8 @@ pub let pv_hidden : Ref[String] = { val: "" }
 
 ///|
 /// A thumbnail of the chat built this frame as node `node`, showing `picture` (FilePreview.kt viewerThumb): where it is
-/// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into.
+/// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into; in
+/// chat list `list` (note_list), if it is in one.
 pub fn note_thumb(
   c : @ui.Ctx,
   id : String,
@@ -420,9 +430,24 @@ pub fn note_thumb(
   radius : Double,
   picture~ : String,
   letterbox? : Bool = false,
+  list? : String = "",
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node) }
+  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node), list }
+}
+
+///|
+/// What is drawn over each chat's list (by its key, as last built): how much of its top the bar takes, how much of
+/// its foot the composer.
+let pv_lists : Map[String, (Double, Double)] = Map([])
+
+///|
+/// Chat list `key`, node `node`, built this frame, `bar` of its top under the chat's bar and `room` of its foot under
+/// the composer (both drawn over the viewer's picture as it flies: over_flight): where its thumbnails show with nothing
+/// over them.
+pub fn note_list(c : @ui.Ctx, node : Int, key : String, bar : Double, room : Double) -> Unit {
+  @motion.measure(c, node, "pv-list/" + key)
+  pv_lists[key] = (bar, room)
 }
 
 ///|
@@ -469,8 +494,53 @@ pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
         letterbox: l.letterbox,
         picture: l.picture,
         seen: if l.id != 0 { c.rect_of(l.id) } else { None },
+        clear: match (pv_lists.get(l.list), @motion.measured_rect(c, "pv-list/" + l.list)) {
+          (Some((bar, room)), Some((_, ly, _, lh))) => Some((ly + bar, ly + lh - room))
+          _ => None
+        },
       })
     _ => None
+  }
+}
+
+///|
+/// How far thumbnail `t` goes up (less than 0) or down to show whole between the chat's bar and its composer, a
+/// little in from them (centred between them when it is taller than what they leave); 0 when nothing hides it.
+pub fn lift_of(t : Thumb) -> Double {
+  match t.clear {
+    Some((top, foot)) => {
+      let (top, foot) = (top + lift_gap, foot - lift_gap)
+      if t.h > foot - top {
+        (top + foot) / 2.0 - (t.y + t.h / 2.0)
+      } else if t.y < top {
+        top - t.y
+      } else if t.y + t.h > foot {
+        foot - (t.y + t.h)
+      } else {
+        0.0
+      }
+    }
+    None => 0.0
+  }
+}
+
+///|
+/// How far from the bar and the composer a thumbnail going out from under them stops.
+let lift_gap : Double = 12.0
+
+///|
+/// How long a thumbnail takes going out from under the bar or the composer before it grows (the way back after it has
+/// shrunk), on Standard: a thing moved (docs/motion.md).
+pub let fly_lift_ms : Double = 240.0
+
+///|
+/// The share of the flight's way that is the thumbnail's going out from under the bar or composer, for a flight
+/// `grow_ms` long: none when nothing hides `t`.
+fn lift_share(t : Thumb, grow_ms : Double) -> Double {
+  if lift_of(t).abs() < 0.5 {
+    0.0
+  } else {
+    fly_lift_ms / (fly_lift_ms + grow_ms)
   }
 }
 
@@ -617,6 +687,7 @@ pub fn new_viewer(
     fly: @motion.Value::new(0.0),
     fly_back: false,
     fly_from: None,
+    fly_lift: 0.0,
     fly_to: None,
     fly_pic: "",
     start_at: match pv_frames.get(station + "/" + key + "/" + a.path) {
@@ -1236,8 +1307,11 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
             if v.shown_kind() == Some(KVideo) {
               v.fly_pic = v.still(src)
             }
+            // (at an even pace: the way out from under the bar or composer first, if any, then the growing:
+            // Viewer::flying, Viewer::lifted)
+            v.fly_lift = lift_share(t, fly_open_ms)
             v.fly.set(0.0)
-            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms, ease=Arrive)))
+            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms / (1.0 - v.fly_lift), ease=Linear)))
             pv_hidden.val = v.id()
           }
           None => ()
@@ -1385,15 +1459,9 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // it fades out
     match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
       (Some(t), Some(KImage), Some(_)) => {
-        let p = self.flying()
         self.fly_from = Some(t)
         self.fly_back = true
-        if !self.flies {
-          self.flies = true
-          self.fly.set(1.0)
-        }
-        // as far along as it was: back from there, in as much of its time
-        ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive)))
+        self.fly_home_from(t)
         pv_hidden.val = self.id()
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
@@ -1429,15 +1497,37 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
 ///|
 /// A video back into its thumbnail with `picture` (from where a flight in has got to, in as much of its time).
 pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
-  let p = self.flying()
   self.fly_pic = picture
   self.fly_back = true
+  match self.fly_from {
+    Some(t) => self.fly_home_from(t)
+    None => ()
+  }
+  pv_hidden.val = self.id()
+}
+
+///|
+/// Back towards thumbnail `t` from as far along as it was, in as much of its time: shrinking, then (if the bar or the
+/// composer hides it now) going in under them at its own size. The way re-shared for where `t` is now, so that it
+/// has grown, or gone out, as far as it had.
+fn Viewer::fly_home_from(self : Viewer, t : Thumb) -> Unit {
   if !self.flies {
     self.flies = true
+    self.fly_lift = 0.0
     self.fly.set(1.0)
   }
-  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive)))
-  pv_hidden.val = self.id()
+  let (was, q) = (self.fly_lift, self.fly.get())
+  let lift = lift_share(t, fly_close_ms)
+  let q = if q >= was {
+    lift + (q - was) / (1.0 - was) * (1.0 - lift)
+  } else if was > 0.0 {
+    q / was * lift
+  } else {
+    0.0
+  }
+  self.fly_lift = lift
+  self.fly.set(q)
+  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms / (1.0 - lift) * q), ease=Linear)))
 }
 
 ///|
@@ -1777,7 +1867,22 @@ pub fn Viewer::flying(self : Viewer) -> Double {
   if !self.flies {
     return 1.0
   }
-  self.fly.get()
+  let q = self.fly.get()
+  if q <= self.fly_lift {
+    0.0
+  } else {
+    @ui.Ease::Arrive.at((q - self.fly_lift) / (1.0 - self.fly_lift))
+  }
+}
+
+///|
+/// How far its thumbnail has gone out from under the bar or the composer (0 where the chat lays it out, 1 clear of
+/// them), on Standard; 1 when nothing hid it.
+pub fn Viewer::lifted(self : Viewer) -> Double {
+  if !self.flies || self.fly_lift <= 0.0 {
+    return 1.0
+  }
+  @ui.Ease::Standard.at(self.fly.get() / self.fly_lift)
 }
 
 ///|
@@ -1866,6 +1971,18 @@ pub fn Viewer::draw_flight(
     Some(t) => t
     None => return
   }
+  // out from under the bar or the composer first, at its own size, uncut as it comes clear of what cut it there
+  let l = self.lifted()
+  let dy = lift_of(from) * l
+  let (sx, sy, sw, sh) = from.seen.unwrap_or((from.x, from.y, from.w, from.h))
+  let (sx, sy, sw, sh) = if dy == 0.0 {
+    (sx, sy, sw, sh)
+  } else {
+    let to = fn(a : Double, b : Double) { a + (b - a) * l }
+    let (x0, y0) = (to(sx, from.x), to(sy, from.y + dy))
+    (x0, y0, to(sx + sw, from.x + from.w) - x0, to(sy + sh, from.y + dy + from.h) - y0)
+  }
+  let from = { ..from, y: from.y + dy }
   let (tx, ty, tw, th) = to
   if tw <= 0.0 || th <= 0.0 {
     return
@@ -1879,7 +1996,6 @@ pub fn Viewer::draw_flight(
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
   let r = from.radius * (1.0 - p)
   // cut, at the thumbnail, as the thumbnail is by what it is in (its card's edge), the stage whole at the other end
-  let (sx, sy, sw, sh) = from.seen.unwrap_or((from.x, from.y, from.w, from.h))
   let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
   let (cw, ch) = (along(sx + sw, c.width) - cx, along(sy + sh, c.height) - cy)
   c.layer(fn() {
@@ -3097,6 +3213,7 @@ pub fn file_viewer_reset() -> Unit {
   marking.write_field.set("")
   marking.note_field.set("")
   pv_thumbs.clear()
+  pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0
   pv_first.clear()

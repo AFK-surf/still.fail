@@ -14,7 +14,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
-      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap)
+      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap, bar=chat_bar_room())
     }
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
