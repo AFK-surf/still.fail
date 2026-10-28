@@ -1551,7 +1551,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             list.push((marking.job_name, png, quotes, "image"))
             marked_into[key] = list
             marks_leave()
-            say(c, pv("android-chat.preview.put.done"))
+            // (closed back to the chat, where the picture and its quotes show in the composer: nothing said of it)
             self.shut(c)
           } else {
             // (the host's picture of the marks, said once)

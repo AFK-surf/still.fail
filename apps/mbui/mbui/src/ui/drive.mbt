@@ -42,6 +42,8 @@
 //   system JSON                 under a Tester (a film's run), the system says JSON on its channel as a host says it
 //                               (@hostapi.system_channel: a size class, the hinge and its fold, the bars), taken at
 //                               the next frame; a real host's system says its own, and the run fails
+//   nav ID [X Y]                the system's own bars' item ID chosen (an iPhone Duo's: what a finger on it does,
+//                               @hostapi.system_channel `nav`), on a real host too; X Y where it is, for a film's taps
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
@@ -125,6 +127,8 @@ priv struct Driver {
   mut bms : Double
   // when a shot the host cannot take was asked for (logged "SHOT NAME": whoever takes it has 1.5 s), -1 before
   mut shot_at : Double
+  /// how many of a `keys` step's letters are typed so far
+  mut keyed : Int
   // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
   // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
   mut mark : Int
@@ -262,6 +266,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     bt0: 0.0,
     bms: 0.0,
     shot_at: -1.0,
+    keyed: 0,
     mark: runtime().outside_ended(),
     shown_mark: 0,
     shown: 0,
@@ -1098,6 +1103,25 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
+      // `keys TEXT`: TEXT typed a letter at a time, key_ms apart, as a hand types it; DRIVE KEY <ms> <letter> on the log
+      // for each (a film's fingers on the keyboard drawn over it afterwards)
+      "keys" => {
+        let letters = arg.to_array()
+        while d.keyed < letters.length() && waited >= d.keyed.to_double() * key_ms {
+          let l = letters[d.keyed].to_string()
+          h_log("DRIVE KEY \{now} " + l)
+          if !h_drive(0, l) {
+            on_text(0, l, 0, 0)
+          }
+          d.keyed += 1
+        }
+        if d.keyed < letters.length() {
+          return
+        }
+        d.keyed = 0
+        acted()
+        return
+      }
       "mark" => {
         if !h_drive(1, arg) {
           on_text(1, arg, arg.length(), 0)
@@ -1226,6 +1250,17 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
+      "nav" => {
+        let parts = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let id = parts[0]
+        if parts.length() >= 3 {
+          h_log("DRIVE tap nav \{id} at \{parts[1]},\{parts[2]}")
+        }
+        // (as the system says its bar's item chosen: the next frame's, handed on as the host's are)
+        messages_in.push((@hostapi.system_channel, Json::object({ "nav": Json::string(id) }).stringify(), None))
+        acted()
+        return
+      }
       "system" => {
         match fake.val {
           Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
@@ -1499,3 +1534,7 @@ fn first_words(c : Ctx, i : Int) -> String {
   }
   ""
 }
+
+///|
+/// How far apart a `keys` step's letters are typed (ms): a quick hand's.
+let key_ms : Double = 110.0

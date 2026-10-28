@@ -105,6 +105,10 @@ pub fn fixture_fetch(
       found = Some((f.1)())
     }
   }
+  // (a told story's pictures, whole: story_fixture.mbt)
+  if found is None {
+    found = story_picture(file)
+  }
   let bytes = match found {
     Some(b) => b
     None => {

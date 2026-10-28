@@ -7,14 +7,18 @@ story = json.load(open(os.path.join(here, sys.argv[1])))
 en = story.get("lang") == "en"
 words = {"登录 Acme": "Sign in to Acme", "欢迎回来": "Welcome back", "登录": "Sign in", "忘记密码？": "Forgot password?"}
 pics = {}
-for name, kind in ((("before.png" if en else "改前.png"), "before"), (("after.png" if en else "改后.png"), "after")):
-    html = os.path.join(here, f"_{kind}.html")
+kinds = [(("before.png" if en else "改前.png"), "before"), (("after.png" if en else "改后.png"), "after")]
+# (a story whose agent fixes it again: the page as fixed the second time, its link brightened)
+if any(f.get("name") == "after-2.png" for steps in story.get("sent", []) for s in steps for f in s.get("post", {}).get("files", [])):
+    kinds.append(("after-2.png", "after after2"))
+for name, kind in kinds:
+    html = os.path.join(here, f"_{kind.split()[-1]}.html")
     page = open(os.path.join(here, "login.html")).read().replace("KIND", kind)
     if en:
         for zh, w in words.items():
             page = page.replace(">" + zh + "<", ">" + w + "<")
     open(html, "w").write(page)
-    out = os.path.join(here, f"_{kind}.png")
+    out = os.path.join(here, f"_{kind.split()[-1]}.png")
     subprocess.run([chrome, "--headless=new", "--hide-scrollbars", f"--screenshot={out}", "--window-size=390,780",
                     "--force-device-scale-factor=2", "file://" + html], check=True, capture_output=True)
     pics[name] = base64.b64encode(open(out, "rb").read()).decode()

@@ -33,13 +33,15 @@ function biquad(type, f, q) {
 
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
-export function filmSound({ seconds, marks, taps, unfold, flip, end, out }) {
+export function filmSound({ seconds, marks, taps, keys = [], unfold, flip, end, out }) {
   const n = Math.ceil(seconds * RATE);
   const L = new Float32Array(n), R = new Float32Array(n);
+  // (a sound from before the film's start, as one cut from later on: what of it is after 0; none of a mark not in it)
   const add = (t0, len, fn, gain = 1, pan = 0) => {
-    const i0 = Math.max(0, Math.round(t0 * RATE)), m = Math.min(n - i0, Math.round(len * RATE));
+    if (!Number.isFinite(t0)) return;
+    const i0 = Math.round(t0 * RATE), m = Math.min(n - i0, Math.round(len * RATE));
     const gl = gain * Math.cos((pan + 1) * Math.PI / 4), gr = gain * Math.sin((pan + 1) * Math.PI / 4);
-    for (let i = 0; i < m; i++) {
+    for (let i = Math.max(0, -i0); i < m; i++) {
       const v = fn(i / RATE);
       L[i0 + i] += v * gl;
       R[i0 + i] += v * gr;
@@ -114,6 +116,11 @@ export function filmSound({ seconds, marks, taps, unfold, flip, end, out }) {
           0.15 * (rr() * 0.5));
       }
     }
+  }
+  // a key typed on the keyboard (a `keys` step's letters, each when it was typed): its tick
+  for (const tk of keys) {
+    const bp = biquad('bp', 3200 + 900 * Math.sin(tk * 77), 1.6), lp = biquad('lp', 900, 0.8), r2 = noise(Math.round(tk * 997));
+    add(tk, 0.035, (t) => (bp(r2()) * 1.6 + lp(r2()) * 0.8) * Math.exp(-t * 160) * Math.min(1, t / 0.0008), 0.22);
   }
   // the words sent: a whoosh going up
   {

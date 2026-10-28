@@ -1,0 +1,75 @@
+# Film 2 of still.fail in use on the iPhone Duo simulator, in English: a picture marked up and sent back (story
+# scripts/story/iduo-mark-en.json, FILM_LANG=en FILM_STORY=iduo-mark-en).
+timeout 45000
+until Message
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1500
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
+wait 1200
+at tap=发消息
+tap Message
+wait 900
+at type=The sign-in
+type The sign-in
+wait 700
+at type= button is hard
+type  button is hard
+wait 800
+at type= to see in dark
+type  to see in dark
+wait 750
+at type= mode, fix it
+type  mode, fix it
+wait 650
+at tap=send
+tap icon:arrow-up
+wait 500
+at kb-down
+tapxy 250 140
+wait 600
+at working
+wait 2000
+until Sign out
+at answer
+wait 1500
+at unfold
+log UNFOLD
+wait 4500
+at pic
+tap img:after
+wait 2000
+at mark
+nav over/mark 902 260
+wait 900
+at draw
+drag 378 466 110 40 500
+wait 900
+at comment
+wait 600
+at keys
+keys Still hard to read
+wait 700
+at note-done
+tap Done
+wait 900
+at offer
+tap Add to chat
+wait 1200
+at tap=send2
+tap icon:arrow-up
+wait 500
+at working2
+until Good catch
+at fixed
+wait 1500
+at tap=合并
+tap =Merge
+until 4f2a9c1
+at merged
+wait 3200
+at end
+exit

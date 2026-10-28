@@ -137,8 +137,8 @@ if (want) {
   }
   ff.stdin.end();
   await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
-  // and at 2K (2560 × 1440), from it
-  if (SCALE >= 2) {
+  // and at 2K (2560 × 1440) from it where asked (FILM_2K=1)
+  if (SCALE >= 2 && process.env.FILM_2K === '1') {
     execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, `out/film/promo3d-${name}.mp4`), '-vf', 'scale=2560:1440:flags=lanczos',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'copy', '-movflags', '+faststart',
       join(app, `out/film/promo3d-${name}-2k.mp4`)]);

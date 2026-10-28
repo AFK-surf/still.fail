@@ -572,3 +572,60 @@ test "a login card in a chat on a phone: as tall as what it holds, the next mess
   let (_, ny, _, _) = t.rect_of("5 分钟前").unwrap()
   assert_true(ny - (by + bh) < 60.0, msg="room between the card's key and the next message: \{ny - (by + bh)}")
 }
+
+///|
+test "a reply read from its start, its card answered: back at the list's end, the next reply followed" {
+  reset()
+  // (the story's agent: its reply with a card a moment after the words are sent, its next as the card is answered)
+  let reply_at = 100.0
+  let answer_at = 1900.0
+  @sffixture.fix_story.val = Some({
+    "title": "Acme App",
+    "before": [],
+    "sent": [
+      [
+        {
+          "at": Json::number(reply_at),
+          "post": {
+            "text": "Good catch: the link was the old purple at 3.1, under 4.5. It now uses the theme's link color at 7.4. The sign-in page now:",
+            "options": [{ "label": "Not yet", "detail": "Keep it on the branch, I'll take a look" }, { "label": "Merge", "detail": "Into main, the beta ships itself", "recommended": true }],
+            "files": [{ "name": "after-2.png", "w": 780, "h": 1560, "size": 188000 }],
+          },
+        },
+      ],
+    ],
+    "answered": [[{ "at": 300, "working": true, "activity": "Merging into main" }, { "at": Json::number(answer_at), "post": { "text": "Merged into main (`4f2a9c1`). The beta is on its way.", "ending": "all_done" } }, { "at": Json::number(answer_at + 400.0), "working": false }]],
+  })
+  let src = fixture("chat-story")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "Acme App", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  t.tap_text("发消息")
+  t.type_text("The sign-in button is hard to see in dark mode, fix it")
+  let send = t.locate("icon:arrow-up")
+  t.tap(send[0].0, send[0].1)
+  t.run_for(flight_ms + reply_at + @sf.enter_ms)
+  t.run_for(t.rest_of("a list") - t.time())
+  // the reply taller than the room: read from its start, its card under the composer, the way to the newest out
+  assert_true(rd.jump)
+  // moved up a little, as a person would to reach it (still short of the end), and answered
+  t.move(600.0, 300.0)
+  t.wheel(600.0, 300.0, 80.0)
+  t.run_for(t.rest_of("a list") - t.time())
+  let merge = t.locate("=Merge")
+  t.tap(merge[0].0, merge[0].1)
+  // the answer at the end, the list gone there after it (as for words sent)
+  t.run_for(dmax(0.0, t.rest_of("a list") - t.time()))
+  let answered = rd.jump
+  // the next reply: followed
+  for k in 0..<12 {
+    t.run_for(250.0)
+    println("t+\{k}: jump \{rd.jump} reply \{t.rect_of("Merged into main")} merge \{t.rect_of("=Merge")}")
+  }
+  t.run_for(dmax(0.0, t.rest_of("a list") - t.time()))
+  let followed = !rd.jump
+  @sffixture.fix_story.val = None
+  assert_false(answered)
+  assert_true(followed)
+}

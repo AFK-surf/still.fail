@@ -5,7 +5,7 @@
 // out/film/promo3d-sim.mp4; `node compose_sim.mjs [still times…]` only those, as out/stills/promo3d-sim-N.png (a time:
 // seconds, or a mark ± seconds: answer+0.8).
 import { execFileSync, spawn } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, extname, join } from 'node:path';
@@ -74,15 +74,39 @@ function touchesAt(t, size) {
   return out;
 }
 const taps = touches.map((k) => k.t + 0.08);
+// the letters a `keys` step typed (DRIVE KEY <ms> <letter>), each a finger on its key of the inner screen's keyboard as
+// iOS lays it out held open (its points, as the recording shows it), a capital's shift a moment before it
+const KEYBOARD = (() => {
+  const k = {};
+  const row = (letters, x0, y) => [...letters].forEach((l, i) => { k[l] = [x0 + i * 79.4, y]; });
+  row('qwertyuiop', 116, 469); row('asdfghjkl', 156, 521); row('zxcvbnm', 235, 573);
+  k[' '] = [474, 626]; k.shift = [128, 573];
+  return k;
+})();
+const keys = [];
+for (const line of log) {
+  const m = line.match(/^DRIVE KEY ([\d.]+) (.)$/);
+  if (!m) continue;
+  const t = +m[1] / 1000 - start, l = m[2];
+  const at = KEYBOARD[l.toLowerCase()];
+  if (!at) continue;
+  if (l !== l.toLowerCase()) touches.push({ t: t - 0.1, x: KEYBOARD.shift[0], y: KEYBOARD.shift[1], dx: 0, dy: 0, ms: 50 });
+  touches.push({ t: t - 0.08, x: at[0], y: at[1], dx: 0, dy: 0, ms: 60 });
+  keys.push(t);
+}
 
 // ---- the recordings' frames at 60 a second, the inner one turned upright (as the screen is held: landscape) ----
 const frames = join(app, 'out/sim-frames', process.env.FILM_REC || 'rec');
-const need = (k) => !existsSync(join(frames, k, '1.jpg'));
+// (made again for another recording under the same name: its size and time kept with them)
+const stamp = (k) => { const s = statSync(join(rec, `ios-${k}.mp4`)); return `${s.size} ${s.mtimeMs}`; };
+const need = (k) => !existsSync(join(frames, k, '1.jpg')) || !existsSync(join(frames, `${k}.stamp`)) ||
+  readFileSync(join(frames, `${k}.stamp`), 'utf8') !== stamp(k);
 for (const [k, vf] of [['outer', `fps=${FPS}`], ['inner', `transpose=1,fps=${FPS}`]]) {
   if (!need(k)) continue;
   rmSync(join(frames, k), { recursive: true, force: true });
   mkdirSync(join(frames, k), { recursive: true });
   execFileSync(FFMPEG, ['-loglevel', 'error', '-i', join(rec, `ios-${k}.mp4`), '-vf', vf, '-q:v', '2', '-start_number', '0', join(frames, k, '%d.jpg')]);
+  writeFileSync(join(frames, `${k}.stamp`), stamp(k));
 }
 const count = (k) => readdirSync(join(frames, k)).length;
 const nOuter = count('outer'), nInner = count('inner');
@@ -91,7 +115,12 @@ const frameOf = (k, t, n) => Math.min(n - 1, Math.max(0, Math.round((wallOf(t) -
 const outerAt = (t) => frameOf('outer', Math.min(t, U), nOuter);
 const innerAt = (t) => frameOf('inner', Math.max(t, foldDone + 0.05), nInner);
 
-const cams = (await import(pathToFileURL(join(here, 'iduo-sim.cam3d.js')))).default(marks);
+const when = (a) => { const m = a.match(/^(.*?)([+-][\d.]+)?$/); return isNaN(Number(a)) ? marks[m[1]] + Number(m[2] || 0) : Number(a); };
+// (FILM_FROM: the film from that moment of the take, a mark and how long after it: what came before it left out)
+const FROM = process.env.FILM_FROM ? when(process.env.FILM_FROM) : 0;
+marks.from = FROM;
+// (FILM_CAM: another film's camera, by its marks)
+const cams = (await import(pathToFileURL(join(here, process.env.FILM_CAM || 'iduo-sim.cam3d.js')))).default(marks);
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
 const keyed = (fr, t) => {
@@ -137,7 +166,6 @@ async function draw(t) {
     document.getElementById('end').style.opacity = String(Math.min(1, Math.max(0, (endT - .55) / .9)));
   }, [s, a, keyed(cams, t), (t - END) / .9, tc]);
 }
-const when = (a) => { const m = a.match(/^(.*?)([+-][\d.]+)?$/); return isNaN(Number(a)) ? marks[m[1]] + Number(m[2] || 0) : Number(a); };
 if (stills.length) {
   mkdirSync(join(app, 'out/stills'), { recursive: true });
   for (const [i, a] of stills.entries()) {
@@ -146,25 +174,28 @@ if (stills.length) {
     console.log('still', i + 1, a, when(a).toFixed(2));
   }
 } else {
-  const n = Math.round((END + 1.5) * FPS);
-  // its sound, on the same marks (sound.mjs)
+  const n = Math.round((END - FROM + 1.5) * FPS);
+  // its sound, on the same marks from where it starts (sound.mjs): what came before left out
+  const later = Object.fromEntries(Object.entries(marks).filter(([, v]) => v >= FROM).map(([k, v]) => [k, v - FROM]));
   const wav = join(app, 'out/film/' + NAME + '.wav');
-  filmSound({ seconds: n / FPS, marks, taps, unfold: U, flip: FLIP, end: END, out: wav + '.raw.wav' });
+  filmSound({ seconds: n / FPS, marks: later, taps: taps.filter((t) => t >= FROM).map((t) => t - FROM),
+    keys: keys.filter((t) => t >= FROM).map((t) => t - FROM), unfold: U - FROM, flip: FLIP,
+    end: END - FROM, out: wav + '.raw.wav' });
   // (as loud as films are played: -16 LUFS)
   execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', wav + '.raw.wav', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', wav]);
   const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-i', wav,
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'aac', '-b:a', '192k', '-shortest',
     '-movflags', '+faststart', join(app, 'out/film/' + NAME + '.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
   for (let f = 0; f < n; f++) {
-    await draw(f / FPS);
+    await draw(FROM + f / FPS);
     const jpg = await page.screenshot({ type: 'jpeg', quality: 93 });
     if (!ff.stdin.write(jpg)) await new Promise((ok) => ff.stdin.once('drain', ok));
     if (f % 300 === 0) console.log(`compose_sim: ${f}/${n}`);
   }
   ff.stdin.end();
   await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
-  // and at 2K (2560 × 1440), from it
-  if (SCALE >= 2) {
+  // and at 2K (2560 × 1440) from it where asked (FILM_2K=1)
+  if (SCALE >= 2 && process.env.FILM_2K === '1') {
     execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, 'out/film/' + NAME + '.mp4'), '-vf', 'scale=2560:1440:flags=lanczos',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'copy', '-movflags', '+faststart',
       join(app, 'out/film/' + NAME + '-2k.mp4')]);
