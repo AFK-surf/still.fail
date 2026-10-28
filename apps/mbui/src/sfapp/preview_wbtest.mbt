@@ -701,6 +701,28 @@ test "pinched smaller than fitted and let go: back to fitted" {
 }
 
 ///|
+test "a swipe back as the step to the next still slides: a finger catches it there, and a quick short move back goes back" {
+  let t = preview_tester("step")
+  t.drag(300.0, 422.0, 100.0, 422.0)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  // at once, the next mostly in: a quick 60 to the right, the way back
+  t.drag(100.0, 422.0, 160.0, 422.0, steps=3)
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  // and a finger down on a slide and up again: it stays at the one nearest, no tap of it
+  t.drag(300.0, 422.0, 100.0, 422.0)
+  t.run_for(@ui.input_step_ms)
+  let awake = viewer.val.unwrap().awake
+  t.touch(0, 195.0, 422.0)
+  t.draw()
+  t.touch(2, 195.0, 422.0)
+  t.draw()
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.val.unwrap().awake, awake)
+}
+
+///|
 /// The pictures drawn in the last frame (x, y, w, h), left to right.
 fn drawn_pictures(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
   let out = t.drawn_images().map(fn(i) { (i[0], i[1], i[2], i[3]) })
@@ -797,9 +819,14 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
 }
 
 ///|
-test "zoomed in, dragged slowly far past its edge: the next" {
+test "zoomed in, dragged slowly far past its edge it stops there, nothing beside it pulled; another drag from there: the next" {
   let t = preview_tester("step")
-  zoom_in_middle(t) |> ignore
+  let z = zoom_in_middle(t)
+  t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  let (x, _, w, _) = z.rect().unwrap()
+  assert_true((x + w - 390.0).abs() < 0.001)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   assert_eq(viewer.val.unwrap().file.name, "第二版.png")
 }
