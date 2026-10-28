@@ -41,25 +41,33 @@ fn places_reset() -> Unit {
 let place_across : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// The page picked in a place (the stations' or the profiles' list), by place; none: the first (of the profiles, the
-/// first that needs a look).
+/// The page picked in a place (the stations' or the profiles' list) of the workspace `w`; none: the first.
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
-  match place_pick.get(place) {
+  match place_pick.get(place_key(w.id, place)) {
+    // (a station gone from the list: the first, not its page waiting for it)
+    Some(Station(a)) if !stations_listed(src, w).iter().any(fn(s) { text(Some(s), "station") == a }) =>
+      place_route_first(src, w, place)
     Some(r) => Some(r)
-    None =>
-      match place {
-        "stations" =>
-          match stations_listed(src, w).get(0) {
-            Some(s) => Some(Route::Station(text(Some(s), "station")))
-            None => None
-          }
-        // (the first that needs a look, else the first: what its settings' row counts is what shows)
-        "profiles" => {
-          let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
-          list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
-        }
-        _ => None
+    None => place_route_first(src, w, place)
+  }
+}
+
+///|
+/// The page a place shows with none picked in it: the first station; the first profile that needs a look, else the
+/// first.
+fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.Route? {
+  match place {
+    "stations" =>
+      match stations_listed(src, w).get(0) {
+        Some(s) => Some(Route::Station(text(Some(s), "station")))
+        None => None
       }
+    // (the first that needs a look, else the first: what its settings' row counts is what shows)
+    "profiles" => {
+      let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+      list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
+    }
+    _ => None
   }
 }
 
@@ -118,7 +126,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let address = text(s, "station")
         let on = picked == Some(Route::Station(address))
         station_side_row(c, src, s, on, i + 1 < listed.length(), fn() {
-          place_pick["stations"] = Route::Station(address)
+          place_pick[place_key(w.id, "stations")] = Route::Station(address)
           @sfbase.show_chosen()
         })
       }
@@ -219,7 +227,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
           ) {
-          place_pick["profiles"] = route
+          place_pick[place_key(w.id, "profiles")] = route
           @sfbase.show_chosen()
         }
       }
