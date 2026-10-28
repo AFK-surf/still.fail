@@ -221,7 +221,7 @@ fn places_favorites(
                   @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
                   nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
                   c.text(st.name, style=nav_meta()) |> ignore
-                  let ub = c.box(style=unkeep, id=rid, fn() {
+                  let ub = c.box(style=unkeep(), id=rid, fn() {
                     @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
                   })
                   c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
@@ -463,19 +463,19 @@ let keep_off : @ui.Style = @ui.css("w=Full radius=Xl")
 let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent"))
 
 ///|
-/// A favourite's remove (unkeep): 20 across, round, in the middle of its row's end (a sidebar's row 32 high, a capsule)
-/// as far in as makes it concentric with it (capsule_in: 6), past the row's 10.
+/// A favourite's remove (unkeep): 20 across, round, in the middle of its row's end (a sidebar's row as high as a row
+/// at least, row_least: a capsule) as far in as makes it concentric with it (capsule_in: 8 in a row 36 high), past the
+/// row's 10. (Its row was 32 high when this was said once: 6 in a row 36 high since rows' least height, its corner
+/// none of the row's.)
+fn unkeep() -> @ui.Style {
+  let corner = @sf.row_least() / 2.0
+  let off = @sf.capsule_in(corner, unkeep_side, room=corner) - unkeep_row_pad
+  unkeep_look.then(@ui.style(mr=@sf.room_of(off)))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let unkeep : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Full hovered{bg=Hover}").then(
-  @ui.style(mr=@sf.room_of(unkeep_off)),
-)
-
-///|
-/// How far past its row's padding the remove stands (unkeep), its row's height and padding, its side.
-let unkeep_off : Double = @sf.capsule_in(unkeep_row_h / 2.0, unkeep_side, room=unkeep_row_h / 2.0) - unkeep_row_pad
-
-///|
-let unkeep_row_h : Double = 32.0
+let unkeep_look : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Full hovered{bg=Hover}")
 
 ///|
 let unkeep_row_pad : Double = 10.0

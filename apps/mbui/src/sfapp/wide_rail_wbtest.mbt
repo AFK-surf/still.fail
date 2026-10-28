@@ -170,28 +170,28 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
 }
 
 ///|
-test "wide: wherever the pointer shows the sidebar's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
+test "wide: the sidebar's edge is pressed and shows its ↔ 6 either side of its line, as the web's; a drag from wherever it shows sets its width" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let edge = @sfdesk.rail_w + 240.0
-  let offsets = [-16.0, -12.0, -8.0, -4.0, -2.0, 0.0, 2.0, 4.0, 8.0, 12.0, 16.0]
-  let shown : Array[String] = []
+  let offsets = [-16.0, -12.0, -8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 5.0, 6.0, 8.0, 12.0, 16.0]
   for y in [400.0, 700.0, 780.0] {
+    let shown : Array[Double] = []
     for dx in offsets {
       let x = edge + dx
       t.move(x, y)
       if t.cursor() != ResizeX {
         continue
       }
-      shown.push("\{dx.to_int()}@\{y.to_int()}")
+      shown.push(dx)
       t.drag(x, y, x + 30.0, y)
       assert_eq(@sfdesk.wide.side_w, 270.0)
       t.drag(x + 30.0, y, x, y)
       assert_eq(@sfdesk.wide.side_w, 240.0)
     }
+    // (over a row and over none alike: the strip its line is in the middle of, no room grown round it)
+    assert_eq(shown, [-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 5.0], msg="at \{y}")
   }
-  // (beyond the 6 its strip is drawn on: its room round it, as the pointer lights it)
-  assert_true(shown.iter().any(fn(s) { s.has_prefix("-") || s.has_prefix("8@") || s.has_prefix("12@") }))
 }
 
 ///|
@@ -199,7 +199,8 @@ test "wide: the sidebar's edge let go a little past where the last frame drew it
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let edge = @sfdesk.rail_w + 240.0
-  let edge_at = fn() { t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect.0 }
+  // (its line in the middle of its strip)
+  let edge_at = fn() { t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect.0 + @sfdesk.edge_half }
   t.hold_drag(edge, 400.0, edge + 60.0, 400.0)
   assert_eq(edge_at(), @sfdesk.rail_w + 300.0)
   // let go 6 further on, before a frame drew it there (the hand ahead of what is drawn): the frame that sees it let
@@ -548,7 +549,8 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let t = wide_tester(calls)
   let (x0, y0, _, _) = t.rect_of("新建对话").unwrap()
   let (ex, _, _, _) = t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect
-  assert_eq(ex, @sfdesk.rail_w + @sfdesk.wide.side_w)
+  // (its line in the middle of its strip)
+  assert_eq(ex + @sfdesk.edge_half, @sfdesk.rail_w + @sfdesk.wide.side_w)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   // halfway: the edge on its way with the block, the list not moved across, the block's edges round it (its top row's
   // 8 giving way to the bar's 6 above)
@@ -566,7 +568,8 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@sfdesk.side_move_ms)
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
-  assert_eq(px, @sfdesk.closed_edge + @sfdesk.wide.side_w + @sfdesk.edge_half)
+  // (its line in the middle of its strip)
+  assert_eq(px + @sfdesk.edge_half, @sfdesk.closed_edge + @sfdesk.wide.side_w + @sfdesk.edge_half)
   assert_true(@sfdesk.wide.bar_mr >= 0.0)
 }
 

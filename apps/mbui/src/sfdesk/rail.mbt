@@ -1102,9 +1102,9 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
         active~,
         line=!wide.folded,
       )
-      // The open sidebar's inside edge belongs to its list's scroll thumb. Resize from the page side;
-      // the folded rail still uses the whole strip to open.
-      let strip = c.box(left=if sized { edge_half } else { 0.0 }, right=0.0, top=0.0, bottom=0.0, id~, fn() { })
+      // (the whole strip, its line in its middle, as the web's: the list's bar's thumb, shown, takes the pointer where
+      // it is over it, @ui's hit test; the user, 2026-10-28: 以 divider 为中心，左右各 6px)
+      let strip = c.box(left=0.0, right=0.0, top=0.0, bottom=0.0, id~, fn() { })
       c.semantics(strip, Button, id~, label=words)
     })
     |> ignore
