@@ -97,7 +97,7 @@ export const scanOnComputer = style({
   selectors: { ':root:is([data-platform="android"], [data-platform="ios"]) &': { display: "none" } },
 });
 /** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
-export const scanCode = style({ display: "block", flex: "none", width: "64px", height: "64px", padding: "4px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
+export const scanCode = style({ display: "block", flex: "none", width: "64px", height: "64px", padding: "4px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" }); // own corner: a white label round the code, no panel
 
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
 export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
