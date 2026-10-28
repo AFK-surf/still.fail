@@ -3557,6 +3557,35 @@ fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bo
 let options_card_radius : Double = list_card_corner
 
 ///|
+/// One line asked of the viewer on an options card's ground (what the chat needs, at its end, with 忽略): the card an
+/// options card is under a post (on the text at 5%, its corner, list_pad in) and one row in it laid as an option's
+/// (pad_in in on every side, so its words sit as far in as an option's and its corner's concentric), `body` that
+/// row's (a row; `column` lays it a column instead).
+pub fn ask_line_card(c : @ui.Ctx, column? : Bool = false, body : () -> Unit) -> Int {
+  // (the row's room round its words an option's, the theme's for the screen: option_type)
+  let inside = @ui.style(p=room(option_type().pad_in))
+  c.box(style=ask_line_frame, fn() {
+    c.box(style=(if column { ask_line_column } else { ask_line_row }).then(inside), body) |> ignore
+  })
+}
+
+///|
+/// ask_line_card's frame: the options card's ground under a post (on the text at 5%: options_card `wide`).
+// kept across runs: a value (no field of it changes)
+let ask_line_frame : @ui.Style = @ui.css("w=Full bg=A(Fg,O5)").then(
+  @ui.style(p=room(options_card_pad), radius=rounded(options_card_radius)),
+)
+
+///|
+/// Its row: 12 between its words and what is at its end, as an option's disc and label.
+// kept across runs: a value (no field of it changes)
+let ask_line_row : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_line_column : @ui.Style = @ui.css("w=Full align=AStart")
+
+///|
 /// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger list_pad
 /// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on

@@ -372,8 +372,10 @@ fn ask_dismiss(
   if at_end {
     if shown {
       let words = @sf.t("web-main.chat.asks.dismiss")
-      let b = c.box(style=dismiss_end.then(@sf.row_least_h()), id~, fn() {
-        c.text(words, style=if hot { dismiss_words_hot } else { dismiss_words }) |> ignore
+      // (on the line's own leading, level with its first line; a press reaches it from round it, press_reach)
+      let look = @sf.theme().chat_list
+      let b = c.box(id~, fn() {
+        c.text(words, style=(if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)) |> ignore
       })
       c.semantics(b, Button, id~, label=words)
     }
@@ -428,10 +430,10 @@ let settled_room : @ui.Style = @ui.css("align=AStart")
 let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
 
 ///|
-/// 忽略 at the end of a card (`at_end`: what the chat needs, at the chat's end): its words 10 in from each side of a
-/// room as high as a row at least (row_least_h, at its use), its press's room the card's, cut at its edge.
+/// 忽略 at the end of the card saying what the chat needs (`at_end`): the line's words, as wide as they are, the quiet
+/// ink and the line's own under the pointer, its room the card row's (ask_line_card), not padding of its own.
 // kept across runs: a value (no field of it changes)
-let dismiss_end : @ui.Style = @ui.css("row px=S2_5 align=ACenter")
+let dismiss_end : @ui.TextStyle = @ui.text_style(w=Hug, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
