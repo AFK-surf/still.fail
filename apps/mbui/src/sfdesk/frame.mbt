@@ -634,7 +634,11 @@ pub fn frame(
   // is in them keeps its padding over it; rail_native.mbt)
   // (down the side, the cards to the column's own foot, the home indicator's line under their ground: cards_foot; the
   // soft keyboard up, the window ends where it starts plus the bars' foot: the cards end on it as it rises past that)
-  let foot = if @sf.native_side() { dmin(bars.bottom, cards_foot + c.ime_inset()) } else { bars.bottom }
+  // (a touch device's the same: its navigation bar over the app, edge to edge (Android's gesture line, iOS's home
+  // indicator), the cards' ground under it to the window's foot, what is in them clear of it; not a window's on a
+  // computer, whose foot is its own)
+  let edge = @sf.native_side() || (@sf.native_input() is Finger && wide.tape)
+  let foot = if edge { dmin(bars.bottom, cards_foot + c.ime_inset()) } else { bars.bottom }
   let inset = @ui.window_inset()
   let peek_r = rail_left() - bar_gap_now() + (if wide.peeking.get() { s } else { 0.0 })
   // (under the window's buttons where they are the system's, at its left: macOS's)
