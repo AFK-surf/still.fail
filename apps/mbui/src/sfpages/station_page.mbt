@@ -592,7 +592,10 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
-  out.push(fn() { station_outflow(c, core, address) })
+  // (a block only when there are some: an empty one would still take its place among the others)
+  if outflow_grants(core, address).length() > 0 {
+    out.push(fn() { station_outflow(c, core, address) })
+  }
   match field(o, "agentEnv") {
     Some(Array(env)) => out.push(fn() { station_env(c, core, address, env, manager) })
     _ => ()

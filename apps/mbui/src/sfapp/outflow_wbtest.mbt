@@ -15,8 +15,9 @@ test "a station's settings list the programs granted its data, and revoking one 
   assert_true(t.find(tr("web-main.outflow.title")) is Some(_), msg="the section")
   assert_true(t.find("Comma") is Some(_), msg="the program")
   assert_true(t.find("token 用量和金额、chat 和它们的状态") is Some(_), msg="what it may read")
-  t.click(Button, label=tr("web-main.outflow.revoke"))
-  t.draw()
-  t.run_for(@ui.nav_push_ms)
+  // (asked as a screen reader asks it: the row may lie below the window)
+  t.act(@ui.Button, @ui.Activate, label=tr("web-main.outflow.revoke"))
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting(), msg="a question up")
   assert_true(t.find(tr("web-main.outflow.revokeConfirm").replace(old="{program}", new="Comma")) is Some(_), msg="asked first")
 }

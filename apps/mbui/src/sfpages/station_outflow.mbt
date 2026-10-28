@@ -3,9 +3,8 @@
 /// it, who signed it as the system said (an unsigned one in red), what it may read, when it was granted and last read,
 /// and 取消授权 at its end, asked first. Nothing when there are none (or the station is from before them).
 fn station_outflow(c : @ui.Ctx, core : Core, station : String) -> Unit {
-  let view = (core.topic)("outflowGrants", { "station": str(station) }).value
-  let grants = items(view, "grants")
-  if !flag(view, "supported") || grants.length() == 0 {
+  let grants = outflow_grants(core, station)
+  if grants.length() == 0 {
     return
   }
   st_section(c, @sf.t("web-main.outflow.title"), description=@sf.t("web-main.outflow.lead"), fn() {
@@ -49,4 +48,11 @@ fn station_outflow(c : @ui.Ctx, core : Core, station : String) -> Unit {
       }
     })
   })
+}
+
+///|
+/// The programs granted the station's data, as the core holds them: none from a station from before them.
+fn outflow_grants(core : Core, station : String) -> Array[Json] {
+  let view = (core.topic)("outflowGrants", { "station": str(station) }).value
+  if flag(view, "supported") { items(view, "grants") } else { [] }
 }
