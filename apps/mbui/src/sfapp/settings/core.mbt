@@ -529,6 +529,7 @@ pub fn reset() -> Unit {
   keymap_reset()
   login_marked.val = None
   station_parts.clear()
+  station_network_open.clear()
   lock_prompts_reset()
   fonts_at.val = 0
   adb_reset()

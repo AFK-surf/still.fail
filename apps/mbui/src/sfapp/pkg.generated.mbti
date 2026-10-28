@@ -640,6 +640,8 @@ pub let options_out_ms : Double
 
 pub let options_scale : Double
 
+pub fn over_flight(@ui.Ctx, Int32) -> Unit
+
 pub let own_code_face : Int32
 
 pub let page_bridge_js : String
@@ -1042,7 +1044,7 @@ pub let viz_css : String
 
 pub fn viz_css_color(Int64) -> String
 
-pub fn viz_document(String, Json?, Bool, Int64) -> String
+pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool) -> String
 
 pub fn viz_file_of(@ui.Ctx, @sfbase.Source, String, String, String, String, @sfbase.Attachment, () -> Unit, Int64) -> Unit
 

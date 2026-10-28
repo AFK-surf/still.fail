@@ -352,7 +352,7 @@ pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) 
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
 
-pub fn open_publish(@sfbase.Source, @sfbase.ChatRef, Double) -> Unit
+pub fn open_publish(@sfbase.Source, @sfbase.ChatRef, Double, turn? : Double?) -> Unit
 
 pub fn open_relay(@sfbase.Source, @sfbase.ChatRef, Double, from~ : @sf.Anchor) -> Unit
 
@@ -402,7 +402,7 @@ pub fn pick_files(@sfbase.Writing) -> Unit
 
 pub fn pick_models_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
-pub fn picking(MessageHere, @ui.Ctx, String, String, String, String, () -> Unit, fill? : Bool) -> Unit
+pub fn picking(MessageHere, @ui.Ctx, @sfbase.Source, String, Double, String, String, String, () -> Unit, fill? : Bool) -> Unit
 
 pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool) -> Bool
 
@@ -423,6 +423,8 @@ pub fn publish_close() -> Unit
 pub fn publish_layer(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn publish_left_out(String) -> Bool
+
+pub fn publish_message_left_out(Double) -> Bool
 
 pub fn publish_reset() -> Unit
 
@@ -464,6 +466,8 @@ pub fn role_words(String) -> String
 
 pub fn row_aside(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, Int64) -> Unit
 
+pub fn row_aside_end_w(@sfbase.ChatItem, String) -> Double
+
 pub fn row_aside_shows(@sfbase.ChatItem, String) -> Bool
 
 pub fn row_aside_w(@ui.Ctx, @sfbase.ChatItem, String) -> Double
@@ -484,7 +488,7 @@ pub fn screen_fixture_stream(Json, (Json, Bytes?) -> Unit, (Result[Json, Json]) 
 
 pub fn screen_left(@sfbase.Source, String, String) -> Unit
 
-pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_close? : () -> Unit) -> Unit
+pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_close? : () -> Unit, in_tab? : Bool) -> Unit
 
 pub fn search_away(@ui.Ctx) -> Double
 
@@ -522,7 +526,7 @@ pub fn service_note(@ui.Ctx, String) -> Unit
 
 pub fn service_sizes_panel(String, @sf.Anchor) -> Unit
 
-pub fn service_view(@ui.Ctx, @sfbase.Source, String, String, Int32, String, Bool, Int32, String, file? : @sfbase.FilePage?) -> Unit
+pub fn service_view(@ui.Ctx, @sfbase.Source, String, String, Int32, String, Bool, Int32, String, file? : @sfbase.FilePage?, close? : (() -> Unit)?) -> Unit
 
 pub fn set_filter(@sfbase.Source, @sfbase.Workspace, String) -> Unit
 

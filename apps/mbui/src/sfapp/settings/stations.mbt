@@ -484,3 +484,8 @@ let parts_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 /// machine 软件与设备); none, the overview. Kept while the page is in the stack; a login's link opens the settings
 /// (mark_login).
 pub let station_parts : Map[String, String] = {}
+
+///|
+/// Whose page has its 高级网络设置 opened, by station (opened by the person, or the fixture's
+/// settings-station-network); kept while the page is in the stack.
+pub let station_network_open : Map[String, Bool] = {}
