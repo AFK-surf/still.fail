@@ -1,7 +1,7 @@
 // Data outflow as a part of the station (parts.ts, docs/data-outflow.md): its socket for the programs of this machine
 // (macOS, where still.fail Helper says who a program is and asks the person), its grants, the routes the members
 // list and revoke them with (GET /outflow/grants, DELETE /outflow/grants/:id) and the event that tells them
-// (`outflow-grants`, to the home workspace's members).
+// (`outflow-grants`, to the home workspace's members; how many on the overview, `outflowGrants`).
 import { Effect, Layer } from "effect";
 import type { Socket } from "node:net";
 import { routes } from "../api/routes/outflow.ts";
@@ -49,12 +49,18 @@ export const OutflowLive = Layer.effectDiscard(
     const helper = yield* Helper;
     const events = yield* Events;
     const grants = new OutflowGrants(data, wall.now);
-    const tell = () => events.tell("outflow-grants", { grants: grants.list() }, "outflow-grants", { sees: { ws: null } });
+    const tell = () => {
+      events.tell("outflow-grants", { grants: grants.list() }, "outflow-grants", { sees: { ws: null } });
+      events.overviewChanged();
+    };
     yield* Effect.acquireRelease(
       Effect.sync(() => grants.listen(tell)),
       (stop) => Effect.sync(stop),
     );
-    (yield* Parts).routes(routes(grants));
+    const parts = yield* Parts;
+    parts.routes(routes(grants));
+    // How many there are, on the station's overview: a page asks for the grants themselves only when there are some.
+    parts.overview("outflowGrants", (viewer) => (viewer.home !== false ? grants.list().length : 0));
     // Who a program is needs the Helper (macOS) and an addon that says the other end of a socket.
     const peer = loadMesh().peerProcess;
     if (helper === null || peer === undefined) return;

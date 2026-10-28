@@ -5,8 +5,9 @@
 test "a station's settings list the programs granted its data, and revoking one asks first" {
   reset()
   @settings.reset()
+  @settings.fixture_outflow(true)
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
   t.draw()
   // the station's page, at its settings (a login's link opens it there)
   assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
@@ -15,9 +16,23 @@ test "a station's settings list the programs granted its data, and revoking one 
   assert_true(t.find(tr("web-main.outflow.title")) is Some(_), msg="the section")
   assert_true(t.find("Comma") is Some(_), msg="the program")
   assert_true(t.find("token 用量和金额、chat 和它们的状态") is Some(_), msg="what it may read")
-  // (asked as a screen reader asks it: the row may lie below the window)
-  t.act(@ui.Button, @ui.Activate, label=tr("web-main.outflow.revoke"))
+  // (a window tall enough for the section to be in it, under the logins' card brought into view)
+  t.tap_text(tr("web-main.outflow.revoke"))
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(@sf.presenting(), msg="a question up")
   assert_true(t.find(tr("web-main.outflow.revokeConfirm").replace(old="{program}", new="Comma")) is Some(_), msg="asked first")
+}
+
+///|
+test "a station's settings with no program granted its data ask nothing of it" {
+  reset()
+  @settings.reset()
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
+  t.draw()
+  assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find(tr("web-main.logins.title")) is Some(_), msg="its settings")
+  assert_true(t.find(tr("web-main.outflow.title")) is None, msg="no section")
 }
