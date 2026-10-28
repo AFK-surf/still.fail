@@ -19,6 +19,8 @@ import { useSay, useSiteLang } from "./words.ts";
 
 /** How many steps the scene is scrolled through. */
 const STEPS = 3;
+/** How much later in its step each device sets off than the one under it. */
+const LAG = 0.12;
 
 /**
  * A phone's screen, the one beside the computer and a narrow screen's window alike (the same app, drawn the same):
@@ -212,10 +214,13 @@ export function OneComputer(props: DemoProps) {
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = clamp(x - i);
       // 0 → 1: the device comes up from below, its screen's list with its rows' places empty (rise), and they fly into
-      // them (landing), coming down once it has come to rest. 1 → 2: the computer steps back as the phone comes to the
-      // front (front). Everything only moves: nothing is cut out, shown or faded.
+      // them one after another, the lowest first (landing: of the `k`-th to go; all of them home with the last): each
+      // goes down out of the way of those still standing above it, so that none crosses another in the air. 1 → 2: the
+      // computer steps back as the phone comes to the front (front). Everything only moves: nothing is cut out, shown
+      // or faded.
       const rise = i === 0 ? ease(clamp(t / 0.7)) : 1;
-      const landing = i === 0 ? ease(t) : 1;
+      const landingOf = (k: number) => i === 0 ? ease(clamp((t - k * LAG) / (1 - (names.length - 1) * LAG))) : 1;
+      const landing = landingOf(names.length - 1);
       const front = i === 1 ? t : 0;
 
       // The window, drawn at its size: up from below the room, then stepping back (about its centre) as the phone
@@ -242,12 +247,13 @@ export function OneComputer(props: DemoProps) {
       // The devices are the app's rows: from where they stand apart (in the room) to their places in its list, in the
       // air until they are there; a shadow under each, as under the devices, closing up as it comes down into the screen.
       const parts = apart(size, narrow);
+      const order = parts.machines.map((_, k) => k).sort((a, b) => parts.machines[b]!.y - parts.machines[a]!.y);
       const placed = rows.map((r, k) => {
-        const from = parts.machines[k]!, home = inRoom(r.box);
-        const scale = lerp(parts.scale, s, landing);
-        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landing), y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landing);
+        const from = parts.machines[k]!, home = inRoom(r.box), landed = landingOf(order.indexOf(k));
+        const scale = lerp(parts.scale, s, landed);
+        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed), y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landed);
         if (landing < 1) {
-          const up = 1 - landing;
+          const up = 1 - landed;
           Object.assign(r.flying.style, {
             transform: `translate(${x}px, ${y}px) scale(${scale})`,
             boxShadow: `0 ${(30 * up) / scale}px ${(40 * up) / scale}px rgba(0, 0, 0, ${0.18 * up})${r.shadow}`,
