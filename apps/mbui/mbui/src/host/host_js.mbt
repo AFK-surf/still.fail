@@ -1093,6 +1093,13 @@ fn window_corner() -> Double {
 }
 
 ///|
+/// A browser's page: its corners square, each (@hostapi.window_corner_at).
+fn window_corner_at(k : Int) -> Double {
+  ignore(k)
+  0.0
+}
+
+///|
 /// The window dragged by the app's top row (see host_native.mbt): a browser's page cannot move its window.
 fn window_drag() -> Unit {
   ()
