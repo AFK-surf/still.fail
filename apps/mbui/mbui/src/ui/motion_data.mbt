@@ -191,7 +191,7 @@ pub fn Ctx::every(
     None => self.clock - from
   }
   if gone < 0.0 {
-    self.wake_at_time(self.clock - gone, later=true)
+    self.wake_at_time(self.clock - gone, later=true, loc~)
     return 0
   }
   // the next period's start: a wake the test's idle does not wait for (it comes for as long as it is shown); counted
@@ -205,7 +205,7 @@ pub fn Ctx::every(
     }
     None => periods_at(self.clock, from, period)
   }
-  self.wake_at_time(next, later=true)
+  self.wake_at_time(next, later=true, loc~)
   n
 }
 
@@ -241,7 +241,7 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
   }
   let at = if resident {
     let step = (self.clock / cycle_step_ms).floor()
-    self.wake_at_time((step + 1.0) * cycle_step_ms, later=true)
+    self.wake_at_time((step + 1.0) * cycle_step_ms, later=true, loc~)
     step * cycle_step_ms
   } else {
     self.cycling = true
@@ -273,7 +273,7 @@ pub fn Ctx::loop_at(self : Ctx, length : Double, ends : Array[Double], loc~ : So
       break
     }
   }
-  self.wake_at_time(laps * length + next, later=true)
+  self.wake_at_time(laps * length + next, later=true, loc~)
   t
 }
 
