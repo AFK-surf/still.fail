@@ -360,7 +360,7 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (backOn) back(2, 0, 1, 0);
+        if (Host.backWanted) back(2, 0, 1, 0);
         else super.onBackPressed();
     }
 
@@ -427,6 +427,8 @@ public class MainActivity extends Activity {
         NativeViews.moveTo(layer);
         Native.overOther(over());
         mbView.onResume();
+        // back as the app has it now, whatever this activity was told before (Host.backWanted)
+        setBackEnabled(Host.backWanted);
         Host.resumed = true;
         Host.tellAppState();
         // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)

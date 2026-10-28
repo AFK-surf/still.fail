@@ -436,9 +436,17 @@ final class Host {
         });
     }
 
-    /** Whether the app takes back (a page to go back to); MainActivity's callback follows it. */
+    /**
+     * Whether the app takes back (a page to go back to): the process's, as the app's pages are, told only as it changes.
+     * Each activity follows it as it comes to the front (MainActivity.onResume): one made again (the system remade it,
+     * an OverActivity was the host meanwhile) took back from nothing it was told, and the system's back left the app
+     * from a page with one to go back to.
+     */
+    static volatile boolean backWanted;
+
     static void backEnabled(boolean on) {
-        main.post(() -> { if (activity != null) activity.setBackEnabled(on); });
+        backWanted = on;
+        main.post(() -> { if (activity != null) activity.setBackEnabled(backWanted); });
     }
 
     static void log(String s) {
