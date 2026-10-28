@@ -4,8 +4,8 @@
 //
 // - While the app goes on (shown, or put away where its host still runs it: a desktop's app in the notification area
 //   or minimized, @ui.app_awake, as still.fail's desktop app showed its notices with no window open): the notices the
-//   core's `notify {workspace}` says to show now (not while off, not for the chat looked at, only of the workspace in
-//   view: client/core-ts attend.ts decides), each shown once it is taken (`notice.claim`). Behind for good (a phone's
+//   core's `notify {workspace}` says to show now (not while off, not for the chat looked at, none of a workspace turned
+//   off, another workspace's named in its title: client/core-ts attend.ts decides), each shown once it is taken (`notice.claim`). Behind for good (a phone's
 //   app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
 //   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again

@@ -1,0 +1,8 @@
+# 通知 in a phone's window (sfpages notifications.mbt): MBUI_FIXTURE=settings-notify, scrolled down to its workspaces'
+# switches and 其他.
+timeout 20000
+until 通知类别
+wait 600
+wheel 1200
+wait 800
+exit

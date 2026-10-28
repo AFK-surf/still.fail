@@ -137,7 +137,8 @@ final class Push {
      * FCM's side (Push.kt PushService), on its own thread, with the core: the app's where it runs, else one started for
      * it (StillFailCore.start there; CoreHost.startAlone), stopped once done unless the app has taken it meanwhile. A
      * new token is registered; a push is shown unless the core says not ({@code notice.pushed}: notifications off, a
-     * page in view, another workspace's, its kind off), then what it is about brought onto the device
+     * page in view, its workspace or its kind off; the title as the core says it, a workspace's name before one of a
+     * workspace the viewer is not in), then what it is about brought onto the device
      * ({@code notice.bring}) while FCM lets the app run.
      */
     public static final class Service extends FirebaseMessagingService {
@@ -173,11 +174,13 @@ final class Push {
             boolean alone = !CoreHost.running();
             boolean core = CoreHost.startAlone(cloud(this), beta(this));
             try {
-                boolean show = shown(core, data.get("workspace"), data.get("kind"));
+                String title = data.get("title");
+                JSONObject said = shown(core, data.get("workspace"), data.get("kind"), title);
+                boolean show = said.optBoolean("show");
                 Host.log("push: " + tag + (show ? " shown" : " not shown") + (alone ? " (a core of its own)" : ""));
                 if (!show) return;
                 String seq = data.get("seq");
-                String title = data.get("title");
+                if (said.opt("title") instanceof String) title = said.optString("title");
                 String body = data.get("body");
                 // (the channel named as the app names it, its words only Chinese so far: sfapp strings.mbt)
                 Notices.show(this, "消息", tag, title == null ? "" : title, body == null ? "" : body,
@@ -188,20 +191,29 @@ final class Push {
             }
         }
 
-        /** The core's say, or (it not answering) shown unless the app is in front, which shows its own. */
-        private static boolean shown(boolean core, String workspace, String kind) {
+        /**
+         * The core's say ({@code show}, and the {@code title} to show), or (it not answering) shown unless the app is
+         * in front, which shows its own.
+         */
+        private static JSONObject shown(boolean core, String workspace, String kind, String title) {
             if (core) {
                 JSONObject p = new JSONObject();
                 try {
                     if (workspace != null) p.put("workspace", workspace);
                     if (kind != null) p.put("kind", kind);
+                    if (title != null) p.put("title", title);
                 } catch (Exception ignored) {
                 }
                 Object a = ask("notice.pushed", p, SHOWN_MS);
-                if (a instanceof JSONObject && ((JSONObject) a).opt("show") instanceof Boolean) return ((JSONObject) a).optBoolean("show");
+                if (a instanceof JSONObject && ((JSONObject) a).opt("show") instanceof Boolean) return (JSONObject) a;
             }
             Host.log("push: the core did not say; shown unless the app is in front");
-            return !Host.resumed;
+            JSONObject said = new JSONObject();
+            try {
+                said.put("show", !Host.resumed);
+            } catch (Exception ignored) {
+            }
+            return said;
         }
 
         /**

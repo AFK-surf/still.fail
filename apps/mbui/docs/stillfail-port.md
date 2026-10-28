@@ -814,8 +814,8 @@ notifications (src/hostapi/notify.mbt).
   back with 无法开启/关闭通知：… when it fails; the push registration then follows what the core answered (Push.sync:
   `push.unregister` while off, `push.register {kind: fcm, token}` with the host's token while on), as it does at
   every start.
-- A push delivered is shown unless the core says not (`notice.pushed`: off, a page in view, another workspace's, its
-  kind off), and what it is about is brought onto the device (`notice.bring`), by the push service (Push.java).
+- A push delivered is shown unless the core says not (`notice.pushed`: off, a page in view, its workspace
+  or its kind off; the title as the core says it), and what it is about is brought onto the device (`notice.bring`), by the push service (Push.java).
 - `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
   `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* pictures).
 

@@ -354,8 +354,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
-    // (the notifications' page, the system having refused them: its banner's way to allow them)
-    "settings-notify-denied" => "notifications"
+    // (the notifications' page; the system having refused them: its banner's way to allow them)
+    "settings-notify" | "settings-notify-denied" => "notifications"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
@@ -1817,6 +1817,15 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("kinds", obj([("wait", Json::boolean(true)), ("failed", Json::boolean(true)), ("done", str("away")), ("message", Json::boolean(false))])),
           ("preview", Json::boolean(true)),
           ("permission", str(if mode.has_prefix("settings-notify-denied") { "denied" } else { "granted" })),
+          // (the account's two workspaces, 个人 turned off)
+          ("muted", [str("ws2")]),
+          (
+            "workspaces",
+            [
+              obj([("id", str("ws1")), ("name", str("星火工作室")), ("on", Json::boolean(true))]),
+              obj([("id", str("ws2")), ("name", str("个人")), ("on", Json::boolean(false))]),
+            ],
+          ),
         ]),
       )
     }

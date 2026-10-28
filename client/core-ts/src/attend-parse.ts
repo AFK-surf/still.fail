@@ -15,10 +15,10 @@ export type FocusCall = { visible: boolean | null; focused: boolean | null; chat
 
 export type AttendCall =
   | { kind: "focus"; focus: FocusCall }
-  | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown; preview: boolean | null }
+  | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown; preview: boolean | null; workspaces: unknown }
   | { kind: "permission"; state: Permission }
   | { kind: "claim"; id: string }
-  | { kind: "pushed"; workspace: string | null; notice: string | null }
+  | { kind: "pushed"; workspace: string | null; notice: string | null; title: string | null }
   | { kind: "bring"; station: string; session: string; seq: number | null };
 
 /// Whether the system lets this device show notifications, as its app finds: allowed, refused, not asked yet, or not
@@ -60,9 +60,11 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
         ["asked", "bool", "opt"],
         ["kinds", "value", "opt"],
         ["preview", "bool", "opt"],
+        ["workspaces", "value", "opt"],
       ]);
       if (f.kinds !== null && !isObject(f.kinds)) throw CoreError.invalid(t("core-misc.params.not_object"));
-      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null, kinds: f.kinds ?? null, preview: f.preview as boolean | null };
+      if (f.workspaces !== null && !isObject(f.workspaces)) throw CoreError.invalid(t("core-misc.params.not_object"));
+      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null, kinds: f.kinds ?? null, preview: f.preview as boolean | null, workspaces: f.workspaces ?? null };
     }
     case "notify.permission": {
       const state = read(p, [["state", "string", "req"]]).state as string;
@@ -72,8 +74,8 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
     case "notice.claim":
       return { kind: "claim", id: read(p, [["id", "string", "req"]]).id as string };
     case "notice.pushed": {
-      const f = read(p, [["workspace", "string", "opt"], ["kind", "string", "opt"]]);
-      return { kind: "pushed", workspace: f.workspace as string | null, notice: f.kind as string | null };
+      const f = read(p, [["workspace", "string", "opt"], ["kind", "string", "opt"], ["title", "string", "opt"]]);
+      return { kind: "pushed", workspace: f.workspace as string | null, notice: f.kind as string | null, title: f.title as string | null };
     }
     case "notice.bring": {
       const f = read(p, [["station", "string", "req"], ["session", "string", "req"], ["seq", "u64", "opt"]]);
