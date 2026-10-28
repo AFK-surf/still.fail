@@ -123,3 +123,55 @@ test "a Mac's window: a double click on a button in the top row is the button's 
   t.tap(empty, 22.0)
   assert_eq(t.window_drags(), 2)
 }
+
+///|
+/// Across the window's top row at `y`, every 8 points up to the window's own buttons where the app draws them (Windows':
+/// what they take presses in is theirs): each press drags the window (a page with nothing pressed there).
+fn row_all_drags(t : @ui.Tester, what : String, y? : Double = 12.0) -> Unit raise {
+  let keys = @sf.t("desktop.menu.minimize")
+  let end = match t.semantics().iter().find_first(fn(s) { !s.hidden && s.label == keys }) {
+    Some(s) => s.rect.0
+    None => t.ctx().width
+  }
+  let mut x = 2.0
+  while x < end {
+    if !t.drags_window_at(x, y) && !control_at(t, x, y) {
+      fail("\{what}: a press at \{x} is neither a control's nor the window's")
+    }
+    x = x + 8.0
+  }
+}
+
+///|
+test "a window with its buttons in the app's top row: its top drags it before any page, on the splash and signing in" {
+  // macOS's and Windows' (their own buttons in the app's top row), small and wide
+  for platform in [0, 3] {
+    for w in [390.0, 1280.0] {
+      let at = "platform \{platform} at \{w}"
+      // the splash: the accounts not read yet (a window of its own still starting), past the second it shows the ground
+      // alone
+      reset()
+      let base = fixture("home")
+      let src : Source = {
+        ..base,
+        topic: fn(name, params) {
+          if name == "accounts" {
+            { value: None, error: None, version: 0 }
+          } else {
+            (base.topic)(name, params)
+          }
+        },
+      }
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=800.0, platform~, window_inset=true)
+      t.run_for(splash_label_ms + 100.0)
+      assert_true(!frame_bare.val, msg="\{at}: the splash's mark shown")
+      row_all_drags(t, "\{at}: the splash")
+      // signed out: the sign-in page
+      reset()
+      let src = fixture("signin")
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=800.0, platform~, window_inset=true)
+      t.frame()
+      row_all_drags(t, "\{at}: signing in")
+    }
+  }
+}
