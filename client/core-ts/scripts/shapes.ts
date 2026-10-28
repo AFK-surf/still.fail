@@ -1,5 +1,5 @@
 // The clients' types, made from the shapes the core declares (src/shapes/schema.ts): web/src/core/shapes.ts (the Kotlin
-// Android app's data/Shapes.kt was made here too, until that app was frozen on 2026-10-23: it is left as it was); and
+// Android app's data/Shapes.kt was made here too, until that app was frozen on 2026-10-23); and
 // for the mbui app's squeeze sweep, where each topic holds words someone outside the app wrote (a field marked `said`):
 // apps/mbui/src/sffixture/said_paths.mbt.
 // `node scripts/shapes.ts` writes them; `--check` fails when they are not what the shapes make (scripts/check.sh and CI

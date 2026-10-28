@@ -40,7 +40,7 @@ const PARTS: [RegExp, Part[]][] = [
   [/^station\/(src|native)\/|^mesh\//, ["station"]],
   // Android's native shell (the web's iroh, client/iroh-wasm, is among what Android does not carry).
   [/^client\/(shell\/|Cargo\.)/, ["android"]],
-  // The core, which every app carries; but what apps/android/not-carried.txt says the Android app does not.
+  // The core, which every app carries; but what client/core-ts/scripts/not-carried.txt says the apps do not.
   [/^client\//, ["web", "android"]],
   [/^web\//, ["web"]],
   [/^apps\/android\//, ["android"]],
@@ -88,7 +88,7 @@ const SAID_IN: Record<string, Part[]> = {
 };
 
 /**
- * The parts a commit's files reach (`notCarried`: the paths apps/android/not-carried.txt names). A commit that by itself
+ * The parts a commit's files reach (`notCarried`: the paths client/core-ts/scripts/not-carried.txt names). A commit that by itself
  * changes nothing anyone uses (its tests, say, carrying the line for the commits before it) reaches where its files are.
  */
 export function partsOf(files: string[], notCarried: RegExp | null = null): Part[] {
@@ -104,9 +104,9 @@ export function partsOf(files: string[], notCarried: RegExp | null = null): Part
   return [...(code.size ? code : words)].sort();
 }
 
-/** apps/android/not-carried.txt's paths, as one expression (null: there is none). */
+/** client/core-ts/scripts/not-carried.txt's paths, as one expression (null: there is none). */
 export function readNotCarried(root: string): RegExp | null {
-  const file = join(root, "apps/android/not-carried.txt");
+  const file = join(root, "client/core-ts/scripts/not-carried.txt");
   const paths = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")) : [];
   return paths.length ? new RegExp(paths.join("|")) : null;
 }

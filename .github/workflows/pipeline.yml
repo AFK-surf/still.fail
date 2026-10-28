@@ -78,16 +78,6 @@ jobs:
           if [ "$GITHUB_REF" = refs/heads/main ]; then base=$(git rev-parse -q --verify "refs/tags/deployed/beta^{commit}" || true)
           else base=$(git merge-base origin/main HEAD); fi
           if [ -n "$base" ]; then range="$base..$GITHUB_SHA"; changed=$(git diff --name-only "$base" "$GITHUB_SHA"); else range=all; changed=$(git ls-files); fi
-          # The Android app in Kotlin (apps/android) is frozen since 2026-10-23, as asked: a branch that adds to it or
-          # changes a file in it fails here, before anything is built (taking files out is let through; its AGENTS.md
-          # says so). The Android app developed is apps/mbui.
-          if [ "$GITHUB_REF" != refs/heads/main ] && [ -n "$base" ]; then
-            frozen=$(git diff --name-only --diff-filter=d "$base" "$GITHUB_SHA" -- apps/android | grep -vxE 'apps/android/(AGENTS|CLAUDE)\.md' || true)
-            if [ -n "$frozen" ]; then
-              echo "::error::apps/android (the Kotlin Android app) is frozen since 2026-10-23: change apps/mbui instead. This branch changes: $(echo $frozen)"
-              exit 1
-            fi
-          fi
           has() { printf '%s\n' "$changed" | grep -qE "$1"; }
           # Part by part, as ~/bin/ember-deploy decided them.
           static=()
@@ -110,8 +100,6 @@ jobs:
           # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
           # and signed: modules=….
           eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"
-          # (The Android app in Kotlin, apps/android, is frozen since 2026-10-23, as asked: no check of it runs, the mbui
-          # app is the one developed.)
           # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
           # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
           # Java, the client's, media's, vendor's), or to how it is released.
@@ -487,7 +475,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-station-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # The Android app (fail.still.android.beta: mbui's, apps/mbui, in the place of apps/android's), on android/beta/latest.json.
+  # The Android app (fail.still.android.beta: mbui's, apps/mbui, in the place of the Kotlin one), on android/beta/latest.json.
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' }}

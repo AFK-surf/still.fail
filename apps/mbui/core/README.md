@@ -50,8 +50,8 @@ TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-a
   `Library/Frameworks/macosx/hermes.framework` (universal, arm64 4.7 MB; macOS 11 and later), iOS's
   `Library/Frameworks/universal/hermes.xcframework` (`ios-arm64`, `ios-arm64_x86_64-simulator`; iOS 15.1 and later)
   and the headers of Hermes and its JSI (`include`; the JSI is compiled into the framework). Fetched once into
-  `~/Library/Caches/stillfail-build/hermes-apple-0.81.4`, which every worktree shares (as ember's
-  `apps/android/build.py` keeps hermesc), never committed; `out/core/hermes` links to it.
+  `~/Library/Caches/stillfail-build/hermes-apple-0.81.4`, which every worktree shares (as
+  `scripts/core.sh` keeps hermesc), never committed; `out/core/hermes` links to it.
 - **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so ember's
   Cargo.toml is untouched. What it needs from the system (`-framework Security -framework CoreFoundation … -liconv`) is
   what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. `apple` takes it from
@@ -202,7 +202,7 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
   android-arm64`). Hermes itself (`libhermes.so`, and its headers for the engine's build) and `libfbjni.so` come from
   React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go into
   `out/android/apk/jniLibs`, which Gradle packs; nothing is committed. (Until 2026-10-23 the engine was still.fail's
-  Kotlin app's, JNI and all, built in its tree: that app is frozen, and nothing here reads it.)
+  Kotlin app's, JNI and all, built in its tree; that app is gone.)
 - **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as ember's `hermes-bundle.ts` does (esbuild, Babel's
   class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
   `core/media-hermes.ts` (with the media module). It goes into the APK's assets.

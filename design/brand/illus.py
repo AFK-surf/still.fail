@@ -203,7 +203,7 @@ VD = {"new-chat": "illus_new_chat", "no-station": "illus_no_station", "no-profil
 
 
 def write(repo):
-    sys.path.insert(0, os.path.join(repo, "apps/android/scripts"))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import svg2vd
     for name, text in scenes():
         src = os.path.join(repo, "web/public", f"illus-{name}.svg")

@@ -29,7 +29,7 @@ case "${1:?usage: release.sh station|android|modules}" in
     ;;
   android)
     [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || { echo "ANDROID_DEBUG_KEYSTORE_B64 is not set: not releasing an app installed ones could not update to"; exit 1; }
-    # The Android Gradle plugin signs with $ANDROID_USER_HOME/debug.keystore (signingConfigs.debug): this one, not the runner's.
+    # mbui's APK tool signs with $ANDROID_USER_HOME/debug.keystore (as the Android Gradle plugin did): this one, not the runner's.
     mkdir -p "$dir/android"
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$dir/android/debug.keystore"
     export ANDROID_USER_HOME="$dir/android"

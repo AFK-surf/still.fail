@@ -32,14 +32,14 @@ const built = await build({
   logLevel: "warning",
   metafile: true,
 });
-// What the app does not carry (apps/android/not-carried.txt: a change to only that runs no Android check) must not be
+// What the app does not carry (scripts/not-carried.txt: a change to only that reaches no app) must not be
 // in it: a file that is would go unchecked. (Said of still.fail's app; another app's entry is checked the same.)
 // (paths, not URLs' pathnames: on Windows those are /D:/…; and the patterns' slashes, whatever the system's)
 const root = fileURLToPath(new URL("../../../", import.meta.url));
-const notCarried = readFileSync(resolve(root, "apps/android/not-carried.txt"), "utf8").split(/\r?\n/).filter((line) => line && !line.startsWith("#")).map((line) => new RegExp(line));
+const notCarried = readFileSync(resolve(root, "client/core-ts/scripts/not-carried.txt"), "utf8").split(/\r?\n/).filter((line) => line && !line.startsWith("#")).map((line) => new RegExp(line));
 const carried = Object.keys(built.metafile.inputs).map((input) => relative(root, resolve(input)).split(sep).join("/"));
 const wrong = carried.filter((path) => notCarried.some((re) => re.test(path)));
-if (wrong.length) throw new Error(`the app carries what apps/android/not-carried.txt says it does not: ${wrong.join(", ")}`);
+if (wrong.length) throw new Error(`the app carries what scripts/not-carried.txt says it does not: ${wrong.join(", ")}`);
 // Classes as functions (and `extends Error` as Babel's wrapped native super, so `instanceof` still holds).
 const lowered = transformSync(readFileSync(out, "utf8"), { babelrc: false, configFile: false, compact: true, plugins: ["@babel/plugin-transform-classes"] });
 if (!lowered?.code) throw new Error("babel made nothing");

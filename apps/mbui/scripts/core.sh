@@ -80,7 +80,7 @@ shell_prebuilt() {
 # client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020; Babel's class transform, as Hermes 0.81 has no
 # classes; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
 # default core/hermes.ts: still.fail's alone; core/media-hermes.ts with the media module), `@core/` and `@ember/`
-# aliased (`@core/` is client/core-ts/src, `@ember/` this checkout). hermesc: $HERMESC, else the one ember's apps/android/build.py keeps in its cache, else
+# aliased (`@core/` is client/core-ts/src, `@ember/` this checkout). hermesc: $HERMESC, else the one kept in ~/Library/Caches/stillfail-build, else
 # fetched (npm pack react-native@0.81.4) into out/core/hermesc.
 HERMES_RN=0.81.4
 hermesc() {
@@ -198,7 +198,7 @@ hermes_script() {
 # React Native 0.81.4's Hermes for Apple's systems, the one Android's hermes-android is (the same release's Maven
 # tarball, `react-native-artifacts:hermes-ios-release`; MIT): macOS's hermes.framework (Library/Frameworks/macosx), iOS's
 # hermes.xcframework (Library/Frameworks/universal: the device's and the simulator's slices), the headers of Hermes and
-# its JSI (include). Fetched once into a cache every worktree shares (as ember's apps/android/build.py keeps hermesc:
+# its JSI (include). Fetched once into a cache every worktree shares (beside hermesc's:
 # ~/Library/Caches/stillfail-build/hermes-apple-<version>), its sha256 checked; never committed. out/core/hermes links
 # to its destroot.
 HERMES_APPLE_URL=https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/$HERMES_RN/react-native-artifacts-$HERMES_RN-hermes-ios-release.tar.gz

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""The fonts the app carries in itself, as the Android app packs them into its resources: src/sf/font_assets.mbt holds,
-as its bytes (a Bytes literal: kept as they are, not in base64 nor UTF-16), apps/android/shared/src/main/res/font/
-jetbrains_mono.ttf (JetBrains Mono, variable: the code face, as Android's Theme.kt JetBrainsMono; SIL Open Font
+"""The fonts the app carries in itself: src/sf/font_assets.mbt holds, as its bytes (a Bytes literal: kept as they are,
+not in base64 nor UTF-16), assets/fonts/jetbrains_mono.ttf (JetBrains Mono, variable: the code face; SIL Open Font
 License), given to the hosts as the app starts (@sf.give_faces).
 
   python3 scripts/fontassets.py          the file written
@@ -10,7 +9,7 @@ import os, sys
 
 A = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(os.path.dirname(A))
-FONTS = [("code_face_ttf", "apps/android/shared/src/main/res/font/jetbrains_mono.ttf")]
+FONTS = [("code_face_ttf", "apps/mbui/assets/fonts/jetbrains_mono.ttf")]
 OUT = os.path.join(A, "src/sf/font_assets.mbt")
 
 
@@ -20,7 +19,7 @@ def literal(b):
 
 
 def made():
-    out = ["// Made by scripts/fontassets.py from the Android app's own fonts (do not edit: run it again when they change).", ""]
+    out = ["// Made by scripts/fontassets.py from the fonts in assets/fonts (do not edit: run it again when they change).", ""]
     for name, rel in FONTS:
         with open(os.path.join(ROOT, rel), "rb") as f:
             data = f.read()

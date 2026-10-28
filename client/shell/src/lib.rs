@@ -1,4 +1,4 @@
-//! The native shell of the core in TypeScript on Android (client/core-ts `hosts/bridge.ts`; apps/android/core runs it
+//! The native shell of the core in TypeScript in the apps (client/core-ts `hosts/bridge.ts`; apps/mbui/engine runs it
 //! in Hermes from C++): everything the core asks of its host that a JS engine has not, done on tokio's threads and on
 //! a thread for the disk, and answered through a C callback. What it does is what the Rust core's native host (client/ffi) did (reqwest,
 //! tokio-tungstenite, a file per storage key in the data directory, TCP to adbd) and what the station's addon does for

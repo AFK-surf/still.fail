@@ -14,8 +14,7 @@
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
 # browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
 # or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO). (The Android app
-# in Kotlin, apps/android, frozen since 2026-10-23: no part checks it.)
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
 # Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
@@ -233,16 +232,6 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  # The Android app in Kotlin (apps/android) is frozen since 2026-10-23, as asked: nothing in it is added or changed
-  # (its AGENTS.md says so; taken out is let through); the Android app developed is apps/mbui. (CI's plan holds it too.)
-  if [ "$mode" != all ] && touches '^apps/android/'; then
-    case "$mode" in
-      commit) git diff --cached --name-only --diff-filter=d -- apps/android ;;
-      *) git diff --name-only --diff-filter=d "$range" -- apps/android ;;
-    esac | grep -vxE 'apps/android/(AGENTS|CLAUDE)\.md' > "$tmp/android-frozen" || true
-    step "the Kotlin Android app frozen (apps/android: change apps/mbui instead)" sh -c "! grep . '$tmp/android-frozen'"
-  fi
-  # (its own checks gone with it; this one on the mbui app's code in its place)
   if touches '^(web/src|web/ui|apps/mbui/src)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/mbui/src'
   fi
