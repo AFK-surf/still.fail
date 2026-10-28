@@ -650,6 +650,24 @@ static void on_nav_start(View *v, ICoreWebView2NavigationStartingEventArgs *a) {
   mb_host_request_frame();
 }
 
+// What a page's frame says once Chromium has drawn it (tell_drawn), a message of the host's own, not handed on.
+static const wchar_t *kDrawn = L"\x01mbui-drawn";
+
+// A page's readiness, once what it loaded is on the screen (as Android waits on WebView's visual state, Apple's hosts on
+// WebKit's presentation update): told at its load, the app took away what covers it before WebView2 had put a frame in
+// its visual, and the empty visual (black) showed for a frame or more. Chromium has drawn a frame by the page's second
+// animation frame: its callback says so (kDrawn). At once where it does not show (put_IsVisible FALSE: it draws no
+// frames, and nothing of it is on the screen to wait for).
+static void tell_drawn(View *v) {
+  if (!v->shown || !v->placed || v->w <= 0 || v->h <= 0) {
+    tell(v, 1);
+    return;
+  }
+  v->web->ExecuteScript(L"requestAnimationFrame(function(){requestAnimationFrame(function(){"
+                        L"window.chrome.webview.postMessage('\\u0001mbui-drawn')})})",
+                        NULL);
+}
+
 static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
   BOOL ok = FALSE;
   a->get_IsSuccess(&ok);
@@ -677,7 +695,8 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
     if (v->loaded) return;
     v->loaded = true;
     vlog("view %d: %s loaded", v->vid, v->kind == 3 ? "site page" : "page");
-    tell(v, 1);
+    if (v->kind == 2) tell_drawn(v);
+    else tell(v, 1);
     refresh_snap(v);
     return;
   }
@@ -782,6 +801,9 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
             // a player's page: how it stands (player_said); the others' what they say to the app
             if (got && v->kind == 1) {
               player_said(v, text);
+            } else if (got && v->kind == 2 && wcscmp(text, kDrawn) == 0) {
+              vlog("view %d: page drawn", v->vid);
+              tell(v, 1);
             } else if (got) {
               std::wstring e = L"{\"said\":";
               jstr(e, text);
