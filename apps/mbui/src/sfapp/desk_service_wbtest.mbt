@@ -98,3 +98,42 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
   assert_eq(front, "service:j-web")
   assert_true(tabs.contains("jobs") && tabs.contains("service:j-web"), msg="\{tabs}")
 }
+
+///|
+test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
+  reset()
+  let src = fixture("chat-info")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  side_change(r, "open", Some("s-c1"))
+  t.run_for(@sfdesk.side_in_ms)
+  let edge_x = fn() raise {
+    for s in t.semantics() {
+      if s.label.has_prefix("调整侧栏宽度") && !s.hidden {
+        return s.rect.0 + s.rect.2 / 2.0
+      }
+    }
+    fail("no side panel edge")
+  }
+  let line = edge_x()
+  let offsets = [-16.0, -12.0, -8.0, -4.0, -2.0, 0.0, 2.0, 4.0, 8.0, 12.0, 16.0]
+  let mut shown = 0
+  for y in [300.0, 600.0] {
+    for dx in offsets {
+      let x = line + dx
+      t.move(x, y)
+      if t.cursor() != ResizeX {
+        continue
+      }
+      shown += 1
+      // (its edge on its left: dragged left, the panel wider, its edge as far left as the pointer went)
+      t.drag(x, y, x - 30.0, y)
+      assert_eq(edge_x(), line - 30.0, msg="from \{dx} at \{y}")
+      t.drag(x - 30.0, y, x, y)
+      assert_eq(edge_x(), line, msg="back from \{dx} at \{y}")
+    }
+  }
+  assert_true(shown > 0)
+}
