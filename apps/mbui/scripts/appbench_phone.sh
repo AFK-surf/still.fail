@@ -1,6 +1,6 @@
 #!/bin/bash
 # still.fail's scenes on a phone (scripts/appbench.sh's, the phone's own screen): sffix's made-up chats in a debug
-# build of its own (fail.still.mbui.debug, beside the apps the phone has), each scene's script run on the phone
+# build of its own (fail.still.android.dev, beside the apps the phone has), each scene's script run on the phone
 # (MBUI_DRIVE_B64), each frame it draws said on its log (MBUI_PROBE_FRAMES=1: PERF lines), read back into the same
 # table as offscreen (src/sfbench, MBUI_BENCH_LOG). Three steps, where each can run:
 #   scripts/appbench_phone.sh build            (a Mac with the Android SDK) out/bench/sffix-debug.apk
@@ -24,7 +24,7 @@ case "${1:-}" in
   run)
     ADB=${ADB:-adb}
     S=${SERIAL:?SERIAL: the phone adb reaches}
-    PKG=fail.still.mbui.debug
+    PKG=fail.still.android.dev
     if [ "${INSTALL:-1}" = 1 ]; then
       # (in pieces: a large push over a shared phone's adb stalls)
       $ADB -s $S shell rm -f /data/local/tmp/zz_bench.apk

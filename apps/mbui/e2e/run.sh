@@ -152,7 +152,7 @@ if [ $PLATFORM = android ]; then
   export AVD=${AVD:-mbui-avd-e2e} EMU_PORT=${EMU_PORT:-5586}
   SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
   ADB="$SDK/platform-tools/adb -s emulator-$EMU_PORT"
-  export E2E_PKG=${E2E_PKG:-fail.still.mbui.debug}
+  export E2E_PKG=${E2E_PKG:-fail.still.android.dev}
   [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
