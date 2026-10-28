@@ -783,10 +783,14 @@ fn task_view(c : @ui.Ctx, key : String, task : Json?, rail : Bool, rail_last : B
       |> ignore
     } else {
       one_line(c, key, fn() {  }, text(task, "text"), if failed { "red" } else { "" }, fn() {
-        md_view(c, key + "/md", answer, field(task, "md"), small=true)
+        if flag(task, "agent") {
+          md_view(c, key + "/md", answer, field(task, "md"), small=true)
+        } else {
+          c.rich([@ui.span(answer, mono=true)], style=h_output) |> ignore
+        }
       })
       if !steps_own.opened.contains(key) {
-        c.box(style=h_one, fn() { c.text(text(task, "line"), style=h_one_words) |> ignore }) |> ignore
+        c.box(style=h_one, fn() { c.rich([@ui.span(text(task, "line"), mono=!flag(task, "agent"))], style=h_one_words) |> ignore }) |> ignore
       }
     }
   })
@@ -875,6 +879,8 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
   }
   let failures = number(g, "failures").to_int()
   let pending = number(g, "pending").to_int()
+  let rows = items(g, "rows")
+  let calls = rows.iter().any(fn(r) { text(Some(r), "kind") == "step" })
   let hot = c.lit(id)
   c.box(style=h_group, fn() {
     if rail {
@@ -891,7 +897,7 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
       })
       |> ignore
       c.box(style=h_grow_clip, fn() {
-        c.text(text(g, "summary"), style=if hot { h_group_hot } else { h_group_words }) |> ignore
+        c.rich([@ui.span(text(g, "summary"), mono=calls)], style=if hot { h_group_hot } else { h_group_words }) |> ignore
       })
       |> ignore
       if failures > 0 {
@@ -907,8 +913,6 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
       title => @sf.tip(c, "history-group/" + gk, id, title)
     }
     if open {
-      let rows = items(g, "rows")
-      let calls = rows.iter().any(fn(r) { text(Some(r), "kind") == "step" })
       c.box(style=h_steps, fn() {
         for i, row in rows {
           let rv = Some(row)
