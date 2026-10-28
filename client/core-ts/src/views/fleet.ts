@@ -34,7 +34,7 @@ function weekly(w: J): boolean {
 /// The workspace's subscriptions by kind (the profiles view's items), each kind's accounts with a week's quota read and
 /// how much of a week's quota they used in all, each account's share of its own added up: two can use more than one's
 /// (80% and 90%: 170%, 1.7 accounts' weeks), and that as a share of all their weeks (`share`, its ring: 170% of two,
-/// 0.85). The most accounts first; a kind that used none (0%) left out (「0% 不要显示」). Keys (API Key) have no quota.
+/// 0.85). The most weekly quota used first; a kind that used none (0%) left out (「0% 不要显示」). Keys (API Key) have no quota.
 export function quotaOf(profiles: J[]): J[] {
   const kinds = new Map<string, number[]>();
   for (const p of profiles) {
@@ -48,9 +48,9 @@ export function quotaOf(profiles: J[]): J[] {
   }
   const order = (k: string) => GROUPS.indexOf(k as (typeof GROUPS)[number]);
   return [...kinds.entries()]
-    .sort((a, b) => b[1].length - a[1].length || order(a[0]) - order(b[0]))
-    .map(([kind, used]) => {
-      const all = used.reduce((n, u) => n + u, 0);
+    .map(([kind, used]) => ({ kind, used, all: used.reduce((n, u) => n + u, 0) }))
+    .sort((a, b) => b.all - a.all || order(a.kind) - order(b.kind))
+    .map(({ kind, used, all }) => {
       const percent = format.round(all);
       const share = Math.min(1, all / (used.length * 100));
       // said as a sentence round the share (「是用 x 个账号消耗了 xxx% 的周额度」): 用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度;

@@ -35,6 +35,14 @@ test("the card shared says how much of a week's quota each kind of subscription 
   assert.deepEqual(q.map((x: J) => [x.name, x.accountsText]), [["Claude 订阅", "2 个账号"], ["ChatGPT 订阅", "1 个账号"]]);
 });
 
+test("shared quota ranks total weekly usage before account count or average, with a stable kind order for ties", () => {
+  const profiles = [account("grok", 80), account("claude", 30), account("claude", 30), account("chatgpt", 45), account("chatgpt", 45), account("kimi", 80)];
+  const expected = [["chatgpt", 90], ["grok", 80], ["kimi", 80], ["claude", 60]];
+  for (const input of [profiles, [...profiles].reverse()]) {
+    assert.deepEqual(quotaOf(input).map((q: J) => [q.kind, q.used]), expected);
+  }
+});
+
 test("the card shared says how many chats are at work now, and on how many stations today's chats are; today's and the last 7 days' chats archived and what was spent; the tasks chats ran on other stations over them", () => {
   const tile = (label: string, value: string) => ({ label, value, sub: "" });
   const usage = {
