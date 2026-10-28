@@ -9,8 +9,7 @@ client. Only iroh and, on Android, the IO are native:
 | Client | Where the core runs | Host (network, storage, time) | iroh |
 | --- | --- | --- | --- |
 | Web (app.still.fail) | one tab's dedicated Worker (the one holding the Web Lock `stillfail-core`; the other tabs' workers relay to it) | `src/hosts/web.ts`: fetch, WebSocket, IndexedDB (small values), SQLite's WASM build on OPFS | `client/iroh-wasm` (wasm-bindgen, relay only), loaded on the first link |
-| Desktop (`apps/mbui`: macOS, Windows, Linux) | Hermes on a thread of its own, as Android's, the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell`, as Android's | in `client/shell` |
-| Android (iOS later) | Hermes on a thread of its own (`apps/android/core/src/main/cpp/engine.cpp`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, SQLite, TCP) | in `client/shell` |
+| The apps (`apps/mbui`: Android, iOS, macOS, Windows, Linux) | Hermes on a thread of its own (`apps/mbui/engine`; on Apple's systems `apps/mbui/src/host/apple_core.mm`), the core as Hermes bytecode | `src/hosts/bridge.ts` over the Rust shell `client/shell` (HTTP, the cloud's WebSocket, files, SQLite, TCP) | in `client/shell` |
 
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
@@ -132,7 +131,7 @@ outstanding reads when the port closes.
 Only local file IO lives in this adapter: draft state,
 station requests, progress, errors and sending stay in the shared core.
 Android does the same through its engine (`src/hosts/bridge.ts`): the app holds
-the picked file (PickedFiles.kt) and sends `blob: { hostFile, size, type }`; the
+the picked file (`CoreHost.java`) and sends `blob: { hostFile, size, type }`; the
 core reads it with `picked.read {file, start, end}` and lets it go with
 `picked.release {file}`, calls answered by the app rather than the shell. Its
 files go up in a composer of their own (a key no chat has), so a message sent
@@ -711,52 +710,26 @@ The core's modules (`client/core-ts/src`):
 - `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
 - `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.
 
-## Native (Android)
+## Native (the apps)
 
-`apps/android/core` runs the core in Hermes (React Native's prebuilt
-`hermes-android`, without React Native): `engine.cpp` gives each core a thread
-with a task queue, timers on CLOCK_BOOTTIME and the microtasks drained after
-each task, and `__native` calls into the Rust shell (`client/shell`), which does
-the IO the core asks of its host — HTTP (reqwest, rustls), the cloud's
-WebSocket, files per storage key (the same directory and format as the Rust
-core's), the accounts' SQLite databases (`databases/`, asked synchronously), TCP
-to adbd, iroh — on threads of its own and answers through a C callback. The core is bundled for Hermes and compiled to its bytecode
-(`client/core-ts/scripts/hermes-bundle.ts` → `core.hbc` in the app's assets).
-A bug that ends a fiber ends the core: every client gets `{"fatal": "…"}` and the
-app starts a new one.
+The apps are mbui's (`apps/mbui`). Each runs the core in Hermes 0.81.4 (React Native's, without React Native) on a
+thread of its own: `apps/mbui/engine` (`engine.cpp` behind the C API `engine.h`; Android's `libstillfail_hermes.so`,
+Windows' `stillfail_engine.dll`, Linux's `libstillfail_engine.so`), on Apple's systems `apps/mbui/src/host/apple_core.mm`
+on Hermes's frameworks. The engine gives the core a task queue, timers and the microtasks drained after each task, and
+`__native` calls into the Rust shell (`client/shell`), which does the IO the core asks of its host — HTTP (reqwest,
+rustls), the cloud's WebSocket, files per storage key, the accounts' SQLite databases (`databases/`, asked
+synchronously), TCP to adbd, iroh — on threads of its own and answers through a C callback. What only the app can do
+(`secure.*`, `listen.*`, Android's `picked.*`) goes to the host through the same C API (`src/host/*_core.c`). The core
+is bundled for Hermes and compiled to its bytecode by `apps/mbui/scripts/core.sh hermes` (`out/core/core.hbc`, as
+`client/core-ts/scripts/hermes-bundle.ts` makes it). A bug that ends a fiber ends the core: every client gets
+`{"fatal": "…"}` and the app starts a new one.
 
-`apps/android/build.py` builds the shell with the NDK and the core's bytecode,
-checks the generated types (`Shapes.kt`, `Operations.kt`), then runs Gradle.
-The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
-interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
-shared by everyone who collects the same topic, deltas applied as on the web
-(keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
-The app is in modules, each seeing only those it is on, so the compiler keeps the layering:
-
-| module | what | on |
-|---|---|---|
-| `:shared` | the core's data and calls (`data/`, with the generated `Shapes.kt`, `Operations.kt`), the design (`ui/`, with the generated `Icons.kt`; `ui/Controls.kt`: buttons, fields, rows to pick from), the app's state and routes (`AppState.kt`: `AppState`, `Screen`, `LocalApp`; `Places.kt`), and the pages' parts more than one page module shows (`screens/`: `PageParts.kt`, `SettingParts.kt`, `FileKinds.kt`, `Notes.kt`, `PlacePage.kt`…) | `:core` |
-| `:settings` | the settings' pages (`screens/`: stations, profiles, connects, the vault, the workspace…) | `:shared` |
-| `:chat` | the chats' pages (`screens/`: home, a chat, its composer, files, previews, history, decisions…) | `:shared` |
-| `:drive` | a station's drive (`drive/`) | `:shared` |
-| `:app` | the activity, the app's frame (`App.kt`: the pages drawn by `Screen`), notifications, pushes, updates, adb lending, the remote screens (`remote/`), the share sheet (`share/`), sign-in and settings' home | all |
-
-The three page modules stand side by side: lint, which analyses a module only after those it is on, analyses them at
-once (in a line, one after another: 52 s for all of it, 2026-10-18). What one shows or opens of another's (a station's
-card, the workspaces' switcher, a file in the chat's viewer…) goes through `screens/Elsewhere.kt`, which the app fills in
-as it starts (`StillFailApp`); what `:shared` must tell the app, through hooks it sets (`TopicTiming`, `AppHooks`) or an
-interface it fills (`AppUpdates`). The pages keep their package (`fail.still.android.screens`) across the modules; what
-one module takes of another is public. In `:app`, the remote screens and the share sheet take nothing of the drive, and
-the remote screens nothing of the pages (`scripts/check.sh`: phone packages one way).
-
-## Desktop
-
-The desktop apps are mbui's (`apps/mbui`): the core in Hermes over the Rust shell, as on Android (their hosts:
-`apps/mbui/src/host/apple_core.mm`, `win_core.c`, `linux_core.c`). Until 2026-10-26 the desktop app was the web app
-in Electron; the Mac and Windows apps took its place under its ids, so an installed one's updater moved it over
-(`scripts/release.sh desktop`, `desktop-win`), and they keep what it kept: the core's files in its `userData/core`,
-the sign-in, the keys it sealed (`apps/mbui/src/host/electron_sealed.h`, `win_electron_sealed.h`). The station it
-carried and ran is made a service as the new app first starts (`apps/mbui/src/sfbase/local_station.mbt`).
+Until 2026-10-26 the desktop app was the web app in Electron; the Mac and Windows apps took its place under its ids, so
+an installed one's updater moved it over (`scripts/release.sh desktop`, `desktop-win`), and they keep what it kept: the
+core's files in its `userData/core`, the sign-in, the keys it sealed (`apps/mbui/src/host/electron_sealed.h`,
+`win_electron_sealed.h`). The station it carried and ran is made a service as the new app first starts
+(`apps/mbui/src/sfbase/local_station.mbt`). The Android app took the Kotlin one's place the same way (its package, its
+key, its files and sign-ins; the Kotlin app stopped at 0.1.4520 and left the repository on 2026-10-29).
 
 ## Web
 
@@ -776,18 +749,16 @@ too) for the pages and the desktop's main process alike.
 The ordinary station and cloud HTTP operations declare what they take beside
 their requests, in `ops.ts` (`PARAMS`); `client/core-ts/test/ops-contracts.test.ts`
 checks that each reads exactly that. `node client/core-ts/scripts/operations.ts`
-generates `web/src/core/operations.ts` and Android's `data/Operations.kt` from
-them; `--check` (CI, `scripts/check.sh`, the Android build) rejects drift. These
+generates `web/src/core/operations.ts` from
+them; `--check` (CI, `scripts/check.sh`) rejects drift. These
 bindings own named calls and parameter packing; the hand-written facades provide
 convenient return types and adapters. Special core calls (chat streaming, picks,
 local drafts) keep their own adapters. Optional fields distinguish absence (leave
-unchanged) from explicit `null` (reset). Kotlin's optional-fields builder records
-assignments, including null; it must not serialize every unassigned property.
+unchanged) from explicit `null` (reset).
 
 The clients' types are made the same way, from `src/shapes/schema.ts` (the
 shapes every topic's value passes through on its way out): `node
-client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts` and Android's
-`data/Shapes.kt`, and `--check` keeps them from drifting. A field whose words someone outside the app wrote (a name, a
+client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts`, and `--check` keeps them from drifting. A field whose words someone outside the app wrote (a name, a
 title, a notice, a command, an error, or a line the core makes with them in it) is marked `said`: the same script lists
 where each topic holds them for the mbui app (`apps/mbui/src/sffixture/said_paths.mbt`), whose squeeze sweep makes
 them their longest and holds every screen to fit them (docs/ui-panels.md, 放不下的时候).
