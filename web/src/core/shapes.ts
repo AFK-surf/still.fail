@@ -1830,6 +1830,10 @@ export interface ChatItem {
 	 * the workspace's own.
 	 */
 	outside?: string;
+	/** With `outside`: that workspace's mark (as a station's), shown before its name; none when none. */
+	outsideEmoji?: string;
+	/** With `outside`: as a station's icon, shown before the emoji. */
+	outsideIcon?: string;
 	/**
 	 * A chat of another of the workspace's stations than the one the `@` menu is written on (`chatSearch`
 	 * `station`): its station's mark and name go after its title. Absent otherwise.
@@ -2172,6 +2176,10 @@ export interface ChatPublished {
 	createdAt: number;
 	/** Who published it. */
 	byName: string;
+	/** Their email, when the station says (what their tile is coloured by). */
+	by?: string;
+	/** Their picture, as the workspace has it; none: their letter on their colour. */
+	byPicture?: string;
 	/** The viewer may revoke it (who published it, or an owner or admin). */
 	mayRevoke: boolean;
 	/** Its times in words (`createdAt`). */
@@ -2223,12 +2231,20 @@ export interface ChatSearchView {
 export interface ChatShareTo {
 	workspace: string;
 	name: string;
+	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
+	emoji?: string;
+	/** As a station's icon: shown before the emoji. */
+	icon?: string;
 }
 
 /** One of the viewer's other workspaces, and whether the chat is shared with it. */
 export interface ChatSharePlace {
 	workspace: string;
 	name: string;
+	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
+	emoji?: string;
+	/** As a station's icon: shown before the emoji. */
+	icon?: string;
 	/** The chat is shared with it. */
 	on: boolean;
 }
@@ -4099,6 +4115,10 @@ export interface JoinableStation {
 	/** Its home workspace. */
 	workspace: string;
 	workspaceName: string;
+	/** Its workspace's mark as its managers gave it (as a station's), shown before its name; none when none. */
+	workspaceEmoji?: string;
+	/** As a station's icon: shown before the emoji. */
+	workspaceIcon?: string;
 	online: boolean;
 	/** Its home workspace and whether it is up, in a line: Acme · 在线; with `needsLock`, why it cannot be added. */
 	line: string;
@@ -4739,6 +4759,10 @@ export interface MarkItem {
 	kind: string;
 	workspace: string;
 	workspaceName: string;
+	/** Its workspace's mark as its managers gave it (as a station's), shown before its name; none when none. */
+	workspaceEmoji?: string;
+	/** As a station's icon: shown before the emoji. */
+	workspaceIcon?: string;
 	station: string;
 	stationName: string;
 	session?: string;
@@ -4763,6 +4787,10 @@ export interface StationMembership {
 	workspace: string;
 	/** The workspace's name. */
 	name: string;
+	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
+	emoji?: string;
+	/** As a station's icon: shown before the emoji. */
+	icon?: string;
 	/** What the station is called there. */
 	stationName: string;
 	/** Its home workspace, whose owners and admins manage the machine. */

@@ -9,7 +9,7 @@ import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import { CodeEntry, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
-import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { useApp } from "./app.tsx";
 import { Button, LargeTitle, LinkButton, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { confirm } from "./sheets.tsx";
@@ -219,7 +219,7 @@ function PairSheet({ r }: { r: LockPairing }) {
       <span className={partsCss.mSubtle}>{t("web-pages.security.pairBody", { device: r.deviceText })}</span>
       <div className={css.mPlaces}>
         <span className={partsCss.mSubtle}>{t("web-pages.security.promptFor")}</span>
-        {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
+        {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}><WorkspaceBadge w={w} size={16} />{w.name}</span>)}
       </div>
       <div className={css.mBigCode}>{spacedCode(r.code)}</div>
       <span className={css.mNote}>{t("web-pages.security.pairNote")}</span>

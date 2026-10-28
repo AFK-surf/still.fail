@@ -569,7 +569,8 @@ test "desk composer: a reference to another workspace's chat is asked about firs
   assert_eq(named(calls, "chat.outsideRefs").length(), 1)
   assert_eq(named(calls, "chat.send").length(), 0)
   assert_true(t.find("分享对话") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
-  assert_true(t.find("来自 个人") is Some(_))
+  // whose: 来自, then that workspace's mark (its letter, 个, where it has none) and its name
+  assert_true(t.find("来自 ") is Some(_) && t.find("个") is Some(_) && t.find("个人") is Some(_))
   assert_true(t.find("分享并发送") is Some(_))
   // Enter again: shared by the core (which of them, with which workspace: its), then it goes
   t.enter()

@@ -278,6 +278,41 @@ pub fn station_mark(
 }
 
 ///|
+/// A workspace before its name where it is named among other words (a list's row, a chip, a heading; the web's
+/// WorkspaceMark.tsx WorkspaceBadge): its mark `size` across (station_mark), else its first letter, semibold and muted
+/// in a meta's size, in a square as large (no ground of its own, as the workspaces' rows have it: in a rounded row's
+/// corner a tile would have to be concentric with it). A GIF holds its first frame unless `still` is false (the
+/// workspace in use).
+pub fn workspace_badge(
+  c : @ui.Ctx,
+  name : String,
+  emoji : String,
+  icon : String,
+  size : Double,
+  still? : Bool = true,
+) -> Unit {
+  if has_station_mark(emoji, icon) {
+    station_mark(c, emoji, icon, size, theme().p.text, still~)
+    return
+  }
+  let tile = workspace_badge_tile.then(@ui.style(w=Fixed(size), h=Fixed(size)))
+  c.box(style=tile, fn() {
+    c.text(initial(name), style=workspace_badge_letter) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A workspace's letter's square (workspace_badge): what it holds in its middle.
+// kept across runs: a value (no field of it changes)
+let workspace_badge_tile : @ui.Style = @ui.css("align=ACenter justify=JCenter")
+
+///|
+/// Its letter: a meta's size, semibold, muted, on one line.
+// kept across runs: a value (no field of it changes)
+let workspace_badge_letter : @ui.TextStyle = @ui.text_style(size=Meta, leading=Font, weight=Semibold, color=Muted, wrap=false)
+
+///|
 /// Icon `name` (`icon`, where a parameter of that name hides it).
 fn icon_named(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Int {
   icon(c, name, size~, color~)

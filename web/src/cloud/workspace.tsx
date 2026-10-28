@@ -30,7 +30,7 @@ import { Folder, Server } from "@stillfail/ui/icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
-import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { OpenJobsChip } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
 import { workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
@@ -541,7 +541,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
                 <span className={css.menuCheck}>{here && <Check {...ICON} size={14} />}</span>
                 <span className={css.menuWorkspace}>
                   <span className={css.menuWorkspaceName}>
-                    {marked(w) && <WorkspaceMark w={w} size={14} still={!here} />}
+                    <WorkspaceBadge w={w} size={14} still={!here} />
                     <span className={css.menuWorkspaceText}>{w.name}</span>
                     {!here && <MarkCounts mark={marks?.workspaces[w.id]} />}
                   </span>

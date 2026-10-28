@@ -8,9 +8,11 @@ import { Button, Dialog } from "./ui.tsx";
 import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
 import { t } from "./i18n.ts";
+import { tx } from "./cloud/words.tsx";
+import { WorkspaceNamed } from "./WorkspaceMark.tsx";
 
 /** A chat of another workspace a message refers to, not shared with the one it is written in yet. */
-export type Outside = { station: string; id: string; title: string; workspace: string; workspaceName: string; may: boolean };
+export type Outside = { station: string; id: string; title: string; workspace: string; workspaceName: string; workspaceEmoji?: string; workspaceIcon?: string; may: boolean };
 
 /** The chats of other workspaces `text`, written on `station`, refers to and would share. */
 export async function outsideOf(station: string, text: string): Promise<Outside[]> {
@@ -31,7 +33,7 @@ export function OutsideList({ chats }: { chats: Outside[] }) {
       {chats.map((c) => (
         <li key={`${c.station}\t${c.id}`} className={css.outsideItem}>
           <span className={css.refChip}><span className={css.refChipHash}>@</span>{c.title}</span>
-          <span className={css.refChipStation}>{t("web-main.outside.from", { name: c.workspaceName })}</span>
+          <span className={css.refChipStation}>{tx("web-main.outside.from", { name: <WorkspaceNamed w={{ name: c.workspaceName, emoji: c.workspaceEmoji, icon: c.workspaceIcon }} size={11} /> })}</span>
           {!c.may && <span className={css.outsideCannot}>{t("web-main.outside.cannot")}</span>}
         </li>
       ))}

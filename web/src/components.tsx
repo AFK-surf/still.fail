@@ -13,6 +13,7 @@ import * as css from "./components.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { t } from "./i18n.ts";
+import { tx } from "./cloud/words.tsx";
 
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
@@ -75,7 +76,20 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
 export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" }) {
   if (!creator?.shown) return null;
   const said = verb === "created" ? "created" : "started";
-  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : creator.via === "feishu" ? ".feishu" : ""}`, { name: creator.shown.display })}</span>;
+  const key = `web-main.creator.${said}${creator.via === "slack" ? ".slack" : creator.via === "feishu" ? ".feishu" : ""}`;
+  return <span className={css.creator}>{tx(key, { name: <PersonNamed name={creator.shown.display} picture={creator.shown.picture} /> })}</span>;
+}
+
+/** A person's picture, round, at `size`: their account's, else their first letter. */
+export function PersonFace({ name, picture, size = 16 }: { name: string; picture?: string | null | undefined; size?: number }) {
+  return picture
+    ? <img className={cloudCss.person} src={picture} alt="" width={size} height={size} referrerPolicy="no-referrer" />
+    : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.56) }} aria-hidden="true">{([...name.trim()][0] ?? "?").toUpperCase()}</span>;
+}
+
+/** A person named: their picture (PersonFace), then their name (or `children` in its place). */
+export function PersonNamed({ name, picture, size = 16, children }: { name: string; picture?: string | null | undefined; size?: number; children?: ReactNode }) {
+  return <span className={css.person}><PersonFace name={name} picture={picture} size={size} />{children ?? name}</span>;
 }
 
 /** Who a connect belongs to: avatar and name as the core names them. */
@@ -84,9 +98,7 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
   const { name, picture, mine } = owner.shown;
   return (
     <Tip label={owner.id === "local" ? undefined : owner.id}><span className={css.owner}>
-      {picture
-        ? <img className={cloudCss.person} src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
-        : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: 16, height: 16, fontSize: 9 }} aria-hidden="true">{([...name][0] ?? "?").toUpperCase()}</span>}
+      <PersonFace name={name} picture={picture} />
       {mine ? t("web-main.owner.you", { name }) : name}
     </span></Tip>
   );

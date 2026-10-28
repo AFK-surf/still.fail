@@ -63,15 +63,18 @@ function heldOf(thread: J): J[] {
   return arr(get(thread, "published")).filter((p) => isObject(p) && typeof p.id === "string" && typeof p.key === "string");
 }
 
-/// A snapshot as a chat's "…" lists it: its link (by its station's address: its id is its key), when and by whom, and
-/// whether the viewer may revoke it.
-function linkShown(p: J, station: string, may: (by: string | null) => boolean): J {
+/// A snapshot as a chat's "…" lists it: its link (by its station's address: its id is its key), when and by whom (their
+/// picture as the workspace has it), and whether the viewer may revoke it.
+function linkShown(p: J, station: string, members: J[], may: (by: string | null) => boolean): J {
   const by = str(p.by);
+  const picture = pictureOf(members, by);
   return {
     id: p.id,
     link: linkOf(stationId(station), p.id, p.key),
     createdAt: num(p.at),
     byName: str(p.byName) ?? (by !== null ? by.split("@")[0] : ""),
+    ...(by !== null ? { by } : {}),
+    ...(picture !== null ? { byPicture: picture } : {}),
     mayRevoke: may(by),
   };
 }
@@ -79,14 +82,14 @@ function linkShown(p: J, station: string, may: (by: string | null) => boolean): 
 /// What a chat's "…" shows of its public snapshots (`ChatView.publish`), or null while it has no chat. `me`: the
 /// viewer's email; `role`: theirs in the chat's workspace. A read-only member (`viewer`) publishes nothing; a snapshot
 /// is revoked by whoever published it, or an owner or admin.
-export function shown(env: { me: string | null; role: string | null; revoking: (id: string) => boolean }, station: string, thread: J): J | null {
+export function shown(env: { me: string | null; role: string | null; members?: J[]; revoking: (id: string) => boolean }, station: string, thread: J): J | null {
   if (!isObject(thread)) return null;
   const manager = env.role === "owner" || env.role === "admin";
   const mine = (by: string | null) => by !== null && env.me !== null && by.toLowerCase() === env.me.toLowerCase();
   const links = heldOf(thread)
     .filter((p) => !env.revoking(p.id))
     .sort((a, b) => num(b.at) - num(a.at))
-    .map((p) => linkShown(p, station, (by) => manager || mine(by)));
+    .map((p) => linkShown(p, station, env.members ?? [], (by) => manager || mine(by)));
   return { may: env.role !== "viewer", links };
 }
 
@@ -273,7 +276,7 @@ export function install(inner: Inner): void {
       if (!isObject(made) || typeof made.id !== "string" || typeof made.key !== "string") return yield* Effect.fail(new CoreError("bad_reply", t("core-misc.publish.badReply")));
       putHeld(c.station, c.thread, (was) => [made, ...was.filter((p) => p.id !== made.id)]);
       invalidate(c.station);
-      return present.times(linkShown(made, c.station, () => true), clock());
+      return present.times(linkShown(made, c.station, [], () => true), clock());
     });
   };
   handlers.chatUnpublish = (_inner, call, _progress, _at, ctx) => {

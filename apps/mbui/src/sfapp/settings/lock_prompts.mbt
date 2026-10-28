@@ -72,7 +72,13 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
       c.box(style=pair_places, fn() {
         c.text(tr("web-pages.security.promptFor"), style=pair_places_head) |> ignore
         for w in items(shown, "workspaces") {
-          c.text(text(Some(w), "name"), style=pair_place) |> ignore
+          let wv = Some(w)
+          // its mark before its name, its letter where it has none
+          c.box(style=pair_place_line, fn() {
+            @sf.workspace_badge(c, text(wv, "name"), text(wv, "emoji"), text(wv, "icon"), pair_place_mark)
+            c.text(text(wv, "name"), style=pair_place) |> ignore
+          })
+          |> ignore
         }
       })
       |> ignore
@@ -112,6 +118,14 @@ let pair_places_head : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 ///|
 // kept across runs: a value (no field of it changes)
 let pair_place : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg)
+
+///|
+/// A workspace asked into: its mark 8 before its name, as tall as its words.
+// kept across runs: a value (no field of it changes)
+let pair_place_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+let pair_place_mark : Double = 20.0
 
 ///|
 /// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).

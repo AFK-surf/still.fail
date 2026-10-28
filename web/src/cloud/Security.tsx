@@ -12,7 +12,7 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Button, Confirm, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
-import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Security.css.ts";
 
@@ -299,7 +299,7 @@ export function PromptPlaces({ r }: { r: LockPairing }) {
   return (
     <div className={css.places}>
       <span className={css.placesLabel}>{t("web-pages.security.promptFor")}</span>
-      {r.workspaces.map((w) => <span key={w.id} className={css.place}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
+      {r.workspaces.map((w) => <span key={w.id} className={css.place}><WorkspaceBadge w={w} size={16} />{w.name}</span>)}
     </div>
   );
 }

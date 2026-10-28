@@ -22,7 +22,7 @@ import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
 import { sampleStamp, sampleStations, sampleWords, sampleWorkspaceProfiles } from "../samples.ts";
-import { QuotaBars } from "../components.tsx";
+import { PersonNamed, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useGo } from "../go.ts";
 import { ProfileCard } from "../ProfileCard.tsx";
@@ -206,6 +206,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         </li>
         {others.map((a) => (
           <li key={a.sub} className={pagesCss.listRow}>
+            <Avatar account={a} size={28} />
             <span className={pagesCss.listRowTitle}>{a.email}</span>
             <Button variant="ghost" busy={signOut.busy(a.sub)} onClick={() => void signOut.signOut(a.sub).then((out) => { if (out) toast(t("web-mobile.me.signedOut", { email: a.email })); })}>{t("web-mobile.me.signOutOne")}</Button>
           </li>
@@ -1121,7 +1122,7 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
                     <li key={p.email}>
                       <label className={chatCss.modelPoolItem} data-on={picked.has(p.email) || inside.has(p.email) || undefined}>
                         <input type="checkbox" disabled={inside.has(p.email)} checked={picked.has(p.email) || inside.has(p.email)} onChange={() => toggle(p.email)} />
-                        <span>{p.name}</span>
+                        <PersonNamed name={p.name || p.email} picture={p.image} size={18} />
                         <span className={shellCss.muted}>{p.email}</span>
                         {inside.has(p.email) ? <span className={shellCss.muted}>{t("web-pages.settings.members.inside")}</span> : p.guest && <span className={shellCss.muted}>{t("web-pages.settings.members.guest")}</span>}
                       </label>

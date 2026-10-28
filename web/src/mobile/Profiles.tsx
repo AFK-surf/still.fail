@@ -32,6 +32,7 @@ import * as chatCss from "./styles/chat.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { useInStation } from "../screen/InStation.tsx";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
@@ -733,7 +734,7 @@ function WorkspaceRows({ p }: { p: Profile }) {
             <ListRow key={w.workspace} onClick={busy ? undefined : () => act(api.putProfile(p.id, { workspaces: on ? now.filter((x) => x !== w.workspace) : [...now, w.workspace] }),
               t("web-pages.profiles.workspaces.what"), t(on ? "web-pages.profiles.workspaces.turnedOff" : "web-pages.profiles.workspaces.turnedOn", { name: w.name }))}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</span>
+                <span className={listsCss.mRowTitle}><WorkspaceNamed w={w}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</WorkspaceNamed></span>
                 <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}</span>
               </span>
               {busy && <Spinner inline />}

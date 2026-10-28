@@ -1543,13 +1543,32 @@ fn wide_switch_row(
   busy? : Bool = false,
   title_style? : @ui.TextStyle = theme().rows.title,
   note_style? : @ui.TextStyle = theme().rows.note,
+  lead? : (@ui.Ctx) -> Unit,
 ) -> Bool {
   let id = c.id(key + "/words")
   let mut now = on
   // (the switch alone answers, not its words: 2026-10-27 用户「只有开关响应」)
-  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~)
+  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~, lead?)
   now
 }
+
+///|
+/// A row's title, with `lead` before it on its line where given (a workspace's mark: workspace_badge), 6 apart.
+fn led_title(c : @ui.Ctx, title : String, style : @ui.TextStyle, lead : ((@ui.Ctx) -> Unit)?) -> Unit {
+  match lead {
+    Some(draw) =>
+      c.box(style=led_title_line, fn() {
+        draw(c)
+        c.text(title, style~) |> ignore
+      })
+      |> ignore
+    None => c.text(title, style~) |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let led_title_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// A row of a setting (a switch's, a choice's: switch_row, setting): its title with its note under it at its start,
@@ -1563,10 +1582,11 @@ fn control_row(
   title_style? : @ui.TextStyle = theme().rows.title,
   note_style? : @ui.TextStyle = theme().rows.note,
   words_id? : Int = 0,
+  lead? : (@ui.Ctx) -> Unit,
 ) -> Unit {
   c.box(style=switch_row_box, fn() {
     c.box(style=switch_row_words, id=words_id, fn() {
-      c.text(title, style=title_style) |> ignore
+      led_title(c, title, title_style, lead)
       if note != "" {
         c.text(note, style=note_style) |> ignore
       }
@@ -1581,8 +1601,16 @@ fn control_row(
 /// One of several to tick (a list a choice of some of: ChatPage.tsx ShareDialog's rows, the phone's PickRow): its box,
 /// then what it is (`note` quieter under it), the whole row pressed to tick it or not, its ground lit under the hand. Its
 /// room, its words and its box the theme's rows' (Rows: a finger's with touch, a list row's with keyboard and mouse). What
-/// it is now.
-pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : String = "", disabled? : Bool = false) -> Bool {
+/// it is now. `lead`: what goes before its words, after its box (a workspace's mark: workspace_badge).
+pub fn check_row(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  on : Bool,
+  note? : String = "",
+  disabled? : Bool = false,
+  lead? : (@ui.Ctx) -> Unit,
+) -> Bool {
   let id = c.id(key + "/row")
   let mut now = on
   let mut ticked = false
@@ -1593,6 +1621,10 @@ pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : S
     if (v == On) != on {
       ticked = true
       now = v == On
+    }
+    match lead {
+      Some(draw) => draw(c)
+      None => ()
     }
     // (its words as a setting row's: what is left of the row)
     c.box(style=switch_row_words, fn() {
@@ -2878,10 +2910,22 @@ pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "") -> Unit {
 ///|
 /// A group of a small panel's rows (PanelGroup) under a small `label` (12, muted: in by a row's padding, as far under
 /// what is over it as a row's words, 2 over its rows), 2 apart.
-pub fn panel_group(c : @ui.Ctx, body : () -> Unit, label? : String = "") -> Unit {
+/// `lead`: what goes before its label (a workspace's mark: workspace_badge).
+pub fn panel_group(c : @ui.Ctx, body : () -> Unit, label? : String = "", lead? : (@ui.Ctx) -> Unit) -> Unit {
   c.box(style=panel_group_box, fn() {
     if label != "" {
-      c.box(style=panel_label_at, fn() { c.text(label, style=panel_note_words) |> ignore }) |> ignore
+      c.box(style=panel_label_at, fn() {
+        match lead {
+          Some(draw) =>
+            c.box(style=panel_label_led, fn() {
+              draw(c)
+              c.text(label, style=panel_note_words) |> ignore
+            })
+            |> ignore
+          None => c.text(label, style=panel_note_words) |> ignore
+        }
+      })
+      |> ignore
     }
     body()
   })
@@ -2989,6 +3033,11 @@ let panel_group_box : @ui.Style = @ui.css("w=Full gap=S0_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let panel_label_at : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
+
+///|
+/// A label with something before it (panel_group's `lead`): in a line, 6 apart.
+// kept across runs: a value (no field of it changes)
+let panel_label_led : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

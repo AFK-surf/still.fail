@@ -22,7 +22,7 @@ import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
-import { places, type Place } from "./xshare.ts";
+import { markOf, places, type Place } from "./xshare.ts";
 import { enrolled, takeInJoined } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -103,6 +103,7 @@ export function joinable(inner: Inner, workspace: string): J {
         ...(str(get(s, "icon")) ? { icon: get(s, "icon") } : {}),
         workspace: p.id,
         workspaceName: p.name,
+        ...markOf(p, "workspace"),
         online,
         line: needsLock ? t("core-views.joinable.needsLock", { workspace: p.name }) : `${p.name} · ${online ? t("core-views.joinable.online") : t("core-views.joinable.offline")}`,
         ...(needsLock ? { needsLock: true } : {}),
@@ -141,6 +142,7 @@ export function memberships(inner: Inner, address: string): J {
     return [{
       workspace,
       name: all.find((p) => p.id === workspace)?.name ?? str(get(w, "workspaceName")) ?? workspace,
+      ...markOf(all.find((p) => p.id === workspace)),
       stationName: str(get(w, "name")) ?? "",
       home,
       here: workspace === here,

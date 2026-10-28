@@ -712,7 +712,15 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       if creator == "" {
         c.text(@sf.t("web-pages.chat.info.unknown"), style=info_muted) |> ignore
       } else {
-        c.text(creator, style=info_words) |> ignore
+        // their face before their name, as the people's are
+        c.box(style=info_inline, fn() {
+          match field(thread, "creator") {
+            Some(Object(_) as p) => people_stack(c, src, "info-creator", [@sfbase.person_of(p)], 1)
+            _ => ()
+          }
+          c.text(creator, style=info_words) |> ignore
+        })
+        |> ignore
       }
     })
     fact(@sf.t("web-pages.chat.info.people"), fn() {

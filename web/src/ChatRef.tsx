@@ -6,8 +6,9 @@ import { hrefOf } from "./go.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
+import { WorkspaceNamed } from "./WorkspaceMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
-import type { AccountWorkspaces } from "./cloud/api.ts";
+import type { AccountWorkspaces, WorkspaceSummary } from "./cloud/api.ts";
 import type { LinkedChat } from "./core/shapes.ts";
 import { useTopicSelect } from "./core/react.ts";
 import { ModelLogo, Time, WaitLine } from "./ui.tsx";
@@ -43,13 +44,13 @@ export function RefChip({ title, href }: { title: ReactNode | null; href: string
   // Only how its station looks, followed: not each change of the stations' views.
   const found = useStationLook(elsewhere && !outside ? there : null);
   // One of another workspace's (shared with this one, docs/chat-share.md) says that workspace's name.
-  const workspace = useTopicSelect<AccountWorkspaces[], string | undefined>(outside ? { topic: "workspaces" } : null, (s) => s.value?.flatMap((a) => a.workspaces).find((w) => w.id === scopeOf(there!))?.name);
-  const name = !elsewhere ? null : outside ? (workspace ?? scopeOf(there).slice(0, 8)) : (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9));
+  const workspace = useTopicSelect<AccountWorkspaces[], WorkspaceSummary | undefined>(outside ? { topic: "workspaces" } : null, (s) => s.value?.flatMap((a) => a.workspaces).find((w) => w.id === scopeOf(there!)));
+  const name = !elsewhere ? null : outside ? (workspace?.name ?? scopeOf(there).slice(0, 8)) : (found?.name ?? there.slice(there.indexOf("/") + 1, there.indexOf("/") + 9));
   return (
     <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} icon={found?.icon} />}>
       <a className={css.refChip} href={href}>
         <span className={css.refChipHash}>@</span>{title ?? <RefTitle href={href} here={here} />}
-        {name && <span className={css.refChipStation}>{!outside && <StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />}{name}</span>}
+        {name && <span className={css.refChipStation}>{outside ? <WorkspaceNamed w={{ name, emoji: workspace?.emoji, icon: workspace?.icon }} size={11} /> : <><StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />{name}</>}</span>}
       </a>
     </Hover>
   );
@@ -227,7 +228,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
               {/* Another station's: its name after the title, as a reference to it shows it (the row keeps its three columns). */}
               <span className={css.refTitleCell}>
                 <span className={css.refTitle}>{item.title}</span>
-                {item.outside ? <span className={css.refChipStation}>{item.outside}</span>
+                {item.outside ? <span className={css.refChipStation}><WorkspaceNamed w={{ name: item.outside, emoji: item.outsideEmoji, icon: item.outsideIcon }} size={11} /></span>
                   : item.otherStation && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
               </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />

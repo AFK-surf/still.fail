@@ -66,8 +66,12 @@ fn outside_body(c : @ui.Ctx, key : String) -> Unit {
         })
         |> ignore
         c.box(style=outside_whose, fn() {
-          c.text(@sf.t("web-main.outside.from", args=[("name", x.workspace_name)]), style=outside_whose_words)
-          |> ignore
+          let (before, after) = @sf.t_around("web-main.outside.from", "name")
+          if before != "" {
+            c.text(before, style=outside_whose_words) |> ignore
+          }
+          @sf.workspace_badge(c, x.workspace_name, x.workspace_emoji, x.workspace_icon, outside_whose_mark)
+          c.text(x.workspace_name + after, style=outside_whose_words) |> ignore
         })
         |> ignore
         if !x.may {
@@ -126,7 +130,11 @@ let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=AccentText, wr
 ///|
 /// Whose it is (refChipStation): a pill 4 after it, 1 by 6 in, the meta size, muted, on the hover's ground.
 // kept across runs: a value (no field of it changes)
-let outside_whose : @ui.Style = @ui.css("ml=S1 px=S1_5 py=SPx radius=Full bg=Hover")
+let outside_whose : @ui.Style = @ui.css("row ml=S1 px=S1_5 py=SPx gap=S1 radius=Full bg=Hover align=ACenter")
+
+///|
+/// Its workspace's mark, as a chip's station's (ChatRef.css.ts refChipStationIcon: 11).
+let outside_whose_mark : Double = 11.0
 
 ///|
 // kept across runs: a value (no field of it changes)

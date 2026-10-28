@@ -161,7 +161,11 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
                 c.box(style=ref_menu_title_line, fn() {
                   c.box(style=ref_menu_title_box, fn() { c.text(item.title, style=ref_menu_title) |> ignore }) |> ignore
                   if outside != "" {
-                    c.box(style=words_tag, fn() { c.text(outside, style=words_tag_words) |> ignore }) |> ignore
+                    c.box(style=words_tag, fn() {
+                      @sf.workspace_badge(c, outside, text(Some(x), "outsideEmoji"), text(Some(x), "outsideIcon"), 12.0)
+                      c.text(outside, style=words_tag_words) |> ignore
+                    })
+                    |> ignore
                   } else if flag(Some(x), "otherStation") {
                     station_tag(c, {
                       address: item.station,

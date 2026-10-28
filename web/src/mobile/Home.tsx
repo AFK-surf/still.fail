@@ -42,6 +42,7 @@ import { useVirtualList, useVirtualModel } from "../virtual/list.tsx";
 import type { Item } from "../virtual/model.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
+import { marked, WorkspaceBadge } from "../WorkspaceMark.tsx";
 
 export function Home() {
   const app = useApp();
@@ -121,12 +122,15 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
   filter: ChatFilter; syncing?: ChatsView["syncing"];
 }) {
   const app = useApp();
+  const here = useWorkspaces().value?.flatMap((a) => a.workspaces).find((w) => w.id === app.entry.id);
   return (
     <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
       <button type="button" className={`${barsCss.mNavButton} ${css.mHomeMe}`} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
         <Settings size={22} />
       </button>
       <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
+        {/* its mark before its name; none where it has none, its letter only the name's first again beside it */}
+        {here && marked(here) && <WorkspaceBadge w={here} size={20} still={false} />}
         <b>{app.entry.name}</b>
         {others
           ? <span className={chatMarkCss.chatMarkInline} data-tone={others} role="img" aria-label={othersLabel ?? ""} />

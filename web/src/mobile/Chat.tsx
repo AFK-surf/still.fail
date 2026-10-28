@@ -41,7 +41,7 @@ import { Button, Gone, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, Nav
 import { AgentMark, ElsewhereLogo } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
-import { PeopleStack } from "../components.tsx";
+import { PeopleStack, PersonNamed } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { Letters } from "../Letters.tsx";
 import { TermText } from "../TermText.tsx";
@@ -63,6 +63,7 @@ import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 
+import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { t } from "../i18n.ts";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
@@ -887,7 +888,7 @@ function PublishedRow({ here, thread, link }: { here: Here; thread: number; link
   return (
     <div className={`${listsCss.mInfoRow} ${css.mPublished}`}>
       <Web size={16} className={partsCss.mSubtle} />
-      <span className={`${partsCss.mGrow} ${css.mPublishedText}`}>{link.time?.createdAt?.ago} · {link.byName}</span>
+      <span className={`${partsCss.mGrow} ${css.mPublishedText}`}>{link.time?.createdAt?.ago} · <PersonNamed name={link.byName} picture={link.byPicture} size={16} /></span>
       <LinkButton label={t("common.copy")} onClick={copy} />
       {link.mayRevoke && <LinkButton label={t("web-pages.chat.publish.revoke")} onClick={revoke} />}
     </div>
@@ -988,7 +989,7 @@ function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; s
       <SheetHead title={t("web-pages.chat.xshare")} />
       <div className={sheetsCss.mSheetScroll}>
         <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-pages.chat.xshare.lead")}</p>
-        {share.places.map((p) => <PickRow key={p.workspace} label={p.name} checked={ticked.has(p.workspace)}
+        {share.places.map((p) => <PickRow key={p.workspace} label={p.name} leading={<WorkspaceBadge w={p} size={20} />} checked={ticked.has(p.workspace)}
           onClick={() => setTicked((was) => { const next = new Set(was); if (next.has(p.workspace)) next.delete(p.workspace); else next.add(p.workspace); return next; })} />)}
         <div className={css.mShareWrite}>
           <button type="button" className={connectsCss.mSwitchRow} disabled={ticked.size === 0} onClick={() => setWrite(!write)}>

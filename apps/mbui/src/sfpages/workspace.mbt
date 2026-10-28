@@ -100,13 +100,11 @@ let workspaces_tall : Double = 0.7
 fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
-  let any_marked = all.iter().any(workspace_marked)
-  let lead = fn(x : Workspace) { if any_marked { Some(x) } else { None } }
   c.box(style=ws_list, fn() {
     ws_label(c, @sf.t("android-misc.workspace.current"))
     c.box(style=ws_current, fn() {
       c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
-        if workspace_row(c, "ws/" + w.id, w.name, w.email, true, lead(w), "", Json::null(), on_card=true) {
+        if workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true) {
           close()
         }
       })
@@ -120,7 +118,7 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
     }
     for o in others {
       let mark = field(by_ws, o.id).unwrap_or(Json::null())
-      if workspace_row(c, "ws/" + o.id, o.name, o.email, false, lead(o), "", mark) {
+      if workspace_row(c, "ws/" + o.id, o.name, o.email, false, Some(o), "", mark) {
         close()
         switch_workspace(src, o.id)
       }

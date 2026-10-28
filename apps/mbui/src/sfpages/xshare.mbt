@@ -81,7 +81,10 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       let ws = text(Some(p), "workspace")
       let name = text(Some(p), "name")
       let on = xsharing.ticked.contains(ws)
-      if @sf.check_row(c, "xshare/" + ws, name, on) != on {
+      let lead = fn(c : @ui.Ctx) {
+        @sf.workspace_badge(c, name, text(Some(p), "emoji"), text(Some(p), "icon"), xshare_mark)
+      }
+      if @sf.check_row(c, "xshare/" + ws, name, on, lead~) != on {
         if on {
           xsharing.ticked.remove(ws)
         } else {
@@ -103,6 +106,10 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// A workspace's mark before its name (WorkspaceNamed's 16 on the web's rows).
+let xshare_mark : Double = 16.0
 
 ///|
 /// The workspaces (shareList: out past the panel's words by a row's room, 12, its rows as wide), 2 apart, each a tick

@@ -1072,7 +1072,7 @@ export class Views implements Owner {
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
     // Its public snapshots, without those being revoked here meanwhile.
-    const published = publish.shown({ me: str(get(v.me, "email")), role: typeof role === "string" ? role : null, revoking: (id) => this.#core.revoking?.(station, id) === true }, station, v.thread);
+    const published = publish.shown({ me: str(get(v.me, "email")), role: typeof role === "string" ? role : null, members: arr(get(workspace, "members")), revoking: (id) => this.#core.revoking?.(station, id) === true }, station, v.thread);
     if (published !== null) v.publish = published;
     return out;
   }
@@ -1099,7 +1099,7 @@ export class Views implements Owner {
             if (place.id === view.scope) continue;
             const theirs = this.#chats(place.id, false, false);
             if (theirs === undefined || !("ok" in theirs)) continue;
-            for (const item of arr(refs.search(theirs.ok, view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name });
+            for (const item of arr(refs.search(theirs.ok, view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
           }
           found.items = refs.withOutside(arr(found.items), others, view.query as string, view.scope as string, view.limit as number | undefined);
         }

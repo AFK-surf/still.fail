@@ -95,7 +95,14 @@ fn top_bar(
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
         // the name as long as there is room for it
         let keys = if @sfdesk.transfers_key_shown(src, w.id) { 1 } else { 0 }
-        let room = c.width - 16.0 * 2.0 - 34.0 * (2 + keys).to_double() - 10.0 * (2 + keys).to_double() - 6.0 * 2.0 - 16.0 - 10.0
+        let marked = @sf.has_station_mark(w.emoji, w.icon)
+        let room = c.width - 16.0 * 2.0 - 34.0 * (2 + keys).to_double() - 10.0 * (2 + keys).to_double() - 6.0 * 2.0 - 16.0 - 10.0 -
+          (if marked { home_ws_mark + 6.0 } else { 0.0 })
+        // its mark before its name (the one in use: a GIF of it moves); none where it has none, its letter only the
+        // name's first again beside it
+        if marked {
+          @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
+        }
         c.box(max_w=dmax(room, 40.0), fn() {
           top_bar_title(c, w.name) |> ignore
         })
@@ -241,3 +248,7 @@ fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
 /// The workspaces opened from Home's top as it first draws (the fixture's home-sheet: newchat_fixture.mbt open_mode).
 // kept across runs: put back by reset, let go as Home reads it
 let home_sheet_at_start : Ref[Bool] = Ref(false)
+
+///|
+/// The workspace's mark before its name in Home's bar (Home.tsx WorkspaceBadge: 20).
+let home_ws_mark : Double = 20.0

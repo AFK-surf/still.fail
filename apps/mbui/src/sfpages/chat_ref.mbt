@@ -176,7 +176,11 @@ fn ref_menu_body(
         // keeps its three columns)
         let outside = text(Some(x), "outside")
         if outside != "" {
-          c.box(style=ref_chip_station, fn() { c.text(outside, style=ref_chip_words) |> ignore }) |> ignore
+          c.box(style=ref_chip_station, fn() {
+            @sf.workspace_badge(c, outside, text(Some(x), "outsideEmoji"), text(Some(x), "outsideIcon"), ref_chip_icon)
+            c.text(outside, style=ref_chip_words) |> ignore
+          })
+          |> ignore
         } else if flag(Some(x), "otherStation") {
           c.box(style=ref_chip_station, fn() {
             @sf.station_mark(c, item.station_emoji, item.station_icon, ref_chip_icon, @sf.theme().p.muted)

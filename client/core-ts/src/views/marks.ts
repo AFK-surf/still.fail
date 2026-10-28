@@ -129,7 +129,14 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   const others = new Counts();
   let total = 0;
   const names = new Map<string, string>();
-  for (const a of arr(views.ok({ topic: "workspaces" }))) for (const w of arr(get(a, "workspaces"))) if (typeof get(w, "id") === "string") names.set(w.id, str(get(w, "name")) ?? w.id);
+  const marks = new Map<string, { workspaceEmoji?: string; workspaceIcon?: string }>();
+  for (const a of arr(views.ok({ topic: "workspaces" }))) {
+    for (const w of arr(get(a, "workspaces"))) {
+      if (typeof get(w, "id") !== "string") continue;
+      names.set(w.id, str(get(w, "name")) ?? w.id);
+      marks.set(w.id, { ...(str(get(w, "emoji")) ? { workspaceEmoji: w.emoji } : {}), ...(str(get(w, "icon")) ? { workspaceIcon: w.icon } : {}) });
+    }
+  }
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
     // The same of the lists the rail leads to besides the whole one (我参与的, 监控中).
@@ -177,6 +184,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
           kind: tone,
           workspace: id,
           workspaceName: names.get(id) ?? id,
+          ...marks.get(id),
           station: address,
           stationName: nameOf.get(address) ?? address,
           session: get(row, "id") ?? null,

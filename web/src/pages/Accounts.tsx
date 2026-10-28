@@ -31,6 +31,7 @@ import { NAME } from "../channel.ts";
 import { useInStation } from "../screen/InStation.tsx";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
+import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 import { sampleProfile } from "../samples.ts";
 /** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
@@ -279,7 +280,7 @@ function WorkspacesSection({ profile }: { profile: Profile }) {
       {joined.map((w) => {
         const on = shown.includes(w.workspace);
         return (
-          <SwitchRow key={w.workspace} title={t("web-pages.profiles.workspaces.for", { name: w.name })} checked={on}
+          <SwitchRow key={w.workspace} title={<WorkspaceNamed w={w}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</WorkspaceNamed>} checked={on}
             description={t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}
             busy={put.busy && (put.args?.[0].includes(w.workspace) ?? false) !== now.includes(w.workspace)} disabled={put.busy}
             onChange={(next) => void put.run(next ? [...now, w.workspace] : now.filter((x) => x !== w.workspace)).then((ok) => {

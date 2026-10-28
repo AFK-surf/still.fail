@@ -17,7 +17,7 @@ import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, useRootPage, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
-import { Button, Field, FilterMenu, GroupLabel, LinkButton, Gone, ListCard, ListRow, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, SectionHeader, Seg, SlackMark, ticked, tNodes } from "./parts.tsx";
+import { Avatar as PersonAvatar, Button, Field, FilterMenu, GroupLabel, LinkButton, Gone, ListCard, ListRow, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, SectionHeader, Seg, SlackMark, ticked, tNodes } from "./parts.tsx";
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
@@ -37,6 +37,7 @@ import * as newChatCss from "./styles/new-chat.css.ts";
 import { NAME } from "../channel.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
+import { PersonNamed } from "../components.tsx";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import type { PickView } from "../core/shapes.ts";
 import { sampleConnects, samplePick } from "../samples.ts";
@@ -236,7 +237,7 @@ function ConnectBody({ item }: { item: ConnectItem }) {
         <ConnectAvatar connect={connect} size={44} />
         <span className={partsCss.mGrow}>
           <span className={listsCss.mRowTitle}>{placeOf(connect)}</span>
-          <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} />{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
+          <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} />{connect.createdBy ? tNodes("web-mobile.connects.owner", { owner: <PersonNamed name={connect.createdBy.shown?.display ?? connect.createdBy.name} picture={connect.createdBy.shown?.picture} size={14} /> }) : ""}</span>
         </span>
       </div>
       {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
@@ -371,7 +372,7 @@ function OwnerSheet({ connect }: { connect: Connect }) {
       <div className={sheetsCss.mSheetScroll}>
         <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-mobile.connects.ownerNote")}</p>
         {members.map((m) => (
-          <PickRow key={m.sub} label={m.name || m.email} sub={m.email} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
+          <PickRow key={m.sub} label={m.name || m.email} sub={m.email} leading={<PersonAvatar id={m.email} name={m.name || m.email} size={28} picture={m.picture || undefined} />} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
             busy={asked === m.email} failed={picked === m.email ? putFailed : undefined} enabled={!putting}
             onClick={() => {
               setPicked(m.email);

@@ -22,6 +22,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Attention.css.ts";
 import { t } from "./i18n.ts";
+import { WorkspaceNamed } from "./WorkspaceMark.tsx";
 
 /** Its state line without its lead (the core's `what`): the dot before it says that. */
 const line = (i: MarkItem) => i.what || i.stationName;
@@ -30,12 +31,12 @@ const line = (i: MarkItem) => i.what || i.stationName;
 const keyOf = (i: MarkItem) => i.failure ?? `${i.station}/${i.session ?? i.thread}`;
 
 /** Each workspace's chats in 待处理 (the one in view first). */
-function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspace: string; name: string; items: MarkItem[] }[] {
+function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspace: string; name: string; emoji?: string | undefined; icon?: string | undefined; items: MarkItem[] }[] {
   return Object.entries(marks?.workspaces ?? {})
     .sort(([a], [b]) => (a === scope ? -1 : b === scope ? 1 : 0))
     .map(([workspace, m]) => {
       const items = m.items ?? [];
-      return { workspace, name: items[0]?.workspaceName ?? workspace, items };
+      return { workspace, name: items[0]?.workspaceName ?? workspace, emoji: items[0]?.workspaceEmoji, icon: items[0]?.workspaceIcon, items };
     })
     .filter((g) => g.items.length > 0);
 }
@@ -142,7 +143,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
           {rail && jobs > 0 && <div className={css.group}><OpenJobs scope={scope} /></div>}
           {listed.map((g) => (
             <div key={g.workspace} className={css.group}>
-              {several && <div className={css.groupName}>{g.name}</div>}
+              {several && <div className={css.groupName}><WorkspaceNamed w={g} size={14} /></div>}
               {g.items.map((i) => (
                 <div key={keyOf(i)} role="button" tabIndex={0} className={css.item} onClick={() => go(i)} onKeyDown={(e) => { if (e.key === "Enter") go(i); }}>
                   <span className={css.dot} data-kind={i.kind} aria-label={t(i.kind === "alert" ? "web-main.attention.alertOne" : "web-main.attention.waitOne")} role="img" />

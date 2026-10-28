@@ -18,6 +18,8 @@ export const owner = style({
   whiteSpace: "nowrap",
 });
 export const ownerNone = style({ color: vars.subtle });
+/** A person's picture and name in a line (PersonNamed), a little apart, in the words' size and colour. */
+export const person = style({ display: "inline-flex", alignItems: "center", gap: "0.35em", verticalAlign: "bottom", whiteSpace: "nowrap" });
 export const quota = style({ display: "grid", gap: "10px" });
 export const quotaRow = style({
   display: "grid", gridTemplateColumns: "5.5em minmax(80px, 1fr) 3.2em minmax(7em, auto)", alignItems: "center",

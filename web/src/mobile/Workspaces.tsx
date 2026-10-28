@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn, useAccounts, useSignIn } from "../cloud/accounts.ts";
 import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation, type WorkspaceSummary } from "../cloud/api.ts";
-import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import type { Account } from "../cloud/accounts.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -30,9 +30,8 @@ function WorkspacesSheet() {
   const others = byAccount
     .map((a) => ({ account: a.account, workspaces: a.workspaces.filter((w) => w.id !== app.entry.id) }))
     .filter((a) => a.workspaces.length > 0);
-  // Each its mark before its name, its letter where it has none, once any has one (the actions' icons stand there too).
-  const anyMarked = byAccount.some((a) => a.workspaces.some(marked));
-  const lead = (w: WorkspaceSummary) => anyMarked ? <span className={css.mMark}><WorkspaceMark w={w} size={20} picture={24} still={w.id !== app.entry.id} /></span> : undefined;
+  // Each its mark before its name, its letter where it has none (the actions' icons stand there too).
+  const lead = (w: WorkspaceSummary) => <span className={css.mMark}><WorkspaceMark w={w} size={20} picture={24} still={w.id !== app.entry.id} /></span>;
   // What each of the others has waiting, as the core counts it.
   const marks = useWorkspaceMarks(app.entry.id);
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {

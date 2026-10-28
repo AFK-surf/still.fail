@@ -17,7 +17,7 @@ import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
-import { WorkspaceMark } from "../WorkspaceMark.tsx";
+import { WorkspaceMark, WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
 import { ResourcesBody, SAMPLE_RESOURCES, useResources } from "../Resources.tsx";
 import { sampleStation, sampleStations } from "../samples.ts";
@@ -414,7 +414,7 @@ function Workspaces({ s }: { s: StationView }) {
       <div className={pagesCss.card}>
         {m.workspaces.map((w) => (
           <div key={w.workspace} className={pagesCss.cardRow}>
-            <span className={pagesCss.cardRowText}><strong>{w.name}</strong><span className={shellCss.muted}>{w.line}</span></span>
+            <span className={pagesCss.cardRowText}><strong><WorkspaceNamed w={w} /></strong><span className={shellCss.muted}>{w.line}</span></span>
           </div>
         ))}
       </div>

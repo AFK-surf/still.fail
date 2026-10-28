@@ -21,8 +21,16 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
-/// One of the workspaces the signed-in accounts are in, as their `/v1/me` says: its name, the account's role there.
-export type Place = { id: string; name: string; role: string | null };
+/// One of the workspaces the signed-in accounts are in, as their `/v1/me` says: its name and mark, the account's role
+/// there.
+export type Place = { id: string; name: string; role: string | null; emoji: string | null; icon: string | null };
+
+/// A workspace's mark as its managers gave it (`emoji`, `icon`), for the places that name it: none when it has none or
+/// is not one of the viewer's. `prefix` names the fields (`workspaceEmoji`) where the record says more than the workspace.
+export function markOf(p: Place | undefined, prefix?: string): { [k: string]: string } {
+  const key = (k: string) => (prefix ? `${prefix}${k[0]!.toUpperCase()}${k.slice(1)}` : k);
+  return { ...(p?.emoji ? { [key("emoji")]: p.emoji } : {}), ...(p?.icon ? { [key("icon")]: p.icon } : {}) };
+}
 /// What `chat.xshare` asked: the workspaces to share with, and whether their agents may send.
 export type Asked = { to: string[]; write: boolean };
 
@@ -47,7 +55,7 @@ export function places(inner: Inner): Place[] {
     for (const w of arr(get(inner.data.record("me", account.sub), "workspaces"))) {
       const id = str(get(w, "id"));
       if (id === null || out.some((p) => p.id === id) || inner.workspaces.owner(id) !== account.sub) continue;
-      out.push({ id, name: str(get(w, "name")) ?? id, role: str(get(w, "role")) });
+      out.push({ id, name: str(get(w, "name")) ?? id, role: str(get(w, "role")), emoji: str(get(w, "emoji")) || null, icon: str(get(w, "icon")) || null });
     }
   }
   return out;
@@ -81,7 +89,7 @@ export function shown(env: { places: Place[]; asked: (session: string) => Asked 
   const asked = env.asked(session);
   const ids = asked ? asked.to : now.to.map((w) => w.workspace);
   const write = asked ? asked.write : now.write;
-  const to = ids.map((id) => ({ workspace: id, name: nameOf(id) }));
+  const to = ids.map((id) => ({ workspace: id, name: nameOf(id), ...markOf(others.find((p) => p.id === id)) }));
   const role = env.places.find((p) => p.id === scope)?.role ?? null;
   const starter = env.me !== null && (str(get(get(thread, "creator"), "id")) === env.me || str(thread.createdBy) === env.me);
   const text = to.length === 0
@@ -93,7 +101,7 @@ export function shown(env: { places: Place[]; asked: (session: string) => Asked 
     to,
     write,
     may: starter || role === "owner" || role === "admin",
-    places: others.map((p) => ({ workspace: p.id, name: p.name, on: ids.includes(p.id) })),
+    places: others.map((p) => ({ workspace: p.id, name: p.name, ...markOf(p), on: ids.includes(p.id) })),
   };
 }
 
@@ -211,6 +219,7 @@ export function outsideRefs(inner: Inner, station: string, text: string): J[] {
       title: str(get(row, "title")) ?? l,
       workspace: ofAddress(chat.station),
       workspaceName: place?.name ?? ofAddress(chat.station),
+      ...markOf(place, "workspace"),
       may: place === undefined ? false : row === undefined || starter || place.role === "owner" || place.role === "admin",
     });
   }
