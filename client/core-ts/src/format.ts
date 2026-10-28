@@ -361,9 +361,9 @@ export const feishuChatUrl = (applink: string, channel: string) => `${applink}/c
 /// A Slack message's link into Slack's app (its deep link, which opens there without a browser's page first): the
 /// message `ts` of channel `channel` in workspace `team`, in its thread `threadTs` when it is a reply.
 export function slackAppUrl(team: string, channel: string, ts: string, threadTs: string): string {
-  const q = new URLSearchParams({ team, id: channel, message: ts });
-  if (threadTs !== ts) q.set("thread_ts", threadTs);
-  return `slack://channel?${q}`;
+  const e = encodeURIComponent;
+  const reply = threadTs !== ts ? `&thread_ts=${e(threadTs)}` : "";
+  return `slack://channel?team=${e(team)}&id=${e(channel)}&message=${e(ts)}${reply}`;
 }
 
 /// A thread a history entry came from or went to: its name, where it is, and the way there (`app`: into Slack's app,
