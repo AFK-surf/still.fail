@@ -15,6 +15,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
 #import <WebKit/WebKit.h>
+#import <objc/message.h>
 #if TARGET_OS_OSX
 #import <Cocoa/Cocoa.h>
 typedef NSView PView;
@@ -817,10 +818,31 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   if (self.closed || self.loaded) return;
   self.loaded = YES;
   vlog(@"view %d: page loaded", self.vid);
-  // ready for the app (its picture for snapshots is the host's own business: mb_views_snap_all, at a snapshot)
-  [self tell:1];
+  // ready for the app once it is drawn (its picture for snapshots is the host's own business: mb_views_snap_all, at a
+  // snapshot)
+  [self tellDrawn];
   [self refreshSnap];
   mb_host_request_frame();
+}
+
+// A page's readiness, once what it loaded is on the screen (WebKit's next presentation update, as Android waits on
+// WebView's visual state): told at its load, the app took away what covers it before the page's first frame was there,
+// and the empty view showed for a frame or more. At once where it does not show (nothing of it to wait for) or where
+// WebKit has no such call (_doAfterNextPresentationUpdate:, WKWebViewPrivate).
+- (void)tellDrawn {
+  SEL after = NSSelectorFromString(@"_doAfterNextPresentationUpdate:");
+  if (!self.placed || !self.shown || self.w <= 0 || self.h <= 0 || ![self.web respondsToSelector:after]) {
+    [self tell:1];
+    return;
+  }
+  __weak MBNative *me = self;
+  void (^drawn)(void) = ^{
+    MBNative *v = me;
+    if (!v || v.closed) return;
+    [v tell:1];
+    mb_host_request_frame();
+  };
+  ((void (*)(id, SEL, id))objc_msgSend)(self.web, after, drawn);
 }
 
 // Its readiness told to the app (apple.h's mb_host_outside: kind 2), as it comes: ready (a page loaded and its picture

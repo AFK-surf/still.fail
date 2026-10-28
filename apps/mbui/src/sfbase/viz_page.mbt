@@ -183,9 +183,11 @@ pub fn viz_frame(
   if f.view.state() == 1 && (f.page || f.height == 0) {
     f.shown = true
   }
-  // what is under it shows till it has drawn itself: the ground (a page's paper), drawn over it
+  // what is under it shows till it has drawn itself: the ground (a page's paper), drawn over it; and till its host has
+  // drawn it (host_done: its first frame on the screen), as a page that has loaded, or said its height, is not drawn
+  // yet: the empty view showed through for a frame or more
   let cover = fn(style : @ui.Style) {
-    if !f.shown {
+    if !f.shown || !f.view.host_done() {
       c.layer(fn() { c.box(style~, fn() {  }) |> ignore }) |> ignore
     }
   }
