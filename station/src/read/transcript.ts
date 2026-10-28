@@ -210,6 +210,10 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
     if (placed) elsewhere.set(at, null);
     return null;
   }
+  // Codex's: its file is where it was found (put away, its `.zst` beside) once a process.
+  const at = `${dir}\0${id}`;
+  const kept = rollouts.get(at);
+  if (kept !== undefined && isFile(storage(kept))) return kept;
   const find = (dir: string): string | null => {
     for (const name of entriesOf(dir) ?? []) {
       const path = join(dir, name);
@@ -224,8 +228,14 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
     }
     return null;
   };
-  return find(dir);
+  const found = find(dir);
+  if (found !== null) rollouts.set(at, found);
+  return found;
 }
+
+/// The Codex transcripts found, by directory and id: kept by date (sessions/<year>/<month>/<day>/rollout-…-<id>.jsonl),
+/// each was looked for through every day's directory at each read, seconds on the station's thread on ccvm.
+const rollouts = new Map<string, string>();
 
 /// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
 /// highest N. Its directory is under one named for its working directory (any).
