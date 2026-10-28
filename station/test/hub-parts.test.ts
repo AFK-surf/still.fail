@@ -535,6 +535,30 @@ test("a Claude transcript is looked for in the project of its session's working 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a Codex transcript is looked for through its days once, then where it was found", () => {
+  const dir = temp();
+  const day = join(dir, "transcripts", "codex", "sessions", "2026", "10", "29");
+  mkdirSync(day, { recursive: true });
+  for (let i = 1; i < 28; i++) mkdirSync(join(dir, "transcripts", "codex", "sessions", "2026", "10", String(i).padStart(2, "0")), { recursive: true });
+  const file = join(day, "rollout-2026-10-29T07-00-00-abc.jsonl");
+  writeFileSync(file, "");
+  const listed: string[] = [];
+  const real = fs.readdirSync;
+  fs.readdirSync = ((path: fs.PathLike, ...rest: unknown[]) => (listed.push(String(path)), (real as (...a: unknown[]) => unknown)(path, ...rest))) as unknown as typeof real;
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["abc"]).paths, [file]);
+    const once = listed.length;
+    assert.ok(once > 1);
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["abc"]).paths, [file]);
+    assert.equal(listed.length, once, "where it was found");
+  } finally {
+    fs.readdirSync = real;
+    syncBuiltinESMExports();
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("how fast the model writes is told once half a second of it has come", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
   const hub = new LiveHub(() => null);
