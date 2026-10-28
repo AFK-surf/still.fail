@@ -59,6 +59,30 @@ test "an option tapped in the chat answers its card (decision.answer)" {
 }
 
 ///|
+test "an option picked away from the chat's end: the list goes there, after the answer (as for words sent)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat")
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    if t.find("把首页和聊天页的截图都更新") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  // where it is with the list at its end
+  let (_, at_end, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
+  // moved on up a little: short of the end, the option still in view; picked
+  t.wheel(195.0, 400.0, -120.0)
+  let (_, up, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
+  assert_true(up > at_end + 100.0)
+  t.tap_text("把首页和聊天页的截图都更新")
+  t.run_for(dmax(0.0, t.rest_of("a list") - t.time()))
+  // the list at its end again (the answer's row, when it comes, under it)
+  let (_, now, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
+  assert_true(now <= at_end + 0.5, msg="the option at \{now}, at \{at_end} with the list at its end")
+}
+
+///|
 test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
