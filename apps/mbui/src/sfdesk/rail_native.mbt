@@ -56,9 +56,12 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
             let (x, y, w, h) = s.rect
             // Native views sit above the canvas: keep uncovered controls visible but inert,
             // and never draw them through a presenter that physically covers their bounds.
-            let covered = blocked && semantics.iter().any(fn(p) {
+            // Direct kit popovers (the chat menu and services) are not sf presenters.
+            // Their visible bounds still cover native controls, including during exit.
+            let covered = semantics.iter().any(fn(p) {
               let (px, py, pw, ph) = p.rect
-              !p.hidden && (p.role == @ui.Role::Dialog || p.role == @ui.Role::Menu) &&
+              // Accessibility-hidden popovers can still be painted over a kept pane.
+              (p.role == @ui.Role::Dialog || p.role == @ui.Role::Menu) &&
                 x < px + pw && x + w > px && y < py + ph && y + h > py
             })
             if w > 0.0 && h > 0.0 && !covered { floating.push({ item, x, y, w, h, blocked }) }

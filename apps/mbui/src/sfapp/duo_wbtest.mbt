@@ -714,3 +714,23 @@ test "Duo short system column keeps the complete chat menu reachable" {
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
 }
+
+///|
+test "Duo chat menu covers sidebar glass until its exit finishes" {
+  let t = native_chat(669.0, 951.0, true)
+  assert_true(t.nav_said().contains("workspace-switch"))
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[270,0,44,44]}")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
+  for id in ["workspace-switch", "sidebar/search", "sidebar/filter"] {
+    assert_false(t.nav_said().contains(id), msg="covered control: \{id}")
+  }
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[270,0,44,44]}")
+  t.frame()
+  t.run_for(@kit.pop_out_ms / 2.0)
+  for id in ["workspace-switch", "sidebar/search", "sidebar/filter"] {
+    assert_false(t.nav_said().contains(id), msg="control returned during exit: \{id}")
+  }
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.nav_said().contains("workspace-switch"))
+}
