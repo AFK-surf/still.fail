@@ -111,6 +111,30 @@ test "a quote's card (QuoteCard): whose and the passage, what is said under it; 
 }
 
 ///|
+test "a quote's picture with nothing said under it: as far over its card's foot as in from its side" {
+  let card = Ref(-1)
+  let picture = Ref(-1)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let _ = begin(c)
+      c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
+        card.val = quote_card(c, "q1", "Opus", "ref4.png", picture=fn() {
+          picture.val = c.box(style=@ui.style(w=Fixed(120.0), h=Fixed(80.0)), fn() {  })
+        }).card
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.draw()
+  let laid = t.boxes()
+  let q = laid.iter().find_first(fn(l) { l.index == card.val }).unwrap()
+  let p = laid.iter().find_first(fn(l) { l.index == picture.val }).unwrap()
+  assert_eq(q.y + q.h - (p.y + p.h), p.x - q.x)
+}
+
+///|
 test "a quote waiting in the composer has its ✕ hung on its corner, as everything waiting there: its centre on the curve, the quote its room across, the ✕ past its side as far as past its top" {
   let removed = Ref(false)
   let t = @ui.Tester::new(
