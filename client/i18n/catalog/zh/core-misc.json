@@ -151,6 +151,7 @@
   "core-misc.host.unsendable_page": "无法传给页面：{error}",
   "core-misc.host.unsendable_ui": "无法传给界面：{error}",
   "core-misc.notice.block": "需要你处理 · {text}",
+  "core-misc.notice.elsewhere": "{workspace} · {title}",
   "core-misc.notice.failed": "出错 · {text}",
   "core-misc.notice.file": "（文件）",
   "core-misc.notice.hidden.done": "已完成",

@@ -207,7 +207,8 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       others.unread += counts.unread;
     }
     const badge = badgeOf(prefs, fresh, said);
-    total += badge;
+    // (a workspace turned off on the notifications page adds nothing to the app's badge; its own mark stays)
+    if (views.heard(id)) total += badge;
     const mark: J = { alert: counts.alert, unread: counts.unread, badge, items };
     if (counts.wait > 0) mark.wait = counts.wait;
     if (waiting > 0) mark.decisions = waiting;

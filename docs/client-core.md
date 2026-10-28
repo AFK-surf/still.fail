@@ -213,7 +213,8 @@ keys from before are read where there is none yet). Nothing of one is read or
 dropped through another. What is the device's stays shared (the mesh endpoint,
 relays, what is kept on the device, notification settings), and what is an
 account's is kept by account. A UI says which workspace it is in (`client.focus {workspace}`);
-notices are only of the workspace the viewer is in (attend.ts).
+notices are of every workspace the device has not turned off (`notify.set {workspaces}`), one of a workspace the
+viewer is not in with its name before its title (attend.ts).
 
 ### Topics
 

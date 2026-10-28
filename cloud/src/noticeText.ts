@@ -20,9 +20,10 @@ export function noticeBody(kind: string, text: string, by?: string, lang: Lang =
 
 /**
  * What a device shows of notices, as it says when it registers (docs/notifications.md `notify.set`): which kinds
- * (`wait` covers `block`; `done` is `off`, `away` or `always`) and whether what was said (`preview`).
+ * (`wait` covers `block`; `done` is `off`, `away` or `always`), whether what was said (`preview`), and the workspaces
+ * it hears nothing of (`muted`; an older app says none).
  */
-export type Shows = { kinds: { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean }; preview: boolean };
+export type Shows = { kinds: { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean }; preview: boolean; muted: string[] };
 
 /** What a registration says the device shows; null when it says nothing (an older app's: every kind, in full). */
 export function showsOf(input: Record<string, unknown>): Shows | null {
@@ -31,12 +32,17 @@ export function showsOf(input: Record<string, unknown>): Shows | null {
   const kinds = k as Record<string, unknown>;
   const flag = (name: string) => kinds[name] !== false;
   const done = kinds.done === "off" || kinds.done === "always" ? kinds.done : "away";
-  return { kinds: { wait: flag("wait"), failed: flag("failed"), done, message: flag("message") }, preview: input.preview };
+  const muted = Array.isArray(input.muted) ? input.muted.filter((w): w is string => typeof w === "string") : [];
+  return { kinds: { wait: flag("wait"), failed: flag("failed"), done, message: flag("message") }, preview: input.preview, muted };
 }
 
-/** Whether a device shows a notice of `kind` at all: a push comes with none of its pages in front, so `done` unless off. */
-export function shown(shows: Shows | null, kind: string): boolean {
+/**
+ * Whether a device shows a notice of `kind` of `workspace` at all: not of a workspace it turned off; a push comes with
+ * none of its pages in front, so `done` unless off.
+ */
+export function shown(shows: Shows | null, kind: string, workspace = ""): boolean {
   if (!shows) return true;
+  if (shows.muted.includes(workspace)) return false;
   if (kind === "block" || kind === "wait") return shows.kinds.wait;
   if (kind === "failed") return shows.kinds.failed;
   if (kind === "message") return shows.kinds.message;

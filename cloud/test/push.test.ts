@@ -132,6 +132,14 @@ test("a device that says what it shows gets only those kinds, and with its previ
   assert.equal(noticeBodyFor(null, "message", "hi", "Bob"), "Bob: hi");
 });
 
+test("a device that turned a workspace off gets nothing of it", () => {
+  const shows = showsOf({ kinds: {}, preview: true, muted: ["01HZWORKSPACEOFF0000000000"] });
+  assert.ok(!shown(shows, "block", "01HZWORKSPACEOFF0000000000"));
+  assert.ok(shown(shows, "block", "01HZWORKSPACEON00000000000"));
+  // An app from before says none: every workspace.
+  assert.ok(shown(showsOf({ kinds: {}, preview: true }), "block", "01HZWORKSPACEOFF0000000000"));
+});
+
 // ── still.fail cloud ──────────────────────────────────────────────────────
 
 async function key() {

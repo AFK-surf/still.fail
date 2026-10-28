@@ -151,6 +151,7 @@
   "core-misc.host.unsendable_page": "Couldn't send to page: {error}",
   "core-misc.host.unsendable_ui": "Couldn't send to app: {error}",
   "core-misc.notice.block": "Needs you · {text}",
+  "core-misc.notice.elsewhere": "{workspace} · {title}",
   "core-misc.notice.failed": "Failed · {text}",
   "core-misc.notice.file": "(File)",
   "core-misc.notice.hidden.done": "Done",

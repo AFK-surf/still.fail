@@ -232,7 +232,7 @@ test("notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once", async 
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
   const n = (id: string) => ({ id, station: "ws/st", session: "k1", thread: 7 });
-  const shown = (a: Attend) => a.value(null).show.map((x: J) => x.id);
+  const shown = (a: Attend) => a.value().show.map((x: J) => x.id);
   assert.ok(!attend.noticed([n("n1")], false));
   attend.focus(1, focus({ visible: true, focused: false, chat: { station: "ws/st", thread: 7 } }));
   assert.ok(attend.noticed([n("n2")], true));
@@ -253,7 +253,7 @@ test("notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once", async 
   assert.ok(!attend.noticed([n("n6")], true));
   assert.deepEqual(shown(attend), []);
   const again = await run(Attend.load(host));
-  assert.deepEqual(again.value(null), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, preview: true, permission: "unknown", show: [] });
+  assert.deepEqual(again.value(), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, preview: true, muted: [], permission: "unknown", show: [] });
   attend.gone(2);
   assert.ok(!attend.seen());
 });
@@ -262,7 +262,7 @@ test("only_the_kinds_turned_on_are_shown_a_turn_done_by_default_only_while_the_a
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
   const n = (id: string, kind: string) => ({ id, kind, station: "ws/st", session: "k1", thread: 7 });
-  const shown = () => attend.value(null).show.map((x: J) => x.id);
+  const shown = () => attend.value().show.map((x: J) => x.id);
   attend.focus(1, focus({ visible: true, focused: true, chat: { station: "ws/st", thread: 9 } }));
   attend.noticed([n("d1", "done"), n("w1", "wait"), n("b1", "block"), n("m1", "message")], true);
   assert.deepEqual(shown(), ["w1", "b1", "m1"], "in front: a turn done is not told");
@@ -276,42 +276,46 @@ test("only_the_kinds_turned_on_are_shown_a_turn_done_by_default_only_while_the_a
   assert.deepEqual(shown(), ["f1"]);
   attend.claim("f1");
   await run(attend.set(null, null, { wait: false }));
-  assert.deepEqual(attend.value(null).kinds, { wait: false, failed: true, done: "off", message: false }, "each given one changes, the rest stay");
+  assert.deepEqual(attend.value().kinds, { wait: false, failed: true, done: "off", message: false }, "each given one changes, the rest stay");
   attend.focus(1, focus({ visible: false }));
   assert.ok(!attend.pushed(null, "block"));
   assert.ok(attend.pushed(null, "failed"));
   assert.ok(attend.pushed(null));
   const again = await run(Attend.load(host));
-  assert.deepEqual(again.value(null).kinds, { wait: false, failed: true, done: "off", message: false });
+  assert.deepEqual(again.value().kinds, { wait: false, failed: true, done: "off", message: false });
 });
 
-test("only_the_workspace_the_viewer_is_in_is_heard_of", async () => {
+test("every_workspace_is_heard_of_unless_turned_off", async () => {
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
-  const n = (id: string, workspace: string) => ({ id, station: `${workspace}/st`, workspace, session: "k1", thread: 7 });
-  const shown = (a: Attend, w: string | null) => a.value(w).show.map((x: J) => x.id);
-  attend.focus(1, focus({ visible: true }));
+  const n = (id: string, workspace: string) => ({ id, station: `${workspace}/st`, workspace, session: "k1", thread: 7, title: "部署" });
+  const names = (w: string) => ({ w1: "星火", w2: "个人" })[w] ?? null;
+  const shown = (a: Attend) => a.value(names).show.map((x: J) => `${x.id} ${x.title}`);
+  attend.focus(1, focus({ visible: true, workspace: "w1" }));
+  // Another workspace's is heard of too, its name before its title.
   assert.ok(attend.noticed([n("n1", "w1"), n("n2", "w2")], true));
-  assert.deepEqual(shown(attend, null), ["n1", "n2"]);
+  assert.deepEqual(shown(attend), ["n1 部署", "n2 个人 · 部署"]);
   attend.claim("n1");
   attend.claim("n2");
-  attend.focus(1, focus({ workspace: "w1" }));
-  assert.ok(!attend.noticed([n("n3", "w2")], true));
-  attend.focus(1, focus({ chat: { station: "w1/st", thread: 9 } }));
-  assert.ok(attend.noticed([n("n4", "w1"), n("n5", "w2")], true));
-  assert.deepEqual(shown(attend, null), ["n4"]);
-  attend.focus(2, focus({ visible: true, workspace: "w2" }));
-  assert.ok(attend.noticed([n("n6", "w2")], true));
-  assert.deepEqual(shown(attend, "w2"), ["n6"]);
-  assert.deepEqual(shown(attend, "w1"), ["n4"]);
+  // Turned off: none of it, here or pushed; what was waiting to show goes with it.
+  assert.ok(attend.noticed([n("n3", "w2")], true));
+  await run(attend.set(null, null, null, null, { w2: false }));
+  assert.deepEqual(shown(attend), []);
+  assert.ok(!attend.noticed([n("n4", "w2")], true));
+  assert.ok(attend.noticed([n("n5", "w1")], true));
+  assert.deepEqual(attend.shows().muted, ["w2"]);
   attend.focus(1, focus({ visible: false }));
-  attend.focus(2, focus({ visible: false }));
-  assert.ok(attend.pushed("w2"));
-  assert.ok(!attend.pushed("w3"));
-  assert.ok(attend.pushed(null));
-  attend.gone(1);
-  attend.gone(2);
-  assert.ok(attend.pushed("w3"));
+  assert.ok(attend.pushed("w1"));
+  assert.ok(!attend.pushed("w2"));
+  assert.ok(attend.pushed("w3"), "one joined later is heard of");
+  assert.equal(attend.titled("w2", "部署", names), "个人 · 部署");
+  assert.equal(attend.titled("w1", "部署", names), "部署");
+  // Kept on the device; turned on again.
+  const again = await run(Attend.load(host));
+  assert.ok(!again.heard("w2"));
+  await run(again.set(null, null, null, null, { w2: true }));
+  assert.ok(again.heard("w2"));
+  assert.deepEqual(again.value().muted, []);
 });
 
 test("what_is_measured_only_to_be_shown_waits_for_a_page_in_view", async () => {

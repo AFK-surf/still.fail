@@ -180,6 +180,8 @@ export class CloudSync {
       this.forgetUnreachable();
       core.store.invalidate({ topic: "workspaces" });
       core.store.invalidateAll((t) => t.topic === "workspace");
+      // (the notifications page lists them, a notice of another says its name)
+      core.store.invalidateAll((t) => t.topic === "notify");
     });
   }
 
@@ -472,6 +474,7 @@ export class CloudSync {
     core.store.invalidate({ topic: "accounts" });
     core.store.invalidate({ topic: "workspaces" });
     core.store.invalidateAll((t) => t.topic === "workspace");
+    core.store.invalidateAll((t) => t.topic === "notify");
     this.syncSockets();
     void before;
     // Someone signed in: their devices hear pushes too.

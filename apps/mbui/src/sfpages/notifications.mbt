@@ -238,6 +238,38 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
       |> ignore
     })
   })
+  // each workspace heard of or not (`notify.set {workspaces}`), where there is more than one
+  let workspaces = items(notify, "workspaces")
+  if workspaces.length() > 1 {
+    blocks.push(fn() {
+      @sf.section(c, @sf.t("web-pages.notifications.workspaces.title"), heads=true, fn() {
+        @sf.page_card(c, fn() {
+          for w in workspaces {
+            let wv = Some(w)
+            let id = text(wv, "id")
+            let name = text(wv, "name")
+            let heard = flag(wv, "on")
+            let now = @sf.switch_row(
+              c,
+              "notify-ws/" + id,
+              name,
+              heard,
+              disabled=!on,
+              // its mark before it, as the workspace is named everywhere
+              lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
+            )
+            if now != heard {
+              c.after_build("notify-ws/" + id, fn() {
+                @settings.act(core, name, "notify.set", obj([("workspaces", obj([(id, Json::boolean(now))]))]))
+              })
+            }
+          }
+        })
+        // (its note under its card)
+        @sf.page_note(c, @sf.t("web-pages.notifications.workspaces.note"))
+      })
+    })
+  }
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
       // (a card of words: its switch's row no ground of its own, 20 in from its corner)

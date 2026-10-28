@@ -442,6 +442,8 @@ export type ViewsEnv = {
   revoking?: (station: string, id: string) => boolean;
   /// The name of the home workspace of a station a workspace joined, when the viewer is in it (memberships.ts).
   homeName?: (workspace: string, id: string) => string | null;
+  /// Whether a workspace's notices are heard of on this device (`notify.set` `workspaces`); every one where not given.
+  heard?: (workspace: string) => boolean;
   /// A topic a view watches shown again (its owner asked to bring it up to date, store.ts `resume`).
   resume?: (topic: Topic) => void;
   /// How agents' requests about vault items are answered on this device, from the vault as the core holds it
@@ -481,6 +483,7 @@ export function envOf(core: Inner): ViewsEnv {
     revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
     vaultAnswers: (workspace, asks) => askAnswers(core, workspace, asks),
+    heard: (workspace) => core.attention?.attend.heard(workspace) ?? true,
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -902,6 +905,11 @@ export class Views implements Owner {
   }
 
   // ── what the views read ──
+
+  /// Whether a workspace's notices are heard of on this device.
+  heard(workspace: string): boolean {
+    return this.#core.heard?.(workspace) ?? true;
+  }
 
   ok(topic: Topic): J {
     const v = this.#core.store.value(topic);

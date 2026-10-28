@@ -52,8 +52,31 @@ export class Attention implements Owner {
   }
 
   compute(topic: Topic): Value | undefined {
-    const workspace = typeof topic.workspace === "string" ? topic.workspace : null;
-    return { ok: topic.topic === "notices" ? this.notices.value(workspace) : this.attend.value(workspace) };
+    if (topic.topic === "notices") return { ok: this.notices.value(typeof topic.workspace === "string" ? topic.workspace : null) };
+    return { ok: this.#notify() };
+  }
+
+  /// The `notify` topic (attend.ts `value`), with the workspaces the accounts are in, each heard of or not.
+  #notify(): J {
+    const all = this.#workspaces();
+    const names = new Map(all.map((w) => [w.id as string, w.name as string]));
+    return { ...this.attend.value((w) => names.get(w) ?? null), workspaces: all.map((w) => ({ ...w, on: this.attend.heard(w.id) })) };
+  }
+
+  /// The workspaces the signed-in accounts are in, as their `/v1/me` list them: id, name, and its mark.
+  #workspaces(): J[] {
+    const seen = new Set<string>();
+    const out: J[] = [];
+    for (const [, me] of this.#core.data.mes()) {
+      for (const w of arr(get(me, "workspaces"))) {
+        const id = get(w, "id");
+        if (typeof id !== "string" || seen.has(id)) continue;
+        seen.add(id);
+        const name = get(w, "name");
+        out.push({ id, name: typeof name === "string" && name !== "" ? name : id, ...(typeof get(w, "emoji") === "string" && w.emoji !== "" ? { emoji: w.emoji } : {}), ...(typeof get(w, "icon") === "string" && w.icon !== "" ? { icon: w.icon } : {}) });
+      }
+    }
+    return out;
   }
 
   /// The stations kept in sync: those of every workspace an account reaches, as the workspace lists them.
@@ -100,6 +123,7 @@ export class Attention implements Owner {
     const core = this.#core;
     const attend = this.attend;
     const store = core.store;
+    const self = this;
     // A registration kept: this device has pushes.
     core.runner.fork(
       Effect.map(Effect.orElseSucceed(core.host.storageGet(PUSH_KEY), () => null), (bytes) => {
@@ -125,12 +149,14 @@ export class Attention implements Owner {
           });
         case "set":
           return Effect.gen(function* () {
-            yield* attend.set(c.on, c.asked, c.kinds, c.preview);
+            yield* attend.set(c.on, c.asked, c.kinds, c.preview, c.workspaces);
             store.invalidateAll((t) => t.topic === "notify");
+            // (a workspace turned off adds nothing to the app's badge)
+            if (c.workspaces !== null) store.invalidateAll((t) => t.topic === "workspaceMarks");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             // what it shows changed: its registration given again (pushes made so), not waited on
-            else if ((c.kinds !== null || c.preview !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered()));
-            return attend.value(null);
+            else if ((c.kinds !== null || c.preview !== null || c.workspaces !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered()));
+            return self.#notify();
           });
         case "permission":
           return Effect.sync(() => {
@@ -143,15 +169,18 @@ export class Attention implements Owner {
             if (show) store.invalidateAll((t) => t.topic === "notify");
             return { show };
           });
-        case "pushed":
-          return Effect.succeed({ show: attend.pushed(c.workspace, c.notice) });
+        case "pushed": {
+          // (the title as a notice of it shows: of a workspace the viewer is not in, its name first)
+          const names = new Map(this.#workspaces().map((w) => [w.id as string, w.name as string]));
+          const show = attend.pushed(c.workspace, c.notice);
+          return Effect.succeed(c.title === null || c.workspace === null ? { show } : { show, title: attend.titled(c.workspace, c.title, (w) => names.get(w) ?? null) });
+        }
         case "bring":
           return Effect.as(core.stations.bringPushed(c.station, c.session, c.seq), null);
       }
     };
     handlers.pushRegister = (_inner, call) => {
       const c = call as Extract<Call, { kind: "pushRegister" }>;
-      const self = this;
       return Effect.gen(function* () {
         if (!attend.on()) return null;
         yield* Effect.ignore(core.host.storageSet(PUSH_KEY, new TextEncoder().encode(JSON.stringify({ registration: c.registration, with: [], lang: null }))));

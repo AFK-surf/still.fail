@@ -1228,6 +1228,8 @@ web-pages.notifications.ways.badge
 web-pages.notifications.ways.bell
 web-pages.notifications.ways.banner
 web-pages.notifications.ways.title
+web-pages.notifications.workspaces.note
+web-pages.notifications.workspaces.title
 web-pages.permissions.allow
 web-pages.permissions.lead
 web-pages.permissions.notify.name

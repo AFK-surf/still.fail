@@ -2128,9 +2128,18 @@ export const SHAPES: Record<string, Shape> = {
     ["push", "bool"],
     ["kinds", "NotifyKinds", { default: true }],
     ["preview", "bool", { default: true, doc: "Notices say what was said (on by default); off, only what kind of thing happened." }],
+    ["muted", vec("String"), { default: true, doc: "The workspaces not heard of on this device (`notify.set {workspaces}`): no notice of theirs\nshown or pushed, nothing of theirs on the app's badge. Each one is heard of unless turned off." }],
+    ["workspaces", vec("NotifyWorkspace"), { default: true, doc: "The workspaces the accounts are in, in the order their `/v1/me` list them, each heard of or not." }],
     ["permission", "String", { default: true, doc: "Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |\ndefault (not asked yet) | unknown (none said, or no way to tell)." }],
     ["show", vec("Notice")],
   ], { doc: "Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the\nsystem was asked to allow them, whether the device should hold a push registration, and the notices a page is to\nshow now, each taken by one page (`notice.claim`).", keepNone: true }),
+  NotifyWorkspace: struct([
+    ["id", "String"],
+    ["name", "String"],
+    ["emoji", opt("String")],
+    ["icon", opt("String")],
+    ["on", "bool", { doc: "Heard of on this device (not in `muted`)." }],
+  ], { doc: "A workspace on the notifications page (`notify` `workspaces`)." }),
   NotifyKinds: struct([
     ["wait", "bool", { default: true, doc: "A card waits for them, or an agent needs them (wait, block)." }],
     ["failed", "bool", { default: true }],

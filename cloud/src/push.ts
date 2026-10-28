@@ -158,8 +158,8 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
     for (const email of n.to) for (const device of targets.devices[email.toLowerCase()] ?? []) devices.set(device.kind === "web" ? `web ${device.endpoint}` : `fcm ${device.token}`, device);
     for (const device of devices.values()) {
       if (pushes.length >= MAX_PUSHES) break;
-      // (a kind it does not show is not sent)
-      if (!shown(device.shows, n.kind)) continue;
+      // (a kind it does not show, or of a workspace it turned off, is not sent)
+      if (!shown(device.shows, n.kind, targets.workspace)) continue;
       const said = payload(device.lang, device.shows);
       const push = device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!) : null) : fcm ? fcmPush(fcm, device.token, said) : null;
       if (!push) continue;

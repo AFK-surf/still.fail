@@ -8,6 +8,7 @@ import { useNavigate } from "react-router";
 import type { Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
 import { core, useTopic } from "../core/react.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
+import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, Switch, SwitchRow, Waiting } from "../ui.tsx";
@@ -65,6 +66,14 @@ function Settings({ s, open, onOpen }: { s: SettingsState; open: Kind | "service
         <ServicesRow s={s} open={open === "services"} onOpen={() => onOpen(open === "services" ? null : "services")} />
       </div>
     </Section>
+    {/* (each workspace heard of or not, where there is more than one) */}
+    {s.workspaces.length > 1 && <Section title={t("web-pages.notifications.workspaces.title")} description={t("web-pages.notifications.workspaces.note")}>
+      <div className={pagesCss.card}>
+        {s.workspaces.map((w) => (
+          <SwitchRow key={w.id} title={<WorkspaceNamed w={w} />} checked={w.on} disabled={s.state !== "on"} onChange={(on) => s.setWorkspace(w.id, on)} />
+        ))}
+      </div>
+    </Section>}
     <Section title={t("web-pages.notifications.more.title")}>
       <div className={pagesCss.card}>
         {/* (a browser's pushes follow it too: the cloud makes them as its registration says) */}
@@ -89,6 +98,8 @@ function useSettings(workspace: string) {
   // What was just chosen shows before the core says it back.
   const [kinds, setKinds] = useState<NotifyKinds | null>(null);
   const [preview, setPreviewNow] = useState<boolean | null>(null);
+  const [heard, setHeard] = useState<Record<string, boolean>>({});
+  useEffect(() => setHeard({}), [notify?.muted?.join(" ")]);
   useEffect(() => setKinds(null), [notify?.kinds?.wait, notify?.kinds?.failed, notify?.kinds?.done, notify?.kinds?.message]);
   useEffect(() => setPreviewNow(null), [notify?.preview]);
 
@@ -101,6 +112,8 @@ function useSettings(workspace: string) {
     /** The core's settings have come (until then, what is shown would be the defaults). */
     read: notify !== undefined,
     notices, preview: preview ?? notify?.preview ?? true,
+    /** The workspaces the accounts are in, each heard of or not (as just chosen, before the core says it back). */
+    workspaces: (notify?.workspaces ?? []).map((w) => ({ ...w, on: heard[w.id] ?? w.on })),
     permission: notify?.permission ?? "unknown",
     kinds: k,
     /** Whether a kind comes as a banner now. */
@@ -119,6 +132,10 @@ function useSettings(workspace: string) {
     setBell: (on: boolean) => {
       setBellNow(on);
       core().call("prefs.set", { badgeKinds: { services: on } }).catch((e: unknown) => { setBellNow(null); failed(e); });
+    },
+    setWorkspace: (id: string, on: boolean) => {
+      setHeard((h) => ({ ...h, [id]: on }));
+      core().call("notify.set", { workspaces: { [id]: on } }).catch((e: unknown) => { setHeard((h) => Object.fromEntries(Object.entries(h).filter(([k]) => k !== id))); failed(e); });
     },
     setPreview: (on: boolean) => {
       setPreviewNow(on);

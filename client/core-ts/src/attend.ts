@@ -1,7 +1,7 @@
 // Where the viewer's attention is, and what follows from it (attend.rs; the `notify` topic, `client.focus`): a
 // chat's unread line, what is read, what comes in with a motion while a chat shows, which notices a page shows now,
-// and the workspace the viewer is in. Whether notifications are on, and whether the system was asked, are kept on the
-// device.
+// and the workspace the viewer is in. Whether notifications are on, whether the system was asked, and which
+// workspaces are heard of, are kept on the device.
 import { Deferred, Effect } from "effect";
 import type { ChatOf, FocusCall, Permission } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
@@ -23,8 +23,16 @@ const SHOW_FOR_MS = 30_000;
 export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
 export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };
 
-/// `preview`: a notice says what was said; off, only what kind of thing happened (as a phone's 「显示预览」).
-type Settings = { on: boolean; asked: boolean; kinds: Kinds; preview: boolean };
+/// `preview`: a notice says what was said; off, only what kind of thing happened (as a phone's 「显示预览」). `muted`:
+/// the workspaces not heard of (each one is unless turned off, those joined later too).
+type Settings = { on: boolean; asked: boolean; kinds: Kinds; preview: boolean; muted: string[] };
+
+/// The workspaces turned off, as kept or given: `changes` (a workspace's id → heard of) on top of `base`.
+function mutedOf(base: string[], changes: J): string[] {
+  const muted = new Set(base.filter((w) => typeof w === "string"));
+  if (changes !== null && typeof changes === "object") for (const [w, on] of Object.entries(changes)) if (typeof on === "boolean") on ? muted.delete(w) : muted.add(w);
+  return [...muted].sort();
+}
 
 /// Kinds as given (or kept): what is not given stays as `base` has it.
 export function kindsOf(v: J, base: Kinds = ALL_KINDS): Kinds {
@@ -94,7 +102,7 @@ export class Attend {
   static load(host: Host): Effect.Effect<Attend> {
     return Effect.map(Effect.orElseSucceed(host.storageGet(KEY), () => null), (bytes) => {
       const kept = parseJson(bytes) as J;
-      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds), preview: kept.preview !== false } : { on: true, asked: false, kinds: { ...ALL_KINDS }, preview: true };
+      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds), preview: kept.preview !== false, muted: Array.isArray(kept.muted) ? mutedOf(kept.muted, null) : [] } : { on: true, asked: false, kinds: { ...ALL_KINDS }, preview: true, muted: [] };
       return new Attend(host, settings);
     });
   }
@@ -104,22 +112,39 @@ export class Attend {
   }
 
   /// What this device shows of notices, as its push registration says it (the cloud makes a push to it so).
-  shows(): { kinds: Kinds; preview: boolean } {
-    return { kinds: { ...this.#settings.kinds }, preview: this.#settings.preview };
+  shows(): { kinds: Kinds; preview: boolean; muted: string[] } {
+    return { kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, muted: [...this.#settings.muted] };
+  }
+
+  /// Whether a workspace's notices are heard of on this device.
+  heard(workspace: string): boolean {
+    return !this.#settings.muted.includes(workspace);
   }
 
   /// The `notify` topic: the settings, whether this device should hold a push registration, what to show now.
-  value(workspace: string | null): J {
+  /// `nameOf`: a workspace's name, put before the title of a notice of a workspace the viewer is not in.
+  value(nameOf: (workspace: string) => string | null = () => null): J {
     const now = this.#host.nowMs();
-    const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) });
-    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, permission: this.#permission, show };
+    const show = this.#show.filter(([, at]) => now - at < SHOW_FOR_MS).map(([n]) => {
+      const out = this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) };
+      return { ...out, title: this.titled(of(n), out.title, nameOf) };
+    });
+    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, muted: [...this.#settings.muted], permission: this.#permission, show };
   }
 
-  /// Changes the settings and keeps them.
-  set(on: boolean | null, asked: boolean | null, kinds: J = null, preview: boolean | null = null): Effect.Effect<void> {
-    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds), preview: preview ?? this.#settings.preview };
+  /// A notice's title as shown: of a workspace the viewer is not in, that workspace's name first.
+  titled(workspace: string, title: unknown, nameOf: (workspace: string) => string | null): string {
+    const text = typeof title === "string" ? title : "";
+    const name = workspace === "" || this.#currentHas(workspace) ? null : nameOf(workspace);
+    return name ? t("core-misc.notice.elsewhere", { workspace: name, title: text }) : text;
+  }
+
+  /// Changes the settings and keeps them; `workspaces`: a workspace's id → heard of, each given changing.
+  set(on: boolean | null, asked: boolean | null, kinds: J = null, preview: boolean | null = null, workspaces: J = null): Effect.Effect<void> {
+    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds), preview: preview ?? this.#settings.preview, muted: mutedOf(this.#settings.muted, workspaces) };
     this.#settings = s;
     if (!s.on) this.#show = [];
+    else this.#show = this.#show.filter(([n]) => this.heard(of(n)));
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
   }
 
@@ -334,7 +359,7 @@ export class Attend {
     this.#show = this.#show.filter(([, at]) => now - at < SHOW_FOR_MS);
     const before = this.#show.length;
     for (const n of added) {
-      if (!this.#currentHas(of(n)) || !this.wants(n.kind, this.#inFront())) continue;
+      if (!this.heard(of(n)) || !this.wants(n.kind, this.#inFront())) continue;
       const station = typeof n.station === "string" ? n.station : "";
       const looking = this.#showing(station, typeof n.thread === "number" ? n.thread : null, typeof n.session === "string" ? n.session : null).some((f) => f.visible && f.focused);
       if (!looking) this.#show.push([structuredClone(n), now]);
@@ -349,9 +374,9 @@ export class Attend {
     return this.#show.length < before;
   }
 
-  /// A push came: shown unless notifications are off, a page is in view, or it is of another workspace.
+  /// A push came: shown unless notifications are off, a page is in view, its kind is off, or its workspace is.
   pushed(workspace: string | null, kind: string | null = null): boolean {
-    return this.on() && !this.seen() && (kind === null || this.wants(kind, false)) && (workspace === null || this.#currentHas(workspace));
+    return this.on() && !this.seen() && (kind === null || this.wants(kind, false)) && (workspace === null || this.heard(workspace));
   }
 }
 
