@@ -474,8 +474,6 @@ fn side_panel(
     // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
     let alone = side_on_tape.val && tabs.length() == 1
     let own_bar = alone && tab_service(front) is Some(_)
-    // det-ok(build-effect): called only under the press of the panel's × (its bar's or the page's own)
-    let close_panel = fn() { side_change(src, r, "clear", None) }
     if !own_bar {
       c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
         if alone {
@@ -499,7 +497,7 @@ fn side_panel(
         }
         // the panel's switch stays in its top right corner, open or closed
         if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
-          close_panel()
+          side_change(src, r, "clear", None)
         }
       })
       |> ignore
@@ -519,7 +517,11 @@ fn side_panel(
           None => ()
         }
       } else if tab_service(front) is Some(job) {
-        service_pane(c, src, r, job, close=if own_bar { Some(close_panel) } else { None })
+        service_pane(c, src, r, job, close=if own_bar {
+          Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
+        } else {
+          None
+        })
       } else if tab_file(front) is Some((session, path, name)) {
         file_pane(c, src, r, session, path, name)
       } else if station_tab_pane(c, src, w, r, front) {
