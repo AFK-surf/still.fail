@@ -29,10 +29,12 @@ export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCo
   live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
   for (const key of store.sessionKeys()) keepUsage(store, key);
   return store.subscribe((change) => {
-    if (change.type !== "usage") return;
+    // A session gone on in another conversation (its context cleared, as 换新上下文 does): its context is that one's.
+    const sessions = change.type === "usage" ? change.sessions : change.type === "conversation" ? [change.key] : null;
+    if (sessions === null) return;
     // Those it follows told on their streams, then every session counted anew kept as counted.
     live.usageCounted();
-    for (const key of change.sessions) keepUsage(store, key);
+    for (const key of sessions) keepUsage(store, key);
   });
 }
 

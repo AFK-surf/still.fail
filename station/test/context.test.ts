@@ -3,6 +3,7 @@
 // session the next turn starts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { usageNow } from "../src/read/usage.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { Rig, message, reply, settle } from "./hub-fakes.ts";
 
@@ -140,6 +141,30 @@ test("cleared to go on afresh, its next runtime session reads back its work and 
   await r.close();
 });
 
+test("cleared to go on afresh, its usage no longer says the context before nor its cache over: not offered again as its process warms", async () => {
+  const r = new Rig();
+  const { key } = await done(r);
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  r.store.recordUsage(`/t/${key}`, { session: key, offset: 1, model: "claude-opus-5-5" }, "claude", [[
+    { id: "c1", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+    { turn: null, person: null, thread: null, profile: null },
+  ]]);
+  const context = () => {
+    const u = usageNow(r.store, key)!;
+    return [u.contextTokens, u.lastCallAt === undefined, u.cacheMs];
+  };
+  assert.deepEqual(context(), [200_000, false, 3_600_000]);
+  assert.equal(await r.hub.clear(key, true), null);
+  await settle();
+  assert.deepEqual(context(), [undefined, true, undefined], "cleared");
+  // Its process started ahead of the next message (the chat open): a new conversation, nothing of it said yet.
+  await r.hub.warm(key);
+  await settle();
+  assert.notEqual(r.session(key).runtimeSessionId, null);
+  assert.deepEqual(context(), [undefined, true, undefined], "warmed");
+  await r.close();
+});
+
 test("set to, a message to an agent whose large context's cache is over starts it afresh by itself; one still cached goes on", async () => {
   const r = new Rig();
   const { m, key, session } = await done(r);
@@ -150,6 +175,8 @@ test("set to, a message to an agent whose large context's cache is over starts i
       { id: `c${n}`, at, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
       { turn: null, person: null, thread: null, profile: null },
     ]]);
+  // Its conversation began before it (a fake clock's calls are not after it by themselves).
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
   // Not set: it goes on in the same runtime session.
   called(Date.now() - 3 * 3_600_000);
   await r.accept(reply(m, "9999.2", "<@UBOT> and the docs", { addressed: true }));
@@ -172,8 +199,8 @@ test("set to, a message to an agent whose large context's cache is over starts i
   await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
   fresh.complete();
   await settle();
-  // Its cache kept (its last call ten minutes ago): it goes on.
-  called(Date.now() - 10 * 60_000);
+  // Its cache kept (its last call just now): it goes on.
+  called(Date.now());
   await r.accept(reply(m, "9999.4", "<@UBOT> and the tests", { addressed: true }));
   await settle();
   assert.equal(r.claude.last(), fresh);

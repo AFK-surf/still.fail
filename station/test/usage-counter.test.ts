@@ -441,6 +441,7 @@ test("asked, a working session is read before its turn ends; its execution detai
   await time.adjust(20);
   await time.begun(7);
   // Opus 5.5: $4 in, $0.2 read, $20 out.
+  r.store.setRuntimeSessionId("k", "r");
   assert.deepEqual(usageNow(r.store, "k"), {
     modelCalls: 1, inputTokens: 1010, cachedTokens: 1000, outputTokens: 100, cost: (10 * 4 + 1000 * 0.2 + 100 * 20) / 1e6, unpricedCalls: 0,
     model: "claude-opus-5-5", contextTokens: 1010, contextWindow: null, lastCallAt: at,
@@ -453,7 +454,7 @@ test("a session's usage says how long its cache lasts after its last call, by wh
   const call = (at: number, cacheWrite: number, cacheWriteLong: number, fast = false) =>
     ({ turn: "t", profile: null, model: "claude-opus-5-5", context: 200_000, window: null, at, fast, cacheWrite, cacheWriteLong });
   const groups: UsageGroup[] = [{ day: "", session: "k", thread: null, person: null, profile: null, runtime: "claude", model: "claude-opus-5-5", fast: false, calls: 3, input: 0, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0 }];
-  const of = (calls: ReturnType<typeof call>[]) => usageNow({ usageOfSession: () => groups, lastContexts: (_, limit) => calls.slice(-limit) }, "k")!;
+  const of = (calls: ReturnType<typeof call>[]) => usageNow({ usageOfSession: () => groups, lastContexts: (_, limit) => calls.slice(-limit), conversationSince: () => 0 }, "k")!;
   // An hour's write, then a call that only read: an hour from the last; all of it written for an hour again at $4 ×2.
   const long = of([call(1000, 0, 5000), call(2000, 0, 0)]);
   assert.deepEqual([long.lastCallAt, long.cacheMs, long.rereadCost], [2000, 3_600_000, (200_000 * 4 * 2) / 1e6]);
@@ -532,7 +533,7 @@ test("on a real station's copy, the calls counted are the Rust's", { skip: !exis
 test("a session's summary says what its calls used as recorded: added up and priced, and where its last call of its own left its context", () => {
   const store = Store.open(":memory:", null);
   stores.push(store);
-  store.insertSession({ key: "k", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/k", token: "k", createdAt: 1, lastActiveAt: 1 });
+  store.insertSession({ key: "k", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/k", token: "k", createdAt: 1, lastActiveAt: 1, runtimeSessionId: "r1" });
   keepUsage(store, "k");
   assert.equal(store.sessionUsage("k"), null, "no call: none");
   const of = { turn: null, person: null, thread: null, profile: "cc" };
@@ -552,4 +553,23 @@ test("a session's summary says what its calls used as recorded: added up and pri
   store.recordUsage("/t.jsonl", { session: "k", offset: 2, model: null }, "claude", [[{ ...call("d", 4000, false, 3)[0], context: null }, of]]);
   keepUsage(store, "k", true);
   assert.deepEqual([store.sessionUsage("k").modelCalls, "contextTokens" in store.sessionUsage("k")], [4, false]);
+  // Its context cleared (换新上下文): none said, nor when its cache is over, until its next conversation's first call.
+  const context = () => {
+    const u = store.sessionUsage("k");
+    return [u.modelCalls, u.contextTokens, u.lastCallAt];
+  };
+  store.recordUsage("/t.jsonl", { session: "k", offset: 3, model: null }, "claude", [call("e", 5000, false, 4)]);
+  keepUsage(store, "k", true);
+  assert.deepEqual(context(), [5, 114, 5000]);
+  store.setRuntimeSessionId("k", null);
+  keepUsage(store, "k", true);
+  assert.deepEqual(context(), [5, undefined, undefined], "cleared");
+  const began = store.now();
+  store.ranIn("k", "r2", "cc");
+  store.setRuntimeSessionId("k", "r2");
+  keepUsage(store, "k", true);
+  assert.deepEqual(context(), [5, undefined, undefined], "a new conversation, before its first call");
+  store.recordUsage("/t2.jsonl", { session: "k", offset: 1, model: null }, "claude", [call("f", began + 1000, false, 6)]);
+  keepUsage(store, "k", true);
+  assert.deepEqual(context(), [6, 116, began + 1000], "its first call");
 });

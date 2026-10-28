@@ -347,9 +347,21 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET title = ?1 WHERE key = ?2", title, key);
   }
 
-  /// null: none now (its context cleared by hand); those it ran in stay in `runtime_sessions`.
+  /// null: none now (its context cleared by hand); those it ran in stay in `runtime_sessions`. Where its context stands
+  /// changes with it (read/usage.ts `usageNow`).
   setRuntimeSessionId(key: string, id: string | null): void {
-    this.#updateSession(key, "UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
+    this.#with((changes) => {
+      this.#run("UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
+      changes.push({ type: "session", key }, { type: "conversation", key });
+    });
+  }
+
+  /// When the conversation session `key` goes on with began: its runtime session's first record (`ranIn`), 0 where it
+  /// has none (one from before they were recorded); null: none now (its context cleared, or never started).
+  conversationSince(key: string): number | null {
+    const r = this.#one("SELECT s.runtime_session_id AS id, r.at AS at FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", key);
+    if (r === undefined || r.id === null) return null;
+    return r.at ?? 0;
   }
 
   /// How many entries the session's transcript has, as just read (sessions/live.ts): its summary says it from then on.
