@@ -116,7 +116,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     Some((at, x, y, go)) => {
       @sfbase.share_offered.val = None
       // (not over a field right clicked)
-      if at >= c.frame_number() - 1 && !(context.frame == at && context.field != 0) {
+      if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
         if context.frame != at {
           context_at(c, x, y)
         }

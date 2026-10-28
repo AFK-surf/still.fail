@@ -116,10 +116,11 @@ pub fn pickable(
         }
       None => ()
     }
-    // right clicked: its turn offered the window's right click menu (sfdesk's context_menu.mbt)
+    // right clicked: its turn offered the window's right click menu (sfdesk's context_menu.mbt); not where something
+    // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked)
     match share {
       Some(go) =>
-        match c.right_clicked(id) {
+        match c.menu_asked(id) {
           Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))
           None => ()
         }
