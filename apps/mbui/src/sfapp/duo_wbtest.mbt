@@ -535,3 +535,27 @@ test "Duo new chat with a long draft and attachment keeps send above the keyboar
   let (_, y, _, h) = send[0].rect
   assert_true(y >= 0.0 && y + h <= 369.5, msg="send at \{y}..\{y + h}")
 }
+
+
+///|
+test "Duo inline HTML expanded uses the image viewer native bars and closes back to the chat" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-viz")
+  viz_open_full("release.html", "ws1/st1", "s-c1", "work/s-c1/release.html", "s-c1")
+  t.frame()
+  t.frame()
+  let said = t.nav_said()
+  for id in ["lead/over/close", "over/download", "\"bare\":true"] {
+    assert_true(said.contains(id), msg=said)
+  }
+  assert_false(said.contains("page/chat/"), msg=said)
+  assert_true(t.find("返回") is None)
+  let opened = opened_views(t, 2)
+  let page = opened[opened.length() - 1]
+  guard view_rect(t, page) is Some((x, _, w, _)) else { fail("no HTML page") }
+  assert_true(x + w <= 951.0 - 84.0, msg="HTML ends at \{x + w}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+  t.frame()
+  t.frame()
+  assert_true(@sfbase.viz_full.val is None)
+  assert_true(t.nav_said().contains("\"bare\":false"))
+}
