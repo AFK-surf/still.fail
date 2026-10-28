@@ -1,8 +1,7 @@
 # 数据外流（设计稿）
 
-> chat C0C5ZF5TQET/1793162070.551209（2026-10-28，左子健）。Comma for Teams（CFT）要按各团队自己的规则算 token 的 ROI，
-> 需要 still.fail 用户的 token 总用量、各任务的用量和是否完成。still.fail 只提供数据，怎么算是对方的事。
-> 「类似其它 app 的第三方申请访问数据的功能」。
+> chat C0C5ZF5TQET/1793162070.551209（2026-10-28，左子健）。「类似其它 app 的第三方申请访问数据的功能」：同一台机器上的
+> 程序经人同意读取 still.fail 的数据。still.fail 不知道、也不管使用者是谁、拿去做什么：它只给出数据，并让人看清是哪个程序在要。
 
 ## 结论先说
 
@@ -15,12 +14,10 @@
 | 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，窗口里单独一项，写明对方能读到对话内容） |
 | 怎么收回 | still.fail 的「数据外流」页列出每份授权、申请方、最近读了什么；取消后立即失效 |
 
-## 第一个用的：Comma
+## 不知道使用者
 
-同一台机器上的 Comma station（Comma 桌面 app 带的那个）来申请。批准后它把 token 交给 Comma 云端（Salix）加密存着，按
-「这台机器的 Comma station × still.fail station」一份；要数据时从 Salix 取 token，在本机 socket 上读，再经它和 Salix
-已有的连接交给 CFT。token 离开这台机器就用不了，所以云端存着也读不到别处的数据。读的时候被拒（授权取消了），Comma 就删掉
-token，等下次再申请。
+still.fail 这边没有任何为某个使用者写的东西：谁来申请都走同一个窗口、同一个接口，窗口里写的是系统核实的程序身份，程序自述的
+名字和用途只当它自己的话显示。拿到 token 之后怎么存、怎么用、数据拿去做什么，是使用者自己的事。
 
 ## 为什么是接口，不是读库
 
@@ -32,7 +29,7 @@ token，等下次再申请。
 - 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据；一个程序冒充另一个程序（窗口里写的是系统核实的签名，不是申请方自报
   的名字）；token 被抄走后换个程序或换台机器来用。
 - 不防的是：同一系统用户下存心要拿数据的程序。它本来就能直接读 `stillfail.db`（agent 也是同一个用户，docs/vault.md 说过同样的事）。
-  这里做的是一条经过人同意、看得见、能收回、格式稳定的正式通道，让 Comma 这样的程序不用去读 station 的库。
+  这里做的是一条经过人同意、看得见、能收回、格式稳定的正式通道，让外面的程序不用去读 station 的库。
 
 ## 申请
 
@@ -55,7 +52,7 @@ station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权
 
 1. 第一步：「〈签名的名字〉想读取你在 still.fail 的数据」。写明系统核实的身份（Team ID、签名标识、路径；未签名就标红）、申请方自己
    写的名字和用途（标明「对方自述」），以及要的每一类数据，各带一个勾，可以去掉。按钮：不允许 / 允许。
-2. 第二步：一句话摘要（「把这台 station 上所有 chat 的 token 用量和金额给 AFK Inc. (D9AAN3VJK8) 的 surf.comma.station，
+2. 第二步：一句话摘要（「把这台 station 上所有 chat 的 token 用量和金额给 Example Inc. (ABCDE12345) 的 com.example.reader，
    直到你取消」），用 Touch ID 或系统密码确认（LocalAuthentication）。
 
 窗口只在这台机器上出现：申请来自这台机器，批准的人也得在这台机器前。
@@ -93,6 +90,5 @@ station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权
 
 还没做：
 
-- Comma（AFK-surf/Cue）：Comma station 的申请、token 交给 Salix 加密保存、按 token 读取并交给 CFT。
 - 网页版的「数据外流」页（网页不在那台机器上，取消授权先在 app 里做）。
 - Windows 和 Linux 上的授权窗口（Helper 只有 macOS）：那里申请回 `501 unsupported`。
