@@ -309,3 +309,39 @@ test "an iPhone Duo on its side or upright, whatever the sidebar's width: the si
     }
   }
 }
+
+///|
+test "an iPhone Duo on its side: a service alone in the side panel a card in it, its foot corner concentric with the panel's, the page cut to each of its corners" {
+  let (w, h, side) = (951.0, 669.0, 84.0)
+  let t = native_chat(w, h, true, side~, mode="chat-info", corner=59.0)
+  // (the system's round action at the column's foot: the panel's foot left corner made concentric round it)
+  let a = 48.67
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}},\"nav_action\":{\"x\":\{w - 24.0 - a},\"y\":\{h - 24.0 - a},\"w\":\{a},\"h\":\{a}}}")
+  t.run_for(@ui.nav_push_ms)
+  app.nav.push(Service("ws1/st1", "j-web"))
+  t.frame()
+  t.frame()
+  t.run_for(@sfdesk.side_in_ms)
+  let holes = t.holes()
+  assert_eq(holes.length(), 1, msg="the service's page")
+  let (x, y, hw, hh) = holes[0]
+  // the panel it is alone in: the roundest at its foot left of those round it
+  let mut panel : @ui.Laid? = None
+  for b in t.boxes() {
+    if b.radii.3 > 0.0 && b.x < x && x + hw <= b.x + b.w && b.y < y && y + hh < b.y + b.h &&
+      (panel is None || panel.unwrap().w > b.w) {
+      panel = Some(b)
+    }
+  }
+  guard panel is Some(p) else { fail("no panel round the page") }
+  // (the page's hole on whole device pixels, the panel's place as laid out: as near as a pixel)
+  let near = fn(u : Double, v : Double) { (u - v).abs() < 0.5 }
+  let room = p.y + p.h - (y + hh)
+  assert_true(near(x - p.x, room), msg="the page \{x - p.x} from the panel's side, \{room} from its foot")
+  let (r0, r1, r2, r3) = t.hole_corners()[0]
+  assert_true(near(r3, @ui.concentric(p.radii.3, room)), msg="its foot left corner \{r3}, the panel's \{p.radii.3} \{room} out")
+  // (the panel's foot corner the system's action's, rounder than the tape's: the page's not one radius all round)
+  assert_true(r3 > r0 + 1.0, msg="its corners \{(r0, r1, r2, r3)}")
+  assert_true(t.views().iter().any(fn(s) { s.has_prefix("place ") && s.contains(" round \{r0} \{r1} \{r2} \{r3}") }), msg="told the host each")
+  assert_eq(t.corner_faults(), [])
+}

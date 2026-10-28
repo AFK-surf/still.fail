@@ -153,6 +153,27 @@ test "a native view's corners round: the host told its radius, its hole as round
 }
 
 ///|
+test "a native view's corners each its own (a page alone in a panel, each concentric with the panel's there): the host told each, its hole as round" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(
+    fn(c) {
+      let v = once(cell, fn() { @ui.NativeView::page("<p>hi</p>") })
+      c.box(w=Px(390.0), h=Px(500.0), fn() {
+        c.native(v, corners=(20.0, 0.0, 20.0, 38.0)) |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  assert_eq(t.holes(), [(0.0, 0.0, 390.0, 500.0)])
+  assert_eq(t.hole_corners(), [(20.0, 0.0, 20.0, 38.0)])
+  assert_eq(t.hole_radii(), [38.0])
+  assert_true(t.views().contains("place 1 0 0 390 500 in 0 0 390 500 round 20 0 20 38"))
+  cell.val.unwrap().close()
+}
+
+///|
 test "a PDF's pages are images the host draws at the size they are shown" {
   let cell : Ref[@ui.Pdf?] = { val: None }
   let t = @ui.Tester::new(

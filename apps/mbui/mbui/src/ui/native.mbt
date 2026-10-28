@@ -32,14 +32,14 @@ pub struct NativeView {
   priv reading : Map[Int, () -> Unit]
   priv info : FixedArray[Double]
   priv mut state : Int
-  /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1
+  /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
   priv mut painted : Int
   /// where in that frame's paint it was (how many instances were before it): the views are stacked so
   priv mut seq : Int
   priv at : FixedArray[Double]
   /// its hole as painted there (x y w h; w 0: none), to follow it to where the frame took it after (Ctx::follow_holes)
   priv hole : FixedArray[Double]
-  /// what the host was last told: the same 8 and shown
+  /// what the host was last told: the same 12 and shown
   priv told : FixedArray[Double]
   priv mut told_shown : Bool
   priv mut closed : Bool
@@ -219,9 +219,9 @@ fn NativeView::make(
     state: 0,
     painted: -1,
     seq: 0,
-    at: FixedArray::make(9, 0.0),
+    at: FixedArray::make(12, 0.0),
     hole: FixedArray::make(4, 0.0),
-    told: FixedArray::make(9, -1.0),
+    told: FixedArray::make(12, -1.0),
     told_shown: false,
     closed: false,
     frames_asked: false,
@@ -641,8 +641,9 @@ pub fn NativeView::ended(self : NativeView) -> Bool {
 /// Where `v` shows: a node of `w` × `h` (filling its parent by default), the view's content at `content` within it
 /// (x, y, w, h from the node's top left; the whole node when None: a video's picture is stretched to it), seen only
 /// inside the node and whatever clips it, its content's corners round by `radius` (points: a page laid out as a
-/// phone's screen, its screen's corners; the host cuts the view itself, the canvas's hole is as round). What is
-/// painted after it draws over it.
+/// phone's screen, its screen's corners; the host cuts the view itself, the canvas's hole is as round), or each its own
+/// by `corners` (top left, then round it: a page alone in a panel, each corner concentric with the panel's there).
+/// What is painted after it draws over it.
 pub fn Ctx::native(
   self : Ctx,
   v : NativeView,
@@ -650,11 +651,16 @@ pub fn Ctx::native(
   h? : Size = Fill(1.0),
   content? : (Double, Double, Double, Double)? = None,
   radius? : Double = 0.0,
+  corners? : (Double, Double, Double, Double),
 ) -> Int {
   let i = self.box(w~, h~, fn() {  })
   let n = self.nodes[i]
   n.kind = kind_native
-  native_nodes[i] = (v, content, dmax(radius, 0.0))
+  let r = match corners {
+    Some((r0, r1, r2, r3)) => FixedArray::from_array([dmax(r0, 0.0), dmax(r1, 0.0), dmax(r2, 0.0), dmax(r3, 0.0)])
+    None => FixedArray::make(4, dmax(radius, 0.0))
+  }
+  native_nodes[i] = (v, content, r)
   // (a view of the system's, placed where it is each frame: a part kept builds it each frame, kept_part.mbt)
   part_live()
   i
@@ -662,8 +668,8 @@ pub fn Ctx::native(
 
 ///|
 /// The native views' nodes the last build made, by their index in the pool: the view, where its content is, its
-/// corners.
-let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, Double)] = Map([])
+/// corners (top left, then round it).
+let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, FixedArray[Double])] = Map([])
 
 ///|
 fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
@@ -671,7 +677,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   if shooting.val {
     return
   }
-  let (v, content, radius) = match native_nodes.get(i) {
+  let (v, content, radii) = match native_nodes.get(i) {
     Some(x) => x
     None => return
   }
@@ -704,6 +710,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   if hx1 > hx0 && hy1 > hy0 && cw > 0.0 && ch > 0.0 {
     // round: the content's own rounded rect, cut by the clips it is painted in (its corners where the content's are,
     // not where the clip cuts it)
+    let radius = dmax(dmax(radii[0], radii[1]), dmax(radii[2], radii[3]))
     let round = radius > 0.0
     let (sx, sy, sw, sh) = if round {
       (cx, cy, cw, ch)
@@ -727,6 +734,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       sw / cw,
       sh / ch,
     )
+    self.corners_last_each(radii[0], radii[1], radii[2], radii[3])
     self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
     v.hole[0] = sx
     v.hole[1] = sy
@@ -749,7 +757,9 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   v.at[5] = snap(y0)
   v.at[6] = snap(x1)
   v.at[7] = snap(y1)
-  v.at[8] = radius
+  for k in 0..<4 {
+    v.at[8 + k] = radii[k]
+  }
 }
 
 ///|
@@ -801,7 +811,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     let shown = v.painted == self.build_no
     let mut moved = shown != v.told_shown
     if shown {
-      for j in 0..<9 {
+      for j in 0..<12 {
         if (v.at[j] - v.told[j]).abs() > 0.01 {
           moved = true
         }
@@ -811,16 +821,18 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       v.tell_covers(self)
     }
     if moved {
-      for j in 0..<9 {
+      for j in 0..<12 {
         v.told[j] = v.at[j]
       }
       v.told_shown = shown
       // on a run's log (MBUI_DRAW_LOG): where it was told to go, in device pixels, for the host's own saying where it
-      // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views)
+      // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views): its rect, its clip, its roundest
+      // corner, then each corner (top left, then round it)
       if draw_logging() && fake.val is None && shown {
         let px = StringBuilder()
-        for j in 0..<9 {
-          px.write_string(" " + (v.at[j] * self.scale).to_string())
+        let most = dmax(dmax(v.at[8], v.at[9]), dmax(v.at[10], v.at[11]))
+        for x in [v.at[0], v.at[1], v.at[2], v.at[3], v.at[4], v.at[5], v.at[6], v.at[7], most, v.at[8], v.at[9], v.at[10], v.at[11]] {
+          px.write_string(" " + (x * self.scale).to_string())
         }
         h_log("VIEWTOLD \{v.id}" + px.to_string())
       }
@@ -835,6 +847,9 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         v.at[6],
         v.at[7],
         v.at[8],
+        v.at[9],
+        v.at[10],
+        v.at[11],
         shown,
       )
     }
@@ -963,7 +978,9 @@ fn Ctx::follow_holes(self : Ctx) -> Unit {
     v.at[5] = dmax(ky * v.at[5] + by, a[b + 17])
     v.at[6] = dmin(kx * v.at[6] + bx, a[b + 18])
     v.at[7] = dmin(ky * v.at[7] + by, a[b + 19])
-    v.at[8] = v.at[8] * dmin(kx, ky)
+    for k in 8..<12 {
+      v.at[k] = v.at[k] * dmin(kx, ky)
+    }
   }
 }
 

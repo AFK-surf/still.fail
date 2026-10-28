@@ -91,10 +91,18 @@ pub fn service_view(
     match close {
       Some(_) =>
         // (in from the panel's sides and the side its bar is not on: its corners there concentric with the panel's)
-        c.box(style=if at_foot { stage_in_panel_top } else { stage_in_panel }, fn() {
-          service_stage(c, p, site, name, restarting, restarts, corner=@ui.concentric(@sf.tape_corner, stage_in_panel_room))
-        })
-        |> ignore
+        {
+          let (room, corners) = stage_in_panel(bar_at_foot=at_foot)
+          let inset = if at_foot {
+            @ui.style(w=Full, h=Full, px=@sf.room_of(room), pt=@sf.room_of(room))
+          } else {
+            @ui.style(w=Full, h=Full, px=@sf.room_of(room), pb=@sf.room_of(room))
+          }
+          c.box(style=inset, fn() {
+            service_stage(c, p, site, name, restarting, restarts, corners~)
+          })
+          |> ignore
+        }
       None => service_stage(c, p, site, name, restarting, restarts)
     }
   }
@@ -108,16 +116,36 @@ pub fn service_view(
 }
 
 ///|
-/// How far in from a panel's sides and foot the page stands alone in it (service_view's `close`).
+/// How far in from a panel's sides and foot the page stands alone in it by the ladder (service_view's `close`).
 let stage_in_panel_room : Double = 8.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-let stage_in_panel : @ui.Style = @ui.css("w=Full h=Full px=S2 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let stage_in_panel_top : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S2")
+/// Where the page alone in a panel stands in from its sides and the side its bar is not on, and its corners (top
+/// left, then round it): those away from its bar in the panel's corners there (pane_round: the screen's at its edges,
+/// the system's at its foot, the tape's elsewhere; none beside the system's column), so far in as it is concentric
+/// with them, the nearest `stage_in_panel_room` the theme's ranges let it (@sf.foot_fit: an iPhone Duo's foot corner
+/// round its action too round for a card 8 in to follow), each followed; those under its bar, in no corner of the
+/// panel's, the tape's followed so far in.
+fn stage_in_panel(bar_at_foot~ : Bool) -> (Double, FixedArray[@ui.CornerOf]) {
+  let k = @sf.pane_round.val.unwrap_or(FixedArray::make(4, @ui.CornerOf::Own(@sf.tape_corner)))
+  let r = @sf.corner_radii(k)
+  let room = if bar_at_foot {
+    @sf.foot_fit(r[0], r[1], stage_in_panel_room)
+  } else {
+    @sf.foot_fit(r[3], r[2], stage_in_panel_room)
+  }
+  let alone = @ui.concentric(@sf.tape_corner, room)
+  (
+    room,
+    FixedArray::makei(4, fn(i) {
+      if (i < 2) == bar_at_foot {
+        @ui.CornerOf::Follow(k[i], room, alone)
+      } else {
+        Own(alone)
+      }
+    }),
+  )
+}
 
 ///|
 /// What its bars know of the page this frame (its address said on the log as it moves, a tap on the address typing
@@ -570,7 +598,7 @@ fn service_stage(
   name : String,
   restarting : Bool,
   restarts : Int,
-  corner? : Double = 0.0,
+  corners? : FixedArray[@ui.CornerOf],
 ) -> Unit {
   let t = @sf.theme()
   let ground = @sf.mix(t.p.chip, 0.55, t.p.card)
@@ -586,7 +614,19 @@ fn service_stage(
   }
   // (once the frame's builds are over, as the last of them has it; told the host only when it changes)
   c.after_build("service-touch", fn() { site.touch(touch) })
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=if p.viewport is Some(_) { ground } else { t.p.card }, radius=corner, clip=true, id=stage, fn() {
+  let round = match corners {
+    Some(k) => @sf.corners_radius(k)
+    None => Sharp
+  }
+  // (the page's own corners each the stage's, where it fills it)
+  let r = match corners {
+    Some(k) => {
+      let r = @sf.corner_radii(k)
+      Some((r[0], r[1], r[2], r[3]))
+    }
+    None => None
+  }
+  c.box(w=Fill(1.0), h=Fill(1.0), style=@ui.style(radius=round), bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
     let placed = match (p.viewport, c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
@@ -644,7 +684,7 @@ fn service_stage(
       None =>
         if p.viewport is None {
           c.after_build("scale", fn() { site.set_scale(1.0) })
-          c.native(site, radius=corner) |> ignore
+          c.native(site, corners?=r) |> ignore
         }
     }
     // the marks over the page, where it is drawn

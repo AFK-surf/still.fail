@@ -85,7 +85,7 @@ fn list_text(xs : Array[Double]) -> String {
 
 ///|
 /// views: a native view placed between pixels (kitdemo's MBUI_VIEWCHECK): where the host put it (VIEWAT, in device
-/// pixels) is where the app told it to (VIEWTOLD), on whole device pixels
+/// pixels) is where the app told it to (VIEWTOLD), on whole device pixels, its corners each as told
 fn views(args : Array[String]) -> Int {
   if args.length() != 2 {
     @sys.eprintln("chk views LOG HOST")
@@ -100,7 +100,7 @@ fn views(args : Array[String]) -> Int {
         Some(i) => {
           let p = split_ws(line.view(start_offset=i + key.length()).to_string())
           if p.length() > 0 {
-            out[p[0]] = p[1:@cmp.minimum(10, p.length())].to_array().map(num_of)
+            out[p[0]] = p[1:@cmp.minimum(14, p.length())].to_array().map(num_of)
           }
         }
         None => ()
@@ -108,7 +108,8 @@ fn views(args : Array[String]) -> Int {
     }
   }
   let names = [
-    "x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1", "corners' radius",
+    "x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1", "roundest corner", "top left corner", "top right corner",
+    "bottom right corner", "bottom left corner",
   ]
   let bad = []
   if told.length() == 0 || at.length() == 0 {
@@ -155,6 +156,10 @@ fn views(args : Array[String]) -> Int {
         bad.push("view \{v}: told \{list_text(t)}, the host said not where it put it")
         continue
       }
+    }
+    // (each corner said, as told: a host saying one radius for all four rounds them alike whatever it was told)
+    if a.length() < t.length() {
+      bad.push("view \{v}: told \{t.length()} numbers of where it goes, the host said \{a.length()}")
     }
     let n = @cmp.minimum(names.length(), @cmp.minimum(t.length(), a.length()))
     for k in 0..<n {

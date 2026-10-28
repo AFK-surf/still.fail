@@ -21,7 +21,8 @@ void moonbit_panic(void) { abort(); }  // the runtime's, given by a MoonBit prog
 
 // the host API under test
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg);
-void mb_host_view_place(int32_t, double, double, double, double, double, double, double, double, int32_t);
+void mb_host_view_place(int32_t, double, double, double, double, double, double, double, double, double, double,
+                        double, double, int32_t);
 void mb_host_view_close(int32_t);
 void mb_host_view_control(int32_t, int32_t, double);
 int32_t mb_host_view_info(int32_t, double *);
@@ -138,8 +139,8 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
   [steps addObject:^BOOL(int t) {
     vid = mb_host_view_open(1, mb_string_from_ns(mime));
     check(vid > 0, [NSString stringWithFormat:@"%@: opened (id %d)", tag, vid]);
-    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 1);
-    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 1);  // again, unchanged: nothing done
+    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 0, 0, 0, 0, 1);
+    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 0, 0, 0, 0, 1);  // again, unchanged: nothing done
     return YES;
   }];
   [steps addObject:^BOOL(int t) {
@@ -214,7 +215,7 @@ static void web_steps(void) {
   [steps addObject:^BOOL(int t) {
     vid = mb_host_view_open(2, mb_string_from_ns(html));
     check(vid > 0, [NSString stringWithFormat:@"web: opened (id %d)", vid]);
-    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 1);
+    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 0, 0, 0, 0, 1);
     return YES;
   }];
   __block int loadedAt = -1;
@@ -233,7 +234,7 @@ static void web_steps(void) {
     check(near(px, 0, 160, 0, 30) && px[3] == 255, [NSString stringWithFormat:@"web: its script ran, the page green %@", rgba(px)]);
     pixel(p, (X + 20) * S, (Y + 20) * S, px);
     check(near(px, 255, 0, 0, 2), [NSString stringWithFormat:@"web: the bar over it %@", rgba(px)]);
-    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 0);
+    mb_host_view_place(vid, X, Y, VW, VH, X, Y, X + VW, Y + VH, 0, 0, 0, 0, 0);
     check(mb_views_pass_through(X + 100, Y + 100) == 0, @"web: hidden, the pointer stays the canvas's");
     mb_host_view_close(vid);
     return YES;

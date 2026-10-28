@@ -225,8 +225,9 @@ struct MediaRead {
 struct View {
   int vid, kind;
   long long z = 0;  // where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
-  double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0, radius = 0;
-  ComPtr<IDCompositionRectangleClip> round;  // its content cut to its rect, rounded (radius > 0)
+  double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0;
+  double r[4] = {0, 0, 0, 0};                // its corners (top left, then round it)
+  ComPtr<IDCompositionRectangleClip> round;  // its content cut to its rect, rounded (a corner over 0)
   bool shown = false, placed = false;
   bool loaded = false, failed = false, closed = false, told = false, loading = true;
   std::string html;    // a page's
@@ -354,23 +355,24 @@ static void apply_place(View *v) {
   RECT r = {0, 0, (LONG)pw, (LONG)ph};
   v->ctl->put_Bounds(r);
   // its corners round (as the hole the app paints for it): its content's visual cut to its rect, rounded
-  if (v->radius > 0) {
+  if (v->r[0] > 0 || v->r[1] > 0 || v->r[2] > 0 || v->r[3] > 0) {
     IDCompositionDevice *dc = (IDCompositionDevice *)mb_render_dcomp();
     if (!v->round && dc) dc->CreateRectangleClip(&v->round);
     if (v->round) {
-      float rr = (float)(v->radius * s);
+      float r0 = (float)(fmax(0, v->r[0]) * s), r1 = (float)(fmax(0, v->r[1]) * s);
+      float r2 = (float)(fmax(0, v->r[2]) * s), r3 = (float)(fmax(0, v->r[3]) * s);
       v->round->SetLeft(0.0f);
       v->round->SetTop(0.0f);
       v->round->SetRight((float)pw);
       v->round->SetBottom((float)ph);
-      v->round->SetTopLeftRadiusX(rr);
-      v->round->SetTopLeftRadiusY(rr);
-      v->round->SetTopRightRadiusX(rr);
-      v->round->SetTopRightRadiusY(rr);
-      v->round->SetBottomLeftRadiusX(rr);
-      v->round->SetBottomLeftRadiusY(rr);
-      v->round->SetBottomRightRadiusX(rr);
-      v->round->SetBottomRightRadiusY(rr);
+      v->round->SetTopLeftRadiusX(r0);
+      v->round->SetTopLeftRadiusY(r0);
+      v->round->SetTopRightRadiusX(r1);
+      v->round->SetTopRightRadiusY(r1);
+      v->round->SetBottomRightRadiusX(r2);
+      v->round->SetBottomRightRadiusY(r2);
+      v->round->SetBottomLeftRadiusX(r3);
+      v->round->SetBottomLeftRadiusY(r3);
       v->content->SetClip(v->round.Get());
     }
   } else if (v->round) {
@@ -381,9 +383,12 @@ static void apply_place(View *v) {
   v->ctl->put_IsVisible(v->shown || v->kind == 1 ? TRUE : FALSE);
   mb_render_commit();
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
-  if (v->shown)
-    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by, bx + clip.right,
-         by + clip.bottom, v->round ? v->radius * s : 0.0);
+  if (v->shown) {
+    double k0 = v->round ? fmax(0, v->r[0]) * s : 0.0, k1 = v->round ? fmax(0, v->r[1]) * s : 0.0;
+    double k2 = v->round ? fmax(0, v->r[2]) * s : 0.0, k3 = v->round ? fmax(0, v->r[3]) * s : 0.0;
+    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by,
+         bx + clip.right, by + clip.bottom, fmax(fmax(k0, k1), fmax(k2, k3)), k0, k1, k2, k3);
+  }
 }
 
 // ---- its picture for snapshots ----
@@ -987,19 +992,21 @@ extern "C" int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 extern "C" void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0,
-                                   double cx1, double cy1, double radius, int32_t shown) {
+                                   double cx1, double cy1, double r0, double r1, double r2, double r3,
+                                   int32_t shown) {
   View *v = find(vid);
   if (!v) return;
   bool s = shown != 0;
   if (v->placed && v->shown == s && v->x == x && v->y == y && v->w == w && v->h == h && v->cx0 == cx0 &&
-      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1 && v->radius == radius)
+      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1 && v->r[0] == r0 && v->r[1] == r1 && v->r[2] == r2 &&
+      v->r[3] == r3)
     return;
   bool resized = !v->placed || v->w != w || v->h != h;
   v->placed = true;
   v->shown = s;
   v->x = x; v->y = y; v->w = w; v->h = h;
   v->cx0 = cx0; v->cy0 = cy0; v->cx1 = cx1; v->cy1 = cy1;
-  v->radius = radius;
+  v->r[0] = r0; v->r[1] = r1; v->r[2] = r2; v->r[3] = r3;
   apply_place(v);
   if (resized) refresh_snap(v);
 }

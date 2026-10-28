@@ -4,7 +4,7 @@
 // video player yet: its page alone), what the app told the host on the log (VIEWTOLD, in device pixels: ui's native.mbt) beside where the
 // host put it (VIEWAT, each host's own), then `VIEWCHECK done` and the app's end. The two the same, on whole device
 // pixels, or the contract fails: else the row its edge half covers shows what is under the canvas. The page's corners
-// round (view_check_round: told the host, its hole as round); MBUI_VIEWCHECK=hold leaves both on the screen once placed
+// round, each its own (view_check_round: told the host, its hole as round); MBUI_VIEWCHECK=hold leaves both on the screen once placed
 // (`VIEWCHECK placed`) for the contract's picture of those corners (Android: scripts/host_contract.sh android views),
 // with two pages far taller than a picture of them can be under them (view_check_tall), seen in their middles: one
 // placed so from the first, one only once it has loaded (view_check_grow), as a page in a message is. A page opened
@@ -37,8 +37,9 @@ let view_check_grown : Ref[Bool] = Ref(false)
 let view_check_tall_html : String = "<html style=\"overflow:hidden\"><body style=\"margin:0;background:#c00\"><div style=\"height:29000px\"></div><div style=\"height:2000px;background:#0a0\"></div><div style=\"height:9000px\"></div><script>addEventListener('load',function(){mbuiHost.post('loaded')})</script></body></html>"
 
 ///|
-/// The page's corners' radius (points): a phone's screen's, as a page laid out as one shows (still.fail's preview).
-let view_check_round : Double = 24.0
+/// The page's corners (points; top left, then round it): a phone's screen's, as a page laid out as one shows, and less
+/// at two of them, as a page alone in a panel follows the panel's corners each (still.fail's preview).
+let view_check_round : (Double, Double, Double, Double) = (24.0, 12.0, 24.0, 12.0)
 
 ///|
 /// A page opened last, painted between the video and the round page: under the round one, as a chat's page under a
@@ -104,7 +105,7 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
   c.column(fn() {
     c.native(v, h=Px(360.0), content=Some((12.0, 147.3625, 366.0, 205.875))) |> ignore
     c.native(u, h=Px(40.0)) |> ignore
-    c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25)), radius=view_check_round) |> ignore
+    c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25)), corners=view_check_round) |> ignore
     match tall {
       Some((t, g)) => {
         c.native(t, h=Px(60.0), content=seen_tall) |> ignore
