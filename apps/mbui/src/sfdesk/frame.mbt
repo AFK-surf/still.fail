@@ -685,20 +685,23 @@ pub fn frame(
     Some(_) => tape_panel_w(tw)
     None => 0.0
   }
-  let main_w = if !wide.tape {
+  let main_to = if !wide.tape {
     dmax(0.0, c.width - col)
   } else if panel_of is Some(_) {
     dmax(0.0, tw - tape_shows_left() - tape_shows_right() - 2.0 * bar_gap_now())
   } else {
     tape_one_beside(tw, tape_shows_left())
   }
-  let at = tape_at(tw, col, main_w, panel_w)
+  let at = tape_at(tw, col, main_to, panel_w)
   // (the chat shown has its view: what its side panel shows is known)
   let known = match app.nav.top() {
     Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
     _ => true
   }
   let tape_x = tape_frame(c, panel_of, at, known)
+  // (on the tape the page as wide as its move has got: the side panel opening beside it, it narrows as the tape moves
+  // to it, one move, not at once before it: tape_moves)
+  let main_w = if wide.tape { c.moved("--tape-page-w", main_to) } else { main_to }
   // shown a while, the page moved aside as wide as it was (shell.css.ts main's left: --peek-shift), drawn moved
   // (page_in); closed, its bars' padding clear of the bar (and of the window's buttons)
   let shift = if peek { wide.peek_shift } else { 0.0 }
@@ -1114,7 +1117,7 @@ pub let tape_side_max : Double = 320.0
 /// ease out).
 // kept across runs: a table, never written
 let tape_moves : Array[(String, Array[String])] = [
-  ("tape", ["--tape-x", "--behind-side", "--behind-page", "--behind-panel"]),
+  ("tape", ["--tape-x", "--tape-page-w", "--behind-side", "--behind-page", "--behind-panel"]),
 ]
 
 ///|

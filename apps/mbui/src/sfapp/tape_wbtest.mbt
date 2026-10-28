@@ -1277,3 +1277,4 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   assert_eq(@sfdesk.side_now(src, r).1, "service:j-web")
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
 }
+

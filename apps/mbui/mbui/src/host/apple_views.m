@@ -1105,6 +1105,7 @@ static MBNative *open_web(int32_t vid, NSString *html) {
 @end
 
 static MBNative *open_site(int32_t vid, NSString *start) {
+  CFTimeInterval made_from = CACurrentMediaTime();
   MBNative *v = [MBNative new];
   WKWebViewConfiguration *c = page_config(v);
   v.reqs = [NSMutableDictionary new];
@@ -1133,7 +1134,7 @@ static MBNative *open_site(int32_t vid, NSString *start) {
   v.content = wv;
   NSString *s = start.length ? start : @"/";
   [wv loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"%@://svc%@", kSiteScheme, s]]]];
-  vlog(@"view %d: open site at %@", vid, s);
+  vlog(@"view %d: open site at %@ (%.0f ms)", vid, s, (CACurrentMediaTime() - made_from) * 1000);
   return v;
 }
 
