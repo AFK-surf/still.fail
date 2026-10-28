@@ -1740,6 +1740,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     NSView *under = mb_views_root(NSRectToCGRect(inside));
     under.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [box addSubview:under];
+    mb_views_warm();
     the_view = [[MBView alloc] initWithFrame:inside];
     the_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [box addSubview:the_view];
