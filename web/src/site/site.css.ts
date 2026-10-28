@@ -76,7 +76,8 @@ export const downloadBand = style({
 });
 /** Every app, a line of quiet links. */
 export const downloadAll = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 20px", margin: "12px 0 0", fontSize: vars.textTitle, color: "var(--s-muted)" });
-globalStyle(`${downloadAll} > a`, { color: FG, transition: "color .2s", selectors: { "&:hover": { color: "var(--s-muted)" } } });
+globalStyle(`${downloadAll} > a`, { color: FG, transition: "color .2s" });
+globalStyle(`${downloadAll} > a:hover`, { color: "var(--s-muted)" });
 export const downloadMain = style({ display: "flex", alignItems: "center", gap: "24px" });
 /** Each device's button: the one for the device the page is on shows (data-platform on the root; a computer not a
  *  Mac's is taken for Windows', a device none is made for opens the web app). */
