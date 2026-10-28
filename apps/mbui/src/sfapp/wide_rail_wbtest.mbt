@@ -170,6 +170,31 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
 }
 
 ///|
+test "wide: wherever the pointer shows the sidebar's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let edge = @sfdesk.rail_w + 240.0
+  let offsets = [-16.0, -12.0, -8.0, -4.0, -2.0, 0.0, 2.0, 4.0, 8.0, 12.0, 16.0]
+  let shown : Array[String] = []
+  for y in [400.0, 700.0, 780.0] {
+    for dx in offsets {
+      let x = edge + dx
+      t.move(x, y)
+      if t.cursor() != ResizeX {
+        continue
+      }
+      shown.push("\{dx.to_int()}@\{y.to_int()}")
+      t.drag(x, y, x + 30.0, y)
+      assert_eq(@sfdesk.wide.side_w, 270.0)
+      t.drag(x + 30.0, y, x, y)
+      assert_eq(@sfdesk.wide.side_w, 240.0)
+    }
+  }
+  // (beyond the 6 its strip is drawn on: its room round it, as the pointer lights it)
+  assert_true(shown.iter().any(fn(s) { s.has_prefix("-") || s.has_prefix("8@") || s.has_prefix("12@") }))
+}
+
+///|
 test "wide: the sidebar's edge let go a little past where the last frame drew it: there at once, nothing moving after" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

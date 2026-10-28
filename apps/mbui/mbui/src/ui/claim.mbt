@@ -28,6 +28,17 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
     }
     k = k - 1
   }
+  // a drag area drawn smaller than its room is reached from round it, as the pointer lights it and shows its shape
+  // there (press_reach: a column's edge 6 wide, its ↔ shown a room across): the press there its own, the innermost
+  // (2026-10-28 用户: 能拖动的位置和鼠标显示能拖动的不一致)
+  let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+  let reached = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  if reached != top && reached >= 0 {
+    let id = c.hit_ids[reached]
+    if drags.contains(id) && !out.contains(id) {
+      out.insert(0, id)
+    }
+  }
   out
 }
 
