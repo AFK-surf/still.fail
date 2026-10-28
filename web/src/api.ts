@@ -452,7 +452,7 @@ export function stationApi(t: StationCall) {
     xshare: (of: { thread?: number | null; session: string }, to: string[], write: boolean) =>
       t.op<unknown>("chat.xshare", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), to, write }),
     /** What a public snapshot of the chat would hold now (nothing kept): its messages, what was hidden in them, its attachments. */
-    publishPreview: (thread: number) => t.op<PublishPreview>("chat.publishPreview", { thread }),
+    publishPreview: (thread: number, turn?: number) => t.op<PublishPreview>("chat.publishPreview", { thread, ...(turn !== undefined ? { turn } : {}) }),
     /** Keeps a public snapshot of the chat up to `upto` (the preview's last message), with the attachments ticked: its link. */
     publish: (thread: number, upto: number, files: string[]) => t.op<ChatPublished>("chat.publish", { thread, upto, files }),
     /** Revokes one of the chat's public snapshots: its link opens nothing any more. */

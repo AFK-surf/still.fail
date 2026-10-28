@@ -9,7 +9,7 @@
 import { latestFrame } from "@stillfail/ui/frames.ts";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Quote } from "../api.ts";
-import { Copy, Quote as QuoteIcon } from "@stillfail/ui/icons.tsx";
+import { Copy, Photo, Quote as QuoteIcon } from "@stillfail/ui/icons.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import { hearPageShown, useApp } from "./app.tsx";
@@ -29,10 +29,11 @@ interface Span { start: number; end: number }
 interface Picked { ts: string; span: Span; author: string; role: "agent" | "person" }
 
 /**
- * Picking in the list `list` (its rows the wide screen's: ../Chat.tsx), what is picked quoted by `onQuote`. Answers the
- * handles and the bar, to be drawn beside the list in what it is placed in.
+ * Picking in the list `list` (its rows the wide screen's: ../Chat.tsx), what is picked quoted by `onQuote`, its
+ * message's turn shared by `onShare` (by its ts). Answers the handles and the bar, to be drawn beside the list in what
+ * it is placed in.
  */
-export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">) => void): ReactNode {
+export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">) => void, onShare?: (ts: string) => void): ReactNode {
   const app = useApp();
   const [picked, setPicked] = useState<Picked | null>(null);
   // A finger widening it or moving one of its ends: the bar waits until it lifts.
@@ -311,6 +312,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
           <button type="button" onClick={quote}><QuoteIcon size={15} />{t("web-main.chat.quote")}</button>
           <button type="button" onClick={copy}><Copy size={15} />{t("common.copy")}</button>
           {!everything && <button type="button" onClick={() => setPicked({ ...picked, span: { start: 0, end: length } })}>{t("web-mobile.annotate.selectAll")}</button>}
+          {onShare && <button type="button" onClick={() => { const ts = picked.ts; letGo(); onShare(ts); }}><Photo size={15} />{t("web-main.chat.shareTurn")}</button>}
         </div>
       )}
     </>

@@ -245,8 +245,11 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   };
   // A chat keeping watch is archived only once asked.
   const archiveAsked = () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); };
+  // One of its turns shared as a picture (a message's words picked: 分享这一轮), by its thread and the message's n.
+  const [sharingTurn, setSharingTurn] = useState<{ thread: number; seq: number } | null>(null);
+  const shareTurn = (seq: number) => { const thread = chatView.value?.thread?.id; if (thread !== undefined) setSharingTurn({ thread, seq }); };
   // What is in the page (its messages, its bar, its tabs) does these by the chat's key: it is handed none of them.
-  useChatPageActions(chatKey, { history: openHistory, tab: openTab, jobs: openJobs, archive: archiveAsked });
+  useChatPageActions(chatKey, { history: openHistory, tab: openTab, jobs: openJobs, archive: archiveAsked, share: shareTurn });
   // A visualization in a message opens in a tab of the side panel: the same function while the page is this chat's.
   const [openFile] = useState(() => (session: string, file: { path: string; name: string }) => chatPage.tab(chatKey, fileTab(session, file.path, file.name)));
   // A station's screen linked in a message opens beside the chat as well (ScreenLink.tsx), and from there on its own page.
@@ -322,6 +325,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const sendTo = made ?? ("session" in of && !chat.thread ? of.session : undefined);
   return (
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
+      {sharingTurn && <PublishDialog station={station.address} thread={sharingTurn.thread} turn={sharingTurn.seq} onClose={() => setSharingTurn(null)} />}
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>

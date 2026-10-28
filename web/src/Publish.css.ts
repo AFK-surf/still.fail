@@ -7,8 +7,17 @@ export const list = style({
   display: "flex", flexDirection: "column", gap: "28px",
   selectors: { "&[data-inline]": { gap: "20px" } },
 });
-/** A message and, under it, how much was hidden in it. */
-export const said = style({ display: "grid", gap: "6px", minWidth: "0" });
+/** A message and, under it, how much was hidden in it; left out of the picture, it fades. */
+export const said = style({
+  position: "relative", display: "grid", gap: "6px", minWidth: "0",
+  transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&[data-off]": { opacity: "0.45" } },
+});
+/** A message's box to tick: over it, at the top of the side its words leave (its head's end; the viewer's own, its start). */
+export const messageTick = style({
+  position: "absolute", top: "2px", right: "0", margin: "0", zIndex: "1", cursor: "pointer",
+  selectors: { "&[data-mine]": { right: "auto", left: "0" } },
+});
 /** Under a message: how many things in it were hidden (as looking secret); under the viewer's own, at its end. */
 export const note = style({
   display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",

@@ -866,11 +866,14 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   // (its menu, the presenters', gone as it goes)
   t.run_for(@kit.presence_out_ms)
   assert_true(t.find("在浏览器中打开链接") is None)
-  // the words before it with nothing picked: no menu
+  // the words before it with nothing picked: its turn shared alone (a message of the chat's list)
   let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
   t.right_click(px + pw / 2.0, py + ph / 2.0)
   t.frame()
-  assert_false(@sfdesk.context.open)
+  assert_true(t.find("分享这一轮") is Some(_))
+  assert_true(@sfdesk.context.share is Some(_) && @sfdesk.context.link == "" && @sfdesk.context.words == "")
+  t.key(@ui.key_escape)
+  t.run_for(@kit.presence_out_ms)
   // words picked with the pointer: 复制 alone, and what is picked copied
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()

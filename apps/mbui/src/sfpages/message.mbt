@@ -53,12 +53,15 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
 }
 
 ///|
-/// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking);
-/// out of a list, as they are.
+/// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking), its
+/// turn shared as a picture from there (`turn`: its seq; the sharing over the window, open_publish); out of a list, as
+/// they are.
 pub fn picking(
   here : MessageHere,
   c : @ui.Ctx,
+  src : Source,
   ts : String,
+  turn : Double,
   author : String,
   role : String,
   words : String,
@@ -66,7 +69,10 @@ pub fn picking(
   fill? : Bool = true,
 ) -> Unit {
   match here.list {
-    Some(_) => @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body)
+    Some(_) => {
+      let share = here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } })
+      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, share~)
+    }
     None => body()
   }
 }
@@ -121,13 +127,13 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       let files = beside_quotes(m.quotes, m.attachments)
       if m.author_kind == "person" {
         if m.text != "" {
-          picking(here, c, m.ts, m.by.name, "person", m.text, fn() {
+          picking(here, c, src, m.ts, m.seq, m.by.name, "person", m.text, fn() {
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
           })
         }
         message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)))
       } else {
-        picking(here, c, m.ts, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
+        picking(here, c, src, m.ts, m.seq, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
         })
       }
@@ -151,7 +157,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
     quotes(c, src, here, m.quotes, m.attachments, mine=true)
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if m.text != "" {
-      picking(here, c, m.ts, @sf.t("web-main.chat.you"), "person", m.text, fn() {
+      picking(here, c, src, m.ts, m.seq, @sf.t("web-main.chat.you"), "person", m.text, fn() {
         mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats), chat_title=chat_title_of(m))
       }, fill=false)
     }

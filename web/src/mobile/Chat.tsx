@@ -48,7 +48,7 @@ import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatCcTo, ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
-import { PublishPicture, savePicture, takePicture, usePublishPreview, useTicking } from "../Publish.tsx";
+import { keptCount, PublishPicture, savePicture, takePicture, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import { sendingHere, sentAfter } from "../madeChat.ts";
@@ -295,8 +295,8 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   const archive = useArchiveChat(here.station, here.key);
   // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
   const gallery = useMemo(() => ({ chat: { session: here.key } }), [here.key]);
-  const latest = useRef({ here, draft, app });
-  latest.current = { here, draft, app };
+  const latest = useRef({ here, draft, app, view, messages: rows.messages });
+  latest.current = { here, draft, app, view, messages: rows.messages };
   // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).
   const chatKey = draftKeyOf(here.station, here.key);
   useChatPageActions(chatKey, {
@@ -308,14 +308,25 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   });
   const [stable] = useState(() => ({
     quote: (q: Omit<Quote, "comment">, file?: Attachment) => latest.current.draft.current.quote(q, file),
+    // The turn of the message `ts` shared as a picture, in the sheet the chat's own sharing has.
+    share: (ts: string) => {
+      const seq = latest.current.messages.find((m) => m.ts === ts)?.seq;
+      if (seq !== undefined) stable.shareSeq(seq);
+    },
+    shareSeq: (seq: number) => {
+      const { app, here, view } = latest.current;
+      if (!view.thread) return;
+      const thread = view.thread.id;
+      app.sheet({ height: 0.9, content: () => <PublishSheet here={here} thread={thread} turn={seq} /> });
+    },
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
       app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
     },
   }));
   // Words selected with a mouse inside one message offer to quote them; a finger held on them picks them in place.
-  const quoting = useSelectionQuote(list, stable.quote);
-  const picking = usePick(list, stable.quote);
+  const quoting = useSelectionQuote(list, stable.quote, stable.shareSeq);
+  const picking = usePick(list, stable.quote, stable.share);
   const hold = useLinkHold(list);
   const askedFile = useAskedFile(list, rows.messages);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page, as a reference is
@@ -884,14 +895,15 @@ function PublishedRow({ here, thread, link }: { here: Here; thread: number; link
 }
 
 /**
- * Shares the chat as a picture (the phone's; the wide screen's is Publish.tsx PublishDialog): the picture as it would
- * be, the attachments to tick (all at first), how much was hidden; at its foot 「取消」 and 「保存图片」 (2026-10-26:
+ * Shares the chat as a picture (the phone's; the wide screen's is Publish.tsx PublishDialog), or one turn of it
+ * (`turn`: a message's n, from its pick's 分享这一轮): the picture as it would be, the messages and attachments to tick
+ * (all at first), how much was hidden; at its foot 「取消」 and 「保存图片」 (2026-10-26:
  * 「应该放下面，俩按钮，一个取消一个保存到相册」): the picture handed to the system's share sheet (where it is saved to the
  * photos, or sent), or saved as a file where there is none.
  */
-function PublishSheet({ here, thread }: { here: Here; thread: number }) {
+function PublishSheet({ here, thread, turn }: { here: Here; thread: number; turn?: number }) {
   const app = useApp();
-  const preview = usePublishPreview(here.station, thread);
+  const preview = usePublishPreview(here.station, thread, turn);
   const ticking = useTicking();
   const paper = useRef<HTMLDivElement | null>(null);
   const [taking, setTaking] = useState(false);
@@ -936,7 +948,7 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
       </div>
       <div className={sheetsCss.mSheetFoot}>
         <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-        <Button primary label={t("web-pages.chat.shareImage.save")} enabled={!!p && p.list.length > 0} busy={taking} onClick={() => void save()} />
+        <Button primary label={t("web-pages.chat.shareImage.save")} enabled={!!p && keptCount(p, ticking) > 0} busy={taking} onClick={() => void save()} />
       </div>
     </>
   );

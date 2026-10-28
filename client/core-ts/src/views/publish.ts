@@ -184,13 +184,54 @@ export function previewShown(answer: J, clock: present.Clock, members: J[] = [],
   }, clock);
 }
 
+/// The messages of one turn of the chat, by message `n` in it: the person's words that began it (those said one after
+/// another before an answer, together) and all said after them until a person speaks again. None of the chat's when
+/// `n` is not among the messages read.
+export function turnOf(entries: J[], n: number): { from: number; upto: number } | null {
+  const at = entries.findIndex((e) => num(get(e, "n")) === n);
+  if (at < 0) return null;
+  const person = (i: number) => get(entries[i], "authorKind") === "person";
+  let start = at;
+  while (start > 0 && !person(start)) start--;
+  while (start > 0 && person(start - 1)) start--;
+  let end = at;
+  while (end + 1 < entries.length && person(end + 1) && person(end)) end++;
+  while (end + 1 < entries.length && !person(end + 1)) end++;
+  return { from: num(get(entries[start], "n")), upto: num(get(entries[end], "n")) };
+}
+
+/// A station's answer to a preview (`POST /threads/:thread/publish/preview`) holding only one turn of the chat (turnOf,
+/// by message `n`): its messages, their attachments, what was hidden in them, and their entries as the chat's page
+/// reads them (an edit of one by the message it edits).
+export function turnShown(answer: J, n: number): J {
+  const turn = turnOf(arr(get(answer, "entries")), n);
+  const within = (k: number) => turn !== null && k >= turn.from && k <= turn.upto;
+  const views = get(answer, "views");
+  return {
+    ...answer,
+    upto: turn?.upto ?? num(get(answer, "upto")),
+    entries: arr(get(answer, "entries")).filter((e) => within(num(get(e, "n")))),
+    redacted: arr(get(answer, "redacted")).filter((r) => within(num(get(r, "n")))),
+    files: arr(get(answer, "files")).filter((f) => within(num(get(f, "n")))),
+    ...(isObject(views)
+      ? {
+        views: {
+          entries: arr(get(views, "entries")).filter((e) => within(num(get(e, get(e, "kind") === "message" ? "n" : "target")))),
+          hidden: arr(get(views, "hidden")).filter((r) => within(num(get(r, "n")))),
+        },
+      }
+      : {}),
+  };
+}
+
 type Of<K extends Call["kind"]> = Extract<Call, { kind: K }>;
 
 /// A station from before publishing has none of its routes (an unknown chat is its own 404, said as the station says it).
 const oldStation = (e: CoreError) => (e.status === 404 && e.message.startsWith("no route ") ? new CoreError("http_404", t("core-misc.publish.oldStation"), 404) : e);
 
-/// `chat.publishPreview`: what a snapshot of the chat would hold now. `chat.publish`: one kept, up to the message the
-/// preview ended at, with the attachments ticked; its link answered and its thread shows it at once.
+/// `chat.publishPreview`: what a snapshot of the chat would hold now (`turn`: of the turn of that message alone).
+/// `chat.publish`: one kept, up to the message the preview ended at, with the attachments ticked; its link answered and
+/// its thread shows it at once.
 /// `chat.unpublish`: one revoked, gone from the list at once.
 export function install(inner: Inner): void {
   const clock = (): present.Clock => {
@@ -217,7 +258,7 @@ export function install(inner: Inner): void {
         oldStation,
       );
       const members = arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members"));
-      return previewShown(answer, clock(), members, (entries) => inner.views.listed(c.station, c.thread, entries));
+      return previewShown(c.turn === null ? answer : turnShown(answer, c.turn), clock(), members, (entries) => inner.views.listed(c.station, c.thread, entries));
     });
   };
   handlers.chatPublish = (_inner, call, _progress, _at, ctx) => {

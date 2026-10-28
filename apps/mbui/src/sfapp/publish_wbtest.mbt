@@ -117,6 +117,27 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
 }
 
 ///|
+test "分享图片: a message unticked fades on the page and is not in the picture" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls)
+  t.tap_text("分享图片")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // a box to tick for each message, all ticked; the agent's words (the second) left out
+  let ticks = t.all(Checkbox, label="放进图片")
+  assert_eq(ticks.length(), 4)
+  assert_true(ticks.iter().all(fn(n) { n.check == Some(On) }))
+  let (x, y, w, h) = ticks[1].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(@sfpages.publish_message_left_out(6.0))
+  assert_true(!@sfpages.publish_message_left_out(4.0))
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  let words = t.shots()[0].join("|")
+  assert_true(words.contains("截图、日志和构建缓存都附上了") && !words.contains("跑了 42 秒"), msg=words)
+}
+
+///|
 /// Whether the viewer's message stands further along than someone else's in the picture shown (its bubble at the
 /// column's end, as the chat's list has it).
 fn picture_mine_at_end(t : @ui.Tester) -> Bool {
