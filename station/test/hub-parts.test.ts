@@ -520,6 +520,14 @@ test("a Claude transcript is looked for in the project of its session's working 
     // No places said: every project's looked in, as before.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
     assert.equal(listed.length, 2);
+    // A new session's, not written yet: the projects listed once, not at each read; once written, where it works.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places), { paths: [], current: false });
+    assert.equal(listed.length, 3);
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places), { paths: [], current: false });
+    assert.equal(listed.length, 3, "not listed again");
+    writeFileSync(join(shared, here, "fresh.jsonl"), line("fresh", "m3"));
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places), { paths: [join(shared, here, "fresh.jsonl")], current: true });
+    assert.equal(listed.length, 3);
   } finally {
     fs.readdirSync = real;
     syncBuiltinESMExports();

@@ -162,7 +162,17 @@ export function claudeProject(cwd: string): string | null {
 /// each chat the station ever had: 923 on ccvm, each looked at in turn on the main thread).
 function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonly string[]): string | null {
   if (runtime !== "claude") return null;
-  for (const place of places) {
+  // Claude Code names it by the directory as its process sees it (symbolic links resolved): one reached through a link
+  // is looked for by both.
+  const real = (place: string): string[] => {
+    try {
+      const at = realpathSync(place);
+      return at === place ? [place] : [place, at];
+    } catch {
+      return [place];
+    }
+  };
+  for (const place of places.flatMap(real)) {
     const project = claudeProject(place);
     if (project === null) continue;
     const path = join(dir, project, `${id}.jsonl`);
@@ -173,12 +183,15 @@ function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonl
 
 /// The Claude transcripts found in a project not of their session's places (it ran before the data directory moved, or
 /// in a terminal's directory), by directory and id: a transcript stays where it is (put away, its `.zst` beside), so each
-/// is looked for in every project once a process.
-const elsewhere = new Map<string, string>();
+/// is looked for in every project once a process. Null: looked for with its places and in no project then. One a
+/// session writes from now on is in its places (`placedIn`, asked first every time), so it is not looked for again: a
+/// new session's is not written until its conversation begins, and every project (676 on ccvm) was looked in at each
+/// read until then, 25 seconds on the station's thread while memory was short.
+const elsewhere = new Map<string, string | null>();
 
 /// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
-/// place), if it is there.
-function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | null {
+/// place), if it is there. `placed`: a Claude one was looked for in its session's places first.
+function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = false): string | null {
   if (runtime === "dsh") return dshTranscript(dir, id);
   if (runtime === "grok") return grokTranscript(dir, id);
   if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
@@ -188,11 +201,13 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | n
   if (runtime === "claude") {
     const at = `${dir}\0${id}`;
     const kept = elsewhere.get(at);
-    if (kept !== undefined && isFile(storage(kept))) return kept;
+    if (kept === null && placed) return null;
+    if (kept != null && isFile(storage(kept))) return kept;
     for (const project of entriesOf(dir) ?? []) {
       const path = join(dir, project, `${id}.jsonl`);
       if (isFile(storage(path))) return (elsewhere.set(at, path), path);
     }
+    if (placed) elsewhere.set(at, null);
     return null;
   }
   const find = (dir: string): string | null => {
@@ -277,7 +292,8 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
     }
     return null;
   };
-  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id)));
+  const placed = places.length > 0;
+  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed)));
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
 }
 

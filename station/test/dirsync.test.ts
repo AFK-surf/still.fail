@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -15,7 +15,7 @@ import { signalGroup } from "../src/ops/group.ts";
 import { LOOK_MS } from "../src/jobs/admit.ts";
 import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
-import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, readJson, writeJson } from "../src/jobs/remote.ts";
+import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson } from "../src/jobs/remote.ts";
 import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
 import { PEER_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { type Json, Store } from "../src/store/store.ts";
@@ -283,6 +283,26 @@ describe("dirsync", { concurrency: true }, () => {
     assert.deepEqual([second.sync.sent.files, second.sync.written, second.sync.removed], [0, 1, 1]);
     assert.equal(readFileSync(join(m, "renamed"), "utf8"), "twins\n");
     assert.deepEqual(stamp(join(m, "src", "main.c")), before);
+  });
+
+  test("a session's prepared tasks are kept in a directory of its own, one from before moved there; closing it removes them", async () => {
+    const p = await pair();
+    const dir = join(tempdir(), "kept");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    const prepared = join(p.a.dir, "remote", "prepared");
+    const own = join(prepared, hash("s1"));
+    await p.use("station_task", { key: "k1", action: "prepare", command: "true", dir });
+    const [name] = readdirSync(own);
+    assert.ok(name!.endsWith(".json"));
+    // Kept as before: started from there until it is moved, then moved into the session's.
+    renameSync(join(own, name!), join(prepared, name!));
+    assert.equal((await p.use("station_task", { key: "k1", action: "start" })).sync.git, false);
+    await p.a.remote["movePrepared"]();
+    assert.deepEqual(readdirSync(prepared), [hash("s1")]);
+    assert.deepEqual(readdirSync(own), [name]);
+    p.a.remote.closeSession("s1");
+    await until("its prepared tasks go", () => !existsSync(own));
   });
 
   test("one task at a time in a mirror: a sync while one runs there is refused, nothing started", async () => {
