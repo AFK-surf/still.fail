@@ -79,6 +79,8 @@
   "core-logic.decisions.chose": "{name} 选择了「{label}」",
   "core-logic.decisions.line": "奏 · {text}",
   "core-logic.decisions.line.empty": "奏",
+  "core-logic.decisions.dismissed": "已忽略",
+  "core-logic.decisions.dismissedNeed": "已忽略：{text}",
   "core-logic.decisions.replaced": "已替换为新问题",
   "core-logic.decisions.replied": "{name} 回复了",
   "core-logic.decisions.waited.under_minute": "不足 1 分钟",

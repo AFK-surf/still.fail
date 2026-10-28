@@ -38,6 +38,24 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   let look = @sf.theme().chat_list
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
+  // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end
+  match here.view.state_ask {
+    Some(seq) if turn => {
+      c.box(style=need_card, fn() {
+        c.box(style=need_card_words, label=words, fn() {
+          c.box(style=look.state_slot, fn() { lead_icon(c, lead, p.text) }) |> ignore
+          if rest != "" {
+            c.text(rest, style=said) |> ignore
+          }
+        })
+        |> ignore
+        ask_dismiss(c, src, here, seq, true, false, at_end=true)
+      })
+      |> ignore
+      return
+    }
+    _ => ()
+  }
   match lead {
     "need" | "done" | "wait" | "watch" =>
       c.box(style=chat_state_row, label=words, fn() {
@@ -593,3 +611,13 @@ let chat_state_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart")
 ///|
 // kept across runs: a value (no field of it changes)
 let chat_state_wraps : @ui.TextStyle = @ui.text_style(wrap=true)
+
+///|
+/// What the chat needs of the viewer, with 忽略 (chat_state): a card on a 5% tint of the ink, as the options' are, its
+/// words taking what 忽略 leaves at its end.
+// kept across runs: a value (no field of it changes)
+let need_card : @ui.Style = @ui.css("row w=Full px=S3 gap=S2 radius=Xl align=ACenter bg=A(Fg,O5)")
+
+///|
+// kept across runs: a value (no field of it changes)
+let need_card_words : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart)

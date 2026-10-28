@@ -907,9 +907,9 @@ export interface TurnSummary {
 /**
  * What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),
  * done (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (奏 · …: its
- * lead word in bold).
+ * lead word in bold); what an agent needed, let go by the viewer (已忽略：…, a chat's end only: quiet, no mark).
  */
-export type StateLead = "need" | "done" | "wait" | "watch" | "decision";
+export type StateLead = "need" | "done" | "wait" | "watch" | "decision" | "dismissed";
 
 /** A colour of meaning. */
 export type Tone = "accent" | "green" | "blue" | "red" | "amber" | "neutral";
@@ -2550,8 +2550,8 @@ export interface ChatView {
 	 */
 	stateText?: string;
 	/**
-	 * What leads `stateText` (need, done, wait, watch), for a client to say as a mark of its own. Absent when
-	 * nothing does (an agent's failure).
+	 * What leads `stateText` (need, done, wait, watch; dismissed: what an agent needs, let go by the viewer,
+	 * kept as 已忽略：…), for a client to say as a mark of its own. Absent when nothing does (an agent's failure).
 	 */
 	stateLead?: StateLead;
 	/** What follows the lead in `stateText` (watching: the whole line). Absent without `stateLead`. */

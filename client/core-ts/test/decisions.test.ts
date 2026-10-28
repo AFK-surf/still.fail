@@ -177,7 +177,8 @@ const typed = (seq: number): J => ({ ...said(seq, "agent", "key？"), card: { ty
 test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   let messages: J[] = [said(1, "person", "做吧"), askedMsg(2), said(3, "agent", "顺便说下进度")];
   messages = d.inMessages(messages, [2, true]);
-  assert.deepEqual(messages[1].decision, { resolved: false, dismissed: true });
+  // let go by the viewer: said so where its options were, so what it asked stays in the chat
+  assert.deepEqual(messages[1].decision, { resolved: false, dismissed: true, text: "已忽略" });
   assert.deepEqual(messages[1].options, [{ label: "B" }, { label: "A", recommended: true }]);
   assert.deepEqual(messages[1].card, { type: "options", options: [{ label: "B" }, { label: "A", recommended: true }] });
   assert.equal(messages[0].decision, undefined);
