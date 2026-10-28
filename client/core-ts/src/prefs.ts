@@ -11,12 +11,14 @@ import * as keymap from "./keymap.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "fillOff", "fillMax", "shareLook"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
 const JOBS_SEEN_KEPT = 200;
+/// At most this many failures kept as let go in one workspace's 待处理.
+const FAILS_GONE_KEPT = 200;
 const PREFS = { topic: "prefs" };
 
 type Map_ = Record<string, unknown>;
@@ -61,6 +63,12 @@ export function badgeKindsOf(prefs: unknown): BadgeKinds {
 /// the `longJobs` view's `ids` were when it opened).
 export function jobsSeenOf(prefs: unknown, workspace: string): Set<string> {
   const by = isObject(prefs) && isObject(prefs.jobsSeen) ? prefs.jobsSeen[workspace] : null;
+  return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);
+}
+
+/// The failures let go in a workspace's 待处理 (`failsGone`, by workspace: each as its item's `failure` said it).
+export function failsGoneOf(prefs: unknown, workspace: string): Set<string> {
+  const by = isObject(prefs) && isObject(prefs.failsGone) ? prefs.failsGone[workspace] : null;
   return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);
 }
 
@@ -147,6 +155,11 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
         }
         // The jobs a bell has shown: the newest of them.
         if (field === "jobsSeen" && Array.isArray(entry)) entry = entry.slice(-JOBS_SEEN_KEPT);
+        // The failures let go: added to those kept, the newest of them.
+        if (field === "failsGone" && Array.isArray(entry)) {
+          const was = Array.isArray(map[key]) ? (map[key] as unknown[]) : [];
+          entry = [...new Set([...was, ...entry])].slice(-FAILS_GONE_KEPT);
+        }
         // A workspace's bottom bars, kept as they read (as `bars`).
         if (field === "barsBy") entry = barsOf(entry);
         // An action's keys, each a binding as the keymap has it (keymap.ts); one that is none is refused.
@@ -189,6 +202,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if (isObject(prefs.sidebars) && Object.values(prefs.sidebars).some((v) => typeof v !== "string" || !/^([0-9]{1,4}|[0-9]{1,4},closed|closed)$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "sidebars" }));
   if (isObject(prefs.trouble) && (Object.keys(prefs.trouble).some((k) => !/\n(seen|gone)$/.test(k)) || Object.values(prefs.trouble).some((v) => v !== null && (typeof v !== "string" || v.length > 2000)))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "trouble" }));
   if (isObject(prefs.jobsSeen) && Object.values(prefs.jobsSeen).some((v) => !Array.isArray(v) || v.some((k) => typeof k !== "string" || k.length > 300))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "jobsSeen" }));
+  if (isObject(prefs.failsGone) && Object.values(prefs.failsGone).some((v) => !Array.isArray(v) || v.some((k) => typeof k !== "string" || k.length > 400))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "failsGone" }));
   if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("fillOff" in prefs && typeof prefs.fillOff !== "boolean") throw CoreError.invalid(t("core-misc.params.invalid", { error: "fillOff" }));
   if ("fillMax" in prefs && (typeof prefs.fillMax !== "number" || !Number.isSafeInteger(prefs.fillMax) || prefs.fillMax < 0)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "fillMax" }));

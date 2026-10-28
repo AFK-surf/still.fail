@@ -4750,6 +4750,11 @@ export interface MarkItem {
 	what: string;
 	/** The waiting card's post (`decision.dismiss`), for `wait`. */
 	seq?: number;
+	/**
+	 * This failure, for `alert`: what to keep as let go (忽略: `prefs.set {failsGone: {<workspace>: [failure]}}`).
+	 * The same chat failing again is another.
+	 */
+	failure?: string;
 	at: number;
 }
 
@@ -5462,6 +5467,11 @@ export interface PrefsView {
 	 * `longJobs` view's `ids` were when it opened. They no longer light it.
 	 */
 	jobsSeen?: Record<string, string[]>;
+	/**
+	 * The failures let go in 待处理, by workspace: each as its item's `failure` said it. `prefs.set
+	 * {failsGone: {<workspace>: [failure]}}` adds to those kept. Gone from 待处理 and the workspace's mark until it fails again.
+	 */
+	failsGone?: Record<string, string[]>;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */
@@ -6667,9 +6677,10 @@ export interface WorkspaceMark {
 	 */
 	badge?: number;
 	/**
-	 * 待处理: the chats that came to want them (`alert`, `wait`) and that they have not looked at since, of the
-	 * kinds the badge counts (`badgeKinds` wait, failed); the failed first, the latest first within. One looked at is no
-	 * longer here: its row and 奏 still say it.
+	 * 待处理, of the kinds the badge counts (`badgeKinds` wait, failed): the chats of theirs that went wrong
+	 * (`alert`), read or not, until they run again, are archived or the failure is let go (`failsGone`); the cards and needs
+	 * waiting for them (`wait`) not looked at since they came (one looked at: its row and 奏 still say it). The failed
+	 * first, the latest first within. `alert` counts the same failures.
 	 */
 	items?: MarkItem[];
 	/** Chats they take part in whose agent waits for someone else (not counted). Absent for 0. */

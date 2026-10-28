@@ -4,7 +4,7 @@
 import { decodeComponent } from "../accounts.ts";
 import * as decisions from "../decisions.ts";
 import { tr, current, type Lang } from "../i18n.ts";
-import { badgeKindsOf } from "../prefs.ts";
+import { badgeKindsOf, failsGoneOf } from "../prefs.ts";
 import * as present from "../present.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
@@ -39,6 +39,20 @@ function startedBy(row: J, me: J): boolean {
   const creator = get(row, "creator");
   const who = typeof creator === "string" ? creator : (str(get(creator, "email")) ?? str(get(creator, "id")));
   return me === null || who === null ? get(row, "mine") === true : present.isViewer(me, who, []);
+}
+
+/// A failure of a chat's (its row's tone alert), as 待处理 names it to be let go (`failsGone`): the chat, and when its
+/// agents that went wrong last ended. The same chat failing again is another.
+export function failureOf(station: string, row: J): string {
+  let at = 0;
+  for (const a of arr(get(row, "agents"))) {
+    if (present.markOf(a) !== "failed") continue;
+    const turn = get(a, "lastTurn");
+    const when = [get(turn, "endedAt"), get(turn, "startedAt"), get(a, "lastActiveAt")].find((n) => typeof n === "number");
+    if (typeof when === "number" && when > at) at = when;
+  }
+  const thread = get(row, "thread");
+  return `${station}/${str(get(row, "id")) ?? `thread:${typeof thread === "number" ? thread : ""}`}@${at}`;
 }
 
 /// A row's state line as its list says it (its agents presented as the chats view has them).
@@ -128,6 +142,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
     let elsewhere = 0;
     const items: J[] = [];
     const me = views.me(id);
+    const gone = failsGoneOf(prefs, id);
     // Only the rows that ask something or are unread count (db/account.ts: found by their columns, not loaded whole).
     const stations = views.stations(id) ?? [];
     const nameOf = new Map(stations.map((s) => [s.address, s.name]));
@@ -136,7 +151,10 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       const d = decisions.forViewer(row, me);
       const thread = get(row, "thread");
       const waits = d !== null && !(typeof thread === "number" && local.answered(address, thread, typeof d.seq === "number" ? d.seq : 0));
-      const tone = waits ? "wait" : rowTone(row, me);
+      const asked = waits ? "wait" : rowTone(row, me);
+      // a failure let go (忽略) wants them no more, here or in 待处理, until the chat fails again
+      const failure = asked === "alert" ? failureOf(address, row) : null;
+      const tone = failure !== null && gone.has(failure) ? null : asked;
       if (waits) waiting++;
       const seen = get(row, "unread") !== true;
       const lists = [counts];
@@ -150,9 +168,10 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
       if (!seen && tone === "done" && saidByPerson(row)) said++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
-      // 待处理 (`items`): what came to want them that they have not looked at since, of what the badge counts (its
-      // cards, its failures): one looked at is theirs to come back to in its chat, its row and 奏 still say it.
-      if (!seen && ((tone === "alert" && kinds.failed) || (tone === "wait" && kinds.wait))) {
+      // 待处理 (`items`), of what the badge counts: its failures until they run again, are archived or let go, read or
+      // not (a chat read is still broken: pengxiao, 2026-10-28), as the workspace's mark counts them; its cards that
+      // came to want them and were not looked at since (one looked at: its row and 奏 still say it).
+      if ((tone === "alert" && kinds.failed) || (!seen && tone === "wait" && kinds.wait)) {
         const [text, what] = stateText(row);
         const item: J = {
           kind: tone,
@@ -168,6 +187,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
           at: typeof get(row, "lastActiveAt") === "number" ? row.lastActiveAt : 0,
         };
         if (waits && typeof d.seq === "number") item.seq = d.seq;
+        if (tone === "alert" && failure !== null) item.failure = failure;
         items.push(item);
       }
     }

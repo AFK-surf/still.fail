@@ -561,7 +561,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
 });
 
-test("待处理_is_what_went_wrong_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
+test("待处理_is_what_went_wrong_till_let_go_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
   const t = setup();
   const marks = ui();
   t.subscribe(1, { topic: "workspaceMarks" });
@@ -583,9 +583,28 @@ test("待处理_is_what_went_wrong_or_waits_not_looked_at_since_of_what_the_badg
   t.set(rows("ws/st"), [failed("new", now - 1000, true), failed("old", now - 2000, false), waits]);
   await t.readAll([[marks, 1]]);
   const listed = () => marks.value.workspaces.ws.items.map((i: J) => [i.kind, i.session]);
-  // the one gone wrong already looked at is its row's to say, not 待处理's
-  assert.deepEqual(listed(), [["alert", "new"], ["wait", "k1"]]);
-  assert.deepEqual([marks.value.workspaces.ws.alert, marks.value.badge], [2, 2]);
+  // gone wrong, read or not, till it runs again or is let go: as the workspace's mark says (pengxiao, 2026-10-28);
+  // the badge only what was not read
+  assert.deepEqual(listed(), [["alert", "new"], ["alert", "old"], ["wait", "k1"]]);
+  assert.deepEqual([marks.value.workspaces.ws.alert, marks.value.workspaces.ws.label, marks.value.badge], [2, "2 个出错 · 1 个待你处理", 2]);
+  const old = marks.value.workspaces.ws.items[1].failure;
+  assert.equal(old, "ws/st/old@1", "a failure names its chat and when it ended");
+  // let go (忽略): off 待处理 and the workspace's mark
+  t.set(prefs(), { failsGone: { ws: [old] } });
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.workspaces.ws.alert, marks.value.workspaces.ws.label], [[["alert", "new"], ["wait", "k1"]], 1, "1 个出错 · 1 个待你处理"]);
+  // the same chat failing again is another failure: back
+  const again = failed("old", now - 500, false);
+  again.agents[0].lastTurn = { ...again.agents[0].lastTurn, startedAt: 2, endedAt: 2 };
+  t.set(rows("ws/st"), [failed("new", now - 1000, true), again, waits]);
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.workspaces.ws.alert], [[["alert", "old"], ["alert", "new"], ["wait", "k1"]], 2]);
+  // run again (it ended well): no longer wrong
+  const fine = row("old", now - 400);
+  fine.mine = true;
+  t.set(rows("ws/st"), [failed("new", now - 1000, true), fine, waits]);
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.workspaces.ws.alert], [[["alert", "new"], ["wait", "k1"]], 1]);
   // the badge counting only the cards: 待处理 has only them
   t.set(prefs(), { badgeKinds: { failed: false } });
   await t.readAll([[marks, 1]]);

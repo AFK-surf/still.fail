@@ -1,8 +1,9 @@
 // What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (ember
 // web/src/Attention.tsx, Attention.css.ts): the stations' trouble and the services left up long (with the bell), then
 // each workspace's chats that came to want the viewer and were not read since (the core's `workspaceMarks` items),
-// each leading to its chat; one read is no longer here (its row and 奏 still say it), one let go here neither (忽略,
-// `decision.dismiss`). A station's trouble is the same: listed until the panel has shown it, then the Station's place
+// each leading to its chat: a card until read (then its row and 奏 still say it), a failure until the chat runs again;
+// one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it fails again). A
+// station's trouble is the same: listed until the panel has shown it, then the Station's place
 // says it, until the trouble changes (kept on this device).
 
 ///|
@@ -151,9 +152,12 @@ pub fn bell_lit(src : Source, w : Workspace) -> Bool {
 }
 
 ///|
-/// A wanting chat by its station and chat (keyOf).
+/// A wanting chat by its station and chat, a failure by itself (keyOf: the same chat failing again is listed anew).
 fn attention_key(i : Json) -> String {
   let v = Some(i)
+  if text(v, "failure") != "" {
+    return text(v, "failure")
+  }
   let session = text(v, "session")
   text(v, "station") + "/" + (if session != "" { session } else { number(v, "thread").to_int64().to_string() })
 }
@@ -220,8 +224,26 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
         let title = text(v, "title")
         let thread = number(v, "thread")
         let seq = field(v, "seq")
-        // let go (忽略): a decision waiting on the viewer (the core says where it is in the chat)
-        let dismiss = if text(v, "kind") == "wait" && thread > 0.0 && seq is Some(Number(_, ..)) {
+        // let go (忽略): a failure, until the chat fails again (kept on this device: prefs' failsGone)
+        let failure = text(v, "failure")
+        let alert = text(v, "kind") == "alert"
+        // a decision waiting on the viewer (the core says where it is in the chat)
+        let dismiss = if alert && failure != "" {
+          Some(fn() {
+            attention.gone.push(key)
+            let m : Map[String, Json] = {}
+            m[text(v, "workspace")] = Json::array([Json::string(failure)])
+            act(
+              src,
+              @sf.t("web-main.decisions.dismissWhat"),
+              "",
+              "prefs.set",
+              { "failsGone": Json::object(m) },
+              // not let go: listed again
+              failed=fn() { attention.gone.retain(fn(k) { k != key }) },
+            )
+          })
+        } else if text(v, "kind") == "wait" && thread > 0.0 && seq is Some(Number(_, ..)) {
           Some(fn() {
             attention.gone.push(key)
             act(
@@ -243,7 +265,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
           text(v, "kind"),
           if title != "" { title } else { @sf.t("web-main.attention.untitled") },
           attention_line(v),
-          @sf.t("web-main.attention.dismissNote"),
+          @sf.t(if alert { "web-main.attention.dismissFailNote" } else { "web-main.attention.dismissNote" }),
           dismiss,
           fn() {
             close()
