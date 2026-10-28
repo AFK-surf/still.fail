@@ -302,7 +302,7 @@ export class Core {
         const c = call as Extract<Call, { kind: "commandsFind" }>;
         return Effect.sync(() => commands.find(c.query, c.offered, t));
       };
-      const fontFiles = new FontFiles(inner.host, inner.store, () => get(inner.data.get({ topic: "prefs" }), "fonts"));
+      const fontFiles = new FontFiles(inner.host, inner.store);
       fonts.setKeptAt((sha256) => fontFiles.at(sha256));
       inner.router.owners.push(fontFiles);
       handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
