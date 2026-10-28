@@ -368,8 +368,12 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         continue
       }
       // concentric where it stands, but with a corner the ranges do not let it have (squarer than the least: as good
-      // as square in a round corner) where some place in them would: it stands where that is (Ctx::fit_place)
-      if !round && even && in_step && !c.corner_fits(rb) && c.fit_there(ra, rb, round, room=room_a) {
+      // as square in a round corner) where some place in them would: it stands where that is (Ctx::fit_place). A card
+      // as big as half its container each way may be rounder than the ladder's most, following a container that is
+      // (a page alone in a panel whose corner is the screen's or the system's round its action: the user, 2026-10-28:
+      // 边距 4 且同心); a smaller thing so round reads as a blob
+      if !round && even && in_step && !c.corner_fits(rb) && !(c.corner_fits_least(rb) && c.half_of(i, p)) &&
+        c.fit_there(ra, rb, round, room=room_a) {
         let place = c.fit_place(ra, dx)
         out.push(
           "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, a corner the theme's ranges do not let it have; \{place} in, it would be \{concentric(ra, place)}",
@@ -905,6 +909,23 @@ fn Ctx::corner_fits(self : Ctx, k : Double) -> Bool {
     Some(f) => k >= f.least - 0.5 && k <= f.most + 0.5
     None => true
   }
+}
+
+///|
+/// Whether a corner `k` round is as round as the theme's ranges let one be at least (its most aside).
+fn Ctx::corner_fits_least(self : Ctx, k : Double) -> Bool {
+  match self.corner_fit {
+    Some(f) => k >= f.least - 0.5
+    None => true
+  }
+}
+
+///|
+/// Whether node `i` is as big as half of node `p` (what holds it) each way: a card filling its panel, not a part in it.
+fn Ctx::half_of(self : Ctx, i : Int, p : Int) -> Bool {
+  let a = self.nodes[i]
+  let b = self.nodes[p]
+  a.fw * 2.0 >= b.fw && a.fh * 2.0 >= b.fh
 }
 
 ///|

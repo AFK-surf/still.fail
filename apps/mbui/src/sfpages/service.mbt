@@ -116,30 +116,28 @@ pub fn service_view(
 }
 
 ///|
-/// How far in from a panel's sides and foot the page stands alone in it by the ladder (service_view's `close`).
-let stage_in_panel_room : Double = 8.0
+/// How far in from a panel's sides and the side its bar is not on the page stands alone in it: the nearest the theme lets
+/// what lies in a corner stand (corner_fit's 4; the user, 2026-10-28: 网页边距 4px 差不多了).
+let stage_in_panel_room : Double = @sf.corner_fit.near
 
 ///|
-/// Where the page alone in a panel stands in from its sides and the side its bar is not on, and its corners (top
-/// left, then round it): those away from its bar in the panel's corners there (pane_round: the screen's at its edges,
-/// the system's at its foot, the tape's elsewhere; none beside the system's column), so far in as it is concentric
-/// with them, the nearest `stage_in_panel_room` the theme's ranges let it (@sf.foot_fit: an iPhone Duo's foot corner
-/// round its action too round for a card 8 in to follow), each followed; those under its bar, in no corner of the
-/// panel's, the tape's followed so far in.
+/// Where the page alone in a panel stands in from its sides and the side its bar is not on (stage_in_panel_room), and
+/// its corners (top left, then round it): those away from its bar in the panel's corners there (pane_round: the
+/// screen's at its edges, the system's at its foot, the tape's elsewhere; none beside the system's column) concentric
+/// with them so far in, however round that makes them (an iPhone Duo's foot corner round its action: past the ladder's
+/// most, as the panel's own is); those under its bar, in no corner of the panel's, the tape's so far in.
 fn stage_in_panel(bar_at_foot~ : Bool) -> (Double, FixedArray[@ui.CornerOf]) {
-  let k = @sf.pane_round.val.unwrap_or(FixedArray::make(4, @ui.CornerOf::Own(@sf.tape_corner)))
-  let r = @sf.corner_radii(k)
-  let room = if bar_at_foot {
-    @sf.foot_fit(r[0], r[1], stage_in_panel_room)
-  } else {
-    @sf.foot_fit(r[3], r[2], stage_in_panel_room)
+  let r = match @sf.pane_round.val {
+    Some(k) => @sf.corner_radii(k)
+    None => FixedArray::make(4, @sf.tape_corner)
   }
+  let room = stage_in_panel_room
   let alone = @ui.concentric(@sf.tape_corner, room)
   (
     room,
     FixedArray::makei(4, fn(i) {
-      if (i < 2) == bar_at_foot {
-        @ui.CornerOf::Follow(k[i], room, alone)
+      if (i < 2) == bar_at_foot && r[i] > room {
+        @ui.CornerOf::Own(@ui.concentric(r[i], room))
       } else {
         Own(alone)
       }
