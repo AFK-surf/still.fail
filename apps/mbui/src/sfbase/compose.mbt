@@ -435,13 +435,15 @@ pub fn writing_retry(src : Source, w : Writing, id : String) -> Unit {
 }
 
 ///|
-/// A passage quoted (its `author`, `text`, its message's `ts` and `role`), its comment line asking for the focus; with
+/// A passage quoted (its `author`, `text`, its message's `ts` and `role`), its comment line asking for the focus while
+/// nothing is said of it (a mark's quote comes with what its note said: written, it asks for nothing); with
 /// its picture: an image of a message (`file`: it goes again with the message as the station has it, by `quoted-<id>`),
 /// or a mark's screenshot (`picture`: the station it goes up to, its name and bytes).
 pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, picture? : (String, String, Bytes)) -> Unit {
   writing_n.val += 1
   let id = "q" + writing_n.val.to_string()
-  let p : Map[String, Json] = { "id": Json::string(id), "quote": quote, "focus": Json::boolean(true) }
+  let ask = text(Some(quote), "comment") == ""
+  let p : Map[String, Json] = { "id": Json::string(id), "quote": quote, "focus": Json::boolean(ask) }
   match file {
     Some(f) => {
       p["attachment"] = f
@@ -449,7 +451,7 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
     }
     None => ()
   }
-  writing_act(src, w, "quote", p, show=fn(w) { w.focus = id })
+  writing_act(src, w, "quote", p, show=fn(w) { if ask { w.focus = id } })
   match picture {
     Some((station, name, bytes)) => writing_add(src, w, station, name, bytes, quote=id)
     None => ()
