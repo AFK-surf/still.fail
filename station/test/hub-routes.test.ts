@@ -637,6 +637,49 @@ test("a session's summary says what its calls used as the usage counter recorded
   }
 });
 
+test("as the station starts, a summary a station from before kept is kept as it says it now, and devices are told", async () => {
+  const r = rig();
+  const counter = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes", "cc") }] }) });
+  let stop = keepCounted(r.store, r.hub.live, counter);
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const key = made.key;
+    const dir = join(r.data, "homes", "cc", "projects", claudeProject(r.store.getSession(key)!.workspace));
+    mkdirSync(dir, { recursive: true });
+    const usage = { input_tokens: 1, cache_read_input_tokens: 100, cache_creation_input_tokens: 80_000, cache_creation: { ephemeral_1h_input_tokens: 80_000 }, output_tokens: 7 };
+    writeFileSync(join(dir, "rs1.jsonl"), `${JSON.stringify({ type: "assistant", timestamp: new Date(r.store.now() + 1000).toISOString(), message: { id: "m1", model: "claude-opus-5-5", content: [], usage } })}\n`);
+    r.store.ranIn(key, "rs1", "cc");
+    r.store.setRuntimeSessionId(key, "rs1");
+    await counter.read();
+    const now = r.store.sessionUsage(key);
+    assert.equal(now.cacheMs, 3_600_000);
+    // As a station from before kept it: without when its cache is over.
+    const { cacheMs: _, lastCallAt: __, rereadCost: ___, ...before } = now;
+    r.store.setSessionUsage(key, before, true);
+    stop();
+    const told: string[] = [];
+    const unsubscribe = r.store.subscribe((c) => {
+      if (c.type === "session") told.push(c.key);
+    });
+    stop = keepCounted(r.store, r.hub.live, counter);
+    unsubscribe();
+    assert.deepEqual(r.store.sessionUsage(key), now, "kept as this station says it");
+    assert.deepEqual(told, [key], "told, as a device holds the summary from before");
+    told.length = 0;
+    stop();
+    const again = r.store.subscribe((c) => {
+      if (c.type === "session") told.push(c.key);
+    });
+    stop = keepCounted(r.store, r.hub.live, counter);
+    again();
+    assert.deepEqual(told, [], "the same again: nothing told");
+  } finally {
+    stop();
+    await counter.stop();
+    await r.close();
+  }
+});
+
 test("the sidebar items a change can touch are read as the whole sidebar has them, and only they", async () => {
   const r = rig();
   try {

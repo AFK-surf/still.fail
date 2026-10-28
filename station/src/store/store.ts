@@ -378,9 +378,9 @@ export class Store {
     return r ? JSON.parse(r.usage) : null;
   }
 
-  /// The sessions of which no usage is kept yet.
-  sessionsWithoutUsage(): string[] {
-    return this.#all("SELECT key FROM sessions WHERE key NOT IN (SELECT session FROM session_usage)").map((r) => r.key as string);
+  /// Every session's key.
+  sessionKeys(): string[] {
+    return this.#all("SELECT key FROM sessions").map((r) => r.key as string);
   }
 
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
