@@ -123,13 +123,13 @@ final class Push {
     }
 
     /** still.fail cloud, as the app's core is given it (sfcore start: MBUI_CLOUD, else still.fail's own). */
-    private static String cloud(Context c) {
+    static String cloud(Context c) {
         String v = env(c, "MBUI_CLOUD");
         return v.isEmpty() ? "https://app.still.fail" : v;
     }
 
     /** Whether the app's core is a beta's (sfcore start: MBUI_BETA=1, the beta app's build and still.fail mbui's). */
-    private static boolean beta(Context c) {
+    static boolean beta(Context c) {
         return env(c, "MBUI_BETA").equals("1");
     }
 
