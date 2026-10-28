@@ -69,13 +69,12 @@ globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
 /** The table as a card (a card's ground and corner, as the chat's other cards: no line round it), its rows 6 in from
  * its top and foot and its words 16 from its sides (as the app's list cards': apps/mbui/src/sf/markdown.mbt), the head
- * told by its words alone, the rows ruled between them faintly from edge to edge: within the scroll, sliding with it. */
+ * told by its words alone, the rows ruled between them from edge to edge: within the scroll, sliding with it. */
 export const tableFrame = style({
   flex: "none", width: "fit-content", overflow: "hidden", padding: "6px 0", borderRadius: vars.rCard,
   cornerShape: vars.cornerShape, background: cardGround,
 });
 globalStyle(`${tableFrame} > table`, { margin: "0" });
-globalStyle(`${markdown} ${tableFrame} th, ${markdown} ${tableFrame} td`, { borderBottomColor: vars.neutralBg });
 globalStyle(`${markdown} ${tableFrame} th`, { background: "none" });
 globalStyle(`${markdown} ${tableFrame} :is(th, td):first-child`, { paddingLeft: "16px" });
 globalStyle(`${markdown} ${tableFrame} :is(th, td):last-child`, { paddingRight: "16px" });

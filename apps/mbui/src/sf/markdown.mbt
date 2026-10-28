@@ -1471,7 +1471,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
 /// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card (its ground
 /// and corner, as the chat's other cards: no line round it, its words as far in as a list card's), the head told by
 /// its words alone (muted, smaller, medium: no ground of its own; its height measured as `head_at`), rows ruled
-/// between them faintly (a quiet ground's step off the card, not a line's), across it.
+/// between them by the theme's line, across it.
 fn Md::table_frame(
   self : Md,
   rows : Array[Array[Array[MdInline]]],
@@ -1523,9 +1523,10 @@ fn Md::table_frame(
         if head {
           @motion.measure(c, row_box, head_at)
         }
-        // a rule under every row but the last, across the card from edge to edge
+        // a rule under every row but the last, across the card from edge to edge: the theme's line, the faintest a
+        // line may be and still be seen (docs/ui-panels.md 对比度)
         if r < rows.length() - 1 {
-          c.box(w=Px(total + 2.0 * table_in_x), h=Px(1.0), mx=-table_in_x, bg=theme().p.neutral_bg, fn() {  })
+          c.box(w=Px(total + 2.0 * table_in_x), h=Px(1.0), mx=-table_in_x, bg=theme().p.line, fn() {  })
           |> ignore
         }
       }
