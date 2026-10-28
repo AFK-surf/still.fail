@@ -151,8 +151,8 @@ Topics read what they show by query, when they go out; nothing is loaded at star
 - A station's list a topic shows whole (`chatRows`, `archivedRows`, `sessions`, `threads`, `jobs`) is loaded by one
   indexed query the first time it is read, kept current by the writer row by row, and let go when its topic goes
   (`Store` → `Data.release`). A list a view only watches (a source of the chat list) is not read for it.
-- The chat list (`chats`): while its stations' rows are not loaded and they are many (more than 500), the rows it shows
-  on top are read by one query over the `chat_recent` index (80: pinned, then the latest active), and go out at once;
+- The chat list (`chats`): while its stations' rows are not loaded and they are more than it shows on top, those are
+  read by one query over the `chat_recent` index (80: pinned, then the latest active), and go out at once;
   the stations' rows are loaded after, a station at a time, and the whole list follows (as one op).
 - The workspace marks read only the rows that ask something or are unread (`tone`/`asks`); the 奏 page only the rows
   it lists (`desk`); the station sync the rows at work (`running`).

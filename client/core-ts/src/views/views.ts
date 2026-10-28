@@ -57,10 +57,9 @@ const str = (v: J): string | null => (typeof v === "string" ? v : null);
 const u64 = (v: J): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
 const DAY_MS = 86_400_000;
-/// How many rows a list shows before its stations' rows are loaded: more than a screen holds; and from how many rows
-/// the stations hold on that is done (fewer are loaded at once).
+/// How many rows a list shows before its stations' rows are loaded: more than a screen holds. Done whenever the
+/// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
 export const HEAD = 80;
-export const HEAD_FROM = 500;
 
 const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
@@ -1344,11 +1343,11 @@ export class Views implements Owner {
     // how many chats are left to bring the latest of.
     let checking = false;
     let behind = 0;
-    // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are many, the rows a
-    // list shows on top are read by one query, and the rest are loaded after, a station at a time.
+    // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are more than a list
+    // shows on top, those are read by one query, and the rest are loaded after, a station at a time.
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
     const unloaded = known.filter((s) => !data.loaded({ topic: "chatRows", station: s }));
-    const head = unloaded.length > 0 && data.chatCount(unloaded) > HEAD_FROM ? this.#head(scope, known) : null;
+    const head = unloaded.length > 0 && data.chatCount(unloaded) > HEAD ? this.#head(scope, known) : null;
     for (const s of stations) {
       const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
