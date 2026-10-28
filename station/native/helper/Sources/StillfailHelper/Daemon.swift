@@ -106,7 +106,7 @@ final class Daemon {
     }
     switch request["op"] as? String {
     case "hello":
-      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator"]])
+      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator", "outflow"]])
     case "status":
       var status = Status.fresh() ?? Status.now()
       status["live"] = ["capture": CGPreflightScreenCaptureAccess(), "control": Status.inputAllowed()]
@@ -120,6 +120,27 @@ final class Daemon {
       let grants = (request["grants"] as? [String]) ?? [Grant.screenRecording.rawValue, Grant.accessibility.rawValue]
       let paths = request["paths"] as? [String: String] ?? [:]
       DispatchQueue.main.async { MainActor.assumeIsolated { Permissions.shared.show(words: words, grants: grants, paths: paths, daemon: self) } }
+      channel.line(["ok": true])
+    case "outflow.identify":
+      // Who a program at the other end of the station's outflow socket is (docs/data-outflow.md).
+      channel.line(Outflow.identify(request["auditToken"] as? String ?? ""))
+    case "outflow.ask":
+      // The window asks the person here; the answer comes once they gave it (or closed it, or it timed out).
+      let answered = DispatchSemaphore(value: 0)
+      var answer: [String: Any] = ["answer": "refuse"]
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          OutflowWindow.shared.ask(request) { given in
+            answer = given
+            answered.signal()
+          }
+        }
+      }
+      answered.wait()
+      channel.line(answer)
+    case "outflow.cancel":
+      // The program that asked hung up: its window goes, refused.
+      DispatchQueue.main.async { MainActor.assumeIsolated { OutflowWindow.shared.cancel() } }
       channel.line(["ok": true])
     case "screen.view":
       // Granted since this process started: it starts again to have it (the station asks again once it is back).
