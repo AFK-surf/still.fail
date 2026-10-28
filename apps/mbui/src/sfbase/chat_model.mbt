@@ -198,6 +198,7 @@ pub(all) struct Place {
   surface : String
   session : String
   url : String
+  app : String
 }
 
 ///|
@@ -229,6 +230,7 @@ pub fn elsewhere_of(e : Json) -> Elsewhere {
           surface: text(p, "surface"),
           session: text(p, "session"),
           url: text(p, "url"),
+          app: text(p, "app"),
         })
       _ => None
     },

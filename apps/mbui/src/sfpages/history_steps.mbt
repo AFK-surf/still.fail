@@ -716,7 +716,7 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
   if goes {
     if c.clicked(id) {
       if url != "" {
-        @ui.open_url(url) |> ignore
+        @sfbase.open_slack(text(place, "app"), url) |> ignore
       } else {
         app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
       }

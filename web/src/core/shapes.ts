@@ -1972,6 +1972,11 @@ export interface Place {
 	session?: string;
 	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
 	url?: string;
+	/**
+	 * A Slack thread's link into Slack's app (slack://), at the message when it is one of the thread's: it opens
+	 * without a browser's page first. Present once the station knows the thread's workspace.
+	 */
+	app?: string;
 }
 
 /**
@@ -2441,6 +2446,8 @@ export interface ChatView {
 	/** Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in. */
 	place?: string;
 	slackUrl?: string;
+	/** The same thread's link into Slack's app (slack://), which opens without a browser's page first. */
+	slackApp?: string;
 	/** A Feishu (Lark) chat's link in Feishu. */
 	feishuUrl?: string;
 	/**

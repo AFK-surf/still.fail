@@ -358,8 +358,17 @@ export const feishuApplink = (domain: string | null | undefined) => (domain === 
 /// A Feishu chat's link in Feishu, `applink`: its connect's (feishuApplink).
 export const feishuChatUrl = (applink: string, channel: string) => `${applink}/client/chat/open?openChatId=${encodeURIComponent(channel)}`;
 
-/// A thread a history entry came from or went to: its name, where it is, and the way there.
-export function place(threads: unknown[], address: string, offsetMin: number, workspaces: Map<string, SlackWorkspace>): unknown {
+/// A Slack message's link into Slack's app (its deep link, which opens there without a browser's page first): the
+/// message `ts` of channel `channel` in workspace `team`, in its thread `threadTs` when it is a reply.
+export function slackAppUrl(team: string, channel: string, ts: string, threadTs: string): string {
+  const q = new URLSearchParams({ team, id: channel, message: ts });
+  if (threadTs !== ts) q.set("thread_ts", threadTs);
+  return `slack://channel?${q}`;
+}
+
+/// A thread a history entry came from or went to: its name, where it is, and the way there (`app`: into Slack's app,
+/// at `message` when it is one of the thread's, else at its root).
+export function place(threads: unknown[], address: string, offsetMin: number, workspaces: Map<string, SlackWorkspace>, message: string | null = null): unknown {
   const split = splitThread(address);
   if (!split) return null;
   const [channel, ts] = split;
@@ -373,11 +382,14 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
     const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;
     return { name: n, surface: "feishu", session, url: feishuChatUrl(connect?.url ?? feishuApplink(null), channel) };
   }
-  const team = surface?.startsWith("slack:") ? workspaces.get(surface.slice(6)) : undefined;
+  const teamId = surface?.startsWith("slack:") ? surface.slice(6) : null;
+  const team = teamId !== null ? workspaces.get(teamId) : undefined;
   const teamName = team && team.name !== "" ? team.name : null;
   const named = teamName === null ? n : n.startsWith("#") ? `${teamName}${n}` : `${teamName} ${n}`;
   const url = team?.url ? `${team.url.replace(/\/+$/, "")}/archives/${channel}/p${ts.replaceAll(".", "")}` : null;
-  return { name: named, surface: "slack", session, url };
+  // (a surface names its team once the station knows it: "slack:<connect id>" before, which no workspace is known by)
+  const app = team !== undefined ? slackAppUrl(teamId!, channel, message || ts, ts) : null;
+  return { name: named, surface: "slack", session, url, ...(app !== null ? { app } : {}) };
 }
 
 /// Who made a model, by its name: [id, name] for its mark; null when the marks do not know it.

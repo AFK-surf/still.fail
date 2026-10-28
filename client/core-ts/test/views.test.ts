@@ -1621,6 +1621,7 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
   // where its Slack thread is, and the way there, as a chat's info says them
   assert.deepEqual([v.place, v.slackUrl, v.feishuUrl], ["#ops", "https://afk.slack.com/archives/C1/p12", undefined]);
+  assert.equal(v.slackApp, "slack://channel?team=T1&id=C1&message=1.2");
   assert.equal(v.noChat, undefined, "its Slack thread is its chat: the page does not open its history by itself");
   for (const archived of [42, null]) {
     t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { archivedAt: archived }), threads: [], turns: [] });

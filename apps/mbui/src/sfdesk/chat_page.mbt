@@ -823,7 +823,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       }
       if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
         chat_own.info_open = false
-        @ui.open_url(slack) |> ignore
+        @sfbase.open_slack(text(chat, "slackApp"), slack) |> ignore
       }
       if feishu != "" && info_row(c, "info-pop/feishu", "external", @sf.t("web-pages.chat.openInFeishu"), "") {
         chat_own.info_open = false

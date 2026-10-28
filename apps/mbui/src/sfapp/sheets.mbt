@@ -320,6 +320,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     _ => None
   }
   let slack = text(chat, "slackUrl")
+  let slack_app = text(chat, "slackApp")
   let feishu = text(chat, "feishuUrl")
   let xshare = field(chat, "xshare")
   let (archived, offline) = match view {
@@ -543,7 +544,9 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             |> ignore
             chevron(c)
           }) {
-          open_outside(slack)
+          if !@sfbase.open_slack(slack_app, slack) {
+            toast_later(tr("android-chat.link.failed"))
+          }
         }
         if feishu != "" &&
           info_row(c, "info/feishu", fn() {

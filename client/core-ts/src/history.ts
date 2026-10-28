@@ -350,7 +350,7 @@ export function presentHistory(live: J, cx: Context): J {
   });
 
   const failedOf = (step: Step) => step.result !== null && timeline[step.result]?.ok === false;
-  const place = (address: string | null) => (address === null ? null : format.place(cx.threads, address, cx.offsetMin, cx.workspaces));
+  const place = (address: string | null, message: string | null = null) => (address === null ? null : format.place(cx.threads, address, cx.offsetMin, cx.workspaces, message));
   const shown = items.map(([item, first, last]) => {
     let v: J;
     switch (item.kind) {
@@ -394,7 +394,7 @@ export function presentHistory(live: J, cx: Context): J {
             }
             // A person's words are drawn as they wrote them; an agent's are Markdown, as a chat's page reads them.
             const said = mentions(m.text, cx);
-            return [{ key: m.ts, from, text: said, place: place(m.thread), ...(m.agent ? { md: markdown(said, cx.md) } : {}) }];
+            return [{ key: m.ts, from, text: said, place: place(m.thread, m.slack ? m.ts : null), ...(m.agent ? { md: markdown(said, cx.md) } : {}) }];
           }),
         };
         break;

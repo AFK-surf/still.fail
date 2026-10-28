@@ -917,6 +917,8 @@ pub fn open_screen(String, String, String?) -> Unit
 
 pub fn open_setting(String) -> Unit
 
+pub fn open_slack(String, String) -> Bool
+
 pub fn open_target(Source, LinkTarget, Bool, Double?) -> Bool
 
 pub let open_titled : @ref.Ref[String]
@@ -2568,6 +2570,7 @@ pub(all) struct Place {
   surface : String
   session : String
   url : String
+  app : String
 }
 
 pub(all) struct Placed {
