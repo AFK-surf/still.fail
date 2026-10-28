@@ -31,7 +31,7 @@ test("a device not in the lock waits and asks only by hand; one that cannot keep
   assert.equal(v.me.waiting, true, "its page shows instead of the workspace's");
   assert.equal(v.me.asked, false);
   // A station refusing it asks nothing either.
-  hooks.lockRefused!(r.core.inner, "ws", "st");
+  hooks.lockRefused!(r.core.inner, "ws", "st", null);
   await r.host.time.pass(5_000);
   assert.deepEqual(r.cloud.asked, []);
   // Asked by hand: the key cannot be kept, said; nothing reached the cloud.
@@ -87,7 +87,7 @@ test("an app in the lock without its signing key (the genesis put it in before i
 test("a station's refusal names the workspace and the code to approve, where the device is not in that workspace's lock", async () => {
   const r = await rig((me) => ({ ws: genesis("ws", me, true), w2: genesis("w2", elsewhere(), false) }));
   await r.watch({ topic: "lock", workspace: "w2" });
-  const said = hooks.lockRefused!(r.core.inner, "w2", "st2");
+  const said = hooks.lockRefused!(r.core.inner, "w2", "st2", null);
   assert.equal(said?.code, "lock_unconfirmed");
   assert.match(said!.message, /日常/);
   assert.ok(said!.message.includes(shortCode(ME)), said!.message);
@@ -113,7 +113,7 @@ test("a station that refuses this device though the lock names it has not heard 
   await r.watch({ topic: "lock", workspace: "ws" });
   const woke: string[] = [];
   r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
-  const said = hooks.lockRefused!(r.core.inner, "ws", "st");
+  const said = hooks.lockRefused!(r.core.inner, "ws", "st", null);
   assert.equal(said?.code, "lock_unconfirmed");
   assert.equal(hooks.lockWaiting!(r.core.inner, "ws", "st"), null, "asked again as any station would be");
   await r.host.time.pass(BEHIND_MS - 10);
@@ -122,10 +122,37 @@ test("a station that refuses this device though the lock names it has not heard 
   assert.deepEqual(woke, ["ws/st"], "and woken soon to be");
   // Refused again and again: a few more tries, each later, then no more for this head.
   for (let i = 1; i < 8; i++) {
-    hooks.lockRefused!(r.core.inner, "ws", "st");
+    hooks.lockRefused!(r.core.inner, "ws", "st", null);
     await r.host.time.pass(BEHIND_MS * (i + 1) + 10);
   }
   assert.equal(woke.length, BEHIND_TRIES, "as often as BEHIND_TRIES");
+});
+
+test("a device the lock names without its signing key signs nothing: the cloud gets no entry the stations would refuse", async () => {
+  // This app is in the lock without its key (put in before it kept one), and keeps one now; an older device approved a
+  // request so, the cloud kept it, and every station refused it and all after it (2026-10-24).
+  const r = await rig(() => ({ ws: genesis("ws", elsewhere(), false, [], {}, ME, [{ id: ME, sub: "s1", kind: "app", label: "this" }]) }));
+  r.cloud.requests.set("ws", [phoneRequest]);
+  await assert.rejects(r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) }), (e: { code: string }) => e.code === "lock_no_signer");
+  assert.deepEqual(r.cloud.posted, []);
+});
+
+test("a station that keeps another lock says so, and is neither tried again as behind nor shown protected", async () => {
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: "st", name: "studio" }]) }));
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  // Its head is of another genesis (the lock turned on again while it kept the old one).
+  const said = hooks.lockRefused!(r.core.inner, "ws", "st", { seq: 0, hash: "00".repeat(32), genesis: "00".repeat(32) });
+  assert.equal(said?.code, "lock_other");
+  assert.match(said!.message, /stillfail lock reset/);
+  assert.equal(hooks.lockWaiting!(r.core.inner, "ws", "st")?.code, "lock_other", "not asked again until the lock moves on");
+  await r.host.time.pass(BEHIND_MS * 4);
+  assert.deepEqual(woke, []);
+  assert.ok(!(await lock()).stations.some((s: { id: string; protected: boolean }) => s.id === "st" && s.protected));
+  // Behind on this one (its genesis, nothing after): as before, tried again shortly.
+  const g = r.cloud.chains.get("ws")![0]!;
+  assert.equal(hooks.lockRefused!(r.core.inner, "ws", "st2", { seq: 0, hash: entryHash(g), genesis: entryHash(g) })?.code, "lock_unconfirmed");
 });
 
 test("a hello brings what put this device in the lock lately, for a station that has not heard of it yet", async () => {

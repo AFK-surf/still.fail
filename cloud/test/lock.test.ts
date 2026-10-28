@@ -1,11 +1,12 @@
 // The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md, src/lock.ts): one chain, each entry following
-// the last; carried to the stations on their presence sockets and to members; the devices that asked for credentials,
-// for the owner to check; devices waiting to be confirmed. Whether an entry is signed by whom it may be is the
-// stations' to check (station/test/lock.test.ts), not the cloud's.
+// the last and signed by whom it may be, as a station checks it (station/test/lock.test.ts tests those rules); carried
+// to the stations on their presence sockets and to members; the devices that asked for credentials, for the owner to
+// check; devices waiting to be confirmed.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { canonical, entryHash, shortCode, type LockEntry } from "../src/lock.ts";
 import { harness } from "./harness.ts";
+import { signer } from "./lock-signer.ts";
 
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
 
@@ -14,11 +15,6 @@ async function key() {
   const id = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
   const sign = async (message: string) => hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(message)));
   return { id, sign };
-}
-
-/// An entry after `prev` (none: a genesis); the cloud does not read its signature.
-async function entry(ws: string, prev: LockEntry | null, kind: string, body: unknown): Promise<LockEntry> {
-  return { v: 1, ws, seq: prev ? prev.seq + 1 : 0, prev: prev ? await entryHash(prev) : null, at: 1000, kind, body, sig: { key: "ed25519:00", alg: "Ed25519", sig: "00" } };
 }
 
 test("the hash is the stations' and the core's (the same values in their tests)", async () => {
@@ -67,9 +63,12 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     const state = (lock: (l: any) => boolean) => next((f) => f.type === "state" && lock(f.lock));
     await state((l) => l === null);
 
-    const g = await entry(ws, null, "genesis", { owner: "alice" });
-    const e1 = await entry(ws, g, "member", { sub: "bob" });
-    const e2 = await entry(ws, e1, "member", { sub: "carol" });
+    const owner = signer("alice");
+    const entry = owner.entry;
+    const g = await owner.genesis(ws);
+    const member = (sub: string) => ({ sub, email: `${sub}@example.test`, role: "member" });
+    const e1 = await entry(ws, g, "member", member("bob"));
+    const e2 = await entry(ws, e1, "member", member("carol"));
     assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [e1] })).status, 409, "no genesis");
     const head = (await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g, e1] })).json() as any).head;
     assert.deepEqual(head, { seq: 1, hash: await entryHash(e1), genesis: await entryHash(g) });
@@ -79,11 +78,17 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     assert.deepEqual((await next((f) => f.type === "lock")).entries, [e1]);
     // What follows is kept; what it has, skipped; a fork, another genesis, or a gap, refused.
     assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g, e1, e2] })).status, 200);
-    const fork = await entry(ws, e1, "member", { sub: "mallory" });
+    const fork = await entry(ws, e1, "member", member("mallory"));
     assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [fork] })).status, 409);
-    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [await entry(ws, null, "genesis", { owner: "x" })] })).status, 409);
-    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [{ ...(await entry(ws, e2, "member", {})), seq: 9 }] })).status, 409);
-    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [await entry("01HOTHERWSOTHERWSOTHERWSOT", e2, "member", {})] })).status, 400);
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [await signer("x").genesis(ws)] })).status, 409);
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [{ ...(await entry(ws, e2, "member", member("dave"))), seq: 9 }] })).status, 409);
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [await entry("01HOTHERWSOTHERWSOTHERWSOT", e2, "member", member("dave"))] })).status, 400);
+    // One a station would refuse, refused here too (kept, it would leave every entry after it refused there): signed
+    // by a key the lock does not name, or not its signer's to make, or with its signature broken.
+    const refused = async (e: LockEntry) => [(await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [e] })).status, (await (await alice("GET", `/v1/workspaces/${ws}/lock`)).json() as any).head.seq];
+    assert.deepEqual(await refused(await signer("alice").entry(ws, e2, "member", member("dave"))), [409, 2], "a key not in the lock");
+    assert.deepEqual(await refused(await entry(ws, e2, "member", { sub: "dave" })), [409, 2], "not a member");
+    assert.deepEqual(await refused({ ...(await entry(ws, e2, "member", member("dave"))), at: 1001 }), [409, 2], "its signature broken");
     // Lost (the owner cleared it): a station brings it back.
     assert.equal((await bob("DELETE", `/v1/workspaces/${ws}/lock`)).status, 404);
     assert.equal((await alice("DELETE", `/v1/workspaces/${ws}/lock`)).status, 200);
@@ -93,9 +98,34 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     // Turned off, a new genesis starts another chain.
     const off = await entry(ws, e2, "disable", {});
     assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [off] })).status, 200, "turned off");
-    const g2 = await entry(ws, null, "genesis", { owner: "alice", again: true });
+    const g2 = await owner.genesis(ws, { again: true });
     assert.equal(((await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g2] })).json()) as any).head.genesis, await entryHash(g2));
     assert.equal(((await (await alice("GET", `/v1/workspaces/${ws}`)).json()) as any).lock.seq, 0);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a chain kept before the cloud checked entries is cut back to where the stations take it", { timeout: 20000 }, async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const ws = (await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any).id as string;
+    const owner = signer("alice");
+    const member = (sub: string) => ({ sub, email: `${sub}@example.test`, role: "member" });
+    const g = await owner.genesis(ws);
+    const e1 = await owner.entry(ws, g, "member", member("bob"));
+    // Signed by a device the lock names without its key (2026-10-24): every station refused it, and all after it.
+    const bad = await signer("alice").entry(ws, e1, "member", member("carol"));
+    const after = await owner.entry(ws, bad, "member", member("dave"));
+    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = directories.get(directories.idFromName("primary"));
+    await directory.keepLockUnchecked(ws, await Promise.all([g, e1, bad, after].map(async (e) => ({ seq: e.seq, entry: e, hash: await entryHash(e) }))));
+    const kept = (await (await alice("GET", `/v1/workspaces/${ws}/lock`)).json()) as any;
+    assert.deepEqual([kept.head.seq, kept.entries.length], [1, 2]);
+    // What follows what the stations have is taken.
+    const next = await owner.entry(ws, e1, "member", member("erin"));
+    assert.equal(((await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [next] })).json()) as any).head.hash, await entryHash(next));
   } finally {
     await h.close();
   }

@@ -42,6 +42,7 @@ import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject } from "../util.ts";
+import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
 import { unsealOwn, writePlain } from "./vault.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -80,7 +81,10 @@ type Part = {
   /// Of the draft: what is left out; the devices that asked for credentials; each station's answer to GET /lock.
   excluded: Set<string>;
   devices: J[] | null;
-  probes: Map<string, "ok" | "old" | "offline">;
+  probes: Map<string, "ok" | "old" | "offline" | "other">;
+  /// How far each station's own lock goes, as it last said this run (its GET /lock, or its refusal of this device);
+  /// null: it keeps none.
+  heads: Map<string, Head | null>;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
   /// Why this device's request to be confirmed did not reach the cloud (its signing key could not be kept, the cloud
@@ -151,7 +155,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), base: bases.get(inner) ?? null, failed: null }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), base: bases.get(inner) ?? null, failed: null }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -177,6 +181,51 @@ export const nameOf = (inner: Inner, ws: string): string =>
 const cloudSays = (v: J): string | undefined => (!isObject(v) || !("lock" in v) ? undefined : `${get(v.lock, "hash") ?? ""}/${get(v, "lock_requests") ?? 0}`);
 
 const now = (inner: Inner) => Math.floor(inner.host.nowMs() / 1000);
+
+/// Whether a station's lock, as it said (`theirs`), is the one held here, as far as it goes: not another lock, nor one
+/// that went another way after some entry. One ahead of what is held may be (the cloud is read again for it).
+function onChain(h: Held | null, theirs: Head): boolean {
+  if (!h?.head) return true;
+  if (theirs.genesis !== h.head.genesis) return false;
+  const e = h.entries.find((x) => x.seq === theirs.seq);
+  return e === undefined ? theirs.seq > h.head.seq : entryHash(e) === theirs.hash;
+}
+
+/// Whether a station holds the lock as held here (or is behind on it): not when it said it keeps none, or another.
+function keeps(inner: Inner, ws: string, station: string): boolean {
+  const p = part(inner, ws);
+  if (!p.heads.has(station)) return true;
+  const theirs = p.heads.get(station)!;
+  return theirs !== null && onChain(held(inner, ws), theirs);
+}
+
+/// A station keeping another lock than the workspace's (a lock turned on again while it was not reached, an entry it
+/// refused kept at the cloud before the cloud checked them): it takes no approval, nor anything else of this one,
+/// until it is reset on its own machine and protected again.
+function otherLock(inner: Inner, ws: string, station: string): CoreError {
+  const name = str(arr(get(view(inner, ws), "stations")).find((s) => s.id === station)?.name) || station.slice(0, 8);
+  return new CoreError("lock_other", t("core-misc.lock.otherLock", { name }));
+}
+
+/// How far the lock goes on each station of it this device reaches, asked as its lock is shown: one that keeps none or
+/// another is not shown protected.
+function readStations(inner: Inner, ws: string): Effect.Effect<void> {
+  const p = part(inner, ws);
+  const h = held(inner, ws);
+  const f = fold(h?.entries ?? []);
+  const base = p.base ?? bases.get(inner) ?? null;
+  if (!h?.head || f.disabled || base === null || !f.devices.has(base)) return Effect.void;
+  return Effect.forEach(
+    [...f.stations.keys()],
+    (id) =>
+      Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock?after=999999999", null, { quiet: true })), (r) => {
+        if (r._tag !== "Success") return;
+        p.heads.set(id, readHead(get(r.success, "head")));
+        touch(inner, ws);
+      }),
+    { concurrency: 4, discard: true },
+  );
+}
 const daysLeft = (secs: number) => Math.max(0, Math.ceil(secs / 86400));
 
 export function install(inner: Inner): void {
@@ -268,12 +317,20 @@ function moved(inner: Inner, ws: string): void {
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says
 /// then: which workspace, and where to approve it.
-function refused(inner: Inner, ws: string, station: string): CoreError | null {
+function refused(inner: Inner, ws: string, station: string, theirs: unknown): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
   const f = fold(h?.entries ?? []);
+  // Its own lock is another: no approval in this one lets this device in there, however often it is tried.
+  const said = readHead(theirs);
+  if (said !== null) p.heads.set(station, said);
+  if (said !== null && !onChain(h, said)) {
+    p.refused.set(station, h?.head?.hash ?? null);
+    touch(inner, ws);
+    return otherLock(inner, ws, station);
+  }
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
@@ -298,7 +355,7 @@ function waiting(inner: Inner, ws: string, station: string): CoreError | null {
     p.refused.delete(station);
     return null;
   }
-  return unconfirmed(inner, ws);
+  return keeps(inner, ws, station) ? unconfirmed(inner, ws) : otherLock(inner, ws, station);
 }
 
 /// A station of the workspace refused this device for its lock: which workspace, and where it is approved (another
@@ -351,8 +408,8 @@ function owner(inner: Inner): Owner {
       // The prompts are of what each workspace's lock holds, read as their workspaces change.
       if (t.topic === "lockPrompts") return;
       if (t.topic === "lockDraft") inner.scheduler.enqueue("cloud", `lock/${ws}/draft`, Priority.shown, draft(inner, ws));
-      // Shown: read again now, what is held showing meanwhile.
-      else inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.shown, read(inner, ws));
+      // Shown: read again now, what is held showing meanwhile; then what its stations keep.
+      else inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.shown, Effect.tap(read(inner, ws), () => Effect.sync(() => inner.runner.fork(readStations(inner, ws)))));
     },
     compute: (t: Topic) => {
       const ws = typeof t.workspace === "string" ? t.workspace : "";
@@ -484,7 +541,7 @@ export function lockView(inner: Inner, ws: string): J {
     return [...groups.values()];
   };
   const stations = arr(get(v, "stations")).map((s) => ({
-    id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id),
+    id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id) && keeps(inner, ws, s.id),
   }));
   const members = [...f.members].map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
@@ -579,7 +636,8 @@ function draft(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
       arr(get(view(inner, ws), "stations")),
       (s) =>
         Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, s.id), "GET", "/lock", null, { quiet: true })), (r) => {
-          p.probes.set(s.id, r._tag === "Success" ? "ok" : r.failure.status === 404 || /404|no route/.test(r.failure.message) ? "old" : "offline");
+          // One that answers with a lock of its own keeps another (turned on before, not off there): reset first.
+          p.probes.set(s.id, r._tag === "Success" ? (readHead(get(r.success, "head")) === null ? "ok" : "other") : r.failure.status === 404 || /404|no route/.test(r.failure.message) ? "old" : "offline");
           inner.store.invalidateAll((t) => t.topic === "lockDraft" && t.workspace === ws);
         }),
       { concurrency: 4, discard: true },
@@ -628,7 +686,7 @@ function draftView(inner: Inner, ws: string): J {
     return {
       id: s.id, name: s.name, version: s.version ?? null, state, on: probe === "ok" && !p.excluded.has(s.id), fixed: probe !== "ok",
       // why it cannot be signed yet (none when it can)
-      stateText: state === "ok" ? null : t(state === "asking" ? "web-pages.security.asking" : state === "old" ? "web-pages.security.tooOld" : "web-pages.security.offline"),
+      stateText: state === "ok" ? null : t(state === "asking" ? "web-pages.security.asking" : state === "old" ? "web-pages.security.tooOld" : state === "other" ? "core-misc.lock.stationOtherLock" : "web-pages.security.offline"),
     };
   });
   return {
@@ -719,6 +777,27 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     // What changed is read again before the call answers (the pages show it at once).
     yield* Effect.ignore(read(inner, c.workspace));
     return result;
+  });
+}
+
+/// Whether `chain` (`entries` and one more, signed with `key`) is one the stations take: why not, said to the person.
+function checkSigned(entries: Entry[], chain: Entry[], key: string, at: number): Effect.Effect<void, CoreError> {
+  return Effect.try({
+    try: () => {
+      let kept: Checked;
+      try {
+        kept = checkLock(entries, at);
+      } catch {
+        throw new CoreError("lock_invalid", t("core-misc.lock.chainInvalid"));
+      }
+      if (signerIn(kept, key, at) === null) throw new CoreError("lock_no_signer", t("core-misc.lock.notSigner"));
+      try {
+        checkLock(chain, at);
+      } catch {
+        throw new CoreError("forbidden", t("core-misc.lock.notAllowed"));
+      }
+    },
+    catch: (e) => (e instanceof CoreError ? e : new CoreError("lock_invalid", String(e))),
   });
 }
 
@@ -922,9 +1001,14 @@ export class Lock {
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
       }
+      // It keeps another lock: none of this one's entries would follow its own.
+      const theirs = readHead(get(asked.success, "head"));
+      part(self.#inner, self.ws).heads.set(station, theirs);
+      if (theirs !== null && !onChain(held(self.#inner, self.ws), theirs)) return yield* Effect.fail(otherLock(self.#inner, self.ws, station));
       const done = yield* self.append("station", { key: station, name: s.name ?? "" }, [station]);
       const pinned = get(get(done, "stations"), station);
       if (isObject(pinned) && typeof pinned.error === "string") return yield* Effect.fail(new CoreError("lock_station_refused", pinned.error));
+      part(self.#inner, self.ws).heads.set(station, readHead(pinned));
       return done;
     });
   }
@@ -942,9 +1026,13 @@ export class Lock {
       const { head, entries } = yield* self.#chain();
       if (head === null) return yield* Effect.fail(new CoreError("lock_none", "the workspace has no lock"));
       const entry = signer.sign(next(self.ws, head, self.#inner.host.nowMs() / 1000, kind, body));
-      yield* self.#cloud("POST", "/lock", { entries: [entry] });
       // The whole chain: a station that is behind takes what it lacks, and skips what it has.
       const chain = [...entries, entry];
+      // Checked as the stations check it before it goes: one they refuse, kept at the cloud, leaves every entry after
+      // it refused there too (2026-10-28: a device the lock names without its key approved one, and a station kept
+      // turning the devices approved after it away for days).
+      yield* checkSigned(entries, chain, signer.id, now(self.#inner));
+      yield* self.#cloud("POST", "/lock", { entries: [entry] });
       const stations = [...fold(chain).stations.keys()];
       const later = stations.filter((s) => !waitFor.includes(s));
       if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later)));

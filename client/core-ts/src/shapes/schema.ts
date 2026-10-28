@@ -1593,7 +1593,7 @@ export const SHAPES: Record<string, Shape> = {
     ["id", "String"],
     ["name", "String", { said: true }],
     ["version", opt("String")],
-    ["state", "String", { doc: "`ok` (it understands a lock), `old` (too old), `offline`, `asking`." }],
+    ["state", "String", { doc: "`ok` (it understands a lock), `old` (too old), `offline`, `other` (it keeps another lock: reset it first), `asking`." }],
     ["on", "bool"],
     ["fixed", "bool"],
     ["stateText", opt("String"), { said: true, doc: "Why it cannot be signed yet, in words (none when `ok`)." }],
