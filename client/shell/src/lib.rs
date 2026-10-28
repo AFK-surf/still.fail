@@ -82,6 +82,9 @@ enum Handle {
     Conn(Connection),
     /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
     Gone { remote: String, reason: Value, stats: Value },
+    /// An endpoint closed (`iroh.close`), let go, with what the core may still ask of it: one bound anew in its place
+    /// leaves a dial still under way on it asking its relays as it fails (mesh.ts `link`), as the station's addon answers.
+    Unbound { id: String },
     IStream(Arc<Halves>),
     /// A zstd stream being taken apart (`zstd.open`).
     Unzstd(Arc<Mutex<Unzstd>>),
@@ -287,6 +290,7 @@ impl Handle {
             Handle::Endpoint(..) => "endpoint",
             Handle::Conn(_) => "conn",
             Handle::Gone { .. } => "gone",
+            Handle::Unbound { .. } => "unbound",
             Handle::IStream(_) => "stream",
             Handle::Unzstd(_) => "unzstd",
         }
@@ -543,7 +547,11 @@ impl Inner {
             }
             "iroh.bind" => self.bind(&a, bytes.unwrap_or_default()).await,
             "iroh.connect" => {
-                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let endpoint = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, _) => endpoint,
+                    Handle::Unbound { .. } => return Err("the endpoint is closed".into()),
+                    _ => return Err("not an endpoint".into()),
+                };
                 let additional: Vec<Vec<u8>> = a.get("additional").and_then(Value::as_array).into_iter().flatten().filter_map(|x| hex::decode(x.as_str()?).ok()).collect();
                 let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional);
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
@@ -554,7 +562,11 @@ impl Inner {
             // As the station's addon takes them: handshakes side by side, each on its own, so one never finished (a
             // device gone half way) holds up no other; one that fails is skipped.
             "iroh.accept" => {
-                let Handle::Endpoint(endpoint, accepted) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let (endpoint, accepted) = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, accepted) => (endpoint, accepted),
+                    Handle::Unbound { .. } => return Ok(Answer::json(json!({ "end": true }))),
+                    _ => return Err("not an endpoint".into()),
+                };
                 let mut accepted = accepted.lock().await;
                 let done = accepted.get_or_insert_with(|| {
                     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -579,12 +591,28 @@ impl Inner {
                 }
             }
             "iroh.networkChange" => {
-                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let endpoint = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, _) => endpoint,
+                    Handle::Unbound { .. } => return Ok(Answer::json(json!({}))),
+                    _ => return Err("not an endpoint".into()),
+                };
                 endpoint.network_change().await;
                 Ok(Answer::json(json!({})))
             }
             "iroh.close" => {
-                if let Some(Handle::Endpoint(endpoint, _)) = self.drop_handle(id_of(&a)?) {
+                let id = id_of(&a)?;
+                let endpoint = {
+                    let mut handles = self.handles.lock().unwrap();
+                    match handles.get(&id) {
+                        Some(Handle::Endpoint(endpoint, _)) => {
+                            let endpoint = endpoint.clone();
+                            handles.insert(id, Handle::Unbound { id: hex::encode(endpoint.id().as_bytes()) });
+                            Some(endpoint)
+                        }
+                        _ => None,
+                    }
+                };
+                if let Some(endpoint) = endpoint {
                     endpoint.close().await;
                 }
                 Ok(Answer::json(json!({})))
@@ -905,6 +933,9 @@ impl Inner {
             ("conn.closeReason", Handle::Gone { reason, .. }) => Ok(reason),
             ("conn.paths", Handle::Gone { .. }) => Ok(json!([])),
             ("conn.stats", Handle::Gone { stats, .. }) => Ok(stats),
+            ("iroh.endpointId", Handle::Unbound { id }) => Ok(json!(id)),
+            ("iroh.addAddr", Handle::Unbound { .. }) => Ok(Value::Null),
+            ("iroh.relayStatus", Handle::Unbound { .. }) => Ok(json!([])),
             (op, _) => Err(format!("no operation {op} on that handle")),
         }
     }
@@ -1252,6 +1283,25 @@ mod tests {
         counted("test.op", false);
         let stats = stats_json();
         assert_eq!(stats["calls"]["test.op"], json!([2, 1]));
+    }
+
+    #[test]
+    fn answers_of_a_closed_endpoint() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let endpoint = Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await.unwrap();
+            let id = inner.keep(Handle::Endpoint(endpoint.clone(), Accepted::default()));
+            inner.run("iroh.close", json!({ "id": id }), None).await.unwrap();
+            // A dial on it failing after another was bound in its place asks it still (the app's core died of "no handle 3").
+            assert_eq!(inner.run_sync("iroh.endpointId", &json!({ "id": id })).unwrap(), json!(hex::encode(endpoint.id().as_bytes())));
+            assert_eq!(inner.run_sync("iroh.relayStatus", &json!({ "id": id })).unwrap(), json!([]));
+            assert_eq!(inner.run("iroh.accept", json!({ "id": id }), None).await.unwrap().json, json!({ "end": true }));
+            let addr = json!({ "id": hex::encode(endpoint.id().as_bytes()), "ips": ["127.0.0.1:1"] });
+            assert!(inner.run("iroh.connect", json!({ "id": id, "addr": addr }), Some(b"stillfail/test".to_vec())).await.is_err());
+            assert!(inner.run("iroh.close", json!({ "id": id }), None).await.is_ok());
+        });
     }
 
     #[test]
