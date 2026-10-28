@@ -280,6 +280,12 @@ export class Links {
     return this.#links.get(address)?.state.state !== "offline";
   }
 
+  /// Whether its link is up now: a request to it not answered then was not answered for itself, not for its station
+  /// being down, and nothing will say the station is back (`stationBack` is told as a link comes up).
+  online(address: string): boolean {
+    return this.#links.get(address)?.state.state === "online";
+  }
+
   /// Every station of every workspace an account reaches, as the workspaces are held: those not linked yet are
   /// linked, those no longer listed let go.
   reconcile(): void {
