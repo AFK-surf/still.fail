@@ -61,6 +61,17 @@ pub fn native_clear() -> Double {
 }
 
 ///|
+/// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
+/// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
+pub fn native_foot() -> Double {
+  if native_bars.on && native_bars.side == 0.0 {
+    @ui.system_bars().bottom
+  } else {
+    0.0
+  }
+}
+
+///|
 /// How high a capsule across a card's foot stands beside the system's action at the column's foot (iOS 27's prominent
 /// tab, an iPhone Duo's round one: @ui.system_nav_action): as high as it, so the two are one row (the user, 2026-10-28:
 /// 输入框跟右边的对上); None where there is none (every other device, upright, none said).
