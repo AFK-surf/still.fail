@@ -22,12 +22,13 @@ pub fn takes_drops() -> Bool {
 
 ///|
 /// Where files from outside are held over the window now, and the drops not taken yet (where each was let go, its pick);
-/// words from outside let go on no field, the frame they came in (where, what they say, the frame's number): that
+/// words from outside let go on no field, the frame they came in (the hit target and what holds it, what they say,
+/// the frame's number): that
 /// frame's build may take them (Ctx::words_into), none after it.
 priv struct Dropping {
   mut held : (Double, Double)?
   drops : Array[(Double, Double, Pick)]
-  mut words : (Double, Double, String, Int)?
+  mut words : (Array[Int], String, Int)?
 }
 
 ///|
@@ -55,7 +56,17 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
       place_caret(st, x, y, h_now())
       st.text_input(text_paste, words, 0, 0, h_now())
     }
-    None => dropping.words = Some((x, y, words, c.frame_no))
+    None => {
+      // What was shown at the drop, and what holds it: not a page merely underneath a dialog or popover. Include
+      // boxes only pointed at, too (a chat's page); they can receive words without taking a press from their contents.
+      let k = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+      let within : Array[Int] = []
+      c.holders(k, within)
+      if k >= 0 {
+        within.push(c.hit_ids[k])
+      }
+      dropping.words = Some((within, words, c.frame_no))
+    }
   }
   // (taken as the frame begins: what reads what the hand did is built again in it, the field's words, a box that takes
   // them for its field)
@@ -66,13 +77,11 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 /// Words dragged in from outside and let go on box `id` this frame beside any field in it (one let go on a field the
 /// field took, where it was let go): put in the field of editor `key` (built in this scope) at its caret, as a paste's,
 /// the field taking the focus. For a box that is its field's, as a press on it is (a composer's capsule: its padding,
-/// its buttons). Each is taken once.
+/// its buttons). A layer over the box takes the drop itself; the box underneath never sees it. Each is taken once.
 pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
   hand_events_read()
-  guard dropping.words is Some((x, y, words, frame)) && frame == self.frame_no else { return }
-  guard self.rect_of(id) is Some((rx, ry, rw, rh)) && x >= rx && x < rx + rw && y >= ry && y < ry + rh else {
-    return
-  }
+  guard dropping.words is Some((within, words, frame)) && frame == self.frame_no else { return }
+  guard within.contains(id) else { return }
   let field = self.id(key)
   guard self.editors.get(field) is Some(st) else { return }
   dropping.words = None

@@ -95,3 +95,77 @@ test "words let go beside a field go into it only on a box that takes them for i
   t.frame()
   assert_eq(f.text(), "abcd")
 }
+
+///|
+test "words dropped on a modal or its ground do not reach the page underneath" {
+  let field = @ui.Field::new(text="draft")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field~, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("modal", modal=true, fn() {
+      c.box(id=c.id("panel"), tx=20.0, ty=20.0, w=Px(150.0), h=Px(100.0), fn() {
+        c.text("dialog") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 50.0, "on the dialog")
+  t.frame()
+  assert_eq(field.text(), "draft")
+  t.drop_words(250.0, 250.0, "on the ground")
+  t.frame()
+  assert_eq(field.text(), "draft")
+}
+
+///|
+test "a popover blocks words dropped on it and leaves the page outside it reachable" {
+  let field = @ui.Field::new(text="draft")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field~, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("popover", fn() {
+      c.box(id=c.id("panel"), tx=20.0, ty=20.0, w=Px(150.0), h=Px(100.0), fn() {
+        c.text("menu") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 50.0, "on the menu")
+  t.frame()
+  assert_eq(field.text(), "draft")
+  t.drop_words(250.0, 250.0, " outside")
+  t.frame()
+  assert_eq(field.text(), "draft outside")
+}
+
+///|
+test "words dropped beside a field in a dialog belong to that field, not the page underneath" {
+  let page_field = @ui.Field::new(text="draft")
+  let dialog_field = @ui.Field::new(text="dialog")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field=page_field, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("modal", modal=true, fn() {
+      let panel = c.id("panel")
+      c.words_into(panel, "dialog-field")
+      c.box(id=panel, tx=20.0, ty=20.0, w=Px(200.0), h=Px(180.0), pad=40.0, fn() {
+        c.editor("dialog-field", field=dialog_field, placeholder="dialog field") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 150.0, " words")
+  t.frame()
+  assert_eq(page_field.text(), "draft")
+  assert_eq(dialog_field.text(), "dialog words")
+  assert_eq(t.ime().1, "dialog words")
+}
