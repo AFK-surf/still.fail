@@ -218,6 +218,8 @@ test "a secret the person types in: its field over 存入, which waits for somet
   t.tap(x, y)
   t.draw()
   assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\",\"typed\":{\"secret\":\"sk-go-1\"}}"])
+  // its field answered: the keyboard goes with it (the card says how it went, the field no longer there)
+  assert_false(t.ctx().field_focused())
 }
 
 ///|
@@ -236,6 +238,7 @@ test "a login the person types in, the agent naming no account: 用户名 over i
   t.enter()
   t.draw()
   assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\",\"typed\":{\"secret\":\"pw 1\",\"username\":\"admin\"}}"])
+  assert_false(t.ctx().field_focused())
 }
 
 ///|

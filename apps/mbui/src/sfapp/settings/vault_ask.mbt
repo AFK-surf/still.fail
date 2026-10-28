@@ -356,6 +356,11 @@ pub fn vault_foot(
       return
     }
     vault_pending[request] = yes
+    // (what was typed in is answered: its field goes as the card says how it went, the keyboard with it, not left up
+    // over a field no longer there)
+    if typed is Some(_) && c.field_focused() {
+      c.blur()
+    }
     (core.call)(call, params, fn(r) {
       // (gone through, it stays turning till what it did shows: the core says how it went on the card first; what was
       // typed in for it let go)
