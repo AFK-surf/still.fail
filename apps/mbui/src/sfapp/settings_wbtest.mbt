@@ -149,6 +149,18 @@ test "appearance: 深色 chosen, the app is drawn dark at once and the core keep
 }
 
 ///|
+test "appearance: another theme picked, it spreads from where it was picked, the page as it was under it" {
+  let t = settings_tester("appearance")
+  t.tap_text("深色")
+  t.frame()
+  assert_true(@sf.theme().dark)
+  assert_true(@ui.reveal_spreading())
+  t.run_for(@ui.reveal_ms)
+  t.frame()
+  assert_false(@ui.reveal_spreading())
+}
+
+///|
 test "appearance: 动画 减少 chosen, motion is reduced at once whatever the system says; 不减少, it is not" {
   let t = settings_tester("appearance")
   assert_false(@ui.reduced_motion())
