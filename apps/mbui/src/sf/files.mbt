@@ -715,13 +715,14 @@ pub fn quote_sent_shift(author : String, role : String) -> (Double, Double) {
 let quote_icon : Double = 11.0
 
 ///|
-/// quoteCard: 12 round (in the composer its inner corner), the text at 4% over the canvas.
+/// quoteCard: a card's of the ladder's in a message (as a login's, an ask's: what it holds, its picture, concentric in it;
+/// the web's 12), in the composer its inner corner; the text at 4% over the canvas.
 // kept across runs: a value (no field of it changes)
 let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=Over(Bg, faint_ground), clip=true)
 
 ///|
-/// A quote's corner: a block's of the ladder's, in a message as in the composer (the web's 12 in a message).
-let quote_corner : Double = row_corner
+/// A quote's corner in a message: a card's of the ladder's, as the other cards in a message are.
+let quote_corner : Double = card_corner
 
 ///|
 fn quote_box_composer() -> @ui.Style {
