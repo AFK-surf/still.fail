@@ -2,7 +2,7 @@
 
 still.fail's Android app (and its macOS and Windows builds: a phone's pages in a narrow window, the web app's wide frame
 in a desktop's, docs/stillfail-port.md "The PC (wide) frame") written in mbui (`mbui/`), the MoonBit UI
-framework: an app of its own, **still.fail mbui** (`fail.still.mbui`, the debug build `fail.still.mbui.debug`),
+framework: an app of its own, **still.fail mbui** (`fail.still.mbui`; the debug build Android's `fail.still.android.dev`, still.fail dev, iOS's `fail.still.mbui.debug`),
 installable beside still.fail's apps. The plan and what is done: `docs/stillfail-port.md`.
 
 mbui is the framework (layout, text, the UI tree, motion, Markdown, the platform hosts, the build's C step) and stays

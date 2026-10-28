@@ -35,9 +35,9 @@
       "placeholders": {"appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1"}
     },
     "debug": {
-      "applicationIdSuffix": ".debug",
+      "applicationId": "fail.still.android.dev",
       "debuggable": true,
-      "placeholders": {"appLabel": "still.fail mbui dev", "mbuiEnv": ""}
+      "placeholders": {"appLabel": "still.fail dev", "mbuiEnv": ""}
     }
   }
 }
