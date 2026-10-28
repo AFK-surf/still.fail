@@ -29,7 +29,8 @@ pub let viz_first_height : Int = 120
 pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
   let p = @sf.palette_of(dark)
   let t = @sf.theme().t
-  let px = fn(v : Double) { v.to_string() + "px" }
+  let scale = @ui.font_scale()
+  let px = fn(v : Double) { (v * scale).to_string() + "px" }
   [
     ("canvas", viz_css_color(p.canvas)),
     ("raised", viz_css_color(p.raised)),
@@ -169,7 +170,7 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -
   "<meta http-equiv=\"Content-Security-Policy\" content=\"" +
   viz_csp() +
   "\">" +
-  "<style>:root{color-scheme:" +
+  "<style>:root{-webkit-text-size-adjust:100%;text-size-adjust:100%;color-scheme:" +
   theme +
   ";" +
   vars +

@@ -26,6 +26,7 @@ pub(all) struct VizFrame {
   mut grown : Int
   mut shown : Bool
   mut dark : Bool
+  mut font_scale : Double
   mut ground : Int64
 }
 
@@ -154,6 +155,7 @@ pub fn viz_frame(
         grown: 0,
         shown: false,
         dark,
+        font_scale: @ui.font_scale(),
         ground,
       }
       cell.val = Some(f)
@@ -162,8 +164,9 @@ pub fn viz_frame(
     }
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
-  if f.dark != dark || f.ground != ground {
+  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() {
     f.dark = dark
+    f.font_scale = @ui.font_scale()
     f.ground = ground
     let scheme = if dark { "dark" } else { "light" }
     let g = viz_css_color(ground)

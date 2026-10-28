@@ -493,3 +493,45 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
   assert_eq(app.picked, "ws2")
   assert_true(app.nav.top() == NewChat, msg="the new workspace has no last chat")
 }
+
+///|
+test "Duo HTML preview exposes close source and download in native bars" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-preview-html")
+  t.run_for(fly_open_ms)
+  for id in ["lead/over/close", "over/source", "over/download"] {
+    assert_true(t.nav_said().contains(id), msg=t.nav_said())
+  }
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
+  t.draw()
+  assert_true(viewer.val.unwrap().source)
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
+  t.draw()
+  assert_false(viewer.val.unwrap().source)
+  t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+  t.run_for(fly_close_ms)
+  assert_true(viewer.val is None)
+}
+
+///|
+test "Duo new chat with a long draft and attachment keeps send above the keyboard" {
+  reset()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.nav_push_ms)
+  t.post(@hostapi.system_channel, "{\"nav\":\"new\"}")
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("做任何事")
+  let draft = @sfbase.writing(src, "new:ws1")
+  @sfbase.writing_add(src, draft, "ws1/st1", "照片.png", png_head())
+  t.type_text("这是一段很长的输入，需要在键盘弹出时仍能看到发送按钮。\n".repeat(20))
+  t.set_ime_inset(280.0)
+  t.resize(951.0, 389.0)
+  t.run_for(@ui.nav_push_ms + @sfpages.morph_ms)
+  let send = t.semantics().filter(fn(s) { s.label == @sf.t("web-main.composer.send") })
+  assert_eq(send.length(), 1)
+  let (_, y, _, h) = send[0].rect
+  assert_true(y >= 0.0 && y + h <= 369.5, msg="send at \{y}..\{y + h}")
+}
