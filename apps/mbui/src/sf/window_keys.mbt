@@ -1,7 +1,9 @@
 // The window's own buttons where they are the app's to draw (@ui.window_keys_own: Windows', a window with no title bar
 // of the system's, the app's top row its title bar), as still.fail's desktop app drew them in its page's top row (web
 // WindowControls.tsx, WindowControls.css.ts): after a rule, minimize, maximize or back as it was, close, as the bars'
-// keys are (icon_button: 32, round, their icons 16 quiet till pointed at, 2 apart), close red under the hand. Over all
+// keys are (icon_button: 32, round, their icons 16, 2 apart), close red under the hand; their icons in the text's ink
+// at rest, not quiet, as the system's own are: over the window's see-through ground (Windows' acrylic, what is behind
+// the window blurred and lit through) a quiet grey reads faint (the user, 2026-10-28). Over all
 // the app shows, as a title bar is: on the line of the top row under them, each layout's (window_keys_at). What a
 // top row at the window's top right holds stands before them (window_end_in, window_clear_in, tape_bar_end). The
 // maximize one is the host's too (@ui.window_snap: Windows' Snap Layouts open from it as the pointer rests there),
@@ -131,7 +133,15 @@ pub fn window_keys(c : @ui.Ctx) -> Unit {
   c.box(style=@ui.style(row=true, w=Full, pt=room(top), pr=room(side), justify=JEnd, align=AStart), fn() {
     c.box(style=@ui.style(row=true, align=ACenter, gap=room(window_keys_gap)), fn() {
       c.box(style=window_rule, fn() {  }) |> ignore
-      if icon_button(c, "minus", key="window/minimize", round=true, linked=link, label=t("desktop.menu.minimize")) {
+      if icon_button(
+          c,
+          "minus",
+          key="window/minimize",
+          round=true,
+          linked=link,
+          quiet=p.text,
+          label=t("desktop.menu.minimize"),
+        ) {
         @ui.window_act(1)
       }
       // (pressed with the keys alone: the pointer's press on it is the host's)
@@ -143,6 +153,7 @@ pub fn window_keys(c : @ui.Ctx) -> Unit {
           linked=link,
           on=snap == 2,
           lit=snap == 1,
+          quiet=p.text,
           label=t(if zoomed { "desktop.window.restore" } else { "desktop.window.maximize" }),
         ) {
         @ui.window_act(2)
@@ -154,6 +165,7 @@ pub fn window_keys(c : @ui.Ctx) -> Unit {
           round=true,
           linked=link,
           ink=p.red,
+          quiet=p.text,
           label=t("desktop.menu.close"),
         ) {
         @ui.window_act(3)
