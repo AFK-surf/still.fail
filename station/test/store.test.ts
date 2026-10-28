@@ -1067,9 +1067,8 @@ test("a session's usage as its summary says it: kept as told, a change told as t
   assert.deepEqual(h.changes.length, 1, "quiet: not told");
   store.setSessionUsage("gone", usage);
   assert.equal(store.sessionUsage("gone"), null, "no session: none kept");
-  assert.deepEqual(store.sessionsWithoutUsage(), []);
   session(store, "b");
-  assert.deepEqual(store.sessionsWithoutUsage(), ["b"]);
+  assert.deepEqual(store.sessionKeys().sort(), ["a", "b"]);
   const reader = read.openStore(data);
   assert.deepEqual([...read.sessionUsages(reader, null)], [["a", { ...usage, modelCalls: 4 }]]);
   assert.deepEqual([...read.sessionUsages(reader, "b")], []);

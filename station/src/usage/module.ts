@@ -20,11 +20,14 @@ export function keepUsage(store: StationStore, key: string, quiet = false): void
 }
 
 /// Sessions' usage as `counter` records it: the live view tells it and asks the counter to count what a session at work
-/// writes; each session counted anew is kept as counted (its summary), and those of before it was kept at once and
-/// untold (a device reads them with its sessions). Gives what stops it.
+/// writes; each session counted anew is kept as counted (its summary). As it starts, every session's is kept again as
+/// this station says it, told where that changed it: what a summary says grows (when its cache is over, #2340), and one
+/// kept by a station from before says it only once its session makes another call, the very call that reads its whole
+/// context again (no device is told otherwise: a device that comes back to a new station process is told what it missed,
+/// not every summary again). Some tens of ms for ccvm's 1,200 sessions. Gives what stops it.
 export function keepCounted(store: StationStore, live: LiveHub, counter: UsageCounter): () => void {
   live.countWith({ of: (key) => usageNow(store, key), ask: (key) => counter.soon(key) });
-  for (const key of store.sessionsWithoutUsage()) keepUsage(store, key, true);
+  for (const key of store.sessionKeys()) keepUsage(store, key);
   return store.subscribe((change) => {
     if (change.type !== "usage") return;
     // Those it follows told on their streams, then every session counted anew kept as counted.
