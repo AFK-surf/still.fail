@@ -1,0 +1,7 @@
+kept-answers-ask {"call": "markdown", "text": "Nice. Swap the home page spinner for skeletons while you're at it"}
+kept-answers-ask {"call": "markdown", "text": "Done: all three home sections show skeletons until their data arrives. Merged into main (`7c1e0a2`)."}
+kept-answers-ask {"call": "markdown", "text": "On Safari, Pay on the checkout page does nothing"}
+kept-answers-ask {"call": "markdown", "text": "I can reproduce it in Studio's browser. Watch it live:\n\n[Checkout - localhost:5173](https://still.fail/w/ws1/s/st1/screen/browser%3AT1)"}
+kept-answers-ask {"call": "markdown", "text": "Fix it"}
+kept-answers-ask {"call": "markdown", "text": "Fixed: Safari blocks a payment window opened after a wait, so Pay now opens the payment form in the page itself. A test payment goes through in Safari and Chrome."}
+kept-answers-ask {"call": "markdown", "text": "Merged into main (`9d41b7e`). The beta is on its way."}

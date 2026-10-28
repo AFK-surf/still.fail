@@ -62,6 +62,8 @@ pub fn story_chat(story : Json) -> Json {
           "tone": "neutral",
         },
         "status": "idle",
+        // (a story with a web service: its agent's dev server, up)
+        "jobs": if field(Some(story), "service") is Some(_) { [fix_job("j-web")] } else { [] },
       },
     ],
     "messages": Json::array(messages),
@@ -144,6 +146,13 @@ fn story_play(list : String, n : Int) -> Unit {
             more["decision"] = { "resolved": false }
             more["asked"] = true
           }
+          // (an agent asking to keep a secret the viewer types in, or to use one: its vault card, `vault` the request as
+          // its card says it, with its `request` id)
+          match field(Some(p), "vault") {
+            Some(ask) =>
+              more["card"] = { "type": "options", "vault": Json::string(text(Some(ask), "request")), "vaultAsk": ask }
+            None => ()
+          }
           fc.sent.push(msg(seq, "agent", by_agent("anthropic", "claude", session), text(Some(p), "text"), "刚刚", more))
         }
         None => ()
@@ -180,6 +189,42 @@ pub fn story_on_answer(f : Fixture, seq : Int, label : String) -> Unit {
 }
 
 ///|
+/// The story's vault card (a post's `vault`) answered here (`vault.approve`, `vault.deny` for its `request`): how it went
+/// on its card at once, as the core puts it, then its agent's steps after it (`answered`, in turn with the cards). False
+/// where it is not the story's.
+pub fn story_vault_answer(f : Fixture, name : String, params : Json) -> Bool {
+  let request = text(Some(params), "request")
+  let fc = fix_chat("s-c1")
+  let at = fc.sent.search_by(fn(m) { text(field(Some(m), "card"), "vault") == request })
+  guard request != "" && at is Some(i) else { return false }
+  let approved = name == "vault.approve"
+  match fc.sent[i] {
+    Object(m) => {
+      let o = m.copy()
+      let card = match o.get("card") {
+        Some(Object(c)) => c.copy()
+        _ => Map([])
+      }
+      let ask = match card.get("vaultAsk") {
+        Some(Object(a)) => a.copy()
+        _ => Map([])
+      }
+      ask["status"] = Json::string(if approved { "granted" } else { "denied" })
+      card["vaultAsk"] = Json::object(ask)
+      o["card"] = Json::object(card)
+      fc.sent[i] = Json::object(o)
+    }
+    _ => ()
+  }
+  f.changed()
+  if approved {
+    story_play("answered", story_answered.val)
+    story_answered.val += 1
+  }
+  true
+}
+
+///|
 /// `v` with the made-up chats' words as the story says them in its language (its `words`: each string of `v` that is
 /// one of them, whole), where it says any.
 pub fn story_words(v : Json) -> Json {
@@ -211,3 +256,97 @@ pub fn story_words(v : Json) -> Json {
   }
   go(v)
 }
+
+///|
+/// The story's station screen (`screen`), when it has one: what an agent does on it, seen live. Its card's words, its
+/// state as the core says it, its frames each `at` ms after it is asked for (`frames`: a picture of the story's by its
+/// name), as the station streams them:
+///   "screen": { "title": "Checkout - localhost:5173", "line": "Watching · Claude is driving", "agent": "Claude",
+///               "width": 1280, "height": 800, "frames": [{"at": 0, "picture": "screen-0.jpg"}, …] }
+fn story_screen() -> Json? {
+  field(fix_story.val, "screen")
+}
+
+///|
+/// The story screen's card (`screenCard`): its title, who is on it, its preview's size.
+pub fn story_screen_card(screen : String) -> Json? {
+  guard story_screen() is Some(s) else { return None }
+  Some({
+    "kind": "browser",
+    "title": Json::string(text(Some(s), "title")),
+    "line": Json::string(text(Some(s), "card")),
+    "link": Json::string("/w/ws1/s/st1/screen/" + screen),
+    "gone": false,
+    "peek": true,
+    "width": Json::number(number(Some(s), "width")),
+    "height": Json::number(number(Some(s), "height")),
+  })
+}
+
+///|
+/// `screen.view` over the story's screen: its preview (`peek`) the first frame; seen, live, the agent driving it and this
+/// view looking on, each frame at its time.
+pub fn story_screen_stream(params : Json, on_value : (Json, Bytes?) -> Unit) -> Int? {
+  guard story_screen() is Some(s) else { return None }
+  let frames = items(Some(s), "frames")
+  let picture = fn(f : Json) -> Bytes? { story_picture(text(Some(f), "picture")) }
+  fix_stream_ids.val += 1
+  if params is Object(o) && o.get("peek") is Some(True) {
+    let first = if frames.length() > 0 { picture(frames[0]) } else { None }
+    fix_later(0.0, fn() { on_value({ "frame": { "ts": 1 } }, first) })
+    return Some(fix_stream_ids.val)
+  }
+  let w = number(Some(s), "width")
+  let h = number(Some(s), "height")
+  let agent = text(Some(s), "agent")
+  fix_later(0.0, fn() {
+    on_value(
+      {
+        "state": {
+          "phase": "live",
+          "title": Json::string(text(Some(s), "title")),
+          "kind": "browser",
+          "control": false,
+          "may": true,
+          "others": [Json::string(agent)],
+          "controllers": [Json::string(agent)],
+          "takeOver": true,
+          "line": Json::string(text(Some(s), "line")),
+          "codec": "jpeg",
+          "width": Json::number(w),
+          "height": Json::number(h),
+        },
+      },
+      None,
+    )
+    on_value({ "config": { "codec": "jpeg", "width": Json::number(w), "height": Json::number(h) } }, None)
+  })
+  for i, f in frames {
+    let ts = number(Some(f), "at")
+    fix_later(ts, fn() { on_value({ "frame": { "key": true, "ts": Json::number(1000.0 + ts + i.to_double()) } }, picture(f)) })
+  }
+  Some(fix_stream_ids.val)
+}
+
+///|
+/// A file of the story's web service (`service`: its `files` by path, what its station's dev server answers through
+/// `station.preview`): its status, its type and its body; None where the story has no service.
+///   "service": { "files": { "/": "<!doctype html>…", "/app.css": "body { … }" } }
+pub fn story_service_file(path : String) -> (Int, String, String)? {
+  guard field(fix_story.val, "service") is Some(s) else { return None }
+  let path = if path == "/index.html" { "/" } else { path }
+  match field(field(Some(s), "files"), path) {
+    Some(String(body)) => {
+      let kind = if path.has_suffix(".css") {
+        "text/css; charset=utf-8"
+      } else if path.has_suffix(".js") {
+        "text/javascript; charset=utf-8"
+      } else {
+        "text/html; charset=utf-8"
+      }
+      Some((200, kind, body))
+    }
+    _ => Some((404, "text/plain; charset=utf-8", "Not Found"))
+  }
+}
+

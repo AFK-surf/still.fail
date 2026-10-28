@@ -1,0 +1,6 @@
+kept-answers-ask {"call": "markdown", "text": "Nice. Swap the home page spinner for skeletons while you're at it"}
+kept-answers-ask {"call": "markdown", "text": "Done: all three home sections show skeletons until their data arrives. Merged into main (`7c1e0a2`)."}
+kept-answers-ask {"call": "markdown", "text": "Add yearly prices to the pricing page"}
+kept-answers-ask {"call": "markdown", "text": "Done: the plans have a Monthly / Yearly switch, and Yearly shows two months free. The dev server is up on Studio, try it on your phone:\n\n[open the pricing page](https://still.fail/o/ws1/st1/s-c1?service=j-web)"}
+kept-answers-ask {"call": "markdown", "text": "Ship it"}
+kept-answers-ask {"call": "markdown", "text": "Merged into main (`4b7e2d1`). Yearly prices go out with the next deploy."}

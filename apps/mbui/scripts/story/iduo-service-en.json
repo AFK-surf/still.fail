@@ -1,0 +1,122 @@
+{
+ "title": "Acme Site",
+ "lang": "en",
+ "words": {
+  "整理发布清单": "Prepare the release checklist",
+  "正在核对第三项：安装包的签名": "Checking item 3: the installer's signature",
+  "首页的列表改成按天分组": "Group the home list by day",
+  "奏 · 分组的标题用相对日期还是具体日期？": "Asks · Relative or exact dates for the group headers?",
+  "奏": "Asks",
+  " · 分组的标题用相对日期还是具体日期？": " · Relative or exact dates for the group headers?",
+  "夜里的构建又失败了": "The nightly build failed again",
+  "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？": "Needs you: the test machine's disk is full. Clear the old caches?",
+  "测试机的磁盘满了，要不要清理旧的缓存？": "The test machine's disk is full. Clear the old caches?",
+  "给设置页加一个深色模式开关": "Add a dark mode switch to settings",
+  "做完了：开关和三处颜色都改好了": "Done: the switch and three colors are in",
+  "开关和三处颜色都改好了": "The switch and three colors are in",
+  "盯着 CI，绿了告诉我": "Watch CI and tell me when it's green",
+  "监控中：每 5 分钟看一次主干的构建": "Watching: checks the main build every 5 minutes",
+  "监控中：主干构建": "Watching: main build",
+  "它会在归档里继续盯着。": "It keeps watching from the archive.",
+  "和 Ana 一起看新版的引导页": "Review the new onboarding with Ana",
+  "Ana：第二屏的插画可以再小一点": "Ana: the second screen's illustration could be smaller",
+  "Slack 里问的报销流程": "The expenses question from Slack",
+  "Slack · 星火 · #行政": "Slack · Spark · #ops",
+  "已经把三个步骤整理成一页文档": "Wrote the three steps up as a one-page doc",
+  "把旧的截图都换成新的": "Replace the old screenshots",
+  "做完了": "Done",
+  "迁移数据库的演练": "Database migration rehearsal",
+  "MBA 离线": "MBA offline",
+  "演练到第二步时 MBA 断开了": "MBA dropped at step two",
+  "周报的模板": "Weekly report template",
+  "模板放在共享文件夹的第一层": "The template is at the top of the shared folder",
+  "2 分钟前": "2 min ago",
+  "8 分钟前": "8 min ago",
+  "15 分钟前": "15 min ago",
+  "40 分钟前": "40 min ago",
+  "1 小时前": "1 hr ago",
+  "昨天 21:14": "Yesterday 21:14",
+  "昨天 18:02": "Yesterday 18:02",
+  "昨天 10:30": "Yesterday 10:30",
+  "星期三": "Wednesday",
+  "昨天": "Yesterday",
+  "刚刚": "Just now",
+  "待你决定": "Waiting on you",
+  "未开始": "Not started",
+  "星火工作室": "Spark Studio",
+  "个人": "Personal",
+  "林": "Lin",
+  "周": "Zhou",
+  "安娜": "Anna",
+  "周宁": "Zhou Ning",
+  "今天": "Today",
+  "你 选择了「Merge」": "You chose “Merge”",
+  "你 选择了「Not yet」": "You chose “Not yet”",
+  "在线": "Running",
+  " · 3 小时": " · just now"
+ },
+ "before": [
+  {
+   "kind": "person",
+   "text": "Nice. Swap the home page spinner for skeletons while you're at it",
+   "when": "Yesterday"
+  },
+  {
+   "kind": "agent",
+   "text": "Done: all three home sections show skeletons until their data arrives. Merged into main (`7c1e0a2`).",
+   "when": "Yesterday"
+  }
+ ],
+ "sent": [
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "Reading src/pricing/Plans.tsx"
+   },
+   {
+    "at": 1500,
+    "activity": "Adding the Monthly / Yearly switch"
+   },
+   {
+    "at": 2700,
+    "activity": "Starting the dev server on :5173"
+   },
+   {
+    "at": 4000,
+    "post": {
+     "text": "Done: the plans have a Monthly / Yearly switch, and Yearly shows two months free. The dev server is up on Studio, try it on your phone:\n\n[open the pricing page](https://still.fail/o/ws1/st1/s-c1?service=j-web)"
+    }
+   },
+   {
+    "at": 4300,
+    "working": false
+   }
+  ],
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "Merging into main"
+   },
+   {
+    "at": 1900,
+    "post": {
+     "text": "Merged into main (`4b7e2d1`). Yearly prices go out with the next deploy.",
+     "ending": "all_done"
+    }
+   },
+   {
+    "at": 2300,
+    "working": false
+   }
+  ]
+ ],
+ "answered": [],
+ "service": {
+  "files": {
+   "/": "<!doctype html>\n<html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<link rel=\"stylesheet\" href=\"/app.css\"><title>Pricing - Acme</title></head>\n<body>\n<header><span class=\"logo\"></span>Acme</header>\n<main>\n<h1>Simple pricing</h1>\n<p class=\"sub\">Start free, upgrade when your team grows.</p>\n<div class=\"switch\"><button id=\"m\">Monthly</button><button id=\"y\" class=\"on\">Yearly <span class=\"save\">2 months free</span></button></div>\n<div class=\"plans\">\n<div class=\"plan\"><h2>Starter</h2><div class=\"price\"><b data-m=\"$0\" data-y=\"$0\">$0</b><span>/ month</span></div><ul><li>3 projects</li><li>Community support</li></ul><a class=\"btn ghost\">Get started</a></div>\n<div class=\"plan pro\"><div class=\"tag\">Most popular</div><h2>Pro</h2><div class=\"price\"><b data-m=\"$24\" data-y=\"$20\">$20</b><span>/ month</span></div><p class=\"bill\" data-m=\"Billed monthly\" data-y=\"$240 billed yearly\">$240 billed yearly</p><ul><li>Unlimited projects</li><li>Preview deploys</li><li>Priority support</li></ul><a class=\"btn\">Start a trial</a></div>\n<div class=\"plan\"><h2>Team</h2><div class=\"price\"><b data-m=\"$60\" data-y=\"$50\">$50</b><span>/ month</span></div><p class=\"bill\" data-m=\"Billed monthly\" data-y=\"$600 billed yearly\">$600 billed yearly</p><ul><li>Everything in Pro</li><li>SSO and audit log</li></ul><a class=\"btn ghost\">Talk to us</a></div>\n</div>\n</main>\n<script>\nconst set = (k) => { document.querySelectorAll('[data-m]').forEach(e => e.textContent = e.dataset[k]);\n  document.getElementById('m').className = k === 'm' ? 'on' : ''; document.getElementById('y').className = k === 'y' ? 'on' : ''; };\ndocument.getElementById('m').onclick = () => set('m'); document.getElementById('y').onclick = () => set('y');\n</script>\n</body></html>",
+   "/app.css": "html{background:#f6f6f8}\nbody{margin:0;font-family:-apple-system,system-ui,sans-serif;color:#1d1d1f;background:#f6f6f8}\nheader{display:flex;align-items:center;gap:10px;padding:16px 20px;font-weight:700;font-size:18px;background:#fff;border-bottom:1px solid #ececf0}\n.logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#ff7a45,#e5484d)}\nmain{padding:24px 18px 40px;max-width:980px;margin:0 auto}\nh1{font-size:30px;margin:6px 0 6px;text-align:center}.sub{text-align:center;color:#6e6e73;margin:0 0 20px}\n.switch{display:flex;width:max-content;margin:0 auto 24px;background:#e9e9ee;border-radius:12px;padding:4px}\n.switch button{border:0;background:none;padding:9px 16px;border-radius:9px;font:600 15px -apple-system,system-ui;color:#3a3a3c}\n.switch button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}\n.save{color:#1f9d55;font-weight:600;font-size:13px;margin-left:4px}\n.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}\n.plan{position:relative;background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06)}\n.plan.pro{outline:2px solid #5b5bd6}\n.tag{position:absolute;top:-11px;left:20px;background:#5b5bd6;color:#fff;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px}\nh2{font-size:17px;margin:0 0 8px}.price b{font-size:34px}.price span{color:#6e6e73;margin-left:4px}\n.bill{color:#1f9d55;font-size:13px;margin:4px 0 0}\nul{padding-left:18px;color:#3a3a3c;line-height:1.7;font-size:14px}\n.btn{display:block;text-align:center;padding:11px;border-radius:10px;background:#5b5bd6;color:#fff;font-weight:600;text-decoration:none}\n.btn.ghost{background:#f0f0f5;color:#1d1d1f}"
+  }
+ }
+}

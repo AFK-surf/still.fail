@@ -1,0 +1,6 @@
+kept-answers-ask {"call":"markdown","text":"All 14 payment tests pass against Stripe's test mode: card, 3-D Secure, refund and webhook. The key came through your vault's proxy to api.stripe.com only; I never saw it, and it's not in the repo, the logs or this chat."}
+kept-answers-ask {"call":"markdown","text":"All 14 payment tests pass against Stripe's test mode: card, 3-D Secure, refund and webhook. The key stays in your vault; it's not in the repo, the logs or this chat."}
+kept-answers-ask {"call":"markdown","text":"Checkout is in on the `stripe-checkout` branch: cart, card form and the order page. The payment tests are next."}
+kept-answers-ask {"call":"markdown","text":"Merged into main (`9c3e1f7`). Checkout goes out with the next deploy."}
+kept-answers-ask {"call":"words","key":"{\"call\":\"ref.at\",\"text\":\"Run the payment tests\",\"caret\":21}"}
+kept-answers-ask {"call":"words","key":"{\"call\":\"ref.pasted\",\"text\":\"Run the payment tests\",\"here\":\"ws1/st1\"}"}

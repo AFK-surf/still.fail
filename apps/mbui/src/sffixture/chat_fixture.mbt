@@ -1397,6 +1397,8 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       f.changed()
       Some(Ok(Json::object({})))
     }
+    // a told story's vault card (story_fixture.mbt)
+    "vault.approve" | "vault.deny" if story_vault_answer(f, name, params) => Some(Ok(Json::object({})))
     // chat-vault's request decided: how it went on its card at once, as the core puts it
     "vault.approve" | "vault.deny" if text(p, "request") == "r-ux7" => {
       fix_vault.val = if name == "vault.approve" { "granted" } else { "denied" }
@@ -1689,6 +1691,10 @@ pub fn fixture_link_card(name : String, params : Map[String, Json]) -> Json? {
   let screen = match params.get("screen") {
     Some(String(s)) => s
     _ => ""
+  }
+  match story_screen_card(screen) {
+    Some(card) => return Some(card)
+    None => ()
   }
   let card = fn(kind : String, title : String, line : String, gone : Bool, peek : Bool, w : Int, h : Int) -> Json {
     {

@@ -1,0 +1,48 @@
+# Film 3 of still.fail in use on the iPhone Duo simulator, in English: the agent asks to use a key kept in the person's
+# vault; allowed from its card, it uses it through the vault's proxy without seeing it (story
+# scripts/story/iduo-vault-en.json, FILM_LANG=en FILM_STORY=iduo-vault-en).
+timeout 45000
+until Message
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1500
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
+wait 1500
+at unfold
+log UNFOLD
+wait 4500
+at tap=发消息
+tap Message
+wait 600
+at keys
+keys Run the payment tests
+wait 600
+at tap=send
+tap icon:arrow-up
+wait 400
+at working
+until =Allow
+at answer
+wait 2200
+# (read a while with the keyboard up as one leaves it after sending; the list tapped to put it away)
+at tap=list
+tapxy 560 300
+wait 900
+at tap=allow
+tap =Allow
+wait 500
+at allowed
+until Not yet
+at answer2
+wait 2600
+at tap=合并
+tap =Merge
+wait 400
+until 9c3e1f7
+at merged
+wait 3200
+at end
+exit
