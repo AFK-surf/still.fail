@@ -69,13 +69,15 @@ export const navMark = style({ display: "grid", placeItems: "center", width: "24
 
 // Gone to from the bar's 下载 (Download): its title clear of the bar.
 globalStyle("#download", { scrollMarginTop: "64px" });
-/** Its title, and the button for this device's app beside it (under it on a narrow screen, where the cards are as
- *  tall as what is in them). */
-export const downloadHead = style({
+/** Its title with every app under it, and the button for this device's beside it (under it on a narrow screen). */
+export const downloadBand = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "24px",
-  "@media": { [NARROW]: { flexDirection: "column", alignItems: "flex-start", gap: "20px" } },
+  "@media": { [NARROW]: { flexDirection: "column", alignItems: "flex-start", gap: "24px" } },
 });
-export const downloadMain = style({ display: "flex" });
+/** Every app, a line of quiet links. */
+export const downloadAll = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 20px", margin: "12px 0 0", fontSize: vars.textTitle, color: "var(--s-muted)" });
+globalStyle(`${downloadAll} > a`, { color: FG, transition: "color .2s", selectors: { "&:hover": { color: "var(--s-muted)" } } });
+export const downloadMain = style({ display: "flex", alignItems: "center", gap: "24px" });
 /** Each device's button: the one for the device the page is on shows (data-platform on the root; a computer not a
  *  Mac's is taken for Windows', a device none is made for opens the web app). */
 export const downloadFor = style({ display: "none" });
@@ -84,27 +86,13 @@ for (const [key, platforms] of Object.entries(MAIN_FOR)) {
   globalStyle(`${platforms.map((p) => `:root[data-platform="${p}"] ${downloadFor}[data-for="${key}"]`).join(", ")}`, { display: "flex" });
 }
 globalStyle(`:root:not(:is([data-platform="mac"], [data-platform="windows"], [data-platform="desktop"], [data-platform="android"])) ${downloadFor}[data-for="other"]`, { display: "flex" });
-/** Every app, four across (two on a narrower screen), each a card that is its link. */
-export const downloads = style({
-  display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", margin: "40px auto 0", listStyle: "none",
-  "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
-});
-export const download = style({
-  display: "flex", flexDirection: "column", gap: "4px", height: "100%", minHeight: "180px", padding: "20px", boxSizing: "border-box",
-  "@media": { [NARROW]: { minHeight: "0" } },
-  borderRadius: vars.rCard, background: CARD, color: "var(--s-muted)", fontSize: vars.textUi, transition: "background .2s",
-  selectors: { "&:hover": { background: ink(6) } },
-});
-globalStyle(`${download} > b`, { fontSize: vars.textHeading, fontWeight: "600", color: FG, letterSpacing: "-.01em" });
-/** Where it goes, at the card's foot. */
-export const downloadGo = style({ marginTop: "auto", paddingTop: "16px", color: FG, fontWeight: "500" });
-/** The code to scan for the Android app, with its word: on a computer only (on a phone the card is the link). */
+/** The code to scan for the Android app, with its words: on a computer only (a phone has its link). */
 export const scanOnComputer = style({
-  display: "flex", alignItems: "center", gap: "12px", marginTop: "8px",
+  display: "flex", alignItems: "center", gap: "12px", fontSize: vars.textUi, color: "var(--s-muted)",
   selectors: { ':root:is([data-platform="android"], [data-platform="ios"]) &': { display: "none" } },
 });
 /** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
-export const scanCode = style({ display: "block", flex: "none", width: "88px", height: "88px", padding: "6px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
+export const scanCode = style({ display: "block", flex: "none", width: "64px", height: "64px", padding: "4px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
 
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
 export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });

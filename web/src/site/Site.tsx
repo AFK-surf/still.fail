@@ -100,27 +100,26 @@ export function Promises() {
  *  iPhone, Linux) opens the web app. */
 const MAIN = [["mac", MAC], ["windows", WINDOWS], ["android", ANDROID], ["other", APP]] as const;
 
-/** The apps: a button for this device's, then every one. */
+/** The apps, in a band: its title with a line of every app under it; the button for this device's, and on a computer
+ *  a code to scan for the Android app. */
 function Downloads() {
   const say = useSay();
   const d = say.downloads;
   return (
     <section id="download" className={css.section}>
-      <div className={`${css.wrap} ${css.downloadHead}`}>
-        <h2 className={css.headingTitle}>{d.title}</h2>
+      <div className={`${css.wrap} ${css.downloadBand}`}>
+        <div>
+          <h2 className={css.headingTitle}>{d.title}</h2>
+          <p className={css.downloadAll}>
+            <span>{d.all}</span>
+            <a href={MAC}>Mac</a><a href={WINDOWS}>Windows</a><a href={ANDROID}>Android</a><a href={APP}>{d.web}</a>
+          </p>
+        </div>
         <div className={css.downloadMain}>
+          <span className={css.scanOnComputer}><img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />{say.androidScan}</span>
           {MAIN.map(([key, href]) => <span key={key} className={css.downloadFor} data-for={key}><Button href={href} kind="primary" large>{d.main[key]}</Button></span>)}
         </div>
       </div>
-      <ul className={`${css.wrap} ${css.downloads}`}>
-        <li><a className={css.download} href={MAC}><b>Mac</b><span>{say.appleSilicon}</span><span className={css.downloadGo}>{say.downloadGo}</span></a></li>
-        <li><a className={css.download} href={WINDOWS}><b>Windows</b><span>x64</span><span className={css.downloadGo}>{say.downloadGo}</span></a></li>
-        {/* A code to scan where the page is on a computer; on a phone, the link. */}
-        <li><a className={css.download} href={ANDROID}><b>Android</b>
-          <span className={css.scanOnComputer}><img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />{say.androidScan}</span>
-          <span className={css.downloadGo}>{d.apk}</span></a></li>
-        <li><a className={css.download} href={APP}><b>{d.phones}</b><span>{d.phonesNote}</span><span className={css.downloadGo}>{d.openWeb}</span></a></li>
-      </ul>
     </section>
   );
 }
