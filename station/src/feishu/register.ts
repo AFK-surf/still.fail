@@ -27,6 +27,7 @@ export const ADDONS = {
       "im:chat.members:read",
       "contact:user.base:readonly",
       "contact:user.email:readonly",
+      "contact:user.id:readonly",
       "cardkit:card:write",
       "tenant:tenant:readonly",
     ],

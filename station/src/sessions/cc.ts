@@ -1,5 +1,6 @@
 // A person's message in a still.fail chat copied to Slack and Feishu threads its agents are in (docs/relay.md "抄送"):
-// those they tick in the composer's 抄送 menu, where each thread's bot says who wrote it on still.fail and what. It is the station's words there (no agent's, no person's: the bot never speaks as someone), not delivered to
+// those they tick in the composer's 抄送 menu, where each thread's bot says who wrote it on still.fail (their account
+// there, mentioned, where one has their email; else their name) and what. It is the station's words there (no agent's, no person's: the bot never speaks as someone), not delivered to
 // the agent, who has the message from the chat already. One that did not go is said in the chat.
 import { tr, stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -12,15 +13,17 @@ export function ccText(who: string, said: string): string {
   return said === "" ? head : `${head}\n\n${said}`;
 }
 
-/// Copies `said` (and its files) by `who` from chat `thread` to those of its Slack and Feishu threads named in `to`
-/// (their thread ids; others are not the chat's, and are left out): done once the promise is (it never fails: what did
-/// not go is said in the chat).
-export async function cc(hub: Hub, thread: number, who: string, said: string, files: Attachment[], to: number[]): Promise<void> {
-  const text = ccText(who, said);
+/// Copies `said` (and its files) by `who` (`email`) from chat `thread` to those of its Slack and Feishu threads named in
+/// `to` (their thread ids; others are not the chat's, and are left out): done once the promise is (it never fails: what
+/// did not go is said in the chat).
+export async function cc(hub: Hub, thread: number, who: string, email: string, said: string, files: Attachment[], to: number[]): Promise<void> {
   const picked = hub.store.ccThreads(thread).filter((o) => to.includes(o.thread.id));
   await Promise.all(picked.map(async (o) => {
     try {
-      const ts = await hub.chat(o.connect).post({ channel: o.thread.channel, threadTs: o.thread.threadTs }, text, files);
+      const chat = hub.chat(o.connect);
+      const user = (await chat.userOf?.(email).catch(() => null)) ?? null;
+      const text = ccText(user === null ? who : (chat.mention?.(user) ?? `<@${user}>`), said);
+      const ts = await chat.post({ channel: o.thread.channel, threadTs: o.thread.threadTs }, text, files);
       hub.store.insertMessage({ thread: o.thread.id, ts, authorKind: "ember", author: "ember", text, attachments: files });
     } catch (error) {
       log.warn("hub", "a message was not copied to a thread of its chat", { thread, to: o.thread.id, error: (error as Error).message });

@@ -30,7 +30,7 @@
 接力过的对话（或者 agent 本来就在 Slack、飞书的会话里），之后人在 still.fail 里接着发的话，Slack、飞书那边的人看不到：still.fail 的对话和那边的会话是两个对话，agent 在哪边被问就在哪边答。要让那边的人也看到，就在输入框里勾「抄送」（`chat.cc`）。
 
 - 能抄送到哪：对话的 agent 所在的每个 Slack、飞书会话，最近有人说话的在前，最多 20 个（`CC_THREADS_SQL`，`station/src/store/rows.ts`）。一个都没有，就没有抄送。
-- 勾上的每个会话，发出去的每条消息站点照常记进 still.fail 的对话、交给 agent，同时让那个会话的 bot 在那边发一条「某人 在 still.fail 说：」加原话，带上附件（`station/src/sessions/cc.ts`）。bot 不冒充人：Slack 的 `chat:write.customize` 能换名字和头像，但不用（左子健，2026-10-25）。
+- 勾上的每个会话，发出去的每条消息站点照常记进 still.fail 的对话、交给 agent，同时让那个会话的 bot 在那边发一条「某人 在 still.fail 说：」加原话，带上附件（`station/src/sessions/cc.ts`）。「某人」是用这个人的邮箱在那个平台上找到的账号，@ 这个账号（Slack 用 `users.lookupByEmail`，飞书用 `contact/v3/users/batch_get_id`，要 `contact:user.id:readonly`）；找不到才写 still.fail 上的名字（Peng Xiao，2026-10-28）。bot 不冒充人：Slack 的 `chat:write.customize` 能换名字和头像，但不用（左子健，2026-10-25）。
 - 那边那条记成站点的话，不交给 agent：它已经从 still.fail 的对话里收到了。agent 的回答还是在 still.fail 的对话里。
 - 没发出去（bot 不在频道里、权限不够），站点在 still.fail 的对话里说一句为什么，消息本身照常发出。
 - 默认都不勾。勾了就一直勾着（这个对话、这台设备、这次运行里：core 的 `Views.ccOn`），不用每条都勾。Slack 自己的「同时发送到 #频道」是每发一条就复位的，这里不这样，因为在这里接着聊是连续的。

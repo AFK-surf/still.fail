@@ -438,6 +438,18 @@ export class FeishuSurface extends ConnectedSurface {
     return name === "" ? null : { name, email: "" };
   }
 
+  /// contact/v3/users/batch_get_id (contact:user.id:readonly; an app given only the scopes before it cannot ask, and has
+  /// none): their open_id, as `mention` takes it.
+  protected async lookUpEmail(email: string): Promise<string | null> {
+    try {
+      const d = (await this.client.api("POST", "/open-apis/contact/v3/users/batch_get_id", { emails: [email] }, { user_id_type: "open_id" }))?.data ?? {};
+      const found = (Array.isArray(d.user_list) ? d.user_list : []).find((u: any) => text(u?.email).toLowerCase() === email);
+      return text(found?.user_id) || null;
+    } catch {
+      return null;
+    }
+  }
+
   knownPerson(user: string): Person | null {
     if (!this.book) return this.names.get(user) ?? null;
     return this.book.person(personKey(this.connect, user), () => this.profile(user));

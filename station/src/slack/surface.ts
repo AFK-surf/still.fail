@@ -537,6 +537,16 @@ export class SlackSurface extends ConnectedSurface {
     }
   }
 
+  /// users.lookupByEmail (users:read.email): users_not_found, or a deactivated account, is none.
+  protected async lookUpEmail(email: string): Promise<string | null> {
+    try {
+      const user = (await this.client.api("users.lookupByEmail", [["email", email]], this.botToken))?.user;
+      return user?.deleted === true ? null : text(user?.id) || null;
+    } catch {
+      return null;
+    }
+  }
+
   /// A person as far as already known, without waiting; an unknown one is looked up in the background, and so is one
   /// learned before pictures were kept.
   knownPerson(user: string): Person | null {

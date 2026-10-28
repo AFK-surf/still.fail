@@ -402,6 +402,26 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("a person found by their email (users.lookupByEmail), kept once found; none for one not there or deactivated", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    fake.answer("users.lookupByEmail", (s) =>
+      s.params.email === "ada@example.test" ? { ok: true, user: { id: "U1" } }
+        : s.params.email === "old@example.test" ? { ok: true, user: { id: "U9", deleted: true } }
+        : { ok: false, error: "users_not_found" },
+    );
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
+    try {
+      await surface.start(quiet);
+      assert.deepEqual([await surface.userOf(" Ada@Example.test"), await surface.userOf("ada@example.test")], ["U1", "U1"]);
+      assert.deepEqual(fake.calls("users.lookupByEmail").map((c) => c.params.email), ["ada@example.test"], "asked once, as written there");
+      assert.deepEqual([await surface.userOf("old@example.test"), await surface.userOf("bo@example.test"), await surface.userOf("")], [null, null, null]);
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("any Web API method as the bot: structures go as JSON, nulls left out; Slack's refusal and its 429 waits", async () => {
     const fake = await FakeSlack.start();
     const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });

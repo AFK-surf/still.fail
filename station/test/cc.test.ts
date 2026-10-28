@@ -54,7 +54,7 @@ test("copying a message: each thread picked has the bot say who wrote it on stil
   const other = r.store.openThread("slack:T1", "C9", "1700.000900", null, "bo");
   const before = r.claude.sessions.length;
   // Both picked, and one that is not the chat's (left out).
-  await cc(r.hub, chat.id, "Ada Lovelace", "can you look at #42?", [], [a.id, b.id, other.id]);
+  await cc(r.hub, chat.id, "Ada Lovelace", "ada@x.com", "can you look at #42?", [], [a.id, b.id, other.id]);
   const said = `${tr(stationLang(), "station.cc.said", { who: "Ada Lovelace" })}\n\ncan you look at #42?`;
   assert.equal(ccText("Ada Lovelace", "can you look at #42?"), said);
   assert.deepEqual(r.chat.posts.map((p) => p[0].channel).sort(), ["C1", "C2"]);
@@ -64,9 +64,23 @@ test("copying a message: each thread picked has the bot say who wrote it on stil
   await settle();
   assert.equal(r.claude.sessions.length, before, "the agent is not given the copy: it has the message from the chat");
   // One picked, only files: who sent them, and the files.
-  await cc(r.hub, chat.id, "Ada", "", [{ name: "a.png", path: "/x/a.png", size: 3 }], [b.id]);
+  await cc(r.hub, chat.id, "Ada", "ada@x.com", "", [{ name: "a.png", path: "/x/a.png", size: 3 }], [b.id]);
   assert.deepEqual(r.chat.posts.at(-1), [{ channel: "C2", threadTs: "1700.000200" }, tr(stationLang(), "station.cc.said", { who: "Ada" })]);
   assert.deepEqual(r.chat.files.at(-1), ["a.png"]);
+  await r.close();
+});
+
+test("copying a message: the one who wrote it is mentioned as their account there, found by their email; their name where none is", async () => {
+  const r = new Rig();
+  const [key, chat] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  const there = r.store.openThread("slack:T1", "C1", "1700.000100", null, "ada");
+  r.store.joinThread(there.id, key, "cl");
+  r.chat.people.set("ada@x.com", "UADA");
+  await cc(r.hub, chat.id, "Ada Lovelace", "Ada@X.com", "hi", [], [there.id]);
+  assert.equal(r.chat.lastText(), ccText("<@UADA>", "hi"));
+  assert.deepEqual(r.said(there.id).map((m) => m.text), [ccText("<@UADA>", "hi")]);
+  await cc(r.hub, chat.id, "Bo", "bo@x.com", "hi", [], [there.id]);
+  assert.equal(r.chat.lastText(), ccText("Bo", "hi"));
   await r.close();
 });
 
@@ -76,7 +90,7 @@ test("a copy that did not go is said in the chat", async () => {
   const there = r.store.openThread("slack:T1", "C1", "1700.000100", null, "ada");
   r.store.joinThread(there.id, key, "cl");
   Object.assign(r.chat, { post: async () => { throw new Error("not_in_channel"); } });
-  await cc(r.hub, chat.id, "Ada", "hi", [], [there.id]);
+  await cc(r.hub, chat.id, "Ada", "ada@x.com", "hi", [], [there.id]);
   assert.deepEqual(r.said(there.id), []);
   const note = r.said(chat.id).at(-1)!;
   assert.deepEqual([note.authorKind, note.text], ["ember", tr(stationLang(), "station.cc.failed", { place: "Slack", error: "not_in_channel" })]);
