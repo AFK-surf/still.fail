@@ -242,9 +242,7 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
   let workspaces = items(notify, "workspaces")
   if workspaces.length() > 1 {
     blocks.push(fn() {
-      // (its note under its title where wide, under its card where narrow: as 提醒方式's)
-      let note = @sf.t("web-pages.notifications.workspaces.note")
-      @sf.section(c, @sf.t("web-pages.notifications.workspaces.title"), heads=true, note=if look == Wide { note } else { "" }, fn() {
+      @sf.section(c, @sf.t("web-pages.notifications.workspaces.title"), heads=true, fn() {
         @sf.page_card(c, fn() {
           for w in workspaces {
             let wv = Some(w)
@@ -267,9 +265,8 @@ fn notify_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, notify : Js
             }
           }
         })
-        if look == Narrow {
-          @sf.page_note(c, note)
-        }
+        // (its note under its card)
+        @sf.page_note(c, @sf.t("web-pages.notifications.workspaces.note"))
       })
     })
   }

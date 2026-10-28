@@ -1237,7 +1237,7 @@ let zh : Map[String, String] = {
   "web-pages.notifications.ways.bell": "铃铛",
   "web-pages.notifications.ways.banner": "横幅",
   "web-pages.notifications.ways.title": "提醒方式",
-  "web-pages.notifications.workspaces.note": "关闭的 workspace 不再提醒，也不计入红点",
+  "web-pages.notifications.workspaces.note": "关闭的 workspace 不再提醒，也不算进红点",
   "web-pages.notifications.workspaces.title": "Workspace",
   "web-pages.permissions.allow": "允许",
   "web-pages.permissions.lead": "{name} 在此设备上所需的系统权限；在系统设置中更改后，此处会立即更新",
