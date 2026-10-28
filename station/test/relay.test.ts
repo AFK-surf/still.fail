@@ -11,6 +11,9 @@ import { SlackClient } from "../src/slack/web.ts";
 import { Rig, message, settle, testClock, type Setup } from "./hub-fakes.ts";
 import { FakeSlack } from "./slack-fake.ts";
 
+/// Who relays the chats here.
+const ADA = { name: "Ada", email: "ada@x.com" };
+
 /// A rig whose Claude connect's bot is in #cue-dev and #design, and starts conversations as Slack would.
 function relayRig(setup: Setup = {}) {
   const r = new Rig({ link: true, ...setup });
@@ -61,7 +64,7 @@ test("a chat's places: every bot, the one running what the chat's agent runs pre
   r.config.connects.find((c) => c.id === "gpt")!.bind = { runtime: "claude", profile: "cc" };
   assert.deepEqual(await preferred(claude), ["gpt"]);
   // Another bot can be picked all the same.
-  const done = await relay(r.hub, claude, "Ada", { connect: "gpt", channel: "C1" }, "");
+  const done = await relay(r.hub, claude, ADA, { connect: "gpt", channel: "C1" }, "");
   assert.equal(done.place, "#cue-dev");
   await r.close();
 });
@@ -72,11 +75,11 @@ test("a chat's places: those relayed to before come first, the latest first, the
   const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
   const order = async () => (await relayPlaces(r.hub, thread))[0]!.places.map((p) => [p.id, p.used ?? null]);
   assert.deepEqual(await order(), [["C1", null], ["C2", null]]);
-  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C2" }, "");
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C2" }, "");
   const first = r.store.now();
   assert.deepEqual(await order(), [["C2", first], ["C1", null]]);
   await time.adjust(1000);
-  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C1" }, "");
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "");
   assert.deepEqual(await order(), [["C1", first + 1000], ["C2", first]]);
   await r.close();
 });
@@ -93,7 +96,7 @@ test("relaying starts the conversation there, makes it the agent's, says so wher
   sayIn(r.hub, thread.id, "ada@x.com", "plan the relay feature");
   await settle();
   await end();
-  const done = await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C1" }, " @Bo could you look? ");
+  const done = await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, " @Bo could you look? ");
   assert.deepEqual(done, { thread: r.thread("C1", "1700.000100").id, to: "C1/1700.000100", place: "#cue-dev", link: "https://acme.slack.com/archives/C1/p1700000100" });
   // The station's first message there: who, which chat (linked), the note.
   assert.equal(begun.length, 1);
@@ -140,7 +143,7 @@ test("relaying starts the conversation there, makes it the agent's, says so wher
 test("a relayed chat's first post is a reply where it would not fit in the station's first message, carries files, or is not the relaying agent's", async () => {
   const { r } = relayRig();
   const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
-  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C1" }, "");
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "");
   await settle();
   const long = "x".repeat(3500);
   assert.equal(await r.call(key, "chat_post", { to: "C1/1700.000100", text: long }), "Posted to C1/1700.000100.");
@@ -155,20 +158,35 @@ test("a relayed chat's first post is a reply where it would not fit in the stati
   await r.close();
 });
 
+test("the station's first message there mentions who relayed it, where the platform has an account with their email", async () => {
+  const { r, begun } = relayRig();
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  r.chat.people.set("ada@x.com", "UADA");
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "");
+  assert.equal(begun[0]![1], tr(stationLang(), "station.relay.opening", { who: "<@UADA>", chat: begun[0]![1].match(/\[.*\]\(.*\)/)![0] }));
+  // The chat it came from names them as still.fail does.
+  assert.ok(r.said(thread.id).at(-1)!.text.includes("Ada"));
+  // One the platform has no account for is named.
+  r.chat.people.clear();
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C2" }, "");
+  assert.ok(begun[1]![1].includes("Ada") && !begun[1]![1].includes("<@"), begun[1]![1]);
+  await r.close();
+});
+
 test("relaying is refused where the bot is not, through a connect that cannot, and for a chat with no agent", async () => {
   const { r, begun } = relayRig();
   const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
-  await assert.rejects(relay(r.hub, thread, "Ada", { connect: "cl", channel: "C9" }, ""), /not in C9/);
-  await assert.rejects(relay(r.hub, thread, "Ada", { connect: "gpt", channel: "C1" }, ""), /cannot take this chat/);
+  await assert.rejects(relay(r.hub, thread, ADA, { connect: "cl", channel: "C9" }, ""), /not in C9/);
+  await assert.rejects(relay(r.hub, thread, ADA, { connect: "gpt", channel: "C1" }, ""), /cannot take this chat/);
   const lone = r.store.openThread("ember", "EMBER", "1.5", null, "ada@x.com");
-  await assert.rejects(relay(r.hub, lone, "Ada", { connect: "cl", channel: "C1" }, ""), /no agent/);
+  await assert.rejects(relay(r.hub, lone, ADA, { connect: "cl", channel: "C1" }, ""), /no agent/);
   assert.equal(begun.length, 0, "nothing was started");
-  await assert.rejects(relay(r.hub, thread, "Ada", { link: "https://other.slack.com/archives/C1/p1650000000000100" }, ""), /not a link/);
+  await assert.rejects(relay(r.hub, thread, ADA, { link: "https://other.slack.com/archives/C1/p1650000000000100" }, ""), /not a link/);
   // A thread another chat's agent is in stays that one's.
   const other = r.store.openThread("slack:T1", "C1", "1650000000.000100", null, null);
   const [elsewhere] = newSession(r.hub, { runtime: "claude", createdBy: "bo@x.com" });
   r.store.joinThread(other.id, elsewhere, "cl");
-  await assert.rejects(relay(r.hub, thread, "Ada", { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, ""), /another chat's agent/);
+  await assert.rejects(relay(r.hub, thread, ADA, { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, ""), /another chat's agent/);
   assert.equal(r.chat.posts.length, 0, "nothing was said there");
   await r.close();
 });
@@ -176,7 +194,7 @@ test("relaying is refused where the bot is not, through a connect that cannot, a
 test("relaying to a Slack thread by a message's link joins that thread: the station says so in it, and the agent reads it first", async () => {
   const { r, begun } = relayRig();
   const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
-  const done = await relay(r.hub, thread, "Ada", { link: "https://acme.slack.com/archives/C1/p1650000000000100?thread_ts=1650000000.000100&cid=C1" }, "");
+  const done = await relay(r.hub, thread, ADA, { link: "https://acme.slack.com/archives/C1/p1650000000000100?thread_ts=1650000000.000100&cid=C1" }, "");
   assert.equal(begun.length, 0, "no new thread");
   assert.equal(done.to, "C1/1650000000.000100");
   assert.deepEqual(r.chat.posts.map(([at]) => at), [{ channel: "C1", threadTs: "1650000000.000100" }]);
@@ -185,7 +203,7 @@ test("relaying to a Slack thread by a message's link joins that thread: the stat
   assert.ok(back.includes(`[${tr(stationLang(), "station.relay.threadIn", { place: "#cue-dev" })}](https://acme.slack.com/archives/C1/p1650000000000100)`), back);
   await settle();
   assert.ok(r.claude.last().prompts.at(-1)!.includes("conversations.replies"), "told to read what was said there");
-  await assert.rejects(relay(r.hub, thread, "Ada", { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, ""), /in that thread already/);
+  await assert.rejects(relay(r.hub, thread, ADA, { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, ""), /in that thread already/);
   await r.close();
 });
 
