@@ -15,7 +15,7 @@ import { useJoinable, useProfiles, useStations, type Profile, type StationView }
 import { same, type Mark } from "../stationPick.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import type { JoinableView, WorkspaceProfile } from "../core/shapes.ts";
+import type { JoinableView, WayRow, WorkspaceProfile, WorkspaceWaysView } from "../core/shapes.ts";
 import { MarkOrLetter } from "../StationMark.tsx";
 import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 import { ConnectList } from "../pages/Connects.tsx";
@@ -39,7 +39,7 @@ import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, 
 import { useAccounts, useDeleteAccount, useSignIn, useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
-import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type MemberView, type Role, type WayView, type WorkspaceView } from "./api.ts";
+import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type MemberView, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
 import { useDoing } from "../doing.ts";
@@ -1000,15 +1000,14 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
   );
 }
 
-/** A way straight to a station as listed (`WayView` of kind lan, tailnet, direct): its title and the line under it. */
-export function wayWords(w: WayView): { title: string; note: string } {
+/** A way straight to a station as listed (`WayRow` of kind lan, tailnet, direct): its title and the line under it. */
+export function wayWords(w: WayRow): { title: string; note: string } {
   return { title: t(`android-settings.ways.${w.kind}`), note: t(`android-settings.ways.${w.kind}Note`) };
 }
 
-/** How many of the workspace's ways are turned off, as its row says it: 全部开启, 已关闭 N 项. */
-export function waysValue(view: WorkspaceView): string {
-  const off = (view.ways ?? []).filter((w) => !w.on).length;
-  return off === 0 ? t("android-settings.ways.allOn") : t("android-settings.ways.someOff", { n: off });
+/** How the workspace's members' devices reach its stations, as the core has it from `/v1/me` (views/ways.ts). */
+export function useWays(workspace: string): WorkspaceWaysView | undefined {
+  return useTopic<WorkspaceWaysView>({ topic: "workspaceWays", workspace }).value;
 }
 
 /**
@@ -1018,15 +1017,15 @@ export function waysValue(view: WorkspaceView): string {
  */
 function WaysRow({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
   const [open, setOpen] = useState(false);
-  const ways = view.ways ?? [];
-  if (!manager && (view.relays ?? []).length === 0 && ways.every((w) => w.on)) return null;
+  const ways = useWays(view.id);
+  if (!manager && (view.relays ?? []).length === 0 && (ways?.off ?? 0) === 0) return null;
   return (
     <>
       <ul className={pagesCss.list}>
         <li>
           <button type="button" className={pagesCss.listRow} onClick={() => setOpen(true)}>
             <span className={pagesCss.listRowTitle}>{t("android-settings.ways.title")}</span>
-            <span className={css.rowValue}>{waysValue(view)}</span>
+            <span className={css.rowValue}>{ways?.offLabel}</span>
             <ChevronRight size={14} className={css.rowChevron} />
           </button>
         </li>
@@ -1040,15 +1039,15 @@ function WaysRow({ view, account, manager }: { view: WorkspaceView; account: Acc
 
 /** The ways in the dialog: still.fail's relays and the ways straight to a station each on or off, its own relays between. */
 function Ways({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
-  const ways = view.ways ?? [];
+  const ways = useWays(view.id)?.ways ?? [];
   const set = useAction(({ way, on }: { way: string; on: boolean }) => cloud.setWay(account.sub, view.id, way, on));
-  const turn = (w: WayView, title: string, note?: string) => (
+  const turn = (w: WayRow, title: string, note?: string) => (
     <SwitchRow key={w.id} title={title} description={note} checked={set.busy && set.arg?.way === w.id ? set.arg.on : w.on} disabled={!manager || set.busy} busy={set.busy && set.arg?.way === w.id} onChange={(on) => void set.run({ way: w.id, on })} />
   );
   return (
     <>
       <Section title={t("android-settings.ways.ours", { app: NAME })}>
-        {ways.filter((w) => w.kind === "relay" && !w.own).map((w) => turn(w, w.name ?? relayLabel(w.id)))}
+        {ways.filter((w) => w.kind === "relay" && !w.own).map((w) => turn(w, w.name))}
       </Section>
       <Relays view={view} account={account} manager={manager} />
       <Section title={t("android-settings.ways.straight")}>

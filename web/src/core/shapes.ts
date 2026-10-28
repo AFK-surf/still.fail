@@ -6696,6 +6696,19 @@ export interface VaultsView {
 	statusBad?: boolean;
 }
 
+/** One way to a workspace's stations. */
+export interface WayRow {
+	/** A relay's URL, or the kind (lan, tailnet, direct): what `workspace.setWay` is given. */
+	id: string;
+	/** relay | lan | tailnet | direct */
+	kind: string;
+	/** A relay's: what still.fail calls it (北京), or its host. Empty for a kind. */
+	name: string;
+	/** A relay of the workspace's own. */
+	own: boolean;
+	on: boolean;
+}
+
 /**
  * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
  * have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a
@@ -6750,5 +6763,17 @@ export interface WorkspaceMarksView {
 	badge?: number;
 	/** What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says. */
 	badgeKinds?: BadgeKinds;
+}
+
+/**
+ * How a workspace's members' devices reach its stations (the `workspaceWays` view, views/ways.ts): still.fail's relays,
+ * the workspace's own, the ways straight to a station; each on or turned off. From `/v1/me`, kept on the device.
+ */
+export interface WorkspaceWaysView {
+	ways: WayRow[];
+	/** How many are turned off. */
+	off: number;
+	/** 全部开启, 已关闭 2 项: the workspace page's 连接方式 row says it. */
+	offLabel: string;
 }
 

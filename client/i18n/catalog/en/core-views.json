@@ -279,6 +279,8 @@
   "core-views.present.net.choosing": "Routing…",
   "core-views.present.net.direct": "Direct",
   "core-views.present.net.tailnet": "Tailscale",
+  "core-views.ways.all_on": "All on",
+  "core-views.ways.some_off": "{n} off",
   "core-views.present.net.loss": "{percent}% loss",
   "core-views.present.net.relay": "Relay",
   "core-views.present.net.relay_host": "Relay {host}",
