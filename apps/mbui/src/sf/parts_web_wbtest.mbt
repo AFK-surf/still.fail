@@ -319,8 +319,10 @@ test "a list's row in a side column: what stands at its first line's end in one 
           0L,
           high=true,
           end_slot=16.0,
-          corner=fn() { c.box(w=Px(l.face_d), h=Px(l.face_d), bg=0x00FF00FFL, fn() {  }) |> ignore },
-          corner_w=l.face_d,
+          // (an agent's mark last in the corner, 16 wide)
+          corner=fn() { c.box(w=Px(16.0), h=Px(16.0), bg=0x00FF00FFL, fn() {  }) |> ignore },
+          corner_w=16.0,
+          corner_end=16.0,
           fn() {
             c.box(style=@ui.css("w=Full"), fn() {  }) |> ignore
             c.box(w=Px(16.0), h=Px(16.0), bg=0xFF0000FFL, fn() {  }) |> ignore

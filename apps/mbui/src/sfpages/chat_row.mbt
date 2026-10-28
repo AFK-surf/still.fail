@@ -248,6 +248,7 @@ pub fn chat_row(
         slotted=swipes,
         // (its station's mark at its first line's end, in the column of who is in it under it)
         end_slot=kind_slot_w,
+        corner_end=row_aside_end_w(item, lead),
         fn() {
             // (renamed, the field takes the head's whole width, its mark's place too: rename_box)
             let tone = @sfbase.row_tone(item)

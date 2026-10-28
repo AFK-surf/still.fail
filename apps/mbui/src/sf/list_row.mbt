@@ -16,7 +16,8 @@
 /// not draw kept empty, so rows of a kind are as high whatever each says (a station's, up or away); `slotted`: in the
 /// slot it is moved across in (list_row_slot: a finger's swipe), whose corners are its: its own ground square, so
 /// nothing shows between it and what it uncovers beside it as it moves; `end_slot`: how wide what stands at its first
-/// line's end is, in one column with what stands in its corner. Its box, the one pressed.
+/// line's end is, in one column with the last of what stands in its corner (`corner_end` wide: a face's by default).
+/// Its box, the one pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -33,6 +34,7 @@ pub fn list_row(
   after? : () -> Unit = fn() {  },
   slotted? : Bool = false,
   end_slot? : Double = 0.0,
+  corner_end? : Double = 0.0,
 ) -> Int {
   let l = theme().chat_list
   let line = @ui.style(h=Fixed(l.head_h))
@@ -58,7 +60,10 @@ pub fn list_row(
       // what stands in its foot's end corner (a chat's people and agents, concentric with the row's corner: aside_end),
       // their middles on one line down the list, the first line reaching into the row's room for it where it must)
       let reach = match at {
-        Side if end_slot > 0.0 => dmax(0.0, l.band_pad + end_slot / 2.0 - (l.aside_end + l.face_d / 2.0))
+        Side if end_slot > 0.0 => {
+          let last = if corner_end > 0.0 { corner_end } else { l.face_d }
+          dmax(0.0, l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0))
+        }
         _ => 0.0
       }
       let head_style = if reach > 0.0 { l.head.then(@ui.style(mr=room(-reach))) } else { l.head }
