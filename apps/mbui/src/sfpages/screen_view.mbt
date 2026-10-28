@@ -25,6 +25,8 @@ priv struct ScreenUi {
   mut full : Bool
   /// the window made to fill the screen by its 全屏 (keyboard and mouse's), put back as it closes
   mut fulled : Bool
+  /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
+  mut in_tab : Bool
   mut tools_open : Bool
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
@@ -85,6 +87,7 @@ fn screen_ui(key : String) -> ScreenUi {
         held: { mods: 0 },
         full: false,
         fulled: false,
+        in_tab: false,
         tools_open: false,
         saying: false,
         sayings: 0,
@@ -135,13 +138,21 @@ let rail_say_ms : Double = 3000.0
 /// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
 /// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then. Inside
 /// the room its frame keeps over and under it (`frame`: the system's bars), unless full.
-pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame, on_close? : () -> Unit) -> Unit {
+pub fn screen_page(
+  c : @ui.Ctx,
+  src : Source,
+  at : ScreenAt,
+  frame : PageFrame,
+  on_close? : () -> Unit,
+  in_tab? : Bool = false,
+) -> Unit {
   let station = at.station
   let screen = at.screen
   let title = at.title
   let key = screen_key(station, screen)
   let s = screen_sess(src, station, screen)
   let u = screen_ui(key)
+  u.in_tab = in_tab
   // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen
   let close = fn() {
     if u.fulled && @ui.full_screen() {
@@ -568,7 +579,7 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=screen_bar, fn() {
-    if round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+    if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
       close()
     }
     let live = s.phase() == "live"
@@ -790,7 +801,7 @@ fn screen_rail(
   let line = text(s.state, "line")
   c.box(fn() {
     c.box(style=rail_box, fn() {
-      if round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+      if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
         close()
       }
       c.spacer()
