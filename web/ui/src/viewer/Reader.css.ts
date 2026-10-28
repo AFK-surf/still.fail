@@ -87,7 +87,7 @@ globalStyle(`${hairline} > span`, { position: "absolute", inset: "0", background
 
 /** What floats over the page: its raised ground frosted, as the composer and a preview's bars. */
 const glassy = {
-  background: "color-mix(in srgb, var(--r-raised) 72%, transparent)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: "color-mix(in srgb, var(--r-raised) 72%, transparent)",
   backdropFilter: "blur(20px) saturate(1.4)", color: "var(--r-ink)", fontFamily: vars.fontBody,
   borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
 } as const;

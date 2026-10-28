@@ -58,7 +58,7 @@ export const fileTitle = style({ display: "flex", alignItems: "center", gap: "6p
 export const fileTime = style({ flex: "0 0 auto", marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
 export const fileTitleIcon = style({ flex: "0 0 auto", color: vars.muted });
 export const filePath = style({
-  fontFamily: vars.fontMono, fontSize: vars.textCaption, color: vars.muted, overflowWrap: "anywhere", userSelect: "text", WebkitUserSelect: "text",
+  fontFamily: vars.fontMono, fontSize: vars.textCaption, color: vars.muted, overflowWrap: "anywhere", userSelect: "text",
 });
 /** What can be done with a file's path (copied, shown in Finder), at the end of its facts. */
 /**

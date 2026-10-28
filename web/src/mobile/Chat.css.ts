@@ -79,7 +79,7 @@ export const mBarJoinedStation = style({
  */
 globalStyle(`${mMessages} [data-author]`, {
   WebkitTouchCallout: "none",
-  "@media": { "(hover: none)": { userSelect: "none", WebkitUserSelect: "none" } },
+  "@media": { "(hover: none)": { userSelect: "none" } },
 });
 export const mJump = style({
   position: "absolute", right: "18px", bottom: "calc(var(--m-composer-room) + var(--asks-height, 0px) + 2px)", zIndex: "2", display: "grid",

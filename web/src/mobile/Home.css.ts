@@ -7,8 +7,8 @@ export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
 });
 // Home is navigation, not document text: iOS can expand a hold on an unselectable row to its selectable ancestor.
-export const mHome = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" });
-globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitUserSelect: "text", WebkitTouchCallout: "default" });
+export const mHome = style({ position: "absolute", inset: "0", userSelect: "none", WebkitTouchCallout: "none" });
+globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitTouchCallout: "default" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
 export const mHomeSlide = style({
   position: "absolute", inset: "0", transition: "transform 240ms var(--m-standard)",
@@ -76,7 +76,7 @@ export const mEmpty = style({
 export const mChatRow = style({
   position: "relative", display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%",
   height: "66px", padding: "0 16px 0 22px", border: "0", background: "transparent", color: "var(--m-ink)",
-  textAlign: "left", cursor: "pointer", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none",
+  textAlign: "left", cursor: "pointer", userSelect: "none", WebkitTouchCallout: "none",
   vars: { "--mark-around": "var(--m-bg)" },
   selectors: {
     "&[data-held]": { background: "color-mix(in srgb, var(--m-ink) 5%, transparent)" },

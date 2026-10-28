@@ -5,7 +5,7 @@ import { centredX, centredY } from "@stillfail/ui/styles/align.ts";
 
 /** Frosted, as the composer is. */
 const glass = {
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
   backdropFilter: "blur(20px) saturate(1.4)",
 } as const;
 /** Dark: thicker, so over a light page it is not a muddy grey. */
@@ -89,7 +89,7 @@ export const toolbar = style({
   ...glass,
   display: "flex", alignItems: "center", gap: "4px", height: "48px", padding: "0 6px", borderRadius: "999px",
   boxShadow: "0 1px 3px rgb(0 0 0 / .06), 0 6px 20px rgb(0 0 0 / .12)",
-  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none", touchAction: "pan-x",
+  userSelect: "none", WebkitTouchCallout: "none", touchAction: "pan-x",
   animation: `${fadeInKeyframes} 160ms ${vars.easeOut}`,
   ...darkGlass,
 });

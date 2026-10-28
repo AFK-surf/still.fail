@@ -15,7 +15,7 @@ export const bar = style({
   display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)", alignItems: "center", gap: "16px",
   padding: "0 12px 1px", color: `var(--viewer-ink, ${vars.text})`,
   // Over the file, frosted with its ground: what scrolls under it shows through, softened.
-  background: `color-mix(in srgb, var(--viewer-ground, ${vars.canvas}) 82%, transparent)`, WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  background: `color-mix(in srgb, var(--viewer-ground, ${vars.canvas}) 82%, transparent)`,
   backdropFilter: "blur(20px) saturate(1.4)", boxShadow: `inset 0 -1px 0 color-mix(in srgb, var(--viewer-line, ${vars.line}) 70%, transparent)`,
   transition: `transform 240ms ${vars.easeOut}, opacity 240ms ${vars.easeOut}`,
   selectors: {

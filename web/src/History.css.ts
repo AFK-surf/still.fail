@@ -137,7 +137,6 @@ export const foldBody = style({
   selectors: {
     "&[data-folded]": {
       maxHeight: "calc(var(--fold-lines, 5) * 1lh + 2px)", overflow: "hidden",
-      WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 1lh), transparent)",
       maskImage: "linear-gradient(to bottom, #000 calc(100% - 1lh), transparent)",
     },
   },

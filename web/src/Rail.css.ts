@@ -12,7 +12,7 @@ const narrow = "(max-width: 700px)";
 export const rail = style({
   // Its last place's ground (30 in 38) as far from its foot as from its sides: 13.
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 9px", flex: "none", width: 56,
-  WebkitUserSelect: "none", userSelect: "none",
+  userSelect: "none",
   // A window too short for every place: they scroll (its bar floating, scrollbars.ts), not squashed.
   overflowY: "auto", scrollbarWidth: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it: moved with it (brand.tsx moveSidebar), not by a transition of

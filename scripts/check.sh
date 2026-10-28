@@ -257,6 +257,12 @@ if part ts; then
   if touches '^(web/src|web/ui)/'; then
     step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src web/ui'
   fi
+  # Prefixes are the build's (Lightning CSS adds -webkit- where the browsers built for want it). Written by hand after
+  # the standard property, Lightning CSS keeps only the last of the two, the prefixed one: Chrome drew no frosted glass
+  # behind the site's bar, the composer or the viewers, and selected text the styles said not to.
+  if touches '^(web/src|web/ui)/'; then
+    step "prefixes from the build" sh -c '! git grep -nE "Webkit(BackdropFilter|UserSelect|Mask[A-Za-z]*|BoxDecorationBreak):" -- web/src web/ui'
+  fi
   # Type sizes are the tokens' (web/ui/src/styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
   if touches '^web/(src|ui)/'; then
     step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts" "web/ui/*.css.ts"'

@@ -128,12 +128,10 @@ export const composerText = style({
     "&::placeholder": { color: vars.subtle },
     [`${composerBox}:not([data-multiline]) &`]: { padding: "5px 8px 5px 0" },
     "&[data-more-above]": {
-      WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       maskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       vars: { "--more-above": "4px" },
     },
     "&[data-more-below]": {
-      WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       maskImage: "linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent)",
       vars: { "--more-below": "4px" },
     },

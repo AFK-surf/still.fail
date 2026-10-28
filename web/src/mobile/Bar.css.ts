@@ -28,7 +28,7 @@ export const mBarHost = style({
 /** The bar and its panel (as tall as the panel, its foot the bar's); only what shows takes a touch. */
 export const mBarWrap = style({
   position: "absolute", left: "0", right: "0", bottom: "0", transformOrigin: "50% 100%",
-  touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+  touchAction: "none", userSelect: "none", WebkitTouchCallout: "none",
 });
 
 /** The scrim under the open panel: nothing to see, a tap on it closes the panel. */
@@ -41,7 +41,7 @@ const rim = (a: number, b: number, c: number) =>
 export const mBarGlass = style([{
   position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none",
   background: "color-mix(in srgb, var(--raised) 72%, transparent)",
-  WebkitBackdropFilter: "blur(20px) saturate(1.6)", backdropFilter: "blur(20px) saturate(1.6)",
+  backdropFilter: "blur(20px) saturate(1.6)",
   boxShadow: rim(0.35, 0.8, 0.45),
 }, dark({ boxShadow: rim(0.14, 0.3, 0.16) })]);
 
@@ -73,7 +73,7 @@ export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", h
 export const mBarBall = style([{
   position: "absolute", left: 0, top: 0, zIndex: 5, pointerEvents: "none", transition: "opacity 200ms",
   background: "color-mix(in srgb, #fff 42%, transparent)",
-  WebkitBackdropFilter: "blur(14px) saturate(1.6)", backdropFilter: "blur(14px) saturate(1.6)",
+  backdropFilter: "blur(14px) saturate(1.6)",
   boxShadow: `${rim(0.5, 0.95, 0.55)}, 0 1px 8px rgb(55 53 45 / .2)`,
 }, dark({ background: "color-mix(in srgb, #fff 12%, transparent)", boxShadow: `${rim(0.22, 0.45, 0.25)}, 0 1px 8px rgb(0 0 0 / .35)` })]);
 
@@ -82,7 +82,7 @@ export const mBarLing = style({
   position: "absolute", left: "50%", width: "56px", height: "56px", borderRadius: "50%", border: "0", padding: "0", zIndex: 4,
   display: "grid", placeItems: "center", color: "#fff", cursor: "pointer", transformOrigin: "50% 50%",
   background: "color-mix(in srgb, var(--m-accent) 86%, transparent)",
-  WebkitBackdropFilter: "blur(20px) saturate(1.6)", backdropFilter: "blur(20px) saturate(1.6)",
+  backdropFilter: "blur(20px) saturate(1.6)",
   boxShadow: rim(0.4, 0.75, 0.4),
 });
 

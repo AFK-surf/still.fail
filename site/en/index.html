@@ -23,6 +23,9 @@
 <script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
 <!-- Which idea of the page shows (web/src/site/Site.tsx): ?v=2 the second, else the first. -->
 <script>document.documentElement.dataset.v=new URLSearchParams(location.search).get("v")==="2"?"2":"1"</script>
+<!-- With a mouse, scrollbars float and take no room, as the demo's app has them once it runs (web/src/scrollbars.ts):
+     so before the first paint, or its opening frame is laid out narrower than the app that takes it over. -->
+<script>if(matchMedia("(pointer: fine)").matches)document.documentElement.dataset.floatingScrollbars=""</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>

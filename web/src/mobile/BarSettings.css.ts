@@ -19,7 +19,7 @@ export const mCard = style({
 export const mSlot = style({
   position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", padding: "12px 0 10px",
   border: "0", background: "none", color: "var(--m-ink)", borderRadius: "16px", touchAction: "none", userSelect: "none",
-  WebkitUserSelect: "none", transition: "transform 200ms var(--m-ease)", cursor: "grab",
+  transition: "transform 200ms var(--m-ease)", cursor: "grab",
   selectors: {
     "&[data-lifted]": { transition: "none", zIndex: 2, background: "var(--m-surface)", boxShadow: "0 6px 18px rgb(0 0 0 / .14)", cursor: "grabbing" },
     "&[data-empty]": { color: "var(--m-subtle)", cursor: "pointer" },

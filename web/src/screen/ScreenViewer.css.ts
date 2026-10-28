@@ -25,7 +25,7 @@ const GAP = 8;
 
 export const viewer = style({
   position: "absolute", inset: "0", overflow: "hidden", background: vars.canvas, color: vars.text,
-  userSelect: "none", WebkitUserSelect: "none",
+  userSelect: "none",
 });
 
 /** Where the picture is, and where the pointer and fingers are heard (none of the browser's own gestures here). */

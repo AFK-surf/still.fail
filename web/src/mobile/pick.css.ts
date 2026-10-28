@@ -13,7 +13,7 @@ globalStyle(`${mPickedPaint} span`, { background: "color-mix(in srgb, var(--m-ac
  * for a finger. Placed by pick.tsx as the list scrolls.
  */
 export const mHandle = style({
-  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+  userSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", top: "0", left: "0", width: "2px", translate: "-50% 0", background: "var(--m-accent)", touchAction: "none", zIndex: "2",
   selectors: {
     // The finger's room: 44px round the knob.
@@ -35,7 +35,7 @@ const BUTTON = 32;
  */
 export const mPickBar = style([popover, {
   vars: { [IN]: pillInner(PANEL_PAD, BUTTON, vars.cornerScale) },
-  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+  userSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", top: "0", left: "0", zIndex: "3", display: "flex", alignItems: "center", whiteSpace: "nowrap",
 }]);
 // The phone's rule for buttons' type (styles/root.css.ts) is stronger than a class of their own: said again here, as strong.

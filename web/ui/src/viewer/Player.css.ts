@@ -5,7 +5,7 @@ import { pictureGlass as glass } from "../styles/glass.ts";
 import { vvBar } from "./media.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane): a song in the theme's colours. */
-export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
+export const player = style({ position: "absolute", inset: "0", userSelect: "none" });
 /** A film on black, its bars and controls a deep tint with words near white, whatever the theme (as players show one;
  *  the app's mbui player's media_ink). */
 globalStyle(`${player}[data-film]`, {
@@ -61,7 +61,7 @@ export const cue = style({
 });
 globalStyle(`${cue} span`, {
   display: "inline", padding: "2px 8px", borderRadius: "6px", background: "rgba(0, 0, 0, .6)", color: "#fff",
-  fontSize: vars.textTitle, lineHeight: "1.6", whiteSpace: "pre-line", WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone",
+  fontSize: vars.textTitle, lineHeight: "1.6", whiteSpace: "pre-line", boxDecorationBreak: "clone",
 });
 /** The time: in the controls' row, or over the timeline on a phone. */
 export const timeTop = style({
