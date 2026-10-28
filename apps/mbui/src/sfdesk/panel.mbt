@@ -312,6 +312,14 @@ fn side_leaving(key : String) -> (Array[String], String)? {
 }
 
 ///|
+/// Page `key`'s panel gone, as it was sliding out (its tabs shown no more).
+fn side_left(key : String) -> Unit {
+  if side_leaving(key) is Some(_) {
+    panel_own.leaving = None
+  }
+}
+
+///|
 /// Page `key` (`page`) and its side panel (`panel`, `whole` wide at rest) side by side, the panel `open` or not. Opened by
 /// a change asked here, the panel's column widens from nothing over 280 ms and the page narrows with it, frame by frame;
 /// closed, the other way over 240 ms (ChatSide.tsx useSidePanel). The panel keeps its whole width all along and shows
@@ -431,14 +439,19 @@ pub fn side_open_for(src : Source, w : Workspace, p : Page) -> SideOf? {
 ///|
 /// The side panel `side` on the tape, a panel of its own beside the page's: a chat's tabs as its view has them, a new
 /// chat's Station 文件; its edge not dragged (its width the tape's: frame.mbt tape_one_beside).
-pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf) -> Unit {
+pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf, leaving? : Bool = false) -> Unit {
   side_over.val = true
   side_on_tape.val = true
   match side {
     ChatSide(r) =>
       match view_of_chat(src, r).0 {
         Some(view) => {
-          let (tabs, front) = side_of(view)
+          // (closed while in use: what it had as the tape moves off it)
+          let (tabs, front) = if leaving {
+            side_leaving(chat_key(r)).unwrap_or(side_of(view))
+          } else {
+            side_of(view)
+          }
           side_panel(c, src, w, r, view, tabs, front)
         }
         None => ()
