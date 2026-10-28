@@ -13,6 +13,7 @@
 #   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
 #   scripts/win.sh sealed                  the desktop app's sealed values opened (src/host/win_electron_sealed.h) checked
 #   scripts/win.sh setup                   the installer (windows/setup.c) with the app built and put packed after it
+#   scripts/win.sh setup-bare              the installer's own program alone (out/setup-bare), which setup packs the app with
 # Its identity (as mac-app.sh's Info.plist has the Mac app's), in the program's resources: its icon
 # (windows/AppIcon-<mac-icon.swift's hash>.ico: that script draws it on a Mac, `--ico`), its version (0.1.<MBUI_BUILD>,
 # else the commits in still.fail's history), its name, and its own environment (RCDATA MBUI_ENV, which mbui's host
@@ -125,19 +126,28 @@ sealed() {
 # setup: the installer (windows/setup.c) with the app as built and put (put: the program, its engine and shell, core.hbc)
 # packed after it, as MBUI_VARIANT has it: <MBUI_SETUP_OUT, else out/setup>/<name> (MBUI_SETUP_NAME, else
 # stillfail-setup-0.1.<n>.exe)
-setup() {
-  # (its parts' times said: the step was 22-26 s and then 44-75 s, most of it before packing, 2026-10-28)
+# the installer's own program (windows/setup.c), bare: made once for its source, apart from the app (CI makes it while
+# the app compiles: made in the installer's step, beside the e2e flow's app, it was 4 s alone and 15-56 s there,
+# 2026-10-28)
+setup_bare() {
+  local out=$A/out/setup-bare
+  [ "$out/setup-bare.exe" -nt "$A/windows/setup.c" ] && return 0
+  mkdir -p "$out"
   local t0=$SECONDS
+  (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe.tmp.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
+    { cat "$out/build.log"; return 1; }
+  mv -f "$out/setup-bare.exe.tmp.exe" "$out/setup-bare.exe"
+  echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"
+}
+setup() {
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
-  local t1=$SECONDS
   variant || return 1
   . "$MBUI_DIR/scripts/env.sh"
   local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=${MBUI_SETUP_OUT:-$A/out/setup}
   [ -f "$built/stillfail.exe" ] || { echo "win.sh: no app built (win.sh build, put)" >&2; return 1; }
   rm -rf "$out" && mkdir -p "$out/files"
-  (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
-    { cat "$out/build.log"; return 1; }
-  echo "win.sh: setup's build number in $((t1 - t0)) s, setup.c compiled in $((SECONDS - t1)) s"
+  setup_bare || return 1
+  cp "$A/out/setup-bare/setup-bare.exe" "$out/setup-bare.exe"
   cp "$built/stillfail.exe" "$out/files/$exe.exe"
   cp "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" "$built/core.hbc" "$out/files/"
   printf 'APP_NAME=%s\nAPP_ID=%s\nEXE=%s\nDIR=%s\nSCHEMES=%s\nVERSION=0.1.%s\n' "$name" "$id" "$exe" "$dir" "$schemes" "$n" > "$out/setup.env"
@@ -152,6 +162,7 @@ case "${1:-build}" in
   collate) collate; exit $? ;;
   sealed) sealed; exit $? ;;
   setup) setup; exit $? ;;
+  setup-bare) setup_bare; exit $? ;;
 esac
 if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
   core || exit 1

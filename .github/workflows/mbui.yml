@@ -593,6 +593,8 @@ jobs:
           B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e
           # (the e2e flow told the app is not coming, else it would wait its 10 minutes)
           trap '[ -s "$E/app" ] || echo failed > "$E/app"' EXIT
+          # the installer's own program made while the app compiles (win.sh setup takes it), not beside the e2e flow
+          bash apps/mbui/scripts/win.sh setup-bare
           t0=$SECONDS
           while [ ! -s "$B/status" ]; do
             [ $((SECONDS - t0)) -lt 420 ] || { echo "the build took over 7 minutes"; cat "$B/log"; exit 1; }
