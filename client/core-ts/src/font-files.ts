@@ -5,7 +5,8 @@
 // which. Where the host keeps each value as a file of its own (the native apps' shell), the prefs' `faces` say where
 // a chosen face's files are (`path`, fonts.ts `setKeptAt`): the app's host reads them there as the app starts, none of
 // them carried through here nor checked again (the app falls back on `fonts.file` where one cannot be read: one kept
-// as fetched). Only the files of the faces chosen stay, once nothing is being fetched. A face's preview
+// as fetched). A face's files stay once fetched, chosen or not (the `fonts` topic's `kept`: the faces whole here), so
+// choosing one again asks nothing of the network. A face's preview
 // (`fonts.preview {id}`: the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen.
 import { Effect } from "effect";
 import { CoreError } from "./error.ts";
@@ -29,26 +30,30 @@ export type FontsCall = { kind: "fetch"; id: string } | { kind: "preview"; id: s
 export class FontFiles implements Owner {
   readonly #host: Host;
   readonly #store: Store;
-  /// The faces chosen now (the prefs' `fonts`, as kept).
-  readonly #chosen: () => unknown;
   /// A face being fetched: how far, 0 to 1.
   readonly #fetching = new Map<string, number>();
   /// A face whose fetch failed: why.
   readonly #failed = new Map<string, string>();
   #kept: Kept | null = null;
 
-  constructor(host: Host, store: Store, chosen: () => unknown) {
+  constructor(host: Host, store: Store) {
     this.#host = host;
     this.#store = store;
-    this.#chosen = chosen;
   }
 
   owns(topic: Topic): boolean {
     return topic.topic === "fonts";
   }
 
+  /// What is kept is read from the host's storage the first time the topic is wanted, said once it is read.
+  start(): void {
+    if (this.#kept === null) Effect.runFork(Effect.map(this.#index(), () => this.#changed()));
+  }
+
   compute(): Value {
-    return { ok: { fetching: Object.fromEntries(this.#fetching), failed: Object.fromEntries(this.#failed) } };
+    const kept = this.#kept;
+    const whole = kept === null ? [] : fonts.ids().filter((id) => fonts.faceOf(id)!.files.every((f) => kept[f.sha256] !== undefined));
+    return { ok: { fetching: Object.fromEntries(this.#fetching), failed: Object.fromEntries(this.#failed), kept: whole } };
   }
 
   #changed(): void {
@@ -140,7 +145,6 @@ export class FontFiles implements Owner {
       if (got._tag === "Failure") this.#failed.set(id, got.failure.message);
       this.#changed();
       if (got._tag === "Failure") return yield* Effect.fail(got.failure);
-      yield* this.#prune(id);
       return null;
     });
   }
@@ -184,24 +188,6 @@ export class FontFiles implements Owner {
       if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
       yield* Effect.ignore(this.#host.storageSet(key, r.body));
       return new Beside({}, r.body);
-    });
-  }
-
-  /// Only the files of the faces chosen (and of `also`, just fetched) stay, once nothing is being fetched.
-  #prune(also: string): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      if (this.#fetching.size > 0) return;
-      const chosen = fonts.choicesOf(this.#chosen());
-      const wanted = new Set<string>();
-      for (const id of [chosen.ui, chosen.text, chosen.code, also]) for (const f of (id === null ? null : fonts.faceOf(id))?.files ?? []) wanted.add(f.sha256);
-      const kept = yield* this.#index();
-      const gone = Object.keys(kept).filter((sha) => !wanted.has(sha));
-      if (gone.length === 0) return;
-      for (const sha of gone) {
-        yield* Effect.ignore(this.#host.storageDelete(fileKey(sha)));
-        delete kept[sha];
-      }
-      yield* this.#save();
     });
   }
 }

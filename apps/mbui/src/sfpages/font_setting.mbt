@@ -2,8 +2,8 @@
 // a face chosen for each of three places (界面, 正文, 代码) and the chat they make seen as it is chosen. What it is for is
 // one thing on every screen, so it is one design: the place in view by a choice of three; a chat as the faces set it
 // right under that, where the eye is as a face is chosen; the place's faces in a group, each row its name and a line
-// of it drawn in itself (how far it has come, what failed, its size before it is here, at its end; the chosen one
-// checked). A row pointed at is tried in the chat first (where there is a pointer: c.lit). This machine's own faces
+// of it drawn in itself (how far it has come, what failed, its size where its files are not kept here, at its end;
+// the chosen one checked). A row pointed at is tried in the chat first (where there is a pointer: c.lit). This machine's own faces
 // (where the host lists them: keyboard and mouse's) are one row more, opening a list of them to find one in. What is chosen
 // is the device's (`prefs.set {fonts}`). Its page (fonts_page) and 外观's wide section (appearance.mbt) hold it.
 
@@ -27,6 +27,8 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let all = items(field(prefs, "faces"), "list")
   let files_state = (core.topic)("fonts", Map::new()).value
+  // the faces whose files this device keeps (chosen or not): no size said, choosing one fetches nothing
+  let kept = items(files_state, "kept")
   let place = @settings.font_places[@settings.fonts_at.val]
   let chosen = chosen_of(place)
   // each face shown in itself: its host face (its preview's), by its place in the list
@@ -111,7 +113,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
                 (@sf.t("android-settings.fonts.failed", args=[("error", failed)]), true)
               } else if damaged != "" {
                 (@sf.t("android-settings.fonts.failed", args=[("error", damaged)]), true)
-              } else if (core.face_here)(id) {
+              } else if (core.face_here)(id) || kept.contains(id.to_json()) {
                 ("", false)
               } else {
                 (face_size(number(fv, "bytes")), false)

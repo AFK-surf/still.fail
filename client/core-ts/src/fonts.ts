@@ -106,6 +106,11 @@ function face(e: Entry): Record<string, unknown> {
 /// A face still.fail keeps, by its id, as a device fetches it: each file's address, size and hash, and its preview's.
 export type FaceFiles = { files: { weight: number; url: string; bytes: number; sha256: string }[]; bytes: number; preview?: string };
 
+/// The faces still.fail keeps, by id.
+export function ids(): string[] {
+  return FACES.map((f) => f.id);
+}
+
 export function faceOf(id: string): FaceFiles | null {
   const e = FACES.find((f) => f.id === id);
   if (!e) return null;

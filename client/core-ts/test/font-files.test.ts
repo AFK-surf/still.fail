@@ -1,5 +1,5 @@
 // A face's files kept by the core for an app that keeps none (src/font-files.ts, docs/fonts.md): fetched in parts, how
-// far said each percent; kept by hash, gzipped as fetched, then as the app unzipped them; only the chosen faces' stay;
+// far said each percent; kept by hash, gzipped as fetched, then as the app unzipped them; every face fetched stays;
 // previews fetched once.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -17,13 +17,13 @@ holdLanguage();
 
 const ORIGIN = "https://stillfail.test";
 
-function rig(chosen: () => unknown) {
+function rig() {
   const host = new FakeHost();
   host.origin = ORIGIN;
   fonts.setOrigin(ORIGIN);
   let changed = 0;
   const store = { invalidate: () => void changed++ } as unknown as Store;
-  const files = new FontFiles(host, store, chosen);
+  const files = new FontFiles(host, store);
   const seen: unknown[] = [];
   const said = () => (files.compute() as { ok: unknown }).ok;
   // each file in parts of a tenth of the face, failing where `refuse` says
@@ -54,7 +54,7 @@ function rig(chosen: () => unknown) {
 }
 
 test("a face's files are fetched once, how far said as they come, kept gzipped until the app keeps them unzipped", async () => {
-  const r = rig(() => ({ text: "lxgw-wenkai" }));
+  const r = rig();
   const face = fonts.faceOf("lxgw-wenkai")!;
   assert.equal(face.files.length, 2);
   assert.equal(await run(r.files.fetch("lxgw-wenkai")), null);
@@ -63,7 +63,7 @@ test("a face's files are fetched once, how far said as they come, kept gzipped u
   assert.equal(far[0], 0);
   assert.deepEqual(far, [...far].sort((a, b) => a - b));
   assert.ok(far.some((p) => p > 0.4 && p < 0.6), JSON.stringify(far));
-  assert.deepEqual(r.said(), { fetching: {}, failed: {} });
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["lxgw-wenkai"] });
   // kept as fetched
   const first = (await run(r.files.file(face.files[0].sha256))) as Beside;
   assert.deepEqual(first.value, { zipped: true });
@@ -84,7 +84,7 @@ test("a face's files are fetched once, how far said as they come, kept gzipped u
 });
 
 test("where a file is kept, on a host that keeps values as files; its bytes still given by the call", async () => {
-  const r = rig(() => ({ text: "lxgw-wenkai" }));
+  const r = rig();
   const first = fonts.faceOf("lxgw-wenkai")!.files[0];
   // a host without files: nowhere
   assert.equal(r.files.at(first.sha256), null);
@@ -97,9 +97,8 @@ test("where a file is kept, on a host that keeps values as files; its bytes stil
   assert.deepEqual([kept.value, [...kept.bytes]], [{ zipped: false }, [1, 2, 3]]);
 });
 
-test("a fetch that fails says why until the face is fetched again; only the chosen faces' files stay", async () => {
-  let chosen: Record<string, string> = { ui: "inter" };
-  const r = rig(() => chosen);
+test("a fetch that fails says why until the face is fetched again; a face fetched stays when another is chosen", async () => {
+  const r = rig();
   const inter = fonts.faceOf("inter")!.files[0];
   r.refuse.add(inter.url);
   await assert.rejects(run(r.files.fetch("inter")));
@@ -107,20 +106,25 @@ test("a fetch that fails says why until the face is fetched again; only the chos
   assert.match(failed.inter, /503/);
   r.refuse.clear();
   await run(r.files.fetch("inter"));
-  assert.deepEqual(r.said(), { fetching: {}, failed: {} });
-  // another chosen instead: once it is here, inter's file goes
-  chosen = { ui: "lxgw-wenkai" };
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["inter"] });
+  // another fetched: inter's file stays, chosen again with nothing asked of the network
   await run(r.files.fetch("lxgw-wenkai"));
-  await assert.rejects(run(r.files.file(inter.sha256)));
-  assert.equal(r.host.storage.has(`fonts/file/${inter.sha256}`), false);
-  for (const f of fonts.faceOf("lxgw-wenkai")!.files) assert.deepEqual(((await run(r.files.file(f.sha256))) as Beside).value, { zipped: true });
-  // kept across a core started again: what the host's storage holds
-  const again = new FontFiles(r.host, { invalidate: () => {} } as unknown as Store, () => chosen);
+  assert.deepEqual((r.said() as { kept: string[] }).kept, ["inter", "lxgw-wenkai"]);
+  assert.deepEqual(((await run(r.files.file(inter.sha256))) as Beside).value, { zipped: true });
+  const asked = r.host.requests.length;
+  await run(r.files.fetch("inter"));
+  assert.equal(r.host.requests.length, asked);
+  // kept across a core started again: what the host's storage holds, said once it is read
+  const again = new FontFiles(r.host, { invalidate: () => {} } as unknown as Store);
+  assert.deepEqual((again.compute() as { ok: { kept: string[] } }).ok.kept, []);
+  again.start();
+  await run(Effect.void);
+  assert.deepEqual((again.compute() as { ok: { kept: string[] } }).ok.kept, ["inter", "lxgw-wenkai"]);
   assert.equal(((await run(again.file(fonts.faceOf("lxgw-wenkai")!.files[1].sha256))) as Beside).bytes.length, fonts.faceOf("lxgw-wenkai")!.files[1].bytes);
 });
 
 test("a face's preview is fetched once and kept", async () => {
-  const r = rig(() => ({}));
+  const r = rig();
   const url = fonts.faceOf("inter")!.preview!;
   r.host.onFetch((req) => (req.url === url ? { status: 200, headers: [], body: new Uint8Array([9, 9]) } : { status: 404, headers: [], body: new Uint8Array() }));
   assert.deepEqual([...((await run(r.files.preview("inter"))) as Beside).bytes], [9, 9]);
