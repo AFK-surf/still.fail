@@ -174,6 +174,31 @@ test "on the tape the page or the side panel in use has the window but a strip o
 }
 
 ///|
+test "on the tape the sidebar left wide on a larger screen opens at the tape's most, its width kept; dragged, no wider" {
+  let apart = 8.0
+  for platform in [2, 0] {
+    let room = if platform == 2 { "medium" } else { "" }
+    let at = "platform \{platform}"
+    let t = tape_chat(platform, 840.0 - 1.0, 840.0, width=room, height=room)
+    // the person's width the wide frame's most (dragged so on a larger screen): the page beside the tape's most
+    @sfdesk.wide.side_w = @sfdesk.side_max
+    t.frame()
+    let most = @sfdesk.rail_w + @sfdesk.tape_side_max
+    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    assert_true(page_at() > most && page_at() < most + 4.0 * apart, msg="\{at}: the page from \{page_at()}")
+    assert_eq(@sfdesk.wide.side_w, @sfdesk.side_max, msg=at)
+    // dragged wider from there: no further than the tape's most; narrower, from where it shows
+    let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
+    drag_slowly(t, ex, ey, 60.0, hold=true)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, @sfdesk.tape_side_max, msg=at)
+    drag_slowly(t, ex, ey, -40.0, hold=true)
+    t.frame()
+    assert_eq(@sfdesk.wide.side_w, @sfdesk.tape_side_max - 40.0, msg=at)
+  }
+}
+
+///|
 /// The middle of the edge said as `label` (tape_edge: in the gap beside the page and what it takes past it).
 fn edge_middle(t : @ui.Tester, label : String) -> (Double, Double) raise {
   guard said_at(t, label) is Some((x, y, w, h)) else { fail("no \{label}") }

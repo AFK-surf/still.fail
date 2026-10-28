@@ -48,7 +48,9 @@ test "an iPhone Duo on its side: the places and the chat's actions handed to the
   // screen's edge, its ground there)
   for s in t.semantics() {
     let (x, _, w, _) = s.rect
-    if !s.hidden && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
+    // (the card pressed to bring it over: what shows of the page beside the sidebar in use)
+    let card = s.label == "收起侧边栏"
+    if !s.hidden && !card && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
       fail("\{s.label} under the system's column: \{s.rect}")
     }
   }
@@ -98,7 +100,9 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
   // (the picture and its ways before and after clear of the system's column)
   for s in t.semantics() {
     let (x, _, w, _) = s.rect
-    if !s.hidden && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
+    // (the card pressed to bring it over: what shows of the page beside the sidebar in use)
+    let card = s.label == "收起侧边栏"
+    if !s.hidden && !card && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
       fail("\{s.label} under the system's column: \{s.rect}")
     }
   }
@@ -283,4 +287,25 @@ test "an Android foldable open, its gesture line over the app: the page's card t
   // (the composer in its foot corner, concentric with it as anywhere: taps go through the line, only its swipe is the
   // system's)
   assert_true(b.y + b.h < p.y + p.h, msg="the composer's foot at \{b.y + b.h}")
+}
+
+///|
+test "an iPhone Duo on its side or upright, whatever the sidebar's width: the sidebar in use with the page beside it to be brought over, never both in use side by side" {
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let (w, h, side) = size
+    for own in [@sfdesk.side_min, 240.0, @sfdesk.tape_side_max] {
+      let at = "\{w}x\{h} \{own}"
+      let t = native_chat(w, h, true, side~)
+      @sfdesk.wide.side_w = own
+      t.frame()
+      // the sidebar in use, what shows of the page beside it a press to bring it over
+      assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+      guard covered(t, "收起侧边栏") is Some((px, _)) else { fail("\{at}: the page beside the sidebar not to be brought over") }
+      // pressed: the page in use, the sidebar a strip at the window's left
+      t.tap(px + 20.0, 400.0)
+      t.run_for(@sfdesk.side_move_ms)
+      assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+      assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), @sfdesk.tape_shows), msg=at)
+    }
+  }
 }
