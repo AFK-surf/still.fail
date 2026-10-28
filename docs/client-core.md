@@ -646,7 +646,7 @@ thread, else its session), `chats.archived`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `profile.loginBrowser`, `login.new`, `login.code`, `login.drop`, `login.browser` (a sign-in's page opened in the
 station's own browser: `{screen}`, docs/remote-login.md), `job.get`, `job.log`, `job.stop`,
-`memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
+`memory.get`, `outflow.revoke` (a program's grant of the station's data, docs/data-outflow.md), `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
 list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's window for it up on that Mac, docs/remote-screens.md "Grants"; the overview read again). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
