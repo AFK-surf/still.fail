@@ -230,6 +230,18 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
+  test("an hourly allowance failure is a rate limit; the same words in a reply are not", () => {
+    for (const text of ["You've hit your 5-hour limit · resets 7:50am (UTC)", "You've hit your 5 hour limit", "You've hit your 3-hour limit"]) {
+      for (const is_error of [true, false]) {
+        const { events, push } = listen();
+        const turn: Turn = { busy: true, aborting: false, authFailure: null, closed: false };
+        onFrame({ type: "result", subtype: "success", is_error, result: text }, turn, push, () => {});
+        assert.deepEqual(outcome(events), is_error ? { kind: "failed", reason: "rate_limit", message: text } : { kind: "completed" });
+      }
+    }
+    assert.equal(classifyResult("5-hour limit configuration is invalid"), "model");
+  });
+
   test("the first api_retry 401 interrupts the turn, which fails as auth", async () => {
     const d = driver();
     const o = options();

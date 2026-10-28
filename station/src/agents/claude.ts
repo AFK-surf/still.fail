@@ -113,6 +113,7 @@ export function classifyResult(text: string): FailureReason {
     word("429") ||
     ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit", "overloaded"].some((s) => lower.includes(s)) ||
     ["session", "weekly", "daily"].some((window) => lower.includes(`hit your ${window} limit`)) ||
+    /\bhit your \d+[- ]hour limit\b/.test(lower) ||
     lower.includes("you've hit your limit")
   ) {
     return "rate_limit";
