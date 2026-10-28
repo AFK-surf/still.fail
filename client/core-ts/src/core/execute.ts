@@ -32,7 +32,7 @@ export const hooks: {
   enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
   /// A station refused this device for the workspace lock (what to say of it); why a station is not asked now
   /// (views/lock.ts).
-  lockRefused?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;

@@ -1,7 +1,10 @@
-// The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md): the cloud only stores the chain and carries
-// it, to the stations (their presence sockets) and to members' devices. It checks that each entry follows the last, by
-// its hash, so it keeps one chain; whether an entry is signed by whom it may be is for the stations, which trust
-// nothing the cloud says of it. The hashing is the stations' (station/src/cloud/lock.ts), tested on the same values.
+// The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md): the cloud stores the chain and carries it,
+// to the stations (their presence sockets) and to members' devices. It keeps one chain, each entry following the last,
+// and only entries a station takes: checked by the stations' own rules (station/src/cloud/lock.ts `genesis`/`apply`),
+// as one it kept that they refuse leaves every entry after it refused too. The stations trust nothing the cloud says
+// of it all the same. The hashing is the stations', tested on the same values.
+export { apply, genesis, type Entry, type LockState } from "../../station/src/cloud/lock.ts";
+
 
 export type LockEntry = { v: 1; ws: string; seq: number; prev: string | null; at: number; kind: string; body: unknown; sig: unknown };
 

@@ -24,7 +24,7 @@ import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
-import { asEntry, entryHash, shortCode, type LockEntry } from "./lock";
+import { apply, asEntry, entryHash, genesis, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -485,7 +485,40 @@ export class Directory extends DurableObject<Env> {
 
   // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
 
+  /** Workspaces whose kept chain was checked while this object lives (#lockChecked). */
+  protected readonly lockSeen = new Set<string>();
+
+  /** The kept chain checked once a workspace while this object lives (#lockState): what it reads after is what checks out. */
+  #lockChecked(workspace: string): void {
+    if (this.lockSeen.has(workspace)) return;
+    this.lockSeen.add(workspace);
+    this.#lockState(workspace);
+  }
+
+  /**
+   * The kept chain's state as a station takes it (null: none), what does not check out cut off with everything after
+   * it: entries kept before the cloud checked them (until 2026-10-29), which every station refused, and every entry
+   * after them with them (a workspace's new devices turned away for days). Its stations and members are told.
+   */
+  #lockState(workspace: string): LockState | null {
+    let state: LockState | null = null;
+    for (const r of this.#rows("SELECT seq, entry FROM lock_entries WHERE workspace = ? ORDER BY seq", workspace)) {
+      try {
+        const e = JSON.parse(r.entry as string) as Entry;
+        state = state === null ? genesis(e) : apply(state, e, null);
+      } catch (error) {
+        this.#run("DELETE FROM lock_entries WHERE workspace = ? AND seq >= ?", workspace, r.seq);
+        console.warn(`lock: ${workspace}'s kept lock cut back before entry ${String(r.seq)}, which no station takes: ${(error as Error).message}`);
+        // Not from inside what is being told (a state frame reads the head).
+        queueMicrotask(() => this.#changed(workspace, false));
+        break;
+      }
+    }
+    return state;
+  }
+
   #lockHead(workspace: string): LockHead | null {
+    this.#lockChecked(workspace);
     const last = this.#one("SELECT seq, hash FROM lock_entries WHERE workspace = ? ORDER BY seq DESC LIMIT 1", workspace);
     if (!last) return null;
     const first = this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = 0", workspace);
@@ -521,11 +554,13 @@ export class Directory extends DurableObject<Env> {
 
   /** Whether a workspace is locked: it has a chain, not turned off. */
   #locked(workspace: string): boolean {
+    this.#lockChecked(workspace);
     const last = this.#one("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq DESC LIMIT 1", workspace);
     return last !== undefined && (JSON.parse(last.entry as string) as LockEntry).kind !== "disable";
   }
 
   #lockAfter(workspace: string, after: number): unknown[] {
+    this.#lockChecked(workspace);
     return this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? AND seq > ? ORDER BY seq", workspace, after).map((r) => JSON.parse(r.entry as string));
   }
 
@@ -538,7 +573,8 @@ export class Directory extends DurableObject<Env> {
   /**
    * Entries that follow the kept chain (those it has are skipped; one that disagrees is refused, with the rest). A
    * genesis starts a chain where there is none, or where the last one was turned off. Stations and members' devices
-   * bring them; whether one is signed by whom it may be is not checked here: a station checks every entry itself.
+   * bring them; each is checked as a station checks it (signed by whom it may be), and one a station would refuse is
+   * refused here, with the rest: kept, it would leave every entry after it refused at the stations.
    */
   async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
     const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
@@ -566,6 +602,14 @@ export class Directory extends DurableObject<Env> {
       lastKind = e.kind;
     }
     if (adding.length > 0) {
+      let state = restart ? null : this.#lockState(workspace);
+      for (const { e } of adding) {
+        try {
+          state = state === null ? genesis(e as Entry) : apply(state, e as Entry, nowSeconds());
+        } catch {
+          fail(409, "lock_refused");
+        }
+      }
       this.ctx.storage.transactionSync(() => {
         if (restart) this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
         for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));

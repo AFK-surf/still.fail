@@ -5,8 +5,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { exportPKCS8, generateKeyPair } from "jose";
-import { entryHash, type LockEntry } from "../src/lock.ts";
+import type { LockEntry } from "../src/lock.ts";
 import { harness, type OutboundRequest } from "./harness.ts";
+import { signer } from "./lock-signer.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 type As = ReturnType<Harness["as"]>;
@@ -235,11 +236,6 @@ test("enrolling still moves; leaving one workspace keeps the others; the plan's 
   }
 });
 
-/** A lock entry after `prev` (none: a genesis); the cloud does not read its signature. */
-async function entry(ws: string, prev: LockEntry | null, kind: string, body: unknown): Promise<LockEntry> {
-  return { v: 1, ws, seq: prev ? prev.seq + 1 : 0, prev: prev ? await entryHash(prev) : null, at: 1000, kind, body, sig: { key: "ed25519:00", alg: "Ed25519", sig: "00" } };
-}
-
 test("a station whose home is locked joins locked workspaces only; each one's lock is said and carried for it", async () => {
   const h = await harness();
   try {
@@ -247,7 +243,7 @@ test("a station whose home is locked joins locked workspaces only; each one's lo
     const [a, b, c] = [await create(alice, "A"), await create(alice, "B"), await create(alice, "C")];
     const p = await key(), q = await key();
     assert.equal((await enroll(h, p, await token(alice, a, "p"))).status, 200);
-    const genesis = await entry(b, null, "genesis", { owner: "alice" });
+    const genesis = await signer("alice").genesis(b);
     assert.equal((await alice("POST", `/v1/workspaces/${b}/lock`, { entries: [genesis] })).status, 200);
     // A station of an unlocked home joins a locked workspace when it pins that lock there (`locks`); one from before
     // would take its members on the cloud's word.
@@ -256,7 +252,7 @@ test("a station whose home is locked joins locked workspaces only; each one's lo
     // Its home locked, it joins no unlocked workspace; a locked one it does.
     assert.equal((await enroll(h, q, await token(alice, b, "q"))).status, 200);
     assert.deepEqual(Object.values(await enroll(h, q, await token(alice, c, "q"), true)), [409, { error: "locked_workspace" }]);
-    assert.equal((await alice("POST", `/v1/workspaces/${a}/lock`, { entries: [await entry(a, null, "genesis", { owner: "alice" })] })).status, 200);
+    assert.equal((await alice("POST", `/v1/workspaces/${a}/lock`, { entries: [await signer("alice").genesis(a)] })).status, 200);
     assert.equal((await enroll(h, q, await token(alice, a, "q"), true, { locks: true })).status, 200);
     // Each workspace's lock head in the state frame; its entries asked by naming it, said back with its name.
     const sq = await connect(h, q);

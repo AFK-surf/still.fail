@@ -52,6 +52,12 @@ export class Directory extends ProductionDirectory {
   ageLockRequest(workspace: string, base: string, secs: number) {
     this.ctx.storage.sql.exec("UPDATE lock_requests SET created_at = ? WHERE workspace = ? AND base = ?", nowSeconds() - secs, workspace, base);
   }
+  /** A workspace's lock kept as `entries`, unchecked, as the cloud kept them before it checked them (none read yet). */
+  keepLockUnchecked(workspace: string, entries: { seq: number; entry: unknown; hash: string }[]) {
+    this.ctx.storage.sql.exec("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+    for (const e of entries) this.ctx.storage.sql.exec("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, e.hash, JSON.stringify(e.entry));
+    this.lockSeen.delete(workspace);
+  }
   /** An account as members were before invite codes: in a workspace, admitted by nothing on record. */
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);

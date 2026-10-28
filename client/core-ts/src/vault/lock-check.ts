@@ -58,6 +58,10 @@ function sigValid(sig: any, hash: string, s: Checked, passkey: boolean): boolean
   }
 }
 
+/// Who signs with `key` in the lock (a member's passkey, or an app device of theirs not run out): what a station takes
+/// an entry signed with it from; null for none.
+export const signerIn = (s: Checked, key: string, now: number | null) => signer(s, { key }, now);
+
 function signer(s: Checked, sig: any, now: number | null): { sub: string; role: string; passkey: boolean } | null {
   const key = sig?.key;
   for (const [k, sub] of s.passkeys) if (k === key && s.members.has(sub)) return { sub, role: s.members.get(sub)!, passkey: true };
