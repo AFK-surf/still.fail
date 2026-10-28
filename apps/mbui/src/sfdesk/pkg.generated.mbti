@@ -381,6 +381,8 @@ pub fn tape_shows_right() -> Double
 
 pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf) -> Unit
 
+pub let tape_side_max : Double
+
 pub fn tip_keys(@sfbase.Source) -> (String) -> String
 
 pub fn toggle_jobs_pop() -> Unit

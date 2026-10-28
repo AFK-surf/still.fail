@@ -684,21 +684,14 @@ pub fn frame(
     Some(_) => tape_panel_w(tw)
     None => 0.0
   }
-  // (room for the page whole beside the sidebar whole, no side panel open: both in use at once, the tape where it is
-  // with the sidebar's, nothing to slide over)
-  // (beside the system's tabs only: an iPhone Duo's; elsewhere the tape as it was)
-  let both = @sf.native_on() && wide.tape && panel_of is None && tw - col - bar_in_now() >= tape_both_least
   let main_w = if !wide.tape {
     dmax(0.0, c.width - col)
-  } else if both {
-    tw - col - bar_in_now()
   } else if panel_of is Some(_) {
     dmax(0.0, tw - tape_shows_left() - tape_shows_right() - 2.0 * bar_gap_now())
   } else {
     tape_one_beside(tw, tape_shows_left())
   }
   let at = tape_at(tw, col, main_w, panel_w)
-  let at = if both { (at.0, at.0, at.2) } else { at }
   // (the chat shown has its view: what its side panel shows is known)
   let known = match app.nav.top() {
     Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
@@ -946,7 +939,7 @@ pub fn frame(
             tape_x,
             panel_top,
             panel_h,
-            wide.side_w,
+            tape_side_w(tw, wide.side_w),
             side_min,
             tape_side_most(tw),
             Right,
@@ -1091,10 +1084,6 @@ let window_buttons_in : Double = 16.0
 let window_buttons_w : Double = 54.0
 
 ///|
-/// The least a page is wide on the tape for the sidebar and it to be in use at once (a chat's column and its margins).
-let tape_both_least : Double = 420.0
-
-///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
 /// shows of the other (`shows`: at the window's left tape_shows_left, at its right tape_shows; 8 from it) and 6 from the
 /// window's other edge. The page's without a side panel and the side panel's (a strip at the window's left beside
@@ -1106,10 +1095,18 @@ fn tape_one_beside(width : Double, shows : Double) -> Double {
 ///|
 /// How wide the sidebar is on the tape, a window `width` wide: its own, as the person left it (a list as wide as a list
 /// needs: the user, 2026-10-26, the chats' list stretched across the window had no need to be), the page beside it
-/// showing what the window leaves; at most as wide as a panel with one beside it (tape_one_beside), less the rail's.
+/// showing what the window leaves; at most tape_side_max, and as wide as a panel with one beside it (tape_one_beside),
+/// less the rail's.
 fn tape_side_w(width : Double, own : Double) -> Double {
-  dmax(0.0, dmin(own, tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
+  dmax(0.0, dmin(dmin(own, tape_side_max), tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
 }
+
+///|
+/// The widest the sidebar is on the tape, whatever width the person left it at on a larger screen (theirs, the same on
+/// every screen: a sidebar dragged to the wide frame's most opened on a phone on its side, a small tablet or a fold
+/// nearly to the window's edge; the user, 2026-10-28: opened there, it is not to be so wide). The width kept stays
+/// theirs; a larger screen shows it again.
+pub let tape_side_max : Double = 320.0
 
 ///|
 /// What moves as the other comes over on the tape: the tape (how far it is moved), as the sidebar moves (380 ms, its
@@ -1142,9 +1139,9 @@ fn tape_panel_w(width : Double) -> Double {
 
 ///|
 /// The widest the sidebar is dragged to on the tape, a window `width` wide: a panel with a strip of the page beside it,
-/// less the rail's (tape_side_w), and the wide frame's most (side_max).
+/// less the rail's, and the tape's most (tape_side_w).
 fn tape_side_most(width : Double) -> Double {
-  dmax(side_min, dmin(side_max, tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
+  dmax(side_min, dmin(tape_side_max, tape_one_beside(width, tape_shows_right()) - rail_left() - rail_more()))
 }
 
 ///|
