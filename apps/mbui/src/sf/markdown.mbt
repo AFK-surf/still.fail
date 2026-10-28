@@ -1334,16 +1334,6 @@ let code_lang_wide : Double = 11.0
 // ── tables ──────────────────────────────────────────────────────────────
 
 ///|
-/// A table's ground (Markdown.kt tableGround).
-fn table_ground() -> Int64 {
-  if theme().dark {
-    0x232427FFL
-  } else {
-    0xFAFAFAFFL
-  }
-}
-
-///|
 /// The narrowest a word of `s` lets it be and its width on one line, at `size` and `weight` (a browser's min- and
 /// max-content: a cell wraps between words, Chinese between any two characters).
 fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
@@ -1376,11 +1366,11 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 }
 
 ///|
-/// A table as the web draws it (Markdown.kt Table): in a card's frame (20 round, a line round it, a faint ground),
-/// small type (13), the head's row tinted and its words muted (12, medium), rows ruled between them only, each cell
-/// 12 and 7 in, middle-aligned, at least 4em wide. Columns are as wide as their content until the message is full (the
-/// browser's automatic layout), then share what is left by how much more they would take, none narrower than its
-/// words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
+/// A table as the web draws it (Markdown.kt Table): on a card (a card's ground and corner, no line round it, its words
+/// in as a list card's), small type (13), the head told by its words, muted (12, medium), rows ruled between them only,
+/// each cell 12 and 7 in, middle-aligned, at least 4em wide. Columns are as wide as their content until the message is
+/// full (the browser's automatic layout), then share what is left by how much more they would take, none narrower than
+/// its words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
 /// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
 /// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
 /// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
@@ -1398,13 +1388,12 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let key = "sf-md/table\{self.n}"
   let id = c.id(key)
   // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
-  // page sliding in shows part of it, which had the columns squeezed); the columns get it less the frame's line either
-  // side
+  // page sliding in shows part of it, which had the columns squeezed)
   let room = match c.laid_size(id) {
     Some((rw, _)) => rw - 2.0 * bleed
     None => c.width
   }
-  let avail = room - 2.0
+  let avail = room - 2.0 * table_in_x
   let least = 4.0 * 13.0 + 24.0
   // (14em of the rows' words, at the system's size of words)
   let readable = 14.0 * c.sp(13.0)
@@ -1472,15 +1461,17 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its
   // words' ids its own: the next block's as they were)
   let n = self.n
-  c.shot(table_shot(key), total + 2.0 + 2.0 * table_shot_in, fn() {
+  c.shot(table_shot(key), total + 2.0 * table_in_x + 2.0 * table_shot_in, fn() {
     c.box(style=table_shot_paper, fn() { self.table_frame(rows, widths, total, key + "/picture-head") }) |> ignore
   })
   self.n = n
 }
 
 ///|
-/// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card's frame (a
-/// line round it, a faint ground), the head's row tinted (its height measured as `head_at`), rows ruled between them.
+/// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card (its ground
+/// and corner, as the chat's other cards: no line round it, its words as far in as a list card's), the head told by
+/// its words alone (muted, smaller, medium: no ground of its own; its height measured as `head_at`), rows ruled
+/// between them faintly (a quiet ground's step off the card, not a line's), across it.
 fn Md::table_frame(
   self : Md,
   rows : Array[Array[Array[MdInline]]],
@@ -1492,34 +1483,20 @@ fn Md::table_frame(
   let w = web()
   let cols = widths.length()
   c.box(
-    w=Px(total + 2.0),
-    radius=row_corner,
-    border=1.0,
-    border_color=w.line,
-    bg=table_ground(),
-    pad=1.0,
+    w=Px(total + 2.0 * table_in_x),
+    // (a card of its own on what holds it, as round as the chat's other cards: the ladder's card; not a block's, which
+    // is for what sits in a card's corner)
+    radius=card_corner,
+    bg=theme().p.card,
+    padx=table_in_x,
+    pady=table_in_y,
     clip=true,
     fn() {
-      // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
-      // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
-      // tint is a round box taller than the head, cut at the head's foot.
-      match @motion.measured(c, head_at) {
-        Some(hh) if hh > 0.0 =>
-          c.layer(pad=1.0, fn() {
-            c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
-              c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
-              |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        _ => ()
-      }
       for r, row in rows {
         let head = r == 0
         let row_box = c.box(dir=Row, align=AStretch, fn() {
           for k in 0..<cols {
-            c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+            c.box(w=Px(widths[k]), padx=table_cell_x, pady=table_cell_y, justify=JCenter, fn() {
               match self.cell_images(row[k]) {
                 Some(images) => {
                   // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
@@ -1546,15 +1523,32 @@ fn Md::table_frame(
         if head {
           @motion.measure(c, row_box, head_at)
         }
-        // a rule under every row but the last
+        // a rule under every row but the last, across the card from edge to edge
         if r < rows.length() - 1 {
-          c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
+          c.box(w=Px(total + 2.0 * table_in_x), h=Px(1.0), mx=-table_in_x, bg=theme().p.neutral_bg, fn() {  })
+          |> ignore
         }
       }
     },
   )
   |> ignore
 }
+
+///|
+/// How far a table's cell's words are from its sides, and from its top and foot (12, 7: the web's `th`, `td`).
+let table_cell_x : Double = 12.0
+
+///|
+let table_cell_y : Double = 7.0
+
+///|
+/// How far a table's cells are in from its card's sides and from its top and foot: its rows as a list card's, list_pad
+/// in from its top and foot, their words as far in from its sides as a menu's and a list card's (6 + 10: the app's
+/// 边距, docs/ui-panels.md).
+let table_in_x : Double = list_pad + text_in - table_cell_x
+
+///|
+let table_in_y : Double = list_pad
 
 ///|
 /// A cell of only the message's images (`| ![](before.png) | ![](after.png) |`, Markdown.kt cellImages): each one's
@@ -1601,7 +1595,3 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
   }
   w
 }
-
-///|
-/// The table head's tint's corner: concentric with the table's frame (a block of the ladder's), 1 in from its edge.
-let table_head_radius : Double = inner_corner(row_corner, 1.0)

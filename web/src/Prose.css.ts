@@ -2,6 +2,7 @@
 import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
+import { cardGround } from "./styles/pages.css.ts";
 
 /** Long formulas scroll within the message on a phone. Room above and below keeps accents and limits unclipped. */
 export const mathBlock = style({ maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", padding: "2px 0" });
@@ -66,18 +67,23 @@ export const codeCopy = style({
 export const tableScroll = style({ display: "flex", alignItems: "flex-start", width: "fit-content", maxWidth: "100%", overflowX: "auto", margin: "0 0 8px" });
 globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
-/** The table framed as a card (its corners, which clip its head's tint, a faint ground), the rows ruled between them
- * only: within the scroll, sliding with it. */
+/** The table as a card (a card's ground and corner, as the chat's other cards: no line round it), its rows 6 in from
+ * its top and foot and its words 16 from its sides (as the app's list cards': apps/mbui/src/sf/markdown.mbt), the head
+ * told by its words alone, the rows ruled between them faintly from edge to edge: within the scroll, sliding with it. */
 export const tableFrame = style({
-  flex: "none", width: "fit-content", overflow: "hidden", border: `1px solid ${vars.line}`, borderRadius: vars.rCard,
-  cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.text} 2%, ${vars.canvas})`,
+  flex: "none", width: "fit-content", overflow: "hidden", padding: "6px 0", borderRadius: vars.rCard,
+  cornerShape: vars.cornerShape, background: cardGround,
 });
 globalStyle(`${tableFrame} > table`, { margin: "0" });
+globalStyle(`${markdown} ${tableFrame} th, ${markdown} ${tableFrame} td`, { borderBottomColor: vars.neutralBg });
+globalStyle(`${markdown} ${tableFrame} th`, { background: "none" });
+globalStyle(`${markdown} ${tableFrame} :is(th, td):first-child`, { paddingLeft: "16px" });
+globalStyle(`${markdown} ${tableFrame} :is(th, td):last-child`, { paddingRight: "16px" });
 /** How far its copy key is from the table and from what follows it (Prose.tsx Table), its middle on the head's row's
- * (the frame's line, the head's padding and line, its rule: Prose's `th`; an IconButton, 32): in what scrolls, after
+ * (the frame's 6 over it, the head's padding and line, its rule: Prose's `th`; an IconButton, 32): in what scrolls, after
  * the table, taking no room and over nothing of it (docs/ui-panels.md 复制表格). */
 export const tableKey = style({
-  flex: "none", padding: "0 6px", marginTop: `calc((1px + 14px + ${vars.textMeta} * 1.65 + 1px - 32px) / 2 + 1px)`,
+  flex: "none", padding: "0 6px", marginTop: `calc((14px + ${vars.textMeta} * 1.65 + 1px - 32px) / 2 + 6px)`,
 });
 /** A code block's code: square in its block's frame, on its ground, wherever the words around it frame their own `pre`
  * (the reader's page). */
