@@ -96,13 +96,14 @@ pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
 }
 
 ///|
-/// The core's `fonts`: what is being fetched, how far; what failed.
+/// The core's `fonts`: what is being fetched, how far; what failed; the faces whose files are kept.
 pub fn fixture_fonts_topic(f : Fixture) -> Json {
   let fetching : Map[String, Json] = {}
   if f.mode == "settings-fonts-coming" {
     fetching["noto-sans-sc"] = (0.42).to_json()
   }
-  { "fetching": Json::object(fetching), "failed": {} }
+  let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { id.to_json() }).collect()
+  { "fetching": Json::object(fetching), "failed": {}, "kept": Json::array(kept) }
 }
 
 ///|
