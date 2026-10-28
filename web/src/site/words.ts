@@ -22,6 +22,7 @@ const ZH = {
   /** What a visitor asks first (Site.tsx Questions), each with its answer. */
   questionsTitle: "常见问题",
   questions: [
+    { q: "和直接在终端里用 Claude Code 有什么不同？", a: "终端里的 agent 只能坐在那台电脑前用。still.fail 把你每台电脑上的 agent 放到一处：在手机、Slack 或飞书里随时交代和查看，看每台电脑的负载，密钥在 agent 使用前由你批准。agent 本身不变。" },
     { q: "要付费吗？", a: "目前免费，有使用额度（workspace、成员和 station 的数量）。agent 用的是你自己的订阅账号或 API 密钥。" },
     { q: "代码和对话会传到云端吗？", a: "不会。对话、文件和记录保存在你的电脑上，云端只负责账号和中继。中继只转发加密数据，看不到内容。" },
     { q: "电脑要一直开着吗？", a: "agent 在你的电脑上运行，所以电脑要开着、联网。still.fail station 随登录启动，不用开着窗口。" },
@@ -31,6 +32,16 @@ const ZH = {
     { q: "iPhone 和 iPad 能用吗？", a: "App 即将上线，现在可以用网页版，添加到主屏幕后像 App 一样打开。" },
     { q: "开源吗？", a: "开源，采用 MIT 许可，代码在 GitHub。" },
   ],
+  /** What the last release brought (Site.tsx Shipped): its number and day, how many new, better and fixed, and its
+   *  first new things (in Chinese only: the notes are). */
+  shipped: {
+    title: "每晚更新",
+    when: (version: string, date: string) => `${version} · ${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日`,
+    counts: (c: { fresh: number; better: number; fixed: number }) => [c.fresh && `${c.fresh} 项新功能`, c.better && `${c.better} 项改进`, c.fixed && `${c.fixed} 项修复`].filter(Boolean).join(" · "),
+    lines: true,
+  },
+  /** The page's last word: its title again, and the ways in. */
+  closing: "One devices.",
   other: "English", otherHref: "/en/",
   title: "One devices.",
   start: "开始使用",
@@ -70,6 +81,7 @@ const EN: typeof ZH = {
   },
   questionsTitle: "Questions",
   questions: [
+    { q: "How is it different from Claude Code in a terminal?", a: "An agent in a terminal is used at that computer. still.fail puts the agents on all your computers in one place: direct and follow them from your phone, Slack or Feishu, see each computer's load, and approve a key before an agent uses it. The agents themselves are unchanged." },
     { q: "Does it cost anything?", a: "It's free for now, within limits on workspaces, members and stations. Agents use your own subscriptions or API keys." },
     { q: "Do my code and chats go to the cloud?", a: "No. Chats, files and history stay on your computers; the cloud only handles accounts and relays. A relay passes on encrypted data it can't read." },
     { q: "Does my computer have to stay on?", a: "Agents run on your computer, so it has to be on and online. The still.fail station starts at login; no window needs to stay open." },
@@ -79,6 +91,13 @@ const EN: typeof ZH = {
     { q: "Can I use it on an iPhone or iPad?", a: "The app is coming. Until then, use the web app; added to the home screen, it opens like an app." },
     { q: "Is it open source?", a: "Yes, under the MIT license. The code is on GitHub." },
   ],
+  shipped: {
+    title: "Shipped every night",
+    when: (version: string, date: string) => `${version} · ${new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`,
+    counts: (c: { fresh: number; better: number; fixed: number }) => [c.fresh && `${c.fresh} new`, c.better && `${c.better} improved`, c.fixed && `${c.fixed} fixed`].filter(Boolean).join(" · "),
+    lines: false,
+  },
+  closing: "One devices.",
   other: "中文", otherHref: "/",
   title: "One devices.",
   start: "Get started",

@@ -254,8 +254,8 @@ globalStyle(`${marks} svg`, { display: "block", flex: "none" });
 // What a visitor asks first (Site.tsx Questions): the title on the left, the questions on the right (under it on a
 // narrow screen), each a quiet card that opens to its answer; the page's foot under them.
 export const questions = style({
-  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start", paddingBottom: "120px",
-  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px", paddingBottom: "80px" } },
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px" } },
 });
 export const questionList = style({ display: "grid", gap: "10px" });
 export const question = style({ borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
@@ -266,6 +266,22 @@ export const questionAsked = style({
 export const questionOpen = style({ flex: "none", color: "var(--s-muted)", transition: `transform .2s ${vars.easeOut}` });
 globalStyle(`${question}[open] ${questionOpen}`, { transform: "rotate(180deg)" });
 export const questionAnswer = style({ margin: "0", padding: "0 24px 22px", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+
+// What the last release brought (Site.tsx Shipped): the title on the left, its number, day and counts on the right, its
+// first new things under them.
+export const shipped = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "20px" } },
+});
+export const shippedWhen = style({ display: "flex", flexWrap: "wrap", gap: "4px 20px", margin: "0", fontSize: vars.textTitle, color: "var(--s-muted)", "@media": { "screen and (min-width: 861px)": { paddingTop: "14px" } } });
+globalStyle(`${shippedWhen} > :first-child`, { color: FG, fontFamily: vars.fontMono });
+export const shippedLines = style({ display: "grid", gap: "10px", margin: "20px 0 0", padding: "0 0 0 20px", fontSize: vars.textTitle, lineHeight: "1.6", color: FG });
+globalStyle(`${shippedLines} > li::marker`, { color: "var(--s-muted)" });
+
+// The page's last word (Site.tsx Closing): its title again, the ways in under it, in the middle; the page's foot under.
+export const closing = style({ display: "grid", justifyItems: "center", gap: "32px", textAlign: "center", paddingBottom: "120px", "@media": { [NARROW]: { gap: "24px", paddingBottom: "80px" } } });
+export const closingTitle = style({ margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const closingActions = style({ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "12px" });
 
 /** The command, in a terminal's colours in either theme. */
 export const terminal = style({

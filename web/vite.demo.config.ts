@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { uiAlias } from "./ui/alias.ts";
 import { defineConfig, type Plugin } from "vite";
@@ -20,6 +21,28 @@ const betaHead: Plugin = {
     .replaceAll('href="/apple-touch-icon.png"', 'href="/apple-touch-icon-beta.png"'),
 };
 
+/**
+ * The last release whose notes are in the repository (docs/releases/<0.1.n>.md, written as each stable release goes
+ * out), for the site to say what it brought (src/site/Site.tsx Shipped): its number, its day, how many of its lines are
+ * new, better and fixed, and the first few new things (better ones where none are new), each only up to its first pause.
+ */
+function lastRelease() {
+  const dir = here("../docs/releases");
+  const n = (f: string) => Number(f.replace(/^0\.1\.|\.md$/g, ""));
+  const file = readdirSync(dir).filter((f) => /^0\.1\.\d+\.md$/.test(f)).sort((a, b) => n(b) - n(a))[0];
+  if (!file) return null;
+  const text = readFileSync(`${dir}/${file}`, "utf8");
+  const lines = text.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2));
+  const of = (kind: string) => lines.filter((l) => l.startsWith(`${kind}：`)).map((l) => l.slice(kind.length + 1));
+  const fresh = of("新功能"), better = of("改进"), fixed = of("修复");
+  return {
+    version: `0.1.${n(file)}`,
+    date: /^date: (\S+)/m.exec(text)?.[1] ?? "",
+    counts: { fresh: fresh.length, better: better.length, fixed: fixed.length },
+    lines: (fresh.length ? fresh : better).slice(0, 3).map((l) => l.split(/[，；：]/)[0]!),
+  };
+}
+
 // The official site (site/index.html → src/site), with the web app itself in it on made-up data (src/demo), into
 // dist/site; `pnpm build:site` also builds the page to HTML (web/site-prerender.mjs).
 // No core: the worker's modules are stood in for, so this builds without client/iroh-wasm/build.sh.
@@ -30,6 +53,7 @@ export default defineConfig({
   plugins: [react(), vanillaExtractPlugin(), ...(beta ? [betaHead] : [])],
   define: {
     __SITE_BETA__: JSON.stringify(beta),
+    __SITE_RELEASE__: JSON.stringify(lastRelease()),
     __POSTHOG__: "null",
     __BUILT_AT__: JSON.stringify(Date.now()),
     __PREVIEW_ORIGIN__: JSON.stringify("https://preview.still.fail"),
