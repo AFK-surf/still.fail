@@ -68,7 +68,7 @@ function rig(withAgents = true) {
     store.close();
     rmSync(data, { recursive: true, force: true });
   };
-  return { data, store, hub, jobs, claude, codex, ask, close };
+  return { data, store, hub, jobs, readers, claude, codex, ask, close };
 }
 
 test("a new chat: its session and its thread, refused without a runtime or with an unknown profile", async () => {
@@ -124,6 +124,10 @@ test("another chat with a session, and a session brought into a chat", async () 
     assert.deepEqual(view.sessions.map((m: any) => m.session), [a.key, b.key]);
     const slack = r.store.openThread("slack:T1", "C1", "1.1", null, null);
     assert.deepEqual(await r.ask("POST", `/threads/${slack.id}/sessions`, { session: b.key }), [400, { error: `no still.fail chat ${slack.id}` }]);
+    // chat_list's threads, as the readers read them: what the store lists.
+    assert.deepEqual(JSON.parse(await r.readers.read("threadList", {}, "en")), JSON.parse(JSON.stringify(r.store.listThreads("", null, null))));
+    // The archive review's messages, as the readers read them: what the store has.
+    assert.deepEqual(JSON.parse(await r.readers.read("latestMessages", { thread: chat.id, limit: 2 }, "en")), JSON.parse(JSON.stringify(r.store.messagesBefore(chat.id, null, 2))));
   } finally {
     await r.close();
   }
