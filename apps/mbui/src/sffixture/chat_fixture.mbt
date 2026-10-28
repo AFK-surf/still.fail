@@ -1324,6 +1324,16 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
           _ => ()
         }
       }
+      // what the chat's end says it needs, let go here: said let go at once, as the core says it (views.ts withLetGo)
+      match o.get("stateAsk") {
+        Some(Number(n, ..)) if fix_decided.get(n.to_int()) is Some(Object(d)) && d.get("dismissed") == Some(Json::boolean(true)) => {
+          let rest = text(Some(v), "stateRest")
+          o["stateText"] = Json::string("已忽略：" + rest)
+          o["stateLead"] = Json::string("dismissed")
+          o.remove("stateAsk") |> ignore
+        }
+        _ => ()
+      }
       // chat-vault's request to keep a password, last
       if vault {
         all.push(vault_post(f.mode == "chat-vault-typed"))

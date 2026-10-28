@@ -662,6 +662,8 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks" || v.topic === "decisions");
         return;
       case "letGo":
+        // (the chat says it let go at once: its end's line, the asks)
+        for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
         this.#invalidate((v) => v.topic === "decisions");
         return;
       case "vault": {
@@ -1789,7 +1791,10 @@ export class Views implements Owner {
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const { place, slackUrl, slackApp, feishuUrl } = this.#whereIn(station, agents, strOf(thread, "surface"), strOf(thread, "channel"), strOf(thread, "channelName"), strOf(thread, "threadTs"));
     const found = this.#row(station, { thread: id });
-    const row = found ?? undefined;
+    // what is asked here, let go from here (忽略): said let go at once, as its station will say it (back if refused)
+    const asking = found !== undefined && found !== null ? decisions.asked(found) : null;
+    const lettingGo = found !== undefined && found !== null && asking !== null && this.local.lettingGo(station, id, u64(asking.seq) ?? -1);
+    const row = lettingGo ? decisions.withLetGo(found) : (found ?? undefined);
     const open = (d: J) => !this.local.answered(station, id, u64(d.seq) ?? 0);
     let pendingCard: [number, boolean] | null | undefined;
     if (found !== undefined) {

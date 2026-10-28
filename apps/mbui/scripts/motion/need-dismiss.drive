@@ -1,0 +1,7 @@
+# What the chat needs, at its end, let go with 忽略 (chat_rows.mbt chat_state): the card goes as answered options do
+# (to 90%, fading, its room closing on the rows' spring) and 已忽略：… fades in after it in its place.
+timeout 20000
+until 在手机上试新列表
+wait 800
+tapxy 348 650
+wait 1500

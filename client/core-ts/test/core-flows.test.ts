@@ -17,7 +17,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { Status, base, entry, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
+import { Status, base, entry, overview, session, started, stationHost, stationLater, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -489,6 +489,34 @@ test("a_decision_dismissed_is_off_the_page_at_once_and_back_when_its_station_ref
   call(core, ui, 5, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
   assert.deepEqual(await read(), { order: [9, 8], shown: 9 });
   assert.ok("ok" in answers.get(5));
+  core.close();
+});
+
+test("what_an_agent_needs_let_go_in_its_chat_is_said_let_go_at_once_and_back_when_its_station_refuses", async () => {
+  const agent = { ...session("k1"), status: "idle", lastTurn: { id: "t", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed", declared: "block", ending: "need_help", need: "在手机上试新列表" } };
+  const need = { seq: 3, message: { seq: 3, thread: 7, ts: "9.000003", authorKind: "agent", author: "k1", authorName: "Claude", text: "你试一下", attachments: [], quotes: [], declared: null, createdAt: 1, editedAt: null }, before: [] };
+  const { host, core } = await started({ ...base(), "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [agent], lastActiveAt: 1, need }] });
+  // The station's answer held until told: what is said meanwhile is the core's own.
+  let answer: (res: ReturnType<typeof jsonResponse>) => void = () => {};
+  stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/dismissed") ? new Promise((r) => (answer = r)) : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  const state = () => [v(values, 1).stateLead, v(values, 1).stateAsk ?? null];
+  assert.deepEqual(state(), ["need", 3]);
+  // Let go: said so before the station answers.
+  call(core, ui, 2, "decision.dismiss", { station: "ws/st", thread: 7, seq: 3 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(state(), ["dismissed", null]);
+  assert.equal(v(values, 1).stateText, "已忽略：在手机上试新列表");
+  // Refused: what it needs is back, to be let go again.
+  answer(jsonResponse(403, { error: "不行" }));
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(state(), ["need", 3]);
   core.close();
 });
 
