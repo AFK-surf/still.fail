@@ -1788,8 +1788,9 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   assert_true(t.find("成员") is Some(_))
   assert_true(t.query(Button, label="添加成员") is Some(_))
   assert_true(t.find("管理员") is Some(_), msg="a role at its row's end")
-  assert_true(t.find("中继") is Some(_))
-  assert_true(t.find("添加中继") is Some(_))
+  // the relays and the ways behind one row (workspace_page.mbt ws_ways_panel)
+  assert_true(t.find("连接方式") is Some(_))
+  assert_true(t.find("添加中继") is None)
   // a person pressed: what can be done about them, beside them
   assert_false(@sf.presenting())
   t.tap_text("ana@example.com")

@@ -4,6 +4,7 @@
 // has all of them in its map: a station homes on the nearest, and a device dials it on every one (client/core-ts mesh.ts).
 // RELAY_NAMES says what each is called where people see which one a connection goes through (经中继北京).
 import { originList } from "./compat";
+import type { WayView } from "./types";
 
 export const relayUrls = (env: { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELAY_URLS?: string }): string[] => originList(env.RELAY_URL || env.PUBLIC_ORIGIN, env.RELAY_URLS);
 
@@ -39,4 +40,19 @@ export function parseRelays(kept: unknown): string[] {
   } catch {
     return [];
   }
+}
+
+/** The ways to a station that are no relay, which a workspace may turn off as it may a relay: straight on its LAN, over
+ * Tailscale, and a path iroh punches through (docs/cloud.md, 连接方式). */
+export const WAY_KINDS = ["lan", "tailnet", "direct"] as const;
+
+/** Every way a workspace's devices may reach its stations: still.fail's relays, its own, then the kinds that are no
+ * relay; each on unless among `off`. */
+export function waysOf(env: RelayEnv, own: string[], off: string[]): WayView[] {
+  const isOff = (id: string) => off.some((o) => sameUrl(o) === sameUrl(id));
+  return [
+    ...relayUrls(env).map((url): WayView => ({ id: url, kind: "relay", ...(env.RELAY_NAMES?.[url] ? { name: env.RELAY_NAMES[url] } : {}), on: !isOff(url) })),
+    ...own.map((url): WayView => ({ id: url, kind: "relay", own: true, on: !isOff(url) })),
+    ...WAY_KINDS.map((kind): WayView => ({ id: kind, kind, on: !off.includes(kind) })),
+  ];
 }

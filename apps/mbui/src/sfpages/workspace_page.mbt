@@ -3,8 +3,9 @@
 // holds; its name and its mark, renamed and picked by its managers; its people in one list (those in it, those added
 // who have not signed in, the invitations out), each pressed by a manager for what can be done about them (their role
 // by the owner, moving them out: a panel, popover or sheet as the presenters say); 添加成员 at the title's end; its
-// relays (中继), each removed, another added; leaving or deleting it in red at its foot, asked first. Its rows a list
-// card's on either width (@sf.group), laid out by the page's width (page_look.mbt).
+// 连接方式 a row, its relays and the ways to its stations in a panel it opens (2026-10-29 the user: 不要平铺这么多
+// 设置); leaving or deleting it in red at its foot, asked first. Its rows a list card's on either width (@sf.group), laid
+// out by the page's width (page_look.mbt).
 
 ///|
 /// The workspace's page (WorkspaceSettings, WorkspaceScreen), in the frame it is given.
@@ -185,47 +186,20 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
       },
     )
   })
-  // its own relays
-  if manager || relays.length() > 0 {
+  // how its members' devices reach its stations: one row, how many ways are turned off at its end; pressed, its relays
+  // and the ways in a panel (ws_ways_panel)
+  let off = items(v, "ways").filter(fn(w) { !flag(Some(w), "on") }).length()
+  if manager || relays.length() > 0 || off > 0 {
     blocks.push(fn() {
-      let busy = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])
-      @sf.section(c, @sf.t("android-settings.relays.title"), note=@sf.t("android-settings.relays.lead", args=[("app", "still.fail")]), fn() {
-        @sf.group(c, fn() {
-          for url in relays {
-            @sf.link_row(c, "", url.replace(old="https://", new="").replace(old="http://", new=""), goes=false, control=fn() {
-              if manager && @sf.button(c, @sf.t("android-settings.members.remove"), key="relay/" + url, tone=Ghost, disabled=busy) {
-                @settings.act(
-                  core,
-                  @sf.t("android-settings.relays.removeWhat"),
-                  "workspace.setRelays",
-                  obj([("workspace", str(ws)), ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
-                  done=@sf.t("android-settings.relays.removed"),
-                )
-              }
-            })
-            |> ignore
-          }
-          if manager && @sf.link_row(c, "relay-add", @sf.t(if busy { "common.saving" } else { "android-settings.relays.add" }), chevron=false) && !busy {
-            ask(
-              @sf.t("android-settings.relays.add"),
-              "",
-              "https://relay.example.com",
-              @sf.t("android-settings.relays.addAction"),
-              hint=@sf.t("android-settings.relays.hint"),
-              fn(line) {
-                let next = relays.copy()
-                next.push(line)
-                @settings.act(
-                  core,
-                  @sf.t("android-settings.relays.add"),
-                  "workspace.setRelays",
-                  obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
-                  done=@sf.t("android-settings.relays.added"),
-                )
-              },
-            )
-          }
-        })
+      @sf.group(c, fn() {
+        let value = if off == 0 {
+          @sf.t("android-settings.ways.allOn")
+        } else {
+          @sf.t("android-settings.ways.someOff", args=[("n", off.to_string())])
+        }
+        if @sf.link_row(c, "ws-ways", @sf.t("android-settings.ways.title"), value~) {
+          ws_ways_panel(core, here, Of(c.id("ws-ways")))
+        }
       })
     })
   }
@@ -406,6 +380,153 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
     }
   })
 }
+
+///|
+/// How the workspace's members' devices reach its stations (cloud setWay), by the row that opened it: still.fail's
+/// relays, each on or off; the workspace's own, each removed, another added; the ways straight to a station (its LAN,
+/// Tailscale, a path punched through), each on or off. Its managers' to change; the others see them. Read live: what
+/// a change brings back shows at once.
+fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
+  @sf.panel(@sf.t("android-settings.ways.title"), from~, form=true, description=@sf.t("android-settings.ways.lead"), fn(c, close) {
+    let v = workspace_view(core, here).value
+    let role = text(v, "role")
+    let manager = role == "owner" || role == "admin"
+    let ws = text(v, "id")
+    let relays = strings(v, "relays")
+    let ways = items(v, "ways")
+    let busy = is_doing(core, ["workspace.setWay"], [("workspace", ws)])
+    let turn = fn(w : Json, title : String, note : String) {
+      let id = text(Some(w), "id")
+      let on = flag(Some(w), "on")
+      ws_way_row(c, title, note, fn() {
+        if @sf.switch(c, "way/" + id, on, label=title, disabled=!manager, busy~) != on {
+          @settings.act(
+            core,
+            @sf.t("android-settings.ways.setWhat"),
+            "workspace.setWay",
+            obj([("workspace", str(ws)), ("way", str(id)), ("on", Json::boolean(!on)), ("account", str(here.sub))]),
+          )
+        }
+      })
+    }
+    let host = fn(url : String) { url.replace(old="https://", new="").replace(old="http://", new="") }
+    // still.fail's relays
+    ws_way_label(c, @sf.t("android-settings.ways.ours", args=[("app", "still.fail")]))
+    for w in ways {
+      if text(Some(w), "kind") == "relay" && !flag(Some(w), "own") {
+        let named = text(Some(w), "name")
+        turn(w, if named != "" { named } else { host(text(Some(w), "id")) }, "")
+      }
+    }
+    // its own: removed, added (one not wanted is taken away, not turned off)
+    if manager || relays.length() > 0 {
+      let setting = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])
+      ws_way_label(c, @sf.t("android-settings.ways.own"))
+      for url in relays {
+        ws_way_row(c, host(url), "", fn() {
+          if manager && @sf.button(c, @sf.t("android-settings.members.remove"), key="relay/" + url, tone=Ghost, disabled=setting) {
+            @settings.act(
+              core,
+              @sf.t("android-settings.relays.removeWhat"),
+              "workspace.setRelays",
+              obj([("workspace", str(ws)), ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
+              done=@sf.t("android-settings.relays.removed"),
+            )
+          }
+        })
+      }
+      // (a row of its own, its words on the line the others' are, in the link's ink)
+      if manager {
+        let add = c.id("relay-add")
+        if c.clicked(add) && !setting {
+          close()
+          ask(
+            @sf.t("android-settings.relays.add"),
+            "",
+            "https://relay.example.com",
+            @sf.t("android-settings.relays.addAction"),
+            hint=@sf.t("android-settings.relays.hint"),
+            fn(line) {
+              let next = relays.copy()
+              next.push(line)
+              @settings.act(
+                core,
+                @sf.t("android-settings.relays.add"),
+                "workspace.setRelays",
+                obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.relays.added"),
+              )
+            },
+          )
+        }
+        let words = @sf.t(if setting { "common.saving" } else { "android-settings.relays.add" })
+        let row = c.box(style=@sf.panel_words_in().then(ws_way_line), id=add, fn() {
+          c.text(words, style=ws_way_link) |> ignore
+        })
+        c.semantics(row, Button, id=add, label=words)
+      }
+    }
+    // straight to a station
+    ws_way_label(c, @sf.t("android-settings.ways.straight"))
+    for w in ways {
+      match text(Some(w), "kind") {
+        "lan" => turn(w, @sf.t("android-settings.ways.lan"), @sf.t("android-settings.ways.lanNote"))
+        "tailnet" => turn(w, @sf.t("android-settings.ways.tailnet"), @sf.t("android-settings.ways.tailnetNote"))
+        "direct" => turn(w, @sf.t("android-settings.ways.direct"), @sf.t("android-settings.ways.directNote"))
+        _ => ()
+      }
+    }
+    // (room under the last: its switch out of the panel's corner, not set in it)
+    c.box(style=ws_way_end, fn() {  }) |> ignore
+  })
+}
+
+///|
+/// A row of the ways' panel: its title, `note` under it, `end` at its end (a switch, a button); on the panel's words'
+/// line, as its description and its groups' labels are.
+fn ws_way_row(c : @ui.Ctx, title : String, note : String, end : () -> Unit) -> Unit {
+  c.box(style=@sf.panel_words_in().then(ws_way_line), fn() {
+    c.box(style=ws_way_words, fn() {
+      c.text(title, style=ws_way_title) |> ignore
+      if note != "" {
+        c.text(note, style=@sf.meta) |> ignore
+      }
+    })
+    |> ignore
+    end()
+  })
+  |> ignore
+}
+
+///|
+/// A group's label in the ways' panel (still.fail's relays, its own, straight to a station): quiet, on the words' line.
+fn ws_way_label(c : @ui.Ctx, words : String) -> Unit {
+  c.box(style=@sf.panel_words_in().then(ws_way_label_at), fn() { c.text(words, style=@sf.meta) |> ignore }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter py=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_end : @ui.Style = @ui.css("h=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_link : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
 /// What a row does at its end (RowAction): a quiet button as every row's on the settings' pages (账号's 退出), turning

@@ -922,14 +922,17 @@ export function host(h: J): J {
   return o;
 }
 
-/// How a connection to a station goes, in words (直连, 北京中继) and as a word to tell apart: a reading's (`net`) or
+/// How a connection to a station goes, in words (直连, Tailscale, 北京中继) and as a word to tell apart (Tailscale's is
+/// direct: no relay of still.fail's or the workspace's on the way): a reading's (`net`) or
 /// its way alone (`way`), `{ path, relay }`.
 function reached(r: J, relayName: (host: string) => string | null): { path: string; via: string } {
   const relayHost = str(r.relay) || null;
   const path =
     r.path === "direct"
       ? t("core-views.present.net.direct")
-      : r.path === "relay"
+      : r.path === "tailnet"
+        ? t("core-views.present.net.tailnet")
+        : r.path === "relay"
         ? relayHost !== null
           ? (() => {
               const name = relayName(relayHost);
@@ -937,7 +940,7 @@ function reached(r: J, relayName: (host: string) => string | null): { path: stri
             })()
           : t("core-views.present.net.relay")
         : t("core-views.present.net.choosing");
-  return { path, via: r.path === "direct" ? "direct" : r.path === "relay" ? "relay" : "choosing" };
+  return { path, via: r.path === "direct" || r.path === "tailnet" ? "direct" : r.path === "relay" ? "relay" : "choosing" };
 }
 
 /// How a station is reached as the places that name it show it (`StationWay`), from its `way`.
@@ -969,6 +972,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
           const ms = get(x, "rttMs");
           // "direct": the way that goes straight there, no relay.
           if (h === "direct") return [{ name: t("core-views.present.net.direct"), rtt: typeof ms === "number" ? figure(ms) : null, current: r.path === "direct" }];
+          if (h === "tailnet") return [{ name: t("core-views.present.net.tailnet"), rtt: typeof ms === "number" ? figure(ms) : null, current: r.path === "tailnet" }];
           return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: through === h }];
         }),
         moved: typeof m.moved === "string" ? named(m.moved) : null,

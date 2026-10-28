@@ -8,9 +8,9 @@ import { core, useTopic, type TopicState } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
 import { t } from "../i18n.ts";
 import type { Account } from "./accounts.ts";
-import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
+export type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView };
 
 /** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
 export interface AccountWorkspaces {
@@ -50,6 +50,8 @@ export const cloud = {
   setWorkspaceMark: (sub: string, id: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, emoji: mark.emoji, icon: mark.icon }),
   /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
   setRelays: (sub: string, id: string, relays: string[]) => operations(sub).workspaceSetRelays<WorkspaceView>({ workspace: id, relays }),
+  /** One way its devices reach its stations turned on or off (cloud directory.ts setWay). */
+  setWay: (sub: string, id: string, way: string, on: boolean) => operations(sub).workspaceSetWay<WorkspaceView>({ workspace: id, way, on }),
   deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),
   invite: (sub: string, id: string, role: Role, email: string) =>
     operations(sub).workspaceInvite<{ token: string; url: string; expires_at: number }>({ workspace: id, role, email }),

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { lanAddrs, lanKept, lanNeighbours, lanReach, privateV4 } from "../src/mesh/lan.ts";
+import { lanAddrs, lanKept, lanNeighbours, lanReach, privateV4, tailnetAddrs, tailnetV4 } from "../src/mesh/lan.ts";
 
 const nic = (address: string, family: "IPv4" | "IPv6" = "IPv4", internal = false) => ({ address, family, internal, netmask: "", mac: "", cidr: null }) as never;
 
@@ -20,6 +20,15 @@ test("a stations LAN addresses are its private IPv4 ones at its mesh port, bridg
   // Bound to one address (STILLFAIL_MESH_BIND_ADDR): that one alone; no IPv4 socket: none.
   assert.deepEqual(lanAddrs(["192.168.20.10:4770"], interfaces), ["192.168.20.10:4770"]);
   assert.deepEqual(lanAddrs(["[::]:56911"], interfaces), []);
+});
+
+// studio's Tailscale address is on a utun (macOS), left out of its LAN; Linux's is on tailscale0.
+test("a stations tailnet addresses are its Tailscale ones at its mesh port, whatever their interface is called", () => {
+  const interfaces = { en0: [nic("192.168.0.126")], utun14: [nic("100.67.165.110"), nic("fd7a:115c:a1e0::1", "IPv6")], tailscale0: [nic("100.101.2.3")], wwan0: [nic("100.128.0.9")] };
+  assert.deepEqual(tailnetAddrs(["0.0.0.0:54387", "[::]:56911"], interfaces), ["100.67.165.110:54387", "100.101.2.3:54387"]);
+  assert.deepEqual(tailnetAddrs(["192.168.0.126:4770"], interfaces), []);
+  for (const ip of ["100.64.0.1", "100.127.255.254"]) assert.ok(tailnetV4(ip), ip);
+  for (const ip of ["100.63.255.255", "100.128.0.1", "10.0.0.1"]) assert.ok(!tailnetV4(ip), ip);
 });
 
 test("private IPv4 is RFC 1918's", () => {

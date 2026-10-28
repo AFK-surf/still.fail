@@ -1286,6 +1286,17 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
           ("added", [obj([("email", str("he@example.com")), ("role", str("member"))])]),
           ("relays", []),
+          // every way its devices reach its stations (cloud setWay), the punched path turned off
+          (
+            "ways",
+            [
+              obj([("id", str("https://app.still.fail/")), ("kind", str("relay")), ("name", str("Cloudflare")), ("on", Json::boolean(true))]),
+              obj([("id", str("https://39.105.157.122/")), ("kind", str("relay")), ("name", str("北京")), ("on", Json::boolean(true))]),
+              obj([("id", str("lan")), ("kind", str("lan")), ("on", Json::boolean(true))]),
+              obj([("id", str("tailnet")), ("kind", str("tailnet")), ("on", Json::boolean(true))]),
+              obj([("id", str("direct")), ("kind", str("direct")), ("on", Json::boolean(false))]),
+            ],
+          ),
         ]),
       )
     "stations" => if fx.none { Some([]) } else { Some([fx_station("ws1/st1"), fx_station("ws1/st2")]) }

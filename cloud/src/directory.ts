@@ -20,7 +20,7 @@ import { grantKeys } from "./grants";
 import { langOf, type Lang } from "./i18n.ts";
 import { isIconUrl } from "./icons";
 import { showsOf, type Shows } from "./noticeText";
-import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
+import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
 import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
@@ -134,6 +134,8 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(invite_codes)").some((r) => r.name === "beta")) this.#run("ALTER TABLE invite_codes ADD COLUMN beta INTEGER");
     // Nor had workspaces relays of their own (a JSON array of URLs, null for none), before they could have.
     if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
+    // Nor ways turned off (a JSON array of relay URLs and kinds of way, null for none: setWay), before they could be.
+    if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "ways_off")) this.#run("ALTER TABLE workspaces ADD COLUMN ways_off TEXT");
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
     // Nor what a device shows of notices (JSON: noticeText.ts Shows; null all, in full), before a device said.
@@ -371,9 +373,9 @@ export class Directory extends DurableObject<Env> {
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
         (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id) AS stations,
-        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.emoji, w.icon
+        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.ways_off, w.emoji, w.icon
       FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
-      .map(({ relays, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
+      .map(({ relays, ways_off, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...offOf(ways_off), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
     return { user: user ?? null, workspaces };
   }
 
@@ -458,7 +460,7 @@ export class Directory extends DurableObject<Env> {
 
   workspace(sub: string, id: string): WorkspaceView {
     const role = this.#role(sub, id);
-    const w = this.#one("SELECT id, name, created_at, relays, emoji, icon FROM workspaces WHERE id = ?", id)!;
+    const w = this.#one("SELECT id, name, created_at, relays, ways_off, emoji, icon FROM workspaces WHERE id = ?", id)!;
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
@@ -469,7 +471,7 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   /**
@@ -713,7 +715,33 @@ export class Directory extends DurableObject<Env> {
       const clean = url!.href.replace(/\/+$/, "");
       if (!ours.includes(sameUrl(clean)) && !list.some((u) => sameUrl(u) === sameUrl(clean))) list.push(clean);
     }
-    this.#run("UPDATE workspaces SET relays = ? WHERE id = ?", list.length ? JSON.stringify(list) : null, id);
+    // A relay of its own taken away is no longer among those turned off either.
+    const off = parseRelays(this.#one("SELECT ways_off FROM workspaces WHERE id = ?", id)?.ways_off);
+    const ways = waysOf(this.env, list, []).map((w) => sameUrl(w.id));
+    const kept = off.filter((o) => ways.includes(sameUrl(o)));
+    this.ctx.storage.transactionSync(() => {
+      this.#run("UPDATE workspaces SET relays = ? WHERE id = ?", list.length ? JSON.stringify(list) : null, id);
+      this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", kept.length ? JSON.stringify(kept) : null, id);
+    });
+    this.#changed(id, true);
+    return this.workspace(sub, id);
+  }
+
+  /**
+   * One way the workspace's devices reach its stations turned on or off (`ways` of its view: a relay, still.fail's or
+   * its own, or a kind of way that is no relay): those off are told to its members in `/v1/me` as `ways_off`, and their
+   * devices do not go that way to its stations (client/core-ts mesh.ts). A relay stays on: the web app goes through
+   * relays alone, and a device that never reached a station yet knows of no other way there.
+   */
+  setWay(sub: string, id: string, way: unknown, on: unknown): WorkspaceView {
+    this.#role(sub, id, MANAGERS);
+    if (typeof way !== "string" || typeof on !== "boolean") fail(400, "invalid_way");
+    const row = this.#one("SELECT relays, ways_off FROM workspaces WHERE id = ?", id)!;
+    const ways = waysOf(this.env, parseRelays(row.relays), parseRelays(row.ways_off));
+    const target = ways.find((w) => sameUrl(w.id) === sameUrl(way as string)) ?? fail(400, "invalid_way");
+    const off = ways.filter((w) => (w === target ? !on : !w.on)).map((w) => w.id);
+    if (!ways.some((w) => w.kind === "relay" && !off.includes(w.id))) fail(409, "last_relay");
+    this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", off.length ? JSON.stringify(off) : null, id);
     this.#changed(id, true);
     return this.workspace(sub, id);
   }
@@ -1634,6 +1662,11 @@ function cleanIcon(value: unknown, origin: string): string | null {
 /** A workspace's emoji and icon as its views carry them: each only when set (clients from before them know neither). */
 function marks(emoji: unknown, icon: unknown): { emoji?: string; icon?: string } {
   return { ...(emoji ? { emoji: emoji as string } : {}), ...(icon ? { icon: icon as string } : {}) };
+}
+/** The ways a workspace turned off as its views carry them: only when some are (clients from before them know none). */
+function offOf(kept: unknown): { ways_off?: string[] } {
+  const off = parseRelays(kept);
+  return off.length > 0 ? { ways_off: off } : {};
 }
 /** How long a picture's data URL kept in the workspace may be: it goes to every member with the workspace. */
 const ICON_BYTES = 48_000;

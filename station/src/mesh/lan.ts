@@ -34,7 +34,32 @@ export function lanAddrs(sockets: string[], interfaces: NodeJS.Dict<NetworkInter
   return [...new Set(out)];
 }
 
-const v4 = (ip: string) => ip.split(".").reduce((n, o) => (n * 256 + Number(o)) >>> 0, 0);
+/// Whether `ip` is in Tailscale's IPv4 range (100.64.0.0/10, the shared address space it gives each machine of a tailnet).
+export function tailnetV4(ip: string): boolean {
+  const o = ip.split(".").map(Number);
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  return o[0] === 100 && o[1]! >= 64 && o[1]! <= 127;
+}
+
+/// `ip:port` of each Tailscale address the station has, at the port of its IPv4 socket (as `lanAddrs`): where a device
+/// on the same tailnet dials it straight, Tailscale carrying it (docs/mesh-lan.md, Tailscale). Known by the address,
+/// not the interface: Tailscale's is utun on macOS, tailscale0 on Linux, its own name on Windows.
+export function tailnetAddrs(sockets: string[], interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
+  const v4 = sockets.map((s) => /^(\d+\.\d+\.\d+\.\d+):(\d+)$/.exec(s)).find((m) => m !== null);
+  if (!v4) return [];
+  const [, bound, port] = v4;
+  const out: string[] = [];
+  for (const addrs of Object.values(interfaces)) {
+    for (const a of addrs ?? []) {
+      if (a.family !== "IPv4" || a.internal || !tailnetV4(a.address)) continue;
+      if (bound !== "0.0.0.0" && bound !== a.address) continue;
+      out.push(`${a.address}:${port}`);
+    }
+  }
+  return [...new Set(out)];
+}
+
+const v4 =(ip: string) => ip.split(".").reduce((n, o) => (n * 256 + Number(o)) >>> 0, 0);
 const dotted = (n: number) => [24, 16, 8, 0].map((s) => (n >>> s) & 255).join(".");
 
 /// An address on each LAN the station is on, not its own: the subnet's first (its router, as a rule).

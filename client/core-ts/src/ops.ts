@@ -173,6 +173,7 @@ export const PARAMS: Record<string, string> = {
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
   "workspace.setRelays": "workspace:string relays?:strings",
+  "workspace.setWay": "workspace:string way:string on:boolean",
   "workspace.delete": "workspace:string",
   "workspace.invite": "workspace:string role?:string email?:string",
   "workspace.addMembers": "workspace:string role?:string emails?:strings",
@@ -595,6 +596,9 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("PATCH", ws, p.pick(["name", "emoji", "icon"]));
     case "workspace.setRelays":
       return op("PUT", () => `${ws()}/relays`, p.pick(["relays"]));
+    // One way its devices reach its stations (a relay, `lan`, `tailnet`, `direct`) turned on or off (cloud setWay).
+    case "workspace.setWay":
+      return op("PUT", () => `${ws()}/ways`, p.pick(["way", "on"]));
     case "workspace.delete":
       return op("DELETE", ws, null);
     case "workspace.invite":

@@ -567,6 +567,7 @@
   "core-logic.mesh.no_answer": "Can't reach this station: no response",
   "core-logic.mesh.no_reply": "Station didn't respond",
   "core-logic.mesh.not_connected": "Not connected to this station yet",
+  "core-logic.mesh.all_off": "This workspace turned off every way to reach this station",
   "core-logic.mesh.read_failed": "Couldn't read station response: {error}",
   "core-logic.mesh.reply_cut": "Station response cut off mid-line",
   "core-logic.mesh.reply_no_status": "Station response has no status code",

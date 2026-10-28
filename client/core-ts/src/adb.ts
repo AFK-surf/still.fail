@@ -30,8 +30,9 @@ export type AdbEnv = {
   store: Store;
   mesh: () => Effect.Effect<Mesh, CoreError>;
   credentials: (workspace: string) => CredentialSource;
-  /// The relays a workspace has of its own (`Mesh.link`).
+  /// The relays a workspace has of its own, the ways it turned off (`Mesh.link`).
   relays: (workspace: string) => string[];
+  off?: (workspace: string) => string[];
   /// Whether this device has an adb to lend: a phone's own adbd, which only an Android device runs (as it said it is:
   /// `client.device`), reached over TCP; a Mac's or a PC's core reaches TCP too, and has none.
   lends: () => boolean;
@@ -237,7 +238,7 @@ export class Adb {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(station);
       const mesh = yield* this.#env.mesh();
-      const link = yield* mesh.link(addr.toString(), this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
+      const link = yield* mesh.link(addr.toString(), this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace), this.#env.off?.(addr.workspace));
       return [mesh, link] as [Mesh, Link];
     });
   }
