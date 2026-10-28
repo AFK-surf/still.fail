@@ -115,7 +115,9 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const require = createRequire(join(process.env.PW_FROM || app, 'x.js'));
 const { chromium } = require('playwright-core');
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+// (drawn at 4K, 3840 × 2160: the page's 1920 × 1080 at twice its pixels; FILM_SCALE=1 for 1080p)
+const SCALE = Number(process.env.FILM_SCALE || 2);
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: SCALE });
 page.on('pageerror', (e) => console.error('3d:', e.message));
 await page.goto(`${base}duo3d/film.html`);
 await page.waitForFunction(() => window.ready3d === true, null, { timeout: 120000 });
@@ -145,7 +147,9 @@ if (stills.length) {
   const n = Math.round((END + 1.5) * FPS);
   // its sound, on the same marks (sound.mjs)
   const wav = join(app, 'out/film/promo3d-sim.wav');
-  filmSound({ seconds: n / FPS, marks, taps, unfold: U, flip: FLIP, end: END, out: wav });
+  filmSound({ seconds: n / FPS, marks, taps, unfold: U, flip: FLIP, end: END, out: wav + '.raw.wav' });
+  // (as loud as films are played: -16 LUFS)
+  execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', wav + '.raw.wav', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', wav]);
   const ff = spawn(FFMPEG, ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', '-i', wav,
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'aac', '-b:a', '192k', '-shortest',
     '-movflags', '+faststart', join(app, 'out/film/promo3d-sim.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
@@ -157,6 +161,12 @@ if (stills.length) {
   }
   ff.stdin.end();
   await new Promise((ok, no) => ff.on('close', (c) => (c === 0 ? ok() : no(new Error('ffmpeg ' + c)))));
+  // and at 2K (2560 × 1440), from it
+  if (SCALE >= 2) {
+    execFileSync(FFMPEG, ['-loglevel', 'error', '-y', '-i', join(app, 'out/film/promo3d-sim.mp4'), '-vf', 'scale=2560:1440:flags=lanczos',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'slow', '-c:a', 'copy', '-movflags', '+faststart',
+      join(app, 'out/film/promo3d-sim-2k.mp4')]);
+  }
 }
 await browser.close();
 server.close();

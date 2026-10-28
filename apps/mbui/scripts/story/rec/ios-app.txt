@@ -1,4 +1,4 @@
-DRIVE start: 55 lines
+DRIVE start: 57 lines
 ios: thermal state 0
 ios: size classes compact wide, regular high
 ios: launched
@@ -7,32 +7,36 @@ DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the ru
 DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
 ios: active
 DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
+ios: hinge closed, 0 division(s)
 ios: the screen's corner 0 8.0
 ios: the screen's corner 1 59.0
 ios: the screen's corner 2 59.0
 ios: the screen's corner 3 8.0
 theme: light
-DRIVE AT 625646544.3576667 start
-DRIVE ok until 发消息 (0 ms)
-ios: first frame 466x678 @3x in 241 ms
+ios: hinge none, 0 division(s)
 ios: hinge closed, 0 division(s)
-DRIVE AT 625648051.4936252 tap=chat
+NAVLOG bar items: lead/workspaces{星火工作室,个人,,设置} lead/attention
+NAVLOG bar items: lead/workspaces{星火工作室,个人,,设置} act/attention
+DRIVE ok until 发消息 (0 ms)
+ios: first frame 466x678 @3x in 258 ms
+DRIVE AT 626678618.0439584 start
+DRIVE AT 626680118.4687085 tap=chat
 DRIVE tapxy 430 330 at 430,330
-DRIVE AT 625649284.9924585 tap=发消息
+DRIVE AT 626681355.7101668 tap=发消息
 DRIVE tap 发消息 at 215,630
-DRIVE AT 625650338.1350834 type=登录页
-DRIVE AT 625650787.7589586 type=暗色模式下
-DRIVE AT 625651288.83 type=按钮看不清
-DRIVE AT 625651688.7401668 type=，修一下
-DRIVE AT 625652371.2162918 tap=send
+DRIVE AT 626682454.1436667 type=登录页
+DRIVE AT 626682904.8899168 type=暗色模式下
+DRIVE AT 626683405.5770835 type=按钮看不清
+DRIVE AT 626683805.2408334 type=，修一下
+DRIVE AT 626684488.1310835 tap=send
 DRIVE tap icon:arrow-up at 350,341
 SAID sent row in the list o:out1
-DRIVE AT 625652935.0268751 kb-down
+DRIVE AT 626685051.7158751 kb-down
 DRIVE tapxy 250 140 at 250,140
-DRIVE AT 625653604.9027501 working
-DRIVE ok until 退出登录 (4916 ms)
-DRIVE AT 625660521.5292085 answer
-DRIVE AT 625662022.3270835 unfold
+DRIVE AT 626685721.7071252 working
+DRIVE ok until 退出登录 (4918 ms)
+DRIVE AT 626692641.5340419 answer
+DRIVE AT 626694155.4549584 unfold
 DRIVE LOG UNFOLD
 ios: hinge half, 0 division(s)
 ios: size classes expanded wide, regular high
@@ -40,15 +44,19 @@ ios: the screen's corner 0 55.0
 ios: the screen's corner 1 55.0
 ios: the screen's corner 2 55.0
 ios: the screen's corner 3 55.0
+NAVLOG depth 2 card: page/who/agent/s-c1 page/info
+NAVLOG bar items: page/who/agent/s-c1 page/info act/workspaces{星火工作室,个人,,设置} act/attention
 ios: hinge open, 0 division(s)
-DRIVE AT 625666524.5964168 pic
+DRIVE AT 626698655.9331251 pic
 DRIVE tap img:改后 at 511,536
-DRIVE AT 625668555.1864585 back
-DRIVE AT 625669524.5706668 scroll
+NAVLOG bar items: lead/over/close over/actual
+DRIVE AT 626700673.0066252 back
+NAVLOG bar items: page/who/agent/s-c1 page/info act/workspaces{星火工作室,个人,,设置} act/attention
+DRIVE AT 626701639.3132501 scroll
 DRIVE dragon 0 -320 450 退出登录 from 395,330
-DRIVE AT 625670923.4670419 tap=合并
-DRIVE tap =合并 at 524,444
-DRIVE ok until 4f2a9c1 (1901 ms)
-DRIVE AT 625672844.5736251 merged
-DRIVE AT 625676055.2801667 end
+DRIVE AT 626703023.5079168 tap=合并
+DRIVE tap =合并 at 524,451
+DRIVE ok until 4f2a9c1 (1899 ms)
+DRIVE AT 626704944.0048335 merged
+DRIVE AT 626708152.5830835 end
 DRIVE PASS

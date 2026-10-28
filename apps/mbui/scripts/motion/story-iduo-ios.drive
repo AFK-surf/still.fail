@@ -1,7 +1,9 @@
 # Film 1 of still.fail in use on the iPhone Duo simulator (made by scripts/story/drive_ios.py; story scripts/story/iduo.json).
 timeout 45000
-at start
 until 发消息
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
 wait 1500
 # (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
 at tap=chat

@@ -10,7 +10,7 @@ const W = 1920, H = 1080;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, W / H, .1, 250);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(1);
+renderer.setPixelRatio(window.devicePixelRatio || 1);
 renderer.setSize(W, H);
 renderer.setClearColor(0x000000, 0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
