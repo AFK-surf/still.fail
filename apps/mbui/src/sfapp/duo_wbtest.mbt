@@ -438,3 +438,29 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
   q.run_for(@ui.nav_push_ms)
   assert_false(workspaces_dot(q))
 }
+
+///|
+/// The composer's width in the chat's page (the page's own width less its room), as last drawn.
+fn composer_w(t : @ui.Tester) -> Double {
+  match t.boxes().search_by(fn(b) { b.kind == "editor" }) {
+    Some(i) => t.boxes()[i].w
+    None => 0.0
+  }
+}
+
+///|
+test "an iPhone Duo on its side: a service's link tapped, the side panel comes over and the page narrows with the tape's move, not at once before it" {
+  let (w, h, side) = (951.0, 669.0, 84.0)
+  let t = native_chat(w, h, true, side~, mode="chat-info", corner=59.0)
+  let src = fixture("chat-info")
+  let from = composer_w(t)
+  open_link_in(src, "https://still.fail/o/ws1/st1/s-c1?service=j-web")
+  // (the move's first frame: the page as wide as it was, near enough, the panel coming in from the window's edge)
+  t.run_for(@ui.frame_period_default)
+  let first = composer_w(t)
+  t.run_for(@sfdesk.side_move_ms)
+  let to = composer_w(t)
+  assert_true(to < from - 20.0, msg="the page narrowed beside the panel: \{from} to \{to}")
+  assert_true(from - first < (from - to) / 3.0, msg="at once: \{from}, then \{first} in the move's first frame, \{to} at its end")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+}

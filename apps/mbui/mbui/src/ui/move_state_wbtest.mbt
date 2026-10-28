@@ -94,6 +94,34 @@ let move_first_late_ms : Double = 40.0
 let move_first_very_late_ms : Double = 500.0
 
 ///|
+test "a move whose first frames are late one after another (its state built over two: a native view made in the second) waits for each" {
+  // the same move, on time: half its time in
+  let on_time = Dock::new()
+  let t = Tester::new(on_time.view(), w=800.0, h=600.0)
+  t.draw()
+  on_time.fold.val = true
+  t.draw()
+  t.run_for(move_ms / 2.0)
+  let half = width_of(on_time.node.val)
+  let d = Dock::new()
+  let t = Tester::new(d.view(), w=800.0, h=600.0)
+  t.draw()
+  d.fold.val = true
+  t.draw()
+  let start = t.time()
+  t.frame_late(move_first_late_ms)
+  t.run_for(first_frame_ms)
+  t.frame_late(move_first_late_ms)
+  t.run_for(first_frame_ms)
+  // (each late frame's time not run: as on time, from the second's)
+  t.run_for(start + 2.0 * move_first_late_ms + move_ms / 2.0 - t.time())
+  assert_true((width_of(d.node.val) - half).abs() < 1.0e-6, msg="\{width_of(d.node.val)} against \{half}")
+  t.run_for(start + 2.0 * move_first_late_ms + move_ms - t.time())
+  assert_eq(width_of(d.node.val), 56.0)
+  t.assert_idle()
+}
+
+///|
 test "a move whose first frame is late to the screen moves from where that frame drew it, at the display's pace; nav_late_most at most" {
   // the same move, its first frame on time: half its time in
   let on_time = Dock::new()
