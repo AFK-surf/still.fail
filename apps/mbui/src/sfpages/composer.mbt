@@ -1752,8 +1752,8 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
 /// In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (Chat.tsx
 /// CcChooser, `chat.cc`), each thread's bot saying there who wrote it on still.fail. In the row under the words once the
 /// composer is opened to write (on one line it only says where: `note`): 抄送, and each thread ticked (its mark and
-/// place), a chooser's look (@sf.chooser), opening a menu of the threads to tick, each ticked one's check at its end:
-/// several stay open to tick in turn, one closes once ticked. None until ticked.
+/// place), a chooser's look (@sf.chooser), opening a menu of the threads to tick (each its mark and place), each ticked
+/// one's check at its end: several stay open to tick in turn, one closes once ticked. None until ticked.
 fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Array[@sfbase.ChatCcTo]) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/cc")
@@ -1768,12 +1768,19 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
   })
   c.semantics(b, Button, id~, label=([label] + on.map(fn(o) { o.1 })).join(" "), expanded=open)
   let entries = to.map(fn(o) { @kit.menu_check(o.thread.to_string(), o.on, label=o.place) })
-  // each ticked one's check at its row's end (左子健)
-  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, row_end=fn(c, s) {
+  // each its platform's mark before its place, as beside 抄送
+  let marks : Map[String, (@ui.Ctx, Double) -> Unit] = {}
+  for o in to {
+    let via = o.via
+    marks[o.thread.to_string()] = fn(c, _) { cc_mark(c, via) }
+  }
+  // each ticked one's check at its row's end (左子健), none before its mark
+  let row_end = fn(c : @ui.Ctx, s : @kit.MenuItemState) {
     if s.entry.kind is Check(true) {
       @sf.icon(c, "check", size=14.0, color=p.text) |> ignore
     }
-  })
+  }
+  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, marks~, check_end=true, row_end~)
   composing.cc_open = m.open
   match m.chosen {
     Some(v) =>

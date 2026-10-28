@@ -1094,7 +1094,8 @@ let menu_zou : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=
 /// A menu (parts.tsx Menu: mbui's dropdown menu, in the web's look): `entries` with their icons (by value), as wide as
 /// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
 /// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
-/// menu's; a press outside closes it.
+/// menu's; a press outside closes it. `check_end`: its choices' checks are drawn at their rows' ends (`row_end`:
+/// parts.tsx ChooserItem checkEnd), no column of them before their words.
 pub fn dropdown(
   c : @ui.Ctx,
   key : String,
@@ -1112,12 +1113,13 @@ pub fn dropdown(
   danger? : Array[String] = [],
   marks? : Map[String, (@ui.Ctx, Double) -> Unit] = {},
   notes? : Map[String, String] = {},
+  check_end? : Bool = false,
 ) -> @kit.Menu {
-  // (a column before every item's words where one has an icon or is one of a choice, so all their words are on one
-  // line; a menu of choices alone, each chosen or not, its check 6 from its words)
+  // (a column before every item's words where one has an icon or is one of a choice, its check there, so all their
+  // words are on one line; a menu of choices alone, each chosen or not, its check 6 from its words)
   let choice = fn(e : @kit.Entry) { e.kind is Choice(_) || e.kind is Check(_) }
   let iconed = entries.iter().any(fn(e) { !choice(e) && icons.get(e.value).unwrap_or("") != "" })
-  let lead = iconed || entries.iter().any(choice)
+  let lead = iconed || (!check_end && entries.iter().any(choice))
   let gap = if lead && !iconed { chooser_gap } else { menu_gap }
   @kit.dropdown_menu(
     c,
