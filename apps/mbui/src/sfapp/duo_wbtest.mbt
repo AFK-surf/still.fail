@@ -464,3 +464,32 @@ test "an iPhone Duo on its side: a service's link tapped, the side panel comes o
   assert_true(from - first < (from - to) / 3.0, msg="at once: \{from}, then \{first} in the move's first frame, \{to} at its end")
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
 }
+
+///|
+test "an iPhone Duo: switching workspace from an open chat never restores the old workspace's last chat" {
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "workspaceMarks" {
+        topic_as_read(name, params, { value: Some({ "workspaces": {
+          "ws1": { "chat": { "station": "ws1/st1", "key": "s-c1" } },
+          "ws2": {},
+        } }), error: None, version: 1 })
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.keep_parts(true)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() is Chat(r) && r.station == "ws1/st1")
+  t.post(@hostapi.system_channel, "{\"nav\":\"ws/ws2\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.picked, "ws2")
+  assert_true(app.nav.top() == NewChat, msg="the new workspace has no last chat")
+}
