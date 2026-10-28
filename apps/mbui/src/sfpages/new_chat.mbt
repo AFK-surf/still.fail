@@ -145,7 +145,7 @@ fn new_on(
   station : Json?,
   state : NewState,
 ) -> Unit {
-  if c.width < @sf.page_narrow_most {
+  if c.width < @sf.page_narrow_most || c.ime_inset() > 0.0 {
     new_narrow(c, src, w, frame, v, station, state)
   } else {
     new_wide(c, src, w, frame, v, station, state)
@@ -613,7 +613,7 @@ fn new_composer_place(
   state : NewState,
   width : Double,
 ) -> Unit {
-  let wide = c.width >= @sf.page_narrow_most
+  let wide = c.width >= @sf.page_narrow_most && c.ime_inset() == 0.0
   match state {
     Going(_, _) => list_space(c, @sfbase.fresh.room.get())
     Held(_) if address == "" => list_space(c, @motion.measured(c, "new/composer").unwrap_or(0.0))

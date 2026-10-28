@@ -29,7 +29,8 @@ pub let viz_first_height : Int = 120
 pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
   let p = @sf.palette_of(dark)
   let t = @sf.theme().t
-  let px = fn(v : Double) { v.to_string() + "px" }
+  let scale = @ui.font_scale()
+  let px = fn(v : Double) { (v * scale).to_string() + "px" }
   [
     ("canvas", viz_css_color(p.canvas)),
     ("raised", viz_css_color(p.raised)),
@@ -158,7 +159,7 @@ pub fn viz_is_fragment(html : String) -> Bool {
 ///|
 /// The page: the content in the stylesheet, the bridge (and what the widget kept) ahead of it, the theme as the app
 /// shows it now (Viz.kt documentOf).
-pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -> String {
+pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64, scroll? : Bool = false) -> String {
   let vars = viz_tokens(dark).map(fn(t) { t.0 + ":" + t.1.replace_all(old="<", new="").replace_all(old=">", new="") }).join(";")
   let theme = if dark { "dark" } else { "light" }
   let kept = Json::object({ "widgetState": state.unwrap_or(Json::null()) }).stringify().replace_all(old="<", new="\\u003c")
@@ -169,13 +170,14 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64) -
   "<meta http-equiv=\"Content-Security-Policy\" content=\"" +
   viz_csp() +
   "\">" +
-  "<style>:root{color-scheme:" +
+  "<style>:root{-webkit-text-size-adjust:100%;text-size-adjust:100%;color-scheme:" +
   theme +
   ";" +
   vars +
   "}</style><style>" +
   viz_css +
   "</style>" +
+  (if scroll { "<style>html{overflow:auto}</style>" } else { "" }) +
   viz_ground_style(ground) +
   "<script type=\"application/json\" id=\"ember-viz-state\">" +
   kept +

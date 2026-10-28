@@ -26,6 +26,7 @@ pub(all) struct VizFrame {
   mut grown : Int
   mut shown : Bool
   mut dark : Bool
+  mut font_scale : Double
   mut ground : Int64
 }
 
@@ -133,7 +134,7 @@ pub fn viz_frame(
     Some(f) => f
     None => {
       let page = !viz_is_fragment(html)
-      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground) }
+      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill) }
       let cell : Ref[VizFrame?] = Ref(None)
       let view = @ui.NativeView::page(doc, said=fn(w) {
         match cell.val {
@@ -154,6 +155,7 @@ pub fn viz_frame(
         grown: 0,
         shown: false,
         dark,
+        font_scale: @ui.font_scale(),
         ground,
       }
       cell.val = Some(f)
@@ -162,8 +164,9 @@ pub fn viz_frame(
     }
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
-  if f.dark != dark || f.ground != ground {
+  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() {
     f.dark = dark
+    f.font_scale = @ui.font_scale()
     f.ground = ground
     let scheme = if dark { "dark" } else { "light" }
     let g = viz_css_color(ground)
@@ -455,15 +458,24 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     }
     Some(Ok((html, state))) => {
       let chart = v.mermaid is Some(_)
+      let native = @sf.native_over_up(v.name)
+      if native {
+        @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { c.tell("viz/full-close", fn() { viz_close_full() }) }, lead=true)
+        if !chart {
+          @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() {
+            keep_bytes(c, v.name, "text/html", @utf8.encode(html))
+          })
+        }
+      }
       let t = @sf.theme()
       let (top, foot) = (@sf.viewer_host().room)()
       c.take_back(fn() { viz_close_full() })
       // under the bar, as a file's page is (Viewer::text_stage)
-      let under = if c.width <= @sf.viewer_small_w { top + page_small_top } else { viewer_top(c) + desk_page_top }
+      let under = if native { top } else if c.width <= @sf.viewer_small_w { top + page_small_top } else { viewer_top(c) + desk_page_top }
       c.layer(fn() {
         c.box(style=viz_ground, fn() {
           c.box(style=@ui.style(w=Full, h=Fixed(under)), fn() {  }) |> ignore
-          c.box(style=viz_full_page, fn() {
+          c.box(style=viz_full_page.then(@ui.style(pr=@sf.room_of(c.space(S3) + @sf.native_clear()))), fn() {
             viz_frame(
               c,
               if chart { "full/mermaid/" + html } else { "full/" + v.station + "/" + v.key + "/" + v.path },
@@ -482,21 +494,23 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@ui.style(w=Full, h=Fixed(foot)), fn() {  }) |> ignore
         })
         |> ignore
-        let (closed, _) = @sf.viewer_frame_bar(
-          c,
-          "viz/full",
-          @sf.t("common.back"),
-          v.name,
-          "",
-          false,
-          true,
-          0.0,
-          1.0,
-          @sf.page_viewer_ink(),
-          fn() {  },
-        )
-        if closed {
-          c.tell("viz/full-close", fn() { viz_close_full() })
+        if !native {
+          let (closed, _) = @sf.viewer_frame_bar(
+            c,
+            "viz/full",
+            @sf.t("common.back"),
+            v.name,
+            "",
+            false,
+            true,
+            0.0,
+            1.0,
+            @sf.page_viewer_ink(),
+            fn() {  },
+          )
+          if closed {
+            c.tell("viz/full-close", fn() { viz_close_full() })
+          }
         }
       })
       |> ignore

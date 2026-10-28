@@ -378,3 +378,28 @@ test "a page that said its height stays covered till its host has drawn it (its 
   t.frame()
   assert_false(view_covered(t, page))
 }
+
+///|
+test "inline HTML type follows the system font scale without WebKit text inflation" {
+  let sizes : Ref[Array[(String, String)]] = Ref([])
+  let t = @ui.Tester::new(fn(_) { sizes.val = viz_tokens(false) })
+  t.draw()
+  let before = sizes.val
+  t.set_font_scale(1.5)
+  t.draw()
+  let body = fn(ts : Array[(String, String)]) {
+    ts.filter(fn(p) { p.0 == "--e-text-body" })[0].1
+  }
+  assert_true(body(before) != body(sizes.val))
+  assert_true(viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL).contains("-webkit-text-size-adjust:100%"))
+}
+
+
+///|
+test "expanded fragments scroll while their inline copies grow with their content" {
+  let content = "<p>用于验证长文档滚动的正文。</p>".repeat(100)
+  let inline_doc = viz_document(content, None, false, 0xFFFFFFFFL)
+  let full_doc = viz_document(content, None, false, 0xFFFFFFFFL, scroll=true)
+  assert_false(inline_doc.contains("<style>html{overflow:auto}</style>"))
+  assert_true(full_doc.contains("<style>html{overflow:auto}</style>"))
+}

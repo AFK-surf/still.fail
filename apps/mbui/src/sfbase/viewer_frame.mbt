@@ -133,8 +133,8 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     }
     @sf.viewer_zoom_keys(c, v.zoom)
   }
-  // (a picture's actions the system's bars' there, marking's its own)
-  if native && kind == Some(KImage) && !marking.on {
+  // Pictures and HTML use the system bars on Duo; marking keeps its own tools.
+  if native && (kind == Some(KImage) || kind == Some(KHtml)) && !marking.on {
     vf_native(v, c, src)
     return
   }
@@ -181,6 +181,24 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { if !v.closing { v.shut(c) } }, lead=true)
   if v.coming() {
+    return
+  }
+  if v.shown_kind() == Some(KHtml) {
+    if v.bytes.get() is Some(_) {
+      @sf.native_over_act("source", @sf.t(if v.source { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
+        v.source = !v.source
+        if v.source {
+          match v.page {
+            Some(p) => p.close()
+            None => ()
+          }
+          v.page = None
+        }
+      })
+      if !downloading(v.download(src)) {
+        @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
+      }
+    }
     return
   }
   let z = v.zoom
