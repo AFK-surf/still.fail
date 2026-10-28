@@ -293,7 +293,7 @@ fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me :
         fn() {
           c.box(style=wh_line_words, id=words, taps=false, points=true, fn() {
             c.text(@sf.t("web-pages.chat.transcript") + " · ", style=wh_words) |> ignore
-            c.text(name, style=wh_file) |> ignore
+            c.rich([@ui.span(name, mono=true)], style=wh_file) |> ignore
           })
           |> ignore
           @sf.tip(c, "history/transcript", words, path)
