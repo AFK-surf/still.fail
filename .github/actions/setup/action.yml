@@ -29,6 +29,24 @@ runs:
     # (Each curl here given up and tried again when its connection stalls, under 1 KB/s for 20 s: --retry alone acts only
     # on an error, and a stalled download is none; nodejs.org's tarball held the mac job until its 10 minutes ran out,
     # main 91434fca, 40642483751.)
+    # Kept in the Actions cache by its version once fetched (a key never made again: whichever run fetched it first
+    # saves it), so nodejs.org is reached once a version, not every run's mac job's.
+    - id: mac-node
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        v=$(tr -d 'v[:space:]' < .node-version); a=$(uname -m | sed 's/x86_64/x64/')
+        d="$RUNNER_TOOL_CACHE/node/$v/$a"
+        echo "dir=$d" >> "$GITHUB_OUTPUT"
+        echo "key=node-darwin-$a-$v" >> "$GITHUB_OUTPUT"
+        [ ! -f "$d.complete" ] || echo "kept=true" >> "$GITHUB_OUTPUT"
+    - if: runner.os == 'macOS' && steps.mac-node.outputs.kept != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.mac-node.outputs.dir }}
+          ${{ steps.mac-node.outputs.dir }}.complete
+        key: ${{ steps.mac-node.outputs.key }}
     - if: runner.os == 'macOS'
       shell: bash
       run: |
