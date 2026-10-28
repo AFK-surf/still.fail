@@ -648,6 +648,59 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 }
 
 ///|
+test "a swipe carries the picture under the finger from where it went down; a second finger takes it back, not left between two" {
+  let t = preview_tester("step")
+  let (x, y, w, h) = viewer.val.unwrap().zoom.rect().unwrap()
+  let at = fn(dx : Double) {
+    drawn_pictures(t).any(fn(d) {
+      (d.0 - (x + dx)).abs() < 0.001 && (d.1 - y).abs() < 0.001 && (d.2 - w).abs() < 0.001 && (d.3 - h).abs() < 0.001
+    })
+  }
+  t.hold_drag(300.0, 422.0, 250.0, 422.0)
+  // 50 left, as the finger went: none of its way lost to the slop
+  assert_true(at(-50.0))
+  t.touch(4, 100.0, 422.0)
+  t.draw()
+  t.touch(6, 100.0, 422.0)
+  t.draw()
+  t.release(250.0, 422.0)
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_true(at(0.0))
+}
+
+///|
+test "a step keeps the bars as they were: hidden by a tap, the next comes without them" {
+  let t = preview_tester("step")
+  t.tap(195.0, 422.0)
+  t.run_for(double_tap_ms)
+  assert_true(!viewer.val.unwrap().awake)
+  t.drag(300.0, 422.0, 100.0, 422.0)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_true(!viewer.val.unwrap().awake)
+}
+
+///|
+test "pinched smaller than fitted and let go: back to fitted" {
+  let t = preview_tester("image")
+  let v = viewer.val.unwrap()
+  let fit = v.zoom.scale
+  t.touch(0, 150.0, 422.0)
+  t.draw()
+  t.touch(4, 330.0, 422.0)
+  t.draw()
+  t.touch(5, 240.0, 422.0)
+  t.draw()
+  assert_true(v.zoom.scale < fit * 0.75)
+  t.touch(6, 240.0, 422.0)
+  t.draw()
+  t.touch(2, 150.0, 422.0)
+  t.draw()
+  t.run_for(@kit.zoom_glide_ms)
+  assert_true((v.zoom.scale - fit).abs() < 0.001)
+}
+
+///|
 /// The pictures drawn in the last frame (x, y, w, h), left to right.
 fn drawn_pictures(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
   let out = t.drawn_images().map(fn(i) { (i[0], i[1], i[2], i[3]) })
