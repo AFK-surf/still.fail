@@ -353,6 +353,13 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
   // (said by this frame's build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = false
   let ground = c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+    // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
+    // a window of its own still starting): under all of it, so what a page puts there takes its own presses
+    if @ui.window_inset() {
+      let id = c.id("window-ground-band")
+      c.window_drag(id)
+      c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+    }
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
