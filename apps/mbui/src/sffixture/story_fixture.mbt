@@ -45,6 +45,14 @@ pub fn story_chat(story : Json) -> Json {
       more["mine"] = Json::boolean(true)
       more["author"] = Json::string("lin@example.com")
     }
+    // (an agent's asking: its card's options, answered here as the story's are, its steps after it `answered`'s)
+    let options = items(Some(b), "options")
+    if options.length() > 0 {
+      more["ending"] = "need_decision"
+      more["card"] = { "type": "options", "assigneeText": "待你决定", "options": Json::array(options) }
+      more["decision"] = { "resolved": false }
+      more["asked"] = true
+    }
     let who = if kind == "agent" { claude } else if by != "" { by_person(by) } else { by_person("林") }
     msg(i + 1, kind, who, text(Some(b), "text"), text(Some(b), "when"), more)
   })

@@ -1,13 +1,14 @@
 # Film 5 of still.fail in use on the iPhone Duo simulator, in English: a chat that came from Slack (someone there @'d the
-# agent), picked up on the phone: read on the outer screen, unfolded, answered; the agent's fix goes back to the thread
-# and its asker answers from Slack (story scripts/story/iduo-slack-en.json, FILM_LANG=en FILM_STORY=iduo-slack-en).
+# agent), its agent asking the viewer to decide: answered with one tap on the folded phone's outer screen; its fix goes
+# back to the thread and its asker answers from Slack (story scripts/story/iduo-slack-en.json, FILM_LANG=en
+# FILM_STORY=iduo-slack-en). It never unfolds.
 timeout 45000
 until Message
 # (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
 wait 1200
 at start
-# (the computer's Slack first: what Ana asked there, and the agent's answer coming in under it, read a while)
-wait 5200
+# (the computer's Slack first: Ana's question there, the agent at work, its card for Lin coming in)
+wait 6500
 # (the list open over the chat as the outer screen lights: the chat from Slack at its top, tapped)
 at tap=row
 tap Checkout fails for EU cards
@@ -17,27 +18,15 @@ at tap=chat
 tapxy 430 330
 wait 600
 at read
-wait 3600
-at unfold
-log UNFOLD
-wait 4000
-at tap=发消息
-tap Message
+until =Fix and deploy
+wait 2200
+at tap=deploy
+tap =Fix and deploy
 wait 600
-at keys
-keys Go ahead, and let Ana know when it's live
-wait 600
-at tap=send
-tap icon:arrow-up
-wait 400
-at working
+at decided
 until Fixed and live
 at answer
-# (its answer read on the phone a while)
-wait 2600
-# (read a while with the keyboard up, as one leaves it after sending; the list tapped to put it away)
-at tap=list
-tapxy 560 260
+wait 3000
 until French card
 at merged
 wait 4200

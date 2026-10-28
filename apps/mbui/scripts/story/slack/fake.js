@@ -165,19 +165,39 @@
     message(tRoot, { who: 'Ana Costa', at: '9:29 AM', img: ANA, html: ANA_TEXT, replies: '1 reply' }),
   ];
   mainBox.replaceChildren(...main);
-  // the thread beside it
-  const FOUND = 'Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank\'s redirect lands on a 500. It\'s a one-line fix in the payment flow. Since it touches payments, I\'ll wait for Lin to say go.';
-  const FIXED = `Lin gave the go-ahead. Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. ${mention('@Ana Costa')} can you try once more?`;
+  // the thread beside it: the agent's question to Lin as still.fail's card in Slack (station/src/slack/cards.ts: its words,
+  // then the options as radio buttons, the recommended last and chosen already, each its detail under it, and OK),
+  // answered from the phone: then its words and who answered what (answeredBlocks)
+  const FOUND = `Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. The fix is one line in the payment flow, but it touches payments. ${mention('@Lin')}, ship it?`;
+  const FIXED = `Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. ${mention('@Ana Costa')} can you try once more?`;
+  const radio = (label, detail, on) =>
+    `<label style="display:flex;gap:9px;align-items:flex-start;padding:4px 0;cursor:default">` +
+    `<span style="flex:none;width:16px;height:16px;margin-top:2px;border-radius:50%;box-sizing:border-box;` +
+    (on ? 'border:5px solid #1d9bd1;background:#fff' : 'border:1px solid rgba(232,232,232,.5)') + `"></span>` +
+    `<span><span style="display:block;font-size:15px;line-height:22px">${label}</span>` +
+    `<span style="display:block;font-size:13px;line-height:18px;opacity:.7">${detail}</span></span></label>`;
+  const card = `<div class="p-block_kit_renderer__block_wrapper" data-card="ask"><div style="padding:4px 0 2px">` +
+    radio('Not yet', 'Leave it for review', false) + radio('Fix and deploy', 'Patch it, run the payment tests, deploy', true) +
+    `</div><button class="c-button c-button--primary c-button--small" type="button" style="margin-top:6px">OK</button></div>`;
+  const answered = `<div class="p-block_kit_renderer__block_wrapper" data-card="answered"><div class="p-context_block">` +
+    `<span class="p-context_block__text" style="opacity:.7;font-size:13px">✓ Lin answered: Fix and deploy</span></div></div>`;
   const sep = tSeparator.cloneNode(true);
   sep.style.position = 'absolute';
   const sepCount = $('.p-threads_flexpane__separator_count', sep);
+  const ask = message(tApp, { who: 'still.fail', at: '9:33 AM', img: APP, app: true, html: FOUND, after: card + answered });
   const thread = [
     message(tThreadRoot, { who: 'Ana Costa', at: '9:29 AM', img: ANA, html: ANA_TEXT, replies: null }),
     sep,
-    message(tApp, { who: 'still.fail', at: '9:33 AM', img: APP, app: true, html: FOUND, after: context('Claude · on Studio') + button('Open in still.fail') }),
-    message(tApp, { who: 'still.fail', at: '9:41 AM', img: APP, app: true, html: FIXED, after: context('Claude · on Studio') }),
+    ask,
+    message(tApp, { who: 'still.fail', at: '9:41 AM', img: APP, app: true, html: FIXED }),
     message(tApp, { who: 'Ana Costa', at: '9:43 AM', img: ANA, html: 'Just paid with my French card, it works. Thanks! 🙌' }),
   ];
+  // what the agent does now, as Slack shows an app's status under its thread (assistant.threads.setStatus:
+  // station/src/slack/status.ts), over the reply box
+  const status = document.createElement('div');
+  status.style.cssText = 'position:absolute;left:0;right:0;padding:6px 20px 8px;font-size:13px;display:flex;align-items:center;gap:8px';
+  status.innerHTML = `<img src="${APP}" style="width:18px;height:18px;border-radius:4px"><span style="opacity:.75"><b style="font-weight:700">still.fail</b> <i></i></span>`;
+  thread.push(status);
   const input = threadItems.find((i) => $('[data-qa="reply_container"]', i));
   threadBox.replaceChildren(...thread, ...(input ? [input] : []));
   walk(document.body);
@@ -215,15 +235,25 @@
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   };
   // in at its mark: what is not yet is not shown
+  // marks: ana (her question), working (the agent at it: its status), found (its card), deploy (answered from the
+  // phone: the agent at it again), fixed, thanks
   window.at = (t, m = {}) => {
-    const show = (el, at) => { el.style.display = at === undefined || t >= at ? '' : 'none'; };
+    const on = (at) => at === undefined || t >= at;
+    const show = (el, at) => { el.style.display = on(at) ? '' : 'none'; };
     show(main[main.length - 1], m.ana);
     show(thread[0], m.ana);
     show(sep, m.found);
-    show(thread[2], m.found);
+    show(ask, m.found);
+    $('[data-card="ask"]', ask).style.display = on(m.deploy) ? 'none' : '';
+    $('[data-card="answered"]', ask).style.display = on(m.deploy) ? '' : 'none';
     show(thread[3], m.fixed);
     show(thread[4], m.thanks);
-    const n = [m.found, m.fixed, m.thanks].filter((x) => x === undefined || t >= x).length;
+    // (its status while it works: reading before its card, fixing after the answer, none once it said how it went)
+    const words = on(m.fixed) ? '' : on(m.deploy) ? 'is fixing the 3-D Secure return URL…' : on(m.found) ? '' : on(m.working) ? 'is reading the checkout logs…' : '';
+    status.style.display = words ? 'flex' : 'none';
+    $('i', status).textContent = words;
+    $('i', status).style.fontStyle = 'normal';
+    const n = [m.found, m.fixed, m.thanks].filter((x) => on(x)).length;
     if (sepCount) sepCount.textContent = n === 1 ? '1 reply' : `${n} replies`;
     const rc = $('[data-qa="reply_bar_count"]', main[main.length - 1]);
     if (rc) rc.textContent = n === 1 ? '1 reply' : `${n} replies`;

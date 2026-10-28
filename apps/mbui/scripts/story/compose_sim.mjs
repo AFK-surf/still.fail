@@ -29,7 +29,9 @@ const start = at.find((a) => a.name === 'start').app;
 const wallOf = (t) => start + off + t;
 const marks = Object.fromEntries(at.map((a) => [a.name, a.app - start]));
 const recStart = Object.fromEntries(times.filter((l) => l[0] === 'rec').map(([, k, w]) => [k, +w]));
-const foldDone = +times.find((l) => l[0] === 'fold')[1] - (start + off);
+// (a take on the outer screen alone, never unfolded: no swap, the phone folded throughout)
+const swap = times.find((l) => l[0] === 'fold');
+const foldDone = swap ? +swap[1] - (start + off) : Infinity;
 // the phone opened on the model as SpringBoard opened it (its swap 0.64 s, answered as it ended), flat FLIP later
 const FLIP = 1.1, U = foldDone - 0.64 - 0.15;
 marks.unfold3d = U;
@@ -102,13 +104,13 @@ const stamp = (k) => { const s = statSync(join(rec, `ios-${k}.mp4`)); return `${
 const need = (k) => !existsSync(join(frames, k, '1.jpg')) || !existsSync(join(frames, `${k}.stamp`)) ||
   readFileSync(join(frames, `${k}.stamp`), 'utf8') !== stamp(k);
 for (const [k, vf] of [['outer', `fps=${FPS}`], ['inner', `transpose=1,fps=${FPS}`]]) {
-  if (!need(k)) continue;
+  if (!existsSync(join(rec, `ios-${k}.mp4`)) || !need(k)) continue;
   rmSync(join(frames, k), { recursive: true, force: true });
   mkdirSync(join(frames, k), { recursive: true });
   execFileSync(FFMPEG, ['-loglevel', 'error', '-i', join(rec, `ios-${k}.mp4`), '-vf', vf, '-q:v', '2', '-start_number', '0', join(frames, k, '%d.jpg')]);
   writeFileSync(join(frames, `${k}.stamp`), stamp(k));
 }
-const count = (k) => readdirSync(join(frames, k)).length;
+const count = (k) => existsSync(join(frames, k)) ? readdirSync(join(frames, k)).length : 0;
 const nOuter = count('outer'), nInner = count('inner');
 const frameOf = (k, t, n) => Math.min(n - 1, Math.max(0, Math.round((wallOf(t) - recStart[k]) * FPS)));
 // (the outer screen held at its last before the unfold; the inner one, while the phone opens, at the swap's end)

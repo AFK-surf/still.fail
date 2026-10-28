@@ -53,14 +53,15 @@
   "你 选择了「Merge」": "You chose “Merge”",
   "你 选择了「Not yet」": "You chose “Not yet”",
   "在线": "Running",
-  " · 3 小时": " · just now"
+  " · 3 小时": " · just now",
+  "你 选择了「Fix and deploy」": "You chose “Fix and deploy”"
  },
  "place": "#support",
  "row": {
   "title": "Checkout fails for EU cards",
   "connect": "slack-1",
   "originText": "Slack · Acme · #support",
-  "last": "still.fail: Found it. Waiting for Lin's go",
+  "last": "still.fail: Found it. @Lin, ship it?",
   "unread": true,
   "agents": [
    {
@@ -78,15 +79,27 @@
    "kind": "person",
    "by": "Ana",
    "text": "@still.fail checkout is failing for some customers in the EU, they get a 500 after entering their card. Can you look?",
-   "when": "12 min ago"
+   "when": "2 min ago"
   },
   {
    "kind": "agent",
-   "text": "Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. It's a one-line fix in the payment flow. Since it touches payments, I'll wait for Lin to say go.",
-   "when": "8 min ago"
+   "text": "Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. The fix is one line in the payment flow, but it touches payments. @Lin, ship it?",
+   "when": "Just now",
+   "options": [
+    {
+     "label": "Not yet",
+     "detail": "Leave it for review"
+    },
+    {
+     "label": "Fix and deploy",
+     "detail": "Patch it, run the payment tests, deploy",
+     "recommended": true
+    }
+   ]
   }
  ],
- "sent": [
+ "sent": [],
+ "answered": [
   [
    {
     "at": 300,
@@ -94,31 +107,30 @@
     "activity": "Fixing the 3-D Secure return URL"
    },
    {
-    "at": 1500,
+    "at": 1400,
     "activity": "Running the payment tests"
    },
    {
-    "at": 2700,
+    "at": 2500,
     "activity": "Deploying to production"
    },
    {
-    "at": 4000,
+    "at": 3700,
     "post": {
-     "text": "Lin gave the go-ahead. Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. @Ana Costa can you try once more?"
+     "text": "Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. @Ana Costa can you try once more?"
     }
    },
    {
-    "at": 4300,
+    "at": 4000,
     "working": false
    },
    {
-    "at": 9000,
+    "at": 7000,
     "post": {
      "by": "Ana",
      "text": "Just paid with my French card, it works. Thanks! 🙌"
     }
    }
   ]
- ],
- "answered": []
+ ]
 }
