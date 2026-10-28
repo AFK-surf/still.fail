@@ -103,8 +103,11 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
     Some((x, _, w, _)) => assert_true(x + w <= 951.0 - 84.0 + 0.5)
     None => fail("no picture laid out")
   }
-  // closed from the system's bar: the tabs back
+  // closed from the system's bar: the tabs back as it goes, the picture still on its way
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+  t.run_for(fly_close_ms / 4.0)
+  assert_true(pv_leaving.val is Some(_))
+  assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
   t.run_for(fly_close_ms)
   assert_true(viewer.val is None)
   assert_true(t.nav_said().contains("\"bare\":false"))
