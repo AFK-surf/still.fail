@@ -597,6 +597,8 @@ pub fn held_order(String, Array[ChatDay], Bool) -> Array[ChatDay]
 
 pub let held_pictures_waiting : @ref.Ref[Bool]
 
+pub fn held_seed(String, @hostapi.Picked) -> String
+
 pub let highlight_limit : Int32
 
 pub fn host_notices() -> NoticeHost

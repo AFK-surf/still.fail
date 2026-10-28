@@ -218,6 +218,9 @@ priv struct Pending {
   mut unseen : Bytes?
   /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
   retrying : @signals.Signal[Bool]
+  /// what it is, picked or pasted as a file (file_seed, held_seed): the same added again while it is in the draft is
+  /// not added twice; "" for any other
+  seed : String
 }
 
 ///|
@@ -400,6 +403,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       retry: false,
       retrying: @signals.signal(false),
       unseen: None,
+      seed: "",
     })
   }
   // links shared in (share-in.ts): each a card among the files, kept and sent as words
@@ -426,6 +430,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       retry: false,
       retrying: @signals.signal(false),
       unseen: None,
+      seed: "",
     })
   }
 }
@@ -623,6 +628,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
       retry: false,
       retrying: @signals.signal(false),
       unseen: None,
+      seed: "",
     })
   }
   d.focus = id
@@ -692,6 +698,11 @@ fn draft_stills(c : @ui.Ctx, station : String, d : Draft) -> Unit {
 /// still.fail's Android app's PickedFiles.kt), named by its content first where the host can say it; its tile the
 /// host's picture of it (a video's still).
 fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked) -> Unit {
+  // (the same file picked again, where the host has it: one tile, one upload)
+  let seed = @sfbase.held_seed(station, f)
+  if d.files.iter().any(fn(x) { x.seed == seed }) {
+    return
+  }
   let id = next_pending.val
   next_pending.val += 1
   let size = f.size.to_int64()
@@ -711,6 +722,7 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     retry: false,
     retrying: @signals.signal(false),
     unseen: None,
+    seed,
   }
   d.files.push(p)
   if size > max_file.to_int64() {
@@ -771,6 +783,11 @@ fn add_file(
   pasted : (String, Json)?,
   still? : String = "",
 ) -> Unit {
+  // (the same file picked or pasted again: one tile, one upload)
+  let seed = if pasted is None { file_seed(station, name, bytes) } else { "" }
+  if seed != "" && d.files.iter().any(fn(x) { x.seed == seed }) {
+    return
+  }
   let id = next_pending.val
   next_pending.val += 1
   let (w, h) = match @pixels.image_size(bytes) {
@@ -802,6 +819,7 @@ fn add_file(
     retry: false,
     retrying: @signals.signal(false),
     unseen: if image == "" && pasted is None && preview_kind(name).0 == Some(@sfbase.KVideo) { Some(bytes) } else { None },
+    seed,
   }
   d.files.push(p)
   if bytes.length() > max_file {
