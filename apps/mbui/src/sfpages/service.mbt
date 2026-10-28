@@ -627,7 +627,13 @@ fn service_stage(
     }
     None => None
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), style?=round, bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
+  // (a page filling it, once drawn, on nothing of the stage's: a ground under it showed along its edges, where the
+  // host's cut and the hole's meet within a pixel, a line round the page)
+  let under = match p.viewport {
+    Some(_) => Some(ground)
+    None => if site.shown() { None } else { Some(t.p.card) }
+  }
+  c.box(w=Fill(1.0), h=Fill(1.0), style?=round, bg?=under, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
     let placed = match (p.viewport, c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
