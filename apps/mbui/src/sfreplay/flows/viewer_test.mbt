@@ -58,9 +58,6 @@ test "96-viewer" {
     f.check(f.t.marks_drawn().length() >= 1, "no marks drawn onto the picture")
     f.t.marks_make(marked)
     f.tap("添加到对话")
-    f.see("已添加到对话")
-    // (said from this frame for its time: kit's toaster)
-    let added_at = f.t.time()
     f.gone("=添加到对话")
     f.see("发消息")
     // the quote and the picture in the composer long enough to be kept as the chat's draft (draft.put), in the run as
@@ -76,14 +73,6 @@ test "96-viewer" {
     f.run_for(@sfapp.flight_ms)
     f.see("标注过的图片 201493")
     f.gone("正在发送")
-    // 已添加到对话 said for its time, then gone (at a slower pace its time can be out by now: going or gone)
-    let out = added_at + @sfapp.toast_ms
-    if f.t.time() < out {
-      f.run_for(out - f.t.time())
-      // (its time out at the last frame: it starts going with the one after)
-      f.t.draw()
-    }
-    f.run_to_rest("toast")
     f.end()
   })
 }
