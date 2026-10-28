@@ -15,7 +15,9 @@
 // mb_core_start/send/stop come from the UI's (GL) thread; on_message runs on the core's. A push delivered with no core
 // running (the app's process started for it: dev.mbui.Push) starts one alone (CoreHost.startAlone, FCM's thread), which
 // the app takes as its own if it starts meanwhile (its on_message set then), else is stopped once the push is handled
-// (CoreHost.stopAlone), as still.fail's PushService starts its StillFailCore.
+// (CoreHost.stopAlone), as still.fail's PushService starts its StillFailCore. The app's own activity starts one so
+// too as it is made (StillfailApp coreAhead), off the GL thread and before the window's surface: the app takes it as
+// it starts.
 #include <jni.h>
 #include <pthread.h>
 #include <android/log.h>
@@ -371,11 +373,11 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
   if (!A.engine) {
     core_start(data_dir, cloud_origin, beta, on_message, ctx);
   } else if (!A.on_message) {
-    // one started for a push: the app's from now on
+    // one started for a push, or ahead of the app (StillfailApp coreAhead): the app's from now on
     A.on_message = on_message;
     A.ctx = ctx;
     A.alone = 0;
-    CORE_LOG("core: the one started for a push taken by the app");
+    CORE_LOG("core: the one started already (ahead, or for a push) taken by the app");
   }
   pthread_mutex_unlock(&A_lock);
 }
