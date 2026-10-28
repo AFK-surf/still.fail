@@ -1107,12 +1107,17 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
     return
   }
   if self.clock >= st.glide_rest {
-    // there: its end, or the top of the row it follows (its goal as last laid out); its bar fades from then
+    // a row followed: moved by what was left of its way as last laid out, the glide over only once this frame's layout
+    // finds it at its goal as it is now (its end, or the row's top): its end moved since by less than sets it out
+    // again (a row under it opening by parts of a point a frame), it is at its end all the same, not short of it and
+    // standing still (Ctx::place_list)
     if st.follow_item >= 0 {
       st.pending = st.pending + st.glide_left
-    } else {
-      st.scroll_to_end()
+      st.glide_meant = 0.0
+      return
     }
+    // there: its end; its bar fades from then
+    st.scroll_to_end()
     st.glide = false
     if st.glide_shows {
       st.last_scroll = dmax(st.last_scroll, st.glide_rest)
