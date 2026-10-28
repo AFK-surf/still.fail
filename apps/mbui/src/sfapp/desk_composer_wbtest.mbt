@@ -275,6 +275,29 @@ test "desk composer: a chat's link pasted as it is copied goes in as its mark" {
 }
 
 ///|
+test "desk composer: words dragged in from another app go into its field: let go on the field where they were let go, on ＋ beside it at its caret" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  t.draw()
+  // on the field, nothing in it and not focused: in, the field focused
+  let (fx, fy, _, fh) = t.rect_of("发消息").unwrap()
+  t.drop_words(fx + 4.0, fy + fh / 2.0, "对话 ID：c1")
+  t.frame()
+  t.frame()
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_eq(desk_words(src), "对话 ID：c1")
+  // on ＋ (the composer opened now), beside the field: at its caret, after them
+  let (px, py, pw, ph) = t.query(Button, label=@sf.t("web-main.composer.attach")).unwrap().rect
+  t.drop_words(px + pw / 2.0, py + ph / 2.0, "，消息 ID：m9")
+  t.frame()
+  t.frame()
+  assert_eq(desk_words(src), "对话 ID：c1，消息 ID：m9")
+  // the core keeps them as typed words (composer.text)
+  let kept = named(calls, "composer.text")
+  assert_eq(text(Some(kept[kept.length() - 1].params), "text"), "对话 ID：c1，消息 ID：m9")
+}
+
+///|
 /// Words past the core's bound for a paste (what the core says of them kept: src/sfkept).
 fn long_paste() -> String {
   let long = StringBuilder()

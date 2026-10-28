@@ -55,6 +55,12 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
     chat_layers(c, src, r, draft, pane, room)
   }
   chat_drop(c, src, r.station, draft, pane)
+  // words dragged in from another app and let go anywhere on the pane but a field (a field takes them where they
+  // were let go: ⌘F's, the composer's): into the composer's field at its caret, as a paste's; not an archived chat's,
+  // whose composer a press does not open either
+  if !(view is Some({ archived: true, .. })) {
+    c.words_into(pane, @sfpages.composer_field_key)
+  }
 }
 
 ///|

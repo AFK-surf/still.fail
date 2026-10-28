@@ -178,6 +178,32 @@ test "words typed go with send: by the chat's thread, the field emptied, Enter a
 }
 
 ///|
+test "words dragged in from another app and let go on ＋ beside the field go into it at its caret, the field focused" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, platform=0)
+  let (px, py, pw, ph) = t.query(Button, label=@sf.t("web-main.composer.attach")).unwrap().rect
+  t.drop_words(px + pw / 2.0, py + ph / 2.0, "对话 ID：c1")
+  t.frame()
+  let (active, words, _, _) = t.ime()
+  assert_true(active)
+  assert_eq(words, "对话 ID：c1")
+  let kept = named(calls, "composer.text")
+  assert_eq(text(Some(kept[kept.length() - 1].params), "text"), "对话 ID：c1")
+}
+
+///|
+test "words dragged in from another app and let go on a message go into the composer at its caret" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, platform=0)
+  let (x, y) = t.find("做完了：").unwrap()
+  t.drop_words(x, y, "对话 ID：c1")
+  t.frame()
+  let (active, words, _, _) = t.ime()
+  assert_true(active)
+  assert_eq(words, "对话 ID：c1")
+}
+
+///|
 test "nothing to send: the button does nothing" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

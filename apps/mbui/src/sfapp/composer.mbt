@@ -1522,6 +1522,11 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   if !locked && c.clicked(cap) {
     c.focus_editor(field_key)
   }
+  // words dragged in from another app and let go on it beside its field (on the field they go where they were let go):
+  // into its field at its caret, as a paste's
+  if !locked {
+    c.words_into(cap, field_key)
+  }
   // the capsule changes shape in one motion (Composer.kt Morph, web morph.ts): drawn from the height it was to the one
   // its content now takes (260 ms, Ease.Out), its ground standing on its bottom edge and its content cut to it, its
   // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
