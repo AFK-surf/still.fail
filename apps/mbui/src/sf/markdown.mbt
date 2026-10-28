@@ -355,10 +355,55 @@ pub fn adb_of_link(href : String) -> String? {
 }
 
 ///|
+/// The web service a link names (a chat's item with its service, as its agent
+/// links to it: `/o/<workspace>/<station>/<chat>?service=<job>`, after a host or
+/// alone): its station (`<workspace>/<station>`) and its job; None for any other
+/// link.
+pub fn service_of_link(href : String) -> (String, String)? {
+  let mut rest = href
+  for scheme in ["https://", "http://"] {
+    if rest.has_prefix(scheme) {
+      let after = rest.view(start_offset=scheme.length()).to_string()
+      match after.find("/") {
+        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
+        _ => return None
+      }
+      break
+    }
+  }
+  guard rest.has_prefix("/o/") else { return None }
+  let (path, query) = match rest.find("?") {
+    Some(i) => (rest.view(start_offset=3, end_offset=i).to_string(), rest.view(start_offset=i + 1).to_string())
+    None => return None
+  }
+  let query = match query.find("#") {
+    Some(i) => query.view(end_offset=i).to_string()
+    None => query
+  }
+  let parts = path.split("/").map(fn(v) { v.to_string() }).to_array()
+  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
+  guard parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("#") }) else { return None }
+  guard @codec.decode_uri_component(parts[0]) is Some(ws) && @codec.decode_uri_component(parts[1]) is Some(st) else {
+    return None
+  }
+  for kv in query.split("&") {
+    let kv = kv.to_string()
+    if kv.has_prefix("service=") {
+      match @codec.decode_uri_component(kv.view(start_offset=8).to_string()) {
+        Some(job) if job != "" => return Some((ws + "/" + st, job))
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
 /// A link drawn as a card alone in a paragraph, and as its title bare in a
-/// sentence (Markdown.kt isCardLink): a screen's, or a station's 共享调试.
+/// sentence (Markdown.kt isCardLink): a screen's, a station's 共享调试, or a
+/// chat's web service's.
 pub fn is_card_link(href : String) -> Bool {
-  screen_of_link(href) is Some(_) || adb_of_link(href) is Some(_)
+  screen_of_link(href) is Some(_) || adb_of_link(href) is Some(_) || service_of_link(href) is Some(_)
 }
 
 ///|

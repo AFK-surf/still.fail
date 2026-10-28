@@ -1640,10 +1640,14 @@ pub fn with_working(v : Json) -> Json {
 pub let peeks_answer : String = "改动在 https://github.com/acme/shop/pull/128 ，数据在 https://example.com/bench/list ，和 [首页的列表改成按天分组](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 有关，入口在 `src/list/place.mbt:12`。"
 
 ///|
-/// An agent's answer with links to Studio's screens and its 共享调试 (screen_links.mbt): the desktop's card, a tab's
-/// with its preview (the link's own words its title), a tab gone, 共享调试 bare in a sentence (its title) and alone
-/// (its card), and a link to anywhere else.
+/// An agent's answer with links to Studio's screens, its 共享调试 and a web service of the chat's (screen_links.mbt):
+/// the desktop's card, a tab's with its preview (the link's own words its title), a tab gone, 共享调试 bare in a
+/// sentence (its title) and alone (its card), a link to anywhere else; first, the service alone (its card).
 pub let screens_answer : String =
+  #|开发服务器在 Studio 上起来了：
+  #|
+  #|[打开定价页](https://still.fail/o/ws1/st1/s-c1?service=j-web)
+  #|
   #|登录页改好了，Studio 的桌面开着：
   #|
   #|https://still.fail/w/ws1/s/st1/screen/desktop

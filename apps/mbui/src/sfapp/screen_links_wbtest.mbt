@@ -114,6 +114,25 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
 }
 
 ///|
+test "a link to the chat's web service alone in a paragraph is its card: its station and port, how it stands; a tap has the service over the chat" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls)
+  scroll_to_words(t, "打开定价页")
+  // the link's own words its title, over the service's station with its port and how it stands, as the core says
+  assert_true(t.find("Studio :5173 · 在线") is Some(_))
+  assert_eq(t.run_rects("打开定价页").length(), 0, msg="a card, not a link in the words")
+  t.tap_text("打开定价页")
+  t.frame()
+  t.frame()
+  // (the service is this chat's: over it, nothing opened outside)
+  assert_eq(t.opened().length(), 0)
+  guard app.nav.top() is Service(station, job) else { fail("no service on top") }
+  assert_eq((station, job), ("ws1/st1", "j-web"))
+}
+
+///|
 test "a screen its station no longer has: its title muted; a live one's in the ink" {
   let streams = []
   let cancelled = []
@@ -247,12 +266,13 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("林 正在查看") is None)
   assert_eq(running(streams, cancelled).length(), 0)
-  // back: a view of its own
+  // back, its card on the screen (built is not enough: a row is built a little before it shows): a view of its own
   for _ in 0..<12 {
-    if t.find("林 正在查看") is Some(_) {
-      break
+    match t.rect_of("林 正在查看") {
+      Some((_, y, _, h)) if y >= 0.0 && y + h <= 844.0 => break
+      _ => ()
     }
-    t.wheel(195.0, 400.0, 300.0)
+    t.wheel(195.0, 400.0, 150.0)
   }
   t.run_for(@ui.nav_push_ms)
   let again = running(streams, cancelled)

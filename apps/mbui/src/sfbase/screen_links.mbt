@@ -154,6 +154,8 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
     card: fn(href, words) {
       if @sf.adb_of_link(href) is Some(_) {
         adb_link_card(c, src, href, words)
+      } else if @sf.service_of_link(href) is Some(_) {
+        service_link_card(c, src, href, words)
       } else {
         screen_link_card(c, src, message + "\n" + href, href, words)
       }
@@ -161,6 +163,8 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
     title: fn(href) {
       if @sf.adb_of_link(href) is Some(_) {
         adb_title(src, href)
+      } else if @sf.service_of_link(href) is Some(_) {
+        service_card_of(src, href).0
       } else {
         match screen_card_of(src, href) {
           Some(card) => card.title
@@ -169,6 +173,56 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
       }
     },
   }
+}
+
+///|
+/// A link to a chat's web service as a card says it (the core's `job` topic, jobs.ts shown): its name (网页服务 until
+/// it is known), its station's name with its port, and how it stands (运行中, 已停止…); whether it is down (stopped or
+/// failed: its title quieter).
+pub fn service_card_of(src : Source, href : String) -> (String, String, Bool) {
+  guard @sf.service_of_link(href) is Some((station, job)) else { return ("", "", false) }
+  let j = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) }).value
+  let name = match text(j, "name") {
+    "" => @sf.t("android-chat.preview.service")
+    n => n
+  }
+  guard j is Some(Object(_)) else { return (name, "", false) }
+  let ws = match station.find("/") {
+    Some(i) => station.view(end_offset=i).to_owned()
+    None => station
+  }
+  let at = match dv_stations(src, ws).0 {
+    Some(list) =>
+      match list.iter().find_first(fn(s) { s.station == station }) {
+        Some(s) => s.name
+        None => @settings.station_name(station)
+      }
+    None => @settings.station_name(station)
+  }
+  let port = number(j, "port").to_int()
+  let place = if port > 0 { at + " :" + port.to_string() } else { at }
+  (name, place + " · " + text(j, "word"), !flag(j, "open"))
+}
+
+///|
+/// A link to a chat's web service as a card (an agent's link to it alone in a paragraph): the web's mark, its title
+/// (the link's own words, when it has them) over its station and port and how it stands; one no longer up, its title
+/// quieter. A tap opens it, as the link does: the service over its chat (open_links.mbt).
+pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
+  let (name, line, down) = service_card_of(src, href)
+  let open = c.id("service-link/" + href)
+  if c.clicked(open) {
+    open_link(href)
+  }
+  let title = match words {
+    Some(w) => w
+    None => name
+  }
+  c.box(style=link_card, id=open, fn() {
+    link_mark(c, Some(globe_mark), Muted)
+    link_card_words(c, title, line, down, link_words)
+  })
+  |> ignore
 }
 
 ///|

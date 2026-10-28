@@ -84,6 +84,7 @@ pub fn fix_job(id : String) -> Json {
         "service": true,
         "open": true,
         "current": true,
+        "word": "在线",
         "meta": [{ "text": "在线", "kind": "word" }, { "text": " · 3 小时" }],
         "notices": [],
       }
