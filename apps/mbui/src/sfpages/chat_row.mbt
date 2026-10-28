@@ -906,12 +906,16 @@ fn swipe_to_archive(
   let moved = off.get()
   // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
   let past = moved < -width * archive_at_share
-  c.after_build("haptic/" + key, fn() {
-    if past && rows.felt_past.get(key) != Some(true) {
-      @ui.haptic(TextHandleMove)
-    }
-    rows.felt_past[key] = past
-  })
+  // (only while it is past the line or was: a row at rest tells nothing, as one coming into view as its list scrolls
+  // would tell otherwise than the frame before and build the next whole, frame_watch.mbt's told_same)
+  if past || rows.felt_past.get(key) == Some(true) {
+    c.after_build("haptic/" + key, fn() {
+      if past && rows.felt_past.get(key) != Some(true) {
+        @ui.haptic(TextHandleMove)
+      }
+      rows.felt_past[key] = past
+    })
+  }
   let fill = @motion.animate(c, key + "/fill", if past { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=@sf.list_row_slot(at), fn() {
