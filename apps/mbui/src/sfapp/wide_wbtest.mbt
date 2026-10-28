@@ -354,6 +354,31 @@ test "wide: Enter sends the composer's words, ⇧Enter is a new line" {
 }
 
 ///|
+test "wide: words dragged in from another app and let go anywhere on the chat go into its composer at its caret; on the chats' list, nowhere" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  // on a message (the chat's pane, no field there): into the composer, which takes the focus
+  let (x, y) = t.find("做完了：").unwrap()
+  t.drop_words(x, y, "对话 ID：c1")
+  t.frame()
+  t.frame()
+  assert_true(t.ime().0)
+  assert_eq(t.ime().1, "对话 ID：c1")
+  // on the chats' list beside the chat: nothing takes them
+  let (lx, ly) = t.find("今天").unwrap()
+  t.drop_words(lx, ly, "，消息 ID：m9")
+  t.frame()
+  t.frame()
+  assert_eq(t.ime().1, "对话 ID：c1")
+  // on another message: after them, at the caret
+  let (mx, my) = t.find("推送截图前要先登录 gh").unwrap()
+  t.drop_words(mx, my, "，消息 ID：m9")
+  t.frame()
+  t.frame()
+  assert_eq(t.ime().1, "对话 ID：c1，消息 ID：m9")
+}
+
+///|
 test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter the next, Esc closes it and forgets" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

@@ -237,6 +237,11 @@ pub fn composer(
   if !spec.locked && c.clicked(cap) {
     c.focus_editor(composer_field_key)
   }
+  // words dragged in from another app and let go on it beside its field (its ＋, send, its edge: on the field they go
+  // where they were let go): into its field at its caret, as a paste's
+  if !spec.locked {
+    c.words_into(cap, composer_field_key)
+  }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
   // laid out for another page than the frame before (a new chat's roomy in the page, a chat's at its foot: dock.tsx)

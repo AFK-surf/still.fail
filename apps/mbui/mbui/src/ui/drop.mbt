@@ -5,6 +5,12 @@
 // are held now (files_held: what it would take them shows so) and takes each drop once (take_drop), its files read as
 // a pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). Under a
 // Tester: Tester::hold_files, Tester::drop_files.
+//
+// Words dragged in from outside (another app's text, a browser page's) are said only as they are let go, with what they
+// say ({"type":"words","x","y","text"}: macOS's MBView): on a field (what a press there reaches) they go into it where
+// they were let go, as a paste's words do, the field taking the focus; let go beside one on a box that is its field's
+// (a composer's capsule), the view puts them in that field (Ctx::words_into); elsewhere nothing takes them. Under a
+// Tester: Tester::drop_words.
 
 ///|
 /// Whether files can be dragged in from outside and let go on the window here: the hosts that say so (macOS's and
@@ -15,19 +21,72 @@ pub fn takes_drops() -> Bool {
 }
 
 ///|
-/// Where files from outside are held over the window now, and the drops not taken yet (where each was let go, its pick).
+/// Where files from outside are held over the window now, and the drops not taken yet (where each was let go, its pick);
+/// words from outside let go on no field, the frame they came in (the hit target and what holds it, what they say,
+/// the frame's number): that
+/// frame's build may take them (Ctx::words_into), none after it.
 priv struct Dropping {
   mut held : (Double, Double)?
   drops : Array[(Double, Double, Pick)]
+  mut words : (Array[Int], String, Int)?
 }
 
 ///|
-let dropping : Dropping = { held: None, drops: [] }
+let dropping : Dropping = { held: None, drops: [], words: None }
 
 ///|
 fn drop_reset() -> Unit {
   dropping.held = None
   dropping.drops.clear()
+  dropping.words = None
+}
+
+///|
+/// Words from outside let go at (`x`, `y`): on a field (what a press there reaches), put in where they were let go as
+/// a paste's are (a step of their own to undo; as many as its paste_limit or more handed to the app as a paste's are,
+/// EditorResult::pasted), the field taking the focus; elsewhere left for this frame's build (Ctx::words_into).
+fn words_let_go(x : Double, y : Double, words : String) -> Unit {
+  let c = g()
+  dropping.words = None
+  let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+  match c.editors.get(target) {
+    Some(st) => {
+      c.focus_visible = false
+      c.focus = target
+      place_caret(st, x, y, h_now())
+      st.text_input(text_paste, words, 0, 0, h_now())
+    }
+    None => {
+      // What was shown at the drop, and what holds it: not a page merely underneath a dialog or popover. Include
+      // boxes only pointed at, too (a chat's page); they can receive words without taking a press from their contents.
+      let k = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+      let within : Array[Int] = []
+      c.holders(k, within)
+      if k >= 0 {
+        within.push(c.hit_ids[k])
+      }
+      dropping.words = Some((within, words, c.frame_no))
+    }
+  }
+  // (taken as the frame begins: what reads what the hand did is built again in it, the field's words, a box that takes
+  // them for its field)
+  hand_event()
+}
+
+///|
+/// Words dragged in from outside and let go on box `id` this frame beside any field in it (one let go on a field the
+/// field took, where it was let go): put in the field of editor `key` (built in this scope) at its caret, as a paste's,
+/// the field taking the focus. For a box that is its field's, as a press on it is (a composer's capsule: its padding,
+/// its buttons). A layer over the box takes the drop itself; the box underneath never sees it. Each is taken once.
+pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
+  hand_events_read()
+  guard dropping.words is Some((within, words, frame)) && frame == self.frame_no else { return }
+  guard within.contains(id) else { return }
+  let field = self.id(key)
+  guard self.editors.get(field) is Some(st) else { return }
+  dropping.words = None
+  st.text_input(text_paste, words, 0, 0, self.clock)
+  self.focus_on(field)
 }
 
 ///|
@@ -64,6 +123,17 @@ fn init {
         }
         p.wait("files dropped")
         dropping.drops.push((num("x"), num("y"), p))
+      }
+      "words" => {
+        dropping.held = None
+        match v {
+          Object(m) =>
+            match m.get("text") {
+              Some(String(s)) if s != "" => words_let_go(num("x"), num("y"), s)
+              _ => ()
+            }
+          _ => ()
+        }
       }
       _ => dropping.held = None
     }
@@ -104,4 +174,17 @@ pub fn Tester::drop_files(self : Tester, x : Double, y : Double, files : Array[(
   self.fake.pick_asks.push({ kind: Files, frame: g().frame_no, taken: false })
   let id = self.fake.pick_asks.length()
   self.post("mbui.drop", "{\"type\":\"drop\",\"x\":\{x},\"y\":\{y},\"pick\":\{id}}")
+}
+
+///|
+/// Words from outside (another app's text) let go on the window at (`x`, `y`), as a host says; taken by the frame that
+/// takes the message.
+pub fn Tester::drop_words(self : Tester, x : Double, y : Double, words : String) -> Unit {
+  let m : Map[String, Json] = {
+    "type": Json::string("words"),
+    "x": Json::number(x),
+    "y": Json::number(y),
+    "text": Json::string(words),
+  }
+  self.post("mbui.drop", Json::object(m).stringify())
 }

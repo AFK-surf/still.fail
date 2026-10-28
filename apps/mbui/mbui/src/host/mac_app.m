@@ -136,10 +136,20 @@ static int32_t drop_pick(NSArray<NSURL *> *urls);
 
 // Files dragged in from outside (Finder) and let go on the window (ui/drop.mbt): where they are held, posted on
 // `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, their files read as a pick's
-// ({"type":"drop","x","y","pick"}).
+// ({"type":"drop","x","y","pick"}). Words dragged in (another app's text, a browser page's) are said only as they are
+// let go, with what they say ({"type":"words","x","y","text"}): a field there takes them.
 static void drop_post(NSString *json) {
   NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
   mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
+}
+
+// Whether what is dragged has files (Finder's): else it is words, when it has any.
+static BOOL drag_has_files(id<NSDraggingInfo> info) {
+  return [info.draggingPasteboard canReadObjectForClasses:@[ NSURL.class ]
+                                                  options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+}
+static BOOL drag_has_words(id<NSDraggingInfo> info) {
+  return [info.draggingPasteboard availableTypeFromArray:@[ NSPasteboardTypeString ]] != nil;
 }
 
 // What the menu bar's editing items can do (@hostapi.edit_can: text_menu_* bits), -1 till the app first says.
@@ -158,7 +168,7 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
   self = [super initWithFrame:f];
   self.wantsLayer = YES;
   self.mirror = @"";
-  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
+  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL, NSPasteboardTypeString ]];
   return self;
 }
 
@@ -166,6 +176,8 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
   return [self draggingUpdated:info];
 }
 - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  // (words: nothing said till they are let go, no files held over the window)
+  if (!drag_has_files(info)) return drag_has_words(info) ? NSDragOperationCopy : NSDragOperationNone;
   NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
   drop_post([NSString stringWithFormat:@"{\"type\":\"over\",\"x\":%.1f,\"y\":%.1f}", p.x, p.y]);
   return NSDragOperationCopy;
@@ -178,8 +190,17 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
   NSArray<NSURL *> *urls = [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
                                                                   options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
   if (urls.count == 0) {
-    drop_post(@"{\"type\":\"left\"}");
-    return NO;
+    // words: what they say, where they were let go
+    NSString *s = [info.draggingPasteboard stringForType:NSPasteboardTypeString];
+    NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+    NSDictionary *m = @{@"type" : @"words", @"x" : @(p.x), @"y" : @(p.y), @"text" : s ?: @""};
+    NSData *json = s.length ? [NSJSONSerialization dataWithJSONObject:m options:0 error:nil] : nil;
+    if (!json) {
+      drop_post(@"{\"type\":\"left\"}");
+      return NO;
+    }
+    mb_post("mbui.drop", (const char *)json.bytes, json.length, NULL, 0);
+    return YES;
   }
   NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
   int32_t pid = drop_pick(urls);

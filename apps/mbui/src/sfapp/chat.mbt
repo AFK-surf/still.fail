@@ -61,8 +61,16 @@ fn unread_lead() -> Double {
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let t = @sf.theme()
   let (view, list, error) = view_of_chat(src, r)
+  // (named to know where it is, not pressed: what is pressed in it is what holds it's)
+  let page = c.id("chat/page")
+  // words dragged in from another app and let go anywhere on it but a field (a field takes them where they were let
+  // go): into the composer's field at its caret, as a paste's; not an archived chat's, whose composer a press does not
+  // open either
+  if !(view is Some({ archived: true, .. })) {
+    c.words_into(page, @sfpages.composer_field_key)
+  }
   // over the navigation bar (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars)))
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), id=page, taps=false, points=true, fn() {
     match view {
       None => {
         // until the core has it, already a chat's page: its bar with the title it was opened by (a row's, a new
