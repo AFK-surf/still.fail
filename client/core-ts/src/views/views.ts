@@ -1829,7 +1829,13 @@ export class Views implements Owner {
     // on: its activity under the messages says it, with how long it has waited.
     const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false) : null;
-    if (line !== null && line[3]?.kind !== "wait") {
+    // What it needed of a person, let go by the viewer (忽略): kept, said as let go, in place of what its row says
+    const letGo = shown !== null ? present.rowLetGoNeed(shown) : null;
+    if (letGo !== null) {
+      view.stateText = t("core-logic.decisions.dismissedNeed", { text: letGo });
+      view.stateLead = "dismissed";
+      view.stateRest = letGo;
+    } else if (line !== null && line[3]?.kind !== "wait") {
       view.stateText = line[0];
       const lead = line[3];
       if (lead !== null) {

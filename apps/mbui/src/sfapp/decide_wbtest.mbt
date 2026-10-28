@@ -146,13 +146,14 @@ test "the history: a group opens to its steps, a step to its call and what came 
 }
 
 ///|
-test "the desk's chat: 忽略 under the line saying what an agent needs, with no card, lets it go (decision.dismiss)" {
+test "the desk's chat: 忽略 at the end of the line saying what an agent needs, with no card, lets it go (decision.dismiss)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-need", wide=true)
-  // under the reminder at the chat's end, not under the post that asks
+  // in the reminder's card at the chat's end, after its words, not under the post that asks
   let (x, y) = t.find_last("忽略").unwrap()
-  let (_, said_y, _, said_h) = t.rect_of(@sffixture.need_state.2).unwrap()
-  assert_true(y > said_y + said_h)
+  let (said_x, said_y, said_w, said_h) = t.rect_of(@sffixture.need_state.2).unwrap()
+  assert_true(x > said_x + said_w)
+  assert_true(y >= said_y && y <= said_y + said_h)
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
   assert_eq(made.length(), 1)

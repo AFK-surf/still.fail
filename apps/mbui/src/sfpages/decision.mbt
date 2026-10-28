@@ -338,6 +338,7 @@ fn ask_dismiss(
   resolved : Bool,
   asking? : Bool = true,
   asked_at? : Double = -1.0,
+  at_end? : Bool = false,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
   if !asked && !resolved {
@@ -345,10 +346,11 @@ fn ask_dismiss(
   }
   let k = seq_key(here.station, thread, seq)
   // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
+  // (at the end of a card, no motion of its own: gone at once when let go, the card staying until the core says so)
   let (mine, own_at) = match here.list {
-    Some(l) =>
+    Some(l) if !at_end =>
       (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms), l.turns.started_at("dismiss/" + k))
-    None => (!dismissed.contains(k), -1.0)
+    _ => (!dismissed.contains(k), -1.0)
   }
   let shown = asking && mine
   let at = if !asking { asked_at } else { own_at }
@@ -367,6 +369,16 @@ fn ask_dismiss(
     })
   }
   let hot = shown && c.hovered(id)
+  if at_end {
+    if shown {
+      let words = @sf.t("web-main.chat.asks.dismiss")
+      let b = c.box(style=dismiss_end.then(@sf.row_least_h()), id~, fn() {
+        c.text(words, style=if hot { dismiss_words_hot } else { dismiss_words }) |> ignore
+      })
+      c.semantics(b, Button, id~, label=words)
+    }
+    return
+  }
   under_post(
     c,
     "dismiss/" + k,
@@ -414,6 +426,12 @@ let settled_room : @ui.Style = @ui.css("align=AStart")
 /// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.
 // kept across runs: a value (no field of it changes)
 let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
+
+///|
+/// 忽略 at the end of a card (`at_end`: what the chat needs, at the chat's end): its words 10 in from each side of a
+/// room as high as a row at least (row_least_h, at its use), its press's room the card's, cut at its edge.
+// kept across runs: a value (no field of it changes)
+let dismiss_end : @ui.Style = @ui.css("row px=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

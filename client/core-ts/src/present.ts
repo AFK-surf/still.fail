@@ -351,6 +351,15 @@ export function rowStateLine(row: J, cards = true): [string, number | null, stri
   return [text, about, text, doneLead];
 }
 
+/// What a chat's agent needs a person for, let go by the viewer (忽略): its words, kept at the end of its messages,
+/// said as let go. Null where nothing it needs is let go.
+export function rowLetGoNeed(row: J): string | null {
+  if (!decisions.letGo(row)) return null;
+  const agents: J[] = arr(get(row, "agents")) ?? [];
+  const blocked = agents.find((a) => shownStatus(a) === "block" && nonEmpty(get(get(a, "lastTurn"), "need")) !== null);
+  return blocked === undefined ? null : stateWhat(blocked);
+}
+
 export function rowStateText(row: J): string | null {
   return rowStateLine(row)?.[0] ?? null;
 }

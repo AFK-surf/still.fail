@@ -19,7 +19,7 @@ export const SHAPES: Record<string, Shape> = {
   NetVia: words(["direct","relay","choosing"], { doc: "How a connection to a station goes: straight there, through a relay, or still being chosen." }),
   Status: words(["running","queued","final","block","decision","failed","aborted","unexpected","idle"], { doc: "Where an agent stands." }),
   Badge: words(["run","block","failed"], { doc: "An agent's mark: at work, blocked, failed." }),
-  StateLead: words(["need","done","wait","watch","decision"], { doc: "What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),\ndone (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (奏 · …: its\nlead word in bold)." }),
+  StateLead: words(["need","done","wait","watch","decision","dismissed"], { doc: "What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),\ndone (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (奏 · …: its\nlead word in bold); what an agent needed, let go by the viewer (已忽略：…, a chat's end only: quiet, no mark)." }),
   Stamp: struct([
     ["at", "f64"],
     ["ago", "String"],
@@ -2951,7 +2951,7 @@ export const SHAPES: Record<string, Shape> = {
     ["decision", opt("RowDecision"), { doc: "The card it waits on, as its row has it. Absent when there is none." }],
     ["asks", vec("ChatAsk"), { default: true, doc: "What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a\nperson), the oldest first, for the bar above the composer that leads to each. Empty when nothing is." }],
     ["stateText", opt("String"), { said: true, doc: "Where it stands, in words, as its row's second line (`ChatItem.stateText`) without a card waiting (the\ncard is in the chat): what an agent needs, why it stopped, what it waits on, done; drawn at the end of its messages.\nAbsent while it is at work, or with nothing to say." }],
-    ["stateLead", opt("StateLead"), { doc: "What leads `stateText` (need, done, wait, watch), for a client to say as a mark of its own. Absent when\nnothing does (an agent's failure)." }],
+    ["stateLead", opt("StateLead"), { doc: "What leads `stateText` (need, done, wait, watch; dismissed: what an agent needs, let go by the viewer,\nkept as 已忽略：…), for a client to say as a mark of its own. Absent when nothing does (an agent's failure)." }],
     ["stateRest", opt("String"), { said: true, doc: "What follows the lead in `stateText` (watching: the whole line). Absent without `stateLead`." }],
     ["askClear", opt("bool"), { doc: "One of `asks` is not at the end of its messages (something comes after its post): the bell leading to it\nmay float over the list's end while the end shows, so the end keeps clear of it. Absent when every ask is the end\nitself (`stateAsk`'s line, or the last post with nothing after it), which shows whenever the end does." }],
     ["stateAsk", opt("i64"), { client: opt("I54"), doc: "What an agent needs a person for, as `stateText` says it (lead need), not decided and not let go by the\nviewer: the post that asks it (a seq), let go (`decision.dismiss`) right after the line rather than under that post.\nAbsent otherwise." }],

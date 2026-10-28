@@ -320,7 +320,10 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
       isDismissed = pendingOf[0] === seq && pendingOf[1];
     }
     const decision: J = { resolved: !isWaiting };
-    if (isDismissed) decision.dismissed = true;
+    if (isDismissed) {
+      decision.dismissed = true;
+      decision.text = t("core-logic.decisions.dismissed");
+    }
     if (!isWaiting) {
       if (answer !== undefined) {
         const name = get(answer, "mine") === true ? t("core-logic.decisions.you") : (str(get(get(answer, "by"), "name")) ?? "");
