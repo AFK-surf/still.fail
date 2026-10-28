@@ -192,11 +192,24 @@ export const links = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
-/** What it is for (OneComputer.tsx): four across, two on a middling screen, one under another on a phone. */
-export const scenes = style({
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "40px",
-  "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }, [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
+/** The film (Film.tsx): as wide as the page's words, its corners a card's, its sound's button over its corner. */
+export const film = style({
+  position: "relative", margin: "40px 0 0", borderRadius: vars.rCard, overflow: "hidden", background: "#000",
+  boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${LINE}`,
 });
+export const filmVideo = style({ display: "block", width: "100%", height: "auto", aspectRatio: "16 / 9", cursor: "pointer" });
+export const filmSound = style({
+  position: "absolute", right: "16px", bottom: "16px", display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0",
+  border: "0", borderRadius: "999px", color: "#fff", cursor: "pointer",
+  background: "color-mix(in srgb, #000 45%, transparent)", backdropFilter: "blur(20px) saturate(1.4)",
+});
+/** What it is for (OneComputer.tsx): those shown on a phone three across, each its phone over its words, what is not
+ *  here yet a line under them; one under another on a narrow screen. */
+export const scenes = style({
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "56px 40px",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "56px" } },
+});
+globalStyle(`${scenes} > [data-soon]`, { gridColumn: "1 / -1" });
 export const link = style({});
 /** Its number, quiet: the orange is for where things connect. */
 export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: "var(--s-muted)" });
@@ -351,6 +364,19 @@ export const onePhone = style({
 });
 /** Its screen: the phone's app, a page of its own (site/phone.html); its corners cut by a clip. */
 export const onePhoneScreen = style({ display: "block", border: "0", clipPath: "inset(0 round 44px)", background: vars.canvas });
+/** A phone showing one: its shell drawn at a phone's size (onePhone's) and made smaller to fit, in a box as large as
+ *  it is drawn. */
+const FEATURE = { w: 390 + 24, h: 844 + 24, k: 0.72 };
+export const featurePhone = style({
+  position: "relative", width: `${FEATURE.w * FEATURE.k}px`, height: `${FEATURE.h * FEATURE.k}px`, margin: "0 0 32px",
+  "@media": { [NARROW]: { margin: "0 auto 28px" } },
+});
+export const featureShell = style({
+  position: "absolute", top: "0", left: "0", width: `${FEATURE.w}px`, height: `${FEATURE.h}px`, padding: "12px", boxSizing: "border-box",
+  transform: `scale(${FEATURE.k})`, transformOrigin: "0 0", borderRadius: "56px", background: BEZEL, // own corner: a phone's
+  boxShadow: `${METAL}, inset 0 0 0 1px rgba(255, 255, 255, .06), 0 30px 50px -12px rgba(0, 0, 0, .3)`,
+});
+globalStyle(`${featureShell} iframe`, { pointerEvents: "none" });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 

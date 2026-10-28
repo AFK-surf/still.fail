@@ -6,4 +6,5 @@ import { followMotion } from "@stillfail/ui/motion.ts";
 
 followMotion();
 // In the page's language, as it was built (site/phone.html, site/en/phone.html).
-mountDemo(document.getElementById("demo")!, { start: "stations", lang: document.documentElement.lang === "en" ? "en" : "zh" });
+const page = new URLSearchParams(location.search).get("at");
+mountDemo(document.getElementById("demo")!, { start: page === "chat" ? "chat" : "stations", ...(page && page !== "chat" ? { at: page } : {}), lang: document.documentElement.lang === "en" ? "en" : "zh" });

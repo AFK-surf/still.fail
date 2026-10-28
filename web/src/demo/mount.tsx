@@ -80,13 +80,13 @@ export const HELD = Symbol("held");
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
-  const value = chineseValueOf(topic);
-  // On the site's English page, what the demo makes up is said in English too (english.ts).
-  return language === "en" && value !== HELD ? inEnglish(value) : value;
+  const made = extendedValueOf(topic);
+  // On the site's English page, what the demo makes up is said in English too (english.ts), the agents' prose before
+  // it is read as Markdown (so that what is read is what is shown).
+  return withProse(topic, language === "en" && made !== HELD ? inEnglish(made) : made);
 }
 
-function chineseValueOf(topic: Topic): unknown {
-  const value = extendedValueOf(topic);
+function withProse(topic: Topic, value: unknown): unknown {
   if (topic.topic !== "chat" || !value || value instanceof CoreError || value === HELD) return value;
   const chat = value as ChatView;
   // Like the real core, send prose with the message, before the row's first layout. Stories may change its words
@@ -150,6 +150,9 @@ function demoValueOf(topic: Topic): unknown {
     case "stations": return start === "stations" ? station.stationViews() : [station.stationView()];
     case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
+    case "vaults": return station.vaults();
+    case "vaultItems": return station.vaultItems();
+    case "vaultUses": return { item: String(topic.item ?? ""), uses: [] };
     case "usage": return station.usage(topic.days ?? 7);
     case "resources": return station.resources();
     case "decisions": return station.decisions(chats);
@@ -606,7 +609,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400}>
-        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={start === "stations" ? [`/w/${ENTRY.id}/settings/stations`] : [`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={start === "stations" ? 0 : 1}>
+        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={at ? [`/w/${ENTRY.id}/${at}`] : start === "stations" ? [`/w/${ENTRY.id}/settings/stations`] : [`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={at || start === "stations" ? 0 : 1}>
           <Director />
           <GoKeeper />
           <Routes><Route path="/w/:ws/*" element={phone ? <MobileWorkspace entry={ENTRY} /> : <WorkspaceShell entry={ENTRY} />} /></Routes>
@@ -639,15 +642,18 @@ export function endDemo(): void {
 /** Where the demo opens: on its chat, the story played (the default); or on the stations' page, as the page that shows
  *  all of the workspace's machines together, no story played. */
 let start: "chat" | "stations" = "chat";
+/** A page of the app's to open on instead (its path in the workspace), its story not played. */
+let at: string | undefined;
 /** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
 let language: "zh" | "en" | undefined;
 
 /** Where the demo opens and the language it is in. */
-export interface DemoOptions { start?: "chat" | "stations"; lang?: "zh" | "en" }
+export interface DemoOptions { start?: "chat" | "stations"; at?: string; lang?: "zh" | "en" }
 
 /** The demo opens as `options` say: as it is mounted, and as its opening frame is built into the page (prerender.tsx). */
 export function openOn(options: DemoOptions): void {
   start = options.start ?? "chat";
+  at = options.at;
   language = options.lang;
 }
 
@@ -721,7 +727,7 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
   }, true);
 
   // Played once the demo is seen: most of it in view.
-  if (start === "chat") new IntersectionObserver((entries, observer) => {
+  if (start === "chat" && !at) new IntersectionObserver((entries, observer) => {
     if (!entries.some((e) => e.isIntersecting)) return;
     observer.disconnect();
     void story.play();

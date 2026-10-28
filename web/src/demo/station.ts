@@ -4,7 +4,7 @@
 // 0: they are moved to now here.
 import data from "./station.json";
 import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
-import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person } from "../core/shapes.ts";
+import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person, VaultItemRow, VaultItemsView, VaultsView } from "../core/shapes.ts";
 import { opensOf } from "../../../client/core-ts/src/drive-kind.ts";
 import { scale } from "../../../client/core-ts/src/views/scale.ts";
 import { resourcesView } from "../../../client/core-ts/src/views/resources.ts";
@@ -373,4 +373,33 @@ export function loginSessions() {
     return { id, name, created_at: created, expires_at: expires, current, time: { created_at: stamp(created), expires_at: stamp(expires) } };
   };
   return [session("s1", "这台浏览器", 3, true), session("s2", "still.fail（Android）", 12, false)];
+}
+
+/** The person's vault (the core's `vaults`, client/core-ts/src/views/vault.ts): locked, set up on this device, three
+ *  secrets in it, and an agent asking to use one, waiting for them to approve it. */
+export function vaults(): VaultsView {
+  return {
+    available: true, locked: true, canSign: true, setUp: true, refused: [], statusText: "1 个待批准", statusBad: true,
+    vaults: [{ id: "mine", name: "我的密钥", owner: "lin", ownerName: "林晓", mine: true, members: [], station: STATION, stationName: "Studio", items: 3, devices: 2, open: true, keyed: true, missing: 0, recoverable: true, lasts: "chat" }],
+    requests: [{
+      id: "ask-1", vault: "mine", vaultName: "我的密钥", item: "github", itemName: "GitHub token", lasts: "chat", session: "ember:c-demo-safari", chat: "登录页手机适配",
+      station: "local", mode: "proxy", reason: "推送 fix/login-button 分支并开 PR", command: "git push origin fix/login-button", hosts: ["github.com", "api.github.com"],
+      at: Date.now() - 20_000, howText: "代理 · 限 github.com",
+    }],
+  };
+}
+
+/** Its secrets (the core's `vaultItems`). */
+export function vaultItems(): VaultItemsView {
+  const item = (id: string, name: string, kindText: string, env: string, hosts: string[], lineText: string): VaultItemRow => ({
+    id, version: 1, at: Date.now() - 86_400_000, name, kind: "token", listed: true, modes: ["proxy"], hosts, env, kindText, agentText: `允许 agent 申请 · 代理 · ${hosts[0]}`,
+    lineText, howText: `代理 · 限 ${hosts[0]}`, lastsText: "跟随默认 · 本对话内", shut: [{ key: "value", label: "值", value: "••••••••••••", secret: true, mono: true }],
+  });
+  return {
+    vault: "mine", name: "我的密钥", open: true, items: [
+      item("github", "GitHub token", "Token", "GH_TOKEN", ["github.com"], "代理 · github.com · 2 小时前用于「登录页手机适配」"),
+      item("openai", "OpenAI API key", "Token", "OPENAI_API_KEY", ["api.openai.com"], "代理 · api.openai.com · 昨天用于「订单导出支持 CSV」"),
+      item("stripe", "Stripe 测试密钥", "Token", "STRIPE_KEY", ["api.stripe.com"], "代理 · api.stripe.com · 尚未使用"),
+    ],
+  };
 }
