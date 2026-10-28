@@ -11,6 +11,8 @@ import { HostError } from "../src/error.ts";
 import { FILL_RECENT_MS, IDLE_MS } from "../src/fill.ts";
 import { chatKeptId, keptId } from "../src/drive-kept.ts";
 import { HostWire } from "../src/station/wire.ts";
+import { RECONNECT_MS } from "../src/station/sync.ts";
+import { AGAIN_MS } from "../src/views/downloads.ts";
 import { call } from "./helpers.ts";
 import { Raw, started, stationReplies, status } from "./station-fixture.ts";
 
@@ -121,22 +123,44 @@ test("it goes on as the core starts again; a station not reached is waited for; 
   await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: MB, keep: true, size: film.length });
   await r.ask("station.file.part", { station: ST, key: "k1", name: "gone.mp4", offset: 0, length: MB, keep: true, size: gone.length });
   t.core.close();
-  // started again over the same device: the station not reached, and one of them gone from it
+  // started again over the same device: the station not reached (its link down too), and one of them gone from it
   away.add("film.mp4");
   all.delete("gone.mp4");
+  t.gate.stream = "fail";
   const core = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
   await t.host.time.pass(IDLE_MS * 2);
   const kept = core.inner.driveKept;
-  assert.equal(await Effect.runPromise(kept.has(chatKeptId(ST, "k1", "gone.mp4"))), false, "what was kept of the one gone let go");
   assert.equal(await Effect.runPromise(kept.whole(chatKeptId(ST, "k1", "film.mp4"), film.length)), false);
   const tried = r.parts("film.mp4");
   await t.host.time.pass(IDLE_MS * 3);
   assert.equal(r.parts("film.mp4"), tried, "not asked again while its station is not reached");
+  // its station reached again (still.fail cloud says it came online): the link back online
   away.delete("film.mp4");
-  core.inner.fill.stationBack(ST);
-  await t.host.time.pass(IDLE_MS + 100);
+  t.gate.stream = "open";
+  core.inner.stations.cameOnline(ST);
+  await t.host.time.pass(RECONNECT_MS * 2 + IDLE_MS + 100, 50);
   assert.equal(await Effect.runPromise(kept.whole(chatKeptId(ST, "k1", "film.mp4"), film.length)), true);
+  assert.equal(await Effect.runPromise(kept.has(chatKeptId(ST, "k1", "gone.mp4"))), false, "what was kept of the one gone let go");
   core.close();
+});
+
+test("a part not answered while its station's link is up (a slow network's time out) is asked again, not left waiting for a station that never went", async () => {
+  const film = bytesOf(6 * MB, 5);
+  const away = new Set<string>();
+  const t = await started();
+  files(t.host, new Map([["film.mp4", film]]), away);
+  const r = await rig(t);
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: MB, keep: true, size: film.length });
+  away.add("film.mp4");
+  await t.host.time.pass(IDLE_MS + 100);
+  const tried = r.parts("film.mp4");
+  assert.ok(tried > 1, "its rest asked for");
+  const [shown] = t.core.inner.fill.shown();
+  assert.notEqual(shown.state, "waiting", "not said to wait for its station");
+  away.delete("film.mp4");
+  await t.host.time.pass(AGAIN_MS + IDLE_MS + 100, 50);
+  assert.equal(await r.whole(chatKeptId(ST, "k1", "film.mp4"), film.length), true);
+  t.core.close();
 });
 
 test("one read long ago is left as it is: only what was opened lately is brought", async () => {

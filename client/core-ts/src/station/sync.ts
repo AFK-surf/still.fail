@@ -169,6 +169,11 @@ export class StationsSync {
     return this.#links.reachable(address);
   }
 
+  /// Whether its link is up now (link.ts `online`).
+  online(address: string): boolean {
+    return this.#links.online(address);
+  }
+
   /// Every station of every workspace an account reaches is linked, those no longer listed let go (link.ts).
   reconcile(): void {
     this.#links.reconcile();

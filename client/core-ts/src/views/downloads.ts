@@ -112,6 +112,8 @@ function idOf(station: string, from: From): string {
 
 /// Not reached (the station, the mesh, a time out), as the outbox takes it (views/calls.ts): tried again once it is.
 const unreached = (e: CoreError) => e.status === undefined && (e.code === "host" || e.code === "mesh" || e.code === "timeout");
+/// How long a part not answered while its station's link is up waits to be asked again.
+export const AGAIN_MS = 5_000;
 
 const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : 100);
 
@@ -281,6 +283,14 @@ export class Downloads {
     });
   }
 
+  /// All of it here, a part not answered while its station's link is up (a slow network's time out: the station is
+  /// reached, a viewer may be reading the same file from it) asked again after AGAIN_MS, not left waiting for a station
+  /// that never went: only its link found down makes it wait (`waiting`), and `stationBack` is told as it comes up.
+  #fetching(d: Download): Effect.Effect<void, CoreError> {
+    return Effect.catch(this.#fetchAll(d), (e) =>
+      unreached(e) && this.#inner.stations.online(d.station) ? Effect.andThen(Effect.sleep(AGAIN_MS), Effect.suspend(() => this.#fetching(d))) : Effect.fail(e));
+  }
+
   /// Fetching it, in the core's own scope: on by itself until it is all here, has failed, its station is not reached,
   /// or it is called off. One only to be kept is done once it is all here: out of the list, what it fetched kept.
   #go(d: Download): void {
@@ -289,7 +299,7 @@ export class Downloads {
     d.told = -1;
     this.#moved(d, 0);
     d.fiber = this.#inner.runner.fork(
-      Effect.flatMap(Effect.result(this.#fetchAll(d)), (r) => {
+      Effect.flatMap(Effect.result(this.#fetching(d)), (r) => {
         d.fiber = null;
         if (this.#held.get(d.id) !== d) return Effect.void;
         if (r._tag === "Success" && d.keep) {

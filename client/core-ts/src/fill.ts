@@ -18,7 +18,7 @@ import { CoreError } from "./error.ts";
 import { Beside } from "./protocol.ts";
 import { Kind } from "./trace.ts";
 import { Priority } from "./sync/scheduler.ts";
-import { DOWNLOAD_PART, titleOf } from "./views/downloads.ts";
+import { AGAIN_MS, DOWNLOAD_PART, titleOf } from "./views/downloads.ts";
 import type { Unfinished } from "./drive-kept.ts";
 import { bytes } from "./format.ts";
 import { t } from "./i18n.ts";
@@ -67,6 +67,9 @@ export class Fill {
   readonly #away = new Set<string>();
   /// Files the station could not give for another reason: not again in this run.
   readonly #failed = new Set<string>();
+  /// Files whose part was not answered while their station's link was up (a slow network's time out): their station is
+  /// reached, and nothing tells of it coming back, so they are asked again after AGAIN_MS, not left waiting for it.
+  readonly #later = new Set<string>();
   /// Waiting for a poke: what goes on.
   #poked: (() => void) | null = null;
   /// Poked since the files were last looked at.
@@ -168,6 +171,14 @@ export class Fill {
     this.#changed();
   }
 
+  #again(id: string): void {
+    this.#later.add(id);
+    this.#inner.runner.fork(Effect.andThen(Effect.sleep(AGAIN_MS), Effect.sync(() => {
+      this.#later.delete(id);
+      this.poke();
+    })));
+  }
+
   #reached(station: string): boolean {
     const stations = this.#inner.stations;
     return stations.link(station) !== undefined && stations.reachable(station);
@@ -240,7 +251,8 @@ export class Fill {
         return;
       }
       const e = done.failure;
-      if (unreached(e)) self.#away.add(station);
+      if (unreached(e) && inner.stations.online(station)) self.#again(id);
+      else if (unreached(e)) self.#away.add(station);
       // gone from the station: what was kept of it is of no use
       else if (e.status === 404) yield* inner.driveKept.forget(id);
       else self.#failed.add(id);
@@ -274,7 +286,7 @@ export class Fill {
       for (const f of list) {
         const call = partOf(f);
         if (call === null) continue;
-        if (this.#away.has(call.station) || !this.#reached(call.station)) continue;
+        if (this.#away.has(call.station) || !this.#reached(call.station) || this.#later.has(f.id)) continue;
         return [f, call];
       }
       return null;

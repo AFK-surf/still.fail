@@ -9,7 +9,8 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import type { FakeHost } from "../src/testing.ts";
 import { Core } from "../src/core.ts";
-import { titleOf } from "../src/views/downloads.ts";
+import { AGAIN_MS, titleOf } from "../src/views/downloads.ts";
+import { RECONNECT_MS } from "../src/station/sync.ts";
 import { HostError } from "../src/error.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { apply as applyOps } from "../src/delta.ts";
@@ -194,16 +195,37 @@ test("a download stopped by the app's end goes on as the core starts again, from
 test("a download whose station is not reached waits for it, and goes on once it is", async () => {
   const zip = bytesOf(6 * MB, 9);
   const away = new Set(["far.zip"]);
-  const r = await rig(new Map([["far.zip", zip]]), new Set(), away);
+  // (its link down too: its events stream not reached)
+  const t = await started(undefined, 0, undefined, (s) => (s.gate.stream = "fail"));
+  files(t.host, new Map([["far.zip", zip]]), new Set(), away);
+  const r = await watch(t);
   const id = (await r.ask("download.start", { station: ST, key: "k1", name: "far.zip", size: zip.length })).ok.download.id;
   const [waiting] = await r.view();
   assert.deepEqual([waiting.state, waiting.active], ["waiting", true]);
   assert.ok(waiting.statusText.length > 0);
+  // its station reached again: the link back online
   away.delete("far.zip");
-  // its station reached again (station/link.ts: the link back online)
-  r.core.inner.downloads.stationBack(ST);
+  t.gate.stream = "open";
+  await t.host.time.pass(RECONNECT_MS * 2 + 50, 50);
   const [back] = await r.view();
   assert.deepEqual([back.id, back.state], [id, "ready"]);
+  r.core.close();
+});
+
+test("a part not answered while its station's link is up (a slow network's time out) is asked again, not left waiting for a station that never went", async () => {
+  const zip = bytesOf(6 * MB, 9);
+  const away = new Set(["slow.zip"]);
+  const r = await rig(new Map([["slow.zip", zip]]), new Set(), away);
+  assert.equal(r.core.inner.stations.online(ST), true);
+  const id = (await r.ask("download.start", { station: ST, key: "k1", name: "slow.zip", size: zip.length })).ok.download.id;
+  const [trying] = await r.view();
+  assert.equal(trying.state, "going", "not said to wait for its station");
+  const tried = r.parts("slow.zip");
+  away.delete("slow.zip");
+  await r.host.time.pass(AGAIN_MS + 50, 50);
+  const [back] = await r.view();
+  assert.deepEqual([back.id, back.state], [id, "ready"]);
+  assert.ok(r.parts("slow.zip") > tried);
   r.core.close();
 });
 
