@@ -14,11 +14,12 @@ fn native_chat(
   mode? : String = "chat",
   corner? : Double = 0.0,
   corners? : FixedArray[Double],
+  platform? : Int = 1,
 ) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1, window_corner=corner, window_corners?=corners)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner=corner, window_corners?=corners)
   t.set_nav_able(able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.nav_push_ms)
@@ -268,4 +269,18 @@ test "an iPhone Duo: a tab left in one workspace and come back to in another sho
   tap("ws/ws1")
   tap("place/chats")
   assert_true(first_chat())
+}
+
+///|
+test "an Android foldable open, its gesture line over the app: the page's card to the screen's foot, not lifted over the line" {
+  // (a Galaxy Z Fold's inner screen, Medium: the cards across; its navigation bar the gesture line's 24)
+  let t = native_chat(750.0, 832.0, false, platform=2)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.nav_push_ms)
+  guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
+  // (as far from the screen's foot as from its side: not lifted over the line's room)
+  assert_true(832.0 - (p.y + p.h) < 24.0, msg="the page's foot at \{p.y + p.h}")
+  // (the composer in its foot corner, concentric with it as anywhere: taps go through the line, only its swipe is the
+  // system's)
+  assert_true(b.y + b.h < p.y + p.h, msg="the composer's foot at \{b.y + b.h}")
 }
