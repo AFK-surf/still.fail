@@ -80,6 +80,18 @@ pub fn writing_put_here(id : String) -> Bool {
 }
 
 ///|
+/// What each file picked or pasted here is (file_seed, held_seed), by its id: the same one added again while it is in
+/// its draft is not added twice.
+// kept across runs: put back by writings_reset (sfbase's reset)
+let writing_seeds : Map[String, String] = {}
+
+///|
+/// Whether draft `w` has the file `seed` names already (writing_seeds).
+fn writing_has(w : Writing, seed : String) -> Bool {
+  w.files.iter().any(fn(f) { writing_seeds.get(text(Some(f), "id")) == Some(seed) })
+}
+
+///|
 /// The files added here, counted (each its own id).
 let writing_n : Ref[Int] = { val: 0 }
 
@@ -93,6 +105,7 @@ pub fn writings_reset() -> Unit {
   writing_pictures.clear()
   writing_went.clear()
   writing_unseen.clear()
+  writing_seeds.clear()
   writing_n.val = 0
 }
 
@@ -224,8 +237,17 @@ pub fn writing_add(
   quote? : String = "",
   still? : String = "",
 ) -> Unit {
+  // (the same file picked or pasted again: one tile, one upload; a quote's picture is its quote's own)
+  let seed = file_seed(station, name, bytes)
+  let picked = pasted is None && quote == ""
+  if picked && writing_has(w, seed) {
+    return
+  }
   writing_n.val += 1
-  let id = "f" + upload_id(w.key + "\u{1}" + file_seed(station, name, bytes), writing_n.val)
+  let id = "f" + upload_id(w.key + "\u{1}" + seed, writing_n.val)
+  if picked {
+    writing_seeds[id] = seed
+  }
   if pasted is None {
     match @pixels.image_size(bytes) {
       Some(_) => {
@@ -305,8 +327,14 @@ pub fn writing_add(
 /// up to `station`, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size,
 /// type}`: still.fail's Android app's PickedFiles.kt); its tile the host's picture of it (a video's still).
 pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
+  // (the same file picked again, where the host has it: one tile, one upload)
+  let seed = held_seed(station, f)
+  if writing_has(w, seed) {
+    return
+  }
   writing_n.val += 1
   let id = "f" + upload_id(w.key + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{f.size}", writing_n.val)
+  writing_seeds[id] = seed
   match host_picture(f.name, f.src) {
     "" => ()
     picture => {
@@ -423,6 +451,7 @@ pub fn writing_mode(src : Source, w : Writing, id : String, mode : String) -> Un
 pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
   writing_pictures.remove(id)
   writing_went.remove(id)
+  writing_seeds.remove(id)
   writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
     w.files = w.files.filter(fn(f) { text(Some(f), "id") != id })
   })

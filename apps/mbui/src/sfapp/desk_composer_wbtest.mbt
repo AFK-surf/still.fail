@@ -368,6 +368,34 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
 }
 
 ///|
+test "desk composer: the same file picked or pasted again while it is in the draft is one file, going up once; taken out, it goes in again" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  let clip : @hostapi.Picked = { name: "录屏.mov", bytes: b"", held: 7, size: 3.0e9, src: "file:///clips/录屏.mov" }
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  @sfbase.writing_add_picked(src, w, "ws1/st1", clip)
+  @sfbase.writing_add_picked(src, w, "ws1/st1", clip)
+  // another file: of another name, or of other bytes
+  @sfbase.writing_add(src, w, "ws1/st1", "照片2.png", png_head())
+  @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abc")
+  @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abcd")
+  t.frame()
+  let names = fn() { @sfbase.writing(src, "ws1/st1:s-c1").files.map(fn(f) { text(Some(f), "name") }) }
+  assert_eq(names(), ["照片.png", "录屏.mov", "照片2.png", "build.log", "build.log"])
+  assert_eq(named(calls, "composer.add").length(), 5)
+  // taken out, the same goes in again
+  let photo = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  @sfbase.writing_remove(src, @sfbase.writing(src, "ws1/st1:s-c1"), photo)
+  t.frame()
+  @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
+  t.frame()
+  assert_eq(names(), ["录屏.mov", "照片2.png", "build.log", "build.log", "照片.png"])
+  assert_eq(named(calls, "composer.add").length(), 6)
+}
+
+///|
 test "desk composer: an image sent while it goes up is among its message's files at once, its picture from here, a file of another kind a card saying how far" {
   let calls : Array[Made] = []
   // the draft as the page heard of it while its files went up (the fixture's core has them up at once)

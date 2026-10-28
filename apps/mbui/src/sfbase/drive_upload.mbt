@@ -234,6 +234,13 @@ pub fn file_seed(station : String, name : String, bytes : Bytes) -> String {
   "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{@ui.stable_hash_bytes(bytes)}"
 }
 
+///|
+/// What a file the host holds (@hostapi.Picked.held) going up to `station` is known by, as file_seed says one read
+/// whole: its name, its size and where the host has it.
+pub fn held_seed(station : String, f : @hostapi.Picked) -> String {
+  "\{station}\u{1}held\u{1}\{f.name}\u{1}\{f.size}\u{1}\{f.src}"
+}
+
 
 ///|
 /// What a read-only run says it does not do.
