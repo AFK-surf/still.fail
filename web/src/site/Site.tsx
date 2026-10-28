@@ -8,12 +8,16 @@ import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject }
 import type { DemoOptions, MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
-import { GitHubMark } from "@stillfail/ui/brands.tsx";
+import { FeishuLogo, GitHubMark, RuntimeLogo, SlackLogo, type RuntimeMarkKind } from "@stillfail/ui/brands.tsx";
+import { ChevronDown, Devices } from "@stillfail/ui/icons.tsx";
 import { OneComputer } from "./OneComputer.tsx";
 import { Distance } from "./Distance.tsx";
 import { SiteLangContext, useSay, useSiteLang, type SiteLang } from "./words.ts";
 
 declare const __SITE_BETA__: boolean;
+/** The last release with notes in the repository (vite.demo.config.ts lastRelease), null where there are none. */
+declare const __SITE_RELEASE__: { version: string; date: string; counts: { fresh: number; better: number; fixed: number }; lines: string[] } | null;
+const RELEASE = typeof __SITE_RELEASE__ !== "undefined" ? __SITE_RELEASE__ : null;
 /**
  * Built as the test channel's site (youdid.wtf, `pnpm build:site-beta`): named youdid.wtf, opening the test channel's
  * web app, its downloads the beta apps (named youdid.wtf, beside the released ones). The rest is the same page.
@@ -124,6 +128,86 @@ function Downloads() {
   );
 }
 
+/** The agents it runs (station's RuntimeKind), by their names (web/src/format.ts RUNTIME_LABEL). */
+const AGENTS: [RuntimeMarkKind, string][] = [
+  ["claude", "Claude Code"], ["codex", "Codex"], ["cursor", "Cursor"], ["devin", "Devin"], ["grok", "Grok Build"], ["dsh", "DeepSeek Harness"], ["hermes", "Hermes Agent"],
+];
+
+/** What it works with: the agents it runs, and where they are directed from, each its mark and its name. */
+function Works() {
+  const w = useSay().works;
+  return (
+    <section className={css.section}>
+      <div className={css.wrap}>
+        <h2 className={css.headingTitle}>{w.title}</h2>
+        <div className={css.works}>
+          <span className={css.worksRow}>{w.agents}</span>
+          <ul className={css.marks}>{AGENTS.map(([kind, name]) => <li key={kind}><RuntimeLogo runtime={kind} size={18} />{name}</li>)}</ul>
+          <span className={css.worksRow}>{w.from}</span>
+          <ul className={css.marks}>
+            <li><Devices size={18} />{w.places.app}</li>
+            <li><SlackLogo size={18} />{w.places.slack}</li>
+            <li><FeishuLogo size={18} />{w.places.feishu}</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** What a visitor asks first: the question in view, its answer opened under it (no script: <details>). */
+function Questions() {
+  const say = useSay();
+  return (
+    <section className={css.section}>
+      <div className={`${css.wrap} ${css.questions}`}>
+        <h2 className={css.headingTitle}>{say.questionsTitle}</h2>
+        <div className={css.questionList}>
+          {say.questions.map((x) => (
+            <details key={x.q} className={css.question}>
+              <summary className={css.questionAsked}>{x.q}<ChevronDown size={18} className={css.questionOpen} /></summary>
+              <p className={css.questionAnswer}>{x.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** What the last release brought: its number and day, how many things new, better and fixed, its first new things. */
+function Shipped() {
+  const s = useSay().shipped;
+  if (!RELEASE) return null;
+  return (
+    <section className={css.section}>
+      <div className={`${css.wrap} ${css.shipped}`}>
+        <h2 className={css.headingTitle}>{s.title}</h2>
+        <div>
+          <p className={css.shippedWhen}><span>{s.when(RELEASE.version, RELEASE.date)}</span><span>{s.counts(RELEASE.counts)}</span></p>
+          {s.lines && RELEASE.lines.length ? <ul className={css.shippedLines}>{RELEASE.lines.map((l) => <li key={l}>{l}</li>)}</ul> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The page's last word: its title again, with the ways in. */
+function Closing() {
+  const say = useSay();
+  return (
+    <section className={css.section}>
+      <div className={`${css.wrap} ${css.closing}`}>
+        <h2 className={css.closingTitle}>{say.closing.replace(/\.$/, "")}<span className={css.titleDot}>.</span></h2>
+        <div className={css.closingActions}>
+          <Button href={APP} kind="primary" large>{say.open} {NAME.head + NAME.tail}</Button>
+          <Button href="#download" kind="ghost" large>{say.download}</Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---- The rest ----
 
 export function Site({ mountDemo, demo, lang = "zh" }: DemoProps & { lang?: SiteLang }) {
@@ -154,6 +238,8 @@ function Page({ mountDemo, demo }: DemoProps) {
       <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
       <div className={css.idea} data-idea="2"><Distance {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
 
+      <Works />
+
       <Downloads />
 
       <section id="start" className={css.section}>
@@ -171,6 +257,12 @@ function Page({ mountDemo, demo }: DemoProps) {
           </div>
         </div>
       </section>
+
+      <Shipped />
+
+      <Questions />
+
+      <Closing />
 
       <footer className={css.footer}>
         <div className={`${css.wrap} ${css.footerRow}`}>

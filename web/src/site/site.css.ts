@@ -202,17 +202,6 @@ export const links = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
-/** The film (Film.tsx): as wide as the page's words, its corners a card's, its sound's button over its corner. */
-export const film = style({
-  position: "relative", margin: "40px 0 0", borderRadius: vars.rCard, overflow: "hidden", background: "#000",
-  boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${LINE}`,
-});
-export const filmVideo = style({ display: "block", width: "100%", height: "auto", aspectRatio: "16 / 9", cursor: "pointer" });
-export const filmSound = style({
-  position: "absolute", right: "16px", bottom: "16px", display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0",
-  border: "0", borderRadius: "999px", color: "#fff", cursor: "pointer",
-  background: "color-mix(in srgb, #000 45%, transparent)", backdropFilter: "blur(20px) saturate(1.4)",
-});
 /** What it is for (OneComputer.tsx): those shown on a phone three across, each its phone over its words, what is not
  *  here yet a line under them; one under another on a narrow screen. */
 export const scenes = style({
@@ -236,9 +225,53 @@ export const promiseText = style({ margin: "12px 0 0", fontSize: vars.textTitle,
 
 // Installing: what to do on the left, the command on the right.
 export const install = style({
-  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center", paddingBottom: "120px",
-  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px", paddingBottom: "80px" } },
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px" } },
 });
+// What it works with (Site.tsx Works): each row's quiet name over its marks, a pill each.
+export const works = style({ display: "grid", gap: "14px", margin: "40px 0 0", "@media": { [NARROW]: { marginTop: "28px" } } });
+globalStyle(`${works} > ul + span`, { marginTop: "18px" });
+export const worksRow = style({ fontSize: vars.textUi, color: "var(--s-muted)" });
+export const marks = style({ display: "flex", flexWrap: "wrap", gap: "10px", "@media": { [NARROW]: { gap: "8px" } }, margin: "0", padding: "0", listStyle: "none" });
+globalStyle(`${marks} > li`, {
+  display: "flex", alignItems: "center", gap: "10px", padding: "10px 18px 10px 14px", borderRadius: "999px",
+  background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, color: FG, fontSize: vars.textTitle, lineHeight: "1.2",
+  "@media": { [NARROW]: { gap: "8px", padding: "8px 14px 8px 12px", fontSize: vars.textBody } },
+});
+globalStyle(`${marks} svg`, { display: "block", flex: "none" });
+
+// What a visitor asks first (Site.tsx Questions): the title on the left, the questions on the right (under it on a
+// narrow screen), each a quiet card that opens to its answer; the page's foot under them.
+export const questions = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px" } },
+});
+export const questionList = style({ display: "grid", gap: "10px" });
+export const question = style({ borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const questionAsked = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", padding: "20px 24px", cursor: "pointer", listStyle: "none",
+  fontSize: vars.textTitle, fontWeight: "600", color: FG, selectors: { "&::-webkit-details-marker": { display: "none" } },
+});
+export const questionOpen = style({ flex: "none", color: "var(--s-muted)", transition: `transform .2s ${vars.easeOut}` });
+globalStyle(`${question}[open] ${questionOpen}`, { transform: "rotate(180deg)" });
+export const questionAnswer = style({ margin: "0", padding: "0 24px 22px", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+
+// What the last release brought (Site.tsx Shipped): the title on the left, its number, day and counts on the right, its
+// first new things under them.
+export const shipped = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "20px" } },
+});
+export const shippedWhen = style({ display: "flex", flexWrap: "wrap", gap: "4px 20px", margin: "0", fontSize: vars.textTitle, color: "var(--s-muted)", "@media": { "screen and (min-width: 861px)": { paddingTop: "14px" } } });
+globalStyle(`${shippedWhen} > :first-child`, { color: FG, fontFamily: vars.fontMono });
+export const shippedLines = style({ display: "grid", gap: "10px", margin: "20px 0 0", padding: "0 0 0 20px", fontSize: vars.textTitle, lineHeight: "1.6", color: FG });
+globalStyle(`${shippedLines} > li::marker`, { color: "var(--s-muted)" });
+
+// The page's last word (Site.tsx Closing): its title again, the ways in under it, in the middle; the page's foot under.
+export const closing = style({ display: "grid", justifyItems: "center", gap: "32px", textAlign: "center", paddingBottom: "120px", "@media": { [NARROW]: { gap: "24px", paddingBottom: "80px" } } });
+export const closingTitle = style({ margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const closingActions = style({ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "12px" });
+
 /** The command, in a terminal's colours in either theme. */
 export const terminal = style({
   borderRadius: vars.rCard, overflow: "hidden", background: "#111114", color: "#E9E9EA",
