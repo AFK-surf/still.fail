@@ -34,8 +34,9 @@ export class Station {
   views: { head: J; got: J[]; mostUnacked: number }[] = [];
   screenFrames: { key: boolean; ts: number; data: Uint8Array }[] = [];
   world: World = REAL;
-  /// Its LAN addresses, said with the answer to a credential (station/src/mesh/lan.ts).
+  /// Its LAN addresses, its Tailscale ones, said with the answer to a credential (station/src/mesh/lan.ts).
   lan: string[] = [];
+  tailnet: string[] = [];
   /// The phone's adb offers (station/src/mesh/adb.ts), each on the connection it came on, answered 200 and held open:
   /// the latest one's connection is where the station opens its tunnels.
   offers: { conn: J; head: J }[] = [];
@@ -111,7 +112,7 @@ export class Station {
   #answer(line: string): J {
     const grant = JSON.parse(line).credential as string;
     this.grants.push(grant);
-    return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}) } : { error: "grant signature invalid" };
+    return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}), ...(this.tailnet.length > 0 ? { tailnet: this.tailnet } : {}) } : { error: "grant signature invalid" };
   }
 
   async #serve(conn: J, dead: () => boolean): Promise<void> {

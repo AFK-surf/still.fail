@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -1151,6 +1151,84 @@ sim("off_the_stations_lan_its_lan_addresses_are_tried_once_and_again_as_the_netw
   s.wakes.wake(network(s.host));
   await s.time.pass(60_000);
   assert.equal(lanTries(), 2);
+  await close(s, station, mesh);
+});
+
+/// A station on the device's tailnet (docs/mesh-lan.md, Tailscale), at home on a (far) and held on b (near), its
+/// Tailscale address `ms` away: no hole punched, Tailscale carrying it.
+async function onTailnet(s: Sim, ms: number) {
+  s.net.direct = { ms };
+  const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  await s.settle(station.endpoint.online());
+  station.endpoint.keep([b]);
+  station.tailnet = station.addr().ips;
+  const mesh = await s.run(Mesh.make(env(s), [a, b]));
+  return { station, mesh, id: station.id(), a, b };
+}
+
+/// Where the station said Tailscale reaches it: dialled there on an endpoint of its own, and the requests go there once
+/// it answers clearly quicker than the relays, as they would to another relay's way.
+sim("a_station_on_the_devices_tailnet_is_reached_there_when_it_is_quicker", async (s) => {
+  const { station, mesh, id } = await onTailnet(s, 3);
+  await reach(s, mesh, id);
+  await s.until(() => mesh.current(id)?.pinned === TAILNET, MIN_STAY_MS + 2 * 60_000);
+  assert.equal(mesh.current(id)!.net().path, TAILNET);
+  assert.ok(mesh.measured(id)!.relays.some(([name, ms]) => name === TAILNET && ms !== null), JSON.stringify(mesh.measured(id)));
+  assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// Tailscale through relays of its own (it could not punch through) is slower than still.fail's nearest: the requests
+/// stay there. A LAN way is taken at once; a tailnet one is not.
+sim("a_tailnet_slower_than_a_relay_is_not_taken", async (s) => {
+  const { station, mesh, id, b } = await onTailnet(s, 150);
+  await reach(s, mesh, id);
+  await s.time.pass(20 * 60_000);
+  assert.ok(sameRelay(via(mesh, id), b), `${via(mesh, id)} ${JSON.stringify(mesh.measured(id))}`);
+  assert.ok(s.net.tries.some((t) => t.to === id && t.ips), "the tailnet was dialled");
+  await close(s, station, mesh);
+});
+
+/// Where the station said it is reached straight is kept: the next run dials it there at once, beside the relays,
+/// and reaches it with none of them answering.
+sim("a_station_said_tailnet_is_kept_and_reached_with_the_relays_down", async (s) => {
+  const { station, mesh, id, a, b } = await onTailnet(s, 3);
+  await reach(s, mesh, id);
+  await s.until(() => mesh.ways(id).some((w) => w.link.pinned === TAILNET), 60_000);
+  await s.run(mesh.close());
+  s.net.down(a, 60 * 60_000);
+  s.net.down(b, 60 * 60_000);
+  const next = await s.run(Mesh.make(env(s), [a, b]));
+  const started = s.time.now();
+  const link = await s.run(next.link(id, grants("ok", { n: 0 })));
+  assert.equal(link.pinned, TAILNET);
+  assert.ok(s.time.now() - started < 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, next);
+});
+
+/// A workspace turns ways off (its `ways_off`): its stations are not reached that way, and a way open to one when it
+/// is turned off is let go, the requests on another. still.fail's own relay off keeps the device off the main endpoint
+/// (at home there): every relay left is reached on its own endpoint.
+sim("ways_a_workspace_turned_off_are_not_gone", async (s) => {
+  const { station, mesh, id, a, b } = await onTailnet(s, 3);
+  const ask = (off: string[]) => s.run(mesh.link(id, grants("ok", { n: 0 }), undefined, off));
+  const gone = (pred: (l: Link) => boolean) => [mesh.current(id), ...mesh.ways(id).map((w) => w.link)].some((l) => l !== null && l.usable() && pred(l));
+  const link = await ask([a, TAILNET]);
+  assert.ok(sameRelay(link.via(), b), `${link.via()}`);
+  for (let t = 0; t < 10 * 60_000; t += TICK_MS) {
+    await s.time.pass(TICK_MS);
+    await ask([a, TAILNET]);
+    assert.ok(!gone((l) => l.pinned === null || l.pinned === TAILNET || sameRelay(l.via(), a)), JSON.stringify(mesh.measured(id)));
+  }
+  assert.ok(!s.net.tries.some((t) => t.to === id && t.ips), "the tailnet was not dialled");
+  // b off now, a on: the way through b goes, the requests on the main endpoint (or a's own way), the tailnet now on.
+  await ask([b]);
+  assert.ok(!gone((l) => sameRelay(l.via(), b)), JSON.stringify(mesh.measured(id)));
+  assert.equal((await request(s, await ask([b]), head("/admin/api/overview"))).status, 200);
+  await s.until(() => mesh.current(id)?.pinned === TAILNET, MIN_STAY_MS + 2 * 60_000);
   await close(s, station, mesh);
 });
 

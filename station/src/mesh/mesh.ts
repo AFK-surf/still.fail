@@ -15,7 +15,7 @@ import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
 import { congestionOf } from "./settings.ts";
 import { bindStation } from "./native.ts";
-import { lanAddrs } from "./lan.ts";
+import { lanAddrs, tailnetAddrs } from "./lan.ts";
 import { Superseded } from "./superseded.ts";
 import { Storms } from "./storms.ts";
 import { Fibers } from "../ops/fibers.ts";
@@ -99,7 +99,7 @@ export const MeshLive = Layer.effectDiscard(
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), connected: () => parts.connected() };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>

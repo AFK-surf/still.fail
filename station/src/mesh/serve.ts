@@ -253,6 +253,8 @@ export type Members = {
   accepted?: () => Accepted;
   /// Where a device on the station's LAN dials it straight (lan.ts): told with the first credential's answer.
   lan?: () => string[];
+  /// Where a device on the station's tailnet dials it straight (lan.ts `tailnetAddrs`): told with it.
+  tailnet?: () => string[];
   /// Told each time a member's device has connected (parts.ts `memberConnected`).
   connected?: () => void;
 };
@@ -293,7 +295,8 @@ export async function serve(m: Members, conn: Connection) {
   // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
   const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
   const lan = m.lan?.() ?? [];
-  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}) });
+  const tailnet = m.tailnet?.() ?? [];
+  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
   m.connected?.();
 

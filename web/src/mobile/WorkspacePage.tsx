@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
 import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
 import { useTopic } from "../core/react.ts";
-import { ROLE_HINT, ROLE_LABEL, sampleWorkspace } from "../cloud/settings.tsx";
+import { ROLE_HINT, ROLE_LABEL, sampleWorkspace, wayWords } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Check, ChevronRight, UserPlus } from "@stillfail/ui/icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
@@ -20,6 +20,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as css from "./WorkspacePage.css.ts";
+import * as connectsCss from "./Connects.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as homeCss from "./styles/home.css.ts";
@@ -108,6 +109,7 @@ function WorkspaceShown({ view }: { view: WorkspaceView }) {
         ))}
       </ListCard>
       <Relays view={view} manager={manager} />
+      <Ways view={view} manager={manager} />
       <div className={css.mGap} />
       <ListCard>
         <ListRow onClick={leave}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>{t("web-mobile.workspace.leave")}</span></ListRow>
@@ -145,6 +147,40 @@ function Relays({ view, manager }: { view: WorkspaceView; manager: boolean }) {
         {manager && <ListRow onClick={busy ? undefined : add}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mLink}`}>{busy ? t("common.saving") : t("web-mobile.workspace.relayAdd")}</span></ListRow>}
       </ListCard>
       <p className={css.mLead}>{t("web-mobile.workspace.relayLead", { name: NAME })}</p>
+    </>
+  );
+}
+
+/**
+ * The ways its members' devices reach its stations, each turned on or off by its managers from its row (the switch
+ * flips as asked, back if still.fail cloud refused); shown to the others once one is off.
+ */
+function Ways({ view, manager }: { view: WorkspaceView; manager: boolean }) {
+  const app = useApp();
+  const me = app.entry.account;
+  const ways = view.ways ?? [];
+  const doing = useDoingList();
+  const asked = (id: string) => doing.find((d) => !failed(d) && doingMatches(d, "workspace.setWay", { account: me.sub, workspace: view.id, way: id }));
+  const busy = ways.some((w) => asked(w.id) !== undefined);
+  if (ways.length === 0 || (!manager && ways.every((w) => w.on))) return null;
+  const set = (way: string, on: boolean) => { cloud.setWay(me.sub, view.id, way, on).catch((e: Error) => app.toast(t("android-misc.act.failed", { what: t("android-settings.ways.setWhat"), error: e.message }))); };
+  return (
+    <>
+      <SectionHeader title={t("android-settings.ways.title")} start={24} />
+      <ListCard>
+        {ways.map((w) => {
+          const { title, note } = wayWords(w);
+          const a = asked(w.id);
+          const on = a !== undefined ? a.params.on === "true" : w.on;
+          return (
+            <ListRow key={w.id} onClick={manager && !busy ? () => set(w.id, !w.on) : undefined}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{title}</span><span className={listsCss.mRowNote}>{note}</span></span>
+              <span className={connectsCss.mSwitch} data-on={on || undefined} />
+            </ListRow>
+          );
+        })}
+      </ListCard>
+      <p className={css.mLead}>{t("android-settings.ways.lead")}</p>
     </>
   );
 }

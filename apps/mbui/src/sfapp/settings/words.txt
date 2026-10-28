@@ -579,6 +579,17 @@ android-settings.relays.lead
 android-settings.relays.removeWhat
 android-settings.relays.removed
 android-settings.relays.title
+android-settings.ways.direct
+android-settings.ways.directNote
+android-settings.ways.lan
+android-settings.ways.lanNote
+android-settings.ways.lead
+android-settings.ways.ours
+android-settings.ways.own
+android-settings.ways.setWhat
+android-settings.ways.tailnet
+android-settings.ways.tailnetNote
+android-settings.ways.title
 android-settings.renamed
 android-settings.run.account
 android-settings.run.effort

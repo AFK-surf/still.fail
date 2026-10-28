@@ -68,6 +68,29 @@ longer matters.
 - Tests: `client/core-ts/test/mesh.test.ts`. The simulated LAN (`SimNet.lan` with `quietAfterMs`) has the punched path
   go quiet, and `SimNet.away` puts the device off the LAN.
 
+## Tailscale
+
+A device on the same tailnet as a station reaches it straight at its Tailscale address, the way a device on its LAN
+does, Tailscale carrying the packets (straight, or through Tailscale's own relays when it could not punch through).
+
+- The station says its Tailscale addresses with its answer to a device's first credential: `tailnet`, `ip:port` for
+  each address of its in 100.64.0.0/10 at the port of its IPv4 mesh socket (`station/src/mesh/lan.ts` `tailnetAddrs`).
+  Known by the address, not the interface: Tailscale's is utun on macOS (left out of the LAN), tailscale0 on Linux.
+- The core dials them on an endpoint of their own (`pinned: "tailnet"`, the device key made over for `tailnet`), on no
+  relay, as the LAN endpoint. Unlike a LAN way it is not taken at once nor does it keep the requests off the main
+  endpoint: a tailnet going through Tailscale's relays may be slower than still.fail's nearest, so its way is compared
+  by how it answers, as a relay's way is (`clearlyBetter`, `BETTER_TICKS`, `MIN_STAY_MS`). A station's card says
+  `Tailscale` for it.
+- Off the station's tailnet its addresses lead nowhere: tried once for each set it says and again after the network
+  changes. Once a way there answered (since the network last changed), it is dialled again every `EXPLORE_MS` while
+  none is open, as the relays are.
+- Where each station said it is reached straight (LAN and tailnet) is kept on the device (`station-addresses`): a run
+  dials them at once beside the relays (`#dialAll`), not after a relay brought the station's answer again, so a station
+  on the device's tailnet is reached with none of the relays answering (2026-10-29: the user wanted Tailscale as one
+  more way to a workspace's stations).
+- Macs ask no Local Network permission for it: 100.64.0.0/10 is not the local subnet.
+- Tests: `client/core-ts/test/mesh.test.ts` (`onTailnet`).
+
 ## Storms
 
 2026-10-19 a phone on ccvm's LAN and the station traded some 48,000 packets a second for over ten minutes with no request among them: the phone's of QUIC's smallest size (room for a PING or an IMMEDIATE_ACK only), the station's ACK-only. Neither kind is held back by congestion control or pacing in noq, so it ran at what the LAN took, four station threads half busy, until the phone's Wi-Fi went off. What kept the phone asking is not known yet (suspects: `network_change` pinging every path with an ACK request on each suspecting wake, or tail-loss probes built up).

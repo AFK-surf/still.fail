@@ -24,7 +24,7 @@ import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
-  already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
+  already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400, invalid_way: 400, last_relay: 409,
   last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
@@ -248,6 +248,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     });
   }
   if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
+  if (kind === "ways" && !target && method === "PUT") return directory(() => dir.setWay(sub, ws, input.way, input.on));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
   if (kind === "members" && !target && method === "POST") return directory(() => dir.addMembers(sub, ws, role(), input.emails));
   if (kind === "added" && target && method === "DELETE") return directory(() => dir.removeAdded(sub, ws, target));

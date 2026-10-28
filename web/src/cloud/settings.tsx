@@ -35,11 +35,11 @@ import { addProfilePath } from "../pages/AddProfile.tsx";
 import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, type MenuItem, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
+import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, type MenuItem, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, SwitchRow, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
 import { useAccounts, useDeleteAccount, useSignIn, useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
-import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type MemberView, type Role, type WorkspaceView } from "./api.ts";
+import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type MemberView, type Role, type WayView, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
 import { useDoing } from "../doing.ts";
@@ -369,6 +369,7 @@ function WorkspaceShown({ entry, view, manager }: { entry: WorkspaceEntry; view:
       {failed && <p className={controlsCss.fieldError} role="alert">{failed}</p>}
       <Members view={view} account={account} manager={manager} />
       <Relays view={view} account={account} manager={manager} />
+      <Ways view={view} account={account} manager={manager} />
       {/* leaving or deleting it, in red at the foot, each asked again */}
       <ul className={pagesCss.list}>
         <li>
@@ -996,6 +997,31 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
           </li>
         ))}
       </ul>
+    </Section>
+  );
+}
+
+/** A way its members' devices reach its stations as listed (`WayView`): its title and the line under it. */
+export function wayWords(w: WayView): { title: string; note: string } {
+  if (w.kind === "relay") return { title: w.name ?? relayLabel(w.id), note: w.own ? t("android-settings.ways.own") : t("android-settings.ways.ours", { app: NAME }) };
+  return { title: t(`android-settings.ways.${w.kind}`), note: t(`android-settings.ways.${w.kind}Note`) };
+}
+
+/**
+ * The ways its members' devices reach its stations (still.fail's relays, its own, the LAN, Tailscale, a path punched
+ * through), each turned on or off by its managers; shown to the others once one is off.
+ */
+function Ways({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
+  const ways = view.ways ?? [];
+  const set = useAction(({ way, on }: { way: string; on: boolean }) => cloud.setWay(account.sub, view.id, way, on));
+  if (ways.length === 0 || (!manager && ways.every((w) => w.on))) return null;
+  return (
+    <Section title={t("android-settings.ways.title")} description={t("android-settings.ways.lead")}>
+      {ways.map((w) => {
+        const { title, note } = wayWords(w);
+        return <SwitchRow key={w.id} title={title} description={note} checked={set.busy && set.arg?.way === w.id ? set.arg.on : w.on} disabled={!manager || set.busy} busy={set.busy && set.arg?.way === w.id} onChange={(on) => void set.run({ way: w.id, on })} />;
+      })}
+      {set.error && <p className={controlsCss.fieldError} role="alert">{set.error.message}</p>}
     </Section>
   );
 }

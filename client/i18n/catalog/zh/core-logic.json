@@ -438,6 +438,7 @@
   "core-logic.mesh.no_answer": "无法连接此 station：无响应",
   "core-logic.mesh.no_reply": "station 无响应",
   "core-logic.mesh.not_connected": "尚未连接此 station",
+  "core-logic.mesh.all_off": "此 workspace 已关闭连接此 station 的所有方式",
   "core-logic.mesh.read_failed": "读取 station 的回复失败：{error}",
   "core-logic.mesh.reply_cut": "station 的响应在行中断开",
   "core-logic.mesh.reply_no_status": "station 的响应缺少状态码",

@@ -362,6 +362,31 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     for (const relays of [["ftp://x.test"], ["not a url"], ["https://u:p@x.test"], ["https://x.test/?a=1"], "https://x.test", [1], ["https://1.test", "https://2.test", "https://3.test", "https://4.test", "https://5.test"]]) {
       assert.equal((await alice("PUT", `/v1/workspaces/${w}/relays`, { relays })).status, 400, JSON.stringify(relays));
     }
+    // Ways turned off: by a manager, every relay and kind of way listed on or off, told to members as ways_off.
+    const ways = async (as: typeof alice, way: string, on: boolean) => as("PUT", `/v1/workspaces/${w}/ways`, { way, on });
+    assert.equal((await ways(bob, ours[0]!, false)).status, 403);
+    for (const [way, on] of [["https://nowhere.test", false], ["lan", "no"]] as const) assert.equal((await alice("PUT", `/v1/workspaces/${w}/ways`, { way, on })).status, 400, way);
+    for (const r of ours) assert.equal((await ways(alice, r, false)).status, 200, r);
+    const off = (await (await ways(alice, "tailnet", false)).json()) as any;
+    assert.deepEqual(off.ways_off, [...ours, "tailnet"]);
+    assert.deepEqual(off.ways.map((x: any) => [x.id, x.kind, x.on, x.own ?? false]), [
+      ...ours.map((r) => [r, "relay", false, false]),
+      ["https://relay.home.test", "relay", true, true],
+      ["https://cn.home.test/relay", "relay", true, true],
+      ["lan", "lan", true, false],
+      ["tailnet", "tailnet", false, false],
+      ["direct", "direct", true, false],
+    ]);
+    assert.deepEqual(((await (await bob("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === w).ways_off, [...ours, "tailnet"]);
+    assert.equal(((await (await alice("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === other).ways_off, undefined, "another workspace has none off");
+    // A relay is left on: the last one is refused.
+    assert.equal((await ways(alice, "https://relay.home.test", false)).status, 200);
+    assert.equal((await ways(alice, "https://cn.home.test/relay", false)).status, 409);
+    // A relay of its own taken away goes from those off; turned on again, a way is no longer off.
+    assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: ["https://cn.home.test/relay"] })).json()) as any).ways_off, [...ours, "tailnet"]);
+    for (const r of ours) await ways(alice, r, true);
+    assert.deepEqual(((await (await ways(alice, "tailnet", true)).json()) as any).ways_off, undefined);
+
     // None again: the station back on still.fail's alone.
     assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: [] })).json()) as any).relays, []);
     await socket.ping!();

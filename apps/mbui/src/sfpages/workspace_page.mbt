@@ -229,6 +229,47 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
       })
     })
   }
+  // the ways its members' devices reach its stations, each turned on or off by its managers (shown to the others once one
+  // is off: why a way they would take is not taken)
+  let ways = items(v, "ways")
+  if manager || ways.iter().any(fn(w) { !flag(Some(w), "on") }) {
+    blocks.push(fn() {
+      let busy = is_doing(core, ["workspace.setWay"], [("workspace", ws)])
+      @sf.section(c, @sf.t("android-settings.ways.title"), note=@sf.t("android-settings.ways.lead"), fn() {
+        @sf.group(c, fn() {
+          for w in ways {
+            let id = text(Some(w), "id")
+            let on = flag(Some(w), "on")
+            let (title, note) = match text(Some(w), "kind") {
+              "lan" => (@sf.t("android-settings.ways.lan"), @sf.t("android-settings.ways.lanNote"))
+              "tailnet" => (@sf.t("android-settings.ways.tailnet"), @sf.t("android-settings.ways.tailnetNote"))
+              "direct" => (@sf.t("android-settings.ways.direct"), @sf.t("android-settings.ways.directNote"))
+              _ => {
+                let named = text(Some(w), "name")
+                let host = id.replace(old="https://", new="").replace(old="http://", new="")
+                (
+                  if named != "" { named } else { host },
+                  if flag(Some(w), "own") {
+                    @sf.t("android-settings.ways.own")
+                  } else {
+                    @sf.t("android-settings.ways.ours", args=[("app", "still.fail")])
+                  },
+                )
+              }
+            }
+            if @sf.switch_row(c, "way/" + id, title, on, note~, disabled=!manager, busy~) != on {
+              @settings.act(
+                core,
+                @sf.t("android-settings.ways.setWhat"),
+                "workspace.setWay",
+                obj([("workspace", str(ws)), ("way", str(id)), ("on", Json::boolean(!on)), ("account", str(here.sub))]),
+              )
+            }
+          }
+        })
+      })
+    })
+  }
   // leaving or deleting it, in red at the foot, asked first
   blocks.push(fn() {
     @sf.group(c, fn() {

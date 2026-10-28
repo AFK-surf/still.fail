@@ -69,6 +69,19 @@ export const DIRECT_RECALL_MS = 10 * 60_000;
 /// requests on it waited out iroh's 15 s before going back to a relay (studio and a phone, 2026-10-17); a connection
 /// dialled by address kept working.
 export const LAN = "lan";
+/// The `pinned` of a link on the endpoint that dials a station at its Tailscale addresses alone (docs/mesh-lan.md,
+/// Tailscale): as the LAN endpoint, no relay and no hole punching, Tailscale carrying it however it does (straight, or
+/// through relays of its own when it could not punch through). So it is not taken over the others as a LAN way is: it
+/// is compared by how it answers, as a relay's way is.
+export const TAILNET = "tailnet";
+/// The ways dialled at addresses the station said, each on an endpoint of its own.
+export const AT_ADDRESSES = [LAN, TAILNET] as const;
+export type AtAddresses = (typeof AT_ADDRESSES)[number];
+/// What a workspace turns off (its `ways_off`) to keep its devices off a path iroh punches through: the main endpoint's.
+export const DIRECT = "direct";
+/// Where each station said a device dials it straight (by address: `{lan, tailnet}`), kept: a run dials them at once,
+/// before any relay brought the station's answer (one whose relays cannot be reached is reached on them alone).
+export const SAID_KEY = "station-addresses";
 /// A way direct (on the LAN endpoint, or the main endpoint's punched path) lost within MIN_STAY_MS of the requests moving
 /// to it, FLAKY_LOSSES times in a row: no way direct is moved to for DIRECT_HOLD_MS, twice as long each time it happens
 /// again, up to DIRECT_HOLD_MAX_MS, unless no other way is up. A phone on studio's LAN moved to it and back to a relay
@@ -125,6 +138,10 @@ export type CredentialSource = (device: string, fresh: boolean) => Effect.Effect
 export type Measured = { measuring: boolean; relays: [string, number | null][]; moved: string | null };
 
 type Day = { day: number; rx: number; tx: number };
+/// Where a station said a device dials it straight, each kind of way's addresses (`ip:port`).
+type Said = Record<AtAddresses, string[]>;
+/// A kind of way's key for a station address, in the maps of dials at addresses.
+const atKey = (kind: AtAddresses, addr: string) => `${kind} ${addr}`;
 /// How fast a way to a station was seen bringing a reply (bytes a second; the fastest within SPEED_FRESH_MS of it), and
 /// when.
 type Speed = { bps: number; at: number };
@@ -230,9 +247,10 @@ export class Way {
     this.samples++;
   }
 
-  /// Where it goes: its relay (as a key), "lan" (the LAN endpoint's), or "direct" (a path iroh punched).
+  /// Where it goes: its relay (as a key), "lan" (the LAN endpoint's), "tailnet" (the Tailscale endpoint's), or
+  /// "direct" (a path iroh punched).
   key(): string {
-    if (this.link.pinned === LAN) return LAN;
+    if (this.link.pinned === LAN || this.link.pinned === TAILNET) return this.link.pinned;
     const via = this.link.via();
     if (via !== null) return relayKey(via);
     if (this.link.path() === "direct") return "direct";
@@ -378,11 +396,14 @@ export class Link {
   refused: CoreError | null = null;
   credential: string;
   readonly credentials: CredentialSource;
-  /// The relay whose own endpoint it is on (LAN: the one dialling stations by their LAN addresses); null on the main one.
+  /// The relay whose own endpoint it is on (LAN, TAILNET: the one dialling stations at their addresses on their LAN, on
+  /// their tailnet); null on the main one.
   readonly pinned: string | null;
   counted: [number, number] = [0, 0];
-  /// Where the station said a device on its LAN dials it (`ip:port`), in its answer to the first credential.
+  /// Where the station said a device on its LAN, on its tailnet, dials it (`ip:port`), in its answer to the first
+  /// credential.
   lan: string[] = [];
+  tailnet: string[] = [];
   /// Done once the station answered the first credential (refused or not).
   readonly answered = Deferred.makeUnsafe<void>();
 
@@ -535,7 +556,7 @@ export class Link {
     const selected = this.conn.paths().find((p) => p.selected);
     const stats = this.conn.stats();
     return {
-      path: selected === undefined ? null : selected.relay !== null ? "relay" : "direct",
+      path: selected === undefined ? null : selected.relay !== null ? "relay" : this.pinned === TAILNET ? TAILNET : "direct",
       relay: selected?.relay ? relayHost(selected.relay) : null,
       rttMs: selected !== undefined ? selected.rttMs : null,
       measured: null,
@@ -610,11 +631,12 @@ export class Mesh {
   /// By address: when a way to it was last seen going direct, and when the main endpoint last dialled it again.
   readonly #directAt = new Map<string, number>();
   readonly #mainDialledAt = new Map<string, number>();
-  /// By address: the station's LAN addresses as it last said them; those last dialled on the LAN endpoint, and when.
-  readonly #lan = new Map<string, string[]>();
-  readonly #lanTried = new Map<string, string>();
-  readonly #lanDialledAt = new Map<string, number>();
-  readonly #lanDialling = new Set<string>();
+  /// By address: where the station last said a device dials it straight (kept: SAID_KEY). By kind and address
+  /// (`atKey`): the addresses last dialled on that kind's endpoint, when, and whether a dial is under way.
+  readonly #said: Record<string, Said>;
+  readonly #tried = new Map<string, string>();
+  readonly #atDialledAt = new Map<string, number>();
+  readonly #atDialling = new Set<string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -626,15 +648,19 @@ export class Mesh {
   readonly #movedDirect = new Map<string, boolean>();
   readonly #directLosses = new Map<string, number>();
   readonly #directHeldUntil = new Map<string, number>();
-  /// By address: when a way on the LAN endpoint last answered its ping (LAN_RECALL_MS).
+  /// By address: when a way on the LAN endpoint last answered its ping (LAN_RECALL_MS); whether one on the Tailscale
+  /// endpoint did since the network last changed (it is dialled again then, as the relays are: `#dialAtIf`).
   readonly #lanAt = new Map<string, number>();
+  readonly #tailnetAnswered = new Set<string>();
   /// By address: whether a way to it answers its pings, as the last tick found (`healthy`), and who waits for that to
   /// change (`healthChange`).
   readonly #health = new Map<string, boolean>();
   readonly #healthWaiting = new Map<string, Deferred.Deferred<boolean>[]>();
   #closed = false;
-  /// By address: the relays its workspace has of its own, as the last `link` to it said.
+  /// By address: the relays its workspace has of its own, and the ways it turned off (its `ways_off`: relays, kinds of
+  /// way), as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
+  readonly #off = new Map<string, string[]>();
   /// By station id: what its links carried today.
   #days: Record<string, Day>;
   #daysChanged = false;
@@ -643,7 +669,7 @@ export class Mesh {
   /// By station id and relay: what replies brought that way in this run (`timed`).
   readonly #came = new Map<string, number>();
 
-  private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>) {
+  private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>, said: Record<string, Said>) {
     this.#env = env;
     this.relays = relays;
     this.entries = entries;
@@ -651,6 +677,7 @@ export class Mesh {
     this.#secret = secret;
     this.#days = days;
     this.#speeds = speeds;
+    this.#said = said;
   }
 
   /// Binds the endpoint with the stored device key (made and stored the first time). No relays binds without one.
@@ -669,8 +696,9 @@ export class Mesh {
       const days: Record<string, Day> = daysRaw !== null && typeof daysRaw === "object" && !Array.isArray(daysRaw) ? daysRaw : {};
       const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
       const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
+      const said = saidOf(parseJson(yield* Effect.orElseSucceed(host.storageGet(SAID_KEY), () => null)));
       const endpoint = yield* Mesh.#bind(env.iroh, secret, relays, false, env.takes);
-      const mesh = new Mesh(env, relays, entries.filter((e) => !relays.some((r) => sameRelay(r, e))), endpoint, secret, days, speeds);
+      const mesh = new Mesh(env, relays, entries.filter((e) => !relays.some((r) => sameRelay(r, e))), endpoint, secret, days, speeds, said);
       env.runner.fork(mesh.#accepting(endpoint));
       env.runner.fork(mesh.#watch());
       env.runner.fork(mesh.#tally());
@@ -710,7 +738,7 @@ export class Mesh {
 
   /// Where the station said it is on its LAN (docs/mesh-lan.md), none until it did.
   lan(addr: string): string[] {
-    return this.#lan.get(addr) ?? [];
+    return this.#said[addr]?.lan ?? [];
   }
 
   /// What the station's links carried on this device today, both ways (in every workspace it is reached in).
@@ -926,21 +954,59 @@ export class Mesh {
   /// the station's, or on its own endpoint once measured quicker.
   relaysFor(addr: string): string[] {
     const theirs = this.#theirs.get(addr) ?? [];
-    return [...this.relays, ...theirs.filter((r) => !this.relays.some((o) => sameRelay(o, r)))];
+    return [...this.relays, ...theirs.filter((r) => !this.relays.some((o) => sameRelay(o, r)))].filter((r) => !this.#isOff(addr, r));
   }
 
-  /// Every way a station is dialled through: its relays (`relaysFor`), then the entries (`entries`).
+  /// Every way a station is dialled through: its relays (`relaysFor`), then the entries (`entries`). Not the entries
+  /// while its workspace turned any of still.fail's relays off: an entry goes through two of their machines, and which
+  /// is not known here.
   #waysFor(addr: string): string[] {
     const relays = this.relaysFor(addr);
+    if (this.relays.some((r) => this.#isOff(addr, r))) return relays;
     return [...relays, ...this.entries.filter((e) => !relays.some((r) => sameRelay(r, e)))];
   }
 
+  /// Whether the station's workspace turned `way` off (a relay, or a kind of way: LAN, TAILNET, DIRECT).
+  #isOff(addr: string, way: string): boolean {
+    return (this.#off.get(addr) ?? []).some((o) => o === way || sameRelay(o, way));
+  }
+
+  /// Whether the station is dialled on the main endpoint: not while its workspace turned off any relay it is at home on
+  /// (still.fail's; which one it is on is iroh's to choose, and the station's answers come there) or the paths iroh
+  /// punches through, which the main endpoint alone goes on. Each relay left is reached on its own endpoint then.
+  #mainOn(addr: string): boolean {
+    return !this.#isOff(addr, DIRECT) && !this.relays.some((r) => this.#isOff(addr, r));
+  }
+
+  /// Whether a way open to the station goes a way its workspace turned off.
+  #wayOff(addr: string, link: Link): boolean {
+    const pinned = link.pinned;
+    if (pinned === null) return !this.#mainOn(addr);
+    if (pinned === LAN || pinned === TAILNET) return this.#isOff(addr, pinned);
+    return !this.#waysFor(addr).some((r) => sameRelay(r, pinned));
+  }
+
+  /// Told the ways the station's workspace turned off: each way open to it that goes one of them is closed (the requests
+  /// on it, if any, go on another: `link`).
+  #turnOff(addr: string, off: readonly string[]): void {
+    const was = this.#off.get(addr) ?? [];
+    if (was.length === off.length && was.every((o, i) => o === off[i])) return;
+    if (off.length > 0) this.#off.set(addr, [...off]);
+    else this.#off.delete(addr);
+    for (const w of this.#ways.get(addr) ?? []) if (this.#wayOff(addr, w.link)) w.link.close();
+    const cur = this.current(addr);
+    if (cur !== null && this.#wayOff(addr, cur)) cur.close();
+    // (a way turned on again is one more to choose between)
+    this.#steerIf(addr);
+  }
+
   /// The link to a station at `addr`, opening it (or opening again a closed one) with a credential from `credentials`,
-  /// its workspace's; `theirs`: the relays its workspace has of its own. The same station at another address (in
-  /// another workspace) has a link of its own.
-  link(addr: string, credentials: CredentialSource, theirs?: readonly string[]): Effect.Effect<Link, CoreError> {
+  /// its workspace's; `theirs`: the relays its workspace has of its own; `off`: the ways it turned off (relays, kinds of
+  /// way), none gone that way. The same station at another address (in another workspace) has a link of its own.
+  link(addr: string, credentials: CredentialSource, theirs?: readonly string[], off?: readonly string[]): Effect.Effect<Link, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (theirs !== undefined) this.#theirs.set(addr, [...theirs]);
+      if (off !== undefined) this.#turnOff(addr, off);
       const existing = this.#links.get(addr);
       let fresh = false;
       if (existing) {
@@ -1103,13 +1169,18 @@ export class Mesh {
     return Effect.suspend(() => {
       this.#exploredAt.set(addr, this.now());
       const relays = this.relaysFor(addr);
-      const main = open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx);
+      const main = this.#mainOn(addr) ? [open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx)] : [];
       const pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+      // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not after
+      // one of them brought its answer again.
+      const at = AT_ADDRESSES.flatMap((kind) => this.#dialAt(addr, kind, credentials, fresh) ?? []);
+      const all = [...main, ...pinned, ...at];
+      if (all.length === 0) return Effect.fail(meshError(t("core-logic.mesh.all_off")));
       const self = this;
       const won = Deferred.makeUnsafe<Link, CoreError>();
-      let left = 1 + pinned.length;
+      let left = all.length;
       let mainFailure: CoreError | null = null;
-      [main, ...pinned].forEach((attempt, i) =>
+      all.forEach((attempt, i) =>
         this.#env.runner.fork(
           Effect.gen(function* () {
             const r = yield* Effect.result(attempt);
@@ -1117,7 +1188,7 @@ export class Mesh {
               if (!Deferred.doneUnsafe(won, Effect.succeed(r.success))) self.#adopt(addr, r.success);
               return;
             }
-            if (i === 0) mainFailure = r.failure;
+            if (i === 0 && main.length > 0) mainFailure = r.failure;
             if (--left === 0) Deferred.doneUnsafe(won, Effect.fail(mainFailure ?? r.failure));
           }),
         ),
@@ -1129,8 +1200,10 @@ export class Mesh {
   /// The ways a station is dialled on each on an endpoint of its own: every relay and entry but still.fail's own relay
   /// (the first, on Cloudflare), which the main endpoint reaches already. It holds few connections, each a cost: one
   /// more a device filled it (2026-10-08: 429 to bft's keeper and to devices). None while there is one way or none.
+  /// Off the main endpoint (`#mainOn`), every relay left is, still.fail's own too.
   #pinnable(addr: string): string[] {
     const ways = this.#waysFor(addr);
+    if (!this.#mainOn(addr)) return ways;
     if (ways.length < 2) return [];
     const own = this.relays[0];
     return ways.filter((r) => own === undefined || !sameRelay(own, r));
@@ -1146,50 +1219,68 @@ export class Mesh {
     });
   }
 
-  /// The station said where it is on its LAN (`link.lan`, its answer to a link's credential): dialled there if new.
+  /// The station said where a device dials it straight (`link.lan`, `link.tailnet`, its answer to a link's
+  /// credential): kept, and dialled there if new.
   #heard(addr: string, link: Link): void {
-    if (link.lan.length === 0) return;
-    const before = this.#lan.get(addr)?.join(" ");
-    this.#lan.set(addr, link.lan);
-    if (before !== link.lan.join(" ")) this.#lanTried.delete(addr);
-    this.#dialLanIf(addr, link.credentials);
+    // (refused, it said nothing of where it is: what was kept stays)
+    if (link.refused !== null) return;
+    const said: Said = { lan: link.lan, tailnet: link.tailnet };
+    const was = this.#said[addr];
+    const same = (kind: AtAddresses) => (was?.[kind] ?? []).join(" ") === said[kind].join(" ");
+    if (!AT_ADDRESSES.every(same)) {
+      for (const kind of AT_ADDRESSES) if (!same(kind)) this.#tried.delete(atKey(kind, addr));
+      if (said.lan.length > 0 || said.tailnet.length > 0) this.#said[addr] = said;
+      else delete this.#said[addr];
+      this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SAID_KEY, toJsonBytes(this.#said))));
+    }
+    for (const kind of AT_ADDRESSES) this.#dialAtIf(addr, kind, link.credentials);
   }
 
-  /// Dials the station at its LAN addresses on the LAN endpoint (`LAN`), unless a way to it is on that endpoint already:
-  /// once for each set of addresses it says (a device off its LAN tries them once, then not again until
-  /// they change or the network does), and again every REDIAL_MAIN_MS while it was reached direct within
-  /// DIRECT_RECALL_MS.
-  #dialLanIf(addr: string, credentials: CredentialSource): void {
-    const lan = this.#lan.get(addr);
-    if (this.#closed || !this.#links.has(addr) || lan === undefined || lan.length === 0 || this.#lanDialling.has(addr)) return;
-    const live = this.#live(addr);
-    if (live.some((w) => w.link.pinned === LAN)) return;
+  /// Dials the station at its addresses of `kind` on that kind's endpoint, unless a way to it is on that endpoint
+  /// already: once for each set of addresses it says (a device off its LAN, its tailnet, tries them once, then not
+  /// again until they change or the network does). Again on the LAN every REDIAL_MAIN_MS while it was reached direct
+  /// within DIRECT_RECALL_MS; on the tailnet every EXPLORE_MS once it answered there since the network changed, as the
+  /// relays are (a way let go as no better than the others may be better later).
+  #dialAtIf(addr: string, kind: AtAddresses, credentials: CredentialSource): void {
+    const at = this.#said[addr]?.[kind] ?? [];
+    if (this.#closed || !this.#links.has(addr) || at.length === 0) return;
     const now = this.now();
-    if (this.#lanTried.get(addr) === lan.join(" ")) {
-      const recent = now - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS;
-      if (!recent || now - (this.#lanDialledAt.get(addr) ?? -Infinity) < REDIAL_MAIN_MS) return;
+    if (this.#tried.get(atKey(kind, addr)) === at.join(" ")) {
+      const last = this.#atDialledAt.get(atKey(kind, addr)) ?? -Infinity;
+      const again = kind === LAN ? now - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS && now - last >= REDIAL_MAIN_MS : this.#tailnetAnswered.has(addr) && now - last >= EXPLORE_MS;
+      if (!again) return;
     }
-    this.#lanTried.set(addr, lan.join(" "));
-    this.#lanDialledAt.set(addr, now);
-    this.#lanDialling.add(addr);
+    const dial = this.#dialAt(addr, kind, credentials, false);
+    if (dial !== null) this.#env.runner.fork(Effect.ignore(Effect.map(dial, (link) => this.#adopt(addr, link))));
+  }
+
+  /// A dial of the station at its addresses of `kind`, on that kind's endpoint (`pinned` LAN or TAILNET): null when it
+  /// said none, its workspace turned that kind off, one is under way or a way to it is on that endpoint already. Counted
+  /// as under way from now: the caller runs it at once (`#dialAtIf` adopts what comes through; `#dialAll` races it).
+  #dialAt(addr: string, kind: AtAddresses, credentials: CredentialSource, fresh: boolean): Effect.Effect<Link, CoreError> | null {
+    const at = this.#said[addr]?.[kind] ?? [];
+    const key = atKey(kind, addr);
+    if (at.length === 0 || this.#isOff(addr, kind) || this.#atDialling.has(key) || this.#live(addr).some((w) => w.link.pinned === kind)) return null;
+    this.#tried.set(key, at.join(" "));
+    this.#atDialledAt.set(key, this.now());
+    this.#atDialling.add(key);
     this.#dialing++;
-    this.#env.runner.fork(
-      Effect.flatMap(this.#pinnedEndpoint(LAN), (endpoint) =>
-        endpoint === null ? Effect.void : Effect.map(Effect.result(open(this.#env, endpoint, [], stationId(addr), credentials, false, LAN, undefined, lan)), (r) => (r._tag === "Success" ? this.#adopt(addr, r.success) : undefined)),
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.#dialing--;
-            this.#lanDialling.delete(addr);
-          }),
-        ),
+    return Effect.flatMap(this.#pinnedEndpoint(kind), (endpoint) =>
+      endpoint === null ? Effect.fail(unreached({ message: `no ${kind} endpoint` })) : open(this.#env, endpoint, [], stationId(addr), credentials, fresh, kind, undefined, at),
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          this.#dialing--;
+          this.#atDialling.delete(key);
+        }),
       ),
     );
   }
 
   /// `link` is a way to the station as well, if it is still wanted; pinged from now on.
   #adopt(addr: string, link: Link): void {
-    if (this.#closed || !this.#links.has(addr)) {
+    // (one dialled before its workspace turned that way off)
+    if (this.#closed || !this.#links.has(addr) || this.#wayOff(addr, link)) {
       link.close();
       return;
     }
@@ -1198,12 +1289,18 @@ export class Mesh {
     this.#ways.set(addr, [...ways, new Way(link)]);
     // A way just opened answers: not taken for unanswered as the ways before it were.
     this.#tellHealth(addr);
-    if (link.pinned !== LAN) this.#env.runner.fork(Effect.andThen(Deferred.await(link.answered), Effect.sync(() => this.#heard(addr, link))));
-    // One way there is all it has (no relays, or one): nothing to choose between.
-    if (!this.#steering.has(addr) && this.#waysFor(addr).length >= 2) {
-      this.#steering.add(addr);
-      this.#env.runner.fork(this.#steer(addr));
-    }
+    if (link.pinned !== LAN && link.pinned !== TAILNET) this.#env.runner.fork(Effect.andThen(Deferred.await(link.answered), Effect.sync(() => this.#heard(addr, link))));
+    this.#steerIf(addr);
+  }
+
+  /// Steers the station's ways (`#steer`) unless they are steered already, or there is but one way there: no relays or
+  /// one, and none at an address it said (or turned off): nothing to choose between.
+  #steerIf(addr: string): void {
+    if (this.#steering.has(addr) || this.#live(addr).length === 0) return;
+    const at = AT_ADDRESSES.filter((kind) => (this.#said[addr]?.[kind] ?? []).length > 0 && !this.#isOff(addr, kind)).length;
+    if (this.#waysFor(addr).length + at < 2 && this.#live(addr).length < 2) return;
+    this.#steering.add(addr);
+    this.#env.runner.fork(this.#steer(addr));
   }
 
   /// Requests to the station go on `way` from now on; the link they went on stays open as another way.
@@ -1468,7 +1565,7 @@ export class Mesh {
       const tries: Effect.Effect<Link, CoreError>[] = [];
       // Not while the LAN endpoint reaches it: the requests keep off the main endpoint then (LAN_RECALL_MS).
       const onLan = this.now() - (this.#lanAt.get(addr) ?? -Infinity) < LAN_RECALL_MS;
-      if (!have.has("main") && !onLan) tries.push(open(this.#env, this.#endpoint, relays, stationId(addr), credentials, false, null, undefined));
+      if (!have.has("main") && !onLan && this.#mainOn(addr)) tries.push(open(this.#env, this.#endpoint, relays, stationId(addr), credentials, false, null, undefined));
       if (!mainOnly) for (const r of this.#pinnable(addr)) if (!have.has(r)) tries.push(this.#dialPinned(addr, r, credentials, false, undefined));
       yield* Effect.all(
         tries.map((attempt) => Effect.map(Effect.result(attempt), (r) => (r._tag === "Success" ? this.#adopt(addr, r.success) : undefined))),
@@ -1498,11 +1595,13 @@ export class Mesh {
         const live = this.#live(addr);
         if (live.some((w) => this.#isDirect(w))) this.#directAt.set(addr, this.now());
         if (live.some((w) => w.link.pinned === LAN && w.missed === 0 && w.samples > 0)) this.#lanAt.set(addr, this.now());
+        if (live.some((w) => w.link.pinned === TAILNET && w.missed === 0 && w.samples > 0)) this.#tailnetAnswered.add(addr);
         const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
         if (credentials === undefined) continue;
-        this.#dialLanIf(addr, credentials);
+        for (const kind of AT_ADDRESSES) this.#dialAtIf(addr, kind, credentials);
         if (this.now() - (this.#exploredAt.get(addr) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(addr, credentials));
         else if (
+          this.#mainOn(addr) &&
           !live.some((w) => w.link.pinned === null) &&
           this.now() - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS &&
           // Not for the punched path while the LAN endpoint reaches it: the requests keep off that (LAN_RECALL_MS).
@@ -1562,7 +1661,7 @@ export class Mesh {
     this.#live(addr).find((x) => x.link === slow)?.note(ms);
   }
 
-  /// Every way to the station as pinged: the round trip of each way open (its relay's host, or "direct"), then each
+  /// Every way to the station as pinged: the round trip of each way open (its relay's host, "tailnet" or "direct"), then each
   /// relay with no way open on it now (not reached, or let go: no figure).
   measured(addr: string): Measured | null {
     const ways = this.#live(addr).filter((w) => w.samples > 0);
@@ -1575,7 +1674,7 @@ export class Mesh {
       if (seen.has(key)) continue;
       seen.add(key);
       const via = w.link.via();
-      relays.push([via !== null ? relayHost(via) : "direct", Math.round(w.srtt)]);
+      relays.push([via !== null ? relayHost(via) : key === TAILNET ? TAILNET : "direct", Math.round(w.srtt)]);
     }
     for (const r of this.#waysFor(addr)) if (!seen.has(relayKey(r))) relays.push([relayHost(r), null]);
     return { measuring, relays, moved: this.#moved.get(addr) ?? null };
@@ -1603,8 +1702,9 @@ export class Mesh {
       if (existing) return yield* Deferred.await(existing);
       const d = Deferred.makeUnsafe<IrohEndpoint | null>();
       this.#pinned.set(relay, d);
-      // The LAN endpoint: on no relay, so it looks nothing up and punches no hole; it dials addresses alone.
-      const bound = yield* Effect.result(relay === LAN ? Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, LAN), []) : Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay], true));
+      // The LAN endpoint, the Tailscale one: on no relay, so each looks nothing up and punches no hole; it dials
+      // addresses alone.
+      const bound = yield* Effect.result(relay === LAN || relay === TAILNET ? Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), []) : Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay], true));
       const endpoint = bound._tag === "Success" ? bound.success : null;
       Deferred.doneUnsafe(d, Effect.succeed(endpoint));
       if (endpoint === null) this.#pinned.delete(relay);
@@ -1641,7 +1741,9 @@ export class Mesh {
         // from home would keep the relay it was fast through there, however slowly it brings replies now): found anew.
         if (wake.network) this.#forgetSpeeds();
         // On another network now, perhaps the station's: its LAN addresses are worth a try again.
-        this.#lanTried.clear();
+        this.#tried.clear();
+        // (and its tailnet: dialled again on it only once it answered there again)
+        this.#tailnetAnswered.clear();
         for (const [addr, link] of this.#openLinks()) {
           if (this.#racing.has(addr)) continue;
           this.#racing.add(addr);
@@ -1737,6 +1839,13 @@ export class Mesh {
   }
 }
 
+/// What was kept of where stations said they are reached straight (SAID_KEY), each kind's addresses as strings.
+function saidOf(kept: J): Record<string, Said> {
+  if (kept === null || typeof kept !== "object" || Array.isArray(kept)) return {};
+  const strings = (v: J) => (Array.isArray(v) ? v.filter((a): a is string => typeof a === "string") : []);
+  return Object.fromEntries(Object.entries(kept as Record<string, J>).map(([addr, v]) => [addr, { lan: strings(v?.lan), tailnet: strings(v?.tailnet) }]));
+}
+
 function relayStatus(endpoint: IrohEndpoint): string {
   const status = endpoint.relayStatus();
   if (status.length === 0) return "none";
@@ -1798,8 +1907,9 @@ function open(
           link.refused = answer.failure;
           conn.close(0, "credential refused");
         } else {
-          const lan = (answer.success as J)?.lan;
-          if (Array.isArray(lan)) link.lan = lan.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8);
+          const addrs = (said: J) => (Array.isArray(said) ? said.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8) : []);
+          link.lan = addrs((answer.success as J)?.lan);
+          link.tailnet = addrs((answer.success as J)?.tailnet);
         }
         Deferred.doneUnsafe(link.answered, Effect.void);
       }),
@@ -1855,8 +1965,9 @@ export type MeshWireEnv = {
   /// The mesh if it is up already.
   meshNow: () => Mesh | null;
   credentials: (workspace: string) => CredentialSource;
-  /// The relays a workspace has of its own (`Mesh.link`).
+  /// The relays a workspace has of its own, the ways it turned off (`Mesh.link`).
   relays: (workspace: string) => string[];
+  off?: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
   /// The workspace lock (views/lock.ts): a station refused this device for it (`theirs`: how far its own lock goes, as
   /// it said); why a station is not asked now.
@@ -1890,8 +2001,9 @@ export class MeshWire implements StationWire {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
       const theirs = env.relays(workspace);
+      const off = env.off?.(workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs));
+      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off));
       const repeats = mayRepeat(head, idempotent.has(key));
       const write = !["GET", "HEAD"].includes(head.method.toUpperCase()) && !onlyReads(head);
       // Asked on more than one way (or again), the body is told of as far as the furthest has gone.
@@ -1925,7 +2037,7 @@ export class MeshWire implements StationWire {
             let pause = 1_000;
             answered = yield* Effect.gen(function* () {
               for (;;) {
-                const again = yield* Effect.result(Effect.flatMap(mesh.link(key, credentials, theirs), ask));
+                const again = yield* Effect.result(Effect.flatMap(mesh.link(key, credentials, theirs, off), ask));
                 if (again._tag === "Success") return again.success;
                 if (again.failure.code !== "mesh") return yield* Effect.fail(again.failure);
                 if (mesh.now() - started >= RECHECK_MS) return yield* Effect.fail(unconfirmed(again.failure));
@@ -1939,7 +2051,7 @@ export class MeshWire implements StationWire {
             // seed 143365259, 2026-10-17), a few times.
             answered = yield* Effect.gen(function* () {
               for (let tries = 1; ; tries++) {
-                const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs));
+                const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off));
                 const again = yield* Effect.result(ask(l));
                 if (again._tag === "Success") return again.success;
                 if (again.failure.code !== "mesh" || l.closed() === null || tries >= LOST_TRIES) return yield* Effect.fail(again.failure);
@@ -1948,7 +2060,7 @@ export class MeshWire implements StationWire {
           } else return yield* Effect.fail(r.failure);
         } else if ("replaced" in first) {
           // Replaced while under way: asked again on the new one at once, the first answer taken.
-          const again = Effect.flatMap(mesh.link(key, credentials, theirs), ask);
+          const again = Effect.flatMap(mesh.link(key, credentials, theirs, off), ask);
           answered = yield* firstAnswer(asked, again, late);
         } else {
           // Slow on its way: asked on the next best as well. Answered there first, its way is told how long it kept it.
@@ -2013,7 +2125,7 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace)));
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace)));
       const [reply, send] = yield* link.socket(head);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
@@ -2025,7 +2137,7 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace)));
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace)));
       const [reply, send] = yield* link.screen(head, screen);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
@@ -2102,6 +2214,7 @@ export function meshWire(inner: Inner): StationWire {
     meshNow: () => up,
     credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null, up?.lockClaim(workspace, device) ?? null),
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
+    off: (workspace) => inner.cloudSync.workspaceOff(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
     lockRefused: (workspace, station, theirs) => hooks.lockRefused?.(inner, workspace, station, theirs) ?? null,
     lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,

@@ -233,6 +233,7 @@
   "core-views.present.need_help": "需要你处理：{need}",
   "core-views.present.net.choosing": "正在选择线路",
   "core-views.present.net.direct": "直连",
+  "core-views.present.net.tailnet": "Tailscale",
   "core-views.present.net.loss": "丢包 {percent}%",
   "core-views.present.net.relay": "中继",
   "core-views.present.net.relay_host": "中继 {host}",

@@ -4,8 +4,12 @@ export type Role = "owner" | "admin" | "member";
 export interface UserView { sub: string; email: string; name: string; picture: string }
 /** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel. */
 export interface MeView extends UserView { beta?: true }
-/** `relays`: the workspace's own relays, used besides still.fail's (absent from a cloud from before them). */
-export interface WorkspaceSummary { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; stations: number; members: number; relays?: string[] }
+/** `relays`: the workspace's own relays, used besides still.fail's (absent from a cloud from before them). `ways_off`: the
+ * ways its devices do not go to its stations (relay URLs, `lan`, `tailnet`, `direct`), only when some are turned off. */
+export interface WorkspaceSummary { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; stations: number; members: number; relays?: string[]; ways_off?: string[] }
+/** One way a workspace's devices reach its stations, on or turned off: a relay (still.fail's, `name` as still.fail calls
+ * it; or the workspace's own, `own`), or a kind of way that is no relay (`id` the kind). */
+export interface WayView { id: string; kind: "relay" | "lan" | "tailnet" | "direct"; name?: string; own?: true; on: boolean }
 /**
  * last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh).
  * name, emoji, icon, enrolled_*: in this workspace. joined: the station is in another workspace too, which it joined
@@ -18,7 +22,7 @@ export interface InvitationView { id: string; role: Role; email: string | null; 
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
+export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
 /** How far the workspace's lock goes as the cloud keeps it (docs/workspace-lock.md): null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }

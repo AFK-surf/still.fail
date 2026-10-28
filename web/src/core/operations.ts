@@ -110,6 +110,7 @@ export interface OperationParams {
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
   "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
+  "workspace.setWay": { workspace: string; way: string; on: boolean };
   "workspace.delete": { workspace: string };
   "workspace.invite": { workspace: string; role?: string | null | undefined; email?: string | null | undefined };
   "workspace.addMembers": { workspace: string; role?: string | null | undefined; emails?: string[] | null | undefined };
@@ -260,6 +261,7 @@ export function bindCloudOperations(call: Call) {
     workspaceCreate: <T = unknown>(params: OperationParams["workspace.create"] = {}) => call("workspace.create", params) as Promise<T>,
     workspaceRename: <T = unknown>(params: OperationParams["workspace.rename"]) => call("workspace.rename", params) as Promise<T>,
     workspaceSetRelays: <T = unknown>(params: OperationParams["workspace.setRelays"]) => call("workspace.setRelays", params) as Promise<T>,
+    workspaceSetWay: <T = unknown>(params: OperationParams["workspace.setWay"]) => call("workspace.setWay", params) as Promise<T>,
     workspaceDelete: <T = unknown>(params: OperationParams["workspace.delete"]) => call("workspace.delete", params) as Promise<T>,
     workspaceInvite: <T = unknown>(params: OperationParams["workspace.invite"]) => call("workspace.invite", params) as Promise<T>,
     workspaceAddMembers: <T = unknown>(params: OperationParams["workspace.addMembers"]) => call("workspace.addMembers", params) as Promise<T>,

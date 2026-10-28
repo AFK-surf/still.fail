@@ -122,6 +122,11 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 - 网页版要求 relay 用公开签发的证书（如 Let's Encrypt，iroh-relay 自带 ACME，也可以给裸 IP 签短期证书）。
 - 不做访问控制：relay 只转发端到端加密的 QUIC，看不到内容；谁能用它由部署者自己在 iroh-relay 里配。
 
+**连接方式**（2026-10-29）：owner 和管理员可以关掉成员设备连这个 workspace 的 station 时用的某种方式（`PUT /v1/workspaces/:id/ways {way, on}`，`workspace.setWay`；存在 `workspaces.ways_off`，JSON 数组）。`way` 是一个中继的 URL（still.fail 的或 workspace 自己的），或 `lan`（局域网直连）、`tailnet`（Tailscale）、`direct`（打洞直连）。workspace 的视图带 `ways: [{id, kind, name?, own?, on}]`（全部方式，界面照它列开关），`/v1/me` 和视图在有关掉的时候带 `ways_off`。
+- 至少留一个中继开着（关最后一个回 409 `last_relay`）：网页版只能走中继，没连过的设备也只能先经中继拿到 station 的地址。自己的中继被移除时，它也从 `ways_off` 里去掉。
+- 设备（core `Mesh.link` 的 `off`）：关掉的中继不拨、不测；关掉 still.fail 的任何一个中继或 `direct` 时不用主 endpoint（它的家在 still.fail 的中继上、打洞也只在它上面），剩下的每个中继都在各自的 endpoint 上拨；关掉 still.fail 的中继时也不用 entry（entry 经过两台中继的机器，分不清是哪台）。改了以后已经开着的、走关掉方式的连接立刻断开，请求换到别的路上。
+- station 不管这个：它照样挂在所有中继上（它可能在几个 workspace 里），station 之间的连接也照旧；只是这个 workspace 的新版设备不再从关掉的方式连它。
+
 **中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数和负载 `POST /v1/relays/load`（中继以 IP 为名，cloud 只认 Cloudflare 看到的来源地址就是那个 IP 的；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
 
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
