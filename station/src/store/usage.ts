@@ -1,7 +1,7 @@
 // What the agents spent, as the station records it (the Rust station's store/usage.rs): one row per model call, with the
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
-import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
+import { type Json, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
 /// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
@@ -153,11 +153,26 @@ export function compactionPoints(db: DatabaseSync, since: number): Map<string, n
 
 /// The calls from `?1` until `?2` (ms), added up by day in the asker's time zone (`?3`, minutes east of UTC) and by
 /// thread, person, profile and model: as the station adds them up and as its readers do for the usage page
-/// (read/store.ts usageGroups).
-export const USAGE_GROUPS = `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
+/// (read/store.ts usageGroups). The whole quarters of an hour between them as kept added up (schema.ts USAGE_QUARTERS),
+/// the calls before the first and from the last one by one; all of them one by one for a time zone that is not whole
+/// quarters. Bounds said as numbers are bound as reals (node:sqlite): taken as the integers they are, as the quarters'
+/// arithmetic needs.
+export const USAGE_GROUPS = `WITH a AS (SELECT CAST(?1 AS INTEGER) AS f, CAST(?2 AS INTEGER) AS t, CAST(?3 AS INTEGER) AS tz),
+  b AS (SELECT f, t, tz, tz % 15 = 0 AS whole, (MAX(f, 0) + ${QUARTER_MS} - 1) / ${QUARTER_MS} AS q0, t / ${QUARTER_MS} AS q1 FROM a)
+  SELECT strftime('%Y-%m-%d', (at + tz * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
     SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
     SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-  FROM usage WHERE at >= ?1 AND at < ?2
+  FROM (
+    SELECT quarter * ${QUARTER_MS} AS at, session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile, runtime,
+      NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+    FROM usage_quarters, b WHERE whole AND quarter >= q0 AND quarter < q1
+    UNION ALL
+    SELECT at, session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+    FROM usage, b WHERE at >= f AND at < CASE WHEN whole THEN MIN(t, q0 * ${QUARTER_MS}) ELSE t END
+    UNION ALL
+    SELECT at, session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+    FROM usage, b WHERE whole AND at >= MAX(f, q0 * ${QUARTER_MS}, q1 * ${QUARTER_MS}) AND at < t
+  ), b
   GROUP BY day, session, thread, person, profile, runtime, model, fast`;
 
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and

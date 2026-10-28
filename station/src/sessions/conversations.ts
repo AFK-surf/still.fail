@@ -2,7 +2,8 @@
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
 import { fetchFiles, keyPart, sandboxed, stationPath } from "../agents/sandbox.ts";
-import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
+import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
@@ -170,11 +171,14 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
   }
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
-  return paths.map((given) => {
+  // Copied off the station's thread: a large file, or one read back from disk on a machine short of memory, held it
+  // for up to 10 seconds a post (ccvm, 2026-10-28).
+  const out: Attachment[] = [];
+  for (const given of paths) {
     const path = isAbsolute(given) ? given : join(row.workspace, given);
     let meta;
     try {
-      meta = statSync(path);
+      meta = await stat(path);
     } catch {
       throw new Error(sandboxed(hub.config().dataDir) ? `no such file, here or in this session's sandbox: ${given}` : `no such file: ${given}`);
     }
@@ -186,10 +190,11 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
       .map((c) => (c === "\\" || c === "/" || c.codePointAt(0)! < 0x20 ? "_" : c))
       .join("");
     const copy = join(dir, `${stamp}-${safe}`);
-    copyFileSync(path, copy);
+    await copyFile(path, copy);
     // a picture or a film as it is shown, so pages hold its place (a film's length and frames with it)
-    return { name, path: copy, size: meta.size, ...shownFacts(copy) } satisfies Attachment;
-  });
+    out.push({ name, path: copy, size: meta.size, ...shownFacts(copy) } satisfies Attachment);
+  }
+  return out;
 }
 
 /// chat_post: a message to one of the session's conversations, maybe with files and a card, maybe ending its turn.

@@ -12,7 +12,7 @@ import {
   MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
-import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
+import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM, USAGE_GROUPS } from "../src/store/usage.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -1014,6 +1014,52 @@ test("usage: a session's calls added up by the database, those from before the t
   assert.deepEqual(store.usageOfSession("b"), []);
 });
 
+test("usage: the page's days are the calls added up, as kept by quarter of an hour, whatever the range and time zone", () => {
+  const path = join(tempdir(), "usage.db");
+  let store = open(path);
+  session(store, "a");
+  session(store, "b");
+  // Calls over three days, a few in each quarter, for two sessions, threads, people and models (some none).
+  let seed = 7;
+  const next = (n: number) => ((seed = (seed * 48271) % 2147483647), seed % n);
+  const day = 86_400_000;
+  const calls = Array.from({ length: 600 }, (_, i) => {
+    const of = { turn: null, person: [null, "p@x", "q@x"][next(3)]!, thread: [null, 1, 2][next(3)]!, profile: [null, "cc"][next(2)]! };
+    const c = { id: `c${i}`, at: day + next(3 * day), model: [null, "m", "n"][next(3)]!, subagent: false, fast: next(2) === 0, input: next(100), cacheRead: next(100), cacheWrite: next(100), cacheWriteLong: next(100), output: next(100), calls: 1 + next(3), context: null, window: null };
+    return [next(2) === 0 ? "a" : "b", c, of] as const;
+  });
+  const record = (only: readonly (typeof calls)[number][]) => {
+    for (const [key, c, of] of only) store.recordUsage(`/${key}.jsonl`, { session: key, offset: 1, model: null }, "claude", [[c, of]] as never);
+  };
+  record(calls.slice(0, 400));
+  store.close();
+  // A database from before them: made from the calls it has as it opens, kept from then on.
+  const before = new DatabaseSync(path);
+  before.exec("DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;");
+  before.close();
+  store = open(path);
+  record(calls.slice(400));
+  // Outputs grown, and calls taken away.
+  for (const [key, c, of] of calls.slice(0, 50)) store.recordUsage(`/${key}.jsonl`, { session: key, offset: 2, model: null }, "claude", [[{ ...c, output: c.output + 1000 }, of]] as never);
+  store.db.exec("DELETE FROM usage WHERE id IN ('c3', 'c77', 'c450')");
+  const one = `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
+      SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+    FROM usage WHERE at >= ?1 AND at < ?2 GROUP BY day, session, thread, person, profile, runtime, model, fast`;
+  const sorted = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).sort();
+  const some = store.db.prepare(USAGE_GROUPS).all(day + 5 * 900_000 + 7, day * 3 - 11, 480).length;
+  assert.ok(some > 100, `${some} groups`);
+  const q = 900_000;
+  const ranges = [[0, 2 ** 62], [day + 5 * q, day * 3], [day + 5 * q + 7, day * 3 - 11], [day * 2 + 3, day * 2 + 400], [day * 2, day * 2 + q], [day * 3 + 1, day * 2], [-5, day + q + 1]];
+  for (const [from, to] of ranges) {
+    for (const tz of [0, 480, -300, 330, 345, 7, -1]) {
+      const kept = store.db.prepare(USAGE_GROUPS).all(from!, to!, tz);
+      const a = sorted(kept), b = sorted(store.db.prepare(one).all(from!, to!, tz));
+      assert.deepEqual(a, b, `${from}..${to} at ${tz}: ${JSON.stringify([a.filter((x) => !b.includes(x)).slice(0, 3), b.filter((x) => !a.includes(x)).slice(0, 3)])}`);
+    }
+  }
+  store.close();
+});
+
 test("usage: a row is the calls it says, and a database from before says each was one, with the context it sent", () => {
   const path = join(tempdir(), "usage.db");
   const of = { turn: null, person: null, thread: null, profile: "cc" };
@@ -1026,6 +1072,7 @@ test("usage: a row is the calls it says, and a database from before says each wa
   // As a station from before the columns kept it: its triggers too.
   const before = new DatabaseSync(path);
   before.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; DROP TRIGGER usage_compactions_add;
+    DROP TRIGGER usage_quarters_add; DROP TRIGGER usage_quarters_drop; DROP TRIGGER usage_quarters_grow; DROP TABLE usage_quarters;
     ALTER TABLE usage DROP COLUMN calls; ALTER TABLE usage DROP COLUMN context; ALTER TABLE usage DROP COLUMN context_window;
     CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
       INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)

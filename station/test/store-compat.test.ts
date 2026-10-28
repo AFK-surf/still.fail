@@ -51,10 +51,10 @@ const ADDED: [string, string][] = [
 /// threads' homes), and the `merged` view saying the column (letters).
 const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own"];
 const MERGED_ADDS = [", m.letter"];
-/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`): each with its columns,
+/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "thread_state", "thread_people", "session_first"];
+const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
