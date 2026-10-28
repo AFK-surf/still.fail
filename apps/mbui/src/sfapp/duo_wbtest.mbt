@@ -361,3 +361,44 @@ test "an iPhone Duo: a chat's actions each its own in the system's bars, its his
   // (none of the chat's own buttons by its title: its ⋯)
   assert_true(said_at(t, @sf.t("web-pages.chat.info")) is None)
 }
+
+///|
+/// Whether the workspaces' button the app handed the system's bars has its dot.
+fn workspaces_dot(t : @ui.Tester) -> Bool raise {
+  guard @json.parse(t.nav_said()) is Object(bar) else { fail("the bars said are no object") }
+  guard bar.get("groups") is Some(Array(groups)) else { fail("the bars said hold no groups") }
+  for g in groups {
+    guard g is Object(g) && g.get("items") is Some(Array(items)) else { continue }
+    for i in items {
+      if i is Object(i) && i.get("id") is Some(String(id)) && id.has_suffix("/workspaces") {
+        return i.get("dot") is Some(True)
+      }
+    }
+  }
+  fail("the bars said hold no workspaces' button")
+}
+
+///|
+test "an iPhone Duo: the workspace's button has a dot while another workspace has something waiting, none while nothing does" {
+  // (the fixture's: ws2's chats unread, the others' mark `done`)
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  assert_true(workspaces_dot(t))
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "workspaceMarks" {
+        { value: Some({ "workspaces": { "ws1": {}, "ws2": {} } }), error: None, version: 1 }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let q = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  q.set_nav_able(true)
+  q.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  q.run_for(@ui.nav_push_ms)
+  assert_false(workspaces_dot(q))
+}
