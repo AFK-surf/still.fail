@@ -362,6 +362,18 @@ jobs:
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
       - uses: ./.github/actions/mbui-moonbit
+      # moon's own build of the app (moonc's C, what it checked) as main's newest run left it, as check-mbui keeps its
+      # own: without, moonc made all of it again each run, ~2 of the .ipa step's 2-3 minutes, the release's longest job
+      # (main ca1e5c05, 40613958685, 2026-10-28). Main's only, as the units' store. (Without each program's objects: the
+      # store keeps those.)
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/out/ios-device/_build
+            !apps/mbui/out/ios-device/_build/**/*.mbc
+          key: mbui-ios-moon-${{ github.sha }}
+          restore-keys: mbui-ios-moon-
       - run: touch "$RUNNER_TEMP/start"
       # Always unsigned. TestFlight signing/upload is a separate manual workflow.
       - name: The iOS app for a device, as an .ipa
@@ -388,6 +400,13 @@ jobs:
             .ci/mbc-store
             .ci/hbc
           key: ${{ env.STORE_KEY }}
+      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/out/ios-device/_build
+            !apps/mbui/out/ios-device/_build/**/*.mbc
+          key: mbui-ios-moon-${{ github.sha }}
 
   windows:
     needs: what
