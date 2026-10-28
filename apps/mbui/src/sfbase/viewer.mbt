@@ -2340,8 +2340,8 @@ pub fn Viewer::gestures(
       }
     } else {
       v.held = true
-      v.down_x = px
-      v.down_y = py
+      v.down_x = c.press_x
+      v.down_y = c.press_y
       if !v.pinched {
         v.moved = 0.0
         // flinging, it stops where it is, and the press taps nothing (as a list moving on its own)
