@@ -126,7 +126,10 @@ sealed() {
 # packed after it, as MBUI_VARIANT has it: <MBUI_SETUP_OUT, else out/setup>/<name> (MBUI_SETUP_NAME, else
 # stillfail-setup-0.1.<n>.exe)
 setup() {
+  # (its parts' times said: the step was 22-26 s and then 44-75 s, most of it before packing, 2026-10-28)
+  local t0=$SECONDS
   local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
+  local t1=$SECONDS
   variant || return 1
   . "$MBUI_DIR/scripts/env.sh"
   local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=${MBUI_SETUP_OUT:-$A/out/setup}
@@ -134,6 +137,7 @@ setup() {
   rm -rf "$out" && mkdir -p "$out/files"
   (cd "$A" && cl.exe -nologo -O2 -W3 windows/setup.c -Fe"$(cygpath -w "$out/setup-bare.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") ||
     { cat "$out/build.log"; return 1; }
+  echo "win.sh: setup's build number in $((t1 - t0)) s, setup.c compiled in $((SECONDS - t1)) s"
   cp "$built/stillfail.exe" "$out/files/$exe.exe"
   cp "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" "$built/core.hbc" "$out/files/"
   printf 'APP_NAME=%s\nAPP_ID=%s\nEXE=%s\nDIR=%s\nSCHEMES=%s\nVERSION=0.1.%s\n' "$name" "$id" "$exe" "$dir" "$schemes" "$n" > "$out/setup.env"
