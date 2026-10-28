@@ -3,7 +3,9 @@ timeout 45000
 at start
 until 发消息
 wait 1500
-drag 400 330 -260 0 350
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
 wait 1200
 at tap=发消息
 tap 发消息

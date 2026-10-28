@@ -951,6 +951,7 @@ fn drive_steps(c : Ctx) -> Unit {
         let xy = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         let x = if xy[0] < 0.0 { c.width + xy[0] } else { xy[0] }
         let y = if xy[1] < 0.0 { c.height + xy[1] } else { xy[1] }
+        h_log("DRIVE \{cmd} \{arg} at \{x.to_int()},\{y.to_int()}")
         press(x, y, true)
         acted()
         return

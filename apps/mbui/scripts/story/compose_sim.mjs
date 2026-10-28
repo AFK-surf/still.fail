@@ -41,13 +41,14 @@ let lastAt = null;
 for (const line of log) {
   let m = line.match(/^DRIVE AT ([\d.]+) /);
   if (m) { lastAt = +m[1] / 1000 - start; continue; }
-  m = line.match(/^DRIVE tap .* at ([\d.]+),([\d.]+)$/);
+  m = line.match(/^DRIVE tap(?:xy)? .* at ([\d.]+),([\d.]+)$/);
   if (m && lastAt !== null) touches.push({ t: lastAt, x: +m[1], y: +m[2], dx: 0, dy: 0, ms: 90 });
   m = line.match(/^DRIVE (?:drag|dragon) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)?.* from ([\d.]+),([\d.]+)$/);
-  if (m) {
+  // (none before the film's start: what readies the screen for it)
+  if (m && lastAt !== null) {
     const drag = line.startsWith('DRIVE drag ');
     const [dx, dy, ms] = drag ? [+m[3], +m[4], 350] : [+m[1], +m[2], +m[3]];
-    touches.push({ t: lastAt ?? 0, x: +m[5], y: +m[6], dx, dy, ms });
+    touches.push({ t: lastAt, x: +m[5], y: +m[6], dx, dy, ms });
   }
 }
 const OUTER = [466, 678], INNER = [951, 669];
