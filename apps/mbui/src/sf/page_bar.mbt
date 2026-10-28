@@ -5,12 +5,30 @@
 
 ///|
 /// The bar: 8 in, 6 over and under, a press's room high at least, its keys apart by keys_gap (8 with keyboard and
-/// mouse, 16 with touch), in their middle.
-pub fn page_bar(c : @ui.Ctx, body : () -> Unit) -> Unit {
+/// mouse, 16 with touch), in their middle. `corners`: the top corners of the card it is the top of (a panel of its own
+/// on the tape, left and right; its top on the tape's line, tape_corner): its first and last keys concentric with them.
+pub fn page_bar(c : @ui.Ctx, body : () -> Unit, corners? : (Double, Double)? = None) -> Unit {
   // (its keys as far apart as makes each a press's room across (keys_gap), and as high: a touch's 28 keys 6 over and
   // under are 40, under its 44)
-  c.box(style=page_bar_box.then(@ui.style(min_h=Fixed(@ui.room_least()), gap=keys_gap(size=theme().bars.key))), body)
-  |> ignore
+  let key = theme().bars.key
+  let look = page_bar_box.then(@ui.style(gap=keys_gap(size=key)))
+  let look = match corners {
+    // (as high as its room over and under its keys makes it, a press's room and more: its keys where it says, not
+    // centred in a taller row)
+    Some((left, right)) => {
+      look.then(
+        @ui.style(
+          // (its corners as round as the tape's at least, as its line is: a square one along a hinge too)
+          // (under the panel's edge: its line over it a point, as the frame draws its panes, page_apart)
+          pt=room_of(capsule_in(tape_corner, key) - pane_edge),
+          pl=room_of(capsule_in(dmax(left, tape_corner), key)),
+          pr=room_of(capsule_in(dmax(right, tape_corner), key)),
+        ),
+      )
+    }
+    None => look.then(@ui.style(min_h=Fixed(@ui.room_least())))
+  }
+  c.box(style=look, body) |> ignore
 }
 
 ///|
@@ -135,3 +153,7 @@ let bar_field_box : @ui.Style = @ui.css("row w=Full radius=Full bg=Faint px=S3 g
 ///|
 // kept across runs: a value (no field of it changes)
 let bar_field_editing : @ui.Style = bar_field_box.then(@ui.css("bg=Card border=B1_5 border_color=A(Accent,O50)"))
+
+///|
+/// How thick a pane's edge is on the tape (the frame's page_apart: a point), what a bar at its top stands under.
+pub let pane_edge : Double = 1.0

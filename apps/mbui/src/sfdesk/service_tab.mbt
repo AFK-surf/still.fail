@@ -99,7 +99,7 @@ fn sv_reset() -> Unit {
 ///|
 /// The service `job` of chat `r`'s station, beside the chat: the page while it is up (and as it starts again), what
 /// stopped it said otherwise.
-fn service_pane(c : @ui.Ctx, src : Source, r : ChatRef, job : String) -> Unit {
+fn service_pane(c : @ui.Ctx, src : Source, r : ChatRef, job : String, close? : (() -> Unit)? = None) -> Unit {
   let found = (src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) })
   let j = found.value
   let name = match text(j, "name") {
@@ -115,7 +115,7 @@ fn service_pane(c : @ui.Ctx, src : Source, r : ChatRef, job : String) -> Unit {
         None => c.box(style=sv_wait, fn() { @sf.wait_line(c, @sf.t("common.connecting"), key="service-tab") }) |> ignore
       }
     _ if port > 0 && flag(j, "open") && (state == "running" || state == "exited") =>
-      sv_page(c, src, r, job, port, name, state == "exited", number(j, "restarts").to_int(), text(j, "session"), None)
+      sv_page(c, src, r, job, port, name, state == "exited", number(j, "restarts").to_int(), text(j, "session"), None, close~)
     _ =>
       sv_said(c, @sf.t(if state == "failed" { "web-pages.chat.serviceFailed" } else { "web-pages.chat.serviceStopped" }, args=[
         ("name", name),
@@ -159,9 +159,10 @@ fn sv_page(
   restarts : Int,
   session : String,
   file : FilePage?,
+  close? : (() -> Unit)? = None,
 ) -> Unit {
   sv_drawn[service_key(r.station, job)] = true
-  c.box(style=sv_box, fn() { @sfpages.service_view(c, src, r.station, job, port, name, restarting, restarts, session, file~) })
+  c.box(style=sv_box, fn() { @sfpages.service_view(c, src, r.station, job, port, name, restarting, restarts, session, file~, close~) })
   |> ignore
 }
 

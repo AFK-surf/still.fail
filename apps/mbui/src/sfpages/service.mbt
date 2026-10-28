@@ -29,7 +29,8 @@ let note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=t
 
 ///|
 /// The service's view in the box it is given (Preview.kt ServicePage, ServiceFrame): its bar, the stage. `file`: a
-/// visualization's page, served from here.
+/// visualization's page, served from here. `close`: what closes the panel it is alone in (on the tape, its bar the
+/// panel's: the × at its end, no row of the panel's own over it).
 pub fn service_view(
   c : @ui.Ctx,
   src : Source,
@@ -41,6 +42,7 @@ pub fn service_view(
   restarts : Int,
   session : String,
   file? : FilePage? = None,
+  close? : (() -> Unit)? = None,
 ) -> Unit {
   svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
   let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
@@ -82,14 +84,40 @@ pub fn service_view(
   }
   // (with touch, as narrow as a phone's: what drives it under it, in a thumb's reach; a row over it would be short of
   // room for what a browser keeps at hand, a press's room round each key)
-  if @sf.keys_at_foot(c.width) {
-    service_stage(c, p, site, name, restarting, restarts)
-    service_foot_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
+  // alone in a panel (its bar the panel's): the page a card in it, round, its foot corners concentric with the
+  // panel's (the user, 2026-10-28: 加点圆角)
+  let at_foot = @sf.keys_at_foot(c.width)
+  let stage = fn() {
+    match close {
+      Some(_) =>
+        // (in from the panel's sides and the side its bar is not on: its corners there concentric with the panel's)
+        c.box(style=if at_foot { stage_in_panel_top } else { stage_in_panel }, fn() {
+          service_stage(c, p, site, name, restarting, restarts, corner=@ui.concentric(@sf.tape_corner, stage_in_panel_room))
+        })
+        |> ignore
+      None => service_stage(c, p, site, name, restarting, restarts)
+    }
+  }
+  if at_foot {
+    stage()
+    service_foot_bar(c, src, p, site, name, station, port, fixed=file is Some(_), close~)
   } else {
-    service_page_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
-    service_stage(c, p, site, name, restarting, restarts)
+    service_page_bar(c, src, p, site, name, station, port, fixed=file is Some(_), close~)
+    stage()
   }
 }
+
+///|
+/// How far in from a panel's sides and foot the page stands alone in it (service_view's `close`).
+let stage_in_panel_room : Double = 8.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let stage_in_panel : @ui.Style = @ui.css("w=Full h=Full px=S2 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let stage_in_panel_top : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S2")
 
 ///|
 /// What its bars know of the page this frame (its address said on the log as it moves, a tap on the address typing
@@ -136,9 +164,15 @@ fn service_page_bar(
   station : String,
   port : Int,
   fixed? : Bool = false,
+  close? : (() -> Unit)? = None,
 ) -> Unit {
   let n = bar_now(c, p, site, fixed)
-  @sf.page_bar(c, fn() {
+  // (the bar of a panel it is alone in, its top: its first and last keys concentric with the panel's corners)
+  let corners = match (close, @sf.pane_radii()) {
+    (Some(_), Some(k)) => Some((k[0], k[1]))
+    _ => None
+  }
+  @sf.page_bar(c, corners~, fn() {
     // (short of room, as the address keeps its least (@sf.bar_field) and marking's words want four characters at
     // least: how far it came leaves the bar first, then its size, then reload, each offered in its ⋯ at its end;
     // never back and forward, nor the address's place)
@@ -183,8 +217,21 @@ fn service_page_bar(
       }
     })
     |> ignore
+    panel_close_key(c, close)
   })
   |> ignore
+}
+
+///|
+/// The × of the panel the page is alone in, at its bar's end (service_view's `close`).
+fn panel_close_key(c : @ui.Ctx, close : (() -> Unit)?) -> Unit {
+  match close {
+    Some(f) =>
+      if @sf.bar_key(c, "service/panel-close", "close", @sf.t("web-pages.chat.closePanel")) {
+        f()
+      }
+    None => ()
+  }
 }
 
 ///|
@@ -202,6 +249,7 @@ fn service_foot_bar(
   station : String,
   port : Int,
   fixed? : Bool = false,
+  close? : (() -> Unit)? = None,
 ) -> Unit {
   let n = bar_now(c, p, site, fixed)
   let load = load_of(src, station, port, fixed)
@@ -227,6 +275,7 @@ fn service_foot_bar(
     } else {
       foot_more(c, src, p, station, port, load)
     }
+    panel_close_key(c, close)
   })
   |> ignore
 }
@@ -521,6 +570,7 @@ fn service_stage(
   name : String,
   restarting : Bool,
   restarts : Int,
+  corner? : Double = 0.0,
 ) -> Unit {
   let t = @sf.theme()
   let ground = @sf.mix(t.p.chip, 0.55, t.p.card)
@@ -536,7 +586,7 @@ fn service_stage(
   }
   // (once the frame's builds are over, as the last of them has it; told the host only when it changes)
   c.after_build("service-touch", fn() { site.touch(touch) })
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=if p.viewport is Some(_) { ground } else { t.p.card }, radius=corner, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
     let placed = match (p.viewport, c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
@@ -594,7 +644,7 @@ fn service_stage(
       None =>
         if p.viewport is None {
           c.after_build("scale", fn() { site.set_scale(1.0) })
-          c.native(site) |> ignore
+          c.native(site, radius=corner) |> ignore
         }
     }
     // the marks over the page, where it is drawn
