@@ -511,6 +511,25 @@ test("the_jobs_a_bell_has_shown_are_kept_by_workspace", async () => {
   assert.deepEqual(v(values, 1).jobsSeen, { ws: ["ws/st/j1", "ws/st/j2"] });
 });
 
+test("the_failures_let_go_in_待处理_are_added_to_those_kept_by_workspace", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  call(core, ui, 2, "prefs.set", { failsGone: { ws: ["ws/st/a@1"] } });
+  await host.settle();
+  call(core, ui, 3, "prefs.set", { failsGone: { ws: ["ws/st/b@2", "ws/st/a@1"] } });
+  await host.settle();
+  apply(host, values);
+  // each let go from 待处理 one at a time: added to those before, none twice
+  assert.deepEqual(v(values, 1).failsGone, { ws: ["ws/st/a@1", "ws/st/b@2"] });
+  call(core, ui, 4, "prefs.set", { failsGone: { ws: [1] } });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 4).length, 1);
+});
+
 test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();

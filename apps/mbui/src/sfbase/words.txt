@@ -748,6 +748,7 @@ web-main.archived.restoring
 web-main.attention.alertOne
 web-main.attention.desk
 web-main.attention.dismiss
+web-main.attention.dismissFailNote
 web-main.attention.dismissNote
 web-main.attention.empty
 web-main.attention.entry

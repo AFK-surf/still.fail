@@ -756,6 +756,7 @@ let zh : Map[String, String] = {
   "web-main.attention.alertOne": "出错",
   "web-main.attention.desk": "全部决定",
   "web-main.attention.dismiss": "忽略",
+  "web-main.attention.dismissFailNote": "忽略：从待处理中移除，再出错时会重新出现",
   "web-main.attention.dismissNote": "忽略：从待处理中移除（选项在对话中仍可使用）",
   "web-main.attention.empty": "暂无待处理",
   "web-main.attention.entry": "待处理",

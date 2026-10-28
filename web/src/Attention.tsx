@@ -1,7 +1,8 @@
-// What wants the viewer and they have not looked at yet (the core's `workspaceMarks` items), in the sidebar's foot:
-// 待处理, with how many, and pressed, which chats: the cards and needs waiting for them (奏) and the chats of theirs
-// that went wrong, not read since they came, every workspace's, each leading to its chat. One read is no longer here
-// (its row and 奏 still say it), one let go here neither (忽略, `decision.dismiss`). A station's trouble is the same:
+// What wants the viewer (the core's `workspaceMarks` items), in the sidebar's foot: 待处理, with how many, and pressed,
+// which chats: the cards and needs waiting for them (奏) not read since they came, and the chats of theirs that went
+// wrong until they run again, every workspace's, each leading to its chat. A card read is no longer here (its row and
+// 奏 still say it); one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it
+// fails again). A station's trouble is the same:
 // listed until the bell has shown it, then the stations' marks say it, until the trouble changes (kept on this device).
 import { useEffect, useState } from "react";
 import { Popover } from "radix-ui";
@@ -25,7 +26,8 @@ import { t } from "./i18n.ts";
 /** Its state line without its lead (the core's `what`): the dot before it says that. */
 const line = (i: MarkItem) => i.what || i.stationName;
 
-const keyOf = (i: MarkItem) => `${i.station}/${i.session ?? i.thread}`;
+/** A chat in 待处理 by its station and chat (a failure by itself: the same chat failing again is listed anew). */
+const keyOf = (i: MarkItem) => i.failure ?? `${i.station}/${i.session ?? i.thread}`;
 
 /** Each workspace's chats in 待处理 (the one in view first). */
 function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspace: string; name: string; items: MarkItem[] }[] {
@@ -96,10 +98,13 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
     navigate(`/w/${scope}/settings/stations`);
   };
   const dismiss = (i: MarkItem) => {
-    if (i.thread == null || i.seq == null) return;
+    const said = i.kind === "alert" && i.failure != null
+      ? call("prefs.set", { failsGone: { [i.workspace]: [i.failure] } })
+      : i.thread != null && i.seq != null ? call("decision.dismiss", { station: i.station, thread: i.thread, seq: i.seq }) : null;
+    if (said === null) return;
     const key = keyOf(i);
     setGone((was) => new Set(was).add(key));
-    act(call("decision.dismiss", { station: i.station, thread: i.thread, seq: i.seq }).catch((e: unknown) => {
+    act(said.catch((e: unknown) => {
       setGone((was) => { const now = new Set(was); now.delete(key); return now; });
       throw e;
     }), t("web-main.decisions.dismissWhat"));
@@ -145,8 +150,8 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
                     <span className={css.itemTitle}>{i.title || t("web-main.attention.untitled")}</span>
                     <span className={css.itemLine}>{line(i)}</span>
                   </span>
-                  {i.kind === "wait" && i.seq != null && (
-                    <button type="button" className={css.dismiss} title={t("web-main.attention.dismissNote")}
+                  {(i.kind === "wait" ? i.seq != null : i.failure != null) && (
+                    <button type="button" className={css.dismiss} title={t(i.kind === "alert" ? "web-main.attention.dismissFailNote" : "web-main.attention.dismissNote")}
                       onClick={(e) => { e.stopPropagation(); dismiss(i); }}>{t("web-main.attention.dismiss")}</button>
                   )}
                 </div>

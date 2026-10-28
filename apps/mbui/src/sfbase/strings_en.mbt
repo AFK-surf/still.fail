@@ -767,6 +767,7 @@ let en : Map[String, String] = {
   "web-main.attention.alertOne": "Went wrong",
   "web-main.attention.desk": "All decisions",
   "web-main.attention.dismiss": "Dismiss",
+  "web-main.attention.dismissFailNote": "Dismiss: remove from your to-do list until it fails again",
   "web-main.attention.dismissNote": "Dismiss: remove from your to-do list and Decisions (options still work in the chat)",
   "web-main.attention.empty": "Nothing to do",
   "web-main.attention.entry": "To do",
