@@ -111,11 +111,15 @@ globalStyle(fileCardOpen, {
  * Room around it for the avatar's ring (3px out, its edge smoothed over a pixel more on a phone's fractional scale): the
  * line clips (to fold away) at its padding's edge, not the ring's.
  */
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
+/**
+ * Its words start where a message's do: as far from its avatar as a message's words from theirs (11; 13 on a phone).
+ * Here rather than with its class: it comes after .chat-list > *, and wins over it.
+ */
 globalStyle(activityLine, {
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", ...bleedX(6), ...bleedY(6),
+  display: "flex", alignItems: "center", gap: "11px", minWidth: "0", minHeight: "0", overflow: "hidden", ...bleedX(6), ...bleedY(6),
   border: "0", background: "none", font: "inherit", fontSize: vars.textUi, textAlign: "left",
   color: vars.muted, cursor: "pointer",
+  "@media": { "(max-width: 700px)": { gap: "13px" } },
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(modelPoolList, {
