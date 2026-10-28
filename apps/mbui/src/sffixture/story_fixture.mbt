@@ -189,8 +189,14 @@ pub fn story_on_answer(f : Fixture, seq : Int, label : String) -> Unit {
 }
 
 ///|
-/// The story's vault card (a post's `vault`) answered here (`vault.approve`, `vault.deny` for its `request`): how it went
-/// on its card at once, as the core puts it, then its agent's steps after it (`answered`, in turn with the cards). False
+/// What asks the person on a real host (sffix's: the system's prompt, Touch ID or Face ID, with the reason in it):
+/// begun with the reason, then asked how it went (0 not yet, 1 yes, 2 no). None: nothing to ask (a Tester), yes at once.
+pub let story_ask_person : Ref[((String) -> Unit, () -> Int)?] = { val: None }
+
+///|
+/// The story's vault card (a post's `vault`) answered here (`vault.approve`, `vault.deny` for its `request`): allowed, the
+/// vault unlocked first as the core unlocks it (the system's prompt, its reason the card's `unlock`); then how it went on
+/// its card at once, as the core puts it, and its agent's steps after it (`answered`, in turn with the cards). False
 /// where it is not the story's.
 pub fn story_vault_answer(f : Fixture, name : String, params : Json) -> Bool {
   let request = text(Some(params), "request")
@@ -198,28 +204,43 @@ pub fn story_vault_answer(f : Fixture, name : String, params : Json) -> Bool {
   let at = fc.sent.search_by(fn(m) { text(field(Some(m), "card"), "vault") == request })
   guard request != "" && at is Some(i) else { return false }
   let approved = name == "vault.approve"
-  match fc.sent[i] {
-    Object(m) => {
-      let o = m.copy()
-      let card = match o.get("card") {
-        Some(Object(c)) => c.copy()
-        _ => Map([])
+  let settle = fn(yes : Bool) {
+    match fc.sent[i] {
+      Object(m) => {
+        let o = m.copy()
+        let card = match o.get("card") {
+          Some(Object(c)) => c.copy()
+          _ => Map([])
+        }
+        let ask = match card.get("vaultAsk") {
+          Some(Object(a)) => a.copy()
+          _ => Map([])
+        }
+        ask["status"] = Json::string(if yes { "granted" } else { "denied" })
+        card["vaultAsk"] = Json::object(ask)
+        o["card"] = Json::object(card)
+        fc.sent[i] = Json::object(o)
       }
-      let ask = match card.get("vaultAsk") {
-        Some(Object(a)) => a.copy()
-        _ => Map([])
-      }
-      ask["status"] = Json::string(if approved { "granted" } else { "denied" })
-      card["vaultAsk"] = Json::object(ask)
-      o["card"] = Json::object(card)
-      fc.sent[i] = Json::object(o)
+      _ => ()
     }
-    _ => ()
+    f.changed()
+    if yes {
+      story_play("answered", story_answered.val)
+      story_answered.val += 1
+    }
   }
-  f.changed()
-  if approved {
-    story_play("answered", story_answered.val)
-    story_answered.val += 1
+  match (approved, story_ask_person.val) {
+    (true, Some((ask, asked))) => {
+      ask(text(field(field(Some(fc.sent[i]), "card"), "vaultAsk"), "unlock"))
+      fn wait() {
+        match asked() {
+          0 => fix_later(100.0, wait)
+          n => settle(n == 1)
+        }
+      }
+      wait()
+    }
+    _ => settle(approved)
   }
   true
 }

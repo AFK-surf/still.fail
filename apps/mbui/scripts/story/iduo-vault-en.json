@@ -92,7 +92,8 @@
       "command": "pnpm test payments",
       "reason": "Run the payment tests against Stripe's test mode",
       "answer": "approve",
-      "lasts": "chat"
+      "lasts": "chat",
+      "unlock": "Let an agent use “Stripe test key”"
      }
     }
    },

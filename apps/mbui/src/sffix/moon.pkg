@@ -8,14 +8,18 @@ import {
   "stillfail/sffixture",
   "stillfail/sfdesk",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(
   "is-main": true,
+  targets: { "person_native.mbt": [ "native" ], "person_js.mbt": [ "js" ] },
+  "native-stub": [ "person.m" ],
   link: {
     "js": { "format": "iife" },
     "native": {
-      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+      "stub-cc-flags": "-fobjc-arc -O2",
+      "cc-link-flags": "-framework LocalAuthentication -framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
     },
   },
 )

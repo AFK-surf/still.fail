@@ -37,6 +37,8 @@ fn main {
   let story = @hostapi.env_text("MBUI_STORY")
   if story != "" {
     @sffixture.fix_story.val = Some(@json.parse(story) catch { _ => abort("MBUI_STORY does not parse") })
+    // (its vault unlocked as the core unlocks it: the system's prompt)
+    ask_person_setup()
   }
   // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
   // as it says

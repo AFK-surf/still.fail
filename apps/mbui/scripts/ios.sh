@@ -7,7 +7,7 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 export APP=${APP:-stillfail}
-export MBUI_IOS_PLIST=$A/ios/Info.plist
+export MBUI_IOS_PLIST=${MBUI_IOS_PLIST:-$A/ios/Info.plist}
 export MBUI_IOS_ID=${MBUI_IOS_ID:-fail.still.mbui.debug}
 export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf}
 # its share extension (mbui's src/host/ios_share.m): what another app shares, kept for the app to show
@@ -31,5 +31,5 @@ if [ "${1:-build}" = build ]; then
     swift "$D/mac-icon.swift" --ios "$MBUI_IOS_ASSETS/AppIcon.appiconset/icon.png" > /dev/null
   fi
 fi
-case $APP in coredemo | stillfail) export MBUI_IOS_HOOK=$D/ios-core.sh ;; esac
+case $APP in coredemo | stillfail) export MBUI_IOS_HOOK=$D/ios-core.sh ;; sffix) export MBUI_IOS_HOOK=$D/ios-sffix.sh ;; esac
 exec bash "$MBUI_DIR/scripts/ios.sh" "$@"

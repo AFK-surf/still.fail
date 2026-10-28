@@ -46,6 +46,10 @@ if opened; then
   fi
 fi
 rm -f /tmp/sf-film-inner-$$.png
+# (the app called still.fail, as people have it, not the development build's still.fail mbui: what the system's prompts
+# name it by)
+sed 's#<string>still.fail mbui</string>#<string>still.fail</string>#' ios/Info.plist > out/story/Info.plist
+export MBUI_IOS_PLIST=$D/out/story/Info.plist
 [ "${2:-}" = build ] && { bash scripts/ios.sh build > out/story/ios-build.log 2>&1 || { tail -30 out/story/ios-build.log; exit 1; }; tail -1 out/story/ios-build.log; }
 # the story: FILM_STORY (iduo by default; iduo-en English), its pictures in it (made by make.py, kept built beside it)
 story=${FILM_STORY:-iduo}
@@ -55,6 +59,9 @@ export SIMCTL_CHILD_MBUI_DRIVE_B64=$(base64 -i scripts/motion/$drive.drive | tr 
 export SIMCTL_CHILD_MBUI_FIXTURE=chat-story
 # (the app's words in the film's language: its device's locale, as the host would say it)
 export SIMCTL_CHILD_MBUI_LOCALE=$([ "${FILM_LANG:-zh}" = en ] && echo en-US || echo zh-CN)
+# (a fingerprint enrolled, for what asks the person: the system's prompt, answered by the drive's FINGER)
+xcrun simctl spawn $ID notifyutil -s com.apple.BiometricKit.enrollmentChanged 1 >/dev/null 2>&1
+xcrun simctl spawn $ID notifyutil -p com.apple.BiometricKit.enrollmentChanged >/dev/null 2>&1
 xcrun simctl status_bar $ID override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 >/dev/null 2>&1
 LOG=$D/out/ios/app.log
 # (the simulator records one screen at a time: the outer one till the unfold, the inner one from just before it; when
@@ -88,6 +95,11 @@ tail -n +1 -F "$LOG" 2>/dev/null | while IFS= read -r line; do
       echo "film_ios: unfold at $(python3 -c "import time;print(round(time.time()-$T0,2))")"
       if [ "${REC:-0}" = 1 ]; then unrec outer; rec inner $INNER; fi
       fold; echo "fold $(now)" >> $TIMES; lit=$INNER ;;
+    *"DRIVE LOG FINGER"*)
+      echo "finger $(now)" >> $TIMES
+      # (again a moment later, should the prompt have come up after the first)
+      ( xcrun simctl spawn $ID notifyutil -p com.apple.BiometricKit_Sim.fingerTouch.match; sleep 1.5
+        xcrun simctl spawn $ID notifyutil -p com.apple.BiometricKit_Sim.fingerTouch.match ) >/dev/null 2>&1 & ;;
     *"DRIVE LOG SHOT "*) s=${line##*DRIVE LOG SHOT }; echo "film_ios: shot $s: $(xcrun simctl io $ID screenshot --display=$lit "out/film/ios-$s.png" 2>&1 | tail -1)" ;;
     *"DRIVE PASS"*|*"DRIVE FAIL"*) echo "film_ios: $line"; pkill -P $$ tail 2>/dev/null; break ;;
   esac

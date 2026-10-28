@@ -33,7 +33,11 @@ tapxy 560 300
 wait 900
 at tap=allow
 tap =Allow
-wait 500
+# (the vault unlocked as the core unlocks it: the system's prompt, a finger on the sensor)
+wait 2000
+at finger
+log FINGER
+wait 1500
 at allowed
 until Not yet
 at answer2
