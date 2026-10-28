@@ -647,7 +647,7 @@ export const routes = (tools: Tools): Route[] => {
           const channel = text(i.channel).trim();
           const link = text(i.link).trim();
           if (link === "" && (connect === "" || channel === "")) throw new Refused(400, tr(r.lang, "station.relay.pick"));
-          const by = r.viewer.name.trim() || r.viewer.email;
+          const by = { name: r.viewer.name.trim() || r.viewer.email, email: r.viewer.email };
           return ok(await as(400, () => relay(a.hub, t, by, link !== "" ? { link, ...(connect !== "" ? { connect } : {}) } : { connect, channel }, chars(text(i.note), 2000))));
         }),
     },

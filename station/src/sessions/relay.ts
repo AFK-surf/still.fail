@@ -104,8 +104,12 @@ const placeName = (place: Place) => (place.kind === "channel" ? `#${place.name}`
 /// in one (that thread; through the connect named, when it is in that workspace, else the first that is).
 export type RelayTarget = { connect: string; channel: string } | { link: string; connect?: string };
 
-/// Relays a chat by `by` (a person's name), with their `note`.
-export async function relay(hub: Hub, thread: ThreadRow, by: string, target: RelayTarget, note: string): Promise<Relayed> {
+/// Who relays a chat: their name on still.fail and the email of their account there.
+export type Relayer = { name: string; email: string };
+
+/// Relays a chat by `relayer`, with their `note`.
+export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, target: RelayTarget, note: string): Promise<Relayed> {
+  const by = relayer.name;
   const session = agentOf(hub, thread);
   const connects = connectsFor(hub, session);
   let c: (typeof connects)[number] | undefined;
@@ -140,7 +144,10 @@ export async function relay(hub: Hub, thread: ThreadRow, by: string, target: Rel
   const page = hub.link(session) ?? null;
   const from = page !== null ? `[${title.replace(/[[\]]/g, "")}](${page})` : title;
   const said = note.trim();
-  const opening = tr(lang, "station.relay.opening", { who: by, chat: from }) + (said === "" ? "" : `\n\n${said}`);
+  // There they are mentioned, as the account the platform has with their email (as a 抄送 does); else named.
+  const user = (await c.chat.userOf?.(relayer.email).catch(() => null)) ?? null;
+  const who = user !== null ? (c.chat.mention?.(user) ?? `<@${user}>`) : by;
+  const opening = tr(lang, "station.relay.opening", { who, chat: from }) + (said === "" ? "" : `\n\n${said}`);
   const begun = existing !== null ? { thread: existing, ts: await c.chat.post(existing, opening, []) } : await c.chat.begin!(channel, opening);
   const there = hub.store.openThread(surface, begun.thread.channel, begun.thread.threadTs, null, by);
   hub.store.noteRelayed(c.id, channel);
