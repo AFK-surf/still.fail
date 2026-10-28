@@ -224,6 +224,13 @@ describe("the Grok Build driver", { concurrency: true }, () => {
     }
     assert.equal(classifyFailure("You are not authenticated. Run grok login"), "auth");
     assert.equal(classifyFailure("RESOURCE_EXHAUSTED: usage limit reached"), "rate_limit");
+    // SuperGrok's free usage running out names the subscription, but it is a limit, not the account.
+    assert.equal(
+      classifyFailure(
+        "Rate limited: API error (status 429 Too Many Requests): subscription:free-usage-exhausted: You've used all the included free usage for model grok-4.7 for now. Upgrade to a Grok subscription for higher limits",
+      ),
+      "rate_limit",
+    );
     await session.dispose();
   });
 

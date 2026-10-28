@@ -128,8 +128,11 @@ export function failureOf(text: string, extra: FailureWords = {}): FailureReason
   const words = lower.split(/[^\p{L}\p{N}_]+/u);
   const word = (w: string) => words.includes(w);
   const says = (s: string) => lower.includes(s);
-  if (["401", "403", ...(extra.authCodes ?? [])].some(word) || [...AUTH, ...(extra.auth ?? [])].some(says)) return "auth";
-  if (["429", ...(extra.limitCodes ?? [])].some(word) || [...LIMIT, ...(extra.limit ?? [])].some(says)) return "rate_limit";
+  // A code decides before any phrase: a limit's message may well mention the account ("upgrade your subscription").
+  if (["401", "403", ...(extra.authCodes ?? [])].some(word)) return "auth";
+  if (["429", ...(extra.limitCodes ?? [])].some(word)) return "rate_limit";
+  if ([...AUTH, ...(extra.auth ?? [])].some(says)) return "auth";
+  if ([...LIMIT, ...(extra.limit ?? [])].some(says)) return "rate_limit";
   return "model";
 }
 
