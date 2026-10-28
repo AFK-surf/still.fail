@@ -577,6 +577,34 @@ test "a toast naming a long title with its 撤销: inside the screen, its 撤销
 }
 
 ///|
+test "a toast naming a title that wraps: its 撤销 whole, as wide as beside a short one, the title giving way" {
+  // (2026-10-28 「归档某个 session 时出现撤销按钮变成了点点点」: on the phone a two-line title squeezed the button, its
+  // words cut to their ellipsis; the row shrank both by their width, the button's least only its padding)
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
+    let (_, short) = rested_toast(t, "已归档", "撤销")
+    let (_, _, short_w, _) = short.unwrap()
+    let short_words = t.words().filter(fn(w) { w.0 == "撤销" })[0].3
+    t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
+    for words in [
+        "已归档「office-mac-host-2 卡顿排查」",
+        "已归档「把首页对话列表改成按天分组并且在每一组的标题里写上那天的日期和星期几，再把置顶的对话单独放在最上面」",
+      ] {
+      let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
+      let (bx, by, bw, bh) = button.unwrap()
+      assert_true((bw - short_w).abs() < 0.5, msg="\{wide} \{words} \{bw} \{short_w}")
+      assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+      // its words whole too, as laid out
+      let drawn = t.words().filter(fn(w) { w.0 == "撤销" })
+      assert_eq(drawn.length(), 1)
+      assert_true((drawn[0].3 - short_words).abs() < 0.5, msg="\{wide} \{words} \{drawn[0].3} \{short_words}")
+      t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
+    }
+  }
+}
+
+///|
 test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

@@ -78,9 +78,13 @@ pub fn toast_button(c : @ui.Ctx, id : Int, words : String) -> Bool {
 let toast_row : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
-/// (its button's words toast_px from the toast's end, as its words are from its start)
+/// (its button's words toast_px from the toast's end, as its words are from its start; a row, so that it is never
+/// narrower than its words need: a title too long for the toast's line gives way and wraps, the button keeps its
+/// width. In a column the words would be cut to the column's width, the button's least its padding alone, and the
+/// row's room short would come off both by their width: 「撤销」 cut to its ellipsis beside a two-line title)
 // kept across runs: a value (no field of it changes)
 let toast_action_box : @ui.Style = @ui.style(
+  row=true,
   h=Fixed(toast_action_h),
   px=room(toast_px - toast_action_in),
   radius=Full,
