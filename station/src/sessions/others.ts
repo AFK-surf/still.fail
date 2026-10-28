@@ -296,7 +296,7 @@ export function sessionThreadOf(hub: Hub, key: string): SessionThread {
 
 /// chat_list: the station's conversations of session `key`'s workspace, the latest first, each with its agents
 /// (session keys).
-export function chatList(hub: Hub, key: string, args: Args): string {
+export async function chatList(hub: Hub, key: string, args: Args): Promise<string> {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
@@ -307,7 +307,7 @@ export function chatList(hub: Hub, key: string, args: Args): string {
   const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
   const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
     ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
-  const threads = hub.store.listThreads("", null, null).filter(ours);
+  const threads = (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null)).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];

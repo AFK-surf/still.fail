@@ -105,6 +105,13 @@ test("an agent reads another session's chat by its link or address, and finds it
   assert.ok(!listed.includes(b.threadTs), listed);
   const mine = await r.call(keyB, "chat_list", {});
   assert.ok(mine.includes(`${keyB} (you)`), mine);
+  // Read by the readers where there are (agents.ts): the same list, the store not asked on the main thread.
+  const store = r.hub.store.listThreads("", null, null);
+  r.hub.threadList = async () => JSON.parse(JSON.stringify(store));
+  const listThreads = r.hub.store.listThreads;
+  r.hub.store.listThreads = () => assert.fail("listed on the main thread");
+  assert.equal(await r.call(keyB, "chat_list", {}), mine);
+  r.hub.store.listThreads = listThreads;
   assert.equal(await r.call(keyB, "session_history", { chat: toA }), `Session ${keyA} has no execution history yet.`);
   assert.ok((await r.refused(keyB, "chat_read", { chat: "https://ember.test/o/ws/st/nope" })).includes("not on this station"));
   assert.ok((await r.refused(keyB, "chat_read", { chat: "C9/1.000001" })).includes("no conversation C9/1.000001"));

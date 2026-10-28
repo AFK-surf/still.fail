@@ -85,7 +85,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
     for (const thread of hub.store.sessionThreads(key)) {
       const id = thread.thread.id;
       const version = hub.store.lastEntry(id);
-      const messages = hub.store.messagesBefore(id, null, ARCHIVE_REVIEW_MESSAGES + 1);
+      const messages = hub.latestMessages ? await hub.latestMessages(id, ARCHIVE_REVIEW_MESSAGES + 1) : hub.store.messagesBefore(id, null, ARCHIVE_REVIEW_MESSAGES + 1);
       const omitted = messages.length > ARCHIVE_REVIEW_MESSAGES;
       if (omitted) messages.shift();
       const shown = (m: MessageRow) => ({ authorKind: m.authorKind, author: m.author, text: m.text, ts: m.ts, hasAttachments: m.attachments.length > 0 });
