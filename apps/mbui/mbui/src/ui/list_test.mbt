@@ -582,6 +582,47 @@ test "a row followed from its top: a glide to the end stops with its top under t
 }
 
 ///|
+test "a row followed from its top, the end come first: the glide ends at the end as it now is, the row under it still growing followed" {
+  let n = Ref::new(10)
+  let tall = Ref::new(30.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "rows",
+        n.val,
+        40.0,
+        fn(i) {
+          c.column(h=Px(if i == 10 { tall.val } else { 40.0 }), fn() { c.text("row \{i}", wrap=false) |> ignore })
+          |> ignore
+        },
+        stick_end=true,
+        glide_on_growth=true,
+      )
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  t.run_for(@ui.list_glide_ms * 5.0)
+  // the row over the new one followed from its top (a message just sent), far under the view's: the end comes first
+  t.ctx().list_follow_from("rows", 9, margin=test_follow_margin)
+  // a row comes at the end (an agent's line), its room opening a little each frame (less than a point: the tail of
+  // its spring), on past the glide's rest
+  n.val = 11
+  t.draw()
+  let step = 1000.0 / 120.0
+  let end = t.time() + @ui.list_glide_ms * 12.0
+  while t.time() < end {
+    tall.val = if tall.val + 0.4 > 110.0 { 110.0 } else { tall.val + 0.4 }
+    t.frame(ms=step)
+  }
+  t.run_for(@ui.list_glide_ms * 5.0)
+  let (_, y, _, h) = t.row(10).unwrap()
+  assert_true(t.at_end())
+  assert_true((y + h - 300.0).abs() < 0.5, msg="the last row's foot at \{y + h}, the view's at 300")
+}
+
+///|
 test "list: a glide to its end whose end moves on the way goes on from where it is, never standing still or jumping" {
   let n = Ref::new(10)
   let tall = Ref::new(80.0)
