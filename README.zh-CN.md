@@ -77,7 +77,6 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | `client/` | 共用的客户端 core（`core-ts`）、它的原生外壳和翻译（`i18n`） |
 | `web/` | 网页版、官网和组件 stories |
 | `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
-| `apps/android/` | 以前用 Kotlin 写的安卓 app，已冻结 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `media/` | 基于同一平台的照片、影视和书架 app，开发中 |
 | `docs/` | 设计和运维文档；发布说明在 `docs/releases/` |

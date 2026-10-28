@@ -18,9 +18,8 @@ from fontTools.varLib import instancer
 import uharfbuzz as hb
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(REPO, "apps/android/scripts"))
-import svg2vd  # noqa: E402  (the SVG → VectorDrawable converter the Android drawables were made with)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import svg2vd  # noqa: E402  (the SVG → VectorDrawable converter)
 import illus  # noqa: E402
 
 ORANGE = "#E5704A"

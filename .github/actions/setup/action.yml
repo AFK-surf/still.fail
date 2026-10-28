@@ -4,15 +4,6 @@ inputs:
   native:
     description: Install Rust and WebAssembly tooling
     default: 'false'
-  android:
-    description: Install the Android SDK and NDK
-    default: 'false'
-  ndk:
-    description: With android, the NDK too (what packs the app strips its native parts with; lint does without it)
-    default: 'true'
-  gradle-read-only:
-    description: With android, Gradle's home read, never written (on main too)
-    default: 'false'
   cross:
     description: Install Linux station cross compilers
     default: 'false'
@@ -158,7 +149,7 @@ runs:
           ~/.cargo/bin/cargo-zigbuild
           ~/.cargo/.crates*
           .ci-target
-        key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.android }}-${{ inputs.cross }}-${{ hashFiles('**/Cargo.lock', '.github/actions/setup/action.yml') }}
+        key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cross }}-${{ hashFiles('**/Cargo.lock', '.github/actions/setup/action.yml') }}
     - if: inputs.native == 'true'
       shell: bash
       run: |
@@ -166,42 +157,6 @@ runs:
         if ! command -v wasm-bindgen >/dev/null || [ "$(wasm-bindgen --version)" != "wasm-bindgen $version" ]; then
           cargo install wasm-bindgen-cli --version "$version" --locked --force
         fi
-    - if: inputs.android == 'true'
-      uses: actions/setup-java@v5
-      with:
-        distribution: temurin
-        java-version: '17'
-    # The runner's own SDK tools (ubuntu-24.04 has cmdline-tools/latest, platform-tools and the licenses): setup-android
-    # fetched a newer cmdline-tools from Google each run, and a download that hung there took 347 s of a lint job's
-    # 422 (2026-10-19).
-    - if: inputs.android == 'true'
-      shell: bash
-      run: |
-        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-        echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-    # Gradle's own downloads and its build cache, kept between runs (main writes them, a branch reads; the build cache
-    # is on in apps/android/gradle.properties): a run without them spent ~2 min fetching and compiling what had not
-    # changed. A branch writing them too spent ~10 s saving at every end, for caches its next run seldom needed.
-    - if: inputs.android == 'true'
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        cache-read-only: ${{ inputs.gradle-read-only == 'true' || github.ref != 'refs/heads/main' }}
-    # The NDK is a gigabyte from Google's servers: fetched once, then from the Actions cache (a download cut short failed
-    # a lint job on main, 2026-10-19, and check-android, 2026-10-21: "Error on ZipFile unknown archive")
-    - if: inputs.android == 'true' && inputs.ndk == 'true' && runner.os == 'Linux'
-      id: ndk
-      uses: actions/cache/restore@v4
-      with:
-        path: /usr/local/lib/android/sdk/ndk/28.2.13676358
-        key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
-    - if: inputs.android == 'true'
-      shell: bash
-      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' ${{ inputs.ndk == 'true' && steps.ndk.outputs.cache-hit != 'true' && '''ndk;28.2.13676358''' || '' }}
-    - if: inputs.android == 'true' && inputs.ndk == 'true' && runner.os == 'Linux' && steps.ndk.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: /usr/local/lib/android/sdk/ndk/28.2.13676358
-        key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
     - if: inputs.cross == 'true'
       shell: bash
       run: |

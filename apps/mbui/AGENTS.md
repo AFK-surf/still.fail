@@ -22,11 +22,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## The app, and the Kotlin one before it
 
-- Since 2026-10-23 this is the Android app that is developed: the beta channel's (the stable channel keeps the Kotlin
-  app at 0.1.4520 until it is said to become this one). The Kotlin app (`apps/android`) is frozen: not developed, not
-  built or checked by CI, and nothing is compared with it any more. New work is this app's own.
-- What it took from the Kotlin app (sizes, radii, colours, timings, behaviour: `apps/android/shared/.../ui/{Glass,
-  Corners,Parts}.kt` and each screen's file) stays as it is unless a change means to differ. Nothing in this
+- This is still.fail's app on every platform: Android's since 2026-10-23 (beta) and 2026-10-24 (stable), the desktop's
+  since 2026-10-26. The Kotlin app it took the place of stopped at 0.1.4520 and is gone from the repository (2026-10-29;
+  its last tree is in git history, before that commit). New work is this app's own.
+- What it took from the Kotlin app (sizes, radii, colours, timings, behaviour: its `ui/{Glass,Corners,Parts}.kt` and
+  each screen's file) stays as it is unless a change means to differ. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 

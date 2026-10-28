@@ -789,7 +789,7 @@ pub let viz_components : String =
   #|})();
 
 ///|
-/// apps/android/app/src/main/assets/preview/page.js, as it is.
+/// apps/mbui/assets/preview/page.js, as it is.
 // kept across runs: a file's words, never written
 pub let page_js : String =
   #|// First in each of a web service's pages in the app's preview (screens/Preview.kt puts it there, after <head>): what a

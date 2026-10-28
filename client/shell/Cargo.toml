@@ -1,6 +1,6 @@
 [package]
 name = "stillfail-shell"
-description = "The native shell of the core in TypeScript on Android (client/core-ts hosts/bridge.ts, apps/android/core): HTTP, still.fail cloud's WebSocket, files and the core's database, TCP to adbd, and iroh, behind a C ABI the Hermes engine (C++) calls."
+description = "The native shell of the core in TypeScript in the apps (client/core-ts hosts/bridge.ts, apps/mbui/engine): HTTP, still.fail cloud's WebSocket, files and the core's database, TCP to adbd, and iroh, behind a C ABI the Hermes engine (C++) calls."
 edition.workspace = true
 version.workspace = true
 license.workspace = true

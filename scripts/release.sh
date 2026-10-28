@@ -8,8 +8,8 @@
 # `desktop-win` (the Windows app: apps/mbui's in the Electron app's place, built on Windows, scripts/win.sh
 # MBUI_VARIANT=stable: its installer stillfail-<version>-x64-win.exe in desktop/, not code-signed yet, its feeds
 # win/latest.json and stillfail.yml, below) and
-# `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/; the beta app mbui's in the
-# Kotlin one's place: apps/mbui/scripts/beta.sh build, MBUI_VARIANT=beta). Their version is the
+# `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
+# beta: its APK and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 # And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
 # in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
@@ -180,7 +180,7 @@ for platform in $platforms; do
       ;;
     android)
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json. The
-      # beta app is mbui's (apps/mbui) in the place of the one in Kotlin (apps/android): the same package, signed with
+      # beta app is mbui's (apps/mbui) in the place of the one in Kotlin: the same package, signed with
       # the same key, so an installed beta updates to it, its files and sign-ins taken as they are (apps/mbui's
       # CoreHost); built as apps/mbui's own beta is (scripts/beta.sh: MoonBit, the engine and shell prebuilt), warm in
       # a cache of its own. The stable app is mbui's too since 2026-10-24 (as asked; the Kotlin one stopped at

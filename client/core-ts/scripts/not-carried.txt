@@ -1,0 +1,10 @@
+# Paths under client/ that the apps' core (its Hermes bundle) does not carry, one extended regular expression a line:
+# a change to only these reaches no app (scripts/changelog.ts `partsOf`). The core's bundle checks them as it is made
+# (client/core-ts/scripts/hermes-bundle.ts): one of these in it fails.
+# The web's iroh.
+^client/iroh-wasm/
+# The core's tests, benchmarks, harness and side tests: node's, not the app's.
+^client/core-ts/(test|bench|harness|side)/
+# The core's other hosts and node's entry points (the app's is src/hosts/hermes.ts).
+^client/core-ts/src/hosts/(web|node|node-iroh|node-sql)\.ts$
+^client/core-ts/src/(index|comma|iroh|iroh-bindings|testing)\.ts$

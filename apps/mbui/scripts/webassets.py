@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""The web's own files a page of the app's carries (both frames'), as the Android app packs them into its assets:
+"""The web's own files a page of the app's carries (both frames'):
 src/sfbase/web_assets.mbt holds, as strings,
   viz_css     web/src/viz/ember-viz.css   (a visualization's stylesheet: ui/Viz.kt documentOf)
   viz_bridge  web/src/viz/bridge.js       (its bridge: its height, what its widget keeps, words to send)
   viz_components web/src/viz/components.js (still.fail's <sf-…> elements a figure is written with)
   viz_icons   design/icons/*.svg          (still.fail's own icons for a visualization's data-icon marks: each SVG's
               inside, by name, as JSON, as Viz.tsx gives them)
-  page_js     apps/android/app/src/main/assets/preview/page.js (first in each page of a service's preview:
-              its WebSockets, its requests' bodies and fetches, marking it; PreviewWeb.kt)
+  page_js     apps/mbui/assets/preview/page.js (first in each page of a service's preview: its WebSockets, its
+              requests' bodies and fetches, marking it)
 
   python3 scripts/webassets.py          the file written
   python3 scripts/webassets.py --check  fails (saying so) when it is not what they make (scripts/check.sh)"""
@@ -19,7 +19,7 @@ FILES = [
     ("viz_css", "web/src/viz/ember-viz.css"),
     ("viz_bridge", "web/src/viz/bridge.js"),
     ("viz_components", "web/src/viz/components.js"),
-    ("page_js", "apps/android/app/src/main/assets/preview/page.js"),
+    ("page_js", "apps/mbui/assets/preview/page.js"),
 ]
 OUT = os.path.join(A, "src/sfbase/web_assets.mbt")
 

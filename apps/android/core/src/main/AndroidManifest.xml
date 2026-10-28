@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- iroh watches the network to rebind its paths when it changes. -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- What the core keeps sealed with `user` is read after the person's fingerprint or screen lock (SecureStore.kt). -->
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-</manifest>
