@@ -322,6 +322,18 @@ pub fn links_reset() -> Unit {
 }
 
 ///|
+/// A Slack thread opened in Slack: by its link into Slack's app (`app`, slack://) where the system says whether
+/// anything took it (macOS: no browser's page first), else by its web link (`web`). Elsewhere the web link alone:
+/// iOS's and Android's hosts answer before the system knows, Windows' and Linux's open web links only, and a
+/// browser's tab would ask about a slack:// link. False when nothing took it.
+pub fn open_slack(app : String, web : String) -> Bool {
+  if app != "" && @ui.platform() == 0 && @ui.open_url(app) {
+    return true
+  }
+  web != "" && @ui.open_url(web)
+}
+
+///|
 /// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
 /// says (open_link_in); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
 /// when nothing took it.

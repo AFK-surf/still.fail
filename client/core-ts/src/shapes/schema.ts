@@ -2921,6 +2921,7 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String", { said: true }],
     ["place", opt("String"), { said: true, doc: "Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in." }],
     ["slackUrl", opt("String")],
+    ["slackApp", opt("String"), { doc: "The same thread's link into Slack's app (slack://), which opens without a browser's page first." }],
     ["feishuUrl", opt("String"), { doc: "A Feishu (Lark) chat's link in Feishu." }],
     ["cc", vec("ChatCcTo"), { default: true, doc: "Its agents' Slack and Feishu threads, the one said in last first: what is sent from here can be copied to\nthose ticked (`chat.cc`). Empty in a chat whose agents are in none, and from a core before it." }],
     ["people", vec("Person")],
@@ -3203,6 +3204,7 @@ export const SHAPES: Record<string, Shape> = {
     ["surface", "String", { doc: "ember | slack | feishu" }],
     ["session", opt("String")],
     ["url", opt("String"), { doc: "A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu." }],
+    ["app", opt("String"), { doc: "A Slack thread's link into Slack's app (slack://), at the message when it is one of the thread's: it opens\nwithout a browser's page first. Present once the station knows the thread's workspace." }],
   ], { doc: "A place a message came from or went to: a chat on still.fail's page (`session`: the agent it opens), or a Slack thread." }),
   HistoryFrom: struct([
     ["name", "String", { said: true }],

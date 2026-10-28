@@ -898,14 +898,14 @@ pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhe
 /// where it has one: hPlace), 发送失败 in red.
 fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
   let t = @sf.theme()
-  let url = match s.place {
-    Some(p) => p.url
-    None => ""
+  let (url, app) = match s.place {
+    Some(p) => (p.url, p.app)
+    None => ("", "")
   }
   let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
   if place != 0 {
     if c.clicked(place) {
-      c.tell("msg-place/" + key, fn() { @ui.open_url(url) |> ignore })
+      c.tell("msg-place/" + key, fn() { @sfbase.open_slack(app, url) |> ignore })
     }
   }
   c.box(style=msg_route, fn() {

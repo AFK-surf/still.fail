@@ -37,8 +37,15 @@ test("a_slack_place_is_named_with_its_workspace_and_links_to_its_thread", () => 
   const c = cx(threads, [], []);
   const place = format.place(c.threads, "C1/1.000200", c.offsetMin, c.workspaces) as J;
   assert.deepEqual([place.name, place.url], ["Acme#ops", "https://acme.slack.com/archives/C1/p1000200"]);
+  // Into Slack's app: at the thread's root, or at a reply in it.
+  assert.equal(place.app, "slack://channel?team=T1&id=C1&message=1.000200");
+  const reply = format.place(c.threads, "C1/1.000200", c.offsetMin, c.workspaces, "1.000300") as J;
+  assert.equal(reply.app, "slack://channel?team=T1&id=C1&message=1.000300&thread_ts=1.000200");
   const unknown = format.place(c.threads, "C9/2.0", c.offsetMin, c.workspaces) as J;
-  assert.deepEqual([unknown.name, unknown.url], ["#C9", null]);
+  assert.deepEqual([unknown.name, unknown.url, unknown.app], ["#C9", null, undefined]);
+  // A thread whose team the station did not know yet ("slack:<connect id>") has no way into the app.
+  const early = format.place([{ ...threads[0], surface: "slack:cl" }], "C1/1.000200", c.offsetMin, c.workspaces) as J;
+  assert.equal(early.app, undefined);
 });
 
 test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
@@ -180,7 +187,7 @@ test("a_line_standing_for_words_closed_is_their_first_words_without_marks", () =
 });
 
 test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
-  const threads = [{ channel: "C1", threadTs: "1.0", channelName: "ops", sessions: [{ session: "s1" }] }];
+  const threads = [{ surface: "slack:T1", channel: "C1", threadTs: "1.0", channelName: "ops", sessions: [{ session: "s1" }] }];
   const members = [{ email: "a@x.com", name: "阿一" }];
   const slack = ["U1"];
   const live = {
@@ -207,7 +214,10 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   // What 只看收发 leaves out: its steps and thoughts, and its words to itself; what came in and went out, and how it ended, stay.
   assert.deepEqual(items.map((i: J) => i.work === true), [false, true, false, false, true]);
   const m = items[0].body.content.messages[0];
-  assert.deepEqual([m.from.name, m.text, m.place.name, m.place.session], ["你", "hi @ds-ember", "#ops", "s1"]);
+  assert.deepEqual([m.from.name, m.text, m.place.name, m.place.session], ["你", "hi @ds-ember", "Acme#ops", "s1"]);
+  // A message from Slack opens there at itself, in its thread; what was posted, at the thread.
+  assert.equal(m.place.app, "slack://channel?team=T1&id=C1&message=1.2&thread_ts=1.0");
+  assert.equal(items[2].body.content.place.app, "slack://channel?team=T1&id=C1&message=1.0");
   const g = items[1].body.content;
   assert.equal(g.summary, "看看目录 · 共 3 项");
   // Named by its latest call as the chat's activity says that call while it runs.
@@ -219,7 +229,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[1].content.meta, "2 秒");
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
-  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "#ops", "human"]);
+  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "Acme#ops", "human"]);
   // A Slack person it mentions, by the name the station's agents heard them by.
   assert.deepEqual([items[2].body.content.text, items[2].body.content.md], ["@Ada done", markdown("@Ada done")]);
   assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为已完成", "done"]);
