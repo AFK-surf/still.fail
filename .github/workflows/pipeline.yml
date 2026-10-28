@@ -59,7 +59,7 @@ jobs:
       mbui: ${{ steps.plan.outputs.mbui }}
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0, fetch-tags: true }
+        with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" } # (the history's commits and trees: the range, the paths it changed; a blob read is fetched then)
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       # Whether the natives job has anything to do: a part this run uses that the release native-artifacts lacks (the
