@@ -1997,7 +1997,6 @@ let en : Map[String, String] = {
   "web-main.outflow.title": "Data outflow",
   "web-main.outflow.lead": "Programs on this computer you allowed to read your still.fail data. Revoked, their next read is refused.",
   "web-main.outflow.and": ", ",
-  "web-main.outflow.unsigned": "Unsigned",
   "web-main.outflow.revoke": "Revoke",
   "web-main.outflow.revokeConfirm": "Revoke {program}'s access?",
   "web-main.outflow.revokeBody": "Its reads are refused from now on; to give it again, it asks again and you confirm on this computer.",

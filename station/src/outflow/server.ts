@@ -196,7 +196,7 @@ export function words(lang: Lang, who: Identity, self: { name: string; purpose: 
   return {
     title: w("title"),
     heading: w("heading", { program }),
-    signedBy: w("signedBy"),
+    signer: w("signer"),
     unsigned: w("unsigned"),
     program: w("program"),
     identifier: w("identifier"),

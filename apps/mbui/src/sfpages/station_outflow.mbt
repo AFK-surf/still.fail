@@ -1,6 +1,6 @@
 ///|
 /// A station page's 数据外流 (docs/data-outflow.md): the programs of its machine granted its data, each a row naming
-/// it, who signed it as the system said (an unsigned one in red), what it may read, when it was granted and last read,
+/// it, who signed it as the system said, what it may read, when it was granted and last read,
 /// and 取消授权 at its end, asked first. Nothing when there are none (or the station is from before them).
 fn station_outflow(c : @ui.Ctx, core : Core, station : String) -> Unit {
   let grants = outflow_grants(core, station)
@@ -22,9 +22,6 @@ fn station_outflow(c : @ui.Ctx, core : Core, station : String) -> Unit {
           goes=false,
           lead=fn() { st_row_mark(c, "key") },
           tail=fn() {
-            if !flag(gv, "signed") {
-              @sf.pill(c, @sf.t("web-main.outflow.unsigned"), tone=Red)
-            }
             if @sf.button(c, @sf.t("web-main.outflow.revoke"), key="outflow-revoke/" + station + "/" + id, tone=Ghost) {
               @sf.confirm(
                 @sf.t("web-main.outflow.revokeConfirm", args=[("program", program)]),

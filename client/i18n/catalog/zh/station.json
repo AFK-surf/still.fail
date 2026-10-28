@@ -518,8 +518,7 @@
   "station.outflow.scope.chatsWhy": "每个 chat 的标题，是在做、做完了还是在等人，谁开的、什么时候开的，用的模型。不含消息。",
   "station.outflow.window.title": "still.fail",
   "station.outflow.window.heading": "{program} 申请读取你在 still.fail 的数据",
-  "station.outflow.window.signedBy": "签名：",
-  "station.outflow.window.unsigned": "未签名：macOS 无法确认这个程序是谁做的",
+  "station.outflow.window.unsigned": "未签名，macOS 无法确认这个程序是谁做的",
   "station.outflow.window.unsignedShort": "未签名的程序",
   "station.outflow.window.program": "程序",
   "station.outflow.window.identifier": "签名标识",
@@ -536,5 +535,6 @@
   "station.outflow.window.confirm": "确认",
   "station.outflow.window.cancel": "取消",
   "station.outflow.window.reason": "允许 {program} 读取你在 still.fail 的数据",
-  "station.outflow.window.kind": "「{kind}」"
+  "station.outflow.window.kind": "「{kind}」",
+  "station.outflow.window.signer": "签名"
 }

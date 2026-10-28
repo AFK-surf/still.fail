@@ -524,7 +524,6 @@
   "station.outflow.scope.chatsWhy": "Each chat's title, whether it is working, done or waiting on someone, who started it and when, and its agents' models. No messages.",
   "station.outflow.window.title": "still.fail",
   "station.outflow.window.heading": "{program} asks to read your still.fail data",
-  "station.outflow.window.signedBy": "Signed by",
   "station.outflow.window.unsigned": "Not signed: macOS cannot say who made this program",
   "station.outflow.window.unsignedShort": "an unsigned program",
   "station.outflow.window.program": "Program",
@@ -542,5 +541,6 @@
   "station.outflow.window.confirm": "Confirm",
   "station.outflow.window.cancel": "Cancel",
   "station.outflow.window.reason": "allow {program} to read your still.fail data",
-  "station.outflow.window.kind": "“{kind}”"
+  "station.outflow.window.kind": "“{kind}”",
+  "station.outflow.window.signer": "Signed by"
 }

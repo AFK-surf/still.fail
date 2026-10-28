@@ -381,12 +381,12 @@ struct OutflowView: View {
 
   private func identity(_ still: Still) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      if model.signed {
-        pill(model.word("signedBy", "Signed by") + " " + (model.text("signer") ?? model.text("teamId") ?? ""), "checkmark.seal.fill", still.green)
-      } else {
-        pill(model.word("unsigned", "Not signed: macOS cannot say who made this program"), "exclamationmark.triangle.fill", still.red)
-      }
       row(still, model.word("program", "Program"), model.text("app") ?? model.text("identifier") ?? "")
+      if model.signed {
+        row(still, model.word("signer", "Signed by"), model.text("signer") ?? model.text("teamId") ?? "")
+      } else {
+        row(still, model.word("signer", "Signed by"), model.word("unsigned", "Not signed: macOS cannot say who made this program"), ink: still.red)
+      }
       if let identifier = model.text("identifier") { row(still, model.word("identifier", "Identifier"), identifier) }
       row(still, model.word("path", "Path"), model.text("path") ?? "")
       if let said = model.word("said", "").nilIfEmpty { row(still, model.word("saidHeading", "It says (its own words)"), said) }
@@ -396,20 +396,10 @@ struct OutflowView: View {
     .background(RoundedRectangle(cornerRadius: Still.inner, style: .continuous).fill(still.neutral))
   }
 
-  private func pill(_ words: String, _ icon: String, _ ink: Color) -> some View {
-    Label(words, systemImage: icon)
-      .font(.system(size: 12, weight: .medium))
-      .foregroundStyle(ink)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 4)
-      .background(Capsule().fill(ink.opacity(0.14)))
-      .fixedSize(horizontal: false, vertical: true)
-  }
-
-  private func row(_ still: Still, _ name: String, _ value: String) -> some View {
+  private func row(_ still: Still, _ name: String, _ value: String, ink: Color? = nil) -> some View {
     HStack(alignment: .top, spacing: 8) {
       Text(name).font(.system(size: 12)).foregroundStyle(still.muted).frame(width: 72, alignment: .leading)
-      Text(value).font(.system(size: 13)).foregroundStyle(still.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+      Text(value).font(.system(size: 13)).foregroundStyle(ink ?? still.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
     }
   }
 }
