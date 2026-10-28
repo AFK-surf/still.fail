@@ -536,5 +536,7 @@
   "station.outflow.window.signer": "签名",
   "station.card.asking": "✍️ 需要你回答",
   "station.slack.replyHint": "在这个线程里回复作答",
-  "station.feishu.replyHint": "直接回复作答"
+  "station.feishu.replyHint": "直接回复作答",
+  "station.outflow.scope.messages": "chat 里的消息",
+  "station.outflow.scope.messagesWhy": "每个 chat 里人和 agent 说的话，原文。勾上这一项，对方能读到你们的对话内容。"
 }

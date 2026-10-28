@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { log } from "../ops/log.ts";
 
 /// The kinds of data a program may be granted.
-export const SCOPES = ["usage", "chats"] as const;
+export const SCOPES = ["usage", "chats", "messages"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 /// A program as the system says it (the other end of the socket): its code signature where it has one, else its

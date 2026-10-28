@@ -73,3 +73,21 @@ export function outflowChats(s: Store, since: number): Json {
   chats.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
   return { since, chats };
 }
+
+/// v1 `messages`: a chat's messages after its message `after` (its `n`), at most `limit`, oldest first: each one's
+/// `n`, what it is (`message`, `edit`: a later wording of message `target`), who wrote it (`person`, `agent`, and
+/// their reference), its words and when; `last`, the chat's latest `n`, and `more` when there are more after these.
+/// Null for a chat that is not the home workspace's.
+export function outflowMessages(s: Store, thread: number, after: number, limit: number): Json {
+  if (store.getThread(s, thread) === null || !store.seesThread(s, HOME, thread)) return null;
+  const entries = store.entriesAfter(s, thread, BigInt(after));
+  const page = entries.slice(0, limit);
+  return {
+    thread,
+    messages: page.map((e) => ({
+      n: e.n, kind: e.kind, target: e.target, authorKind: e.authorKind, author: e.author, text: e.text, at: e.at,
+    })),
+    last: store.lastEntry(s, thread),
+    more: entries.length > page.length,
+  };
+}

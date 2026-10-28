@@ -620,5 +620,6 @@
   "core-views.outflow.unsigned": "Unsigned program",
   "core-views.outflow.grantedAt": "Granted {when}",
   "core-views.outflow.lastRead": "Last read {when}",
-  "core-views.outflow.neverRead": "Not read yet"
+  "core-views.outflow.neverRead": "Not read yet",
+  "core-views.outflow.scope.messages": "Messages in chats"
 }

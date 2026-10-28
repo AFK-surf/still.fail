@@ -1,7 +1,8 @@
 // Data outflow's own socket (docs/data-outflow.md): <data>/run/outflow.sock, on this machine alone, HTTP. A program
 // here asks for some kinds of the station's data (POST /v1/request): the station says who it is by the other end of the
 // socket (never by what it says of itself), the person at this machine answers in a window, and the program gets a
-// token. With it, that program alone reads what it was granted (GET /v1/usage, GET /v1/chats), in the shape of `/v1`.
+// token. With it, that program alone reads what it was granted (GET /v1/usage, GET /v1/chats, GET /v1/messages), in
+// the shape of `/v1`.
 import { createHash } from "node:crypto";
 import { chmodSync, createReadStream, rmSync, statSync } from "node:fs";
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
@@ -36,6 +37,9 @@ export const ASK_MS = 10 * 60_000;
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 const BODY_MAX = 16 * 1024;
+/// Messages read at once: by default and at most.
+const MESSAGES_PAGE = 100;
+const MESSAGES_PAGE_MAX = 500;
 const SAID_MAX = 200;
 
 class Refused extends Error {
@@ -124,7 +128,7 @@ export class OutflowServer {
   async #answer(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://outflow");
     if (req.method === "POST" && url.pathname === "/v1/request") return this.#request(req, res);
-    if (req.method === "GET" && (url.pathname === "/v1/usage" || url.pathname === "/v1/chats")) return this.#read(req, res, url);
+    if (req.method === "GET" && (url.pathname === "/v1/usage" || url.pathname === "/v1/chats" || url.pathname === "/v1/messages")) return this.#read(req, res, url);
     throw new Refused(404, "no such request");
   }
 
@@ -166,7 +170,7 @@ export class OutflowServer {
     if (grant === null) throw new Refused(401, "revoked");
     const caller = await this.#caller(req);
     if (identityKey(caller) !== identityKey(grant.identity)) throw new Refused(401, "this token was given to another program");
-    const scope: Scope = url.pathname === "/v1/usage" ? "usage" : "chats";
+    const scope: Scope = url.pathname === "/v1/usage" ? "usage" : url.pathname === "/v1/messages" ? "messages" : "chats";
     if (!grant.scopes.includes(scope)) throw new Refused(403, `not granted: ${scope}`);
     const lang = this.#o.lang();
     let text: string;
@@ -178,11 +182,18 @@ export class OutflowServer {
       if (to - from > SPAN_MAX_MS) throw new Refused(400, "a span is at most 31 days");
       if (Math.abs(tz) > 1440) throw new Refused(400, "tz is minutes east of UTC, at most 1440");
       text = await this.#o.reads("outflowUsage", { from, to, tz, lang }, lang);
+    } else if (scope === "messages") {
+      const thread = int(url, "thread");
+      if (thread === null) throw new Refused(400, "thread is the chat's, as /v1/chats names it");
+      const after = Math.max(0, int(url, "after") ?? 0);
+      const limit = Math.min(Math.max(int(url, "limit") ?? MESSAGES_PAGE, 1), MESSAGES_PAGE_MAX);
+      text = await this.#o.reads("outflowMessages", { thread, after, limit }, lang);
+      if (text === "null") throw new Refused(404, "no such chat");
     } else {
       text = await this.#o.reads("outflowChats", { since: int(url, "since") ?? 0 }, lang);
     }
     const read = JSON.parse(text);
-    this.#o.grants.read(grant.id, scope, (scope === "usage" ? read.rows : read.chats)?.length ?? 0);
+    this.#o.grants.read(grant.id, scope, (scope === "usage" ? read.rows : scope === "messages" ? read.messages : read.chats)?.length ?? 0);
     send(res, 200, read);
   }
 }

@@ -539,5 +539,6 @@
   "core-views.outflow.unsigned": "未签名的程序",
   "core-views.outflow.grantedAt": "{when} 授权",
   "core-views.outflow.lastRead": "最近读取 {when}",
-  "core-views.outflow.neverRead": "还没读过"
+  "core-views.outflow.neverRead": "还没读过",
+  "core-views.outflow.scope.messages": "chat 里的消息"
 }
