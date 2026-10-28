@@ -10,7 +10,8 @@
 // time as it is brought over, its words shaped, its rows laid out): its clock does not run while that frame is late to
 // the screen (the host says how late: @hostapi.frame_late), up to nav_late_most, so it moves from where that frame drew
 // it at the display's pace, no step skipped, the wait before it moves instead (as a stack's slide does: nav.mbt; as
-// the web's transitions start once their first frame is drawn).
+// the web's transitions start once their first frame is drawn); and so for each frame after it late one after
+// another (what it shows built over more than one: a native view made as it is laid where it goes).
 
 ///|
 /// The properties a move takes, by their CSS names (one name may stand for several: `margin` for its four,
@@ -102,8 +103,10 @@ impl Moving for MoveRun with rest_at(self, now, frame) {
 }
 
 ///|
-/// Handed each frame's time: the frame after its first, told how late that one was to the screen, its start moved on
-/// that much (nav_late_most at most).
+/// Handed each frame's time: each frame after its first, told how late the one before was to the screen, its start
+/// moved on that much (nav_late_most at most each), as long as they are late one after another; the first on time, it
+/// waits no more. (Its new state may take more than one frame to build: a page built as it is brought over, then its
+/// native view made as it is laid where it goes; each late frame its clock ran past would show as a step skipped.)
 impl Moving for MoveRun with sample(self, now) {
   if !self.waits_late {
     return
@@ -111,10 +114,12 @@ impl Moving for MoveRun with sample(self, now) {
   if self.late_at < 0.0 {
     self.late_at = now
   } else if now > self.late_at {
-    self.waits_late = false
     let late = dmin(h_frame_late(), nav_late_most)
     if late > 0.0 {
       self.start = self.start + late
+      self.late_at = now
+    } else {
+      self.waits_late = false
     }
   }
 }

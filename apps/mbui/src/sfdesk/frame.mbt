@@ -92,6 +92,8 @@ pub(all) struct Wide {
   mut tape_ask : TapePane?
   mut tape_chat : String
   mut tape_panel : String
+  /// the side panel last built on the tape (its key) and in which frame: brought over once a frame before has built it
+  mut tape_built : (String, Int)
   /// the one not in use being pulled over by what shows of it (tape_covers), and how far the finger has moved the tape
   /// since it took it
   mut tape_pull : TapePane?
@@ -153,6 +155,7 @@ pub let wide : Wide = {
   tape_ask: None,
   tape_chat: "",
   tape_panel: "",
+  tape_built: ("", -1),
   tape_pull: None,
   tape_drag: 0.0,
   tape_backing: false,
@@ -221,6 +224,7 @@ fn wide_reset() -> Unit {
   wide.tape_ask = None
   wide.tape_chat = ""
   wide.tape_panel = ""
+  wide.tape_built = ("", -1)
   wide.tape_pull = None
   wide.tape_drag = 0.0
   wide.tape_backing = false
@@ -685,9 +689,14 @@ pub fn frame(
     Some(_) => tape_panel_w(tw)
     None => 0.0
   }
+  // (the page beside the side panel once a frame before has built it, as its move over starts: tape_frame)
+  let laid = match panel_of {
+    Some(side) => wide.tape_built.0 == side.key() && wide.tape_built.1 < c.frame_number()
+    None => false
+  }
   let main_to = if !wide.tape {
     dmax(0.0, c.width - col)
-  } else if panel_of is Some(_) {
+  } else if laid {
     dmax(0.0, tw - tape_shows_left() - tape_shows_right() - 2.0 * bar_gap_now())
   } else {
     tape_one_beside(tw, tape_shows_left())
@@ -886,11 +895,15 @@ pub fn frame(
                   })
                 })
                 |> ignore
+                // (the frame it was first built in, kept while it stays open)
+                if wide.tape_built.0 != side.key() {
+                  wide.tape_built = (side.key(), c.frame_number())
+                }
                 @sf.pane_round.val = None
               },
             ) })
             |> ignore
-          None => ()
+          None => wide.tape_built = ("", -1)
         }
       })
       |> ignore
@@ -1228,6 +1241,7 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
     wide.tape_ask = None
     wide.tape_chat = ""
     wide.tape_panel = ""
+  wide.tape_built = ("", -1)
     wide.tape_pull = None
     wide.tape_drag = 0.0
     wide.tape_backing = false
@@ -1339,6 +1353,10 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
     // Nav::shows_when), as a phone's page slides in once it has what it shows: not sliding over with the page before
     // on it, swapped mid-way and built for the first time as it moves; asked still till then
     Some(Page) if wide.tape_at != Page && !app.nav.top_shows() => ()
+    // the side panel brought over once a frame before this has built it where it waits past the window's edge, as the
+    // page is once it shows what is put on it: what it holds made then (a service's page, its native view made as it is
+    // first drawn: a frame held the while), not as it moves, its first steps skipped over that while
+    Some(Panel) if open != "" && (wide.tape_built.0 != open || wide.tape_built.1 >= c.frame_number()) => ()
     Some(p) => {
       wide.tape_ask = None
       if p != wide.tape_at && !(p == Panel && open == "") {
