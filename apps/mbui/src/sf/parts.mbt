@@ -3191,6 +3191,9 @@ pub fn handle_drag(
   edge? : @ui.Side = Right,
 ) -> Resized {
   c.drag_on(id, axis=Horizontal, hold=true)
+  // (read whatever comes of it: it takes presses in every build of a frame alike, the one that let it go, its end
+  // taken, and one built again after it)
+  let clicked = c.clicked(id)
   let at = fn(h : Handling, x : Double) {
     let d = if edge is Left { h.x0 - x } else { x - h.x0 }
     dmax(min, dmin(max, (h.w0 + d).round()))
@@ -3227,7 +3230,7 @@ pub fn handle_drag(
       c.built_from_changed("a column's edge let go")
     }
     Dropped(w)
-  } else if c.clicked(id) {
+  } else if clicked {
     Pressed
   } else {
     Untouched
