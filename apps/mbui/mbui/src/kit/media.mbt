@@ -605,7 +605,14 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
     Some(t) => t.audio
     None => false
   }
-  let audio = known_audio || (p.started && s.width <= 0.0)
+  // no picture: none once its host is done opening it (a video's done at its first frame shown, its size known by
+  // then); ready alone, a video's size may not be known yet (Android's ExoPlayer tells its size after it is ready)
+  let host_done = match (p.pinned, p.view) {
+    (Some(_), _) => true
+    (None, Some(n)) => n.host_done()
+    (None, None) => false
+  }
+  let audio = known_audio || (p.started && host_done && s.width <= 0.0)
   // left alone while it plays, the controls go (a song's stay): rest_ms from when that last changed
   let rest = "\{p.awake}|\{phase_code(phase)}|\{p.poke}|\{audio}"
   if rest != p.rest_key {
