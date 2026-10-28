@@ -23,7 +23,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0, fetch-tags: true }
+        with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - id: plan
         name: Pin a reviewed release with a successful beta pipeline
@@ -140,7 +140,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - run: cd cloud && pnpm install --frozen-lockfile --prefer-offline
       - name: Promote the same revision's original beta web artifact
@@ -177,7 +177,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - name: Publish the modules' stable packages from the pinned source
         env:
