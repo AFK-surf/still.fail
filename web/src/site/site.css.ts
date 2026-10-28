@@ -69,9 +69,11 @@ export const navMark = style({ display: "grid", placeItems: "center", width: "24
 
 // Gone to from the bar's 下载 (Download): its title clear of the bar.
 globalStyle("#download", { scrollMarginTop: "64px" });
-/** Its title, and the button for this device's app beside it (under it on a narrow screen). */
+/** Its title, and the button for this device's app beside it (under it on a narrow screen, where the cards are as
+ *  tall as what is in them). */
 export const downloadHead = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "24px", flexWrap: "wrap",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "24px",
+  "@media": { [NARROW]: { flexDirection: "column", alignItems: "flex-start", gap: "20px" } },
 });
 export const downloadMain = style({ display: "flex" });
 /** Each device's button: the one for the device the page is on shows (data-platform on the root; a computer not a
@@ -89,6 +91,7 @@ export const downloads = style({
 });
 export const download = style({
   display: "flex", flexDirection: "column", gap: "4px", height: "100%", minHeight: "180px", padding: "20px", boxSizing: "border-box",
+  "@media": { [NARROW]: { minHeight: "0" } },
   borderRadius: vars.rCard, background: CARD, color: "var(--s-muted)", fontSize: vars.textUi, transition: "background .2s",
   selectors: { "&:hover": { background: ink(6) } },
 });
