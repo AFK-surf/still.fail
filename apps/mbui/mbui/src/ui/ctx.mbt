@@ -515,6 +515,8 @@ pub struct Ctx {
   /// @hostapi.a11y_on), asked once as the frame begins
   mut reads_out : Bool
   mut window_corner : Double
+  /// each of the window's corners as the system draws them (top left, then round it), window_corner the roundest
+  window_corners : FixedArray[Double]
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
   // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
@@ -746,6 +748,7 @@ fn Ctx::new() -> Ctx {
     lit_every: false,
     reads_out: false,
     window_corner: 0.0,
+    window_corners: FixedArray::make(4, 0.0),
     inner_faults: [],
     direction: Ltr,
     sems: [],

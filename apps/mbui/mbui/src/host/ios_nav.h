@@ -747,13 +747,15 @@ int32_t mb_host_nav_bar(moonbit_string_t spec) {
 }
 
 
-// How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
-// more) are rounder than anything by them could follow within the corner rule's ranges: said as none; but where the
-// system lays out the app's tabs in every pose (an iPhone Duo's: mb_host_nav_able), the screen's own, the cards along
-// its edges following it (the user, 2026-10-27): read off a view the window's size concentric with it (iOS 26's
-// containerConcentricRadius).
+// How round the window's corners are (@hostapi.window_corner, window_corner_at): the app fills the screen, whose own
+// corners (40 and more) are rounder than anything by them could follow within the corner rule's ranges: said as none;
+// but where the system lays out the app's tabs in every pose (an iPhone Duo's: mb_host_nav_able), the screen's own,
+// the cards along its edges following them (the user, 2026-10-27): read off a view the window's size concentric with
+// it (iOS 26's containerConcentricRadius), each corner its own (an iPhone Duo's outer screen: 8 along its hinge, 59
+// on the other side; a uniform configuration says the roundest of them for all four).
 static UIView *corner_probe;
-double mb_host_window_corner(void) {
+static double corner_said[4] = {-1, -1, -1, -1};
+double mb_host_window_corner_at(int k) {
   if (!mb_host_nav_able()) return 0;
 #ifdef __IPHONE_26_0
   if (@available(iOS 26.0, *)) {
@@ -764,19 +766,31 @@ double mb_host_window_corner(void) {
       corner_probe.hidden = YES;
       corner_probe.userInteractionEnabled = NO;
       corner_probe.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-      corner_probe.cornerConfiguration = [UICornerConfiguration configurationWithUniformRadius:[UICornerRadius containerConcentricRadius]];
+      UICornerRadius *c = [UICornerRadius containerConcentricRadius];
+      corner_probe.cornerConfiguration = [UICornerConfiguration configurationWithTopLeftRadius:c topRightRadius:c
+                                                                             bottomLeftRadius:c bottomRightRadius:c];
     }
     if (corner_probe.superview != win) [win addSubview:corner_probe];
     corner_probe.frame = win.bounds;
     [corner_probe layoutIfNeeded];
-    double k = [corner_probe effectiveRadiusForCorner:UIRectCornerTopLeft];
-    static double said_k = -1;
-    if (k != said_k) {
-      said_k = k;
-      say([NSString stringWithFormat:@"ios: the screen's corner %.1f", k]);
+    // (the corner rule's order: top left, then round it)
+    static const UIRectCorner which[4] = {UIRectCornerTopLeft, UIRectCornerTopRight, UIRectCornerBottomRight,
+                                          UIRectCornerBottomLeft};
+    double r = [corner_probe effectiveRadiusForCorner:which[k & 3]];
+    if (r != corner_said[k & 3]) {
+      corner_said[k & 3] = r;
+      say([NSString stringWithFormat:@"ios: the screen's corner %d %.1f", k & 3, r]);
     }
-    return k;
+    return r;
   }
 #endif
   return 0;
+}
+double mb_host_window_corner(void) {
+  double most = 0;
+  for (int k = 0; k < 4; k++) {
+    double r = mb_host_window_corner_at(k);
+    if (r > most) most = r;
+  }
+  return most;
 }

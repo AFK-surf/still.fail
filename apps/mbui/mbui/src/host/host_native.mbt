@@ -250,6 +250,9 @@ extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
 extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
 
 ///|
+extern "C" fn ffi_window_corner_at(k : Int) -> Double = "mb_host_window_corner_at"
+
+///|
 extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
 
 ///|
@@ -323,6 +326,12 @@ fn set_full_screen(on : Bool) -> Unit {
 /// How round the system draws the window's corners now (@hostapi.window_corner).
 fn window_corner() -> Double {
   ffi_window_corner()
+}
+
+///|
+/// How round the system draws the window's corner `k` (@hostapi.window_corner_at).
+fn window_corner_at(k : Int) -> Double {
+  ffi_window_corner_at(k)
 }
 
 ///|

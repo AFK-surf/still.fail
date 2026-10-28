@@ -107,11 +107,11 @@ priv struct Container {
 }
 
 ///|
-/// Corner `k` of container `ct` (0 top left, then round it): the window's the system's (@hostapi.window_corner), else
-/// its ground's, each corner its own.
+/// Corner `k` of container `ct` (0 top left, then round it): the window's the system's (@hostapi.window_corner_at),
+/// else its ground's, each corner its own.
 fn Ctx::container_r(self : Ctx, ct : Container, k : Int) -> Double {
   if ct.window {
-    self.window_corner
+    self.window_corners[k]
   } else {
     self.nodes[ct.ground].corner_at(k)
   }
@@ -1296,7 +1296,7 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
     let n = self.nodes[q]
     // (the window cuts what is drawn in it as a clip with its corner does)
     let window = q == p && self.window_container(q)
-    let r = if window { self.window_corner } else { n.corner_at(k) }
+    let r = if window { self.window_corners[k] } else { n.corner_at(k) }
     if (n.clip || window) && r >= 0.5 {
       // the corner's own frame: the cut's corner at the origin, inward positive
       let dx = if corner_left(k) { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }

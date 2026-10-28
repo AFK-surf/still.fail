@@ -186,7 +186,8 @@ fn leaked_state() -> Array[String] {
 /// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
 /// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
 /// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
-/// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt).
+/// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt); `window_corners`
+/// each of them where they differ (top left, then round it: an iPhone Duo's outer screen, 8 along its hinge).
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
@@ -214,6 +215,7 @@ pub fn Tester::new(
   live? : Live,
   corners_held? : Bool = true,
   window_corner? : Double = 0.0,
+  window_corners? : FixedArray[Double],
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -279,6 +281,7 @@ pub fn Tester::new(
     inset: window_inset,
     full: false,
     window_corner,
+    window_corners,
     font_scale: 1.0,
     nav_able: false,
     nav_said: "",
