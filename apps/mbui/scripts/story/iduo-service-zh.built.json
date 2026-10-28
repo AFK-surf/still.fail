@@ -1,0 +1,68 @@
+{
+ "title": "Acme 官网",
+ "lang": "zh",
+ "before": [
+  {
+   "kind": "person",
+   "text": "顺手把首页的转圈换成骨架屏",
+   "when": "昨天"
+  },
+  {
+   "kind": "agent",
+   "text": "好了：首页三块数据到之前都显示骨架屏。已合进 main（`7c1e0a2`）。",
+   "when": "昨天"
+  }
+ ],
+ "sent": [
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "读 src/pricing/Plans.tsx"
+   },
+   {
+    "at": 1500,
+    "activity": "加上按月 / 按年切换"
+   },
+   {
+    "at": 2700,
+    "activity": "在 :5173 起开发服务器"
+   },
+   {
+    "at": 4000,
+    "post": {
+     "text": "好了：套餐加了按月 / 按年切换，按年送两个月。开发服务器在 Studio 上起好了，手机上试试：\n\n[打开定价页](https://still.fail/o/ws1/st1/s-c1?service=j-web)"
+    }
+   },
+   {
+    "at": 4300,
+    "working": false
+   }
+  ],
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "合进 main"
+   },
+   {
+    "at": 1900,
+    "post": {
+     "text": "已合进 main（`4b7e2d1`），下次部署按年价格就上线。",
+     "ending": "all_done"
+    }
+   },
+   {
+    "at": 2300,
+    "working": false
+   }
+  ]
+ ],
+ "answered": [],
+ "service": {
+  "files": {
+   "/": "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<link rel=\"stylesheet\" href=\"/app.css\"><title>定价 - Acme</title></head>\n<body>\n<header><span class=\"logo\"></span>Acme</header>\n<main>\n<h1>简单的定价</h1>\n<p class=\"sub\">免费开始，团队变大再升级。</p>\n<div class=\"switch\"><button id=\"m\">按月</button><button id=\"y\" class=\"on\">按年 <span class=\"save\">送 2 个月</span></button></div>\n<div class=\"plans\">\n<div class=\"plan\"><h2>入门</h2><div class=\"price\"><b data-m=\"¥0\" data-y=\"¥0\">¥0</b><span>/ 月</span></div><ul><li>3 个项目</li><li>社区支持</li></ul><a class=\"btn ghost\">开始使用</a></div>\n<div class=\"plan pro\"><div class=\"tag\">最受欢迎</div><h2>专业</h2><div class=\"price\"><b data-m=\"¥168\" data-y=\"¥140\">¥140</b><span>/ 月</span></div><p class=\"bill\" data-m=\"按月付\" data-y=\"按年付 ¥1,680\">按年付 ¥1,680</p><ul><li>不限项目数</li><li>预览部署</li><li>优先支持</li></ul><a class=\"btn\">免费试用</a></div>\n<div class=\"plan\"><h2>团队</h2><div class=\"price\"><b data-m=\"¥420\" data-y=\"¥350\">¥350</b><span>/ 月</span></div><p class=\"bill\" data-m=\"按月付\" data-y=\"按年付 ¥4,200\">按年付 ¥4,200</p><ul><li>专业版全部功能</li><li>SSO 和审计日志</li></ul><a class=\"btn ghost\">联系我们</a></div>\n</div>\n</main>\n<script>\nconst set = (k) => { document.querySelectorAll('[data-m]').forEach(e => e.textContent = e.dataset[k]);\n  document.getElementById('m').className = k === 'm' ? 'on' : ''; document.getElementById('y').className = k === 'y' ? 'on' : ''; };\ndocument.getElementById('m').onclick = () => set('m'); document.getElementById('y').onclick = () => set('y');\n</script>\n</body></html>",
+   "/app.css": "html{background:#f6f6f8}\nbody{margin:0;font-family:-apple-system,\"PingFang SC\",system-ui,sans-serif;color:#1d1d1f;background:#f6f6f8}\nheader{display:flex;align-items:center;gap:10px;padding:16px 20px;font-weight:700;font-size:18px;background:#fff;border-bottom:1px solid #ececf0}\n.logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#ff7a45,#e5484d)}\nmain{padding:24px 18px 40px;max-width:980px;margin:0 auto}\nh1{font-size:30px;margin:6px 0 6px;text-align:center}.sub{text-align:center;color:#6e6e73;margin:0 0 20px}\n.switch{display:flex;width:max-content;margin:0 auto 24px;background:#e9e9ee;border-radius:12px;padding:4px}\n.switch button{border:0;background:none;padding:9px 16px;border-radius:9px;font:600 15px -apple-system,system-ui;color:#3a3a3c}\n.switch button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}\n.save{color:#1f9d55;font-weight:600;font-size:13px;margin-left:4px}\n.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}\n.plan{position:relative;background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06)}\n.plan.pro{outline:2px solid #5b5bd6}\n.tag{position:absolute;top:-11px;left:20px;background:#5b5bd6;color:#fff;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px}\nh2{font-size:17px;margin:0 0 8px}.price b{font-size:34px}.price span{color:#6e6e73;margin-left:4px}\n.bill{color:#1f9d55;font-size:13px;margin:4px 0 0}\nul{padding-left:18px;color:#3a3a3c;line-height:1.7;font-size:14px}\n.btn{display:block;text-align:center;padding:11px;border-radius:10px;background:#5b5bd6;color:#fff;font-weight:600;text-decoration:none}\n.btn.ghost{background:#f0f0f5;color:#1d1d1f}"
+  }
+ }
+}

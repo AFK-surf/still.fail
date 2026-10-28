@@ -1,0 +1,32 @@
+kept-answers-ask {"call": "markdown", "text": "设置页上传头像有时会一直转圈"}
+kept-answers-ask {"call": "markdown", "text": "照片原来没压缩就直接传了。现在先缩到 1080p 再传，6 MB 的照片只剩 300 KB 左右。"}
+kept-answers-ask {"call": "markdown", "text": "顺手把首页的转圈换成骨架屏"}
+kept-answers-ask {"call": "markdown", "text": "好了：首页三块数据到之前都显示骨架屏。已合进 main（`7c1e0a2`）。"}
+kept-answers-ask {"call": "markdown", "text": "找到了：登录按钮的文字和底色写死成了深色，暗色模式下跟页面混在一起。现在改用主题色，用到它的四个页面我都量了对比度：\n\n| 页面 | 按钮 | 浅色 | 暗色（改前） | 暗色（改后） | 测试 |\n|:--|:--|--:|--:|--:|:-:|\n| 登录 | 登录 | 7.8 | 1.1 | 7.2 | ✅ |\n| 注册 | 创建账号 | 7.8 | 1.1 | 7.2 | ✅ |\n| 重置密码 | 发送验证码 | 7.8 | 1.3 | 7.2 | ✅ |\n| 设置 | 退出登录 | 6.9 | 1.2 | 6.5 | ✅ |\n\n高于 4.5 就看得清，四个页面现在都过了。登录页改前改后："}
+kept-answers-ask {"call": "markdown", "text": "看得准：这个链接还是旧的紫色，对比度 3.1，不到 4.5。现在改用主题的链接色，7.4。登录页现在是这样："}
+kept-answers-ask {"call": "markdown", "text": "已合进 main（`4f2a9c1`），测试版在路上了。"}
+kept-answers-ask {"call": "markdown", "text": "登录按钮在暗色模式下看不清，修一下"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.at\",\"text\":\"登录按钮在暗色模式下看不清，修一下\",\"caret\":17}"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.pasted\",\"text\":\"登录按钮在暗色模式下看不清，修一下\",\"here\":\"ws1/st1\"}"}
+kept-answers-ask {"call": "markdown", "text": "还是看不清"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.at\",\"text\":\"还是看不清\",\"caret\":5}"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.pasted\",\"text\":\"还是看不清\",\"here\":\"ws1/st1\"}"}
+kept-answers-ask {"call": "markdown", "text": "顺手把首页的转圈换成骨架屏"}
+kept-answers-ask {"call": "markdown", "text": "好了：首页三块数据到之前都显示骨架屏。已合进 main（`7c1e0a2`）。"}
+kept-answers-ask {"call": "markdown", "text": "Safari 里结账页点支付没反应"}
+kept-answers-ask {"call": "markdown", "text": "在 Studio 的浏览器里复现给你看，实时的：\n\n[结账 - localhost:5173](https://still.fail/w/ws1/s/st1/screen/browser%3AT1)"}
+kept-answers-ask {"call": "markdown", "text": "修好了：Safari 会拦下等了一会儿才弹出的付款窗口，现在点支付直接在页面里打开付款表单。测试付款在 Safari 和 Chrome 里都过了。"}
+kept-answers-ask {"call": "markdown", "text": "已合进 main（`9d41b7e`），测试版在路上了。"}
+kept-answers-ask {"call": "markdown", "text": "修一下"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.at\",\"text\":\"修一下\",\"caret\":3}"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.pasted\",\"text\":\"修一下\",\"here\":\"ws1/st1\"}"}
+kept-answers-ask {"call": "markdown", "text": "顺手把首页的转圈换成骨架屏"}
+kept-answers-ask {"call": "markdown", "text": "好了：首页三块数据到之前都显示骨架屏。已合进 main（`7c1e0a2`）。"}
+kept-answers-ask {"call": "markdown", "text": "好了：套餐加了按月 / 按年切换，按年送两个月。开发服务器在 Studio 上起好了，手机上试试：\n\n[打开定价页](https://still.fail/o/ws1/st1/s-c1?service=j-web)"}
+kept-answers-ask {"call": "markdown", "text": "已合进 main（`4b7e2d1`），下次部署按年价格就上线。"}
+kept-answers-ask {"call": "markdown", "text": "定价页加上年付价格"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.at\",\"text\":\"定价页加上年付价格\",\"caret\":9}"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.pasted\",\"text\":\"定价页加上年付价格\",\"here\":\"ws1/st1\"}"}
+kept-answers-ask {"call": "markdown", "text": "上线吧"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.at\",\"text\":\"上线吧\",\"caret\":3}"}
+kept-answers-ask {"call": "words", "key": "{\"call\":\"ref.pasted\",\"text\":\"上线吧\",\"here\":\"ws1/st1\"}"}

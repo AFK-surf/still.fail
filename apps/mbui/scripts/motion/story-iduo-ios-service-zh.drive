@@ -1,0 +1,65 @@
+# Film 4 of still.fail in use on the iPhone Duo simulator, in Chinese: asked for a change, the agent starts its dev
+# server on the station, and its page is opened on the phone (story scripts/story/iduo-service-zh.json,
+# FILM_LANG=zh FILM_STORY=iduo-service-zh).
+timeout 45000
+until 发消息
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1500
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
+wait 1500
+at unfold
+log UNFOLD
+wait 4500
+at tap=发消息
+tap 发消息
+wait 600
+at keys
+pinyin dingjiaye|定价页
+wait 160
+pinyin jiashang|加上
+wait 160
+pinyin nianfu|年付
+wait 160
+pinyin jiage|价格
+wait 160
+wait 600
+at tap=send
+tap icon:arrow-up
+wait 400
+at kb-down
+# (the keyboard left up as one does: tapping the answer's card takes the page over, the keyboard down with it)
+wait 500
+at working
+until 打开定价页
+at answer
+wait 2200
+at open
+tap 打开定价页
+wait 2500
+at page
+wait 3500
+# (seen, back to the chat to say ship it)
+at tap=back
+tap icon:close
+wait 1200
+at tap=发消息2
+tap 发消息
+wait 600
+at keys2
+pinyin shangxian|上线
+wait 160
+pinyin ba|吧
+wait 160
+wait 600
+at tap=send2
+tap icon:arrow-up
+wait 400
+until 4b7e2d1
+at merged
+wait 3200
+at end
+exit

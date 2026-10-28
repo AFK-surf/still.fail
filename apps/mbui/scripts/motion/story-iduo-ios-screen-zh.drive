@@ -1,0 +1,52 @@
+# Film 3 of still.fail in use on the iPhone Duo simulator, in Chinese: a station's screen watched live as the agent
+# works on it (story scripts/story/iduo-screen-zh.json, FILM_LANG=zh FILM_STORY=iduo-screen-zh; its frames made by
+# screen_frames.mjs).
+timeout 45000
+until 发消息
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1500
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
+wait 1500
+at unfold
+log UNFOLD
+wait 4500
+at card
+tap 结账 - localhost:5173
+wait 1500
+at screen
+wait 7600
+at back
+tap icon:close
+wait 1500
+at tap=发消息
+tap 发消息
+wait 600
+at keys
+pinyin xiuyixia|修一下
+wait 160
+wait 600
+at tap=send
+tap icon:arrow-up
+wait 400
+at kb-down
+# (the keyboard left up as one does after sending: no tap on the list to put it away)
+wait 500
+at working
+until 修好了
+at fixed
+wait 2000
+# (the card under the composer with the keyboard up: the chat pushed up a little to bring it over it)
+at scroll
+drag 560 230 0 -160 450
+wait 700
+at tap=合并
+tap =合并
+until 9d41b7e
+at merged
+wait 3200
+at end
+exit

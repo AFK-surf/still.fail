@@ -26,6 +26,8 @@
 //   tapxy X Y                   taps there (negative: from the right, the bottom)
 //   hold MS TEXT                pressed on TEXT for MS, then let go (a long press)
 //   type TEXT                   committed by the input method      mark TEXT    composed (not yet committed)
+//   keys TEXT                   TEXT a key at a time    pinyin LETTERS|WORDS   LETTERS a key at a time, composed,
+//                               then WORDS taken with the space key (Chinese typed with a pinyin keyboard)
 //   enter                       backspace                 back       the system's back
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
@@ -1117,6 +1119,34 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         if d.keyed < letters.length() {
           return
+        }
+        d.keyed = 0
+        acted()
+        return
+      }
+      // `pinyin LETTERS|WORDS`: Chinese typed as a hand types it with a pinyin keyboard: LETTERS a key at a time, key_ms
+      // apart, composed (marked) as they come, each on the log as `keys`' are (DRIVE KEY); then the space key that takes
+      // the candidate, WORDS committed in their place
+      "pinyin" => {
+        let (spelt, words) = match arg.find("|") {
+          Some(i) => (arg.view(end_offset=i).to_string().to_array(), arg.view(start_offset=i + 1).to_string())
+          None => (arg.to_array(), arg)
+        }
+        while d.keyed < spelt.length() && waited >= d.keyed.to_double() * key_ms {
+          let l = spelt[d.keyed].to_string()
+          h_log("DRIVE KEY \{now} " + l)
+          let so_far = String::from_array(spelt[:d.keyed + 1].to_array())
+          if !h_drive(1, so_far) {
+            on_text(1, so_far, so_far.length(), 0)
+          }
+          d.keyed += 1
+        }
+        if d.keyed < spelt.length() || waited < spelt.length().to_double() * key_ms {
+          return
+        }
+        h_log("DRIVE KEY \{now}  ")
+        if !h_drive(0, words) {
+          on_text(0, words, 0, 0)
         }
         d.keyed = 0
         acted()

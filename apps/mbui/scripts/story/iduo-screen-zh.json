@@ -1,0 +1,367 @@
+{
+ "title": "Acme 商店",
+ "lang": "zh",
+ "before": [
+  {
+   "kind": "person",
+   "text": "顺手把首页的转圈换成骨架屏",
+   "when": "昨天"
+  },
+  {
+   "kind": "agent",
+   "text": "好了：首页三块数据到之前都显示骨架屏。已合进 main（`7c1e0a2`）。",
+   "when": "昨天"
+  },
+  {
+   "kind": "person",
+   "text": "Safari 里结账页点支付没反应",
+   "when": "刚刚"
+  },
+  {
+   "kind": "agent",
+   "text": "在 Studio 的浏览器里复现给你看，实时的：\n\n[结账 - localhost:5173](https://still.fail/w/ws1/s/st1/screen/browser%3AT1)",
+   "when": "刚刚"
+  }
+ ],
+ "sent": [
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "读 src/checkout/pay.ts"
+   },
+   {
+    "at": 1500,
+    "activity": "把付款表单改成在页面里打开"
+   },
+   {
+    "at": 2700,
+    "activity": "在 Safari 里用测试卡付款"
+   },
+   {
+    "at": 4000,
+    "post": {
+     "text": "修好了：Safari 会拦下等了一会儿才弹出的付款窗口，现在点支付直接在页面里打开付款表单。测试付款在 Safari 和 Chrome 里都过了。",
+     "options": [
+      {
+       "label": "先不合",
+       "detail": "留在分支上，我再看看"
+      },
+      {
+       "label": "合并",
+       "detail": "合进 main，测试版自动发",
+       "recommended": true
+      }
+     ]
+    }
+   },
+   {
+    "at": 4400,
+    "working": false
+   }
+  ]
+ ],
+ "answered": [
+  [
+   {
+    "at": 300,
+    "working": true,
+    "activity": "合进 main"
+   },
+   {
+    "at": 1900,
+    "post": {
+     "text": "已合进 main（`9d41b7e`），测试版在路上了。",
+     "ending": "all_done"
+    }
+   },
+   {
+    "at": 2300,
+    "working": false
+   }
+  ]
+ ],
+ "screen": {
+  "title": "结账 - localhost:5173",
+  "card": "Claude 在操作",
+  "line": "在看 · Claude 在操作",
+  "agent": "Claude",
+  "width": 960,
+  "height": 600,
+  "page": "checkout-zh.html",
+  "quality": 60,
+  "moments": [
+   {
+    "at": 0,
+    "s": {
+     "x": 900,
+     "y": 560
+    }
+   },
+   {
+    "at": 500,
+    "s": {
+     "x": 520,
+     "y": 380
+    }
+   },
+   {
+    "at": 900,
+    "s": {
+     "x": 200,
+     "y": 256,
+     "focus": "email"
+    }
+   },
+   {
+    "at": 1120,
+    "s": {
+     "fields": {
+      "email": "lin@"
+     },
+     "focus": "email",
+     "x": 200,
+     "y": 256
+    }
+   },
+   {
+    "at": 1340,
+    "s": {
+     "fields": {
+      "email": "lin@acme"
+     },
+     "focus": "email",
+     "x": 200,
+     "y": 256
+    }
+   },
+   {
+    "at": 1560,
+    "s": {
+     "fields": {
+      "email": "lin@acme.dev"
+     },
+     "focus": "email",
+     "x": 200,
+     "y": 256
+    }
+   },
+   {
+    "at": 1900,
+    "s": {
+     "x": 210,
+     "y": 336,
+     "fields": {
+      "email": "lin@acme.dev"
+     },
+     "focus": "card"
+    }
+   },
+   {
+    "at": 2120,
+    "s": {
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 "
+     },
+     "focus": "card",
+     "x": 210,
+     "y": 336
+    }
+   },
+   {
+    "at": 2340,
+    "s": {
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 "
+     },
+     "focus": "card",
+     "x": 210,
+     "y": 336
+    }
+   },
+   {
+    "at": 2560,
+    "s": {
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242"
+     },
+     "focus": "card",
+     "x": 210,
+     "y": 336
+    }
+   },
+   {
+    "at": 2780,
+    "s": {
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242"
+     },
+     "focus": "card",
+     "x": 210,
+     "y": 336
+    }
+   },
+   {
+    "at": 3100,
+    "s": {
+     "x": 200,
+     "y": 418,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242"
+     },
+     "focus": "exp"
+    }
+   },
+   {
+    "at": 3350,
+    "s": {
+     "x": 200,
+     "y": 418,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28"
+     },
+     "focus": "exp"
+    }
+   },
+   {
+    "at": 3650,
+    "s": {
+     "x": 610,
+     "y": 418,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28"
+     },
+     "focus": "cvc"
+    }
+   },
+   {
+    "at": 3900,
+    "s": {
+     "x": 610,
+     "y": 418,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "focus": "cvc"
+    }
+   },
+   {
+    "at": 4400,
+    "s": {
+     "x": 470,
+     "y": 470,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "pay": "hover"
+    }
+   },
+   {
+    "at": 4700,
+    "s": {
+     "x": 440,
+     "y": 494,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "pay": "down"
+    }
+   },
+   {
+    "at": 4900,
+    "s": {
+     "x": 440,
+     "y": 494,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "pay": "busy",
+     "spin": 0
+    }
+   },
+   {
+    "at": 5260,
+    "s": {
+     "x": 440,
+     "y": 494,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "pay": "busy",
+     "spin": 120
+    }
+   },
+   {
+    "at": 5620,
+    "s": {
+     "x": 440,
+     "y": 494,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "pay": "busy",
+     "spin": 240
+    }
+   },
+   {
+    "at": 6200,
+    "s": {
+     "x": 440,
+     "y": 494,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "error": "付款窗口被拦截了，没有扣款。"
+    }
+   },
+   {
+    "at": 7000,
+    "s": {
+     "x": 700,
+     "y": 600,
+     "fields": {
+      "email": "lin@acme.dev",
+      "card": "4242 4242 4242 4242",
+      "exp": "12 / 28",
+      "cvc": "123"
+     },
+     "error": "付款窗口被拦截了，没有扣款。"
+    }
+   }
+  ],
+  "layout": [
+   1280,
+   800
+  ]
+ }
+}

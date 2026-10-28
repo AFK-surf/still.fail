@@ -9,8 +9,9 @@ words = {"登录 Acme": "Sign in to Acme", "欢迎回来": "Welcome back", "登�
 pics = {}
 kinds = [(("before.png" if en else "改前.png"), "before"), (("after.png" if en else "改后.png"), "after")]
 # (a story whose agent fixes it again: the page as fixed the second time, its link brightened)
-if any(f.get("name") == "after-2.png" for steps in story.get("sent", []) for s in steps for f in s.get("post", {}).get("files", [])):
-    kinds.append(("after-2.png", "after after2"))
+second = "after-2.png" if en else "改后-2.png"
+if any(f.get("name") == second for steps in story.get("sent", []) for s in steps for f in s.get("post", {}).get("files", [])):
+    kinds.append((second, "after after2"))
 for name, kind in kinds:
     html = os.path.join(here, f"_{kind.split()[-1]}.html")
     page = open(os.path.join(here, "login.html")).read().replace("KIND", kind)

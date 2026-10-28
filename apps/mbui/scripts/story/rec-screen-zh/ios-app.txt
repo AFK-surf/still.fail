@@ -1,0 +1,63 @@
+DRIVE start: 53 lines
+ios: thermal state 0
+ios: size classes compact wide, regular high
+ios: launched
+ios: inactive
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+ios: active
+DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
+ios: hinge closed, 0 division(s)
+ios: the screen's corner 0 8.0
+ios: the screen's corner 1 59.0
+ios: the screen's corner 2 59.0
+ios: the screen's corner 3 8.0
+theme: light
+ios: hinge none, 0 division(s)
+ios: hinge closed, 0 division(s)
+DRIVE ok until 发消息 (0 ms)
+ios: first frame 466x678 @3x in 248 ms
+DRIVE AT 703534951.4184169 start
+DRIVE AT 703536452.2540001 tap=chat
+DRIVE tapxy 430 330 at 430,330
+DRIVE AT 703538006.1389169 unfold
+DRIVE LOG UNFOLD
+ios: hinge half, 0 division(s)
+ios: size classes expanded wide, regular high
+ios: the screen's corner 0 55.0
+ios: the screen's corner 1 55.0
+ios: the screen's corner 2 55.0
+ios: the screen's corner 3 55.0
+ios: hinge open, 0 division(s)
+DRIVE AT 703542518.6747501 card
+DRIVE tap 结账 - localhost:5173 at 420,472
+DRIVE AT 703544037.1114168 screen
+DRIVE AT 703551654.0311252 back
+DRIVE tap icon:close at 835,30
+DRIVE AT 703553188.6571251 tap=发消息
+DRIVE tap 发消息 at 551,621
+DRIVE AT 703553951.6830002 keys
+DRIVE KEY 703553951.6830002 x
+DRIVE KEY 703554084.9767919 i
+DRIVE KEY 703554185.2052919 u
+DRIVE KEY 703554285.9511667 y
+DRIVE KEY 703554486.7716668 i
+DRIVE KEY 703554503.9563751 x
+DRIVE KEY 703554686.3889169 i
+DRIVE KEY 703554786.8551251 a
+DRIVE KEY 703554887.3310835  
+DRIVE AT 703555687.9272501 tap=send
+DRIVE tap icon:arrow-up at 835,373
+SAID sent row in the list o:out1
+DRIVE AT 703556137.0547918 kb-down
+DRIVE AT 703556637.2352502 working
+DRIVE ok until 修好了 (4390 ms)
+DRIVE AT 703561027.3682085 fixed
+DRIVE AT 703563034.6633751 scroll
+DRIVE drag 560 230 0 -160 450 from 560,230
+DRIVE AT 703564218.5588335 tap=合并
+DRIVE tap =合并 at 524,438
+DRIVE ok until 9d41b7e (2508 ms)
+DRIVE AT 703566744.8260418 merged
+DRIVE AT 703569951.9560002 end
+DRIVE PASS

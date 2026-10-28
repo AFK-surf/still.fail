@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- A shop's checkout as Studio's browser shows it to the agent (the screen film: screen_frames.mjs draws it at each
+     of its moments, ?s=<state as JSON>): its fields as typed so far, the pointer where the agent has it, Pay pressed,
+     busy, or the error it ends in. -->
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1280px; height: 800px; font: 16px -apple-system, "Helvetica Neue", sans-serif; color: #1d1d1f;
+         background: #f5f5f7; overflow: hidden; position: relative; }
+  .top { height: 64px; background: #fff; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center;
+         padding: 0 48px; gap: 12px; font-weight: 700; font-size: 20px; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #ff7a45, #e5484d); }
+  .wrap { display: flex; gap: 40px; padding: 40px 48px; }
+  .form { flex: 1; background: #fff; border-radius: 16px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  h1 { font-size: 26px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; color: #6e6e73; margin: 16px 0 6px; }
+  .field { height: 46px; border: 1px solid #d2d2d7; border-radius: 10px; padding: 0 14px; display: flex;
+           align-items: center; font-size: 17px; background: #fff; }
+  .field.focus { border-color: #0a84ff; box-shadow: 0 0 0 3px rgba(10,132,255,.2); }
+  .field .ph { color: #aeaeb2; }
+  .caret { display: inline-block; width: 2px; height: 20px; background: #0a84ff; margin-left: 1px; }
+  .row { display: flex; gap: 16px; } .row > div { flex: 1; }
+  .pay { margin-top: 28px; height: 52px; border-radius: 12px; background: #0a84ff; color: #fff; font-weight: 600;
+         font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .pay.hover { background: #0071e3; } .pay.down { background: #0058b0; transform: scale(.99); }
+  .pay.busy { background: #7fb8f5; }
+  .spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.4);
+          border-top-color: #fff; transform: rotate(var(--r, 0deg)); }
+  .err { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #fff1f0; color: #c4312a;
+         font-size: 15px; display: flex; gap: 10px; align-items: center; }
+  .sum { width: 380px; background: #fff; border-radius: 16px; padding: 28px; align-self: flex-start;
+         box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .sum h2 { font-size: 18px; margin-bottom: 18px; }
+  .item { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
+  .thumb { width: 56px; height: 56px; border-radius: 12px; }
+  .item .n { flex: 1; } .item .n div:last-child { color: #6e6e73; font-size: 13px; margin-top: 2px; }
+  .line { display: flex; justify-content: space-between; padding: 8px 0; color: #6e6e73; }
+  .line.total { color: #1d1d1f; font-weight: 700; font-size: 18px; border-top: 1px solid #e5e5ea; margin-top: 8px;
+                padding-top: 16px; }
+  .cursor { position: absolute; width: 22px; height: 30px; pointer-events: none; }
+</style></head><body>
+<div class="top"><div class="logo"></div>Acme 商店</div>
+<div class="wrap">
+  <div class="form">
+    <h1>结账</h1>
+    <label>邮箱</label><div class="field" id="email"></div>
+    <label>卡号</label><div class="field" id="card"></div>
+    <div class="row">
+      <div><label>有效期</label><div class="field" id="exp"></div></div>
+      <div><label>安全码</label><div class="field" id="cvc"></div></div>
+    </div>
+    <div class="pay" id="pay">支付 ¥898.00</div>
+    <div id="err"></div>
+  </div>
+  <div class="sum">
+    <h2>订单</h2>
+    <div class="item"><div class="thumb" style="background:linear-gradient(135deg,#ffd166,#ef8354)"></div>
+      <div class="n"><div>陶瓷马克杯</div><div>沙色 · 2 件</div></div><div>$48.00</div></div>
+    <div class="item"><div class="thumb" style="background:linear-gradient(135deg,#8ecae6,#219ebc)"></div>
+      <div class="n"><div>亚麻围裙</div><div>海蓝</div></div><div>$80.00</div></div>
+    <div class="line"><span>小计</span><span>¥898.00</span></div>
+    <div class="line"><span>运费</span><span>包邮</span></div>
+    <div class="line total"><span>合计</span><span>¥898.00</span></div>
+  </div>
+</div>
+<svg class="cursor" id="cursor" viewBox="0 0 22 30"><path d="M2 2 L2 24 L8 18.5 L12 27.5 L15.5 26 L11.6 17 L19 17 Z"
+  fill="#000" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+<script>
+  const s = JSON.parse(decodeURIComponent(new URLSearchParams(location.search).get('s') || '{}'));
+  const ph = { email: 'you@example.com', card: '1234 1234 1234 1234', exp: '月 / 年', cvc: '安全码' };
+  for (const k of Object.keys(ph)) {
+    const el = document.getElementById(k), v = (s.fields || {})[k] || '';
+    el.innerHTML = v ? v.replace(/&/g, '&amp;').replace(/</g, '&lt;') : `<span class="ph">${ph[k]}</span>`;
+    if (s.focus === k) { el.classList.add('focus'); el.insertAdjacentHTML(v ? 'beforeend' : 'afterbegin', '<span class="caret"></span>'); }
+  }
+  const pay = document.getElementById('pay');
+  if (s.pay) pay.classList.add(s.pay);
+  if (s.pay === 'busy') pay.innerHTML = `<div class="spin" style="--r:${s.spin || 0}deg"></div>Processing…`;
+  if (s.error) document.getElementById('err').innerHTML = `<div class="err">⚠️ ${s.error}</div>`;
+  const c = document.getElementById('cursor');
+  c.style.left = (s.x ?? 900) + 'px'; c.style.top = (s.y ?? 420) + 'px';
+</script>
+</body></html>

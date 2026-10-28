@@ -1,0 +1,90 @@
+# Film 2 of still.fail in use on the iPhone Duo simulator, in Chinese: a picture marked up and sent back (story
+# scripts/story/iduo-mark-zh.json, FILM_LANG=zh FILM_STORY=iduo-mark-zh).
+timeout 45000
+until 发消息
+# (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
+wait 1200
+at start
+wait 1500
+# (the list open over the chat as the outer screen lights: the chat tapped where it shows at the right, the list goes)
+at tap=chat
+tapxy 430 330
+wait 1200
+at tap=发消息
+tap 发消息
+wait 900
+at keys0
+pinyin denglu|登录
+wait 160
+pinyin anniu|按钮
+wait 160
+pinyin zai|在
+wait 160
+pinyin anse|暗色
+wait 160
+pinyin moshi|模式
+wait 160
+pinyin xia|下
+wait 160
+pinyin kanbuqing|看不清
+wait 160
+type ，
+wait 200
+pinyin xiuyixia|修一下
+wait 160
+wait 450
+at tap=send
+tap icon:arrow-up
+wait 500
+at kb-down
+# (the keyboard left up as one does after sending: no tap on the list to put it away)
+wait 600
+at working
+wait 2000
+until 找到了
+# (the answer coming in: the keyboard put away to read it, a while after sending, not at once)
+wait 1200
+tapxy 250 140
+until 退出登录
+at answer
+wait 1500
+at unfold
+log UNFOLD
+wait 4500
+at pic
+tap img:改后
+wait 2000
+at mark
+nav over/mark 902 260
+wait 900
+at draw
+drag 378 466 110 40 500
+wait 900
+at comment
+wait 600
+at keys
+pinyin haishi|还是
+wait 160
+pinyin kanbuqing|看不清
+wait 160
+wait 700
+at note-done
+tap 完成
+wait 900
+at offer
+tap 添加到对话
+wait 1200
+at tap=send2
+tap icon:arrow-up
+wait 500
+at working2
+until 看得准
+at fixed
+wait 1500
+at tap=合并
+tap =合并
+until 4f2a9c1
+at merged
+wait 3200
+at end
+exit
