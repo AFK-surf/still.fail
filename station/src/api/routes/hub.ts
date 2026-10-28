@@ -604,7 +604,7 @@ export const routes = (tools: Tools): Route[] => {
           // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
           // not waited on.
           const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
-          if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, said, kept, ccTo);
+          if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, r.viewer.email, said, kept, ccTo);
           // Answering from the decisions page means the question was read, even without opening its chat. Stop at that
           // card: later messages may not have been seen.
           if (answeredCard !== null) s.setRead(r.viewer.email, t.id, answeredCard);

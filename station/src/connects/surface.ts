@@ -54,6 +54,8 @@ export abstract class ConnectedSurface implements Connection {
   private listeners = new Set<() => void>();
   /// People as the platform says, by their id there.
   protected names = new Map<string, Person>();
+  /// People found by their email (userOf), by it.
+  private byEmail = new Map<string, string>();
   /// Each thread an agent works for: its status line.
   private lines = new Map<string, StatusLine>();
   private readonly pingMs: number;
@@ -87,6 +89,8 @@ export abstract class ConnectedSurface implements Connection {
   abstract runSocket(url: string, handler: Handler): Effect.Effect<void, Error>;
   /// What the platform says of a person (null: nothing, or it could not be asked).
   protected abstract lookUp(user: string): Promise<Person | null>;
+  /// The id of the person with this email, as the platform says (null: none, or it could not be asked).
+  protected abstract lookUpEmail(email: string): Promise<string | null>;
   /// A thread's status line.
   protected abstract statusLine(thread: ThreadRef): StatusLine;
   abstract post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string>;
@@ -288,6 +292,18 @@ export abstract class ConnectedSurface implements Connection {
   async userEmail(user: string): Promise<string | null> {
     const email = (await this.profile(user))?.email ?? "";
     return email === "" ? null : email;
+  }
+
+  /// The person there with this email, kept for the connection's lifetime once found (one not found is asked again:
+  /// they may join later).
+  async userOf(email: string): Promise<string | null> {
+    const key = email.trim().toLowerCase();
+    if (key === "") return null;
+    const known = this.byEmail.get(key);
+    if (known !== undefined) return known;
+    const user = await this.lookUpEmail(key);
+    if (user !== null) this.byEmail.set(key, user);
+    return user;
   }
 
   working(thread: ThreadRef, messageTs: string | null, status: string, page?: string | null) {

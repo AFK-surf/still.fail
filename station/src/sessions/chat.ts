@@ -80,6 +80,9 @@ export interface ChatSurface {
   api?(method: string, params: Record<string, Json>): Promise<Json>;
   /// A person's email, where the platform shares it.
   userEmail?(user: string): Promise<string | null>;
+  /// The person there with this email (their id, as `mention` takes it), where the platform says; null when none is or
+  /// it may not be asked.
+  userOf?(email: string): Promise<string | null>;
   /// What is already known of a person, without waiting (unknown ones are fetched in the background).
   knownPerson?(user: string): Person | null;
   knownChannel?(channel: string): string | null;

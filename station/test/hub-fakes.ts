@@ -38,6 +38,8 @@ export class FakeChat implements ChatSurface {
   /// The bytes of files shared in messages, by file id (others cannot be read); the ids fetched, in order.
   shared = new Map<string, string>();
   downloads: string[] = [];
+  /// People there by their email (userOf).
+  people = new Map<string, string>();
 
   constructor(bot: string) {
     this.bot = bot;
@@ -73,6 +75,9 @@ export class FakeChat implements ChatSurface {
     const bytes = this.shared.get(file.id);
     if (bytes === undefined) throw new Error("missing_scope");
     return new TextEncoder().encode(bytes);
+  }
+  async userOf(email: string) {
+    return this.people.get(email.trim().toLowerCase()) ?? null;
   }
   working(thread: ThreadRef, messageTs: string | null, status: string) {
     this.statuses.push([`${thread.channel}/${thread.threadTs}`, messageTs, status]);

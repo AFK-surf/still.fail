@@ -401,3 +401,22 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     rmSync(data, { recursive: true, force: true });
   }
 });
+
+test("surface: a person found by their email (contact batch_get_id), their open_id, kept once found; none where not found or the app may not ask", async () => {
+  const r = await surfaceRig();
+  try {
+    let may = true;
+    r.fake.answer("POST /open-apis/contact/v3/users/batch_get_id", (seen: Json) =>
+      !may ? { code: 99991672, msg: "Access denied. One of the following scopes is required: [contact:user.id:readonly]" }
+        : { code: 0, data: { user_list: (seen.body.emails as string[]).map((email) => (email === "ada@example.test" ? { email, user_id: "ou_ada" } : { email })) } },
+    );
+    assert.deepEqual([await r.surface.userOf("Ada@example.test"), await r.surface.userOf("bo@example.test")], ["ou_ada", null]);
+    const asked = r.fake.calls("POST", "/open-apis/contact/v3/users/batch_get_id");
+    assert.deepEqual(asked.map((s) => [s.query.user_id_type, s.body]), [["open_id", { emails: ["ada@example.test"] }], ["open_id", { emails: ["bo@example.test"] }]]);
+    may = false;
+    assert.deepEqual([await r.surface.userOf("ada@example.test"), await r.surface.userOf("bo@example.test")], ["ou_ada", null], "one found is kept");
+    assert.equal(r.surface.mention("ou_ada"), "<at id=ou_ada></at>");
+  } finally {
+    await r.close();
+  }
+});
