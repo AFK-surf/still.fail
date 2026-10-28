@@ -45,7 +45,8 @@ globalStyle(":root[data-theme-switching] *, :root[data-theme-switching] *::befor
 // ---- Nav ----
 
 export const nav = style({
-  position: "sticky", top: "0", zIndex: "10", borderBottom: `1px solid ${LINE}`,
+  // No line under it: its frosted glass sets it apart from what scrolls under it.
+  position: "sticky", top: "0", zIndex: "10",
   background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
@@ -138,7 +139,7 @@ export const heroWords = style({ animation: `${fadeUp} .8s .05s ${vars.easeOut} 
 export const title = style({ margin: "0", fontSize: "clamp(44px, 5.4vw, 80px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
 export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance", wordBreak: "keep-all" });
 export const heroActions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px", marginTop: "36px" });
-export const heroNote = style({ fontSize: vars.textUi, color: DIM });
+export const heroNote = style({ fontSize: vars.textUi, color: "var(--s-muted)" });
 
 export const pictureBox = style({ animation: `${fadeUp} .8s .18s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
 /** A dot going along a line now and then: none where less motion is asked for. */
@@ -176,7 +177,7 @@ export const frame = style({ height: "100%", containerType: "inline-size" });
 const NARROW_BOX = "(width < 700px)";
 export const frameWide = style({ height: "100%", "@container": { [NARROW_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@container": { [NARROW_BOX]: { display: "block" } } });
-export const caption = style({ margin: "16px 0 0", textAlign: "center", fontSize: vars.textUi, color: DIM });
+export const caption = style({ margin: "16px 0 0", textAlign: "center", fontSize: vars.textUi, color: "var(--s-muted)" });
 
 // ---- Sections ----
 
@@ -186,7 +187,7 @@ export const headingTitle = style({ margin: "0", fontSize: "clamp(30px, 3.6vw, 4
 export const phrase = style({ display: "inline-block" });
 export const headingLede = style({ margin: "14px 0 0", fontSize: "clamp(16px, 1.5vw, 18px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
 
-// What it connects: three, side by side under a rule each; one under another on a narrow screen.
+// What it connects: three, side by side, set apart by the room between them; one under another on a narrow screen.
 export const links = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
@@ -196,8 +197,9 @@ export const scenes = style({
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "40px",
   "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }, [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
 });
-export const link = style({ paddingTop: "24px", borderTop: `1px solid ${ink(14)}` });
-export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: ORANGE });
+export const link = style({});
+/** Its number, quiet: the orange is for where things connect. */
+export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: "var(--s-muted)" });
 export const linkTitle = style({ margin: "14px 0 0", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.01em", color: FG });
 export const linkText = style({ margin: "10px 0 0", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
 export const parts = style({ display: "flex", flexWrap: "wrap", gap: "8px", margin: "18px 0 0", padding: "0", listStyle: "none" });
@@ -381,6 +383,6 @@ export const demoAfterHeading = style({ marginTop: "40px" });
 
 // ---- Footer ----
 
-export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: vars.textBody, borderTop: `1px solid ${LINE}` });
+export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: vars.textBody });
 export const footerRow = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 24px" });
 export const footerFirst = style({ marginRight: "auto" });
