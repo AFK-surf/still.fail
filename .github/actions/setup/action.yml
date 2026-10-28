@@ -80,6 +80,17 @@ runs:
         # bound TextEncoder's empty Uint8Array as NULL in 24.13 (core-ts's bridge test, 2026-10-04), not in 24.15.
         node-version-file: .node-version
         package-manager-cache: false
+    # Windows' pnpm.exe kept in the Actions cache by its version: github.com's release fetched once a version, not every
+    # run's (one run's fetch could not connect to github.com for 21 s, main c6764347, 40661676439)
+    - id: win-pnpm
+      if: inputs.pnpm == 'true' && runner.os == 'Windows'
+      shell: bash
+      run: echo "key=pnpm-win-x64-$(node -p 'require("./package.json").packageManager.split("@")[1]')" >> "$GITHUB_OUTPUT"
+    - if: inputs.pnpm == 'true' && runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/pnpm/pnpm.exe
+        key: ${{ steps.win-pnpm.outputs.key }}
     - if: inputs.pnpm == 'true'
       shell: bash
       run: |
@@ -96,7 +107,9 @@ runs:
           esac
           dir="$(cygpath -u "$RUNNER_TEMP")/pnpm"
           mkdir -p "$dir"
-          curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 -o "$dir/pnpm.exe" "https://github.com/pnpm/pnpm/releases/download/v$version/pnpm-win-x64.exe"
+          # (kept: the Actions cache's, as checked as a fetched one)
+          [ -f "$dir/pnpm.exe" ] ||
+            curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 -o "$dir/pnpm.exe" "https://github.com/pnpm/pnpm/releases/download/v$version/pnpm-win-x64.exe"
           echo "$sha  $dir/pnpm.exe" | sha256sum -c --quiet || { echo "pnpm-win-x64.exe $version: not the SHA-256 kept for it"; exit 1; }
           cygpath -w "$dir" >> "$GITHUB_PATH"
           export PATH="$dir:$PATH"
