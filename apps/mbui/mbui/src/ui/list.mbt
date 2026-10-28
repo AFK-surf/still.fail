@@ -460,8 +460,9 @@ pub fn Ctx::list(
         glide_shows: false,
         bar: Bar::new(),
         laid: -1,
-        began: (0, 0.0, 0.0, false),
-        left: (0, 0.0, 0.0, false),
+        began: (0, 0.0, 0.0, false, false),
+        left: (0, 0.0, 0.0, false, false),
+        glide_began: (0.0, 0.0, -1.0, 0.0, -1.0),
         scroll_asked: (-1, 0, 0.0),
         fling: 0,
         fling_v: 0.0,
@@ -637,14 +638,24 @@ fn Ctx::place_list(
   // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
   // time may have been laid at a height it does not keep (a fold's words whole until it knows how tall they are), and
   // where the list stood said from that row would move what is in view by what the row lost (to the end, past it)
-  let now = (st.anchor, st.anchor_off, st.pending, st.at_end)
+  // (and gliding to its end as it was then: a glide that set out at the first, its end not yet grown, is under way
+  // again, not over with the list short of its end)
+  let now = (st.anchor, st.anchor_off, st.pending, st.at_end, st.glide)
   if st.laid == self.frame_no && now == st.left {
     st.anchor = st.began.0
     st.anchor_off = st.began.1
     st.pending = st.began.2
     st.at_end = st.began.3
+    st.glide = st.began.4
+    let (t0, l0, rest, left, meant) = st.glide_began
+    st.glide_t0 = t0
+    st.glide_l0 = l0
+    st.glide_rest = rest
+    st.glide_left = left
+    st.glide_meant = meant
   } else {
     st.began = now
+    st.glide_began = (st.glide_t0, st.glide_l0, st.glide_rest, st.glide_left, st.glide_meant)
   }
   st.laid = self.frame_no
   // rows built in the build phase (none, normally) are not shown
@@ -854,7 +865,7 @@ fn Ctx::place_list(
       }
     }
   }
-  st.left = (st.anchor, st.anchor_off, st.pending, st.at_end)
+  st.left = (st.anchor, st.anchor_off, st.pending, st.at_end, st.glide)
   // a finger pulls past the end it reached; a fling stops there
   let drag = st.drag_pending
   st.drag_pending = 0.0

@@ -71,11 +71,13 @@ struct ListState {
   // its scroll bar (scroll_bar.mbt)
   bar : Bar
   // the frame it was last laid out in; where it stood as that frame's first layout of it began and where that frame's
-  // last left it (the row it is anchored to, how far into it, what was scrolled not laid yet, whether at its end): laid
-  // out again in that frame, it is laid from where it began, unless something moved it since (Ctx::place_list)
+  // last left it (the row it is anchored to, how far into it, what was scrolled not laid yet, whether at its end,
+  // whether gliding to it): laid out again in that frame, it is laid from where it began, unless something moved it
+  // since (Ctx::place_list); its glide with it, as it was then (`glide_began`: set out or not, its way)
   mut laid : Int
-  mut began : (Int, Double, Double, Bool)
-  mut left : (Int, Double, Double, Bool)
+  mut began : (Int, Double, Double, Bool, Bool)
+  mut left : (Int, Double, Double, Bool, Bool)
+  mut glide_began : (Double, Double, Double, Double, Double)
   // the last scroll to a row asked of it (Ctx::list_scroll_to): the frame, the row and the offset (asked again as the
   // frame is built again, the same: done already)
   mut scroll_asked : (Int, Int, Double)
