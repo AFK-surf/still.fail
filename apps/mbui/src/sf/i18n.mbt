@@ -17,3 +17,15 @@ pub fn set_words(said : (String, Array[(String, String)]) -> String) -> Unit {
 pub fn t(key : String, args? : Array[(String, String)] = []) -> String {
   (words_of.val)(key, args)
 }
+
+///|
+/// The words for `key` either side of its `{name}` (the web's tx, with something drawn in its place: a workspace's
+/// mark and name, a person's face and name): what goes before it, and after. All of them before, where it has none.
+pub fn t_around(key : String, name : String, args? : Array[(String, String)] = []) -> (String, String) {
+  let mark = "\u{E000}"
+  let whole = t(key, args=[..args, (name, mark)])
+  match whole.find(mark) {
+    Some(i) => (whole.view(end_offset=i).to_owned(), whole.view(start_offset=i + mark.length()).to_owned())
+    None => (whole, "")
+  }
+}

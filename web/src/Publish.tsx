@@ -20,6 +20,7 @@ import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Publish.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import { t } from "./i18n.ts";
+import { PersonNamed } from "./components.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /** A preview as asked (`chat.publishPreview`): being read, read, or why not. */
@@ -242,7 +243,7 @@ export function PublishedLinks({ links, onRevoke }: { links: ChatPublished[]; on
       {links.map((l) => (
         <div key={l.id} className={css.link}>
           <Web size={14} className={css.linkMark} />
-          <span className={css.linkText}><Time stamp={l.time?.createdAt} /> · {l.byName}</span>
+          <span className={css.linkText}><Time stamp={l.time?.createdAt} /> · <PersonNamed name={l.byName} picture={l.byPicture} size={14} /></span>
           <button type="button" className={css.linkAction} onClick={() => copy(l.link)}>{t("common.copy")}</button>
           {l.mayRevoke && <button type="button" className={css.linkAction} onClick={() => onRevoke(l.id)}>{t("web-pages.chat.publish.revoke")}</button>}
         </div>

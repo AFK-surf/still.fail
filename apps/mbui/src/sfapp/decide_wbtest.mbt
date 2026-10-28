@@ -251,7 +251,7 @@ test "the chat's sheet and an agent's card as tall as what they show: their last
   let calls : Array[Made] = []
   // (the chat's last: its public links' last, Bob's)
   // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
-  for case in [("chat-info", "2 天前 · Bob"), ("chat-agent", "后台")] {
+  for case in [("chat-info", "Bob"), ("chat-agent", "后台")] {
     let (mode, last) = case
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")

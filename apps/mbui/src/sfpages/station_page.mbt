@@ -976,11 +976,19 @@ fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
   st_section(c, "Workspace", count=ws.length(), description=@sf.t("web-pages.stations.workspacesLead"), fn() {
     @sf.group(c, fn() {
       for w in ws {
-        @sf.said_row(c, text(Some(w), "name"), text(Some(w), "line"))
+        let wv = Some(w)
+        let name = text(wv, "name")
+        @sf.said_row(c, name, text(wv, "line"), lead=fn(c) {
+          @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), st_ws_mark)
+        })
       }
     })
   })
 }
+
+///|
+/// A workspace's mark before its name (StationPage.tsx WorkspaceNamed: 16).
+let st_ws_mark : Double = 16.0
 
 // ── Machine ─────────────────────────────────────────────────────────────
 

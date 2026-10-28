@@ -15,6 +15,8 @@ pub(all) struct OutsideRef {
   title : String
   workspace : String
   workspace_name : String
+  workspace_emoji : String
+  workspace_icon : String
   may : Bool
 }
 
@@ -99,6 +101,8 @@ fn outside_refs_of(v : Json) -> Array[OutsideRef] {
       title: text(s, "title"),
       workspace: text(s, "workspace"),
       workspace_name: text(s, "workspaceName"),
+      workspace_emoji: text(s, "workspaceEmoji"),
+      workspace_icon: text(s, "workspaceIcon"),
       may: flag(s, "may"),
     }
   })

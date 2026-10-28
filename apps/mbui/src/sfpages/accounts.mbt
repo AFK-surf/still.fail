@@ -1212,6 +1212,8 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> 
           on,
           note=@sf.t(if on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name)]),
           busy~,
+          // its mark before it, as the workspace is named everywhere
+          lead=fn(c) { @sf.workspace_badge(c, name, text(wv, "emoji"), text(wv, "icon"), profile_ws_mark) },
         )
         if next != on {
           let list = if next { now.copy() } else { now.filter(fn(x) { x != ws }) }
@@ -2054,3 +2056,7 @@ let pf_pick_foot : @ui.Style = @ui.css("row w=Full pb=S2_5 gap=S2_5 justify=JEnd
 /// Its two buttons at the head's end (pickModelsActions: 8 apart).
 // kept across runs: a value (no field of it changes)
 let pf_pick_actions : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// A workspace's mark before its switch's title (Accounts.tsx WorkspaceNamed: 16).
+let profile_ws_mark : Double = 16.0

@@ -86,7 +86,10 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       for a in others {
         let sub = text(Some(a), "sub")
         let email = text(Some(a), "email")
-        @sf.link_row(c, "", email, goes=false, control=fn() {
+        let shown = if text(Some(a), "name") != "" { text(Some(a), "name") } else { email }
+        // each with their face, as the one in view
+        let lead = fn() { avatar(c, core, email, shown, acc_picture, picture=text(Some(a), "picture")) }
+        @sf.link_row(c, "", email, goes=false, lead~, control=fn() {
           if @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost) {
             sign_out(sub, email)
           }

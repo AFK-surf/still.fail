@@ -39,10 +39,11 @@ test "分享图片: the chat's sheet opens it, and lists the public links made b
   let calls : Array[Made] = []
   let t = publish_core(calls)
   assert_true(t.find("分享图片") is Some(_))
-  assert_true(t.find("10 分钟前 · Alice") is Some(_))
-  assert_true(t.find("2 天前 · Bob") is Some(_))
+  // when, then who: their face (their initial, without a picture) before their name
+  assert_true(t.find("10 分钟前 · ") is Some(_) && t.find("Alice") is Some(_))
+  assert_true(t.find("2 天前 · ") is Some(_) && t.find("Bob") is Some(_))
   // Bob's only copied: the viewer did not publish it (the one 撤销 is on the viewer's own row)
-  let (_, mine) = t.find("10 分钟前 · Alice").unwrap()
+  let (_, mine) = t.find("Alice").unwrap()
   let (_, revoke) = t.find_last("撤销").unwrap()
   assert_true((revoke - mine).abs() < 1.0)
   // (Bob's 复制, the last, under 复制会话链接: the sheet's last row, brought up from under its foot)

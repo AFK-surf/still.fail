@@ -48,6 +48,7 @@ import * as listsCss from "./styles/lists.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
+import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { t } from "../i18n.ts";
 import { LookInWords } from "../StationNamed.tsx";
 
@@ -419,6 +420,7 @@ function Workspaces({ s }: { s: StationView }) {
       <ListCard>
         {m.workspaces.map((w) => (
           <ListRow key={w.workspace}>
+            <WorkspaceBadge w={w} size={20} />
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{w.name}</span>
             <span className={settingsPageCss.mValue}><span className={css.mMembershipLine}>{w.line}</span></span>
           </ListRow>

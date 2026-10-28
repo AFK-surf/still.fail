@@ -196,16 +196,16 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
   }
   let mut first = true
   // (a small panel's groups: a named one its name's room over it, one with none 6 under the one before)
-  let group = fn(name : String, body : () -> Unit) {
+  let group = fn(name : String, lead : ((@ui.Ctx) -> Unit)?, body : () -> Unit) {
     if name == "" && !first {
       c.box(style=att_group_next, fn() { @sf.panel_group(c, body) }) |> ignore
     } else {
-      @sf.panel_group(c, label=name, body)
+      @sf.panel_group(c, label=name, lead?=lead, body)
     }
     first = false
   }
   if trouble != "" {
-    group("Station", fn() {
+    group("Station", None, fn() {
       attention_item(c, "attention/trouble", "alert", trouble, "", "", None, fn() {
         close()
         @sfbase.go_place("stations") |> ignore
@@ -213,10 +213,15 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
     })
   }
   if jobs > 0 {
-    group("", fn() { open_jobs(c, src, w) })
+    group("", None, fn() { open_jobs(c, src, w) })
   }
   for g in groups {
-    group(if several { g.1 } else { "" }, fn() {
+    // each workspace's mark before its name, as the core says it with its chats (MarkItem's workspaceEmoji, workspaceIcon)
+    let first_item = Some(g.2[0])
+    let lead = fn(c : @ui.Ctx) {
+      @sf.workspace_badge(c, g.1, text(first_item, "workspaceEmoji"), text(first_item, "workspaceIcon"), att_ws_mark)
+    }
+    group(if several { g.1 } else { "" }, Some(lead), fn() {
       for i in g.2 {
         let v = Some(i)
         let key = attention_key(i)
@@ -377,6 +382,10 @@ let att_list : @ui.Style = @ui.css("w=Full gap=S0_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let att_group_next : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+/// A workspace's mark before its name over its chats (Attention.tsx: 14).
+let att_ws_mark : Double = 14.0
 
 ///|
 /// Nothing waiting (empty): 10 round, 13, muted.

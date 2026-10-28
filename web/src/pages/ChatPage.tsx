@@ -57,6 +57,7 @@ import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { tx } from "../cloud/words.tsx";
 import { PublishDialog, PublishedLinks, RevokeConfirm } from "../Publish.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
@@ -798,7 +799,7 @@ function ShareDialog({ share, thread, onClose }: { share: ChatShare; thread: num
           <li key={p.workspace}>
             <label className={pagesCss.listRow}>
               <input type="checkbox" checked={ticked.has(p.workspace)} onChange={() => toggle(p.workspace)} />
-              <span className={pagesCss.listRowTitle}>{p.name}</span>
+              <WorkspaceNamed w={p} className={pagesCss.listRowTitle} />
             </label>
           </li>
         ))}

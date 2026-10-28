@@ -2467,6 +2467,8 @@ pub(all) struct OutsideRef {
   title : String
   workspace : String
   workspace_name : String
+  workspace_emoji : String
+  workspace_icon : String
   may : Bool
 }
 

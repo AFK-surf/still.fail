@@ -24,6 +24,20 @@ let publish_row_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=f
 let published_words : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.full_words)
 
 ///|
+/// How long ago, as its words are, as long as it is.
+// kept across runs: a value (no field of it changes)
+let published_ago : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
+
+///|
+/// When and by whom in a line, what is left of the row: the face 4 from the words either side.
+// kept across runs: a value (no field of it changes)
+let published_line : @ui.Style = @ui.css("row gap=S1 align=ACenter").then(@ui.style(w=@sf.grow))
+
+///|
+/// Who published it: their face, as large as the words.
+let published_face : Double = 16.0
+
+///|
 /// Sharing the chat, a card of its own in its sheet (Publish.kt PublishList): 分享图片 opens the page that draws it as a
 /// picture, for those who may (not a read-only member); each of its public links under it, when and by whom, 复制, and
 /// 撤销 for who published it or an owner or admin (asked first; gone from here at once).
@@ -66,8 +80,19 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
   let id = text(l, "id")
   info_row(c, "", fn() {
     @sf.icon(c, "web", size=published_mark, color=@sf.theme().p.muted) |> ignore
-    let said = [text(field(field(l, "time"), "createdAt"), "ago"), text(l, "byName")].filter(fn(s) { s != "" })
-    c.text(said.join(" · "), style=published_words) |> ignore
+    // how long ago, then who: their face before their name
+    let ago = text(field(field(l, "time"), "createdAt"), "ago")
+    let by = text(l, "byName")
+    c.box(style=published_line, fn() {
+      if ago != "" {
+        c.text(if by != "" { ago + " · " } else { ago }, style=published_ago) |> ignore
+      }
+      if by != "" {
+        avatar(c, src, if text(l, "by") != "" { text(l, "by") } else { by }, by, text(l, "byPicture"), published_face)
+        c.text(by, style=published_words) |> ignore
+      }
+    })
+    |> ignore
     if text_action(c, "publish/copy/" + id, tr("common.copy")) {
       copy_link(c, text(l, "link"))
     }

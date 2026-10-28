@@ -64,7 +64,7 @@ let outside_cannot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 let outside_failed_box : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
-/// Whose a chat is, in a small outlined pill (PageParts.kt StationTag with words alone: 104 at most, 8 and 2 in, its
+/// Whose a chat is, in a small outlined pill (PageParts.kt StationTag: 104 at most, 8 and 2 in, its mark 4 before its
 /// words 12/16 muted on one line).
 // kept across runs: a value (no field of it changes)
 let words_tag : @ui.Style = @ui.style(
@@ -72,6 +72,7 @@ let words_tag : @ui.Style = @ui.style(
   max_w=@sf.tag_max,
   px=S2,
   py=S0_5,
+  gap=S1,
   radius=Full,
   border=B1,
   border_color=Line,
@@ -146,7 +147,12 @@ fn outside_body_of(c : @ui.Ctx, key : String) -> Unit {
         })
         |> ignore
         c.box(style=words_tag, fn() {
-          c.text(fill("web-main.outside.from", [("name", x.workspace_name)]), style=words_tag_words) |> ignore
+          let (before, after) = @sf.t_around("web-main.outside.from", "name")
+          if before != "" {
+            c.text(before, style=words_tag_words) |> ignore
+          }
+          @sf.workspace_badge(c, x.workspace_name, x.workspace_emoji, x.workspace_icon, 12.0)
+          c.text(x.workspace_name + after, style=words_tag_words) |> ignore
         })
         |> ignore
       })

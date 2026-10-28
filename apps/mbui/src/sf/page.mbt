@@ -1653,7 +1653,8 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
 /// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); the switch
 /// alone takes the press, at every width (its reach a finger's least however small it is drawn), its words none. `busy`: what it set is on its
-/// way (not turned again meanwhile). Answers whether it is on now.
+/// way (not turned again meanwhile). `lead`: what goes before its title on its line (a workspace's mark:
+/// workspace_badge). Answers whether it is on now.
 pub fn switch_row(
   c : @ui.Ctx,
   key : String,
@@ -1662,18 +1663,19 @@ pub fn switch_row(
   note? : String = "",
   disabled? : Bool = false,
   busy? : Bool = false,
+  lead? : (@ui.Ctx) -> Unit,
 ) -> Bool {
   match look() {
     // (on a narrow page in the words of its narrow rows)
     Narrow if in_words.val > 0 && in_card.val == 0 =>
-      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words))
+      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
     Wide =>
       if in_list.val > 0 {
         let mut now = on
-        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~) }) |> ignore
+        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?) }) |> ignore
         now
       } else {
-        wide_switch_row(c, key, title, on, note~, disabled~, busy~)
+        wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?)
       }
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
@@ -1682,7 +1684,7 @@ pub fn switch_row(
         // (its switch across the middle of its words: on its title's line it stood in the row's corner, not
         // concentric with it; a switch is narrow, its note keeps most of the row)
         c.box(style=pg_row_words, fn() {
-          c.text(title, style=pg_switch_title) |> ignore
+          led_title(c, title, pg_switch_title, lead)
           if note != "" {
             c.text(note, style=meta.then(full_words)) |> ignore
           }
@@ -1699,19 +1701,19 @@ pub fn switch_row(
 ///|
 /// A row that says how something stands, going nowhere: its title, a note under it, or `value` at its end (a control:
 /// a model's picker, in the room its title leaves) (narrow: on its card; wide: the web's list row, no ground under the
-/// pointer).
-pub fn said_row(c : @ui.Ctx, title : String, note : String, value? : () -> Unit) -> Unit {
+/// pointer). `lead`: what goes before its title on its line (a workspace's mark: workspace_badge).
+pub fn said_row(c : @ui.Ctx, title : String, note : String, value? : () -> Unit, lead? : (@ui.Ctx) -> Unit) -> Unit {
   let narrow = look() == Narrow
   c.box(style=(if narrow { narrow_row(false) } else { wide_list_row() }).then(row_line(narrow)), fn() {
     match value {
       // its title, and at its end, in the room the title leaves, a control (a model's picker) where a value is said
       Some(f) => {
-        c.text(title, style=if narrow { pg_row_title_in } else { desk_list_title }) |> ignore
+        led_title(c, title, if narrow { pg_row_title_in } else { desk_list_title }, lead)
         c.box(style=pg_row_end, f) |> ignore
       }
       None =>
         c.box(style=if narrow { pg_row_words } else { desk_list_text }, fn() {
-          c.text(title, style=if narrow { pg_row_title } else { desk_list_title }) |> ignore
+          led_title(c, title, if narrow { pg_row_title } else { desk_list_title }, lead)
           if note != "" {
             c.text(note, style=if narrow { secondary.then(full_words) } else { wide_list_note }) |> ignore
           }

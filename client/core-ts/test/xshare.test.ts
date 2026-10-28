@@ -46,7 +46,8 @@ class Wire implements StationWire {
   }
 }
 
-/// The viewer is in three workspaces: the chat's (`ws`, W, as `role`), 甲 (`wa`, one station) and 丙 (`wc`, two).
+/// The viewer is in three workspaces: the chat's (`ws`, W, as `role`), 甲 (`wa`, one station, an emoji its mark) and 丙
+/// (`wc`, two, one of still.fail's icons its mark).
 async function setUp(role = "admin", thread: J = threadView(7, 3), chats?: J[], roleC = "member") {
   let wire: Wire | null = null;
   const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? { "GET /chats": chats } : {}) }, 0, (host) => (wire = new Wire(host)), ({ host }) => {
@@ -55,7 +56,7 @@ async function setUp(role = "admin", thread: J = threadView(7, 3), chats?: J[], 
       const path = req.url.replace(ORIGIN, "");
       if (path === "/v1/me") {
         return Effect.succeed(jsonResponse(200, {
-          workspaces: [{ id: "ws", name: "W", role }, { id: "wa", name: "甲", role: "member" }, { id: "wc", name: "丙", role: roleC }],
+          workspaces: [{ id: "ws", name: "W", role }, { id: "wa", name: "甲", role: "member", emoji: "🍎" }, { id: "wc", name: "丙", role: roleC, icon: "glyph:leaf" }],
           invitations: [],
           relay_url: null,
         }));
@@ -109,7 +110,7 @@ test("a_chat_shared_shows_at_once_and_tells_each_new_workspace_through_a_station
   // (a Slack thread's; one of its own has `home`).
   assert.deepEqual(v(values, 1).xshare, {
     session: "k1", text: "未分享", to: [], write: false, may: true,
-    places: [{ workspace: "wa", name: "甲", on: false }, { workspace: "wc", name: "丙", on: false }],
+    places: [{ workspace: "wa", name: "甲", emoji: "🍎", on: false }, { workspace: "wc", name: "丙", icon: "glyph:leaf", on: false }],
   });
 
   // Shared with both, read only: shown so at once, under way until its station has it.
@@ -207,7 +208,9 @@ test("a_member_sees_how_it_is_shared_and_its_starter_may_change_it", async () =>
     const x = v(values, 1).xshare;
     assert.equal(x.text, "甲、Z · 可发消息");
     assert.equal(x.may, false);
-    assert.deepEqual(x.places, [{ workspace: "wa", name: "甲", on: true }, { workspace: "wc", name: "丙", on: false }]);
+    assert.deepEqual(x.places, [{ workspace: "wa", name: "甲", emoji: "🍎", on: true }, { workspace: "wc", name: "丙", icon: "glyph:leaf", on: false }]);
+    // Each named with its mark where it is one of the viewer's; one they are not in has none to show.
+    assert.deepEqual(x.to, [{ workspace: "wa", name: "甲", emoji: "🍎" }, { workspace: "wz", name: "Z" }]);
     // What the viewer cannot tick stays shared whatever is ticked.
     call(core, ui, 2, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wc"], write: true });
     await host.settle();
@@ -246,7 +249,7 @@ test("a_chat_of_another_workspace_referred_to_is_found_by_the_menu_and_shared_wi
   apply(host, values);
   assert.deepEqual(v(values, 6).items.map((i: J) => [i.station, i.outside ?? null]), [["ws/st", null]]);
   const items = v(values, 1).items;
-  assert.deepEqual(items.map((i: J) => [i.station, i.outside ?? null]), [["ws/st", null], ["wc/c1", "丙"], ["wc/c2", "丙"]]);
+  assert.deepEqual(items.map((i: J) => [i.station, i.outside ?? null, i.outsideIcon ?? null]), [["ws/st", null, null], ["wc/c1", "丙", "glyph:leaf"], ["wc/c2", "丙", "glyph:leaf"]]);
   const item = items[1];
   // Picked: its mark kept for W's messages too.
   call(core, ui, 2, "chat.ref", { station: item.station, id: item.id, title: item.title, base: ORIGIN, into: "ws" });
@@ -255,7 +258,7 @@ test("a_chat_of_another_workspace_referred_to_is_found_by_the_menu_and_shared_wi
   call(core, ui, 3, "chat.outsideRefs", { station: "ws/st", text: `看看 ${mark} 怎么说` });
   await host.settle();
   const found = answerOf(host, values, 3).ok.chats;
-  assert.deepEqual(found.map((c: J) => [c.station, c.id, c.workspace, c.workspaceName, c.may]), [["wc/c1", item.id, "wc", "丙", false]]);
+  assert.deepEqual(found.map((c: J) => [c.station, c.id, c.workspace, c.workspaceName, c.workspaceIcon, c.may]), [["wc/c1", item.id, "wc", "丙", "glyph:leaf", false]]);
   // Its own workspace's chats are never asked about.
   call(core, ui, 4, "chat.outsideRefs", { station: "wc/c1", text: mark });
   await host.settle();

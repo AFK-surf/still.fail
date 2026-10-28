@@ -58,7 +58,8 @@ test "a reference to another workspace's chat: asked first, the sheet says whose
   run_to_outside_rest(t)
   assert_true(t.find("分享对话") is Some(_))
   assert_true(t.find("季度路线图") is Some(_))
-  assert_true(t.find("来自 个人") is Some(_))
+  // whose: 来自, then that workspace's mark (its letter, 个, where it has none) and its name
+  assert_true(t.find("来自 ") is Some(_) && t.find("个") is Some(_) && t.find("个人") is Some(_))
   assert_true(t.find("你没有分享权限，需由发起人或管理员分享") is None)
   t.tap_text("分享并发送")
   // (which of them the viewer may share, and with which workspace, the core's: chat.outsideShare)
@@ -165,7 +166,8 @@ test "a new chat's first message is shared before it goes too, over the fixture'
   // asked first: the page is still the new chat, the sheet over it
   assert_true(!(app.nav.top() is Chat(_)))
   run_to_outside_rest(t)
-  assert_true(t.find("来自 个人") is Some(_))
+  // whose: 来自, then that workspace's mark (its letter, 个, where it has none) and its name
+  assert_true(t.find("来自 ") is Some(_) && t.find("个") is Some(_) && t.find("个人") is Some(_))
   t.tap_text("分享并发送")
   match app.nav.top() {
     Chat(r) => assert_eq(r.session, "new:1")
