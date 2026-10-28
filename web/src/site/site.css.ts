@@ -49,7 +49,9 @@ export const nav = style({
   position: "sticky", top: "0", zIndex: "10",
   background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)",
 });
-export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
+// On a phone its links sit closer, so that the name, 下载 (Download), GitHub's mark and the theme switch fit on the
+// narrowest (360 wide), none of them broken over two lines.
+export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px", whiteSpace: "nowrap", "@media": { [NARROW]: { gap: "12px" } } });
 /** The name in the bar, as the wordmark draws it (web/public/wordmark.svg): Inter Bold, its dot still.fail's orange and
  *  drawn closer to the words it joins. */
 export const brand = style({ display: "flex", alignItems: "center", fontSize: vars.textHeading, fontWeight: "700", letterSpacing: "-.02em", color: FG });
@@ -63,6 +65,8 @@ export const navLink = style({ transition: "color .2s", selectors: { "&:hover": 
 export const forAndroid = style({ display: "none", selectors: { ":root[data-platform=\"android\"] &": { display: "inline" } } });
 export const forComputer = style({ display: "none", selectors: { ":root:is([data-platform=\"mac\"], [data-platform=\"desktop\"]) &": { display: "inline-block" } } });
 globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: vars.textTitle });
+/** A link in the bar that is a mark (GitHub's): as wide as the mark, as tall as the theme switch beside it. */
+export const navMark = style({ display: "grid", placeItems: "center", width: "24px", height: "36px" });
 globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", background: "none", font: "inherit", cursor: "default" });
 
 /** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */
