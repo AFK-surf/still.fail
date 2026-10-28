@@ -30,11 +30,23 @@ pub(all) struct NavGroup {
 }
 
 ///|
+/// A native glass button placed in the app's content, in view points. Its menu and accessibility belong to the host.
+pub(all) struct NavFloating {
+  item : NavItem
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+  blocked : Bool
+}
+
+///|
 /// What the app hands over: its groups, the item chosen (lit: its ground moves to it as it changes), the ink of what is
 /// in them and of the one chosen (RGBA), the icon of the menu a group folds into. No groups: none of the system's (the
 /// app draws its own). `bare`: the tabs put away while something is up over the whole window (a picture looked at),
 /// only the foldable group's items shown, `title` over them (none of them: the bar put away too).
 pub(all) struct NavBar {
+  floating : Array[NavFloating]
   groups : Array[NavGroup]
   selected : String
   ink : Int64
@@ -70,6 +82,10 @@ pub fn NavBar::to_json(self : NavBar) -> String {
     }
   })
   let j : Json = {
+    "floating": Json::array(self.floating.map(fn(f) {
+      { "item": nav_item_json(f.item), "x": Json::number(f.x), "y": Json::number(f.y),
+        "w": Json::number(f.w), "h": Json::number(f.h), "blocked": Json::boolean(f.blocked) }
+    })),
     "groups": Json::array(groups),
     "selected": Json::string(self.selected),
     "ink": Json::number(self.ink.to_double()),
@@ -109,7 +125,7 @@ pub fn nav_bar_again() -> Unit {
 ///|
 /// None of the system's: the app draws its own (a phone's frame, the outer screen).
 pub fn nav_bar_none() -> Unit {
-  nav_bar({ groups: [], selected: "", ink: 0L, chosen_ink: 0L, more_icon: "", bare: false, title: "" }) |> ignore
+  nav_bar({ floating: [], groups: [], selected: "", ink: 0L, chosen_ink: 0L, more_icon: "", bare: false, title: "" }) |> ignore
 }
 
 ///|

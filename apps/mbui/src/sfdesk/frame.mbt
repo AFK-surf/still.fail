@@ -713,9 +713,11 @@ pub fn frame(
   }
   let main_to = if !wide.tape {
     dmax(0.0, c.width - col)
-  } else if laid {
+  } else if laid && !@sf.native_side() {
     dmax(0.0, tw - tape_shows_left() - tape_shows_right() - 2.0 * bar_gap_now())
   } else {
+    // The system's trailing column already separates the active pane from what
+    // peeks beside it. Do not reserve a second strip of chat width for details.
     tape_one_beside(tw, tape_shows_left())
   }
   let at = tape_at(tw, col, main_to, panel_w)

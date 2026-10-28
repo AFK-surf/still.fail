@@ -67,8 +67,7 @@ pub fn chat_list(
   // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if asks_of(v).is_empty() || !v.ask_clear { 0.0 } else { float_lift + float_side }
-  // (an iPhone Duo's cards: 48 in however narrow the chat's, row_side)
-  let side = if narrow && !@sf.native_on() { row_side_narrow } else { row_side(c) }
+  let side = row_side(c)
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
   let gutter = side
@@ -258,7 +257,7 @@ pub fn chat_list(
 pub fn chat_messages_sample(c : @ui.Ctx, top : Double) -> Unit {
   let narrow = c.width <= chat_narrow_w
   let gap = if narrow { list_gap_narrow } else { list_gap }
-  let side = if narrow { row_side_narrow } else { row_side(c) }
+  let side = row_side(c)
   let view = @sfbase.chat_view_made({ "title": Json::string(""), "messages": [] })
   let here : MessageHere = {
     station: "",
@@ -552,6 +551,11 @@ fn list_reset() -> Unit {
 /// How far the rows stand in from the pane's sides: the column 760 wide at most in its middle, 40 in at least
 /// (session.css.ts chatList).
 fn row_side(c : @ui.Ctx) -> Double {
+  // Inline avatars need no hanging-avatar gutter. Keep the narrow card's text
+  // close to its title and composer, without changing other platforms' inset.
+  if c.width <= chat_narrow_w {
+    return if @sf.native_on() { dense_row_side_narrow } else { row_side_narrow }
+  }
   // (beside the system's bars, an iPhone Duo's: the rows across the pane, dense_row_side in)
   if @sf.native_on() {
     return dense_row_side
@@ -563,6 +567,9 @@ fn row_side(c : @ui.Ctx) -> Double {
 /// (its pictures out in that room, 29 before the words, about as far from the card's edge as the chat's title: the
 /// user, 2026-10-28, 头像都贴边了)
 let dense_row_side : Double = 48.0
+
+///|
+let dense_row_side_narrow : Double = 20.0
 
 ///|
 /// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
@@ -653,6 +660,9 @@ let chat_list_box : @ui.Style = @ui.css("w=Full h=Full")
 ///|
 /// A row's room (its node): in from the pane's sides to the column (`side` each), `top` over it.
 fn row_box(c : @ui.Ctx, side : Double, top : Double, body : () -> Unit) -> Int {
+  // The system column is reserved by the shell; the text still needs its own
+  // inset from the card's edge, also when a details card stands beside it.
+  let trailing = if @sf.native_side() { dense_row_side_narrow } else { side }
   c.box(style=row_column, fn() {
     if top > 0.0 {
       c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
@@ -660,7 +670,7 @@ fn row_box(c : @ui.Ctx, side : Double, top : Double, body : () -> Unit) -> Int {
     c.box(style=row_line, fn() {
       c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
       c.box(style=row_middle, body) |> ignore
-      c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
+      c.box(style=@ui.style(w=Fixed(trailing)), fn() {  }) |> ignore
     })
     |> ignore
   })

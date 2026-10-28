@@ -9,6 +9,73 @@
 let nav_want : Ref[(Source, Workspace, Array[Workspace])?] = { val: None }
 
 ///|
+let native_workspace_anchor : Ref[Int] = { val: 0 }
+
+///|
+let native_sidebar_items : Map[Int, @hostapi.NavItem] = {}
+
+///|
+let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
+
+///|
+let native_floating : Ref[Array[@hostapi.NavFloating]] = { val: [] }
+
+///|
+// kept across runs: the layout hook is installed once
+let floating_installed : Ref[Bool] = { val: false }
+
+///|
+/// Reserve a place in the list; UIKit draws the actual button there after this frame's layout and motion.
+fn native_workspace(c : @ui.Ctx, src : Source, w : Workspace, node : Int, id : Int) -> Unit {
+  ignore(c)
+  ignore(node)
+  native_workspace_anchor.val = id
+  if !floating_installed.val {
+    floating_installed.val = true
+    @ui.on_after_layout(native_workspace_placed)
+  }
+  let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
+  native_sidebar_items[id] = {
+    id: "workspace-switch", title: w.name, icon: ws_badge(w),
+    dot: others || @sfpages.invitations_waiting(src).length() > 0, prominent: true, menu: [],
+  }
+}
+
+///|
+fn native_workspace_placed(c : @ui.Ctx) -> Unit {
+  guard floating_bar.val is Some(bar) else { return }
+  let floating : Array[@hostapi.NavFloating] = []
+  let blocked = @sf.presenter_visible()
+  let semantics = c.semantics_tree()
+  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at == Side) {
+    // Semantic anchors also survive a sidebar drawn from its kept part.
+    for s in semantics {
+      if !s.hidden || blocked {
+        match native_sidebar_items.get(s.id) {
+          Some(item) => {
+            let (x, y, w, h) = s.rect
+            // Native views sit above the canvas: keep uncovered controls visible but inert,
+            // and never draw them through a presenter that physically covers their bounds.
+            // Direct kit popovers (the chat menu and services) are not sf presenters.
+            // Their visible bounds still cover native controls, including during exit.
+            let covered = semantics.iter().any(fn(p) {
+              let (px, py, pw, ph) = p.rect
+              // Accessibility-hidden popovers can still be painted over a kept pane.
+              (p.role == @ui.Role::Dialog || p.role == @ui.Role::Menu) &&
+                x < px + pw && x + w > px && y < py + ph && y + h > py
+            })
+            if w > 0.0 && h > 0.0 && !covered { floating.push({ item, x, y, w, h, blocked }) }
+          }
+          None => ()
+        }
+      }
+    }
+  }
+  native_floating.val = floating
+  @hostapi.nav_bar({ ..bar, floating }) |> ignore
+}
+
+///|
 /// The page's actions in the navigation bar this frame (bar_action), in their order from the bar's end in, and what
 /// each does; those of the frame before, for what is chosen between frames.
 let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
@@ -52,7 +119,8 @@ pub fn on_cards() -> Bool {
 /// in the system's bars; `act` what it does chosen. A page on its way out (a stack's move) hands none: the one on top
 /// does.
 fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw? : String) -> Bool {
-  if !@sf.native_on() || column_short.val {
+  // Even the short system column needs one entry to the chat's complete menu.
+  if !@sf.native_on() || (column_short.val && id != "chat/info") {
     return false
   }
   if drawn_page.val is Some(p) && p != app.nav.top() {
@@ -81,7 +149,7 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
     return false
   }
   bar_chat_of.val = Some((src, r))
-  bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
+  bar_action("chat/info", @sf.t("web-pages.chat.info"), "more", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
   let history = @sf.t("android-chat.history.title")
@@ -205,6 +273,7 @@ fn native_side_now() -> Unit {
 /// change: @hostapi.nav_bar), the page's actions in them, none where it wants none (a phone's frame).
 pub fn nav_frame(body : () -> Unit) -> Unit {
   nav_want.val = None
+  floating_bar.val = None
   @sf.native_over_clear()
   // (the column as the window is now, turned or not, before anything is laid out beside it)
   native_side_now()
@@ -253,6 +322,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
         rail_nav(src, w, all, card)
       }
       @sf.native_bars.on = @hostapi.nav_bar(bar)
+      floating_bar.val = Some(bar)
       native_side_now()
     }
     None => {
@@ -332,7 +402,7 @@ let native_bell_up : Double = 156.0
 /// its top the card in use's own (the chats' list's filter, the page's actions: `card`), then 对话 and 文件 and 更多 (the
 /// other places, the settings, the workspaces), and at its foot what is most wanted, where the thumb rests: 待处理 and
 /// 新建对话 (on the accent's glass). The place lit chosen (更多 for one in it).
-fn rail_nav(src : Source, w : Workspace, all : Array[Workspace], card : Array[@hostapi.NavItem]) -> @hostapi.NavBar {
+fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@hostapi.NavItem]) -> @hostapi.NavBar {
   let places = rail_items(src, w.id)
   let lit = lit_place()
   let item = fn(id : String, title : String, icon : String) -> @hostapi.NavItem {
@@ -351,28 +421,16 @@ fn rail_nav(src : Source, w : Workspace, all : Array[Workspace], card : Array[@h
     icon: @sf.station_glyph_icon(glance),
     dot: glance.failing > 0,
   })
-  // (the workspace's mark and its name, a button, not a tab: pressed, the workspaces and 设置 in the system's menu from it; by
-  // 待处理's bell, in the column down the side by the tabs, upright at the bar's lead: the user 2026-10-27; its
-  // picture, a link's or a data URL's, the host loads in place of its letter)
+  // Workspace selection lives at the list heading; settings remains a separate action.
   let at = if @sf.native_side() { "act/" } else { "lead/" }
-  // (its menu the system's own: each workspace with its mark, the one in view checked; a line; 设置)
-  let rows = all.map(fn(x) { ("ws/" + x.id, x.name, x.id == w.id, ws_badge(x)) })
-  rows.push(("-", "", false, ""))
-  rows.push(("settings", @sf.t("android-settings.title"), false, @sf.icon_path("settings")))
-  // (on the outer screen's short column, the navigation bar's, the bell the toolbar's: one of the app's own in each
-  // is all the system shows there, the rest folded into a menu of its own: column_short)
-  let ws_at = if column_short.val { "lead/" } else { at }
-  // (a dot on it while another workspace has something waiting, as the phone's top bar marks it (home.mbt's
-  // others_mark), or an invitation does: the user 2026-10-28)
-  let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
-  let elsewhere = others || @sfpages.invitations_waiting(src).length() > 0
-  tabs.push({ ..item(ws_at + "workspaces", w.name, "user"), icon: ws_badge(w), dot: elsewhere, menu: rows })
+  tabs.push(item("settings", @sf.t("android-settings.title"), "settings"))
   // (待处理 a popover over the page, as the bell's: pressed, never chosen; in the column down the side, upright at the
   // bar's lead, left of the top, on the status bar's row: the user 2026-10-27)
   tabs.push({ ..item(at + "attention", rail_label(src, "attention"), "bell"), dot: bell_lit(src, w) })
   let selected = tab_of_place(lit)
   let t = @sf.theme()
   {
+    floating: native_floating.val,
     groups: [
       { items: card, foot: false, foldable: true },
       { items: tabs, foot: false, foldable: false },
@@ -475,6 +533,16 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if lit_place() != "settings" {
         open_settings()
       }
+    } else if id == "workspace-switch" {
+      @sfpages.open_workspaces(src, Of(native_workspace_anchor.val), compact=true)
+    } else if id == "sidebar/search" {
+      switcher_toggle(c)
+    } else if id.has_prefix("sidebar/filter/") {
+      match id.substring(start=15) {
+        "decisions" => @sfbase.go_place("decisions") |> ignore
+        "all" => rail_go(c, src, w, "chats")
+        f => rail_go(c, src, w, f)
+      }
     } else if id.has_prefix("ws/") {
       let ws = id.substring(start=3)
       if ws != w.id {
@@ -543,8 +611,8 @@ let nav_log_was : Ref[String] = { val: "" }
 
 ///|
 /// Whether the column down the side is the outer screen's, short under the status bar it holds: room in it for the
-/// bell and the workspace's button alone (the system folds the rest into a menu of its own), a page's actions its
-/// own, in its card (the user, 2026-10-27: the bell and the workspaces before any of a page's).
+/// bell and the chat's complete menu. The workspace switch lives in the sidebar heading;
+/// other page actions stay in their cards when the column has no room for them.
 // kept across runs: said again each frame (native_frame), put back by rail_native_reset
 let column_short : Ref[Bool] = { val: false }
 
@@ -555,9 +623,13 @@ let column_short_below : Double = 600.0
 ///|
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
+  native_workspace_anchor.val = 0
   column_short.val = false
   @sf.native_bars_reset()
   nav_want.val = None
+  native_sidebar_items.clear()
+  floating_bar.val = None
+  native_floating.val = []
   nav_page.clear()
   nav_page_rows.clear()
   bar_chat_of.val = None
