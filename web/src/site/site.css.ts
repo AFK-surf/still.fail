@@ -219,6 +219,9 @@ export const terminal = style({
   borderRadius: vars.rCard, overflow: "hidden", background: "#111114", color: "#E9E9EA",
   boxShadow: `0 30px 70px -40px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
   font: `14px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
+  // Its lines go by where it is on the screen (typed, output), named here: their own view() would be inside it, which
+  // scrolls sideways (its body; its corners' clip too), and never moves.
+  viewTimeline: "--terminal",
 });
 export const terminalBody = style({ padding: "26px 28px", overflowX: "auto" });
 /** The command's line: the prompt and the command kept together, scrolled sideways where it is too long. */
@@ -231,12 +234,12 @@ export const typed = style({
   // little after it is all in view: the page ends not far under it, so how far it can go up the screen is that much
   // (its install section's foot and the footer: 200px and more), not a share of the screen's height.
   animation: `${type} linear both, ${blink} .9s step-end infinite`, animationTimingFunction: "steps(var(--steps)), step-end",
-  animationTimeline: "view(), auto", animationRange: "entry 60% contain 50px, normal",
+  animationTimeline: "--terminal, auto", animationRange: "entry 60% contain 50px, normal",
   "@media": { [STILL]: { animation: "none", width: "var(--chars)" } },
 });
 const appear = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
 export const output = style({
-  display: "block", color: DIM, animation: `${appear} linear both`, animationTimeline: "view()",
+  display: "block", color: DIM, animation: `${appear} linear both`, animationTimeline: "--terminal",
   selectors: {
     "&[data-ok]": { color: "#7FD4A1" },
     "&[data-at=\"1\"]": { animationRange: "contain 70px contain 90px" },
