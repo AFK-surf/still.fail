@@ -2,7 +2,7 @@
 // came after schema version 12 without changing it, added in place on open (add_*_columns), the same way and in the
 // same order as the Rust station does, so either station opens what the other kept.
 import type { DatabaseSync } from "node:sqlite";
-import { COMPACTED_FROM } from "./rows.ts";
+import { COMPACTED_FROM, QUARTER_MS } from "./rows.ts";
 
 /// Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
 /// hand when the schema changes (no migrations are kept in the code).
@@ -620,6 +620,72 @@ export function addUsageTotals(db: DatabaseSync): void {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (!made()) db.exec(USAGE_TOTALS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// The calls added up by quarter of an hour (`quarter`: their time, ms, over QUARTER_MS) and by session, thread, person,
+/// profile, runtime, model and speed (none of them said: 0 or ''), kept by the database itself as calls are recorded (or
+/// their output grows), as the totals are: what the usage page reads (store/usage.ts USAGE_GROUPS), days in any time
+/// zone being whole quarters. Adding up its 30 days read every call of them, 440,000 on ccvm, each time a page showing
+/// it was told usage changed (every minute while agents work): 30 to 100 seconds a read on a machine short of memory,
+/// both of the station's readers held by it and every other read waiting.
+const USAGE_QUARTERS_KEPT = `
+CREATE TRIGGER usage_quarters_add AFTER INSERT ON usage BEGIN
+  INSERT INTO usage_quarters VALUES (NEW.at / ${QUARTER_MS}, NEW.session, COALESCE(NEW.thread, 0), COALESCE(NEW.person, ''), COALESCE(NEW.profile, ''), NEW.runtime,
+    COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+  ON CONFLICT (quarter, session, thread, person, profile, runtime, model, fast) DO UPDATE SET calls = calls + excluded.calls, input = input + excluded.input,
+    cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long,
+    output = output + excluded.output;
+END;
+CREATE TRIGGER usage_quarters_drop AFTER DELETE ON usage BEGIN
+  UPDATE usage_quarters SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+  WHERE quarter = OLD.at / ${QUARTER_MS} AND session = OLD.session AND thread = COALESCE(OLD.thread, 0) AND person = COALESCE(OLD.person, '')
+    AND profile = COALESCE(OLD.profile, '') AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
+  DELETE FROM usage_quarters WHERE quarter = OLD.at / ${QUARTER_MS} AND calls <= 0;
+END;
+CREATE TRIGGER usage_quarters_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
+  UPDATE usage_quarters SET output = output + NEW.output - OLD.output
+  WHERE quarter = NEW.at / ${QUARTER_MS} AND session = NEW.session AND thread = COALESCE(NEW.thread, 0) AND person = COALESCE(NEW.person, '')
+    AND profile = COALESCE(NEW.profile, '') AND runtime = NEW.runtime AND model = COALESCE(NEW.model, '') AND fast = NEW.fast;
+END;
+`;
+const USAGE_QUARTERS = `
+CREATE TABLE usage_quarters (
+  quarter INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  person TEXT NOT NULL,
+  profile TEXT NOT NULL,
+  runtime TEXT NOT NULL,
+  model TEXT NOT NULL,
+  fast INTEGER NOT NULL,
+  calls INTEGER NOT NULL,
+  input INTEGER NOT NULL,
+  cache_read INTEGER NOT NULL,
+  cache_write INTEGER NOT NULL,
+  cache_write_long INTEGER NOT NULL,
+  output INTEGER NOT NULL,
+  PRIMARY KEY (quarter, session, thread, person, profile, runtime, model, fast)
+) WITHOUT ROWID;
+INSERT INTO usage_quarters
+  SELECT at / ${QUARTER_MS}, session, COALESCE(thread, 0), COALESCE(person, ''), COALESCE(profile, ''), runtime, COALESCE(model, ''), fast,
+    SUM(calls), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
+  FROM usage NOT INDEXED GROUP BY 1, 2, 3, 4, 5, 6, 7, 8;
+${USAGE_QUARTERS_KEPT}`;
+
+/// The usage by quarter (USAGE_QUARTERS), made once from the calls recorded before, in the same transaction as the
+/// triggers that keep it from then on (as addUsageTotals).
+export function addUsageQuarters(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_quarters'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(USAGE_QUARTERS);
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
