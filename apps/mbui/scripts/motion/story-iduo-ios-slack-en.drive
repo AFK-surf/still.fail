@@ -6,7 +6,8 @@ until Message
 # (the film once the app is on the screen as it stays: its first frames, as it starts, are none of the story)
 wait 1200
 at start
-wait 1800
+# (the computer's Slack first: what Ana asked there, and the agent's answer coming in under it, read a while)
+wait 5200
 # (the list open over the chat as the outer screen lights: the chat from Slack at its top, tapped)
 at tap=row
 tap Checkout fails for EU cards
@@ -32,12 +33,13 @@ wait 400
 at working
 until Fixed and live
 at answer
-wait 1200
+# (its answer read on the phone a while)
+wait 2600
 # (read a while with the keyboard up, as one leaves it after sending; the list tapped to put it away)
 at tap=list
 tapxy 560 260
 until French card
 at merged
-wait 3400
+wait 4200
 at end
 exit
