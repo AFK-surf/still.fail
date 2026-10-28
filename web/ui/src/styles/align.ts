@@ -111,7 +111,7 @@ export const columns = {
   avatar: 29,
   /** On a narrow screen, in its 6px padding: 3 out. */
   avatarNarrow: 3,
-  /** An agent's activity line: its 24px avatar and the 11 beside it, out in the list's padding. */
+  /** An agent's activity line: its avatar where a message's is, the line's 6px padding before it. */
   activity: 35,
   activityNarrow: 9,
   /** Where a message went or came from, under an inline head: from the row's start (its avatar's 14 and 11 after). */
