@@ -75,7 +75,11 @@ export const downloadBand = style({
   "@media": { [NARROW]: { flexDirection: "column", alignItems: "flex-start", gap: "24px" } },
 });
 /** Every app, a line of quiet links. */
-export const downloadAll = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 20px", margin: "12px 0 0", fontSize: vars.textTitle, color: "var(--s-muted)" });
+export const downloadAll = style({
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 20px", margin: "12px 0 0", fontSize: vars.textTitle, color: "var(--s-muted)",
+  // (on a phone closer, all of it on one line on the narrowest)
+  "@media": { [NARROW]: { gap: "8px 14px" } },
+});
 globalStyle(`${downloadAll} > a`, { color: FG, transition: "color .2s" });
 globalStyle(`${downloadAll} > a:hover`, { color: "var(--s-muted)" });
 export const downloadMain = style({ display: "flex", alignItems: "center", gap: "24px" });
