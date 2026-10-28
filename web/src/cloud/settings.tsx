@@ -368,8 +368,7 @@ function WorkspaceShown({ entry, view, manager }: { entry: WorkspaceEntry; view:
       </ul>
       {failed && <p className={controlsCss.fieldError} role="alert">{failed}</p>}
       <Members view={view} account={account} manager={manager} />
-      <Relays view={view} account={account} manager={manager} />
-      <Ways view={view} account={account} manager={manager} />
+      <WaysRow view={view} account={account} manager={manager} />
       {/* leaving or deleting it, in red at the foot, each asked again */}
       <ul className={pagesCss.list}>
         <li>
@@ -970,7 +969,7 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
   const add = () => { const url = adding.trim(); if (url) void set.run([...relays, url]); };
   if (!manager && relays.length === 0) return null;
   return (
-    <Section title={t("web-pages.settings.relays.title")} description={t("web-pages.settings.relays.lead", { name: NAME })}>
+    <Section title={t("android-settings.ways.own")}>
       <ul className={pagesCss.list}>
         {relays.map((url) => (
           <li key={url} className={pagesCss.listRow}>
@@ -1001,28 +1000,62 @@ function Relays({ view, account, manager }: { view: WorkspaceView; account: Acco
   );
 }
 
-/** A way its members' devices reach its stations as listed (`WayView`): its title and the line under it. */
+/** A way straight to a station as listed (`WayView` of kind lan, tailnet, direct): its title and the line under it. */
 export function wayWords(w: WayView): { title: string; note: string } {
-  if (w.kind === "relay") return { title: w.name ?? relayLabel(w.id), note: w.own ? t("android-settings.ways.own") : t("android-settings.ways.ours", { app: NAME }) };
   return { title: t(`android-settings.ways.${w.kind}`), note: t(`android-settings.ways.${w.kind}Note`) };
 }
 
+/** How many of the workspace's ways are turned off, as its row says it: 全部开启, 已关闭 N 项. */
+export function waysValue(view: WorkspaceView): string {
+  const off = (view.ways ?? []).filter((w) => !w.on).length;
+  return off === 0 ? t("android-settings.ways.allOn") : t("android-settings.ways.someOff", { n: off });
+}
+
 /**
- * The ways its members' devices reach its stations (still.fail's relays, its own, the LAN, Tailscale, a path punched
- * through), each turned on or off by its managers; shown to the others once one is off.
+ * How its members' devices reach its stations, one row (2026-10-29 the user: 不要平铺这么多设置) saying how many ways are
+ * off; pressed, a dialog with still.fail's relays and the ways straight to a station each on or off, its own relays
+ * removed and added.
  */
+function WaysRow({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ways = view.ways ?? [];
+  if (!manager && (view.relays ?? []).length === 0 && ways.every((w) => w.on)) return null;
+  return (
+    <>
+      <ul className={pagesCss.list}>
+        <li>
+          <button type="button" className={pagesCss.listRow} onClick={() => setOpen(true)}>
+            <span className={pagesCss.listRowTitle}>{t("android-settings.ways.title")}</span>
+            <span className={css.rowValue}>{waysValue(view)}</span>
+            <ChevronRight size={14} className={css.rowChevron} />
+          </button>
+        </li>
+      </ul>
+      <Dialog open={open} onClose={() => setOpen(false)} title={t("android-settings.ways.title")} description={t("android-settings.ways.lead")}>
+        <Ways view={view} account={account} manager={manager} />
+      </Dialog>
+    </>
+  );
+}
+
+/** The ways in the dialog: still.fail's relays and the ways straight to a station each on or off, its own relays between. */
 function Ways({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
   const ways = view.ways ?? [];
   const set = useAction(({ way, on }: { way: string; on: boolean }) => cloud.setWay(account.sub, view.id, way, on));
-  if (ways.length === 0 || (!manager && ways.every((w) => w.on))) return null;
+  const turn = (w: WayView, title: string, note?: string) => (
+    <SwitchRow key={w.id} title={title} description={note} checked={set.busy && set.arg?.way === w.id ? set.arg.on : w.on} disabled={!manager || set.busy} busy={set.busy && set.arg?.way === w.id} onChange={(on) => void set.run({ way: w.id, on })} />
+  );
   return (
-    <Section title={t("android-settings.ways.title")} description={t("android-settings.ways.lead")}>
-      {ways.map((w) => {
-        const { title, note } = wayWords(w);
-        return <SwitchRow key={w.id} title={title} description={note} checked={set.busy && set.arg?.way === w.id ? set.arg.on : w.on} disabled={!manager || set.busy} busy={set.busy && set.arg?.way === w.id} onChange={(on) => void set.run({ way: w.id, on })} />;
-      })}
+    <>
+      <Section title={t("android-settings.ways.ours", { app: NAME })}>
+        {ways.filter((w) => w.kind === "relay" && !w.own).map((w) => turn(w, w.name ?? relayLabel(w.id)))}
+      </Section>
+      <Relays view={view} account={account} manager={manager} />
+      <Section title={t("android-settings.ways.straight")}>
+        {ways.filter((w) => w.kind !== "relay").map((w) => { const { title, note } = wayWords(w); return turn(w, title, note); })}
+      </Section>
       {set.error && <p className={controlsCss.fieldError} role="alert">{set.error.message}</p>}
-    </Section>
+    </>
   );
 }
 

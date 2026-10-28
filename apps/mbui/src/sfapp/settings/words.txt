@@ -590,6 +590,9 @@ android-settings.ways.setWhat
 android-settings.ways.tailnet
 android-settings.ways.tailnetNote
 android-settings.ways.title
+android-settings.ways.allOn
+android-settings.ways.someOff
+android-settings.ways.straight
 android-settings.renamed
 android-settings.run.account
 android-settings.run.effort

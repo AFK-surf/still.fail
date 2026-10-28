@@ -14,7 +14,7 @@ test "the workspace, at each width and with either hand: its name, its people an
 }
 
 ///|
-test "the workspace's ways its devices reach its stations, at each width: each on or off by its switch, Tailscale's turned off asks still.fail cloud (workspace.setWay)" {
+test "the workspace's ways its devices reach its stations, at each width: one row saying how many are off; pressed, a panel with each on or off, Tailscale's turned off asks still.fail cloud (workspace.setWay)" {
   for case in page_cases {
     let (w, platform) = case
     let calls : Array[(String, Json)] = []
@@ -22,9 +22,14 @@ test "the workspace's ways its devices reach its stations, at each width: each o
       { ..s, call: fn(name, params, done) { calls.push((name, params)); (s.call)(name, params, done) } }
     })
     let at = "\{w} platform \{platform}"
-    assert_true(t.find("连接方式") is Some(_), msg=at)
+    // the page: the row alone, what is off said at its end
+    assert_true(t.find("已关闭 1 项") is Some(_), msg=at)
+    assert_true(t.find("Tailscale") is None, msg=at)
+    t.tap_text("连接方式")
+    t.run_for(1000)
+    assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("北京") is Some(_), msg=at)
-    assert_eq(t.get(Switch, label="打洞直连").check, Some(Off), msg=at)
+    assert_eq(t.get(Switch, label="打洞").check, Some(Off), msg=at)
     let (x, y, sw, sh) = t.get(Switch, label="Tailscale").rect
     t.tap(x + sw / 2.0, y + sh / 2.0)
     t.frame()
@@ -32,6 +37,7 @@ test "the workspace's ways its devices reach its stations, at each width: each o
     assert_eq(asked.length(), 1, msg=at)
     assert_eq(text(Some(asked[0].1), "way"), "tailnet", msg=at)
     assert_false(flag(Some(asked[0].1), "on"), msg=at)
+    @sf.presenters_reset()
   }
 }
 
