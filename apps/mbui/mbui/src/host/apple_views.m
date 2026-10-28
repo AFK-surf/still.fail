@@ -1003,6 +1003,9 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   wv.opaque = YES;
   wv.backgroundColor = UIColor.whiteColor;
   wv.scrollView.backgroundColor = UIColor.whiteColor;
+  // (placed by the app, clear of the screen's edges as it lays it out: no inset of the system's safe area again, a
+  // white band under the page where the screen's foot is near)
+  wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
 #endif
   v.web = wv;
   v.content = wv;
@@ -1099,6 +1102,9 @@ static MBNative *open_site(int32_t vid, NSString *start) {
   wv.opaque = YES;
   wv.backgroundColor = UIColor.whiteColor;
   wv.scrollView.backgroundColor = UIColor.whiteColor;
+  // (placed by the app, clear of the screen's edges as it lays it out: no inset of the system's safe area again, a
+  // white band under the page where the screen's foot is near)
+  wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
 #endif
   v.web = wv;
   v.content = wv;

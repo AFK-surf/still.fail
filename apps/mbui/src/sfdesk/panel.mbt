@@ -474,6 +474,7 @@ fn side_panel(
     // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
     let alone = side_on_tape.val && tabs.length() == 1
     let own_bar = alone && tab_service(front) is Some(_)
+    // det-ok(build-effect): called only under the press of the panel's × (its bar's or the page's own)
     let close_panel = fn() { side_change(src, r, "clear", None) }
     if !own_bar {
       c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
