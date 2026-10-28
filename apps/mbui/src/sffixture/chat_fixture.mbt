@@ -1061,6 +1061,16 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
             None => ()
           }
         }
+        // (a picture's own size, as composer.ts measures one going up: its message's box in its proportions)
+        if number(o, "width") > 0.0 && number(o, "height") > 0.0 {
+          match kept.get("done") {
+            Some(Object(d)) => {
+              d["width"] = Json::number(number(o, "width"))
+              d["height"] = Json::number(number(o, "height"))
+            }
+            _ => ()
+          }
+        }
         list.push(Json::object(kept))
       }
       fix_composers[key] = list

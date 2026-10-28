@@ -1281,6 +1281,27 @@ pub fn fixture(mode : String) -> Source {
       if fixture_fonts_call(f, name, params, done) {
         return
       }
+      // (a picture going up measured from its bytes, as the core measures it: composer.ts #measure)
+      let params = match (name, @pixels.image_size(bytes), params) {
+        ("composer.add", Some((w, h)), Object(m)) => {
+          let m = m.copy()
+          m["files"] = Json::array(
+            items(Some(params), "files").map(fn(x) {
+              match x {
+                Object(o) => {
+                  let o = o.copy()
+                  o["width"] = Json::number(w.to_double())
+                  o["height"] = Json::number(h.to_double())
+                  Json::object(o)
+                }
+                _ => x
+              }
+            }),
+          )
+          Json::object(m)
+        }
+        _ => params
+      }
       match fixture_chat_call(f, name, params) {
         Some(r) => done(r)
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))

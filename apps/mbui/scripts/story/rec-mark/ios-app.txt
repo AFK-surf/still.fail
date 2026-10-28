@@ -1,39 +1,39 @@
-DRIVE start: 76 lines
+DRIVE start: 80 lines
 ios: thermal state 0
-ios: in the background
-DRIVE the host says the app is 0 (1 shown, 2 in front): kept in front for the run
 ios: size classes compact wide, regular high
 ios: launched
 ios: inactive
 DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+DRIVE the host says the app is 1 (1 shown, 2 in front): kept in front for the run
+ios: active
+DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
 ios: the screen's corner 0 8.0
 ios: the screen's corner 1 59.0
 ios: the screen's corner 2 59.0
 ios: the screen's corner 3 8.0
 theme: light
 DRIVE ok until Message (0 ms)
-ios: first frame 466x678 @3x in 503 ms
-ios: active
-DRIVE the host says the app is 3 (1 shown, 2 in front): kept in front for the run
+ios: first frame 466x678 @3x in 294 ms
 ios: hinge closed, 0 division(s)
-DRIVE AT 637085602.0356668 start
-DRIVE AT 637087105.0549169 tap=chat
+DRIVE AT 708080486.9420418 start
+DRIVE AT 708082003.3149168 tap=chat
 DRIVE tapxy 430 330 at 430,330
-DRIVE AT 637088335.3821251 tap=发消息
+DRIVE AT 708083235.5170834 tap=发消息
 DRIVE tap Message at 215,630
-DRIVE AT 637089784.9392917 type=The sign-in
-DRIVE AT 637090519.3102086 type= button is hard
-DRIVE AT 637091352.7305835 type= to see in dark
-DRIVE AT 637092136.1996251 type= mode, fix it
-DRIVE AT 637092819.5795835 tap=send
+DRIVE AT 708084318.1614168 type=The sign-in
+DRIVE AT 708085052.7171252 type= button is hard
+DRIVE AT 708085885.9616251 type= to see in dark
+DRIVE AT 708086668.4500002 type= mode, fix it
+DRIVE AT 708087351.5483335 tap=send
 DRIVE tap icon:arrow-up at 350,342
 SAID sent row in the list o:out1
-DRIVE AT 637093418.4942085 kb-down
+DRIVE AT 708087902.0839168 kb-down
+DRIVE AT 708088518.2832085 working
+DRIVE ok until Found it (4958 ms)
 DRIVE tapxy 250 140 at 250,140
-DRIVE AT 637094102.2843335 working
-DRIVE ok until Sign out (4898 ms)
-DRIVE AT 637101002.3466251 answer
-DRIVE AT 637102504.6447085 unfold
+DRIVE ok until Sign out (43 ms)
+DRIVE AT 708096769.2155001 answer
+DRIVE AT 708098290.2160835 unfold
 DRIVE LOG UNFOLD
 ios: hinge half, 0 division(s)
 ios: size classes expanded wide, regular high
@@ -42,47 +42,47 @@ ios: the screen's corner 1 55.0
 ios: the screen's corner 2 55.0
 ios: the screen's corner 3 55.0
 ios: hinge open, 0 division(s)
-DRIVE AT 637107005.8799585 pic
+DRIVE AT 708102803.8960001 pic
 DRIVE tap img:after at 511,583
 preview: after.png read whole through the core (station.file, 44884 bytes)
-DRIVE AT 637109022.1146251 mark
+DRIVE AT 708104837.7034168 mark
 DRIVE tap nav over/mark at 902,260
-DRIVE AT 637110035.3729168 draw
+DRIVE AT 708105821.2898335 draw
 DRIVE drag 378 466 110 40 500 from 378,466
-DRIVE AT 637111521.6975834 comment
-DRIVE AT 637112121.7760419 keys
-DRIVE KEY 637112121.7760419 S
-DRIVE KEY 637112284.5381252 t
-DRIVE KEY 637112384.5830418 i
-DRIVE KEY 637112484.5777918 l
-DRIVE KEY 637112584.6225835 l
-DRIVE KEY 637112684.5839168  
-DRIVE KEY 637112784.6295418 h
-DRIVE KEY 637112984.5896668 a
-DRIVE KEY 637113005.2666668 r
-DRIVE KEY 637113184.5660001 d
-DRIVE KEY 637113284.5790001  
-DRIVE KEY 637113384.5900419 t
-DRIVE KEY 637113484.5359585 o
-DRIVE KEY 637113584.6354585  
-DRIVE KEY 637113684.5752501 r
-DRIVE KEY 637113784.6082084 e
-DRIVE KEY 637113884.5650418 a
-DRIVE KEY 637114084.5335418 d
-DRIVE AT 637114821.7345835 note-done
+DRIVE AT 708107370.3749585 comment
+DRIVE AT 708107987.4759586 keys
+DRIVE KEY 708107987.4759586 S
+DRIVE KEY 708108184.1430836 t
+DRIVE KEY 708108218.6936252 i
+DRIVE KEY 708108384.1302085 l
+DRIVE KEY 708108484.1844585 l
+DRIVE KEY 708108584.1212502  
+DRIVE KEY 708108685.8327502 h
+DRIVE KEY 708108784.2636251 a
+DRIVE KEY 708108884.1217501 r
+DRIVE KEY 708108984.2080418 d
+DRIVE KEY 708109184.3238751  
+DRIVE KEY 708109204.1111667 t
+DRIVE KEY 708109384.2786251 o
+DRIVE KEY 708109419.6880834  
+DRIVE KEY 708109584.2694585 r
+DRIVE KEY 708109684.1103334 e
+DRIVE KEY 708109784.2832085 a
+DRIVE KEY 708109884.2626251 d
+DRIVE AT 708110603.3540835 note-done
 DRIVE tap Done at 830,368
-DRIVE AT 637115772.0846667 offer
+DRIVE AT 708111585.8597085 offer
 DRIVE tap Add to chat at 806,22
-2026-10-28 11:22:28.874 mbui[47759:56273880] marks: drawn (82887 bytes)
-DRIVE AT 637117004.7503335 tap=send2
+2026-10-29 07:05:44.687 mbui[61159:59852239] marks: drawn (82887 bytes)
+DRIVE AT 708112818.3522918 tap=send2
 DRIVE tap icon:arrow-up at 815,617
 SAID sent row in the list o:out4
-DRIVE AT 637117538.2760001 working2
-DRIVE ok until Good catch (5790 ms)
-DRIVE AT 637123328.3937501 fixed
-DRIVE AT 637124839.3821669 tap=合并
+DRIVE AT 708113352.1520419 working2
+DRIVE ok until Good catch (5791 ms)
+DRIVE AT 708119143.7507501 fixed
+DRIVE AT 708120652.7255836 tap=合并
 DRIVE tap =Merge at 524,589
 DRIVE ok until 4f2a9c1 (2498 ms)
-DRIVE AT 637127357.9580418 merged
-DRIVE AT 637130572.5647918 end
+DRIVE AT 708123170.2716669 merged
+DRIVE AT 708126384.9027919 end
 DRIVE PASS
