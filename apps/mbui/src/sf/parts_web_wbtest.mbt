@@ -305,3 +305,51 @@ test "a column's edge's words stay away after it is dragged by many moves, the p
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is None)
 }
+
+///|
+test "a list's row in a side column: what stands at its first line's end in one column with what stands in its foot's end corner" {
+  let l = theme().chat_list
+  let t = @ui.Tester::new(
+    wide_view(fn(c) {
+      c.box(w=Px(280.0), fn() {
+        list_row(
+          c,
+          c.id("row"),
+          Side,
+          0L,
+          high=true,
+          end_slot=16.0,
+          // (an agent's mark last in the corner, 16 wide)
+          corner=fn() { c.box(w=Px(16.0), h=Px(16.0), bg=0x00FF00FFL, fn() {  }) |> ignore },
+          corner_w=16.0,
+          corner_end=16.0,
+          fn() {
+            c.box(style=@ui.css("w=Full"), fn() {  }) |> ignore
+            c.box(w=Px(16.0), h=Px(16.0), bg=0xFF0000FFL, fn() {  }) |> ignore
+          },
+          fn() {  },
+        )
+        |> ignore
+      })
+      |> ignore
+    }),
+    w=800.0,
+    h=600.0,
+    // (squares standing in for its marks: the corner rule not held of them)
+    corners_held=false,
+  )
+  t.draw()
+  let at = fn(color : Int64) {
+    match t.drawn_rects().search_by(fn(r) { r.4 == color }) {
+      Some(i) => {
+        let r = t.drawn_rects()[i]
+        r.0 + r.2 / 2.0
+      }
+      None => -1.0
+    }
+  }
+  let end = at(0xFF0000FFL)
+  let corner = at(0x00FF00FFL)
+  assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+  assert_true((end - corner).abs() < 0.5, msg="the first line's end at \{end}, the corner's at \{corner}")
+}

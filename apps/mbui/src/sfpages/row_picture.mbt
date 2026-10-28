@@ -15,6 +15,20 @@ fn row_with_people(item : ChatItem, lead : String) -> Bool {
 }
 
 ///|
+/// How wide the last of what stands in a row's foot's end corner is (row_aside: a face, or an agent's mark), whose
+/// middle the marks at its first line's end stand over (@sf.list_row's `corner_end`).
+pub fn row_aside_end_w(item : ChatItem, lead : String) -> Double {
+  let agents = @sfbase.row_agent_groups(item).length() > 0
+  let faces = row_with_people(item, lead)
+  let faces_last = faces && (lead != "people" || !agents)
+  if faces_last {
+    @sf.theme().chat_list.face_d
+  } else {
+    aside_agent_w
+  }
+}
+
+///|
 /// How wide what row_aside shows is, by its parts' sizes (the theme's chats' list): the room a row keeps for it where
 /// it stands in the row's corner, out of the line's flow (list_row `corner`).
 pub fn row_aside_w(c : @ui.Ctx, item : ChatItem, lead : String) -> Double {

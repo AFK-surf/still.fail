@@ -246,6 +246,9 @@ pub fn chat_row(
         corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
         // (swiped in its slot: the slot's corners its)
         slotted=swipes,
+        // (its station's mark at its first line's end, in the column of who is in it under it)
+        end_slot=kind_slot_w,
+        corner_end=row_aside_end_w(item, lead),
         fn() {
             // (renamed, the field takes the head's whole width, its mark's place too: rename_box)
             let tone = @sfbase.row_tone(item)
@@ -474,6 +477,10 @@ let row_time : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=f
 /// What stands at a row's title's end (Sidebar.css.ts sessionKind): a column 16 wide, its mark (12) in the middle.
 // kept across runs: a value (no field of it changes)
 pub let kind_slot : @ui.Style = @ui.css("w=S4 align=ACenter")
+
+///|
+/// How wide that column is (kind_slot's S4).
+let kind_slot_w : Double = 16.0
 
 ///|
 pub let kind_mark : Double = 12.0
