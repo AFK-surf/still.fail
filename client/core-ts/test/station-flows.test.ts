@@ -145,7 +145,7 @@ test("tells_how_far_a_file_has_come", async () => {
   const { core } = await started({ ...base(), "GET /sessions/k/files?name=big": big });
   const heard: [number, number | null][] = [];
   const [, bytes] = await run(core.inner.stations.requests.file(remote(), "k", "big", false, (loaded, total) => heard.push([loaded, total]), null));
-  // At the start, then once past 256 KB (the size not given, it comes in one chunk here).
+  // At the start, then once past 64 KB (the size not given, it comes in one chunk here).
   assert.deepEqual(heard, [[0, null], [bytes.length, null]]);
   core.close();
 });

@@ -518,10 +518,14 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
 /// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller
 /// stops reading or goes, even while nothing is being written to it, and is let go of however the writing ends: one
 /// whose head could not be written (the caller gone while its answer was being made) stayed a follower of the events
-/// for good, told everything into a queue nobody read.
+/// for good, told everything into a queue nobody read. A whole body says its length, unless compressed (compress.ts: a
+/// client counts what it has read once decompressed): a chat's picture shows how far it has come by it
+/// (pengxiao, 2026-10-28: without it, one under the core's step for an unknown length showed 0 B until it was here).
 export async function send(stream: Stream, response: Answer) {
   const head = { status: response.status, headers: response.headers };
   if (Buffer.isBuffer(response.body)) {
+    const said = Object.keys(response.headers).some((k) => ["content-length", "content-encoding"].includes(k.toLowerCase()));
+    if (!said) head.headers = { ...response.headers, "content-length": String(response.body.length) };
     await writeLine(stream, head);
     await stream.write(response.body);
     return;
