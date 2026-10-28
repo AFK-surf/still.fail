@@ -38,9 +38,14 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let with_bar = fn() {
     c.box(style=new_frame_style, id=page, fn() {
       @sfpages.new_chat_page(c, src, w, frame)
-      // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
+      // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is; its
+      // empty part drags the window as a chat's bar's does (the page under it takes presses: a row let go there)
+      let bar = c.id("new/bar")
+      if @ui.window_inset() {
+        c.window_drag(bar)
+      }
       c.layer(fn() {
-        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, fn() {
+        c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, id=bar, fn() {
           if @sf.icon_button(c, "folder", key="new/files", round=true, label=@sf.t("web-pages.chat.files")) {
             new_files_set(src, w.id, !files)
           }

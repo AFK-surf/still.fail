@@ -175,3 +175,18 @@ test "a window with its buttons in the app's top row: its top drags it before an
     }
   }
 }
+
+///|
+test "a new chat whose stations lend their files: its top row drags the window but for 文件, on a Mac and on Windows" {
+  let calls : Array[Made] = []
+  for platform in [0, 3] {
+    // its panel open beside it, then closed (文件 at the page's end)
+    let t = wide_tester(calls, mode="newchat-files", platform~, window_corner=8.0, window_inset=true)
+    t.run_for(@ui.nav_push_ms)
+    assert_true(app.nav.top() == NewChat)
+    row_drags(t, "platform \{platform}: a new chat beside its 文件", 400.0)
+    t.click(Button, label="Station 文件")
+    t.run_for(@sfdesk.side_move_ms * 2.0)
+    row_drags(t, "platform \{platform}: a new chat, its 文件 closed", 400.0)
+  }
+}
