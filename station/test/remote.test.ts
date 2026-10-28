@@ -330,8 +330,9 @@ describe("remote", { concurrency: true }, () => {
   // ── two stations ──
 
   /// A source station "A" and a target "B" in one workspace; each one's calls reach the other as the transport would
-  /// carry them (errors come back as Refused). `reach`: whether B's calls get through to A.
-  function pair() {
+  /// carry them (errors come back as Refused). `reach`: whether B's calls get through to A. `roster`: the stations the
+  /// workspace has, as the cloud names them.
+  function pair(roster: Json[] = [{ id: "A" }, { id: "B" }]) {
     const clock = testClock();
     const a = station({ clock });
     const b = station({ clock });
@@ -343,7 +344,7 @@ describe("remote", { concurrency: true }, () => {
     const asked: Json[] = [];
     const transport: PeerCall = async (target, workspace, request) => {
       asked.push(request);
-      if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+      if (target === "" && request.method === "peers") return { workspace: "ws", stations: roster, current: true };
       if (target !== "B") throw new Error("peer is not another station in this workspace");
       const answer = await answerPeer(b.remote, workspace ?? "ws", "A", JSON.parse(JSON.stringify(request)));
       if ("error" in answer) throw new Refused(answer.error);
@@ -515,6 +516,17 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(asked.filter((r) => r.method === "task.get").length, asked.slice(0, before).filter((r) => r.method === "task.get").length, "not followed");
     await assert.rejects(use("station_task", { station: "B", key: "", action: "get" }), /station and key are required/);
     await assert.rejects(use("station_task", { station: "B", key: "k", action: "run" }), /unknown task action/);
+  });
+
+  test("a station is named by its id or by the name station_list shows it by", async () => {
+    const { a, b, use } = pair([{ id: "A", name: "Studio" }, { id: "B", name: "Mini1" }, { id: "C", name: "MBA" }, { id: "D", name: "mba" }]);
+    assert.deepEqual(await use("station_task", { station: "mini1", key: "k", action: "prepare", command: "true" }), { key: "k", prepared: true });
+    const started = await use("station_task", { station: "Mini1", key: "k", action: "start" });
+    assert.equal(b.store.getJob(started.job.id)!.sessionKey, "remote:ws:A:s1");
+    assert.ok(existsSync(a.remote.outgoing("ws", "s1", "B", "k")), "kept under its id, as one started by id is");
+    assert.equal((await use("station_task", { station: "B", key: "k", action: "get" })).key, "k");
+    await assert.rejects(use("station_task", { station: "MBA", key: "k", action: "get" }), /2 stations are named MBA/);
+    await assert.rejects(use("station_task", { station: "Nowhere", key: "k", action: "get" }), /peer is not another station/);
   });
 
   test("a task's station tells of it: nothing asks about it while nothing happens to it", async () => {
