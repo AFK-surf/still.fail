@@ -175,9 +175,10 @@ final class NativeViews {
         // how it stands, for info (the GL thread reads these)
         volatile int state;
         volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering, buffered, ended;
-        // placed: x y w h cx0 cy0 cx1 cy1, the content's corners' radius, the part of the content its frame is (its
-        // top, from the content's, and its height: partOf), in pixels; shown
-        final float[] at = new float[11];
+        // placed: x y w h cx0 cy0 cx1 cy1, the content's roundest corner, the part of the content its frame is (its
+        // top, from the content's, and its height: partOf), each of its corners (top left, then round it), in
+        // pixels; shown
+        final float[] at = new float[15];
         /** Where it was told to go before it was made (made once the window has had the focus): put there as it is. */
         float[] pendingTo;
         boolean pendingShown;
@@ -687,16 +688,20 @@ final class NativeViews {
      * anew, or a tall page's part of it moved on (partOf), it is put there at once.
      */
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
-                      float radius, boolean shown) {
+                      float r0, float r1, float r2, float r3, boolean shown) {
         NView v = views.get(id);
         if (v == null) return;
         float d = Host.view.density;
-        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d, 0, 0};
+        float most = Math.max(Math.max(r0, r1), Math.max(r2, r3));
+        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, most * d, 0, 0,
+                r0 * d, r1 * d, r2 * d, r3 * d};
         float[] was = v.toldTo;
         v.partOf(to, was, shown);
         boolean moved = was != null && shown && v.toldShown && Math.abs(to[2] - was[2]) < 0.5f
                 && Math.abs(to[3] - was[3]) < 0.5f && Math.abs(to[8] - was[8]) < 0.5f
-                && Math.abs(to[9] - was[9]) < 0.5f && Math.abs(to[10] - was[10]) < 0.5f;
+                && Math.abs(to[9] - was[9]) < 0.5f && Math.abs(to[10] - was[10]) < 0.5f
+                && Math.abs(to[11] - was[11]) < 0.5f && Math.abs(to[12] - was[12]) < 0.5f
+                && Math.abs(to[13] - was[13]) < 0.5f && Math.abs(to[14] - was[14]) < 0.5f;
         v.toldTo = to;
         v.toldShown = shown;
         v.lastTo = to;
@@ -773,8 +778,9 @@ final class NativeViews {
             if (shown) {
                 // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD),
                 // on a run's draw log only: not at each step of a scroll
-                if (drawLog()) Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f",
-                        id, to[0], to[1], to[2], to[3], l, t, l + cw, t + ch, to[8]));
+                if (drawLog()) Host.log(String.format(java.util.Locale.ROOT,
+                        "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f %.4f %.4f %.4f %.4f", id, to[0], to[1], to[2],
+                        to[3], l, t, l + cw, t + ch, to[8], to[11], to[12], to[13], to[14]));
                 v.placedOnce = true;
                 v.drawnWhenBoth();
             }

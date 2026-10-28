@@ -1079,23 +1079,29 @@
     views.set(id, v);
     return id;
   };
-  H.viewPlace = (id, x, y, w, h, cx0, cy0, cx1, cy1, shown, radius = 0) => {
+  H.viewPlace = (id, x, y, w, h, cx0, cy0, cx1, cy1, shown, r0 = 0, r1 = 0, r2 = 0, r3 = 0) => {
     const v = views.get(id);
     if (!v) return;
     Object.assign(v.clip.style, { left: cx0 + 'px', top: cy0 + 'px', width: Math.max(0, cx1 - cx0) + 'px',
       height: Math.max(0, cy1 - cy0) + 'px', display: shown ? 'block' : 'none' });
-    // (its corners round, as the hole the app paints for it: the element cut to them, what it shows with it)
+    // (its corners round, each its own (top left, then round it), as the hole the app paints for it: the element cut
+    // to them, what it shows with it)
+    const rs = [r0, r1, r2, r3].map((k) => Math.max(0, k)), round = rs.some((k) => k > 0);
     Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px',
-      borderRadius: radius > 0 ? radius + 'px' : '', overflow: radius > 0 ? 'hidden' : '' });
+      borderRadius: round ? rs.map((k) => k + 'px').join(' ') : '', overflow: round ? 'hidden' : '' });
     // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
     if (shown && H.log) {
       const d = window.devicePixelRatio || 1, r = v.el.getBoundingClientRect(), k = v.clip.getBoundingClientRect();
       const cv = (H.canvas || document.querySelector('canvas'));
       const o = cv ? cv.getBoundingClientRect() : { left: 0, top: 0 };
       const f = (n) => n.toFixed(4);
+      // (its corners as the page has them, each)
+      const cs = getComputedStyle(v.el);
+      const said = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius']
+        .map((k) => parseFloat(cs[k]) || 0);
       H.log(`VIEWAT ${id} ${f((r.left - o.left) * d)} ${f((r.top - o.top) * d)} ${f(r.width * d)} ${f(r.height * d)} ` +
         `${f((k.left - o.left) * d)} ${f((k.top - o.top) * d)} ${f((k.right - o.left) * d)} ${f((k.bottom - o.top) * d)} ` +
-        `${f((parseFloat(v.el.style.borderRadius) || 0) * d)}`);
+        `${f(Math.max(...said) * d)} ${said.map((k) => f(k * d)).join(' ')}`);
     }
   };
   H.viewClose = (id) => {

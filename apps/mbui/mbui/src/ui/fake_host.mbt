@@ -214,8 +214,8 @@ impl @hostapi.Host for FakeHost with view_open(_, a0, a1) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with view_place(_, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) {
-  h_view_place(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+impl @hostapi.Host for FakeHost with view_place(_, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13) {
+  h_view_place(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13)
 }
 
 ///|

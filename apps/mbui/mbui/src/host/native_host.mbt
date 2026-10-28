@@ -511,8 +511,8 @@ impl @hostapi.Host for Native with view_open(_, kind, arg) {
 }
 
 ///|
-impl @hostapi.Host for Native with view_place(_, id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown) {
-  view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
+impl @hostapi.Host for Native with view_place(_, id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown) {
+  view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
 }
 
 ///|

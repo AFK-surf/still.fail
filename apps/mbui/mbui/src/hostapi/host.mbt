@@ -111,7 +111,7 @@ pub(open) trait Host {
   view_site_load(Self, Int, String) -> Unit = _
   view_tell(Self, Int, Int, String) -> Unit = _
   view_open(Self, Int, String) -> Int = _
-  view_place(Self, Int, Double, Double, Double, Double, Double, Double, Double, Double, Double, Bool) -> Unit = _
+  view_place(Self, Int, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Bool) -> Unit = _
   view_close(Self, Int) -> Unit = _
   view_control(Self, Int, Int, Double) -> Unit = _
   view_info(Self, Int, FixedArray[Double]) -> Int = _
@@ -707,7 +707,7 @@ impl Host with view_open(_, _, _) {
 }
 
 ///|
-impl Host with view_place(_, _, _, _, _, _, _, _, _, _, _, _) {
+impl Host with view_place(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _) {
   ()
 }
 
@@ -2053,8 +2053,9 @@ pub let view_tex_base : Int = 8388608
 
 ///|
 /// Where the view shows, in the app's coordinates (logical pixels from the window's top left): its content in (x, y,
-/// w, h) (a video's picture is stretched to it), its corners round by `radius` (0: square), seen only within the clip
-/// (cx0, cy0)-(cx1, cy1); hidden when not `shown`. Told again whenever it moves (each frame it does).
+/// w, h) (a video's picture is stretched to it), its corners round by `r0` to `r3` (top left, then round it; 0:
+/// square), seen only within the clip (cx0, cy0)-(cx1, cy1); hidden when not `shown`. Told again whenever it moves
+/// (each frame it does).
 pub fn view_place(
   id : Int,
   x : Double,
@@ -2065,10 +2066,13 @@ pub fn view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
-  radius : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
   shown : Bool,
 ) -> Unit {
-  current.val.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
+  current.val.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
 }
 
 ///|

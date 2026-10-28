@@ -969,6 +969,20 @@ pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
 }
 
 ///|
+/// The same, each corner its own (top left, then round it: an instance's 36-39).
+pub fn Tester::hole_corners(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let out = []
+  for i in 0..<g().ninst {
+    let b = i * inst_size
+    if g().inst[b + 5] == 9.0 {
+      out.push((g().inst[b + 36], g().inst[b + 37], g().inst[b + 38], g().inst[b + 39]))
+    }
+  }
+  out
+}
+
+///|
 /// What each hole in the last frame shows of its view (kind 9, in the order of holes): the view's id (its image less
 /// @hostapi.view_tex_base) and the part of its content there (u0, v0, du, dv: shares of the content's rect), as a host
 /// that draws the view's picture draws it.

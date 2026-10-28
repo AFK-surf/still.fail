@@ -862,10 +862,13 @@ extern "js" fn js_view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
-  radius : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
   shown : Bool,
 ) -> Unit =
-  #|(i, x, y, w, h, a, b, c, d, r, s) => { const H = globalThis.__mbhost; if (H && H.viewPlace) H.viewPlace(i, x, y, w, h, a, b, c, d, s, r) }
+  #|(i, x, y, w, h, a, b, c, d, r0, r1, r2, r3, s) => { const H = globalThis.__mbhost; if (H && H.viewPlace) H.viewPlace(i, x, y, w, h, a, b, c, d, s, r0, r1, r2, r3) }
 
 ///|
 extern "js" fn js_view_close(id : Int) -> Unit =
@@ -903,10 +906,13 @@ fn view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
-  radius : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
   shown : Bool,
 ) -> Unit {
-  js_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
+  js_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
 }
 
 ///|

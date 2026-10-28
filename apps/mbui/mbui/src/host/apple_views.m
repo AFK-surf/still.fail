@@ -161,7 +161,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) int32_t vid, kind;
 @property(nonatomic, strong) PView *box;      // clips: at the clip rect
 @property(nonatomic, strong) PView *content;  // in it: at the view's rect
-@property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1, radius;
+@property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1;
+@property(nonatomic) double r0, r1, r2, r3;  // its corners (top left, then round it)
 @property(nonatomic) BOOL shown, placed, failed, closed;
 // where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
 @property(nonatomic) int64_t z;
@@ -1003,6 +1004,9 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   wv.opaque = YES;
   wv.backgroundColor = UIColor.whiteColor;
   wv.scrollView.backgroundColor = UIColor.whiteColor;
+  // (placed by the app, clear of the screen's edges as it lays it out: no inset of the system's safe area again, a
+  // white band under the page where the screen's foot is near)
+  wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
 #endif
   v.web = wv;
   v.content = wv;
@@ -1099,6 +1103,9 @@ static MBNative *open_site(int32_t vid, NSString *start) {
   wv.opaque = YES;
   wv.backgroundColor = UIColor.whiteColor;
   wv.scrollView.backgroundColor = UIColor.whiteColor;
+  // (placed by the app, clear of the screen's edges as it lays it out: no inset of the system's safe area again, a
+  // white band under the page where the screen's foot is near)
+  wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
 #endif
   v.web = wv;
   v.content = wv;
@@ -1139,13 +1146,72 @@ static void stack(MBNative *v) {
 #endif
 }
 
+// One corner of mbui's (src/ui/smooth.mbt, src/host/corner.sl mb_sd_corner) on path p: |x|^n + |y|^n = R^n about its
+// centre (cx, cy), the quarter towards (sx, sy), from its end along x (`from_x`) or along y, as the hole's is drawn.
+static void smooth_corner(CGMutablePathRef p, double r, double room, double cx, double cy, double sx, double sy,
+                          BOOL from_x) {
+  double s = r <= 0 ? 0 : fmin(1, fmax(0, (room - r) / (0.25 * r)));
+  double R = fmin(r * (1 + 0.25 * s), room), n = 2 + 0.8284271247461903 * s;
+  const int steps = 24;
+  for (int i = 0; i <= steps; i++) {
+    double t = (from_x ? i : steps - i) * M_PI_2 / steps;
+    double x = R * pow(fmax(0, cos(t)), 2 / n), y = R * pow(fmax(0, sin(t)), 2 / n);
+    CGPathAddLineToPoint(p, NULL, cx + sx * x, cy + sy * y);
+  }
+}
+
+// Its content's corners round, each its own (top left, then round it), as the hole the app paints for it, smooth as
+// mbui's are (a circle's arc cut the page short of the hole along each corner, its ground showing in between): a mask
+// of that shape on it, laid along the layer's y as it runs (a Mac's view not flipped: up).
+static void round_content(MBNative *v, double r0, double r1, double r2, double r3) {
+  CALayer *l = v.content.layer;
+  l.cornerRadius = 0;
+  l.masksToBounds = NO;
+  if (r0 <= 0 && r1 <= 0 && r2 <= 0 && r3 <= 0) {
+    if ([l.mask isKindOfClass:CAShapeLayer.class]) l.mask = nil;
+    return;
+  }
+  CGRect b = l.bounds;
+  double w = b.size.width, h = b.size.height, most = fmin(w, h) / 2;
+  // the corners at the layer's y 0 first (left, right), then those at its height (right, left)
+  double a0 = r0, a1 = r1, a2 = r2, a3 = r3;
+#if TARGET_OS_OSX
+  NSView *c = v.content;
+  NSPoint top = [c convertPointToLayer:NSMakePoint(0, c.isFlipped ? 0 : c.bounds.size.height)];
+  if (top.y > h / 2) {
+    a0 = r3; a1 = r2; a2 = r1; a3 = r0;
+  }
+#endif
+  a0 = fmax(0, fmin(a0, most)); a1 = fmax(0, fmin(a1, most));
+  a2 = fmax(0, fmin(a2, most)); a3 = fmax(0, fmin(a3, most));
+  CGMutablePathRef p = CGPathCreateMutable();
+  // (each corner about its centre its R in from both edges: round the box from the first's end along the left edge)
+  double k[4] = {a0, a1, a2, a3};
+  double R[4];
+  for (int i = 0; i < 4; i++) {
+    double s = k[i] <= 0 ? 0 : fmin(1, fmax(0, (most - k[i]) / (0.25 * k[i])));
+    R[i] = fmin(k[i] * (1 + 0.25 * s), most);
+  }
+  CGPathMoveToPoint(p, NULL, 0, R[0]);
+  smooth_corner(p, a0, most, R[0], R[0], -1, -1, YES);
+  smooth_corner(p, a1, most, w - R[1], R[1], 1, -1, NO);
+  smooth_corner(p, a2, most, w - R[2], h - R[2], 1, 1, YES);
+  smooth_corner(p, a3, most, R[3], h - R[3], -1, 1, NO);
+  CGPathCloseSubpath(p);
+  CAShapeLayer *m = [l.mask isKindOfClass:CAShapeLayer.class] ? (CAShapeLayer *)l.mask : [CAShapeLayer layer];
+  m.frame = b;
+  m.path = p;
+  CGPathRelease(p);
+  l.mask = m;
+}
+
 void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, double radius, int32_t shown) {
+                        double cy1, double r0, double r1, double r2, double r3, int32_t shown) {
   MBNative *v = views[@(vid)];
   if (!v) return;
   BOOL s = shown != 0;
   if (v.placed && v.shown == s && v.x == x && v.y == y && v.w == w && v.h == h && v.cx0 == cx0 && v.cy0 == cy0 &&
-      v.cx1 == cx1 && v.cy1 == cy1 && v.radius == radius)
+      v.cx1 == cx1 && v.cy1 == cy1 && v.r0 == r0 && v.r1 == r1 && v.r2 == r2 && v.r3 == r3)
     return;
   BOOL resized = !v.placed || v.w != w || v.h != h;
   views_moved = 1;
@@ -1160,14 +1226,13 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
   // its corners round (as the hole the app paints for it): its own layer cut to them, what it holds with it
-  if (radius > 0 || v.radius > 0) {
+  if (r0 > 0 || r1 > 0 || r2 > 0 || r3 > 0 || v.r0 > 0 || v.r1 > 0 || v.r2 > 0 || v.r3 > 0) {
 #if TARGET_OS_OSX
     v.content.wantsLayer = YES;
 #endif
-    v.content.layer.cornerRadius = fmax(0, radius);
-    v.content.layer.masksToBounds = radius > 0;
+    round_content(v, r0, r1, r2, r3);
   }
-  v.radius = radius;
+  v.r0 = r0; v.r1 = r1; v.r2 = r2; v.r3 = r3;
   [CATransaction commit];
   // where it is now, in device pixels: its content and its clip (scripts/host_contract.sh HOST views compares it with
   // what the app told: VIEWTOLD)
@@ -1178,9 +1243,14 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
     double px = UIScreen.mainScreen.scale;
 #endif
     CGRect b = v.box.frame, c = v.content.frame;
-    vlog(@"VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, (b.origin.x + c.origin.x) * px,
-         (b.origin.y + c.origin.y) * px, c.size.width * px, c.size.height * px, b.origin.x * px, b.origin.y * px,
-         (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px, v.content.layer.cornerRadius * px);
+    // (its corners as put: the layer's, else its mask's, as told)
+    BOOL masked = [v.content.layer.mask isKindOfClass:CAShapeLayer.class];
+    double k0 = masked ? v.r0 : v.content.layer.cornerRadius, k1 = masked ? v.r1 : k0, k2 = masked ? v.r2 : k0,
+           k3 = masked ? v.r3 : k0;
+    vlog(@"VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid,
+         (b.origin.x + c.origin.x) * px, (b.origin.y + c.origin.y) * px, c.size.width * px, c.size.height * px,
+         b.origin.x * px, b.origin.y * px, (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px,
+         fmax(fmax(k0, k1), fmax(k2, k3)) * px, k0 * px, k1 * px, k2 * px, k3 * px);
   }
   if (resized && v.kind >= 2) [v refreshSnap];
 }

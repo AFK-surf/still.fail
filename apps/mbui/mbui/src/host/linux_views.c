@@ -259,7 +259,8 @@ typedef struct {
   GtkWidget parent;
   GtkWidget *child;
   double w, h;               // the clip's size, points
-  double px, py, pw, ph, r;  // the page's rect within it, its corners' radius
+  double px, py, pw, ph;     // the page's rect within it
+  double r[4];               // its corners (top left, then round it)
   double ox, oy, cw, ch;     // the part of the page its widget is (all of it but where it is too big: band)
 } Box;
 typedef struct {
@@ -288,14 +289,17 @@ static void box_snapshot(GtkWidget *w, GtkSnapshot *s) {
   if (!b->child) return;
   graphene_rect_t clip = GRAPHENE_RECT_INIT(0, 0, (float)b->w, (float)b->h);
   gtk_snapshot_push_clip(s, &clip);
-  if (b->r > 0) {
+  int round = b->r[0] > 0 || b->r[1] > 0 || b->r[2] > 0 || b->r[3] > 0;
+  if (round) {
     GskRoundedRect rr;
     graphene_rect_t page = GRAPHENE_RECT_INIT((float)b->px, (float)b->py, (float)b->pw, (float)b->ph);
-    gsk_rounded_rect_init_from_rect(&rr, &page, (float)b->r);
+    graphene_size_t k[4];
+    for (int i = 0; i < 4; i++) k[i] = GRAPHENE_SIZE_INIT((float)b->r[i], (float)b->r[i]);
+    gsk_rounded_rect_init(&rr, &page, &k[0], &k[1], &k[2], &k[3]);
     gtk_snapshot_push_rounded_clip(s, &rr);
   }
   gtk_widget_snapshot_child(w, b->child, s);
-  if (b->r > 0) gtk_snapshot_pop(s);
+  if (round) gtk_snapshot_pop(s);
   gtk_snapshot_pop(s);
 }
 
@@ -328,7 +332,8 @@ typedef struct Req {
 
 typedef struct View {
   int vid, kind;
-  double x, y, w, h, cx0, cy0, cx1, cy1, radius;
+  double x, y, w, h, cx0, cy0, cx1, cy1;
+  double r[4];  // its corners (top left, then round it)
   int shown, placed;
   double band_x, band_y, zoom;  // where its widget's part of a page too big for one begins (device pixels); its zoom
   int loaded, failed, told, loading, there, load_broke;
@@ -475,7 +480,7 @@ static void apply_place(View *v) {
   Box *b = v->box;
   b->w = bw / s, b->h = bh / s;
   b->px = (px0 - bx) / s, b->py = (py0 - by) / s, b->pw = pw / s, b->ph = ph / s;
-  b->r = v->radius > 0 ? v->radius : 0;
+  for (int i = 0; i < 4; i++) b->r[i] = fmax(0, v->r[i]);
   // (a page too big for one widget: the part of it seen and around it, the page scrolled to it)
   if (v->shown) {
     double ox = band(px0, px0 + pw, fmax(bx, px0), fmin(bx + bw, px0 + pw), v->band_x);
@@ -492,8 +497,9 @@ static void apply_place(View *v) {
   gtk_widget_queue_resize(GTK_WIDGET(b));
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
   if (v->shown)
-    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by, bx + bw, by + bh,
-         b->r * s);
+    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by,
+         bx + bw, by + bh, fmax(fmax(b->r[0], b->r[1]), fmax(b->r[2], b->r[3])) * s, b->r[0] * s, b->r[1] * s,
+         b->r[2] * s, b->r[3] * s);
 }
 
 // ---- a site's requests, answered by the app ----
@@ -853,28 +859,31 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, double radius, int32_t shown) {
+                        double cy1, double r0, double r1, double r2, double r3, int32_t shown) {
   Player *pl = player_of(vid);
   if (pl) {
     // (drawn in the canvas where the app paints it: placed as told, on the same device pixels)
     double s = mb_app_scale() > 0 ? mb_app_scale() : 1, px0 = round(x * s), py0 = round(y * s);
     double bx = round(cx0 * s), by = round(cy0 * s);
+    double k0 = fmax(0, r0) * s, k1 = fmax(0, r1) * s, k2 = fmax(0, r2) * s, k3 = fmax(0, r3) * s;
     if (shown)
-      vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, px0, py0, round((x + fmax(0, w)) * s) - px0,
-           round((y + fmax(0, h)) * s) - py0, bx, by, round(cx1 * s), round(cy1 * s), radius > 0 ? radius * s : 0);
+      vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, px0, py0,
+           round((x + fmax(0, w)) * s) - px0, round((y + fmax(0, h)) * s) - py0, bx, by, round(cx1 * s),
+           round(cy1 * s), fmax(fmax(k0, k1), fmax(k2, k3)), k0, k1, k2, k3);
     return;
   }
   View *v = find(vid);
   if (!v) return;
   int s = shown != 0;
   if (v->placed && v->shown == s && v->x == x && v->y == y && v->w == w && v->h == h && v->cx0 == cx0 &&
-      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1 && v->radius == radius)
+      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1 && v->r[0] == r0 && v->r[1] == r1 && v->r[2] == r2 &&
+      v->r[3] == r3)
     return;
   v->placed = 1;
   v->shown = s;
   v->x = x, v->y = y, v->w = w, v->h = h;
   v->cx0 = cx0, v->cy0 = cy0, v->cx1 = cx1, v->cy1 = cy1;
-  v->radius = radius;
+  v->r[0] = r0, v->r[1] = r1, v->r[2] = r2, v->r[3] = r3;
   apply_place(v);
 }
 

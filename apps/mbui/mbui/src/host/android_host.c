@@ -179,7 +179,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_photo = (*env)->GetStaticMethodID(env, picks_cls, "photo", "(Ljava/lang/String;)I");
   views_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/NativeViews"));
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
-  m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFFZ)V");
+  m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFFFFFZ)V");
   m_v_close = (*env)->GetStaticMethodID(env, views_cls, "close", "(I)V");
   m_v_lost = (*env)->GetStaticMethodID(env, views_cls, "lost", "()V");
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
@@ -1215,11 +1215,11 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, double radius, int32_t shown) {
+                        double cy1, double r0, double r1, double r2, double r3, int32_t shown) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, views_cls, m_v_place, id, (jfloat)x, (jfloat)y, (jfloat)w, (jfloat)h,
-                               (jfloat)cx0, (jfloat)cy0, (jfloat)cx1, (jfloat)cy1, (jfloat)radius,
-                               shown ? JNI_TRUE : JNI_FALSE);
+                               (jfloat)cx0, (jfloat)cy0, (jfloat)cx1, (jfloat)cy1, (jfloat)r0, (jfloat)r1,
+                               (jfloat)r2, (jfloat)r3, shown ? JNI_TRUE : JNI_FALSE);
 }
 
 void mb_host_view_close(int32_t id) {

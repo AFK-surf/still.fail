@@ -469,34 +469,39 @@ fn side_panel(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
-      // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs
-      let alone = side_on_tape.val && tabs.length() == 1
-      if alone {
-        side_title(c, src, r, v, tabs[0])
-      } else {
-        c.box(style=side_tab_list, fn() {
-          for tab in tabs {
-            side_tab_of(c, src, r, v, tab, tab == front)
-          }
-        })
-        |> ignore
-      }
-      // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
-      match station_tab_page(r, front) {
-        Some(p) if @sfbase.window_opens_for(p) =>
-          if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
-            @sfbase.open_window(p) {
-            side_change(src, r, "close", Some(front))
-          }
-        _ => ()
-      }
-      // the panel's switch stays in its top right corner, open or closed
-      if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
-        side_change(src, r, "clear", None)
-      }
-    })
-    |> ignore
+    // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs.
+    // One whose page has a bar of its own (a service's: its address names it): that bar the panel's, its × at its end,
+    // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
+    let alone = side_on_tape.val && tabs.length() == 1
+    let own_bar = alone && tab_service(front) is Some(_)
+    if !own_bar {
+      c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
+        if alone {
+          side_title(c, src, r, v, tabs[0])
+        } else {
+          c.box(style=side_tab_list, fn() {
+            for tab in tabs {
+              side_tab_of(c, src, r, v, tab, tab == front)
+            }
+          })
+          |> ignore
+        }
+        // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
+        match station_tab_page(r, front) {
+          Some(p) if @sfbase.window_opens_for(p) =>
+            if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
+              @sfbase.open_window(p) {
+              side_change(src, r, "close", Some(front))
+            }
+          _ => ()
+        }
+        // the panel's switch stays in its top right corner, open or closed
+        if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+          side_change(src, r, "clear", None)
+        }
+      })
+      |> ignore
+    }
     c.box(style=side_pane, fn() {
       if front == "jobs" {
         // a service up pressed: its own tab, in front (JobsTab onOpen)
@@ -512,7 +517,11 @@ fn side_panel(
           None => ()
         }
       } else if tab_service(front) is Some(job) {
-        service_pane(c, src, r, job)
+        service_pane(c, src, r, job, close=if own_bar {
+          Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
+        } else {
+          None
+        })
       } else if tab_file(front) is Some((session, path, name)) {
         file_pane(c, src, r, session, path, name)
       } else if station_tab_pane(c, src, w, r, front) {

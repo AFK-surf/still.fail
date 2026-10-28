@@ -1442,19 +1442,30 @@ fn h_view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
-  radius : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
   shown : Bool,
 ) -> Unit {
   match fake.val {
     Some(f) => {
       f.views.push(
         "place \{id} \{x} \{y} \{w} \{h} in \{cx0} \{cy0} \{cx1} \{cy1}" +
-        (if radius > 0.0 { " round \{radius}" } else { "" }) +
+        (if r0 == r1 && r1 == r2 && r2 == r3 {
+          if r0 > 0.0 {
+            " round \{r0}"
+          } else {
+            ""
+          }
+        } else {
+          " round \{r0} \{r1} \{r2} \{r3}"
+        }) +
         (if shown { "" } else { " hidden" }),
       )
       f.view_at[id] = (dmax(x, cx0), dmax(y, cy0), dmin(x + w, cx1), dmin(y + h, cy1), shown)
     }
-    None => @hostapi.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
+    None => @hostapi.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
   }
 }
 
