@@ -609,7 +609,7 @@ pub fn quote_card(
   let hung = composer && remove
   let node = Ref::new(-1)
   let card = fn() {
-    node.val = c.box(style=if composer { quote_box_composer().then(composer_card()) } else { quote_box }, fn() {
+    node.val = c.box(style=if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }, fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => if hung { quote_source_hung } else { quote_source_composer }
@@ -706,7 +706,7 @@ pub fn quote_sent_shift(author : String, role : String) -> (Double, Double) {
   if pin_of(author, role) != "" {
     (0.0, 0.0)
   } else {
-    (quote_in_composer.px() - quote_in, quote_over_composer - quote_over)
+    (quote_in_composer.px() - (quote_card_in + quote_in), quote_over_composer - (quote_card_in + quote_over))
   }
 }
 
@@ -719,6 +719,15 @@ let quote_icon : Double = 11.0
 /// the web's 12), in the composer its inner corner; the text at 4% over the canvas.
 // kept across runs: a value (no field of it changes)
 let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=Over(Bg, faint_ground), clip=true)
+
+///|
+/// In a message, as the other cards there (a login's): what it holds the ladder's inset in from its edges (its picture
+/// there, concentric with it), its words as far in again.
+// kept across runs: a value (no field of it changes)
+let quote_box_message : @ui.Style = quote_box.then(@ui.style(p=room(quote_card_in)))
+
+///|
+let quote_card_in : Double = corner_inset
 
 ///|
 /// A quote's corner in a message: a card's of the ladder's, as the other cards in a message are.
@@ -763,17 +772,18 @@ pub fn composer_files_end() -> Double {
 }
 
 ///|
-/// quoteCardSource: 7 by 11 over the words (in the composer 9 over, 16 at its start, 34 at its end for its ✕).
+/// Its words in a message: in from its card's padding as far again, as far under them (in the composer 9 over, 16 at
+/// its start, 34 at its end for its ✕).
 // kept across runs: a value (no field of it changes)
 let quote_source : @ui.Style = @ui.style(w=Full, px=room(quote_in), pt=room(quote_over), pb=room(quote_over))
 
 ///|
-/// A quote card's words 11 in and 7 over (quoteCardSource); in the composer 16 in, 34 at its end, 9 over; what is said
-/// 3 under the words, 7 under it (10 in the composer).
-let quote_in : Double = 11.0
+/// A quote card's words in a message the ladder's inset in and over from its card's padding (a login card's title's);
+/// in the composer 16 in, 34 at its end, 9 over; what is said 3 under the words, 10 under it there.
+let quote_in : Double = corner_inset
 
 ///|
-let quote_over : Double = 7.0
+let quote_over : Double = corner_inset
 
 ///|
 let quote_end_composer : Double = 34.0
@@ -798,8 +808,11 @@ let quote_source_composer : @ui.Style = @ui.style(
 
 ///|
 /// How far from a quote's top and start its pin (a capsule quote_pin_h high) stands, concentric with its corner
-/// (capsule_in: 9.22).
+/// (capsule_in); in the composer, with a row's.
 let quote_pin_in : Double = capsule_in(quote_corner, quote_pin_h)
+
+///|
+let quote_pin_in_composer : Double = capsule_in(row_corner, quote_pin_h)
 
 ///|
 let quote_pin_h : Double = 16.0
@@ -809,13 +822,13 @@ let quote_pin_h : Double = 16.0
 /// corner (quote_pin_in).
 // kept across runs: a value (no field of it changes)
 let quote_source_pin : @ui.Style = quote_source.then(
-  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+  @ui.style(pl=room(quote_pin_in - quote_card_in), pt=room(quote_pin_in - quote_card_in)),
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
 let quote_source_composer_pin : @ui.Style = quote_source_composer.then(
-  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+  @ui.style(pl=room(quote_pin_in_composer), pt=room(quote_pin_in_composer)),
 )
 
 ///|
@@ -827,7 +840,7 @@ let quote_source_hung : @ui.Style = quote_source_composer.then(@ui.css("pr=S4"))
 ///|
 // kept across runs: a value (no field of it changes)
 let quote_source_hung_pin : @ui.Style = quote_source_hung.then(
-  @ui.style(pl=room(quote_pin_in), pt=room(quote_pin_in)),
+  @ui.style(pl=room(quote_pin_in_composer), pt=room(quote_pin_in_composer)),
 )
 
 ///|
@@ -858,23 +871,25 @@ let quote_pin : @ui.Style = @ui.css("h=S4 min_w=S4 px=S1 radius=Full bg=Accent a
 let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnAccent, wrap=false)
 
 ///|
-/// quoteCardPicture: 6 over it, 11 in (in the composer 16).
+/// Its picture in a message: at its card's padding, what is said of it as far under it as under the words (in the
+/// composer 6 over it, 16 in).
 // kept across runs: a value (no field of it changes)
-let quote_picture : @ui.Style = @ui.style(row=true, px=room(quote_in), pt=S1_5)
+let quote_picture : @ui.Style = @ui.style(row=true, pb=room(quote_over))
 
 ///|
-/// Last in its card (nothing said of it): as far over its foot as in from its side.
+/// Last in its card (nothing said of it): the card's padding under it, as at its sides.
 // kept across runs: a value (no field of it changes)
-let quote_picture_last : @ui.Style = quote_picture.then(@ui.style(pb=room(quote_in)))
+let quote_picture_last : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let quote_picture_composer : @ui.Style = @ui.css("row px=S4 pt=S1_5")
 
 ///|
-/// quoteCardComment: 3 over, 16 in, 10 under it in the composer; under a message's, 11 in and 7 under.
+/// quoteCardComment: 3 over, 16 in, 10 under it in the composer; in a message's, as far in as its words, as far under
+/// it as they are over them (what is over it keeps its own room under it).
 // kept across runs: a value (no field of it changes)
-let quote_comment : @ui.Style = @ui.style(w=Full, px=room(quote_in), pt=room(quote_said_over), pb=room(quote_over))
+let quote_comment : @ui.Style = @ui.style(w=Full, px=room(quote_in), pb=room(quote_over))
 
 ///|
 // kept across runs: a value (no field of it changes)
