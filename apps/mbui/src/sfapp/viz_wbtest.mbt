@@ -333,3 +333,48 @@ test "a page opened over the chat on a wide window shows over the chat's visuali
   let raised_page = raises.search("raise \{page}")
   assert_true(raised_page is Some(_), msg=raises.join(", "))
 }
+
+///|
+/// Whether something is drawn over view `id`'s hole after it, in the last frame (what covers it), within a pixel (the
+/// hole is put on whole pixels).
+fn view_covered(t : @ui.Tester, id : Int) -> Bool {
+  let hole = match view_rect(t, id) {
+    Some(r) => r
+    None => return false
+  }
+  let mut seen = false
+  for d in t.drawn_order() {
+    if d.0 == 9 && d.1 == hole.0 && d.2 == hole.1 && d.3 == hole.2 && d.4 == hole.3 {
+      seen = true
+    } else if seen &&
+      d.0 == 0 &&
+      d.1 <= hole.0 + 1.0 &&
+      d.2 <= hole.1 + 1.0 &&
+      d.1 + d.3 >= hole.0 + hole.2 - 1.0 &&
+      d.2 + d.4 >= hole.1 + hole.3 - 1.0 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+test "a page that said its height stays covered till its host has drawn it (its first frame on the screen)" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2, finish=false)
+  t.run_for(@ui.nav_push_ms)
+  let (page, _) = viz_views(t)
+  assert_true(view_covered(t, page))
+  // its height said (its page loaded): still covered, the host not done drawing it
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.frame()
+  t.frame()
+  assert_eq(view_rect(t, page).unwrap().3, 232.0)
+  assert_true(view_covered(t, page))
+  // drawn: shown
+  t.finish(2, page)
+  t.frame()
+  assert_false(view_covered(t, page))
+}
