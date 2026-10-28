@@ -461,7 +461,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
         }
         let words = @sf.t(if setting { "common.saving" } else { "android-settings.relays.add" })
         let row = c.box(style=@sf.panel_words_in().then(ws_way_line), id=add, fn() {
-          c.text(words, style=ws_way_title, color=@sf.link_ink()) |> ignore
+          c.text(words, style=ws_way_link) |> ignore
         })
         c.semantics(row, Button, id=add, label=words)
       }
@@ -521,7 +521,12 @@ let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
 let ws_way_end : @ui.Style = @ui.css("h=S3")
 
 ///|
+// kept across runs: a value (no field of it changes)
 let ws_way_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_link : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
 /// What a row does at its end (RowAction): a quiet button as every row's on the settings' pages (账号's 退出), turning
