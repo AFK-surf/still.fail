@@ -536,12 +536,17 @@ jobs:
           echo "not in the release yet: $(echo $missing); the pipeline's natives job is waited for"
           api() { gh api "repos/$GITHUB_REPOSITORY/$1" --jq "$2"; }
           t0=$SECONDS run=""
+          # (main's: in the release, whichever run's natives job put them there. A run of main's still waiting to start
+          # is cancelled by the next push's, which builds and publishes the same natives: 91434fca's was, and this step
+          # waited for it until its 6 minutes ran out, the next one's in the release 2 minutes before, 40642483751.)
+          main() { [ "$GITHUB_REF" = refs/heads/main ]; }
           while :; do
+            ! main || [ -n "$(node scripts/native.ts missing mesh:win32-x64 runner:win32-x64)" ] || { echo "(in the release after $((SECONDS - t0)) s)"; break; }
             [ -n "$run" ] || run=$(api "actions/workflows/pipeline.yml/runs?head_sha=$GITHUB_SHA&per_page=1" '.workflow_runs[0].id // empty' || true)
             state=$([ -z "$run" ] || api "actions/runs/$run/jobs?per_page=100" '.jobs[] | select(.name == "natives") | "\(.status) \(.conclusion // "")"' || true)
             case "$state" in
               "completed success") break ;;
-              completed*) echo "::error::the pipeline's natives job ended $state (run $run)"; exit 1 ;;
+              completed*) main || { echo "::error::the pipeline's natives job ended $state (run $run)"; exit 1; } ;;
             esac
             [ $((SECONDS - t0)) -lt 360 ] || { echo "::error::the pipeline's natives job not done after 6 minutes (run ${run:-not found})"; exit 1; }
             sleep 5
