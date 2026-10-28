@@ -659,6 +659,8 @@ static UIInterfaceOrientationMask mb_upright(void) {
 @property(nonatomic) BOOL barsSaid;
 // turned sideways for a film (@hostapi.set_sideways)
 @property(nonatomic) BOOL sideways;
+// an iPhone let turn as held (@hostapi.set_turnable: a station's screen looked at)
+@property(nonatomic) BOOL turnable;
 // the size classes last said to the app (`size_class`: its width's and its height's, a space between)
 @property(nonatomic, copy) NSString *saidClasses;
 // the hinge as the system last said it (a UIHingeStatus; -1 none: no hinge, or not said yet), and the fold last said to
@@ -675,9 +677,12 @@ static MBController *the_controller;
   return self.dark ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
 }
 // on its side while a film asks (@hostapi.set_sideways), the status bar and the home indicator out of its way then (as
-// Android's system bars: a swipe brings them for a while); else upright on an iPhone, as turned on an iPad (mb_upright)
-- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-  return self.sideways ? UIInterfaceOrientationMaskLandscape : mb_upright();
+// Android's system bars: a swipe brings them for a while); else upright on an iPhone, as turned on an iPad (mb_upright),
+// an iPhone as turned too while the app lets it (@hostapi.set_turnable)
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations { return [self held]; }
+- (UIInterfaceOrientationMask)held {
+  if (self.sideways) return UIInterfaceOrientationMaskLandscape;
+  return self.turnable ? UIInterfaceOrientationMaskAllButUpsideDown | mb_upright() : mb_upright();
 }
 - (BOOL)prefersStatusBarHidden { return self.sideways; }
 - (BOOL)prefersHomeIndicatorAutoHidden { return self.sideways; }
@@ -1502,8 +1507,26 @@ void mb_host_set_sideways(int32_t on) {
   [c setNeedsUpdateOfHomeIndicatorAutoHidden];
   UIWindowScene *scene = c.view.window.windowScene;
   UIWindowSceneGeometryPreferencesIOS *g = [[UIWindowSceneGeometryPreferencesIOS alloc]
-      initWithInterfaceOrientations:on ? UIInterfaceOrientationMaskLandscape : mb_upright()];
+      initWithInterfaceOrientations:[c held]];
   [scene requestGeometryUpdateWithPreferences:g errorHandler:^(NSError *e) { say([NSString stringWithFormat:@"sideways: %@", e]); }];
+}
+
+// An iPhone let turn as held, or upright only again (@hostapi.set_turnable, as Android's user rotation): whether it is
+// one held upright (not an iPad).
+int32_t mb_host_set_turnable(int32_t on) {
+  MBController *c = the_controller;
+  BOOL phone = UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPad;
+  if (!c || c.turnable == (on != 0)) return phone ? 1 : 0;
+  c.turnable = on != 0;
+  [c setNeedsUpdateOfSupportedInterfaceOrientations];
+  // upright again as it is let go, if it was turned
+  if (!on && !c.sideways) {
+    UIWindowSceneGeometryPreferencesIOS *g = [[UIWindowSceneGeometryPreferencesIOS alloc]
+        initWithInterfaceOrientations:[c held]];
+    [c.view.window.windowScene requestGeometryUpdateWithPreferences:g
+                                                      errorHandler:^(NSError *e) { say([NSString stringWithFormat:@"turnable: %@", e]); }];
+  }
+  return phone ? 1 : 0;
 }
 
 // The app drawn dark or light (@hostapi.set_dark): what shows under the status bar and the home indicator (the app's view

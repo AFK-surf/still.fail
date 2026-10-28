@@ -184,6 +184,9 @@ extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 ///|
 extern "C" fn ffi_set_sideways(on : Int) -> Unit = "mb_host_set_sideways"
 
+///|
+extern "C" fn ffi_set_turnable(on : Int) -> Int = "mb_host_set_turnable"
+
 
 ///|
 #borrow(text, name, mime, data)
@@ -798,6 +801,14 @@ fn set_dark(dark : Bool) -> Unit {
 /// Android does it (the activity's requested orientation, its window's insets controller); elsewhere nothing turns.
 fn set_sideways(on : Bool) -> Unit {
   ffi_set_sideways(if on { 1 } else { 0 })
+}
+
+///|
+/// A phone held upright only let turn as it is held (a station's screen), the rotation lock honoured; `false`, upright
+/// only again. Whether the device is one held upright (a phone): Android (the activity's requested orientation) and iOS
+/// (the scene's orientations); elsewhere false, nothing turns.
+fn set_turnable(on : Bool) -> Bool {
+  ffi_set_turnable(if on { 1 } else { 0 }) != 0
 }
 
 

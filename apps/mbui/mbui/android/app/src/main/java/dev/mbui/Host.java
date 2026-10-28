@@ -145,14 +145,33 @@ final class Host {
                 else c.show(android.view.WindowInsets.Type.systemBars());
             }
             sideways = on;
-            activity.setRequestedOrientation(on ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    : upright(activity.getResources().getConfiguration()));
+            if (on) activity.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            else holdUpright(activity);
             log(on ? "sideways: landscape, the system bars away" : "sideways: upright");
         });
     }
 
     /** Whether the app has turned the device sideways itself (setSideways), main thread. */
     static boolean sideways;
+
+    /**
+     * A phone held upright only let turn as the person holds it (@hostapi.set_turnable, a station's screen looked at):
+     * the user's rotation, so with the rotation lock on the system offers its turn button as the phone is turned (it
+     * offers none to a fixed portrait); off, upright only again. Whether the device is one held upright (a phone).
+     */
+    static boolean setTurnable(boolean on) {
+        android.app.Activity a = activity;
+        boolean phone = a != null && upright(a.getResources().getConfiguration())
+                == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+        main.post(() -> {
+            turnable = on;
+            if (activity != null) holdUpright(activity);
+        });
+        return phone;
+    }
+
+    /** Whether the app lets a phone turn as it is held (setTurnable), main thread. */
+    static boolean turnable;
 
     /**
      * Which way the activity asks to be held while the app has not turned it (setSideways off): a phone upright only
@@ -164,9 +183,14 @@ final class Host {
                 : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
     }
 
-    /** The activity's held way set again as its screen may have changed (made, a fold opened or closed), unless sideways. */
+    /**
+     * The activity's held way set again as its screen may have changed (made, a fold opened or closed), or as the app
+     * lets it turn or not (setTurnable), unless sideways.
+     */
     static void holdUpright(android.app.Activity a) {
-        if (!sideways) a.setRequestedOrientation(upright(a.getResources().getConfiguration()));
+        if (sideways) return;
+        a.setRequestedOrientation(turnable ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER
+                : upright(a.getResources().getConfiguration()));
     }
 
     // The soft keyboard asked for and not shown yet (main thread). A show asked before the window has the focus, or

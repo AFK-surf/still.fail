@@ -49,9 +49,10 @@ priv struct ScreenUi {
   down_with : Map[String, Int]
   /// the copies made on the screen put on the device's clipboard
   mut copies : Int
-  /// the device kept awake, the window sideways: as last told to the host
+  /// the device kept awake, the window sideways, a phone let turn as held: as last told to the host
   mut awake : Bool
   mut sideways_told : Bool
+  mut turnable : Bool
   /// the keys row turned to the keys its first face had not the room for (keys_row's ⋯), by their names; none: its
   /// first face
   mut keys_turned : Array[String]
@@ -102,6 +103,7 @@ fn screen_ui(key : String) -> ScreenUi {
         copies: 0,
         awake: false,
         sideways_told: false,
+        turnable: false,
         keys_turned: [],
         first_tick: -1,
         rate_tick: -1,
@@ -174,6 +176,12 @@ pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame, 
     if u.awake != shown {
       u.awake = shown
       @ui.keep_awake(shown)
+    }
+    // while it is looked at, a phone turns as it is held (ScreenViewer.kt: the activity's orientation unspecified),
+    // the rotation lock honoured: with it on, the system offers its turn button
+    if u.turnable != shown {
+      u.turnable = shown
+      @hostapi.set_turnable(shown)
     }
   })
   // its screen gone (the login's tab closed as it ended): back to where it was opened from
@@ -291,7 +299,8 @@ pub fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt, frame : PageFrame, 
 }
 
 ///|
-/// The view's page gone: the view, its decoder and its files let go of; upright and asleep again.
+/// The view's page gone: the view, its decoder and its files let go of; upright (held upright only again) and asleep
+/// again.
 pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   let key = screen_key(station, screen)
   match screens_open.get(key) {
@@ -306,6 +315,9 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
       }
       if u.awake {
         @ui.keep_awake(false)
+      }
+      if u.turnable {
+        @hostapi.set_turnable(false)
       }
     }
     None => ()

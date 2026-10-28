@@ -58,13 +58,15 @@ touch's sizes, a computer's narrow window keyboard and mouse's. So does the room
 | What | Read by | What it is |
 |---|---|---|
 | The native input | `@sf.native_input()` (sf/tokens.mbt) | Touch (`Finger`: a phone, a tablet, iOS and Android, for now) or keyboard and mouse (`Mouse`: macOS, Windows), as the app was started, the same for the whole run; a Tester's by its `platform`. |
-| The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`, by the window's width in points on every screen (600, 840): which way up it is held, its height and its size say nothing of the panes, the height only how much of them shows. The one exception the crease: a fold half open, crease across, is `Small`'s chat. Held while the app holds the device sideways (`@hostapi.sideways()`). |
+| The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`, by the window's width in points on every screen (600, 840): which way up it is held, its height and its size say nothing of the panes, the height only how much of them shows. The one exception the crease: a fold half open, crease across, is `Small`'s chat. Held while the app holds the device sideways or lets a phone turn (`@hostapi.sideways()`). |
 | The current input | `@ui.pointing()` | `Finger` or `Mouse`. It may change while the app runs. |
 
 A phone is used upright only (touch as its native input and its short side under 600 points: a phone, a fold's outer screen):
 Android's activity asks for portrait there (`Host.upright`), an iPhone supports portrait alone (ios_app.m `mb_upright`).
 The app turning it itself is the exception (a film full screen, a station's screen: `@hostapi.set_sideways(true)`); back
-upright after. A tablet and an opened fold's inner screen turn as they are held.
+upright after. A station's screen looked at lets a phone turn as it is held too (`@hostapi.set_turnable(true)`: Android's
+user rotation, so with the rotation lock on the system offers its turn button), upright only again as it is left; the
+tier is held meanwhile as while sideways. A tablet and an opened fold's inner screen turn as they are held.
 
 - **The arrangement is the screen's.** The tier, and a page's own width (below), decide what is shown where. Nothing
   else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow` and `set_web_lines(wide)` go, and so

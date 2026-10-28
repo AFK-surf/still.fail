@@ -86,6 +86,7 @@ pub(open) trait Host {
   a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
   set_sideways(Self, Bool) -> Unit = _
+  set_turnable(Self, Bool) -> Bool = _
   share(Self, String, String, String, Bytes) -> Bool = _
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
@@ -578,6 +579,11 @@ impl Host with set_dark(_, _) {
 ///|
 impl Host with set_sideways(_, _) {
   ()
+}
+
+///|
+impl Host with set_turnable(_, _) {
+  false
 }
 
 ///|
@@ -1180,6 +1186,7 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
   sideways_now.val = false
+  turnable_now.val = false
   // (a new host has been handed nothing)
   nav_said.val = None
 }
@@ -1814,16 +1821,30 @@ pub fn set_sideways(on : Bool) -> Unit {
 }
 
 ///|
-/// Whether the app has the device turned sideways (set_sideways): its window as wide as it is because the app turned
-/// it, for a film or a screen over all of it, not because the screen is another kind (what a layout goes by is not this
-/// turn: still.fail's @sf.layout keeps the one it had).
+/// A phone held upright only (Android's portrait, an iPhone's) let turn as the person holds it while `on` (a station's
+/// screen looked at): the system's rotation lock honoured, so with it on Android offers its turn button as the phone is
+/// turned (a fixed portrait gets none); `false`, upright only again. Set_sideways still turns it while it asks. Android
+/// and iOS do it where the app is held upright (a phone; a tablet turns anyway); elsewhere nothing changes.
+pub fn set_turnable(on : Bool) -> Unit {
+  turnable_now.val = current.val.set_turnable(on) && on
+}
+
+///|
+/// Whether the app has the device turned sideways (set_sideways), or lets a phone held upright only turn as it is held
+/// (set_turnable): its window as wide as it is because the app turned it or let it turn, for a film or a screen over
+/// all of it, not because the screen is another kind (what a layout goes by is not this turn: still.fail's @sf.layout
+/// keeps the one it had).
 pub fn sideways() -> Bool {
-  sideways_now.val
+  sideways_now.val || turnable_now.val
 }
 
 ///|
 // kept across runs: put back as a host is set
 let sideways_now : Ref[Bool] = { val: false }
+
+///|
+// kept across runs: put back as a host is set
+let turnable_now : Ref[Bool] = { val: false }
 
 ///|
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet

@@ -386,6 +386,11 @@ impl @hostapi.Host for Native with set_sideways(_, on) {
 }
 
 ///|
+impl @hostapi.Host for Native with set_turnable(_, on) {
+  set_turnable(on)
+}
+
+///|
 impl @hostapi.Host for Native with share(_, text, name, mime, data) {
   share(text, name, mime, data)
 }
