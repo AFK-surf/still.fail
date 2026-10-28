@@ -665,7 +665,8 @@ let jobs_pop_w : Double = 360.0
 ///|
 /// What the chat's info says (ChatInfoBody): where it came from, who started it, who takes part, when it was made and
 /// last written in; its agents (AgentLine); then what is done with it: the stations' files beside it, what its agents
-/// and other chats' wrote each other, relaying it, it in Slack or Feishu; sharing it, publishing it.
+/// and other chats' wrote each other, and what its row's menu offers (@sfpages.chat_actions); a line between each part
+/// (pengxiao, 2026-10-28: parted by room alone they ran together).
 fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let thread = field(chat, "thread")
   // (a chat of a Slack or Feishu thread alone has none here: where it is, its agents and the way there, no more)
@@ -751,6 +752,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   |> ignore
   let agents = items(chat, "agents")
   if agents.length() > 0 {
+    @sf.menu_rule(c)
     c.box(style=info_agents, fn() {
       for a in agents {
         let av = Some(a)
@@ -782,67 +784,49 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     })
     |> ignore
   }
-  // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive)
-  let files = dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive })
-  let relayable = th is Some(_) && !v.archived && !v.offline && v.agents.length() > 0
-  let slack = text(chat, "slackUrl")
-  let feishu = text(chat, "feishuUrl")
-  let share = field(chat, "xshare")
-  let publish = match field(chat, "publish") {
-    Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
-    _ => None
+  // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive), and what its
+  // agents and other chats' wrote each other: the open chat's own; then what can be done with it, as its row's menu
+  // offers it (@sfpages.chat_actions), each group under a line
+  let own : Array[@sfpages.ChatAction] = []
+  if dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive }) {
+    own.push({ key: "files", icon: "folder", label: @sf.t("web-pages.chat.files"), end: "", busy: false, may: true, run: fn() {
+      side_toggle(src, r, "files")
+    } })
   }
-  let shares = th is Some(_) && (share is Some(Object(_)) || publish is Some(_))
-  if files || v.letters > 0 || relayable || slack != "" || feishu != "" {
-    c.box(style=info_tools(!shares), fn() {
-      if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
-        chat_own.info_open = false
-        side_toggle(src, r, "files")
-      }
-      if v.letters > 0 &&
-        info_row(
-          c,
-          "info-pop/letters",
-          "chats",
-          @sf.t("web-main.letters.title"),
-          @sf.t("web-main.letters.count", args=[("n", v.letters.to_string())]),
-        ) {
-        chat_own.info_open = false
+  if v.letters > 0 {
+    own.push({
+      key: "letters",
+      icon: "chats",
+      label: @sf.t("web-main.letters.title"),
+      end: @sf.t("web-main.letters.count", args=[("n", v.letters.to_string())]),
+      busy: false,
+      may: true,
+      run: fn() {
         letters_to_list(r)
         side_toggle(src, r, "letters")
-      }
-      if th is Some(id) && relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
-        chat_own.info_open = false
-        @sfpages.open_relay(src, r, id, from=Unanchored)
-      }
-      if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
-        chat_own.info_open = false
-        @sfbase.open_slack(text(chat, "slackApp"), slack) |> ignore
-      }
-      if feishu != "" && info_row(c, "info-pop/feishu", "external", @sf.t("web-pages.chat.openInFeishu"), "") {
-        chat_own.info_open = false
-        @ui.open_url(feishu) |> ignore
+      },
+    })
+  }
+  let a = @sfpages.chat_acts_of_chat(r, Some(v), chat)
+  let groups = [own]
+  groups.append(
+    @sfpages.chat_actions(src, a, rename=fn() { @sfpages.ask_rename(src, a) }, archive=fn() {
+      c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
+    }),
+  )
+  let groups = groups.filter(fn(g) { !g.is_empty() })
+  for i, g in groups {
+    @sf.menu_rule(c)
+    c.box(style=info_tools(i == groups.length() - 1), fn() {
+      for x in g {
+        if info_row(c, "info-pop/" + x.key, x.icon, x.label, x.end) && x.may && !x.busy {
+          chat_own.info_open = false
+          (x.run)()
+        }
       }
     })
     |> ignore
   }
-  guard th is Some(id) else { return }
-  if shares {
-    c.box(style=info_tools(true), fn() {
-      if share is Some(Object(_)) &&
-        info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
-        flag(share, "may") {
-        chat_own.info_open = false
-        @sfpages.open_xshare(src, r, Some(id), from=Unanchored)
-      }
-      if publish is Some(_) && info_row(c, "info-pop/publish", "photo", @sf.t("web-pages.chat.shareImage"), "") && flag(publish, "may") {
-        chat_own.info_open = false
-        @sfpages.open_publish(src, r, id)
-      }
-    })
-    |> ignore
-  }
-  ignore(w)
 }
 
 ///|
@@ -1200,9 +1184,9 @@ let info_end : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false
 let info_inline : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
-/// Its agents (detailsList): 8 under the facts, each its mark and label over its line, 2 apart.
+/// Its agents (detailsList): under the facts' line, each its mark and label over its line, 2 apart.
 // kept across runs: a value (no field of it changes)
-let info_agents : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 gap=S1_5")
+let info_agents : @ui.Style = @ui.css("w=Full px=S2_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1223,11 +1207,11 @@ let info_mark_side : Double = 14.0
 let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
 
 ///|
-/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row a small panel's (@sf.pick_high:
+/// What is done with it (infoTools, PanelRow): a group under its line, 2 apart; a row a small panel's (@sf.pick_high:
 /// in its foot corners concentric with them, as a menu's item is), its icon's 14 column and words 10 apart, 10 in,
 /// round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
-let info_tools_base : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
+let info_tools_base : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// (`last` in the panel: its last row, a capsule with keyboard and mouse, in the panel's foot corners as far in as

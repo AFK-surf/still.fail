@@ -2360,6 +2360,8 @@ export const SHAPES: Record<string, Shape> = {
     ["archivable", opt("bool"), { doc: "Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["swipeArchive", opt("bool"), { doc: "It has ended (each of its agents ended all_done, no card waiting for the viewer) and its station is online:\na finger's swipe left archives it (`chat.archive`), unread, pinned, kept or not recommended by its station's\narchive review alike. Absent otherwise." }],
     ["kept", opt("bool"), { doc: "The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise." }],
+    ["xshareMay", opt("bool"), { doc: "A chat the viewer may share with their other workspaces (`chat.xshare`: they started it, or own or run its\nworkspace, and are in another): its menu offers it, as its info does. Absent otherwise." }],
+    ["publishMay", opt("bool"), { doc: "A chat the viewer may make a public picture of (`chat.publish`: no viewer of its workspace): its menu offers\nit, as its info does. Absent otherwise." }],
     ["stateText", opt("String"), { said: true, doc: "Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a\ncard waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with\nno card waiting, or with nothing to say." }],
     ["stateLead", opt("StateLead"), { doc: "What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;\n奏 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message)." }],
     ["stateLeadText", opt("String"), { doc: "A card's line's lead word (奏, Decision), drawn in bold before the rest of `stateText`. Absent otherwise." }],
@@ -2915,6 +2917,7 @@ export const SHAPES: Record<string, Shape> = {
   ChatView: struct([
     ["archived", "bool", { default: true, doc: "Archived chats must be restored before composing another message." }],
     ["pinned", opt("bool"), { doc: "Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned)." }],
+    ["kept", opt("bool"), { doc: "The viewer kept it (`chat.keep`), as its row says. Absent otherwise." }],
     ["me", "Me"],
     ["thread", opt("ChatThread")],
     ["noChat", opt("bool"), { doc: "Its agent has no chat yet, here or in Slack, and is not archived: its page opens its execution history beside\nit. Absent otherwise, and while its detail is not read." }],

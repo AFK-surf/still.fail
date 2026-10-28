@@ -1794,6 +1794,16 @@ export interface ChatItem {
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
 	kept?: boolean;
 	/**
+	 * A chat the viewer may share with their other workspaces (`chat.xshare`: they started it, or own or run its
+	 * workspace, and are in another): its menu offers it, as its info does. Absent otherwise.
+	 */
+	xshareMay?: boolean;
+	/**
+	 * A chat the viewer may make a public picture of (`chat.publish`: no viewer of its workspace): its menu offers
+	 * it, as its info does. Absent otherwise.
+	 */
+	publishMay?: boolean;
+	/**
 	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a
 	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
 	 * no card waiting, or with nothing to say.
@@ -2435,6 +2445,8 @@ export interface ChatView {
 	archived?: boolean;
 	/** Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned). */
 	pinned?: boolean;
+	/** The viewer kept it (`chat.keep`), as its row says. Absent otherwise. */
+	kept?: boolean;
 	me: Me;
 	thread?: ChatThread;
 	/**

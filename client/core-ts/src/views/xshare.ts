@@ -69,6 +69,15 @@ export function sessionOf(thread: J): string | null {
   return str(get(thread, "home")) ?? str(get(arr(get(thread, "sessions"))[0], "session"));
 }
 
+/// Whether the viewer may change where a chat of `station` started by `starter` (an email) is shared: there is another
+/// workspace to share it with, and they started it or own or run its workspace.
+export function may(places: Place[], station: string, me: string | null, starter: string | null): boolean {
+  const scope = ofAddress(station);
+  if (!places.some((p) => p.id !== scope)) return false;
+  const role = places.find((p) => p.id === scope)?.role ?? null;
+  return (me !== null && starter === me) || role === "owner" || role === "admin";
+}
+
 /// What a chat's "…" shows of its sharing (`ChatView.xshare`), or null: no chat or agent yet, or no other workspace.
 export function shown(env: { places: Place[]; asked: (session: string) => Asked | undefined; me: string | null }, station: string, thread: J): J | null {
   const session = isObject(thread) ? sessionOf(thread) : null;
@@ -82,8 +91,6 @@ export function shown(env: { places: Place[]; asked: (session: string) => Asked 
   const ids = asked ? asked.to : now.to.map((w) => w.workspace);
   const write = asked ? asked.write : now.write;
   const to = ids.map((id) => ({ workspace: id, name: nameOf(id) }));
-  const role = env.places.find((p) => p.id === scope)?.role ?? null;
-  const starter = env.me !== null && (str(get(get(thread, "creator"), "id")) === env.me || str(thread.createdBy) === env.me);
   const text = to.length === 0
     ? t("core-views.xshare.none")
     : `${to.map((w) => w.name).join(t("core-views.list_separator"))} · ${write ? t("core-views.xshare.write") : t("core-views.xshare.read")}`;
@@ -92,7 +99,7 @@ export function shown(env: { places: Place[]; asked: (session: string) => Asked 
     text,
     to,
     write,
-    may: starter || role === "owner" || role === "admin",
+    may: may(env.places, station, env.me, str(get(get(thread, "creator"), "id")) ?? str(thread.createdBy)),
     places: others.map((p) => ({ workspace: p.id, name: p.name, on: ids.includes(p.id) })),
   };
 }

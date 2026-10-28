@@ -5,8 +5,8 @@
 // last thing said, who is in it at the second line's end; pressed, its chat (where the shell has it). With a mouse:
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat with nothing
-// left in it is swiped left to archive it. The menu is the presenters' (@sf.menu): 固定,
-// 重命名, 保留, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
+// left in it is swiped left to archive it. The menu is the presenters' (@sf.menu): what can be done with its chat, as
+// its info offers it (chat_actions.mbt).
 
 ///|
 /// What the rows keep: the row whose title is being written in place (a mouse's 重命名, its key; "" none) and its field,
@@ -21,7 +21,6 @@ priv struct Rows {
   mut menu_for : String
   mut menu_serial : Int
   swiped_off : Map[String, Bool]
-  mut transcripts : (String, Array[String])?
   felt_past : Map[String, Bool]
 }
 
@@ -34,7 +33,6 @@ let rows : Rows = {
   menu_for: "",
   menu_serial: -1,
   swiped_off: {},
-  transcripts: None,
   felt_past: {},
 }
 
@@ -47,7 +45,6 @@ fn chat_rows_reset() -> Unit {
   rows.menu_for = ""
   rows.menu_serial = -1
   rows.swiped_off.clear()
-  rows.transcripts = None
   rows.felt_past.clear()
 }
 
@@ -507,138 +504,34 @@ let kind_glyph : Double = 16.0
 let row_icon : Double = 16.0
 
 ///|
-/// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
-/// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 复制会话链接,
-/// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
-/// (a sheet, or under it); right clicked, at the pointer.
+/// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): what can be done
+/// with its chat (chat_actions.mbt), the same as its info offers, its groups apart. Held by a finger, felt as it opens
+/// and from the row (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
-  let r = row_ref(item)
-  let items : Array[@sf.MenuItem?] = []
-  match item.pinned {
-    Some(p) =>
-      items.push(
-        Some(
-          @sf.menu_item_of(@sf.t(if p { "web-main.chat.unpin" } else { "web-main.chat.pin" }), icon="pin", fn() {
-            act(
-              src,
-              @sf.t(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
-              "",
-              "chat.pin",
-              { "station": Json::string(item.station), "session": Json::string(item.session), "pinned": Json::boolean(!p) },
-            )
-          }),
-        ),
+  let a = chat_acts_of_row(item)
+  let groups = chat_actions(
+    src,
+    a,
+    rename=fn() {
+      // asked where the presenters ask it: with keyboard and mouse the row's title its own field (Rename.tsx TitleInput), on a
+      // touch over the page (mobile/Home.tsx ask)
+      @sf.ask_here(
+        @sf.t("android-chat.rename.title"),
+        @sf.t("common.save"),
+        fn(title) { rename_chat(src, a, title) },
+        fn() { rows.renaming = @sfbase.row_name(item) },
+        value=item.title,
+        placeholder=@sf.t("android-chat.rename.field"),
+        hint=@sf.t("android-chat.rename.note"),
       )
-    None => ()
-  }
-  items.push(
-    Some(
-      @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // asked where the presenters ask it: with keyboard and mouse the row's title its own field (Rename.tsx TitleInput), on a
-        // touch over the page (mobile/Home.tsx ask)
-        @sf.ask_here(
-          @sf.t("android-chat.rename.title"),
-          @sf.t("common.save"),
-          fn(title) { rename(src, item, title) },
-          fn() { rows.renaming = @sfbase.row_name(item) },
-          value=item.title,
-          placeholder=@sf.t("android-chat.rename.field"),
-          hint=@sf.t("android-chat.rename.note"),
-        )
-      }),
-    ),
+    },
+    archive=fn() { archive_row(src, item) },
   )
-  match item.thread {
-    Some(th) if item.pinned != Some(true) =>
-      items.push(
-        Some(
-          @sf.menu_item_of(@sf.t(if item.kept { "web-main.chat.unkeep" } else { "web-main.chat.keep" }), icon="shield-check", fn() {
-            act(
-              src,
-              @sf.t(if item.kept { "web-main.chat.unkeep.what" } else { "web-main.chat.keep.what" }),
-              "",
-              "chat.keep",
-              { "station": Json::string(item.station), "thread": Json::number(th), "kept": Json::boolean(!item.kept) },
-              done=@sf.t(if item.kept { "web-main.chat.unkeep.done" } else { "web-main.chat.keep.done" }),
-            )
-          }),
-        ),
-      )
-    _ => ()
-  }
-  let link = @sfbase.chat_link(item.station, item.session)
-  if link != "" {
-    items.push(
-      Some(
-        @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
-          @sfbase.copy_chat_link(@ui.current(), item.title, link)
-        }),
-      ),
-    )
-  }
-  // relayed to a channel (docs/relay.md): a chat with an agent to go on there
-  match item.thread {
-    Some(th) if item.agents.length() > 0 =>
-      items.push(
-        Some(
-          @sf.menu_item_of(@sf.t("web-main.relay.action"), icon="arrow-up-right", fn() {
-            open_relay(src, r, th, from=Unanchored)
-          }),
-        ),
-      )
-    _ => ()
-  }
-  items.push(
-    Some(
-      @sf.menu_item_of(@sf.t("web-main.chat.copyTranscript"), icon="file", fn() {
-        // (asked of its station once the frame after it is built: rows_frame)
-        rows.transcripts = Some((item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
-          [] => [item.session]
-          keys => keys
-        }))
-      }),
-    ),
-  )
-  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
-  @sf.menu(items, from=if finger { Of(id) } else { @sf.at_point(x, y) })
+  @sf.menu(chat_menu_items(groups), from=if finger { Of(id) } else { @sf.at_point(x, y) })
   rows.menu_for = @sfbase.row_name(item)
   rows.menu_serial = @sf.last_presented()
-}
-
-///|
-/// What a row's menu left to do, done as the frame's builds are over (a chat's transcripts' paths asked of its
-/// station): called by the lists as they are drawn.
-fn rows_frame(c : @ui.Ctx, src : Source) -> Unit {
-  match rows.transcripts {
-    Some((station, keys)) =>
-      c.after_build("rows/transcripts", fn() {
-        rows.transcripts = None
-        copy_transcripts(c, src, station, keys)
-      })
-    None => ()
-  }
-}
-
-///|
-/// A chat renamed `title` (`chat.rename`): nothing when it is no different.
-fn rename(src : Source, item : ChatItem, title : String) -> Unit {
-  let words = title.trim(chars=" \n\t").to_string()
-  if words == "" || words == item.title {
-    return
-  }
-  let p : Map[String, Json] = {
-    "station": Json::string(item.station),
-    "session": Json::string(item.session),
-    "title": Json::string(words),
-  }
-  match item.thread {
-    Some(th) => p["thread"] = Json::number(th)
-    None => ()
-  }
-  act(src, @sf.t("android-chat.rename.verb"), "", "chat.rename", Json::object(p))
 }
 
 ///|
@@ -712,7 +605,7 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
         rows.renaming = ""
         rows.rename_for = ""
         c.blur()
-        rename(src, item, title)
+        rename_chat(src, chat_acts_of_row(item), title)
       }
       None => if !res.focused && rows.rename_for != "" && rows.rename_seen { rows.renaming = "" }
     }

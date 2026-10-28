@@ -32,6 +32,8 @@ pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn archiving_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 
+pub fn ask_rename(@sfbase.Source, ChatActs, from? : @sf.Anchor) -> Unit
+
 pub let ask_turns : Map[String, Int32]
 
 pub fn attach_block_corner() -> Double
@@ -58,6 +60,12 @@ pub fn changelog_news(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn changelog_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
+pub fn chat_actions(@sfbase.Source, ChatActs, rename~ : () -> Unit, archive~ : () -> Unit, from? : @sf.Anchor) -> Array[Array[ChatAction]]
+
+pub fn chat_acts_of_chat(@sfbase.ChatRef, @sfbase.ChatView?, Json?) -> ChatActs
+
+pub fn chat_acts_of_row(@sfbase.ChatItem) -> ChatActs
+
 pub fn chat_composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, apart? : Bool) -> Unit
 
 pub fn chat_find_list(@sfbase.ChatRef) -> FindList
@@ -67,6 +75,8 @@ pub fn chat_key(@sfbase.ChatRef) -> String
 pub fn chat_list(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Array[@sfbase.Entry], Double, @settings.Core, top? : Double, lead? : Double, bar? : Double, foot? : Double) -> Unit
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
+
+pub fn chat_menu_items(Array[Array[ChatAction]]) -> Array[@sf.MenuItem?]
 
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
@@ -452,6 +462,8 @@ pub fn ref_panel_put(@sfbase.Source, String, String, String, String) -> Unit
 
 pub fn remove_dialog(@settings.Core, String, String, String) -> Unit
 
+pub fn rename_chat(@sfbase.Source, ChatActs, String) -> Unit
+
 pub fn rename_escape(@ui.Ctx) -> Bool
 
 pub fn renaming() -> Bool
@@ -463,6 +475,8 @@ pub let reveal_ms : Double
 pub fn role_words(String) -> String
 
 pub fn row_aside(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, Int64) -> Unit
+
+pub fn row_aside_end_w(@sfbase.ChatItem, String) -> Double
 
 pub fn row_aside_shows(@sfbase.ChatItem, String) -> Bool
 
@@ -484,7 +498,7 @@ pub fn screen_fixture_stream(Json, (Json, Bytes?) -> Unit, (Result[Json, Json]) 
 
 pub fn screen_left(@sfbase.Source, String, String) -> Unit
 
-pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_close? : () -> Unit) -> Unit
+pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_close? : () -> Unit, in_tab? : Bool) -> Unit
 
 pub fn search_away(@ui.Ctx) -> Double
 
@@ -611,6 +625,37 @@ pub fn xshare_key(String, String) -> String
 // Errors
 
 // Types and methods
+pub(all) struct ChatAction {
+  key : String
+  icon : String
+  label : String
+  end : String
+  busy : Bool
+  may : Bool
+  run : () -> Unit
+}
+
+pub(all) struct ChatActs {
+  station : String
+  station_name : String
+  session : String
+  thread : Double?
+  title : String
+  pinned : Bool?
+  kept : Bool
+  agents : Array[String]
+  relayable : Bool
+  archivable : Bool
+  slack : String
+  slack_app : String
+  feishu : String
+  xshare : Bool
+  xshare_may : Bool
+  xshare_text : String
+  xshare_session : String
+  publish : Bool
+}
+
 pub(all) struct ComposerPlace {
   capsule_in : (Double, Double, Double)
   capsule_pad : Double

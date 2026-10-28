@@ -123,6 +123,10 @@ pub(all) struct ChatItem {
   pinned : Bool?
   /// the viewer kept it out of the archive (保留), pinned or not
   kept : Bool
+  /// the viewer may share it with their other workspaces (the core's `xshareMay`), make a public picture of it
+  /// (`publishMay`): its menu offers them as its info does
+  xshare_may : Bool
+  publish_may : Bool
   /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
   /// throughout
   client_key : String
@@ -227,6 +231,8 @@ pub fn chat_item(v : Json) -> ChatItem {
       _ => None
     },
     kept: flag(s, "kept"),
+    xshare_may: flag(s, "xshareMay"),
+    publish_may: flag(s, "publishMay"),
     client_key: text(s, "clientKey"),
   }
 }

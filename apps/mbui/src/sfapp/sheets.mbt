@@ -101,6 +101,11 @@ fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// A card of the chat's sheet under another, 10 apart (as its publishing card: publish_card_top).
+// kept across runs: a value (no field of it changes)
+let info_group_top : @ui.Style = @ui.css("w=Full pt=S2_5")
+
+///|
 /// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
 /// top and bottom, what it holds 12 apart.
 // kept across runs: a value (no field of it changes)
@@ -307,21 +312,13 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 ///|
 /// The chat itself, from "…" (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
-/// can be done with it: what its agents and other chats' wrote each other, pin it, copy its link, its sharing, archive
-/// it. As tall as what it shows.
+/// its agents and other chats' wrote each other, and what can be done with it as its row's menu offers it, its groups a
+/// line apart. As tall as what it shows.
 fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
   let (view, _, _) = view_of_chat(src, r)
   let agents = items(chat, "agents")
-  let pinned = match field(chat, "pinned") {
-    Some(True) => Some(true)
-    Some(False) => Some(false)
-    _ => None
-  }
-  let slack = text(chat, "slackUrl")
-  let slack_app = text(chat, "slackApp")
-  let feishu = text(chat, "feishuUrl")
   let xshare = field(chat, "xshare")
   let (archived, offline) = match view {
     Some(v) => (v.archived, v.offline)
@@ -330,7 +327,6 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   // archived or offline it is only read: no name to change, nothing to archive
   let open = view is Some(_) && !archived && !offline
   let thread = field(chat, "thread")
-  let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
   let title = text(chat, "title")
   c.box(w=Fill(1.0), fn() {
     // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
@@ -451,134 +447,83 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
           }
         }
       })
-      c.box(h=Px(10.0), fn() {  }) |> ignore
     }
+    // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
     let letters = number(chat, "letters")
-    if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
-      info_list(c, fn() {
-        // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
-        match opt_number(thread, "id") {
-          Some(th) if letters > 0.0 =>
+    match opt_number(thread, "id") {
+      Some(th) if letters > 0.0 =>
+        c.box(style=info_group_top, fn() {
+          info_list(c, fn() {
             if info_row(c, "info/letters", fn() {
                 @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
                 c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
                 |> ignore
-                c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
+                c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta)
+                |> ignore
                 chevron(c)
               }) {
               close()
-                open_letters(src, r, th)
+              open_letters(src, r, th)
             }
-          _ => ()
+          })
+        })
+        |> ignore
+      _ => ()
+    }
+    // what can be done with it, as its row's menu offers it (@sfpages.chat_actions), its groups in one card a line
+    // apart; renamed by ✎ beside its name, a picture of it made public from its own card under them (publish.mbt)
+    let a = @sfpages.chat_acts_of_chat(r, view, chat)
+    let groups = @sfpages.chat_actions(
+      src,
+      a,
+      rename=fn() {  },
+      archive=fn() {
+        // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
+        match (view, text(field(chat, "watch"), "ask")) {
+          (Some(v), "") => archive_chat(src, r, v)
+          (Some(v), ask) => {
+            close()
+            @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
+              archive_chat(src, r, v)
+            })
+          }
+          (None, _) => ()
         }
-        // a station from before pins says nothing of them: its chats are not pinned from here
-        match pinned {
-          Some(p) if open => {
-            let pkey = "pin/" + r.station + "/" + r.session
-            let busy = doing(pkey)
-            if info_row(c, if busy { "" } else { "info/pin" }, fn() {
-                @sf.icon(c, "pin", size=16.0, color=t.p.text) |> ignore
-                c.box(w=Fill(1.0), fn() {
-                  c.text(
-                    tr(if p { "android-chat.unpin" } else { "android-chat.info.pinTop" }),
-                    size=t.t.ui,
-                    color=t.p.text,
-                    wrap=false,
-                  )
-                  |> ignore
-                })
-                |> ignore
-                if busy {
-                  @sf.spinner(c, size=12.0) |> ignore
+      },
+    )
+    let groups = groups
+      .map(fn(g) { g.filter(fn(x) { x.key != "rename" && x.key != "publish" }) })
+      .filter(fn(g) { !g.is_empty() })
+    if !groups.is_empty() {
+      c.box(style=info_group_top, fn() {
+        info_list(c, fn() {
+          for i, g in groups {
+            if i > 0 {
+              @sf.menu_rule(c)
+            }
+            for x in g {
+              if x.key == "xshare" {
+                xshare_row(c, src, r, a.thread, xshare, close)
+                continue
+              }
+              if info_row(c, if x.may && !x.busy { "info/" + x.key } else { "" }, fn() {
+                  @sf.icon(c, x.icon, size=16.0, color=t.p.text) |> ignore
+                  c.box(style=@sf.full_width, fn() { c.text(action_words(x), style=info_words) |> ignore }) |> ignore
+                  if x.busy {
+                    @sf.spinner(c, size=12.0) |> ignore
+                  }
+                }) {
+                // (the chat's sheet put down for what opens in its place)
+                if x.key == "relay" {
+                  close()
                 }
-              }) {
-              act(
-                src,
-                tr(if p { "android-chat.unpin.verb" } else { "android-chat.pin.verb" }),
-                pkey,
-                "chat.pin",
-                {
-                  "station": Json::string(r.station),
-                  "session": Json::string(r.session),
-                  "pinned": Json::boolean(!p),
-                },
-              )
+                (x.run)()
+              }
             }
           }
-          _ => ()
-        }
-        if link != "" &&
-          info_row(c, "info/link", fn() {
-            @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
-            c.box(w=Fill(1.0), fn() {
-              c.text(tr("web-main.chat.copyLink"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-            })
-            |> ignore
-          }) {
-          copy_chat_link(c, title, link)
-        }
-        // relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there
-        match opt_number(thread, "id") {
-          Some(th) if open && agents.length() > 0 =>
-            if info_row(c, "info/relay", fn() {
-                @sf.icon(c, "arrow-up-right", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.relay.action"), style=info_words) |> ignore })
-                |> ignore
-                chevron(c)
-              }) {
-              // (the chat's sheet put down, the picking up in its place)
-              close()
-              @sfpages.open_relay(src, r, th, from=Unanchored)
-            }
-          _ => ()
-        }
-        match xshare {
-          Some(Object(_)) => xshare_row(c, src, r, opt_number(thread, "id"), xshare, close)
-          _ => ()
-        }
-        // where it came from, opened there (the system's app for its link)
-        if slack != "" &&
-          info_row(c, "info/slack", fn() {
-            @sf.slack_mark(c, 16.0) |> ignore
-            c.box(style=@sf.full_width, fn() { c.text(tr("android-chat.info.slack.open"), style=info_words) |> ignore })
-            |> ignore
-            chevron(c)
-          }) {
-          if !@sfbase.open_slack(slack_app, slack) {
-            toast_later(tr("android-chat.link.failed"))
-          }
-        }
-        if feishu != "" &&
-          info_row(c, "info/feishu", fn() {
-            @sf.feishu_mark(c, 16.0) |> ignore
-            c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openFeishu"), style=info_words) |> ignore })
-            |> ignore
-            chevron(c)
-          }) {
-          open_outside(feishu)
-        }
-        // into the archive, back to the list at once
-        if open &&
-          info_row(c, "info/archive", fn() {
-            @sf.icon(c, "archive", size=16.0, color=t.p.text) |> ignore
-            c.box(w=Fill(1.0), fn() {
-              c.text(tr("android-chat.info.archive"), size=t.t.ui, color=t.p.text, wrap=false) |> ignore
-            })
-            |> ignore
-          }) {
-          // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
-          match (view, text(field(chat, "watch"), "ask")) {
-            (Some(v), "") => archive_chat(src, r, v)
-            (Some(v), ask) => {
-              close()
-              @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
-                archive_chat(src, r, v)
-              })
-            }
-            (None, _) => ()
-          }
-        }
+        })
       })
+      |> ignore
     }
     // making it public, a card of its own (publish.mbt)
     match shown_publish(chat) {
@@ -594,6 +539,17 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
 /// name with ✎ beside it).
 fn open_info(src : Source, r : ChatRef) -> Unit {
   @sf.panel("", from=Unanchored, fn(c, close) { chat_info_body(c, src, r, close) })
+}
+
+///|
+/// What a row of the chat's sheet says: an action's own words, the sheet's fuller ones for pinning and archiving (a row
+/// of a card has the room a menu's item has not).
+fn action_words(x : @sfpages.ChatAction) -> String {
+  match x.key {
+    "pin" if x.label == @sf.t("web-main.chat.pin") => tr("android-chat.info.pinTop")
+    "archive" => tr("android-chat.info.archive")
+    _ => x.label
+  }
 }
 
 ///|

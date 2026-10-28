@@ -640,6 +640,8 @@ pub let options_out_ms : Double
 
 pub let options_scale : Double
 
+pub fn over_flight(@ui.Ctx, Int32) -> Unit
+
 pub let own_code_face : Int32
 
 pub let page_bridge_js : String

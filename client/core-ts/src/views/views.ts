@@ -880,6 +880,8 @@ export class Views implements Owner {
         return topics;
     }
     if (view.topic === "chats" || view.topic === "decisions" || view.topic === "longJobs") topics.push({ topic: "prefs" });
+    // (a row's menu offers sharing with the viewer's other workspaces: #chatRow)
+    if (view.topic === "chats") topics.push({ topic: "workspaces" });
     topics.push({ topic: "workspace", workspace: scope });
     if (view.topic === "stations") topics.push({ topic: "workspaces" });
     for (const s of this.stations(scope) ?? []) {
@@ -1325,6 +1327,9 @@ export class Views implements Owner {
     const me = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
+    // What a row's menu offers of sharing (the same as its chat's info): the viewer's workspaces, their role in this one.
+    const places = this.#core.places?.() ?? [];
+    const role = str(get(this.ok({ topic: "workspace", workspace: scope }), "role"));
     const states: J[] = [];
     const troubles: [string, string, boolean, string][] = [];
     const rows: J[] = [];
@@ -1352,7 +1357,7 @@ export class Views implements Owner {
         const link = this.link(s.address);
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint, places, role]);
         for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
@@ -1363,7 +1368,7 @@ export class Views implements Owner {
           let row: J;
           if (kept && kept.sig === sig) row = kept.row;
           else {
-            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
+            row = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint, { places, role });
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
@@ -1493,8 +1498,14 @@ export class Views implements Owner {
   }
 
   /// A station's row as the list shows it (null: not in this list).
-  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint): J {
+  #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint, share: { places: xshare.Place[]; role: string | null }): J {
     let row = structuredClone(raw);
+    // A chat's: whether the viewer may share it with their other workspaces, or make a picture of it public (its menu
+    // offers them as its info does: xshare.ts, publish.ts).
+    if (typeof row.thread === "number") {
+      if (xshare.may(share.places, s.address, str(get(me, "email")), str(get(row.creator, "id")))) row.xshareMay = true;
+      if (share.role !== "viewer") row.publishMay = true;
+    }
     // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
     // false.
     if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
@@ -1818,6 +1829,7 @@ export class Views implements Owner {
     const archived = this.local.archivedChanging(station, id, null);
     if (archived !== null) view.archived = archived;
     if (row !== undefined && row.pinned !== undefined) view.pinned = typeof row.pinned === "number";
+    if (row !== undefined && row.archiveReminderDismissed === true) view.kept = true;
     const sessions = arr(view.agents).flatMap((a) => (a.session !== undefined ? [a.session] : []));
     const watch = present.rowWatch(sessions);
     if (watch !== null) view.watch = watch;

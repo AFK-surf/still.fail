@@ -947,6 +947,8 @@ pub fn outside_sharable(OutsideAsk) -> Bool
 
 pub fn outside_yes(Source, OutsideAsk) -> Unit
 
+pub fn over_flight(@ui.Ctx, Int32) -> Unit
+
 pub let own_code_face : Int32
 
 pub fn own_screen(String, String) -> Bool
@@ -1851,6 +1853,8 @@ pub(all) struct ChatItem {
   creator : String
   pinned : Bool?
   kept : Bool
+  xshare_may : Bool
+  publish_may : Bool
   client_key : String
 }
 
@@ -2608,6 +2612,7 @@ pub(all) struct Reading {
   asked : @signals.Signal[Double]
   mut asked_newer : Double
   mut latest_asked : Bool
+  mut end_asked : Bool
   mut told : String
   mut seen_whole : Double
   mut top_seq : Double
@@ -2892,12 +2897,14 @@ pub(all) struct Thumb {
   radius : Double
   letterbox : Bool
   picture : String
+  seen : (Double, Double, Double, Double)?
 }
 
 pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
   picture : String
+  id : Int32
 }
 
 pub(all) struct Topic {

@@ -331,3 +331,26 @@ test("what_a_message_refers_to_is_shared_by_the_core_those_the_viewer_may_and_no
     core.close();
   }
 });
+
+test("a_row_offers_sharing_as_its_chat_does_to_those_who_may", async () => {
+  // Each role in the chat's workspace, and a member who started it: its row's menu offers sharing just where its
+  // chat's info lets it be changed, and a picture just where its info lets one be made.
+  const started = { creator: { id: "a@x.com", name: "a", via: "cloud" }, createdBy: "a@x.com" };
+  for (const [role, mine, xshare] of [["admin", false, true], ["member", false, false], ["member", true, true], ["viewer", false, false]] as const) {
+    const thread = { ...threadView(7, 3), ...(mine ? started : {}) };
+    const { host, core } = await setUp(role, thread, [row(mine ? { creator: started.creator } : {})]);
+    const ui = core.connect();
+    const values = new Map<number, unknown>();
+    subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+    subscribe(core, ui, 2, { topic: "chat", station: "ws/st", thread: 7 });
+    await host.settle();
+    apply(host, values);
+    const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.thread === 7);
+    const chat = v(values, 2);
+    const said = `${role}${mine ? " who started it" : ""}`;
+    assert.equal(item.xshareMay === true, xshare, said);
+    assert.equal(chat.xshare.may, xshare, said);
+    assert.equal(item.publishMay === true, chat.publish.may, said);
+    core.close();
+  }
+});

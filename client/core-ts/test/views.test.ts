@@ -140,6 +140,7 @@ const threads = (st: string): Topic => ({ topic: "threads", station: st });
 const rows = (st: string): Topic => ({ topic: "chatRows", station: st });
 const hostOf = (st: string): Topic => ({ topic: "host", station: st });
 const prefs = (): Topic => ({ topic: "prefs" });
+const places = (): Topic => ({ topic: "workspaces" });
 const sortedKeys = (topics: Topic[]) => topics.map(topicKey).sort();
 const sorted = (topics: Topic[]) => [...topics].sort((a, b) => (topicKey(a) < topicKey(b) ? -1 : 1));
 const sameTopics = (a: Topic[], b: Topic[], message?: string) => assert.deepEqual(sortedKeys(a), sortedKeys(b), message);
@@ -700,7 +701,7 @@ test("chats_puts_together_the_online_stations", async () => {
   const u = ui();
   t.subscribe(1, { topic: "chats", scope: "ws" });
   await t.read(u, 1);
-  sameTopics(t.started(), [workspace(), prefs()]);
+  sameTopics(t.started(), [workspace(), prefs(), places()]);
   assert.equal(u.value === undefined, true);
   t.set(workspace(), stations(t.nowS()));
   await t.read(u, 1);
@@ -1975,6 +1976,22 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under
   // Archived from its bar or the list: nothing offers it under its last all-done post, nor says what the check made of it.
   assert.equal(v.archiveOffered, undefined);
   assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
+});
+
+test("a_chats_page_is_pinned_and_kept_as_its_row_is", async () => {
+  // Its info offers to pin, unpin, keep and let go as its row's menu does: from what its row says.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 1, entries: [entry(1, "看看")], thread: null });
+  for (const [more, pinned, kept] of [[{}, undefined, undefined], [{ pinned: null }, false, undefined], [{ pinned: 5, archiveReminderDismissed: true }, true, true], [{ archiveReminderDismissed: false }, undefined, undefined]] as const) {
+    t.set(rows("ws/a"), [{ ...row("k", now), thread: 7, ...more }]);
+    await t.read(u, 1);
+    assert.deepEqual([u.value.pinned, u.value.kept], [pinned, kept], JSON.stringify(more));
+  }
 });
 
 test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_row_does", async () => {

@@ -836,7 +836,7 @@ pub let list_pad : Double
 
 pub let list_room : @ui.Space
 
-pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool) -> Int32
+pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double) -> Int32
 
 pub fn list_row_in(ListAt) -> @ui.Style
 
@@ -1063,6 +1063,8 @@ pub fn native_bars_reset() -> Unit
 pub fn native_capsule_h() -> Double?
 
 pub fn native_card_corner() -> Double
+
+pub fn native_card_corner_at(Int32) -> Double
 
 pub fn native_clear() -> Double
 
@@ -2431,7 +2433,7 @@ pub(all) struct MenuItem {
 pub(all) struct NativeBars {
   mut on : Bool
   mut side : Double
-  mut corner : Double
+  corners : FixedArray[Double]
 }
 
 pub(all) struct NativeOver {

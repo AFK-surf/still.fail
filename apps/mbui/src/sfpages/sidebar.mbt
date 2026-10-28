@@ -64,7 +64,6 @@ pub let list_slide_ms : Double = @sf.list_slide_ms
 ///|
 /// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
 pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
-  rows_frame(c, src)
   let last = list_filters.length() + frame.others.length() - 1
   let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide)
   // the others read once switching to them is in sight: as the filter's menu opens (what it would show is there by
