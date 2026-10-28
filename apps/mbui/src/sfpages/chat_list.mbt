@@ -243,6 +243,9 @@ pub fn chat_list(
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
   })
+  // (what of it the bar and the composer hide: its pictures, noted as its, go out from under them before they grow
+  // into the viewer)
+  @sfbase.note_list(c, list_box, rk, bar, room)
   // a new chat's list comes up out of the composer with its first words: drawn below its place by how far they have
   // to go, from where this frame lays their row out (flight.mbt flight_carry_shift)
   if flight_carried(lf.draft) {

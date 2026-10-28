@@ -1004,7 +1004,7 @@ test "a desktop's video opened over its chat has the keys: Space plays it each t
 
 ///|
 /// A chat's file `a` as its message draws it (sfpages' message_files), in a column 300 wide.
-fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
+fn chat_file(c : @ui.Ctx, src : Source, a : Attachment, list? : String = "") -> Unit {
   let here : @sfpages.MessageHere = {
     station: "ws1/st1",
     session: "s-c1",
@@ -1012,7 +1012,12 @@ fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
     go: None,
     inline: true,
     gutter: 0.0,
-    list: None,
+    // (in chat list `list`, where it is in one)
+    list: if list == "" {
+      None
+    } else {
+      Some({ rk: list, turns: @sfbase.turns_of(list), emits: @sfbase.emits_of(list), flight: None })
+    },
     core: None,
   }
   c.box(style=@ui.style(w=Fixed(300.0)), fn() { @sfpages.message_files(c, src, here, [a], false) }) |> ignore
