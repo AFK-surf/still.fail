@@ -9,13 +9,16 @@ const ZH = {
   other: "English", otherHref: "/en/",
   title: "One devices.",
   start: "开始使用",
+  filmTitle: "在手机上交代，在电脑上做完",
+  soundOn: "打开声音", soundOff: "关闭声音",
   scenesTitle: "能用来做什么",
-  /** What it is for, each by what it does (`soon`: not yet). */
+  /** What it is for, each by what it does (`soon`: not yet), shown on the phone's app at its page (`at`: its path in
+   *  the workspace, or "chat": its chat, the story played). */
   scenes: [
-    { title: "Agent", text: "Claude Code 和 Codex 在你的电脑上运行，用手机、Slack 或飞书指挥", soon: false },
-    { title: "资源管理", text: "每台的 CPU、内存、磁盘和文件都在一处，任务按负载排队", soon: false },
-    { title: "密钥管理", text: "订阅账号（Profile）和 API 密钥集中保存，agent 使用前由你在手机上批准", soon: false },
-    { title: "IoT", text: "摄像头、传感器和家里的设备，也连进来", soon: true },
+    { title: "Agent", text: "Claude Code 和 Codex 在你的电脑上运行，用手机、Slack 或飞书指挥", soon: false, at: "chat" },
+    { title: "资源管理", text: "每台的 CPU、内存、磁盘和文件都在一处，任务按负载排队", soon: false, at: "s/local/overview" },
+    { title: "密钥管理", text: "订阅账号（Profile）和 API 密钥集中保存，agent 使用前由你在手机上批准", soon: false, at: "settings/vault" },
+    { title: "IoT", text: "摄像头、传感器和家里的设备，也连进来", soon: true, at: "" },
   ],
   soon: "即将支持",
   /** The demo's machines as it names them (demo/station.ts; demo/english.ts in English). */
@@ -32,12 +35,14 @@ const EN: typeof ZH = {
   other: "中文", otherHref: "/",
   title: "One devices.",
   start: "Get started",
+  filmTitle: "Asked on a phone, done on a computer",
+  soundOn: "Turn sound on", soundOff: "Turn sound off",
   scenesTitle: "What it's for",
   scenes: [
-    { title: "Agents", text: "Claude Code and Codex run on your computers; direct them from your phone, Slack or Feishu", soon: false },
-    { title: "Resources", text: "Every device's CPU, memory, disk and files in one place; tasks queue by load", soon: false },
-    { title: "Keys", text: "Subscriptions (Profiles) and API keys kept in one place; an agent uses one only once you approve it on your phone", soon: false },
-    { title: "IoT", text: "Cameras, sensors and things at home, joined in too", soon: true },
+    { title: "Agents", text: "Claude Code and Codex run on your computers; direct them from your phone, Slack or Feishu", soon: false, at: "chat" },
+    { title: "Resources", text: "Every device's CPU, memory, disk and files in one place; tasks queue by load", soon: false, at: "s/local/overview" },
+    { title: "Keys", text: "Subscriptions (Profiles) and API keys kept in one place; an agent uses one only once you approve it on your phone", soon: false, at: "settings/vault" },
+    { title: "IoT", text: "Cameras, sensors and things at home, joined in too", soon: true, at: "" },
   ],
   soon: "Coming",
   machines: ["Laptop", "Studio", "Mini", "Server"],

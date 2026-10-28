@@ -21,6 +21,9 @@
      room under its camera island). Its opening frame is built to HTML here by web/site-prerender.mjs, until the app
      takes it over. -->
 <div id="demo" data-phone style="width:100vw;height:100vh"><!--demo--></div>
+<!-- Opened at another page of the app (?at=: the site's phones showing what it is for), its frame of the stations is
+     not that page: the app's ground till the app is here. -->
+<script>if(new URLSearchParams(location.search).has("at"))document.getElementById("demo").replaceChildren()</script>
 <script type="module" src="./phone-app.ts"></script>
 </body>
 </html>

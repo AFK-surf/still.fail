@@ -19,6 +19,13 @@ const SAID: [RegExp, string][] = [
   [/^负载 (.+)$/, "load $1"],
   [/^共 (.+)$/, "of $1"],
   [/（本机）/g, " (this machine)"],
+  [/^(\d+) 个待批准$/, "$1 to approve"],
+  [/^代理 · (.+) · (\d+) 小时前用于「(.+)」$/, "Proxy · $1 · used $2 h ago in “$3”"],
+  [/^代理 · (.+) · 昨天用于「(.+)」$/, "Proxy · $1 · used yesterday in “$2”"],
+  [/^代理 · (.+) · 尚未使用$/, "Proxy · $1 · not used yet"],
+  [/^允许 agent 申请 · 代理 · (.+)$/, "Agents may ask · proxy · $1"],
+  [/^代理 · 限 (.+)$/, "Proxy · only $1"],
+  [/^推送 (.+) 分支并开 PR$/, "Push the $1 branch and open a PR"],
   [/(\d+) 个 agent 正在运行/g, "$1 agent running"],
   [/(\d+) 个任务正在运行/g, "$1 task running"],
   [/已运行 (\d+) 天/g, "up $1 days"],
@@ -29,7 +36,8 @@ const SAID: [RegExp, string][] = [
 const WORDS: Record<string, string> = {
   每周: "Weekly", 已登录: "Signed in", 可用: "Available", 已停用: "Disabled", "CPU 负载": "CPU load", 内存: "Memory", 磁盘: "Disk",
   主机名: "Hostname", 芯片: "Chip", 已运行: "Uptime", "CPU 空闲": "CPU idle", 内存剩: "Memory free", 磁盘剩: "Disk free",
-  直连: "Direct", 中继: "Relay", 笔记本: "Laptop", 服务器: "Server", 下载: "Downloads", 桌面: "Desktop",
+  我的密钥: "My keys", Stripe测试密钥: "Stripe test key", "Stripe 测试密钥": "Stripe test key", 登录页手机适配: "Login page on phones", 订单导出支持CSV: "CSV export for orders", "跟随默认 · 本对话内": "Default · for this chat", 值: "Value", 林晓: "Lin Xiao",
+    直连: "Direct", 中继: "Relay", 笔记本: "Laptop", 服务器: "Server", 下载: "Downloads", 桌面: "Desktop",
 };
 
 const HAN = /[㐀-鿿（）]/;

@@ -15,6 +15,7 @@ import { useEffect, useRef } from "react";
 import type { MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
+import { Film } from "./Film.tsx";
 import { useSay, useSiteLang } from "./words.ts";
 
 /** How many steps the scene is scrolled through. */
@@ -30,6 +31,8 @@ const PHONE = { w: 390, h: 870, r: 44 };
  * its base under it, `over` wider than the edge each side and `foot` high.
  */
 const SHELL = { edge: 12, laptop: { edge: 14, over: 70, foot: 18 } };
+/** How tall a phone showing what it is for is: a phone's own height (an iPhone's, at its width). */
+const FEATURE_H = 844;
 /** The phone with its shell. */
 const HAND = { w: PHONE.w + 2 * SHELL.edge, h: PHONE.h + 2 * SHELL.edge };
 
@@ -343,13 +346,32 @@ export function OneComputer(props: DemoProps) {
         </div>
       </section>
 
+      {/* The film: it at work. */}
+      <section className={css.section}>
+        <div className={css.wrap}>
+          <h2 className={css.headingTitle}>{say.filmTitle}</h2>
+          <Film />
+        </div>
+      </section>
+
       {/* What it is for. */}
       <section className={css.section}>
         <div className={css.wrap}>
           <h2 className={css.headingTitle}>{say.scenesTitle}</h2>
+          {/* Each on the phone's app, at its page (site/phone.html?at=): a picture of it at work, taking no input, so
+              that the page scrolls on over it; what is not here yet, in words alone. */}
           <ol className={`${css.links} ${css.scenes}`}>
             {say.scenes.map((p, k) => (
-              <li key={p.title} className={css.link}>
+              <li key={p.title} className={css.link} data-soon={p.soon || undefined}>
+                {p.at ? (
+                  <div className={css.featurePhone}>
+                    <div className={css.featureShell}>
+                      <i className={css.oneKeys} />
+                      <i className={css.oneIsland} />
+                      <iframe className={css.onePhoneScreen} src={`${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(p.at)}`} width={PHONE.w} height={FEATURE_H} title={p.title} tabIndex={-1} loading="lazy" inert />
+                    </div>
+                  </div>
+                ) : null}
                 <span className={css.linkNumber}>{String(k + 1).padStart(2, "0")}{p.soon ? ` · ${say.soon}` : ""}</span>
                 <h3 className={css.linkTitle}>{p.title}</h3>
                 <p className={css.linkText}>{p.text}</p>
