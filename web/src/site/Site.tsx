@@ -138,9 +138,9 @@ function Works() {
       <div className={css.wrap}>
         <h2 className={css.headingTitle}>{w.title}</h2>
         <div className={css.works}>
-          <span className={css.linkNumber}>{w.agents}</span>
+          <span className={css.worksRow}>{w.agents}</span>
           <ul className={css.marks}>{AGENTS.map(([kind, name]) => <li key={kind}><RuntimeLogo runtime={kind} size={18} />{name}</li>)}</ul>
-          <span className={css.linkNumber}>{w.from}</span>
+          <span className={css.worksRow}>{w.from}</span>
           <ul className={css.marks}>
             <li><Devices size={18} />{w.places.app}</li>
             <li><SlackLogo size={18} />{w.places.slack}</li>

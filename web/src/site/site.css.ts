@@ -242,10 +242,12 @@ export const install = style({
 // What it works with (Site.tsx Works): each row's quiet name over its marks, a pill each.
 export const works = style({ display: "grid", gap: "14px", margin: "40px 0 0", "@media": { [NARROW]: { marginTop: "28px" } } });
 globalStyle(`${works} > ul + span`, { marginTop: "18px" });
-export const marks = style({ display: "flex", flexWrap: "wrap", gap: "10px", margin: "0", padding: "0", listStyle: "none" });
+export const worksRow = style({ fontSize: vars.textUi, color: "var(--s-muted)" });
+export const marks = style({ display: "flex", flexWrap: "wrap", gap: "10px", "@media": { [NARROW]: { gap: "8px" } }, margin: "0", padding: "0", listStyle: "none" });
 globalStyle(`${marks} > li`, {
   display: "flex", alignItems: "center", gap: "10px", padding: "10px 18px 10px 14px", borderRadius: "999px",
   background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, color: FG, fontSize: vars.textTitle, lineHeight: "1.2",
+  "@media": { [NARROW]: { gap: "8px", padding: "8px 14px 8px 12px", fontSize: vars.textBody } },
 });
 globalStyle(`${marks} svg`, { display: "block", flex: "none" });
 
