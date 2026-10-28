@@ -103,3 +103,24 @@ test("an answer whose head cannot be written lets go of the stream it would have
   await assert.rejects(send(gone, { status: 200, headers: { "content-type": "text/event-stream" }, body: source }), /destroyed/);
   assert.equal(let_go, 1);
 });
+
+test("a whole answer says its length, so a picture shows how far it has come; a compressed one does not", async () => {
+  const written: Buffer[] = [];
+  const to: Stream = {
+    read: async () => null,
+    write: async (b: Buffer) => void written.push(b),
+    finish: async () => {},
+    stopped: () => new Promise(() => {}),
+    reset: async () => {},
+  };
+  const head = async (answer: Answer) => {
+    written.length = 0;
+    await send(to, answer);
+    return JSON.parse(written[0]!.toString()).headers as Record<string, string>;
+  };
+  const picture = Buffer.alloc(170 * 1024, 1);
+  assert.equal((await head({ status: 200, headers: { "content-type": "image/png" }, body: picture }))["content-length"], String(picture.length));
+  assert.equal(written[1], picture);
+  const zipped = await compressed(json(rows), asks, "/chats");
+  assert.equal((await head(zipped))["content-length"], undefined);
+});

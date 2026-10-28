@@ -377,7 +377,8 @@ export class Requests {
             const kind = replyHeader(reply, "content-type") ?? "";
             const length = Number(replyHeader(reply, "content-length")?.trim());
             const total = Number.isInteger(length) && length >= 0 ? length : null;
-            const step = total === null ? 256 * 1024 : Math.max(Math.floor(total / 100), 64 * 1024);
+            // (its size not said, every 64 KB too: a chat's picture is a few hundred KB, and 256 KB showed 0 B until it came)
+            const step = total === null ? 64 * 1024 : Math.max(Math.floor(total / 100), 64 * 1024);
             progress(0, total);
             let loaded = 0;
             let told = 0;
