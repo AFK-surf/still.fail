@@ -565,11 +565,6 @@ jobs:
         run: |
           bash apps/mbui/scripts/win.sh core
           [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.HBC_KEY != '' && env.HBC_KEY != steps.hbc.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: .ci/hbc
-          key: ${{ env.HBC_KEY }}
       - name: Build (APP=stillfail)
         run: |
           B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e
@@ -628,6 +623,13 @@ jobs:
           Z=$RUNNER_TEMP/zip; mkdir -p "$Z"
           export GITHUB_STEP_SUMMARY="$Z/summary"
           nohup bash -c 'bash apps/mbui/scripts/beta.sh win > "$0/log" 2>&1 && bash apps/mbui/scripts/beta.sh publish win >> "$0/log" 2>&1; echo $? > "$0/status"' "$Z" > /dev/null 2>&1 &
+      # main's core.hbc kept (HBC_CACHE: the newest 8, some 370 MB, its save ~45 s) while the e2e flow runs, not
+      # before the app's put, which the flow waits for (it held the put back 44 s, 2026-10-28, 40642305618)
+      - if: github.ref == 'refs/heads/main' && env.HBC_KEY != '' && env.HBC_KEY != steps.hbc.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/hbc
+          key: ${{ env.HBC_KEY }}
       # main's, saved when its C is new (a branch reads main's: its own would be its alone)
       - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
         uses: actions/cache/save@v4
