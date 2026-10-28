@@ -743,3 +743,55 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
   // what is ticked is said beside 抄送
   assert_true(t.find("#still-fail") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
 }
+
+///|
+test "desk composer: 抄送's menu has each thread's platform mark before its place, its check only at its end (chat.cc)" {
+  reset()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.set_words(fill)
+      let _ = @sf.begin(c)
+      let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
+      let v = chat_view_made({
+        "title": "整理发布清单",
+        "thread": { "id": 7 },
+        "cc": [
+          { "thread": 21, "place": "产品讨论", "via": "feishu", "on": true },
+          { "thread": 22, "place": "#still-fail", "via": "slack", "on": false },
+        ],
+      })
+      @sfpages.chat_composer(c, src, ws, r, Some(v))
+      @sf.presented(c)
+    },
+    w=900.0,
+    h=500.0,
+    pointing=Mouse,
+  )
+  t.draw()
+  // (named with what is ticked)
+  t.click(Button, label=@sf.t("web-main.composer.ccLabel") + " 产品讨论")
+  let bs = t.boxes()
+  // whether it or what is in it draws a picture (a mark, an icon)
+  let draws = fn(i : Int) {
+    bs.iter().any(fn(b) {
+      let mut at = b.index
+      while at >= 0 && at != i {
+        at = bs[at].parent
+      }
+      at == i && b.draws
+    })
+  }
+  for place in ["产品讨论", "#still-fail"] {
+    // (the last: a ticked one's place is said beside 抄送 too)
+    let w = bs.rev_iter().find_first(fn(b) { b.text == place }).unwrap()
+    let row = bs.filter(fn(b) { b.parent == w.parent })
+    let before = row.filter(fn(b) { b.index < w.index })
+    let after = row.filter(fn(b) { b.index > w.index })
+    // one column before its words, its mark's: none empty where a check would go
+    assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{before.map(fn(b) { (b.kind, b.x, b.w) })}")
+    // a ticked one's check at its end, only there
+    assert_eq(after.iter().any(fn(b) { draws(b.index) }), place == "产品讨论", msg=place)
+  }
+}
