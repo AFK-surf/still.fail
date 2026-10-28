@@ -1063,8 +1063,10 @@ fn Ctx::moved_shift(self : Ctx, i : Int, dx : Double, dy : Double) -> Unit {
   if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        st.ox = st.ox + dx
-        st.oy = st.oy + dy
+        // The node may have been restored from a kept layout, while its Field still holds the last placement.
+        // Place the words from the node, rather than accumulating that placement's shift again.
+        st.ox = n.x + n.pad_l
+        st.oy = n.y + n.pad_t - st.scroll
       }
       None => ()
     }
@@ -1086,6 +1088,15 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   self.moved_now(n, f.width, f.height)
   n.x = px + f.left + n.tx + n.moved_x
   n.y = py + f.top + n.ty + n.moved_y
+  if n.kind == kind_editor {
+    match self.editors.get(n.id) {
+      Some(st) => {
+        st.ox = n.x + n.pad_l
+        st.oy = n.y + n.pad_t - st.scroll
+      }
+      None => ()
+    }
+  }
   let mut c = n.first
   while c >= 0 {
     self.replace(c, n.x, n.y)
