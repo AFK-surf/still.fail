@@ -26,6 +26,9 @@ runs:
     # has), for setup-node to find: nodejs.org's tarball, checked against the release's SHASUMS256.txt, unpacked in
     # place. setup-node's own download unpacked it and copied it there file by file: 8.8 s of the mac job (2026-10-24,
     # 40076678382).
+    # (Each curl here given up and tried again when its connection stalls, under 1 KB/s for 20 s: --retry alone acts only
+    # on an error, and a stalled download is none; nodejs.org's tarball held the mac job until its 10 minutes ran out,
+    # main 91434fca, 40642483751.)
     - if: runner.os == 'macOS'
       shell: bash
       run: |
@@ -34,8 +37,8 @@ runs:
         d="$RUNNER_TOOL_CACHE/node/$v/$a"
         [ ! -f "$d.complete" ] || exit 0
         f=node-v$v-darwin-$a.tar.gz
-        curl -fsSL --retry 3 -o "$RUNNER_TEMP/$f" "https://nodejs.org/dist/v$v/$f"
-        curl -fsSL --retry 3 "https://nodejs.org/dist/v$v/SHASUMS256.txt" | grep " $f\$" > "$RUNNER_TEMP/$f.sha256"
+        curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 -o "$RUNNER_TEMP/$f" "https://nodejs.org/dist/v$v/$f"
+        curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 "https://nodejs.org/dist/v$v/SHASUMS256.txt" | grep " $f\$" > "$RUNNER_TEMP/$f.sha256"
         (cd "$RUNNER_TEMP" && shasum -a 256 -c --quiet "$f.sha256") || { echo "$f: not the SHA-256 nodejs.org lists"; exit 1; }
         rm -rf "$d" && mkdir -p "$d" && tar -xzf "$RUNNER_TEMP/$f" --strip-components 1 -C "$d" && touch "$d.complete"
         rm -f "$RUNNER_TEMP/$f"
@@ -75,7 +78,7 @@ runs:
           esac
           dir="$(cygpath -u "$RUNNER_TEMP")/pnpm"
           mkdir -p "$dir"
-          curl -fsSL --retry 3 -o "$dir/pnpm.exe" "https://github.com/pnpm/pnpm/releases/download/v$version/pnpm-win-x64.exe"
+          curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 -o "$dir/pnpm.exe" "https://github.com/pnpm/pnpm/releases/download/v$version/pnpm-win-x64.exe"
           echo "$sha  $dir/pnpm.exe" | sha256sum -c --quiet || { echo "pnpm-win-x64.exe $version: not the SHA-256 kept for it"; exit 1; }
           cygpath -w "$dir" >> "$GITHUB_PATH"
           export PATH="$dir:$PATH"
