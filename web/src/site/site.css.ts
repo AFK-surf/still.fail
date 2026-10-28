@@ -236,9 +236,35 @@ export const promiseText = style({ margin: "12px 0 0", fontSize: vars.textTitle,
 
 // Installing: what to do on the left, the command on the right.
 export const install = style({
-  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center", paddingBottom: "120px",
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px" } },
+});
+// What it works with (Site.tsx Works): each row's quiet name over its marks, a pill each.
+export const works = style({ display: "grid", gap: "14px", margin: "40px 0 0", "@media": { [NARROW]: { marginTop: "28px" } } });
+globalStyle(`${works} > ul + span`, { marginTop: "18px" });
+export const marks = style({ display: "flex", flexWrap: "wrap", gap: "10px", margin: "0", padding: "0", listStyle: "none" });
+globalStyle(`${marks} > li`, {
+  display: "flex", alignItems: "center", gap: "10px", padding: "10px 18px 10px 14px", borderRadius: "999px",
+  background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, color: FG, fontSize: vars.textTitle, lineHeight: "1.2",
+});
+globalStyle(`${marks} svg`, { display: "block", flex: "none" });
+
+// What a visitor asks first (Site.tsx Questions): the title on the left, the questions on the right (under it on a
+// narrow screen), each a quiet card that opens to its answer; the page's foot under them.
+export const questions = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "start", paddingBottom: "120px",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px", paddingBottom: "80px" } },
 });
+export const questionList = style({ display: "grid", gap: "10px" });
+export const question = style({ borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const questionAsked = style({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", padding: "20px 24px", cursor: "pointer", listStyle: "none",
+  fontSize: vars.textTitle, fontWeight: "600", color: FG, selectors: { "&::-webkit-details-marker": { display: "none" } },
+});
+export const questionOpen = style({ flex: "none", color: "var(--s-muted)", transition: `transform .2s ${vars.easeOut}` });
+globalStyle(`${question}[open] ${questionOpen}`, { transform: "rotate(180deg)" });
+export const questionAnswer = style({ margin: "0", padding: "0 24px 22px", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+
 /** The command, in a terminal's colours in either theme. */
 export const terminal = style({
   borderRadius: vars.rCard, overflow: "hidden", background: "#111114", color: "#E9E9EA",
