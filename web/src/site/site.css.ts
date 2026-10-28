@@ -202,17 +202,6 @@ export const links = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
-/** The film (Film.tsx): as wide as the page's words, its corners a card's, its sound's button over its corner. */
-export const film = style({
-  position: "relative", margin: "40px 0 0", borderRadius: vars.rCard, overflow: "hidden", background: "#000",
-  boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${LINE}`,
-});
-export const filmVideo = style({ display: "block", width: "100%", height: "auto", aspectRatio: "16 / 9", cursor: "pointer" });
-export const filmSound = style({
-  position: "absolute", right: "16px", bottom: "16px", display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0",
-  border: "0", borderRadius: "999px", color: "#fff", cursor: "pointer",
-  background: "color-mix(in srgb, #000 45%, transparent)", backdropFilter: "blur(20px) saturate(1.4)",
-});
 /** What it is for (OneComputer.tsx): those shown on a phone three across, each its phone over its words, what is not
  *  here yet a line under them; one under another on a narrow screen. */
 export const scenes = style({

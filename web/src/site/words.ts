@@ -45,8 +45,6 @@ const ZH = {
   other: "English", otherHref: "/en/",
   title: "One devices.",
   start: "开始使用",
-  filmTitle: "在手机上交代，在电脑上做完",
-  soundOn: "打开声音", soundOff: "关闭声音",
   scenesTitle: "能用来做什么",
   /** What it is for, each by what it does (`soon`: not yet), shown on the phone's app at its page (`at`: its path in
    *  the workspace, or "chat": its chat, the story played). */
@@ -101,8 +99,6 @@ const EN: typeof ZH = {
   other: "中文", otherHref: "/",
   title: "One devices.",
   start: "Get started",
-  filmTitle: "Asked on a phone, done on a computer",
-  soundOn: "Turn sound on", soundOff: "Turn sound off",
   scenesTitle: "What it's for",
   scenes: [
     { title: "Agents", text: "Claude Code, Codex and other agents run on your computers; direct them from your phone, Slack or Feishu", soon: false, at: "chat" },

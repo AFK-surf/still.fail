@@ -57,7 +57,7 @@ export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|lin
  * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
-  // The site's film (web/src/site/Film.tsx), too large for the site's own files: a new cut is a new number.
+  // The site's film (on it 2026-10-28 to 10-29; a page built then still asks for it), too large for the site's own files.
   [/^site\/film-[a-z]+-[0-9]+\.mp4$/, "video/mp4"],
   // The station's latest release, for stations to say a newer one is out (the Rust station's updates.rs).
   [/^station\.json$/, "application/json"],

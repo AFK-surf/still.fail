@@ -15,7 +15,6 @@ import { useEffect, useRef } from "react";
 import type { MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
-import { Film } from "./Film.tsx";
 import { useSay, useSiteLang } from "./words.ts";
 
 /** How many steps the scene is scrolled through. */
@@ -378,14 +377,6 @@ export function OneComputer(props: DemoProps) {
             </div>
             <div className={css.oneAir} ref={air} />
           </div>
-        </div>
-      </section>
-
-      {/* The film: it at work. */}
-      <section className={css.section}>
-        <div className={css.wrap}>
-          <h2 className={css.headingTitle}>{say.filmTitle}</h2>
-          <Film />
         </div>
       </section>
 
