@@ -1308,6 +1308,9 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
   wide.tape_pick = pick
   let chat = match app.nav.top() {
     Chat(r) | History(r, _, _) => chat_key(r)
+    // a chat's detail asked as a page, on its way to its chat's side panel (main_page): still that chat, not another
+    // come (its panel, opening, comes over)
+    p if laid_beside(p) => wide.tape_chat
     _ => ""
   }
   let open = match panel {
@@ -1508,7 +1511,15 @@ pub fn page_goes_on() -> Bool {
 /// (shown_in_page), not a chat's detail asked as a page (its history, a service, a file: the frame lays it beside its
 /// chat, in the chat's place).
 pub fn goes_over(p : Page) -> Bool {
-  page_goes_on() && shown_in_page(p) && !(p is (History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _)))
+  page_goes_on() && shown_in_page(p) && !laid_beside(p)
+}
+
+///|
+/// Whether page `p` is a chat's detail asked as a page, which the frame lays beside its chat in its side panel
+/// (main_page): its history, a service, a file. Opened on the tape, the panel comes over with it (tape_frame: a panel
+/// opened), not the page, which keeps the chat.
+pub fn laid_beside(p : Page) -> Bool {
+  p is (History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _))
 }
 
 ///|
