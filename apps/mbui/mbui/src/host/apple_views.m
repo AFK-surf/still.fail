@@ -1146,18 +1146,31 @@ static void stack(MBNative *v) {
 #endif
 }
 
-// Its content's corners round, each its own (top left, then round it), as the hole the app paints for it: alike, its
-// layer's corner; else a mask of that shape on it, laid along the layer's y as it runs (a Mac's view not flipped: up).
+// One corner of mbui's (src/ui/smooth.mbt, src/host/corner.sl mb_sd_corner) on path p: |x|^n + |y|^n = R^n about its
+// centre (cx, cy), the quarter towards (sx, sy), from its end along x (`from_x`) or along y, as the hole's is drawn.
+static void smooth_corner(CGMutablePathRef p, double r, double room, double cx, double cy, double sx, double sy,
+                          BOOL from_x) {
+  double s = r <= 0 ? 0 : fmin(1, fmax(0, (room - r) / (0.25 * r)));
+  double R = fmin(r * (1 + 0.25 * s), room), n = 2 + 0.8284271247461903 * s;
+  const int steps = 24;
+  for (int i = 0; i <= steps; i++) {
+    double t = (from_x ? i : steps - i) * M_PI_2 / steps;
+    double x = R * pow(fmax(0, cos(t)), 2 / n), y = R * pow(fmax(0, sin(t)), 2 / n);
+    CGPathAddLineToPoint(p, NULL, cx + sx * x, cy + sy * y);
+  }
+}
+
+// Its content's corners round, each its own (top left, then round it), as the hole the app paints for it, smooth as
+// mbui's are (a circle's arc cut the page short of the hole along each corner, its ground showing in between): a mask
+// of that shape on it, laid along the layer's y as it runs (a Mac's view not flipped: up).
 static void round_content(MBNative *v, double r0, double r1, double r2, double r3) {
   CALayer *l = v.content.layer;
-  if (r0 == r1 && r1 == r2 && r2 == r3) {
-    if ([l.mask isKindOfClass:CAShapeLayer.class]) l.mask = nil;
-    l.cornerRadius = fmax(0, r0);
-    l.masksToBounds = r0 > 0;
-    return;
-  }
   l.cornerRadius = 0;
   l.masksToBounds = NO;
+  if (r0 <= 0 && r1 <= 0 && r2 <= 0 && r3 <= 0) {
+    if ([l.mask isKindOfClass:CAShapeLayer.class]) l.mask = nil;
+    return;
+  }
   CGRect b = l.bounds;
   double w = b.size.width, h = b.size.height, most = fmin(w, h) / 2;
   // the corners at the layer's y 0 first (left, right), then those at its height (right, left)
@@ -1172,11 +1185,18 @@ static void round_content(MBNative *v, double r0, double r1, double r2, double r
   a0 = fmax(0, fmin(a0, most)); a1 = fmax(0, fmin(a1, most));
   a2 = fmax(0, fmin(a2, most)); a3 = fmax(0, fmin(a3, most));
   CGMutablePathRef p = CGPathCreateMutable();
-  CGPathMoveToPoint(p, NULL, a0, 0);
-  CGPathAddArcToPoint(p, NULL, w, 0, w, h, a1);
-  CGPathAddArcToPoint(p, NULL, w, h, 0, h, a2);
-  CGPathAddArcToPoint(p, NULL, 0, h, 0, 0, a3);
-  CGPathAddArcToPoint(p, NULL, 0, 0, w, 0, a0);
+  // (each corner about its centre its R in from both edges: round the box from the first's end along the left edge)
+  double k[4] = {a0, a1, a2, a3};
+  double R[4];
+  for (int i = 0; i < 4; i++) {
+    double s = k[i] <= 0 ? 0 : fmin(1, fmax(0, (most - k[i]) / (0.25 * k[i])));
+    R[i] = fmin(k[i] * (1 + 0.25 * s), most);
+  }
+  CGPathMoveToPoint(p, NULL, 0, R[0]);
+  smooth_corner(p, a0, most, R[0], R[0], -1, -1, YES);
+  smooth_corner(p, a1, most, w - R[1], R[1], 1, -1, NO);
+  smooth_corner(p, a2, most, w - R[2], h - R[2], 1, 1, YES);
+  smooth_corner(p, a3, most, R[3], h - R[3], -1, 1, NO);
   CGPathCloseSubpath(p);
   CAShapeLayer *m = [l.mask isKindOfClass:CAShapeLayer.class] ? (CAShapeLayer *)l.mask : [CAShapeLayer layer];
   m.frame = b;

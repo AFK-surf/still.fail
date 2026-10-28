@@ -614,9 +614,10 @@ fn service_stage(
   }
   // (once the frame's builds are over, as the last of them has it; told the host only when it changes)
   c.after_build("service-touch", fn() { site.touch(touch) })
+  // (round only alone in a panel: a style given, its box is one more the spacing rules see)
   let round = match corners {
-    Some(k) => @sf.corners_radius(k)
-    None => Sharp
+    Some(k) => Some(@ui.style(radius=@sf.corners_radius(k)))
+    None => None
   }
   // (the page's own corners each the stage's, where it fills it)
   let r = match corners {
@@ -626,7 +627,7 @@ fn service_stage(
     }
     None => None
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), style=@ui.style(radius=round), bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
+  c.box(w=Fill(1.0), h=Fill(1.0), style?=round, bg=if p.viewport is Some(_) { ground } else { t.p.card }, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
     let placed = match (p.viewport, c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
