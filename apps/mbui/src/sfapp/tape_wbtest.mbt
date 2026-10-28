@@ -1256,3 +1256,24 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   t.run_for(@sfdesk.side_move_ms)
   assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("checklist")}")
 }
+
+///|
+test "on the tape, a chat's service opened from the chat in use: its side panel comes over with it, the chat beside" {
+  reset()
+  let src = fixture("chat-jobs")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=720.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(@sfdesk.wide.tape)
+  // (the chat in use, the sidebar beside it)
+  @sfdesk.bring_page()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  // (as its link in a message opens it: a page, which the frame lays beside its chat)
+  open_page(Service("ws1/st1", "j-web"))
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@sfdesk.side_move_ms)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  assert_eq(@sfdesk.side_now(src, r).1, "service:j-web")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+}
