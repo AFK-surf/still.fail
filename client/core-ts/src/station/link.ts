@@ -46,6 +46,9 @@ export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines
 export const LOGS_KEPT = 40;
 /// The agents' memory on the station as it answered GET /memory last (the `memory` topic), in the link's memory.
 export const MEMORY = "agentMemory";
+/// The programs granted the station's data as it answered GET /outflow/grants last (the `outflowGrants` topic,
+/// docs/data-outflow.md), in the link's memory; `{unsupported: true}` from a station from before.
+export const OUTFLOW = "outflowGrants";
 /// What a web link in a message is, as the station answered GET /link-preview for it last (the `linkPreview` topic), in
 /// the link's memory: the latest few kept (each may carry its page's icon and picture inline).
 export const LINK_PREVIEW_KEY = "linkPreview\n";

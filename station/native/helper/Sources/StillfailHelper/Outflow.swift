@@ -84,11 +84,15 @@ final class OutflowWindow {
     let model = OutflowModel(request: request)
     model.done = { [weak self] scopes in self?.finish(scopes.map { ["answer": "allow", "scopes": $0] } ?? ["answer": "refuse"]) }
     let host = NSHostingController(rootView: OutflowView(model: model))
-    let window = NSWindow(contentViewController: host)
+    // As still.fail's dialogs: no title bar, its own rounded white panel with a soft shadow (OutflowView draws it).
+    host.view.wantsLayer = true
+    host.view.layer?.backgroundColor = .clear
+    let window = OutflowPanel(contentRect: NSRect(origin: .zero, size: host.view.fittingSize), styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentViewController = host
     window.title = model.word("title", "still.fail")
-    window.styleMask = [.titled, .closable, .fullSizeContentView]
-    window.titleVisibility = .hidden
-    window.titlebarAppearsTransparent = true
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.hasShadow = false
     window.isMovableByWindowBackground = true
     window.isReleasedWhenClosed = false
     window.level = .floating
@@ -123,6 +127,12 @@ final class OutflowWindow {
     DispatchQueue.main.async { _ = NSApp.setActivationPolicy(.accessory) }
     answer(result)
   }
+}
+
+/// A borderless window that still takes the keyboard (its buttons, Esc, Return).
+private final class OutflowPanel: NSWindow {
+  override var canBecomeKey: Bool { true }
+  override var canBecomeMain: Bool { true }
 }
 
 private final class OutflowDelegate: NSObject, NSWindowDelegate {
@@ -188,91 +198,218 @@ final class OutflowModel: ObservableObject {
   }
 }
 
+/// still.fail's colours and sizes (web/src/styles/global.css.ts), light and dark.
+struct Still {
+  let dark: Bool
+  var canvas: Color { dark ? Color(hex: 0x1F2023) : .white }
+  var text: Color { dark ? Color(hex: 0xECEDED) : Color(hex: 0x2B2F36) }
+  var muted: Color { dark ? Color(hex: 0xA8AAAE) : Color(hex: 0x565B62) }
+  var lineStrong: Color { dark ? Color.white.opacity(0.18) : Color(hex: 0xC6C8CD) }
+  var neutral: Color { dark ? Color.white.opacity(0.06) : Color(red: 36 / 255, green: 39 / 255, blue: 43 / 255).opacity(0.075) }
+  var primary: Color { dark ? Color(hex: 0xECEDED) : Color(hex: 0x24272B) }
+  var onPrimary: Color { dark ? Color(hex: 0x1F2023) : .white }
+  var green: Color { dark ? Color(hex: 0x6FCF97) : Color(hex: 0x026039) }
+  var red: Color { dark ? Color(hex: 0xF08A8F) : Color(hex: 0x9A2830) }
+  /// The brand's dot.
+  static let dot = Color(hex: 0xE5704A)
+  static let pad: CGFloat = 24
+  /// The panel's corner: its padding plus a button's half height (still.fail's dialogs, concentric).
+  static let corner: CGFloat = 42
+  static let inner: CGFloat = 18
+}
+
+extension Color {
+  init(hex: UInt32) {
+    self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+  }
+}
+
+/// still.fail's pill buttons: 36 high, 16 in; the primary in ink with white words, the other on the canvas with a line.
+/// Drawn as a view of its own and tapped (a Button's platform cell clips the pill's round ends); Return and Esc reach
+/// them through `keys`.
+struct Pill: View {
+  let still: Still
+  let label: String
+  var primary = false
+  var disabled = false
+  let action: () -> Void
+  var body: some View {
+    Text(label)
+      .font(.system(size: 13, weight: .medium))
+      .foregroundStyle(primary ? still.onPrimary : still.text)
+      .padding(.horizontal, 16)
+      .frame(height: 36)
+      .background(RoundedRectangle(cornerRadius: 18, style: .circular).fill(primary ? still.primary : still.canvas))
+      .overlay(RoundedRectangle(cornerRadius: 18, style: .circular).strokeBorder(primary ? still.primary : still.lineStrong, lineWidth: 1))
+      .contentShape(RoundedRectangle(cornerRadius: 18, style: .circular))
+      .opacity(disabled ? 0.4 : 1)
+      .onTapGesture { if !disabled { action() } }
+      .accessibilityAddTraits(.isButton)
+      .accessibilityAction { if !disabled { action() } }
+  }
+}
+
+/// Return and Esc for a step: buttons with no size of their own.
+struct Keys: View {
+  let enter: () -> Void
+  let escape: () -> Void
+  var body: some View {
+    ZStack {
+      Button("", action: enter).keyboardShortcut(.defaultAction)
+      Button("", action: escape).keyboardShortcut(.cancelAction)
+    }
+    .frame(width: 0, height: 0)
+    .opacity(0)
+    .accessibilityHidden(true)
+  }
+}
+
+/// still.fail's checkbox: 18, its corner 6; ticked, the ink with a white check.
+struct StillCheck: ToggleStyle {
+  let still: Still
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(alignment: .top, spacing: 10) {
+      ZStack {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .fill(configuration.isOn ? still.primary : still.canvas)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .strokeBorder(configuration.isOn ? still.primary : still.lineStrong, lineWidth: 1)
+        if configuration.isOn {
+          Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(still.onPrimary)
+        }
+      }
+      .frame(width: 18, height: 18)
+      .padding(.top, 1)
+      configuration.label
+      Spacer(minLength: 0)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture { configuration.isOn.toggle() }
+    .accessibilityAddTraits(.isButton)
+  }
+}
+
+/// still.fail's mark: an s and the orange dot.
+struct StillMark: View {
+  let still: Still
+  var body: some View {
+    HStack(alignment: .lastTextBaseline, spacing: 1) {
+      Text("s").font(.system(size: 22, weight: .bold)).foregroundStyle(still.text)
+      Circle().fill(Still.dot).frame(width: 5.5, height: 5.5)
+    }
+  }
+}
+
 struct OutflowView: View {
   @ObservedObject var model: OutflowModel
+  @Environment(\.colorScheme) private var scheme
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack(spacing: 12) {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath))
-          .resizable()
-          .interpolation(.high)
-          .frame(width: 48, height: 48)
+    let still = Still(dark: scheme == .dark)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 10) {
+        StillMark(still: still)
         Text(model.confirming ? model.word("confirmTitle", "Confirm") : model.word("heading", "A program asks to read your still.fail data"))
-          .font(.system(size: 18, weight: .bold, design: .rounded))
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(still.text)
           .fixedSize(horizontal: false, vertical: true)
       }
+      .padding(.bottom, 18)
       if model.confirming {
         Text(model.word("summary", ""))
-          .font(.system(size: 13))
+          .font(.system(size: 14))
+          .lineSpacing(4)
+          .foregroundStyle(still.text)
           .fixedSize(horizontal: false, vertical: true)
         if let failed = model.failed {
-          Text(failed).font(.system(size: 11.5)).foregroundStyle(.red)
+          Text(failed).font(.system(size: 12)).foregroundStyle(still.red).padding(.top, 8)
         }
-        HStack {
-          Button(model.word("back", "Back")) { model.confirming = false }
+        HStack(spacing: 8) {
+          Pill(still: still, label: model.word("back", "Back")) { model.confirming = false }
           Spacer()
-          Button(model.word("refuse", "Don't Allow")) { model.done?(nil) }
-          Button(model.word("confirm", "Confirm")) { model.confirm() }
-            .keyboardShortcut(.defaultAction)
+          Pill(still: still, label: model.word("refuse", "Don't Allow")) { model.done?(nil) }
+          Pill(still: still, label: model.word("confirm", "Confirm"), primary: true) { model.confirm() }
         }
+        .padding(.top, Still.pad)
+        .background(Keys(enter: { model.confirm() }, escape: { model.confirming = false }))
       } else {
-        identity
+        identity(still)
         Text(model.word("scopesHeading", "It asks for"))
-          .font(.system(size: 13, weight: .semibold))
-        ForEach(model.scopes) { scope in
-          Toggle(isOn: Binding(get: { model.chosen.contains(scope.id) }, set: { on in
-            if on { model.chosen.insert(scope.id) } else { model.chosen.remove(scope.id) }
-          })) {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(scope.name).font(.system(size: 13, weight: .medium))
-              if !scope.why.isEmpty {
-                Text(scope.why).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+          .font(.system(size: 12))
+          .foregroundStyle(still.muted)
+          .padding(.top, 18)
+          .padding(.bottom, 10)
+        VStack(alignment: .leading, spacing: 12) {
+          ForEach(model.scopes) { scope in
+            Toggle(isOn: Binding(get: { model.chosen.contains(scope.id) }, set: { on in
+              if on { model.chosen.insert(scope.id) } else { model.chosen.remove(scope.id) }
+            })) {
+              VStack(alignment: .leading, spacing: 2) {
+                Text(scope.name).font(.system(size: 13, weight: .medium)).foregroundStyle(still.text)
+                if !scope.why.isEmpty {
+                  Text(scope.why).font(.system(size: 12)).foregroundStyle(still.muted).fixedSize(horizontal: false, vertical: true)
+                }
               }
             }
+            .toggleStyle(StillCheck(still: still))
           }
-          .toggleStyle(.checkbox)
         }
         Text(model.word("until", "It keeps this until you revoke it in still.fail."))
-          .font(.system(size: 11.5))
-          .foregroundStyle(.secondary)
-        HStack {
+          .font(.system(size: 12))
+          .foregroundStyle(still.muted)
+          .padding(.top, 16)
+        HStack(spacing: 8) {
           Spacer()
-          Button(model.word("refuse", "Don't Allow")) { model.done?(nil) }
-            .keyboardShortcut(.cancelAction)
-          Button(model.word("allow", "Allow")) { model.confirming = true }
-            .disabled(model.chosen.isEmpty)
+          Pill(still: still, label: model.word("refuse", "Don't Allow")) { model.done?(nil) }
+          Pill(still: still, label: model.word("allow", "Allow"), primary: true, disabled: model.chosen.isEmpty) { model.confirming = true }
         }
+        .padding(.top, Still.pad)
+        .background(Keys(enter: { if !model.chosen.isEmpty { model.confirming = true } }, escape: { model.done?(nil) }))
       }
     }
-    .padding(26)
-    .frame(width: 500)
+    .padding(Still.pad)
+    .frame(width: 460)
+    // The shadow on the panel alone (on the whole view it falls under every word and button too).
+    .background(
+      RoundedRectangle(cornerRadius: Still.corner, style: .continuous)
+        .fill(still.canvas)
+        .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.1), radius: 32, y: 24)
+    )
+    .overlay(RoundedRectangle(cornerRadius: Still.corner, style: .continuous).strokeBorder(still.lineStrong.opacity(0.6), lineWidth: 0.5))
+    .padding(40)
   }
 
-  private var identity: some View {
-    VStack(alignment: .leading, spacing: 6) {
+  private func identity(_ still: Still) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
       if model.signed {
-        Label(model.word("signedBy", "Signed by") + " " + (model.text("signer") ?? model.text("teamId") ?? ""), systemImage: "checkmark.seal.fill")
-          .foregroundStyle(.green)
+        pill(model.word("signedBy", "Signed by") + " " + (model.text("signer") ?? model.text("teamId") ?? ""), "checkmark.seal.fill", still.green)
       } else {
-        Label(model.word("unsigned", "Not signed: macOS cannot say who made this program"), systemImage: "exclamationmark.triangle.fill")
-          .foregroundStyle(.red)
+        pill(model.word("unsigned", "Not signed: macOS cannot say who made this program"), "exclamationmark.triangle.fill", still.red)
       }
-      row(model.word("program", "Program"), model.text("app") ?? model.text("identifier") ?? "")
-      if let identifier = model.text("identifier") { row(model.word("identifier", "Identifier"), identifier) }
-      row(model.word("path", "Path"), model.text("path") ?? "")
-      if let said = model.word("said", "").nilIfEmpty { row(model.word("saidHeading", "It says (its own words)"), said) }
+      row(still, model.word("program", "Program"), model.text("app") ?? model.text("identifier") ?? "")
+      if let identifier = model.text("identifier") { row(still, model.word("identifier", "Identifier"), identifier) }
+      row(still, model.word("path", "Path"), model.text("path") ?? "")
+      if let said = model.word("said", "").nilIfEmpty { row(still, model.word("saidHeading", "It says (its own words)"), said) }
     }
-    .font(.system(size: 12))
-    .padding(12)
+    .padding(14)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.08)))
+    .background(RoundedRectangle(cornerRadius: Still.inner, style: .continuous).fill(still.neutral))
   }
 
-  private func row(_ name: String, _ value: String) -> some View {
+  private func pill(_ words: String, _ icon: String, _ ink: Color) -> some View {
+    Label(words, systemImage: icon)
+      .font(.system(size: 12, weight: .medium))
+      .foregroundStyle(ink)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 4)
+      .background(Capsule().fill(ink.opacity(0.14)))
+      .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func row(_ still: Still, _ name: String, _ value: String) -> some View {
     HStack(alignment: .top, spacing: 8) {
-      Text(name).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
-      Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+      Text(name).font(.system(size: 12)).foregroundStyle(still.muted).frame(width: 72, alignment: .leading)
+      Text(value).font(.system(size: 13)).foregroundStyle(still.text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
     }
   }
 }
