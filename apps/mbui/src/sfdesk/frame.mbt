@@ -94,6 +94,8 @@ pub(all) struct Wide {
   mut tape_panel : String
   /// the side panel last built on the tape (its key) and in which frame: brought over once a frame before has built it
   mut tape_built : (String, Int)
+  /// the side panel last open on the tape: closed while in use, built as it was as the tape moves off it (side_leaving)
+  mut tape_last_side : SideOf?
   /// the one not in use being pulled over by what shows of it (tape_covers), and how far the finger has moved the tape
   /// since it took it
   mut tape_pull : TapePane?
@@ -156,6 +158,7 @@ pub let wide : Wide = {
   tape_chat: "",
   tape_panel: "",
   tape_built: ("", -1),
+  tape_last_side: None,
   tape_pull: None,
   tape_drag: 0.0,
   tape_backing: false,
@@ -685,7 +688,21 @@ pub fn frame(
   // leaves in use past what shows of those beside it (tape_shows, 8 from it) and 6 from the window's edge where none
   // is; which is in use and how far the tape is moved
   let panel_of = if wide.tape { side_open_for(src, w, app.nav.top()) } else { None }
-  let panel_w = match panel_of {
+  // (one closed while in use: what it showed, as it goes, while the tape moves off it to the page: let go once there,
+  // as a panel beside a page goes out showing its tabs: side_beside)
+  let leaving = match (panel_of, wide.tape_last_side) {
+    (None, Some(s)) if wide.tape && side_leaving(s.key()) is Some(_) => Some(s)
+    _ => None
+  }
+  wide.tape_last_side = match panel_of {
+    Some(_) => panel_of
+    None => leaving
+  }
+  let shown_side = match panel_of {
+    Some(_) => panel_of
+    None => leaving
+  }
+  let panel_w = match shown_side {
     Some(_) => tape_panel_w(tw)
     None => 0.0
   }
@@ -708,6 +725,11 @@ pub fn frame(
     _ => true
   }
   let tape_x = tape_frame(c, panel_of, at, known)
+  // (the panel closed gone once the tape is at the page)
+  match leaving {
+    Some(s) if (tape_x - at.1).abs() < 0.5 => side_left(s.key())
+    _ => ()
+  }
   // (on the tape the page as wide as its move has got: the side panel opening beside it, it narrows as the tape moves
   // to it, one move, not at once before it: tape_moves)
   let main_w = if wide.tape { c.moved("--tape-page-w", main_to) } else { main_to }
@@ -874,7 +896,7 @@ pub fn frame(
         // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the
         // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
         @motion.scope(c, pane, bottom=true)
-        match panel_of {
+        match shown_side {
           Some(side) =>
             tape_behind(c, Panel, fn() { c.box(
               style=page_apart.then(
@@ -891,12 +913,12 @@ pub fn frame(
                 @sf.pane_round.val = Some(beside_column(tape_pane_corners(Panel, true), under))
                 c.box(style=@ui.style(w=Fixed(panel_w), h=Full), fn() {
                   tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
-                    c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side) })
+                    c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side, leaving=leaving is Some(_)) })
                   })
                 })
                 |> ignore
                 // (the frame it was first built in, kept while it stays open)
-                if wide.tape_built.0 != side.key() {
+                if leaving is None && wide.tape_built.0 != side.key() {
                   wide.tape_built = (side.key(), c.frame_number())
                 }
                 @sf.pane_round.val = None

@@ -466,6 +466,30 @@ test "an iPhone Duo on its side: a service's link tapped, the side panel comes o
 }
 
 ///|
+test "an iPhone Duo on its side: the side panel closed while in use slides off as the page comes back, showing what it showed, then goes" {
+  let (w, h, side) = (951.0, 669.0, 84.0)
+  let t = native_chat(w, h, true, side~, mode="chat-info", corner=59.0)
+  let src = fixture("chat-info")
+  open_link_in(src, "https://still.fail/o/ws1/st1/s-c1?service=j-web")
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  let (x0, _, _, _) = t.holes()[0]
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  side_change(r, "clear", None)
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  // on its way: the page coming back, the panel's page still drawn, further right
+  let holes = t.holes()
+  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{@sfdesk.wide.tape_at})")
+  assert_true(holes[0].0 > x0 + 100.0 && holes[0].0 < w, msg="from \{x0}, on its way at \{holes[0].0}")
+  t.run_for(@sfdesk.side_move_ms * 2.0)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  // there: gone
+  assert_eq(t.holes().length(), 0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
 test "an iPhone Duo: switching workspace from an open chat never restores the old workspace's last chat" {
   reset()
   let base = fixture("chat")
