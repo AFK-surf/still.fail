@@ -930,21 +930,33 @@ fn Ctx::row_stuck(self : Ctx, s : Int, y : Double, stick : Double, room : Double
 
 ///|
 /// What a row or a part drew from instance `i0` (its shapes' pieces from `g0`), each in its clip, of which it leaves
-/// nothing: dropped, the pieces of the shapes kept alone kept, in order (where none of glass is among them: their runs
-/// are the frame's). What of a row is drawn is what shows in its list, built (in the band past it, or plainly) or drawn
-/// again; of a part, what shows where it is drawn.
+/// nothing: dropped, the pieces of the shapes kept alone kept, in order (glass, and what lies between its first and
+/// its last, kept: their runs are the frame's). What of a row is drawn is what shows in its list, built (in the band
+/// past it, or plainly) or drawn again; of a part, what shows where it is drawn.
 fn Ctx::kept_drop(self : Ctx, i0 : Int, g0 : Int) -> Unit {
   let a = self.inst
+  let mut glass0 = self.ninst
+  let mut glass1 = -1
   for q in i0..<self.ninst {
     let kind = a[q * inst_size + 5]
     if kind == 5.0 || kind == 6.0 || kind == 7.0 {
-      return
+      if q < glass0 {
+        glass0 = q
+      }
+      glass1 = q
     }
   }
   let mut w = i0
   for q in i0..<self.ninst {
     let b = q * inst_size
     let kind = a[b + 5]
+    if q >= glass0 && q <= glass1 {
+      if w != q {
+        a.blit_to(a, len=inst_size, src_offset=b, dst_offset=w * inst_size)
+      }
+      w = w + 1
+      continue
+    }
     // (how far past its rect it draws: a line's half width, a shadow's blur; the shapes' pieces, and what is turned,
     // never dropped)
     let past = if kind == 10.0 {
