@@ -1578,6 +1578,7 @@ void mb_host_set_full_screen(int32_t on) { (void)on; }
 // How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
 // more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
 double mb_host_window_corner(void) { return 0; }
+double mb_host_window_corner_at(int k) { (void)k; return 0; }
 void mb_host_window_drag(void) {}
 
 // The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,

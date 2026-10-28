@@ -1296,6 +1296,12 @@ double mb_host_window_corner(void) {
   return 8;
 }
 
+// Each corner (@hostapi.window_corner_at): all alike.
+double mb_host_window_corner_at(int k) {
+  (void)k;
+  return mb_host_window_corner();
+}
+
 // The press under way moves the window (the app's top row), as the title bar's would (Windows' own move, its snapping
 // at the screen's edges among it); the second press of a double click there, the first one the window's too, what the
 // title bar's double click does: maximized, or back as it was.

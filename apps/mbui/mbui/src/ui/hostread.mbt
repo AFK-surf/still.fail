@@ -300,8 +300,35 @@ pub fn full_screen() -> Bool {
 /// it fills the screen): the outermost container of all (corners.mbt).
 pub fn window_corner() -> Double {
   match fake.val {
-    Some(f) => if f.full { 0.0 } else { f.window_corner }
+    Some(f) =>
+      if f.full {
+        0.0
+      } else {
+        match f.window_corners {
+          Some(k) => k.fold(init=0.0, fn(m, r) { dmax(m, r) })
+          None => f.window_corner
+        }
+      }
     None => @hostapi.window_corner()
+  }
+}
+
+///|
+/// How round the system draws the window's corner `k` (0 top left, then round it: @hostapi.window_corner_at; a
+/// Tester's `window_corners`, else its `window_corner`), each its own where they differ (an iPhone Duo's outer screen:
+/// 8 along its hinge), window_corner the roundest of them.
+pub fn window_corner_at(k : Int) -> Double {
+  match fake.val {
+    Some(f) =>
+      if f.full {
+        0.0
+      } else {
+        match f.window_corners {
+          Some(c) => c[k & 3]
+          None => f.window_corner
+        }
+      }
+    None => @hostapi.window_corner_at(k)
   }
 }
 

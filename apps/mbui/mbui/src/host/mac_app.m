@@ -1067,6 +1067,12 @@ double mb_host_window_corner(void) {
   return NSProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 16 : 10;
 }
 
+// Each corner (@hostapi.window_corner_at): all alike.
+double mb_host_window_corner_at(int k) {
+  (void)k;
+  return mb_host_window_corner();
+}
+
 // The press under way drags the window (the app's top row: @hostapi.window_drag); the second of a double click there
 // (the first the window's too), what the system's title bar does on a double click, as AppKit's frame does it for its
 // own (fill, zoom, minimize or nothing, as set in the system's settings; the press's modifiers as there); where the

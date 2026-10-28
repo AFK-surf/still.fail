@@ -18,6 +18,7 @@ pub(open) trait Host {
   full_screen(Self) -> Bool = _
   set_full_screen(Self, Bool) -> Unit = _
   window_corner(Self) -> Double = _
+  window_corner_at(Self, Int) -> Double = _
   window_drag(Self) -> Unit = _
   window_act(Self, Int) -> Unit = _
   window_zoomed(Self) -> Bool = _
@@ -237,6 +238,11 @@ impl Host with set_full_screen(_, _) {
 ///|
 impl Host with window_corner(_) {
   0.0
+}
+
+///|
+impl Host with window_corner_at(self, _) {
+  self.window_corner()
 }
 
 ///|
@@ -1235,6 +1241,13 @@ pub fn set_full_screen(on : Bool) -> Unit {
 /// maximised, a browser's page, Windows 10) or where the system says nothing of them.
 pub fn window_corner() -> Double {
   current.val.window_corner()
+}
+
+///|
+/// How round the system draws the window's corner `k` (0 top left, then round it): each its own where they differ (an
+/// iPhone Duo's outer screen: the two along its hinge 8, the others 59), window_corner the roundest of them.
+pub fn window_corner_at(k : Int) -> Double {
+  current.val.window_corner_at(k)
 }
 
 ///|

@@ -11,20 +11,21 @@ pub(all) struct NativeBars {
   mut on : Bool
   /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none)
   mut side : Double
-  /// the screen's corners where the cards along its edges follow them (0: the window's own, as elsewhere)
-  mut corner : Double
+  /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
+  /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere)
+  corners : FixedArray[Double]
 }
 
 ///|
 // kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
-pub let native_bars : NativeBars = { on: false, side: 0.0, corner: 0.0 }
+pub let native_bars : NativeBars = { on: false, side: 0.0, corners: FixedArray::make(4, 0.0) }
 
 ///|
 /// As at the start: none.
 pub fn native_bars_reset() -> Unit {
   native_bars.on = false
   native_bars.side = 0.0
-  native_bars.corner = 0.0
+  native_bars.corners.fill(0.0)
   native_foot_made.val = None
   native_over_clear()
 }
@@ -118,14 +119,26 @@ let native_foot_made : Ref[Double?] = Ref(None)
 pub let native_in : Double = 4.0
 
 ///|
-/// The corner of the cards at the screen's edge down the side: concentric with the screen's own, so the screen cuts
-/// none of a card's line (the user, 2026-10-27); 0 where it says none.
-pub fn native_card_corner() -> Double {
-  if native_side() && native_bars.corner > 0.0 {
-    dmax(tape_corner, native_bars.corner - native_in)
+/// The corner of the cards in the screen's corner `k` (top left, then round it), down the side: concentric with the
+/// screen's own there, so the screen cuts none of a card's line (the user, 2026-10-27), each corner its own (an iPhone
+/// Duo's outer screen: along its hinge, its 8, the cards' 4); 0 where it says none.
+pub fn native_card_corner_at(k : Int) -> Double {
+  let r = native_bars.corners[k]
+  if native_side() && r > 0.0 {
+    dmax(0.0, r - native_in)
   } else {
     0.0
   }
+}
+
+///|
+/// The roundest of the cards' corners in the screen's (native_card_corner_at); 0 where it says none.
+pub fn native_card_corner() -> Double {
+  let mut most = 0.0
+  for k in 0..<4 {
+    most = dmax(most, native_card_corner_at(k))
+  }
+  most
 }
 
 // ---- what is up over the whole window (the viewer): the system's tabs put away while it is, its actions in their

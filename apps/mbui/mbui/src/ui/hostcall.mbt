@@ -108,8 +108,10 @@ struct FakeHost {
   mut inset : Bool
   /// the window filling the screen (Ctx::set_full_screen), as last made to
   mut full : Bool
-  /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen)
+  /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen), and
+  /// each of them where they differ (Tester::new's `window_corners`: top left, then round it)
   window_corner : Double
+  window_corners : FixedArray[Double]?
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
   /// whether the system lays out the app's tabs itself (an iPhone Duo's: Tester::set_nav_able), and the bars the app

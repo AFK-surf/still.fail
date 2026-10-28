@@ -4,7 +4,8 @@
 
 ///|
 /// The fixture's chat (or `mode`'s) open in a window `w` × `h` of iOS (platform 1), the system's own bars or not (`able`), its column
-/// down the window's trailing edge `side` wide (0: upright, across), the screen's corners `corner` round.
+/// down the window's trailing edge `side` wide (0: upright, across), the screen's corners `corner` round (`corners`:
+/// each its own, top left then round it).
 fn native_chat(
   w : Double,
   h : Double,
@@ -12,11 +13,12 @@ fn native_chat(
   side? : Double = 0.0,
   mode? : String = "chat",
   corner? : Double = 0.0,
+  corners? : FixedArray[Double],
 ) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1, window_corner=corner)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1, window_corner=corner, window_corners?=corners)
   t.set_nav_able(able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.nav_push_ms)
@@ -211,6 +213,23 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
     assert_true(near(@sf.tape_side_corners()[2].radius(), p.radii.3), msg="\{size}: the list's foot corner")
     assert_eq(t.corner_faults(), [])
   }
+}
+
+///|
+test "an iPhone Duo folded, its outer screen on its side: the cards' corners each the screen's there, square along its hinge, round on the other side" {
+  // (the outer screen's corners as the Duo's iOS 27.1 says them: 8 along the hinge, at its left, 59 at its right)
+  let t = native_chat(466.0, 678.0, true, side=70.0, corners=[8.0, 59.0, 59.0, 8.0])
+  t.run_for(@ui.nav_push_ms)
+  let side = @sf.corner_radii(@sf.tape_side_corners())
+  // (the list's card along the hinge: 4 in from the screen's 8, concentric with it; its corners away from the
+  // screen's edge the tape's)
+  assert_eq(side[0], 8.0 - @sf.native_in)
+  assert_eq(side[3], 8.0 - @sf.native_in)
+  // (the page's card along the other side: the screen's 59 less the same)
+  let page = @sf.corner_radii(@sf.tape_corners(left=false, right=true))
+  assert_eq(page[1], 59.0 - @sf.native_in)
+  assert_eq(page[2], 59.0 - @sf.native_in)
+  assert_eq(t.corner_faults(), [])
 }
 
 ///|

@@ -280,17 +280,23 @@ pub let tape_edge : @ui.CornerOf = window_follow(tape_corner)
 pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
   // (along a screen whose corners the host says, an iPhone Duo's: concentric with them, so the screen cuts none of a
   // panel's line, the user 2026-10-27: native_bars.mbt)
-  let screen = native_card_corner()
-  let edge : @ui.CornerOf = if screen > 0.0 { Own(screen) } else { tape_edge }
-  let l = if left { edge } else { Own(tape_corner) }
-  let r = if right { edge } else { Own(tape_corner) }
+  // (each corner the screen's there: an iPhone Duo's outer screen square along its hinge)
+  let edge = fn(k : Int) -> @ui.CornerOf {
+    if native_card_corner() > 0.0 {
+      Own(native_card_corner_at(k))
+    } else {
+      tape_edge
+    }
+  }
+  let l = if left { edge(0) } else { Own(tape_corner) }
+  let r = if right { edge(1) } else { Own(tape_corner) }
   // (their foot corners away from the screen's edges, beside the system's action at the column's foot: the one the
   // composer stands concentric in on its line, native_foot_set)
   let foot : @ui.CornerOf = match native_foot_corner() {
     Some(k) => Own(k)
     None => Own(tape_corner)
   }
-  [l, r, if right { edge } else { foot }, if left { edge } else { foot }]
+  [l, r, if right { edge(2) } else { foot }, if left { edge(3) } else { foot }]
 }
 
 ///|

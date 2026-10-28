@@ -1179,6 +1179,7 @@ void mb_host_set_full_screen(int32_t on) {
 // How round the system draws the window's corners (@hostapi.window_corner): its content's are square under the title
 // bar.
 double mb_host_window_corner(void) { return 0; }
+double mb_host_window_corner_at(int k) { (void)k; return 0; }
 
 // The press under way moves the window (the app's top row), as the title bar's would.
 void mb_host_window_drag(void) {

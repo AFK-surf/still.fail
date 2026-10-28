@@ -913,7 +913,7 @@ pub fn frame(
       |> ignore
     }
     tape_behind(c, Side, fn() {
-      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band} \{@sf.native_card_corner()}", fn() {
+      tape_part(c, Side, "\{s} \{col} \{top} \{foot} \{tape_x} \{c.width} \{c.height} \{wide.brand_h} \{wide.band} \{@sf.native_bars.corners}", fn() {
         // (open beside the system's tabs off the tape, its ground from the window's top as the system's own sidebars'
         // are, what is in it under the bars there: brand_h; rail_native.mbt)
         dock(c, src, w, all, bar, peek, s, col, if side_full_height(bar) { 0.0 } else { top }, foot, tape_x)

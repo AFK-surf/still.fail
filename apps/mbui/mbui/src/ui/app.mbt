@@ -565,6 +565,9 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.lit_apart = c.theme.lit_apart
   c.lit_reach = c.theme.lit_reach
   c.window_corner = window_corner()
+  for k in 0..<4 {
+    c.window_corners[k] = window_corner_at(k)
+  }
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
   parts_build_start()

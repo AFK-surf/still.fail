@@ -46,6 +46,11 @@ impl @hostapi.Host for Native with window_corner(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_corner_at(_, k) {
+  window_corner_at(k)
+}
+
+///|
 impl @hostapi.Host for Native with window_drag(_) {
   window_drag()
 }
