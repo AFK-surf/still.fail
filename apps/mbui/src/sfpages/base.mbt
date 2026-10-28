@@ -1,6 +1,7 @@
 // What the pages read of sfbase, by their own names.
 using @sfbase {
   place_pick,
+  place_key,
   fresh,
   pv,
   type ScreenAt, type PageFrame, type DriveAt, upload_id, file_seed, dv_part_first, dv_part_max, dv_beside_name,

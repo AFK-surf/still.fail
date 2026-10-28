@@ -332,8 +332,15 @@ pub fn back_label(p : Page) -> String {
 }
 
 ///|
-/// The page picked in a place with a list of its own (the stations', the profiles'), by place; none: the shell's first.
-/// Said by the place's list (a row pressed) and by a page that leads to another of its list or is gone from it (a
-/// profile's other stations, a profile deleted); the shell shows it (src/sfdesk places.mbt place_route).
+/// The page picked in a place with a list of its own (the stations', the profiles'), by workspace and place
+/// (`place_key`); none: the shell's first. Said by the place's list (a row pressed) and by a page that leads to another
+/// of its list or is gone from it (a profile's other stations, a profile deleted); the shell shows it (src/sfdesk
+/// places.mbt place_route). Each workspace keeps its own: one picked in another is none of this one's list.
 // kept across runs: said by a row or a page; the shell's places_reset empties it
 pub let place_pick : Map[String, @settings.Route] = {}
+
+///|
+/// `place_pick`'s key for `place` in the workspace `ws`.
+pub fn place_key(ws : String, place : String) -> String {
+  ws + "\n" + place
+}

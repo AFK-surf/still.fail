@@ -794,3 +794,55 @@ test "wide: folded, the window made narrow enough for the tape: the sidebar on t
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(t.rect_of("新建对话"), at_once)
 }
+
+///|
+test "wide: Station's page picked in one workspace: in another, that one's first station shown, not the page before waiting; back, the one picked" {
+  let calls : Array[Made] = []
+  reset()
+  let base = fixture("home")
+  // (the second workspace's own station: the fixture's list is the first's)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      match (name, params.get("scope")) {
+        ("stations", Some(String("ws2"))) =>
+          match ((base.topic)(name, { "scope": Json::string("ws1") }).value) {
+            Some(Array(list)) =>
+              match list[0] {
+                Object(m) => {
+                  let s = Map::from_iter(m.iter())
+                  s["station"] = Json::string("ws2/st9")
+                  s["id"] = Json::string("st9")
+                  s["name"] = Json::string("家里的 mini")
+                  topic_as_read(name, params, { ..t, value: Some(Json::array([Json::object(s)])) })
+                }
+                _ => t
+              }
+            _ => t
+          }
+        _ => t
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0)
+  @sfbase.go_place("stations") |> ignore
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("MBA")
+  t.run_for(@ui.nav_push_ms)
+  @sfpages.switch_workspace(src, "ws2")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(app.nav.top() == Place("stations"))
+  // its row in the sidebar and its page beside it, its name over the page
+  let named = t.words().filter(fn(w) { w.0 == "家里的 mini" }).length()
+  assert_true(named >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // back in the first: the one picked there still
+  @sfpages.switch_workspace(src, "ws1")
+  t.run_for(@sfdesk.side_move_ms)
+  let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
+  assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
+}

@@ -1069,6 +1069,8 @@ pub let pk : ChatPick
 
 pub fn place_icon(String) -> String
 
+pub fn place_key(String, String) -> String
+
 pub fn place_page(String) -> Page
 
 pub let place_pick : Map[String, @settings.Route]

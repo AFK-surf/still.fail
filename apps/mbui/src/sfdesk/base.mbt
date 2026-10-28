@@ -1,6 +1,7 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
   place_pick,
+  place_key,
   files_into,
   quoted_into,
   quote_file_into,

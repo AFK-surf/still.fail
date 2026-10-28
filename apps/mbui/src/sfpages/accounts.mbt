@@ -305,7 +305,7 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
     }
     confirm(title, words, item, danger=true, fn() {
       // gone from here at once: the list shows it until the station has dropped it
-      place_pick.remove("profiles")
+      place_pick.remove(place_key(here.workspace, "profiles"))
       (core.pop)()
       @settings.act(
         core,
@@ -821,7 +821,7 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
               }
             },
           ) {
-          place_pick["profiles"] = Profile(station, pid)
+          place_pick[place_key(workspace_of(station), "profiles")] = Profile(station, pid)
           (core.push)(Profile(station, pid))
         }
       }
