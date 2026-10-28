@@ -259,11 +259,6 @@ fn chat_bar(
   } else {
     room_r
   }
-  // (its agents in the system's bars where it has them, each its history's switch: rail_native.mbt)
-  let agents_in_bars = match v {
-    Some(view) => bar_agents(src, r, view.agents)
-    None => false
-  }
   c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
     room(room_l)
     c.box(style=chat_bar_inner, fn() {
@@ -274,24 +269,22 @@ fn chat_bar(
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
-            // (who is in it by its title, but where its agents are in the system's bars: rail_native.mbt bar_agents)
-            if !agents_in_bars && view.agents.length() == 0 {
+            // (who is in it by its title, beside the system's bars too: the user, 2026-10-28)
+            if view.agents.length() == 0 {
               chat_station(c, r.station, station)
             }
-            if !agents_in_bars && view.people.length() > 0 {
+            if view.people.length() > 0 {
               c.box(drop=chat_bar_drop_people, fn() { people_stack(c, src, "bar-people", view.people, 5) }) |> ignore
             }
-            if !agents_in_bars {
-              let (_, front) = side_of(view)
-              for i, a in view.agents {
-                let tile = fn() {
-                  agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
-                }
-                if i == 0 {
-                  tile()
-                } else {
-                  c.box(drop=chat_bar_drop_agents, tile) |> ignore
-                }
+            let (_, front) = side_of(view)
+            for i, a in view.agents {
+              let tile = fn() {
+                agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
+              }
+              if i == 0 {
+                tile()
+              } else {
+                c.box(drop=chat_bar_drop_agents, tile) |> ignore
               }
             }
           }
@@ -306,24 +299,25 @@ fn chat_bar(
           c.box(style=@sf.keys_row(), fn() {
             // nothing left in it (the core's `archivable`): archived with one press
             // (each in the system's navigation bar where it has the rail's places: rail_native.mbt bar_action)
-            if view.archivable && !view.archived {
-              let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
-              if !bar_action("archive", @sf.t("web-pages.chat.archive"), "archive", archive) &&
-                @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
-                archive()
-              }
-            }
-            jobs_trigger(c, src, r)
+            let archivable = view.archivable && !view.archived
+            let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
             // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
             let info = fn() { chat_own.info_open = !chat_own.info_open }
-            // (its people's faces its bubble in the system's bars: rail_native.mbt bar_people)
-            if !bar_people(view.people, info) &&
+            // (each its own in the system's bars where it has them: rail_native.mbt bar_chat)
+            let in_bars = bar_chat(src, r, view.agents, info, if archivable { Some(archive) } else { None })
+            if !in_bars &&
+              archivable &&
+              @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
+              archive()
+            }
+            jobs_trigger(c, src, r)
+            if !in_bars &&
               @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
               info()
             }
-            // the side panel's switch while it is closed: the first agent's history in it (none where the agents are in
-            // the system's bars: each its own switch there)
-            if !agents_in_bars && side_of(view).0.length() == 0 && view.agents.length() > 0 {
+            // the side panel's switch while it is closed: the first agent's history in it (none where the chat's actions
+            // are in the system's bars: its history's switch there)
+            if !in_bars && side_of(view).0.length() == 0 && view.agents.length() > 0 {
               let panel = fn() { side_change(src, r, "open", Some(view.agents[0].key)) }
               if @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
                 panel()

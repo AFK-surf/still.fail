@@ -67,7 +67,7 @@ pub fn chat_list(
   // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if asks_of(v).is_empty() || !v.ask_clear { 0.0 } else { float_lift + float_side }
-  // (an iPhone Duo's cards: 32 in however narrow the chat's, row_side)
+  // (an iPhone Duo's cards: 48 in however narrow the chat's, row_side)
   let side = if narrow && !@sf.native_on() { row_side_narrow } else { row_side(c) }
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
@@ -560,7 +560,9 @@ fn row_side(c : @ui.Ctx) -> Double {
 }
 
 ///|
-let dense_row_side : Double = 32.0
+/// (its pictures out in that room, 29 before the words, about as far from the card's edge as the chat's title: the
+/// user, 2026-10-28, 头像都贴边了)
+let dense_row_side : Double = 48.0
 
 ///|
 /// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
