@@ -170,18 +170,20 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
       eye = (eye * 10.0).round() / 10.0
     }
   }
-  // a link on its way: its arc breathes between the track and ink (1.4 s), held halfway with motion reduced
-  let mut pulse = 0.5
-  if arcs.iter().any(fn(a) { a.pulse }) && !still {
-    let p = c.cycle(glyph_breath_period, resident=true) * 2.0
-    let p = if p < 1.0 { p } else { 2.0 - p }
-    let eased = standard_at(p)
-    pulse = ((glyph_track + (0.85 - glyph_track) * eased) * 20.0).round() / 20.0
-  }
+  // a link on its way: its arc breathes between the track and ink (1.4 s), held halfway with motion reduced; breathing,
+  // drawn apart over the rest in ink, its opacity a look by the clock (Ctx::cycle_look): what holds the glyph is not
+  // built again for each step of it (built each step, the stations' tab on the phone's bar built the whole frame ten
+  // times a second, and each frame after it again, for as long as a station could not be reached)
+  let breathing = arcs.iter().any(fn(a) { a.pulse }) && !still
   let whole = if g.asleep { 0.4 } else { 1.0 }
   let layers : Array[@pixels.VectorPath] = []
+  let breaths : Array[@pixels.VectorPath] = []
   for a in arcs {
-    let k = if a.lit { 1.0 } else if a.pulse { pulse } else { glyph_track }
+    if a.pulse && breathing {
+      breaths.push(glyph_layer(arc_path(a.from, a.to), 0L, faded(tint, whole), 1.8))
+      continue
+    }
+    let k = if a.lit { 1.0 } else if a.pulse { 0.5 } else { glyph_track }
     layers.push(glyph_layer(arc_path(a.from, a.to), 0L, faded(tint, k * whole), 1.8))
   }
   for d in dots {
@@ -202,8 +204,27 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
     }
   }
   layers.push(glyph_layer(body.to_string(), faded(tint, whole), 0L, 0.0, even_odd=true))
-  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{pulse}/\{red}/\{tint}"
-  draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
+  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{breathing}/\{red}/\{tint}"
+  if !breathing {
+    return draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
+  }
+  // (as big as the glyph: the breath laid over it whole)
+  c.box(fn() {
+    draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None) |> ignore
+    let breath = c.layer(fn() {
+      draw_drawable(c, "glyph-breath/" + key, { w: 24.0, h: 24.0, layers: breaths }, size, None) |> ignore
+    })
+    c.cycle_look(
+      breath,
+      glyph_breath_period,
+      fn(f) {
+        let p = f * 2.0
+        let p = if p < 1.0 { p } else { 2.0 - p }
+        @ui.look(alpha=((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0)
+      },
+      resident=true,
+    )
+  })
 }
 
 ///|
