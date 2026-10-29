@@ -41,6 +41,26 @@ float mb_sd_corner(float2 p, float2 hs, float r, float s, float band) {
 float mb_corner_of(float2 p, float4 r) {
   return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
 }
+// The signed distance of p from a clip (scene.mbt 16-19 and 24-31, or its outer's 40-51): c its rect (x0 y0 x1 y1), r
+// its corners (top left, then clockwise; 0 square), s how smooth each is. A corner is the curve of the box whose corner
+// it is, where that box has it (its radius as that box drew it): drawn there whatever the clip's own size, so a band a
+// few points high sharing a frame's corner is cut by the frame's very curve, not by one flattened to its half height.
+// Each corner against its own corner point; the rect's edges straight.
+float mb_clip_corner(float2 p, float2 k, float2 inward, float2 hs, float r, float s, float band) {
+  float R = r * (1.0 + 0.25 * s);
+  float2 hv = max(hs, float2(R, R));
+  return mb_sd_corner(max(hv - (p - k) * inward, float2(0.0, 0.0)), hv, r, s, band);
+}
+float mb_sd_clip(float2 p, float4 c, float4 r, float4 s, float band) {
+  float2 hs = max((c.zw - c.xy) * 0.5, float2(0.0, 0.0));
+  float2 q = abs(p - (c.xy + hs)) - hs;
+  float d = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0);
+  if (r.x > 0.0) d = max(d, mb_clip_corner(p, c.xy, float2(1.0, 1.0), hs, r.x, s.x, band));
+  if (r.y > 0.0) d = max(d, mb_clip_corner(p, c.zy, float2(-1.0, 1.0), hs, r.y, s.y, band));
+  if (r.z > 0.0) d = max(d, mb_clip_corner(p, c.zw, float2(-1.0, -1.0), hs, r.z, s.z, band));
+  if (r.w > 0.0) d = max(d, mb_clip_corner(p, c.xw, float2(1.0, -1.0), hs, r.w, s.w, band));
+  return d;
+}
 // A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).
 float mb_sd_box(float2 p, float2 hs, float r, float band) {
   float room = min(hs.x, hs.y);

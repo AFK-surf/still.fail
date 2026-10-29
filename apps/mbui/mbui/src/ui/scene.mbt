@@ -59,18 +59,17 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// edge as its own ground is (the renderers: 0.5 - d · scale of the rounded rect's distance; a clip with no rounded
 /// corner cuts hard, at pixel centres, as before), and presses in what it cut away miss (Ctx::hit_clips).
 /// Within other clips, the rule for where they meet: their rects' intersection, each of its corners as round as the
-/// clips whose corner it is (both's: the rounder), square where it is no clip's corner. So a rect inside a rounded
-/// clip (a list in a card, down to its foot) keeps the card's corners where they are its own, and a rounded clip in
-/// a rounded clip is right wherever the inner lies within the outer or shares its corners with room for them. Where
-/// one clip's edge cuts through another's rounded corner, not at its corner (an image's rounded frame scrolled into a
-/// pane's corner, its edge across the pane's curve), or shares the corner with too little room to draw it as long (a
-/// band across the frame's top, flatter there), the intersection's corner there is not its own: so the level keeps
-/// that other clip too, whole (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by
-/// both, exactly. One outer a level: the outermost such clip (a level whose clip has an outer passes it on, whatever it
-/// cuts itself),
-/// so what is drawn never leaves a pane or a window's rounded corners; a clip between the two (a card in the pane,
-/// round the frame) keeps the old error where the frame cuts through its corner (a square corner there, at most
-/// (1 - π/4) r² of it); no stencil is kept.
+/// clips whose corner it is (both's: the rounder), square where it is no clip's corner. A corner is drawn where its box
+/// has it, as round as that box drew it, whatever the intersection's size (smooth.mbt sd_clip, the renderers'
+/// mb_sd_clip): a band a few points high across a frame's top is cut by the frame's very curve. So a rect inside a
+/// rounded clip (a list in a card, down to its foot, a band across a picture) keeps the card's corners where they are
+/// its own, exactly. Where one clip's edge cuts through another's curve, not at its corner (an image's rounded frame
+/// scrolled into a pane's corner, a band brushed across the frame's foot), the level keeps that other clip too, whole
+/// (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by both. The outer is chosen by
+/// what cuts (clip_cutting): of the clip it is in and that one's outer, the one whose curves reach into it; none where
+/// neither does, so a pane's corners far off take no frame's place. Wrong only where two curves cut into one clip's
+/// shape at once (a band across a frame scrolled half past a pane's corner): the one that cuts more is kept; no
+/// stencil is kept.
 // kept across runs: every clip a paint pushes it pops in the same paint, so between frames only its base level is
 // left, the same in every run
 let clip_stack : Array[Double] = [
@@ -84,6 +83,37 @@ let clip_stack : Array[Double] = [
 /// band: kept_part.mbt) is not.
 // kept across runs: pushed and popped with `clip_stack`'s levels, its base the only one left between frames
 let clip_window : Array[Bool] = [true]
+
+///|
+/// Whether each level of `clip_stack` has its outer where what it cuts is drawn, apart from where it is laid out (a
+/// look's clip and what is pushed in it inheriting that outer: draw.mbt), so not to be measured against it. A level not
+/// said is not.
+// kept across runs: pushed and popped with `clip_stack`'s levels, its base the only one left between frames
+let clip_apart : Array[Bool] = [false]
+
+///|
+/// Whether the clip at `k` (in `clip_stack`) has its outer apart from it (clip_apart).
+fn clip_is_apart(k : Int) -> Bool {
+  let level = k / clip_n
+  level < clip_apart.length() && clip_apart[level]
+}
+
+///|
+/// The level just pushed said to have its outer apart from it, or not (clip_apart).
+fn clip_say_apart(apart : Bool) -> Unit {
+  let levels = clip_stack.length() / clip_n
+  while clip_apart.length() > levels {
+    clip_apart.pop() |> ignore
+  }
+  while clip_apart.length() < levels - 1 {
+    clip_apart.push(false)
+  }
+  if clip_apart.length() < levels {
+    clip_apart.push(apart)
+  } else {
+    clip_apart[levels - 1] = apart
+  }
+}
 
 ///|
 /// Whether the clip at `k` (in `clip_stack`) is the window's own edges (clip_window).
@@ -148,10 +178,11 @@ fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
 
 ///|
 /// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise); its
-/// outer the clip it is in's where that has one, else the clip it is in where it cuts through a rounded corner of it
-/// (clip_cuts), else none. `outer_kept`: the clip it is in's outer, whatever it cuts (a clip pushed where what it
-/// holds is laid out, not where it is drawn: a look's, draw.mbt). `outer_whole`: the clip it is in, whole, its outer
-/// (a circle reaching past it: push_circle_clip).
+/// outer, of the clip it is in and that one's outer, the one whose curves cut into it (the most of it: clip_cutting),
+/// none where neither does: what does not reach it is no outer of it, however far out it is. `outer_kept`: the clip it
+/// is in's outer, whatever it cuts (a clip pushed where what it holds is laid out, not where it is drawn: a look's,
+/// draw.mbt; that outer is where it is drawn, apart from it). `outer_whole`: the clip it is in, whole, its outer (a
+/// circle reaching past it: push_circle_clip).
 fn push_clip_r(
   x0 : Double,
   y0 : Double,
@@ -164,14 +195,19 @@ fn push_clip_r(
 ) -> Unit {
   let k = clip_top()
   let has_outer = clip_has_outer(k)
+  // (an outer apart from the clip it is in, where that is laid out (clip_apart): not measured against it, kept unless
+  // the clip it is in cuts it; the look's own transform_insts chooses again where it is drawn)
+  let apart = has_outer && clip_is_apart(k)
   let from = if outer_whole {
     k
-  } else if has_outer || outer_kept || !clip_cuts(k, x0, y0, x1, y1, r) {
-    // (its outer's numbers, or none)
+  } else if outer_kept {
     k + 12
   } else {
-    // (the clip it is in, whole)
-    k
+    let cands = if has_outer && !apart { [k, k + 12] } else { [k] }
+    match clip_cutting(cands, clip_stack, x0, y0, x1, y1, r, sm) {
+      Some(c) => c
+      None => if apart { k + 12 } else { -1 }
+    }
   }
   clip_stack.push(x0)
   clip_stack.push(y0)
@@ -186,8 +222,10 @@ fn push_clip_r(
   clip_stack.push(sm.2)
   clip_stack.push(sm.3)
   for j in 0..<12 {
-    clip_stack.push(clip_stack[from + j])
+    clip_stack.push(if from >= 0 { clip_stack[from + j] } else { 0.0 })
   }
+  // (its outer apart from it where it takes one that is: a look's, or one inherited from where that is laid out)
+  clip_say_apart(from == k + 12 && has_outer && (outer_kept || apart))
   // (a square clip holding all of the window's edges it is in, a frame's whole, is those edges still)
   let s = clip_stack
   clip_say_window(
@@ -224,39 +262,164 @@ fn clip_has_outer(k : Int) -> Bool {
 }
 
 ///|
-/// Whether a clip of rect (x0 y0 x1 y1), its corners `r`, pushed in the clip at `k` cuts through one of that clip's
-/// rounded corners: reaches into the square that corner's curve lies in (as far as a smooth corner's curve goes in,
-/// smooth.mbt) other than by being that corner as round or rounder, its own corner there, with room for it (the
-/// renderers draw a corner no longer than half its rect's shorter side: one sharing that corner with less room, a band
-/// across a frame's top as a picture is brushed in, is flatter than the corner and would show past it).
-fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (Double, Double, Double, Double)) -> Bool {
-  let s = clip_stack
+/// Of the clips that may be the outer of a clip of rect (x0 y0 x1 y1), its corners `r` as smooth as `sm` (each at its
+/// offset in `at`: 12 numbers, a clip_stack level's or an instance's 40-51), the one whose curves cut into it the most
+/// (clip_cut_depth), none where none cuts any of it. Straight edges are no cut (it is cut to their rects already), nor
+/// a corner it shares, as round or rounder (sd_clip draws a corner where its box has it): only a curve that reaches
+/// into its shape where it is not that corner, a band brushed across a frame's foot, a frame scrolled into a pane's
+/// corner.
+fn[A : ClipNumbers] clip_cutting(
+  cands : Array[Int],
+  at : A,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
+) -> Int? {
+  let mut best : Int? = None
+  let mut most = clip_cut_least
+  for c in cands {
+    let d = clip_cut_depth(at, c, x0, y0, x1, y1, r, sm)
+    if d > most {
+      most = d
+      best = Some(c)
+    }
+  }
+  best
+}
+
+///|
+/// What a clip's 12 numbers are read from: clip_stack, an instance list, a kept clip's.
+trait ClipNumbers {
+  clip_number(Self, Int) -> Double
+}
+
+///|
+impl ClipNumbers for Array[Double] with clip_number(self, k) {
+  self[k]
+}
+
+///|
+impl ClipNumbers for FixedArray[Double] with clip_number(self, k) {
+  self[k]
+}
+
+///|
+/// How far past a curve a cut is one (a hundredth of a point: under a twentieth of a pixel at any scale).
+let clip_cut_least : Double = 0.01
+
+///|
+/// The points a corner's curve is taken at (clip_cut_depth): its quarter in eight steps, each angle's cosine and sine.
+let clip_arc_steps : Int = 8
+
+///|
+// kept across runs: a value worked out once
+let clip_arc_cos : FixedArray[Double] = FixedArray::makei(clip_arc_steps + 1, fn(i) {
+  @dmath.cos(half_pi * i.to_double() / clip_arc_steps.to_double())
+})
+
+///|
+// kept across runs: a value worked out once
+let clip_arc_sin : FixedArray[Double] = FixedArray::makei(clip_arc_steps + 1, fn(i) {
+  @dmath.sin(half_pi * i.to_double() / clip_arc_steps.to_double())
+})
+
+///|
+/// How far the clip of 12 numbers at `o` in `at` (its rect, its corners, how smooth) cuts into a shape of rect (x0 y0
+/// x1 y1), corners `r` as smooth as `sm`: the most of the shape past that clip's curves (≤ 0: none of it). Only its
+/// corners count (sd_clip's, each against its own corner point). Its distance is a convex shape's, convex: across the
+/// shape it is most on its edge, along a straight one at its ends; so the shape's corners are what is measured, a
+/// square one its point, a round one along its curve (clip_arc_steps; a smooth one as sd_corner draws it, |x|^n + |y|^n
+/// = R^n). A corner of the shape outside the square a curve of that clip lies in is not measured against it.
+fn[A : ClipNumbers] clip_cut_depth(
+  at : A,
+  o : Int,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
+) -> Double {
+  let n = fn(j : Int) { at.clip_number(o + j) }
+  let (ox0, oy0, ox1, oy1) = (n(0), n(1), n(2), n(3))
+  let ohx = dmax((ox1 - ox0) / 2.0, 0.0)
+  let ohy = dmax((oy1 - oy0) / 2.0, 0.0)
   let own = [r.0, r.1, r.2, r.3]
+  let owns = [sm.0, sm.1, sm.2, sm.3]
+  let mut most = -1.0e9
   for j in 0..<4 {
-    let rr = s[k + 4 + j]
+    let rr = n(4 + j)
     if rr <= 0.0 {
       continue
     }
-    let reach = rr * (1.0 + (smooth_scale - 1.0) * s[k + 8 + j])
+    let ss = n(8 + j)
+    let reach = rr * (1.0 + (smooth_scale - 1.0) * ss)
     let left = j == 0 || j == 3
     let top = j < 2
-    let cx = if left { s[k] } else { s[k + 2] }
-    let cy = if top { s[k + 1] } else { s[k + 3] }
-    // the square from the corner `reach` in
-    let (zx0, zx1) = if left { (cx, cx + reach) } else { (cx - reach, cx) }
-    let (zy0, zy1) = if top { (cy, cy + reach) } else { (cy - reach, cy) }
+    let kx = if left { ox0 } else { ox1 }
+    let ky = if top { oy0 } else { oy1 }
+    let ix = if left { 1.0 } else { -1.0 }
+    let iy = if top { 1.0 } else { -1.0 }
+    // the square its curve lies in
+    let (zx0, zx1) = if left { (kx, kx + reach) } else { (kx - reach, kx) }
+    let (zy0, zy1) = if top { (ky, ky + reach) } else { (ky - reach, ky) }
     if x1 <= zx0 || x0 >= zx1 || y1 <= zy0 || y0 >= zy1 {
       continue
     }
-    // its own corner there, the same corner, as round and as long: the clip's curve within its own
-    let ox = if left { x0 } else { x1 }
-    let oy = if top { y0 } else { y1 }
-    if (ox - cx).abs() < 1.0e-6 && (oy - cy).abs() < 1.0e-6 && own[j] >= rr && dmin(x1 - x0, y1 - y0) / 2.0 >= reach {
-      continue
+    let vx = dmax(ohx, reach)
+    let vy = dmax(ohy, reach)
+    // (a point of the shape's rect its own curves cut away, a square corner beside a frame's corner it shares, is none
+    // of it)
+    let past = fn(px : Double, py : Double) {
+      if sd_clip(px, py, x0, y0, x1, y1, r, sm) > clip_cut_least {
+        -1.0e9
+      } else {
+        sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss)
+      }
     }
-    return true
+    // the shape's corners within that square
+    for i in 0..<4 {
+      let sl = i == 0 || i == 3
+      let st = i < 2
+      let cx = if sl { x0 } else { x1 }
+      let cy = if st { y0 } else { y1 }
+      let jx = if sl { 1.0 } else { -1.0 }
+      let jy = if st { 1.0 } else { -1.0 }
+      let sr = own[i]
+      if sr <= 0.0 {
+        if cx >= zx0 && cx <= zx1 && cy >= zy0 && cy <= zy1 {
+          most = dmax(most, past(cx, cy))
+        }
+        continue
+      }
+      // (the same corner, as round or rounder: its curve within that one's, the clip's own: no cut)
+      if cx == kx && cy == ky && sr >= rr {
+        continue
+      }
+      let sreach = sr * (1.0 + (smooth_scale - 1.0) * owns[i])
+      // (its curve's square, met by that one)
+      let (ax0, ax1) = if sl { (cx, cx + sreach) } else { (cx - sreach, cx) }
+      let (ay0, ay1) = if st { (cy, cy + sreach) } else { (cy - sreach, cy) }
+      if ax1 < zx0 || ax0 > zx1 || ay1 < zy0 || ay0 > zy1 {
+        continue
+      }
+      let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * owns[i])
+      for q in 0..=clip_arc_steps {
+        let ux = sreach * det_pow(clip_arc_cos[q], e)
+        let uy = sreach * det_pow(clip_arc_sin[q], e)
+        // from its curve's middle out towards the corner; what of it is past the shape's rect is none of it
+        let px = cx + jx * (sreach - ux)
+        let py = cy + jy * (sreach - uy)
+        if px >= x0 && px <= x1 && py >= y0 && py <= y1 {
+          most = dmax(most, past(px, py))
+        }
+      }
+    }
   }
-  false
+  most
 }
 
 ///|
@@ -302,27 +465,9 @@ fn push_round_clip(n : Node) -> Unit {
   let x1 = dmin(x + w, s[k + 2])
   let y1 = dmin(y + h, s[k + 3])
   // as round, and as smooth, as its ground's corners are (the renderers cap a radius at half the shorter side, and
-  // smooth it as far as the box has room for)
+  // smooth it as far as the box has room for); drawn where the box has them, however little of it the clip keeps (a
+  // card mostly past the window's edge: its far corners as round as its line, sd_clip)
   let room = dmin(w, h) / 2.0
-  // (cut by the window's edges alone, which cut nothing drawn (past them nothing is), no less of its own rect kept than
-  // its corners take: a box mostly past one keeps its far corners as round as it draws them, the renderers drawing a
-  // corner no longer than half the clip's room (an iPhone Duo's card 56 of its 240 shown: its 46 corner 28, flatter
-  // than its line, what it holds showing past it))
-  let edges = clip_is_window(k)
-  let most = dmin(
-    concentric(dmax(dmax(n.radius_at(0), n.radius_at(1)), dmax(n.radius_at(2), n.radius_at(3))), bw),
-    room,
-  )
-  let (x0, x1) = if edges && x1 - x0 < 2.0 * most {
-    (if x0 > x { dmax(x, x1 - 2.0 * most) } else { x0 }, if x1 < x + w { dmin(x + w, x0 + 2.0 * most) } else { x1 })
-  } else {
-    (x0, x1)
-  }
-  let (y0, y1) = if edges && y1 - y0 < 2.0 * most {
-    (if y0 > y { dmax(y, y1 - 2.0 * most) } else { y0 }, if y1 < y + h { dmin(y + h, y0 + 2.0 * most) } else { y1 })
-  } else {
-    (y0, y1)
-  }
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
@@ -347,6 +492,9 @@ fn pop_clip() -> Unit {
   }
   while clip_window.length() > clip_stack.length() / clip_n {
     clip_window.pop() |> ignore
+  }
+  while clip_apart.length() > clip_stack.length() / clip_n {
+    clip_apart.pop() |> ignore
   }
 }
 

@@ -1033,8 +1033,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
 /// Instances `i0` to `i1` moved and scaled: about (`ox`, `oy`) by `sx`, `sy`, then by `dx`, `dy`; what their subtree
 /// cut them to moves with them (its corners' radii scaled as their radii are, as smooth), within what cut the node itself
 /// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`: the clip painted in now). Their outer clips
-/// (40-51, clip_stack) as a level's are: the one painted in now's where it has one; else that clip itself where theirs,
-/// moved, cuts through a rounded corner of it; else their own from their subtree, moved with them.
+/// (40-51, clip_stack) chosen again where they are drawn, as a level's are (inst_outer_chosen): of their own from
+/// their subtree (moved with them), the clip painted in now and its outer, the one whose curves cut into theirs.
 fn Ctx::transform_insts(
   self : Ctx,
   i0 : Int,
@@ -1107,12 +1107,46 @@ fn Ctx::transform_insts(
       let m1 = oy + (a[b + 17] - oy) * sy + dy
       let m2 = ox + (a[b + 18] - ox) * sx + dx
       let m3 = oy + (a[b + 19] - oy) * sy + dy
-      if clip_has_outer(here) {
-        inst_outer_from(a, b, here + 12)
-      } else if clip_cuts(here, m0, m1, m2, m3, (a[b + 24], a[b + 25], a[b + 26], a[b + 27])) {
-        inst_outer_from(a, b, here)
-      }
       clamp_inst_clip(a, b, m0, m1, m2, m3, outer, outer_r, outer_s)
+      inst_outer_chosen(a, b, here)
+    }
+  }
+}
+
+///|
+/// Instance `b`'s outer, its clip moved and cut to the clip at `here` (transform_insts), chosen again where it is drawn
+/// as a clip pushed there is (push_clip_r): of its own from its subtree (moved with it), the clip at `here` and that
+/// one's outer, the one whose curves cut into its clip the most; none where none does (an outer apart from `here`,
+/// clip_apart: that, unless another cuts).
+fn inst_outer_chosen(a : FixedArray[Double], b : Int, here : Int) -> Unit {
+  let (x0, y0, x1, y1) = (a[b + 16], a[b + 17], a[b + 18], a[b + 19])
+  let r = (a[b + 24], a[b + 25], a[b + 26], a[b + 27])
+  let sm = (a[b + 28], a[b + 29], a[b + 30], a[b + 31])
+  let beyond = clip_has_outer(here)
+  let apart = beyond && clip_is_apart(here)
+  let own = if inst_has_outer(a, b) && !(beyond && inst_outer_is(a, b, here + 12)) {
+    clip_cut_depth(a, b + 40, x0, y0, x1, y1, r, sm)
+  } else {
+    -1.0e9
+  }
+  let mut most = dmax(own, clip_cut_least)
+  let mut from = if own > clip_cut_least { -2 } else { -1 }
+  for k in if beyond && !apart { [here, here + 12] } else { [here] } {
+    let d = clip_cut_depth(clip_stack, k, x0, y0, x1, y1, r, sm)
+    if d > most {
+      most = d
+      from = k
+    }
+  }
+  if from >= 0 {
+    inst_outer_from(a, b, from)
+  } else if from == -1 {
+    if apart {
+      inst_outer_from(a, b, here + 12)
+    } else {
+      for j in 40..<52 {
+        a[b + j] = 0.0
+      }
     }
   }
 }

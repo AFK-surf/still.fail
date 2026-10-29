@@ -419,6 +419,8 @@ pub let scrollbar_hold_ms : Double
 
 pub fn sd_box(Double, Double, Double, Double, Double) -> Double
 
+pub fn sd_clip(Double, Double, Double, Double, Double, Double, (Double, Double, Double, Double), (Double, Double, Double, Double), band? : Double) -> Double
+
 pub fn sd_corner(Double, Double, Double, Double, Double, Double, band? : Double) -> Double
 
 pub fn set_badge(Int32) -> Unit
@@ -1067,6 +1069,7 @@ pub fn Ctx::list_info(Self, String) -> ListInfo?
 pub fn[T : Eq] Ctx::list_info_as(Self, String, (ListInfo?) -> T) -> ListInfo?
 pub fn Ctx::list_moved(Self, String, Int32, Int32) -> Unit
 pub fn Ctx::list_moving(Self, String) -> Bool
+pub fn Ctx::list_pinned_by(Self, Int32) -> Double
 pub fn Ctx::list_place(Self, String) -> (Int32, Double, Double)?
 pub fn Ctx::list_reader(Self, String) -> ListReader
 pub fn Ctx::list_rest(Self, String) -> Double
@@ -2297,6 +2300,7 @@ pub fn Tester::drawn_glass_corners(Self) -> Array[(Double, Double, Double, Doubl
 pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
 pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
+pub fn Tester::drawn_instances(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_lines(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_notches(Self) -> Array[(Int32, Double, Double, Double, Double)]
 pub fn Tester::drawn_of(Self, String) -> (Double, Double)?
@@ -2722,6 +2726,8 @@ pub struct WordsPiece {
 // Type aliases
 
 // Traits
+trait ClipNumbers
+
 pub(open) trait Moving {
   fn rest_at(Self, Double, Int32) -> Double
   fn sample(Self, Double) -> Unit = _
