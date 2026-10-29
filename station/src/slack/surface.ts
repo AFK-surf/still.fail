@@ -12,12 +12,14 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
-import { answerOf, answeredBlocks, markdown, questionBlocks } from "./cards.ts";
+import { type Stands, answerOf, answeredBlocks, markdown, questionBlocks, standsBlock, standsText } from "./cards.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
 import { wall } from "../ops/fibers.ts";
 
 type Json = any;
+/// A message the bot posted, as it posted it.
+type Said = { text: string; blocks: Json[]; question?: boolean };
 
 /// Who a bot token belongs to, as Slack reports it: its workspace's address, and its app's bot id besides.
 export type SlackIdentity = BotIdentity;
@@ -236,6 +238,13 @@ export class SlackSurface extends ConnectedSurface {
   private channels = new Map<string, string | null>();
   /// The questions answered (their messages' ts): a second press before the card changed is not said again.
   private answered = new Set<string>();
+  /// Each thread's newest message as the station saw it (by `channel/threadTs`), the bot's with what it posted (to be
+  /// changed: `standsAt`), anyone else's with null; and where the thread stands said at its end: on the bot's message
+  /// (`mine`, what it said before) or in a message of its own (null). Kept while connected: a restart forgets them.
+  private ends = new Map<string, { ts: string; mine: Said | null }>();
+  private stands = new Map<string, { ts: string; mine: Said | null; block: Json }>();
+  /// One change at a time in each thread, in order.
+  private standing = new Map<string, Promise<void>>();
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -291,6 +300,7 @@ export class SlackSurface extends ConnectedSurface {
         const envelopeId = envelope.envelope_id ?? null;
         void (async () => {
           try {
+            if (event?.type === "message") this.heard(event.message.channel, event.message.threadTs, event.message.ts);
             if (event !== null) await handler(event);
           } catch (error) {
             // Not acknowledged: Slack redelivers, and the store dedupes.
@@ -311,7 +321,7 @@ export class SlackSurface extends ConnectedSurface {
     const uploaded: [string, string][] = [];
     for (const file of files) uploaded.push(await this.upload(file));
     let first: string | null = null;
-    const send = async (said: string, blocks: Json[]) => {
+    const send = async (said: string, blocks: Json[], question = false) => {
       const posted = await this.client.api(
         "chat.postMessage",
         [
@@ -324,6 +334,7 @@ export class SlackSurface extends ConnectedSurface {
         this.botToken,
       );
       if (first === null && typeof posted?.ts === "string") first = posted.ts;
+      if (typeof posted?.ts === "string") this.heard(thread.channel, thread.threadTs, posted.ts, { text: said, blocks, ...(question ? { question } : {}) });
     };
     const question = card && (card.type === "options" || card.type === "text") ? card : null;
     let parts = splitForSlack(message, 3500).filter((t) => t !== "");
@@ -334,7 +345,7 @@ export class SlackSurface extends ConnectedSurface {
       else asking = parts.pop() ?? "";
     }
     for (const part of parts) await send(part, [markdown(part)]);
-    if (question) await send(asking, questionBlocks(asking, question, stationLang()));
+    if (question) await send(asking, questionBlocks(asking, question, stationLang()), true);
     if (uploaded.length > 0) {
       const list = JSON.stringify(uploaded.map(([id, title]) => ({ id, title })));
       const shared = await this.client.api(
@@ -346,6 +357,8 @@ export class SlackSurface extends ConnectedSurface {
         ],
         this.botToken,
       );
+      // (the files are its newest message, nothing the bot can add words to)
+      this.heard(thread.channel, thread.threadTs, (wall.now() / 1000).toFixed(6));
       if (first === null) {
         first = await this.sharedTs(shared, uploaded[0]![0], thread.channel);
         if (first === null) {
@@ -387,6 +400,7 @@ export class SlackSurface extends ConnectedSurface {
     if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
     const action = (payload.actions as Json[]).find((a) => text(a?.action_ts) !== "");
     const ts = text(action?.action_ts) || (wall.now() / 1000).toFixed(6);
+    this.heard(channel, threadTs, ts);
     try {
       await handler({ type: "message", message: { channel, threadTs, ts, user, text: answer.said, addressed: true } });
     } catch (error) {
@@ -395,13 +409,19 @@ export class SlackSurface extends ConnectedSurface {
     }
     const asking = text(payload?.message?.text);
     const who = (await this.userName(user)) ?? "";
+    const answered = answeredBlocks(asking, who, answer.said, lang);
+    // (its buttons gone for good: never put back with where the thread stands)
+    const key = `${channel}/${threadTs}`;
+    if (this.stands.get(key)?.ts === asked) this.stands.delete(key);
+    const end = this.ends.get(key);
+    if (end?.ts === asked && end.mine !== null) end.mine = { text: asking, blocks: answered };
     await this.client.api(
       "chat.update",
       [
         ["channel", channel],
         ["ts", asked],
         ["text", asking],
-        ["blocks", JSON.stringify(answeredBlocks(asking, who, answer.said, lang))],
+        ["blocks", JSON.stringify(answered)],
       ],
       this.botToken,
     );
@@ -528,25 +548,118 @@ export class SlackSurface extends ConnectedSurface {
       const posted = await this.client.api("chat.postMessage", params, this.botToken);
       if (root === "") root = text(posted?.ts);
       if (root === "") throw new Error("slack chat.postMessage gave no ts");
+      this.heard(channel, root, text(posted?.ts) || root, { text: part, blocks: [markdown(part)] });
     }
     if (root === "") throw new Error("nothing to post");
     return { thread: { channel, threadTs: root }, ts: root };
   }
 
-  /// A message changed in place (chat.update), as `post` writes one.
+  /// A message changed in place (chat.update), as `post` writes one; where the thread stands, said under it, stays.
   async edit(thread: ThreadRef, ts: string, message: string): Promise<boolean> {
     if (splitForSlack(message, 3500).length > 1) return false;
+    const key = `${thread.channel}/${thread.threadTs}`;
+    const said: Said = { text: message, blocks: [markdown(message)] };
+    const stands = this.stands.get(key);
+    const under = stands?.ts === ts && stands.mine !== null ? stands.block : null;
     await this.client.api(
       "chat.update",
       [
         ["channel", thread.channel],
         ["ts", ts],
         ["text", message],
-        ["blocks", JSON.stringify([markdown(message)])],
+        ["blocks", JSON.stringify(under !== null ? [...said.blocks, under] : said.blocks)],
       ],
       this.botToken,
     );
+    if (stands?.ts === ts && stands.mine !== null) stands.mine = said;
+    const end = this.ends.get(key);
+    if (end?.ts === ts && end.mine !== null) end.mine = said;
     return true;
+  }
+
+  /// A thread's newest message (`mine`: one the bot posted, as it posted it).
+  private heard(channel: string, threadTs: string, ts: string, mine: Said | null = null) {
+    const key = `${channel}/${threadTs}`;
+    const was = this.ends.get(key);
+    if (was !== undefined && (number(was.ts) ?? 0) > (number(ts) ?? 0)) return;
+    // (the oldest go once there are many: threads long quiet)
+    if (was === undefined && this.ends.size > 2000) this.ends.delete(this.ends.keys().next().value!);
+    this.ends.set(key, { ts, mine });
+  }
+
+  /// Where the thread stands as its agent's turn ended (cards.ts standsBlock), said under its newest message, the line
+  /// still.fail's chat shows at its end: added to the bot's own message when that is the newest, without a new message
+  /// (nobody following the thread is told again), else in a small message of its own. Null: nothing to say (it works
+  /// again, or ended waiting). Whatever was said before goes first: one line at most, at the thread's end. Best
+  /// effort, never waited on.
+  standsAt(thread: ThreadRef, stands: Stands | null) {
+    if (this.stopped) return;
+    const key = `${thread.channel}/${thread.threadTs}`;
+    // (nothing said, nor on its way)
+    if (stands === null && !this.stands.has(key) && !this.standing.has(key)) return;
+    const next = (this.standing.get(key) ?? Promise.resolve()).then(() => this.sayStands(thread, key, stands)).catch((error) =>
+      log.warn("slack", "could not say where the thread stands", { channel: thread.channel, thread: thread.threadTs, error: (error as Error).message }),
+    );
+    this.standing.set(key, next);
+    void next.then(() => {
+      if (this.standing.get(key) === next) this.standing.delete(key);
+    });
+  }
+
+  private async sayStands(thread: ThreadRef, key: string, stands: Stands | null) {
+    const was = this.stands.get(key);
+    if (was !== undefined) {
+      this.stands.delete(key);
+      if (was.mine !== null) await this.update(thread.channel, was.ts, was.mine.text, was.mine.blocks);
+      else await this.client.api("chat.delete", [["channel", thread.channel], ["ts", was.ts]], this.botToken);
+    }
+    if (stands === null) return;
+    const end = this.ends.get(key);
+    // (a question waiting at the end says it, as the chat leaves the line out while a card waits)
+    if (stands.kind === "need" && end?.mine?.question === true) return;
+    const lang = stationLang();
+    const block = standsBlock(stands, lang);
+    // (a message holds 50 blocks)
+    if (end !== undefined && end.mine !== null && end.mine.blocks.length < 50) {
+      // (known as said before it goes: a change of the message meanwhile keeps it)
+      this.stands.set(key, { ts: end.ts, mine: end.mine, block });
+      await this.update(thread.channel, end.ts, end.mine.text, [...end.mine.blocks, block]);
+      return;
+    }
+    const said = standsText(stands, lang);
+    const posted = await this.client.api(
+      "chat.postMessage",
+      [
+        ["channel", thread.channel],
+        ["thread_ts", thread.threadTs],
+        ["text", said],
+        ["blocks", JSON.stringify([block])],
+      ],
+      this.botToken,
+    );
+    const ts = text(posted?.ts);
+    if (ts === "") return;
+    this.stands.set(key, { ts, mine: null, block });
+    this.heard(thread.channel, thread.threadTs, ts);
+  }
+
+  private update(channel: string, ts: string, said: string, blocks: Json[]) {
+    return this.client.api(
+      "chat.update",
+      [
+        ["channel", channel],
+        ["ts", ts],
+        ["text", said],
+        ["blocks", JSON.stringify(blocks)],
+      ],
+      this.botToken,
+    );
+  }
+
+  /// It works again: where it stood is no longer so.
+  override working(thread: ThreadRef, messageTs: string | null, status: string, page?: string | null) {
+    super.working(thread, messageTs, status, page);
+    if (status !== "") this.standsAt(thread, null);
   }
 
   /// Sends a file's bytes to Slack (not yet shared anywhere): its file id and title.

@@ -69,6 +69,20 @@ export function answeredBlocks(text: string, who: string, said: string, lang: La
   return [markdownOf(text.trim() === "" ? [] : [text]), answered].filter((b) => b !== null);
 }
 
+/// Where a thread stands once its agent's turn ended (the line still.fail's chat shows at its end, and its row): done,
+/// or what it needs of a person; in small grey words under its last message (a context block), led as the app leads it.
+export type Stands = { kind: "done" | "need"; words: string | null };
+export function standsBlock(stands: Stands, lang: Lang): Json {
+  return { type: "context", elements: [{ type: "mrkdwn", text: escape(standsText(stands, lang)) }] };
+}
+export function standsText(stands: Stands, lang: Lang): string {
+  const words = stands.words?.trim() ?? "";
+  const [mark, key, name] = stands.kind === "done" ? ["✓", "station.slack.standsDone", "done"] : ["🔔", "station.slack.standsNeed", "need"];
+  return `${mark} ${words === "" ? tr(lang, `${key}Bare`) : tr(lang, key, { [name]: cut(words, STANDS_CHARS) })}`;
+}
+/// The most of its words the line carries: a context block's text holds 3,000 characters, escaped (& goes as &amp;).
+const STANDS_CHARS = 500;
+
 /// What a press of a card's send button answers: the option chosen (its label) or the words in the field (a text card
 /// posted before they went without one), "" when
 /// nothing was chosen or written. Null for any other action (choosing an option before sending it).

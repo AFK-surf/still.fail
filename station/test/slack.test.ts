@@ -294,6 +294,62 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("where a thread stands as its agent's turn ends: under the bot's last message, else a small message of its own; gone as it works again", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const blocks = (c: { params: Record<string, string> }) => JSON.parse(c.params.blocks!);
+    try {
+      await surface.start(quiet);
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      const thread = { channel: "C1", threadTs: "1.1" };
+      // The bot's message is the thread's newest: the line goes under it, no new message (nobody is told again).
+      const answer = await surface.post(thread, "讲完了", []);
+      surface.standsAt(thread, { kind: "done", words: "问题已答完 <x> & y" });
+      await fake.until("the line added", () => fake.calls("chat.update").length === 1);
+      const added = fake.calls("chat.update")[0]!;
+      assert.deepEqual([added.params.ts, added.params.text], [answer, "讲完了"]);
+      assert.deepEqual(blocks(added), [
+        { type: "markdown", text: "讲完了" },
+        { type: "context", elements: [{ type: "mrkdwn", text: "✓ 已完成：问题已答完 &lt;x&gt; &amp; y" }] },
+      ]);
+      assert.equal(fake.calls("chat.postMessage").length, 1);
+      // Its message changed (edit) keeps it.
+      assert.equal(await surface.edit(thread, answer, "讲完了。"), true);
+      assert.deepEqual(blocks(fake.calls("chat.update")[1]!).map((b: any) => b.type), ["markdown", "context"]);
+      // Someone writes and the agent works again: the message as it was.
+      fake.event("e1", { type: "message", channel: "C1", user: "U1", ts: "8000001.500000", thread_ts: "1.1", text: "我试试" });
+      await fake.until("acknowledged", () => fake.acks.some((a) => a.envelope_id === "e1"));
+      surface.working(thread, "8000001.500000", "正在思考…");
+      await fake.until("the line taken back", () => fake.calls("chat.update").length === 3);
+      assert.deepEqual(blocks(fake.calls("chat.update")[2]!), [{ type: "markdown", text: "讲完了。" }]);
+      // Done saying nothing: the person's message is the newest, so the line is a small message of its own.
+      surface.working(thread, null, "");
+      surface.standsAt(thread, { kind: "done", words: null });
+      await fake.until("said on its own", () => fake.calls("chat.postMessage").length === 2);
+      const own = fake.calls("chat.postMessage")[1]!;
+      assert.deepEqual([own.params.thread_ts, own.params.text, blocks(own)], ["1.1", "✓ 已完成", [{ type: "context", elements: [{ type: "mrkdwn", text: "✓ 已完成" }] }]]);
+      // The next turn's end says where it stands then: the line before goes (deleted), one line at most.
+      surface.standsAt(thread, { kind: "need", words: "要 Stripe 的测试 key" });
+      await fake.until("said again", () => fake.calls("chat.postMessage").length === 3);
+      assert.deepEqual(fake.calls("chat.delete").map((c) => [c.params.channel, c.params.ts]), [["C1", "8000002.000100"]]);
+      assert.equal(fake.calls("chat.postMessage")[2]!.params.text, "🔔 需要你处理：要 Stripe 的测试 key");
+      // Ended waiting: nothing is said, and what was goes.
+      surface.standsAt(thread, null);
+      await fake.until("taken back", () => fake.calls("chat.delete").length === 2);
+      // A question at the end says what it needs itself: no line under it.
+      await surface.post(thread, "选一个", [], { type: "options", options: [{ label: "合并" }] });
+      surface.standsAt(thread, { kind: "need", words: "选一个" });
+      surface.standsAt(thread, { kind: "done", words: "好了" });
+      await fake.until("done said", () => fake.calls("chat.update").length === 4);
+      assert.deepEqual(blocks(fake.calls("chat.update")[3]!).map((b: any) => b.type), ["markdown", "actions", "context"]);
+      assert.equal(fake.calls("chat.postMessage").length, 4, "nothing posted for the question");
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("a question's card: radio buttons with the recommended one last and chosen, details under them; long ones listed whole; a field", () => {
     const q = questionBlocks("选一个", { type: "options", options: [{ label: "合并", detail: "squash 合进 main", recommended: true }, { label: "先不", detail: "留着分支" }] }, "zh");
     assert.deepEqual(q[0], { type: "markdown", text: "选一个" });

@@ -83,6 +83,7 @@ export type Surface = {
   post(thread: { channel: string; threadTs: string }, text: string, files: unknown[]): Promise<string>;
   userName?(user: string): Promise<string | null>;
   working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string, page?: string | null): void;
+  standsAt?(thread: { channel: string; threadTs: string }, stands: { kind: "done" | "need"; words: string | null } | null): void;
   mention?(user: string): string;
   botName?(): string;
   botUserId?(): string;
@@ -246,6 +247,9 @@ export class SessionActor {
   private stoppedNote: string | null = null;
   private idleSince: number;
   private workingFor: Working[] = [];
+  /// The threads its last turn worked for (those it says where it stands in as a turn ends: one woken by a notice
+  /// works for none, and says it in its last ones).
+  private endedFor: Working[] = [];
   private tools: [string, string][] = [];
   private notices: string[] = [];
   /// The wait: its number (a newer wait voids an older one's timer), when it is over, and how long it was said to be.
@@ -805,6 +809,7 @@ export class SessionActor {
 
   /// The turn is over: its threads' status line goes.
   private doneWorking() {
+    if (this.workingFor.length > 0) this.endedFor = this.workingFor;
     this.say("");
     this.workingFor = [];
     this.tools = [];
@@ -1207,8 +1212,12 @@ export class SessionActor {
     // Told to whoever opened its chat: how the turn ended, when it ended in a state or did not get there.
     if (turn) {
       const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
+      const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
+      // Where it stands, said in its threads under their last message as its chat says it at its end: done, or what it
+      // needs (failed and stopped have their notice there already; waiting says nothing)
+      const stands = ended === "all_done" ? { kind: "done" as const, words } : ended === "need_human" ? { kind: "need" as const, words } : null;
+      for (const w of this.endedFor) this.deps.chat(w.connect)?.standsAt?.({ channel: w.channel, threadTs: w.threadTs }, stands);
       if (ended !== null) {
-        const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
         try {
           this.deps.settled?.(this.key, ended, words);
         } catch (error) {
