@@ -496,7 +496,7 @@ fn looks_apply(c : Ctx) -> Unit {
 /// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
 /// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
 fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{h_ime_inset()} \{copy_shown()} \{layout_reuse.val} \{c.epoch}"
+  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch}"
 }
 
 ///|

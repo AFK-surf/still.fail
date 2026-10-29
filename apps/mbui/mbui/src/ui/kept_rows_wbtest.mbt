@@ -784,3 +784,54 @@ test "a node more built before the page's boxes: they are laid out as before, ea
   t.frame()
   assert_true(commit_counts[0] - placed2 < 8, msg="laid anew: \{commit_counts[0] - placed2}")
 }
+
+///|
+test "the soft keyboard moving: rows that read nothing of it are not built again" {
+  let builds : Ref[Int] = { val: 0 }
+  let t = Tester::new(
+    fn(c) {
+      c.list("rows", 40, 50.0, fn(i) {
+        builds.val = builds.val + 1
+        c.box(h=Px(50.0), padx=10.0, fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=320.0,
+    h=420.0,
+    platform=2,
+  )
+  // (as a host runs it: no frame drawn whole after each to compare)
+  t.check_looks(false)
+  t.draw()
+  t.run_for(rows_still_ms)
+  // the keyboard coming up a step each frame, as a host says it while it moves (the window's size the test's: a host
+  // lays the app out above it); no row reads it
+  let steps = Ref(0)
+  frame_hook.val = Some(fn() {
+    if steps.val < 10 {
+      steps.val = steps.val + 1
+      t.set_ime_inset(steps.val.to_double() * 30.0)
+    }
+  })
+  // (each of the display's frames drawn, as a host draws them while the keyboard moves)
+  t.set_frame_period(t.period)
+  let before = builds.val
+  t.run_for(rows_still_ms * 4.0)
+  frame_hook.val = None
+  // (the test's own step builds its first frame whole, its rows with it: none after it, as the keyboard moves)
+  assert_eq(steps.val, 10)
+  assert_true(builds.val - before <= 9, msg="rows built as the keyboard moved: \{builds.val - before}")
+}
+
+///|
+test "the soft keyboard moving: what reads how far it reaches is built as it moves" {
+  let reach : Ref[Double] = { val: -1.0 }
+  let t = Tester::new(fn(c) { reach.val = c.ime_inset() }, w=320.0, h=420.0, platform=2)
+  t.draw()
+  t.set_ime_inset(120.0)
+  t.run_for(rows_still_ms)
+  assert_eq(reach.val, 120.0)
+  t.set_ime_inset(240.0)
+  t.run_for(rows_still_ms)
+  assert_eq(reach.val, 240.0)
+}
