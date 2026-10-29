@@ -6,15 +6,13 @@
 fn init {
   @ui.words_over_known([
     ("src/sfapp/composer_wbtest.mbt", 2),
-    ("src/sfapp/duo_wbtest.mbt", 7),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
     ("src/sfapp/preview_wbtest.mbt", 13),
-    ("src/sfapp/publish_wbtest.mbt", 3),
-    ("src/sfapp/screens_wbtest.mbt", 43),
+    ("src/sfapp/publish_wbtest.mbt", 1),
+    ("src/sfapp/screens_wbtest.mbt", 42),
     ("src/sfapp/stations_now_wbtest.mbt", 3),
     ("src/sfapp/tape.mbt", 1),
-    ("src/sfapp/tape_wbtest.mbt", 1),
-    ("src/sfapp/wide_publish_wbtest.mbt", 2),
+    ("src/sfapp/wide_publish_wbtest.mbt", 1),
     ("src/sfapp/wide_wbtest.mbt", 3),
   ])
 }

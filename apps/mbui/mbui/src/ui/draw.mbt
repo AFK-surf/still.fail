@@ -1357,6 +1357,38 @@ pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
+/// How far across what node `i` holds draws (from, to: the words, pictures and grounds in it, as laid out), where it is
+/// narrower than the node (a row as wide as its list, its words at one end): what goes over that part of it is over
+/// what it shows, the rest of it over nothing of it. (i's own x and width where it holds none.)
+pub fn Ctx::node_drawn_across(self : Ctx, i : Int) -> (Double, Double) {
+  let n0 = self.nodes[i]
+  let mut x0 = 1.0e9
+  let mut x1 = -1.0e9
+  let mut j = i + 1
+  while j < self.count {
+    // (what it holds made after it: its descendants, until a node that is none of them)
+    let mut q = self.nodes[j].parent
+    while q > i {
+      q = self.nodes[q].parent
+    }
+    if q != i {
+      break
+    }
+    let n = self.nodes[j]
+    if n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor || n.kind == kind_image || n.bg != 0L {
+      x0 = dmin(x0, n.x)
+      x1 = dmax(x1, n.x + n.fw)
+    }
+    j = j + 1
+  }
+  if x1 < x0 {
+    (n0.x, n0.x + n0.fw)
+  } else {
+    (x0, x1)
+  }
+}
+
+///|
 /// Node `i`'s corner as laid out (its radius, no more than half its height for a capsule's; the roundest of its
 /// corners, where they are each their own: node_radii).
 pub fn Ctx::node_radius(self : Ctx, i : Int) -> Double {
