@@ -102,7 +102,8 @@ function vaultAsk(v: J): J | null {
   const kind = trimmed(get(get(v, "save"), "kind"));
   if (kind !== null) {
     const username = trimmed(get(get(v, "save"), "username"));
-    out.save = { kind, ...(username !== null ? { username } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+    const filename = trimmed(get(get(v, "save"), "filename"));
+    out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
   }
   return out;
 }

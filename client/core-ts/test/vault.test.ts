@@ -819,6 +819,36 @@ test("the plain library: no security mode, items kept on the station as they are
   r.core.close();
 });
 
+test("a file kept: its bytes in base64 under its name; opened, shown as its text, or as binary and its size; too big, refused; one an agent asks for, picked on its card", async () => {
+  const r = await rig();
+  await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const b64 = (b: Uint8Array | string) => Buffer.from(b).toString("base64");
+  const yaml = "apiVersion: v1\nkind: Config\n";
+  const put = await r.ask("vault.putItem", { vault: "plain", plain: { kind: "file", name: "集群", fields: { content: b64(yaml), filename: "config" } }, listing: { name: "集群", kind: "file", modes: ["file"], hosts: [], env: "KUBECONFIG" } });
+  assert.deepEqual(r.st.plain.get(put.id).fields, { content: b64(yaml), filename: "config" });
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: "plain" });
+  assert.deepEqual(shown().items.map((i: any) => [i.kindText, i.agentText, i.lineText]), [["文件", "允许 agent 申请 · 文件", "文件 · KUBECONFIG"]]);
+  assert.deepEqual(shown().items[0].shut.map((f: any) => f.label), ["文件名", "内容"]);
+  const opened = await r.ask("vault.open", { item: put.id });
+  assert.deepEqual([opened.kindText, opened.shown], ["文件", [
+    { key: "filename", label: "文件名", value: "config", secret: false, mono: false },
+    { key: "content", label: "内容", value: yaml, secret: true, mono: true },
+  ]]);
+  const p12 = await r.ask("vault.putItem", { vault: "plain", plain: { kind: "file", name: "证书", fields: { content: b64(new Uint8Array(3000).fill(0x80)), filename: "a.p12" } } });
+  assert.deepEqual((await r.ask("vault.open", { item: p12.id })).shown[1], { key: "content", label: "内容", value: "二进制 · 3 KB", secret: false, mono: false });
+  await fails(r.ask("vault.putItem", { vault: "plain", plain: { kind: "file", name: "大", fields: { content: b64(new Uint8Array(64 * 1024 + 1)) } } }), "vault_file_too_big");
+  await fails(r.ask("vault.putItem", { vault: "plain", plain: { kind: "file", name: "坏", fields: { content: "not base64" } } }), "invalid_params");
+
+  // One an agent asks the person for: the file they picked, under the name the agent gave, else its own.
+  r.st.requests.push({ id: "r_f", ws: "ws", vault: "plain", item: "i_01JAKEEP00000000000000FILE", session: "ember:s", chat: "", mode: "file", reason: "go", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "file", name: "SA", modes: ["file"], hosts: [], typed: true } } as Request);
+  await fails(r.ask("vault.approve", { request: "r_f", typed: { secret: b64(new Uint8Array(64 * 1024 + 1)), filename: "sa.json" } }), "vault_file_too_big");
+  await r.ask("vault.approve", { request: "r_f", typed: { secret: b64("{}"), filename: "sa.json" } });
+  assert.deepEqual(r.st.plainSaves.at(-1), { request: "r_f", fields: { content: b64("{}"), filename: "sa.json" } });
+  r.core.close();
+});
+
 test("turning the lock off: the person's own secrets opened first, then written into the plain library once it is off", async () => {
   const r = await rig();
   r.putLock();

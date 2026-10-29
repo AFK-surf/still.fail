@@ -28,4 +28,7 @@ export const dot = style({
 /** What the person types in for a secret theirs to type (VaultApproval.tsx): its fields, 8 apart, the card's width. */
 export const typed = style({ display: "grid", gap: "8px", minWidth: "0" });
 /** A private key's lines, in the code's letters. */
+/** A file to pick: its name and size, then the button that picks it. */
+export const typedFile = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0" });
+export const typedFileName = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textBody });
 export const typedKey = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, resize: "vertical" });

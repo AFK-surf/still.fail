@@ -306,9 +306,11 @@
   "core-views.vault.kind.token": "Token",
   "core-views.vault.kind.ssh_key": "SSH key",
   "core-views.vault.kind.login": "Login",
+  "core-views.vault.kind.file": "File",
   "core-views.vault.mode.proxy": "Proxy",
   "core-views.vault.mode.env": "Env variable",
   "core-views.vault.mode.ssh": "ssh-agent",
+  "core-views.vault.mode.file": "File",
   "core-views.vault.only_to": "only to {hosts}",
   "core-views.vault.private": "Only for you",
   "core-views.vault.agent_may": "Agents may ask",
@@ -333,6 +335,9 @@
   "core-views.vault.field.password": "Password",
   "core-views.vault.field.totp": "TOTP secret",
   "core-views.vault.field.value": "Value",
+  "core-views.vault.field.filename": "File name",
+  "core-views.vault.field.content": "Content",
+  "core-views.vault.binary": "Binary · {size}",
   "core-views.present.profile.models": {
     "one": "{enabled}/1 model on",
     "other": "{enabled}/{n} models on"

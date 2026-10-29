@@ -7,7 +7,7 @@
 // the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { ChevronDown, ChevronRight, ChevronUp, Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
+import { ChevronDown, ChevronRight, ChevronUp, Copy, Devices, Eye, FileText, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
 import { BackLink, Button, Confirm, Dialog, Field, IconButton, Menu, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
@@ -19,7 +19,7 @@ import { stationBase } from "../station.tsx";
 import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
-  KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
+  KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, itemPath, lastsChoice, lastsName, fileSize, formOf, formProblem, kindName, masked, modeName, modesOf, pickInto, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { sampleVaultItems, sampleVaults } from "../samples.ts";
@@ -29,7 +29,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Vault.css.ts";
 
-const KIND_ICON = { token: Key, ssh_key: Server, login: User } as const;
+const KIND_ICON = { token: Key, ssh_key: Server, login: User, file: FileText } as const;
 
 export function KindIcon({ kind, size = 16 }: { kind: string | undefined; size?: number }) {
   const Icon = KIND_ICON[kind as Kind] ?? Key;
@@ -571,6 +571,7 @@ export function Secret({ label, value, secret, mono, revealed = false }: { label
 export function Editor({ workspace, vault, first, id, plain = false, kinds = true, onClose }: { workspace: string; vault: string; first: Form; id: string | null; plain?: boolean; kinds?: boolean; onClose(): void }) {
   const [f, change] = useForm(() => first);
   const run = useVaultCall();
+  const toast = useToast();
   const [deleting, setDeleting] = useState(false);
   const saving = useDoing("vault.putItem", { workspace, vault });
   const removing = useDoing("vault.deleteItem", { workspace, vault });
@@ -601,7 +602,7 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
         </>}>
         {plain && <p className={css.warn}>{t("web-pages.vault.risk.editor")}</p>}
         {!id && kinds && <div><Segmented label={t("web-pages.vault.editor.kind")} value={f.kind} onChange={(kind) => change({ kind })} options={KINDS.map((k) => ({ value: k, label: kindName(k) }))} /></div>}
-        {input("name", t("web-pages.vault.editor.name"), { placeholder: t("web-pages.vault.editor.namePlaceholder") })}
+        {input("name", t("web-pages.vault.editor.name"), { placeholder: t(f.kind === "file" ? "web-pages.vault.editor.fileNamePlaceholder" : "web-pages.vault.editor.namePlaceholder") })}
         {f.kind === "token" && input("value", t("web-pages.vault.editor.value"), { secret: true, mono: true })}
         {f.kind === "ssh_key" && <>
           {input("privateKey", t("web-pages.vault.editor.privateKey"), { area: true, placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----" })}
@@ -612,6 +613,14 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
           {input("password", t("web-pages.vault.editor.password"), { secret: true, mono: true })}
           {input("totp", t("web-pages.vault.editor.totp"), { secret: true, mono: true })}
         </>}
+        {f.kind === "file" && (
+          <Field label={t("web-pages.vault.editor.file")}>
+            <div className={css.fileLine}>
+              <Button variant="secondary" onClick={() => void pickInto(change, toast)}>{t("web-pages.vault.editor.pickFile")}</Button>
+              {f.fileContent && <span className={css.fileName}>{f.fileName || t("web-pages.vault.kind.file")} · {fileSize(f.fileContent)}</span>}
+            </div>
+          </Field>
+        )}
         <div className={css.agentBox}>
           <SwitchRow title={t("web-pages.vault.editor.agent")} description={t("web-pages.vault.editor.agentNote")} checked={f.agent} onChange={(agent) => change({ agent })} />
           {f.agent && <>
@@ -620,9 +629,9 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
                 ? <div><Segmented label={t("web-pages.vault.editor.how")} value={f.mode} onChange={(mode) => change({ mode: mode as Mode })} options={modes.map((m) => ({ value: m, label: modeName(m) }))} /></div>
                 : <span>{modeName(modes[0]!)}</span>}
             </Field>
-            <p className={css.note}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</p>
+            <p className={css.note}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.kind === "file" ? t("web-pages.vault.editor.fileNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</p>
             {f.kind !== "ssh_key" && f.mode === "proxy" && input("hosts", t("web-pages.vault.editor.hosts"), { placeholder: t("web-pages.vault.editor.hostsPlaceholder"), error: problem === "hosts" && f.hosts !== "" ? t("web-pages.vault.editor.hostsNeeded") : undefined })}
-            {f.kind !== "ssh_key" && input("env", t("web-pages.vault.editor.env"), { mono: true, placeholder: t("web-pages.vault.editor.envPlaceholder") })}
+            {f.kind !== "ssh_key" && input("env", t("web-pages.vault.editor.env"), { mono: true, placeholder: t(f.kind === "file" ? "web-pages.vault.editor.fileEnvPlaceholder" : "web-pages.vault.editor.envPlaceholder") })}
             <Field label={t("web-pages.vault.editor.lasts")}>
               <div><Segmented label={t("web-pages.vault.editor.lasts")} value={f.lasts} onChange={(lasts) => change({ lasts })} options={LASTS.map((l) => ({ value: l, label: lastsChoice(l) }))} /></div>
             </Field>

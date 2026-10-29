@@ -10,7 +10,47 @@ fn vault_fields(kind : String) -> Array[String] {
     "token" => ["value"]
     "ssh_key" => ["private_key", "public_key"]
     "login" => ["username", "password", "totp"]
+    "file" => ["content", "filename"]
     _ => []
+  }
+}
+
+///|
+/// The most a file kept may be, its bytes (the core's and the station's).
+pub let file_most : Int = 64 * 1024
+
+///|
+/// A file picked to be kept, once the system's picker (`pick`) answered: `got` its bytes in base64 and its name; one
+/// bigger than a file kept may be said so, and not taken. Whether it answered (the pick is then done with).
+pub fn take_picked_file(core : Core, pick : @ui.Pick, got : (String, String) -> Unit) -> Bool {
+  match pick.files() {
+    None => false
+    Some(files) => {
+      match files.get(0) {
+        Some(f) if f.bytes.length() > file_most || f.held != 0 => (core.say)(tr("android-settings.vault.fileTooBig"))
+        Some(f) => got(@codec.base64(f.bytes), f.name)
+        None => ()
+      }
+      true
+    }
+  }
+}
+
+///|
+/// A file's size in words, from its base64: 820 B, 12 KB.
+pub fn file_size(content : String) -> String {
+  let pad = if content.has_suffix("==") {
+    2
+  } else if content.has_suffix("=") {
+    1
+  } else {
+    0
+  }
+  let n = content.length() * 3 / 4 - pad
+  if n < 1024 {
+    "\{n} B"
+  } else {
+    "\{(n + 512) / 1024} KB"
   }
 }
 
@@ -166,6 +206,10 @@ pub(all) struct VaultEditing {
   /// the fields shown in the clear (by field)
   reveal : Map[String, Bool]
   serial : Int
+  /// a file's: its bytes in base64 and its name, as picked (or as it was); the system's picker while it asks
+  mut file_content : String
+  mut file_name : String
+  mut file_pick : @ui.Pick?
 }
 
 ///|
@@ -190,7 +234,7 @@ pub fn vault_put_params(
   let fields : Array[(String, Json)] = []
   for f in vault_fields(k) {
     // a private key as pasted (its last line break is part of it); the rest without the spaces around them
-    let v = if f == "private_key" { words.get(f).unwrap_or("") } else { got(f) }
+    let v = if f == "private_key" || f == "content" { words.get(f).unwrap_or("") } else { got(f) }
     if v.trim(chars=" \n") != "" {
       fields.push((f, str(v)))
     }
@@ -208,7 +252,11 @@ pub fn vault_put_params(
     None => ()
   }
   if agent {
-    let modes = if k == "ssh_key" { ["ssh"] } else { [mode] }
+    let modes = match k {
+      "ssh_key" => ["ssh"]
+      "file" => ["file"]
+      _ => [mode]
+    }
     let listing = [
       ("name", str(name)),
       ("kind", str(k)),
@@ -248,13 +296,14 @@ pub fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode
   let filled_in = match k {
     "token" => got("value") != ""
     "ssh_key" => got("private_key") != ""
+    "file" => got("content") != ""
     _ => got("username") != "" || got("password") != ""
   }
   if got("name") == "" {
     "name"
   } else if !filled_in {
     "fields"
-  } else if agent && mode == "proxy" && k != "ssh_key" && vault_hosts(words).length() == 0 {
+  } else if agent && mode == "proxy" && k != "ssh_key" && k != "file" && vault_hosts(words).length() == 0 {
     "hosts"
   } else {
     ""

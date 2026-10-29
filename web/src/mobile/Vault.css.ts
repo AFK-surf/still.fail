@@ -36,6 +36,8 @@ export const mMark = style([mIcon, { alignSelf: "flex-start", marginTop: "3px" }
 
 /** A sheet's body: a column of labels and fields, its buttons last. */
 export const mSheetBody = style({ display: "flex", flexDirection: "column", gap: "8px", padding: "4px 20px 24px", overflowY: "auto", flex: "1", minHeight: "0" });
+/** A file in the editor: its name and size, over the button that picks another. */
+export const mFileName = style({ fontSize: vars.textBody, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const mLabel = style({ fontSize: vars.textMeta, color: "var(--m-muted)", fontWeight: "500", marginTop: "4px" });
 export const mArea = style({ resize: "vertical", lineHeight: "1.5", fontSize: vars.textMeta });
 export const mTools = style({ display: "flex", alignItems: "center", gap: "8px", paddingTop: "8px" });

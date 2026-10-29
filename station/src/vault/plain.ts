@@ -33,10 +33,24 @@ CREATE TABLE IF NOT EXISTS vault_plain_lasts (
 );
 `;
 
-export const KINDS: Kind[] = ["token", "ssh_key", "login"];
-export const MODES: Mode[] = ["proxy", "ssh", "env"];
-/// The fields each kind of item holds.
-export const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"] };
+export const KINDS: Kind[] = ["token", "ssh_key", "login", "file"];
+export const MODES: Mode[] = ["proxy", "ssh", "env", "file"];
+/// The fields each kind of item holds: a file's `content` is its bytes in base64, `filename` what it is called.
+export const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"], file: ["content", "filename"] };
+/// The most a file kept in the vault may be (its bytes): one credential's file (a kubeconfig, a service account's key,
+/// a certificate), not a store of files.
+export const FILE_MOST = 64 * 1024;
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/// Why a file's fields are not one (its content base64, at most FILE_MOST, its name a file's), or null.
+export function fileOk(fields: Record<string, string>): string | null {
+  const content = fields.content ?? "";
+  if (content.length % 4 !== 0 || !BASE64.test(content)) return "a file's content is its bytes in base64";
+  if (Buffer.byteLength(content, "base64") > FILE_MOST) return `a file is at most ${FILE_MOST / 1024} KB`;
+  const name = fields.filename;
+  if (name !== undefined && (name.length > 200 || /[/\\\0]/.test(name) || name === "." || name === "..")) return "a file's name is a name, not a path";
+  return null;
+}
 const isStr = (v: unknown, max = 100_000): v is string => typeof v === "string" && v.length <= max;
 
 /// An item as the pages are told it: all but its fields.
@@ -53,15 +67,20 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
   if (prev?.deleted) return "the item is deleted";
   if (!Number.isSafeInteger(next.at)) return "at is unix seconds";
   if (next.deleted === true) return null;
-  if (!KINDS.includes(next.kind)) return "kind is token, ssh_key or login";
+  if (!KINDS.includes(next.kind)) return "kind is token, ssh_key, login or file";
   if (!isStr(next.name, 200) || next.name.trim() === "") return "an item has a name";
   if (!isStr(next.notes, 10_000)) return "notes are text";
   const fields = next.fields;
   if (fields === null || typeof fields !== "object" || Object.entries(fields).some(([k, v]) => !FIELDS[next.kind].includes(k) || !isStr(v))) return `a ${next.kind}'s fields are ${FIELDS[next.kind].join(", ")}`;
+  if (next.kind === "file") {
+    const why = fileOk(fields);
+    if (why !== null) return why;
+  }
   const l = next.listing;
   if (l !== undefined) {
     if (l === null || typeof l !== "object" || !isStr(l.name, 200) || l.kind !== next.kind) return "a listing names the item and its kind";
-    if (!Array.isArray(l.modes) || l.modes.length === 0 || !l.modes.every((m) => MODES.includes(m))) return "a listing's modes are proxy, ssh or env";
+    if (!Array.isArray(l.modes) || l.modes.length === 0 || !l.modes.every((m) => MODES.includes(m))) return "a listing's modes are proxy, ssh, env or file";
+    if (l.modes.includes("file") !== (next.kind === "file") || (next.kind === "file" && l.modes.length > 1)) return "a file is given as a file, and only a file is";
     if (!Array.isArray(l.hosts) || !l.hosts.every((h) => isStr(h, 253) && /^(\*\.)?[a-z0-9.-]+$/.test(h))) return "a listing's hosts are host names";
     if (l.modes.includes("proxy") && l.hosts.length === 0) return "given through the proxy, it names its hosts";
     if (l.env !== undefined && !(isStr(l.env, 100) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(l.env))) return "env is a variable's name";

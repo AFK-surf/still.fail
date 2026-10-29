@@ -5,13 +5,14 @@
 ///|
 /// The kinds of item, in the editor's order (Vault.kt KINDS).
 // kept across runs: a table, never written
-pub let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
+pub let vault_kinds : Array[String] = ["token", "ssh_key", "login", "file"]
 
 ///|
 pub fn kind_icon(kind : String) -> String {
   match kind {
     "ssh_key" => "server"
     "login" => "user"
+    "file" => "file-text"
     _ => "key"
   }
 }
@@ -19,7 +20,7 @@ pub fn kind_icon(kind : String) -> String {
 ///|
 pub fn mode_name(mode : String) -> String {
   match mode {
-    "proxy" | "env" | "ssh" => tr("android-settings.vault.mode." + mode)
+    "proxy" | "env" | "ssh" | "file" => tr("android-settings.vault.mode." + mode)
     m => m
   }
 }

@@ -25,8 +25,8 @@ export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string;
   listing?: Listing; at: number; sig: Sig;
 };
-export type Kind = "token" | "ssh_key" | "login";
-export type Mode = "proxy" | "ssh" | "env";
+export type Kind = "token" | "ssh_key" | "login" | "file";
+export type Mode = "proxy" | "ssh" | "env" | "file";
 /// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
@@ -51,9 +51,9 @@ export type Request = {
   runOn?: { id: string; name: string };
 };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
-/// SSH key's public half), said on its card. `typed`: the secret is none the agent holds, but what the person types in
-/// on the card (nothing of it here until then, nothing sealed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; typed?: true };
+/// SSH key's public half, a file's name), said on its card. `typed`: the secret is none the agent holds, but what the
+/// person types in (a file: picks) on the card (nothing of it here until then, nothing sealed).
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
 export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number;
@@ -196,8 +196,8 @@ export const VAULT_ID = new RegExp(`^v_${ULID}$`);
 export const ITEM_ID = new RegExp(`^i_${ULID}$`);
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
 const ENV = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const KINDS: Kind[] = ["token", "ssh_key", "login"];
-const MODES: Mode[] = ["proxy", "ssh", "env"];
+const KINDS: Kind[] = ["token", "ssh_key", "login", "file"];
+const MODES: Mode[] = ["proxy", "ssh", "env", "file"];
 const int = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
 const text = (v: unknown, max = 200): v is string => typeof v === "string" && v.length <= max;
 const b64 = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max && B64URL.test(v);
@@ -262,7 +262,7 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy =
 /// Why a listing is not one, or null.
 function listingOk(l: any): string | null {
   if (l === null || typeof l !== "object" || !text(l.name) || !KINDS.includes(l.kind)) return "a listing is {name, kind, modes, hosts, env?}";
-  if (!Array.isArray(l.modes) || !l.modes.every((m: unknown) => MODES.includes(m as Mode)) || !unique(l.modes)) return "modes are proxy, ssh or env";
+  if (!Array.isArray(l.modes) || !l.modes.every((m: unknown) => MODES.includes(m as Mode)) || !unique(l.modes)) return "modes are proxy, ssh, env or file";
   if (!Array.isArray(l.hosts) || l.hosts.length > 64 || !l.hosts.every((h: unknown) => text(h, 253) && HOST.test(h as string))) return "hosts are domain names (*.example.com allowed)";
   if (l.env !== undefined && !(text(l.env, 100) && ENV.test(l.env))) return "env is a variable name";
   if (l.lasts !== undefined && !SCOPES.includes(l.lasts)) return "lasts is once, hour or chat";

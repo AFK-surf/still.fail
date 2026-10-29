@@ -23,8 +23,8 @@ export type Vault = {
   /// Deleted by its owner (`vault.delete`): sealed to no one under a new epoch, its items gone; it stays deleted.
   deleted?: true;
 };
-export type Kind = "token" | "ssh_key" | "login";
-export type Mode = "proxy" | "ssh" | "env";
+export type Kind = "token" | "ssh_key" | "login" | "file";
+export type Mode = "proxy" | "ssh" | "env" | "file";
 /// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
@@ -38,7 +38,7 @@ export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string; listing?: Listing; at: number; sig: Sig;
 };
 /// What an item holds, sealed: `fields` by kind (token `{value}`, ssh_key `{private_key, public_key}`, login
-/// `{username, password, totp?}`).
+/// `{username, password, totp?}`, file `{content (its bytes in base64), filename?}`).
 export type Plain = { kind: Kind; name: string; fields: Record<string, string>; domains: string[]; notes: string };
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
@@ -52,7 +52,7 @@ export type Request = {
   sealed?: { device: string; box: string; secret: string }[];
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; typed?: true };
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
 export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
 

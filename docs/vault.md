@@ -72,7 +72,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 
 - **库（vault）**：`{id, owner, name, members[], keys[], recovery, epoch}`。`members` 是能用这个库的成员（锁里的 `sub`）；`keys` 给这些成员的每台 app 设备各包一份。每次加人、删人、删设备，`epoch` 加一。
 - **库元数据也要签**：每一版都由库 owner 的一台锁里设备签名，station 不认没签名的，客户端也不信，否则 station 被攻破后就能把自己塞进 `members`。owner 定了不变，所以验证不用翻历史。这一期只有 owner 管成员；成员自己加新设备，由 owner 的任一台设备在确认锁的同时补签。
-- **条目（item）**：`{id, vault, version, epoch, ct, listing?}`。密文里是 `{kind, name, fields, domains, notes}`。`kind` 先只有 `token`、`ssh_key`、`login`。名字在密文里，station 不知道存的是什么；只有打开「给 agent 用」的条目带一个明文的 `listing`（名字、允许的方式和域名），agent 要靠它知道有什么能申请。`listing` 由写入的设备签名，station 改不了。
+- **条目（item）**：`{id, vault, version, epoch, ct, listing?}`。密文里是 `{kind, name, fields, domains, notes}`。`kind` 有 `token`、`ssh_key`、`login`、`file`（见「文件」）。名字在密文里，station 不知道存的是什么；只有打开「给 agent 用」的条目带一个明文的 `listing`（名字、允许的方式和域名），agent 要靠它知道有什么能申请。`listing` 由写入的设备签名，station 改不了。
 - **删除库**（2026-10-26 用户定，chat EMBER/1792949811.536000）：owner 在「密钥」页「库」一栏某个库的 ⋯ 里删除，先确认（库里有条目时再过一次系统验证）。core 签一个新版本：`deleted: true`、`epoch` 加一、`keys: []`、不带 `recovery`，谁都解不开了，`vault.delete {vault}`。station 照样存这一版（旧 station 也收：它只是又一个 seq+1 的版本），新 station 存它时把这个库的条目一起删掉、不再收这个库的条目；不删这一版本身，这样还拿着旧版本的 station 会被 core 补上这一版，而不是把旧版本补回来。新 station 不收把已删除的库改回来的版本。core 和各页面不再显示它，`spread` 不再搬它的条目；它的条目 epoch 对不上，旧 station 也不会再列给 agent。已批准的授权照样到期才失效（和删条目一样）。
 - **移除**：删人或删设备之后，生成新的库钥匙，`epoch` 加一。之后新写的条目都用新钥匙加密；旧条目下次被打开时由那台设备顺手重新加密（被删的人以前看过的值，本来就该去各服务那边换掉，界面上会提示）。
 
@@ -114,6 +114,7 @@ sequenceDiagram
 | 代理（默认） | `secret_run {grant, command: "gh pr list"}`：只给这一个命令设 `HTTPS_PROXY`（keeper 的本机代理，带这次授权的代理口令）和信任 keeper CA 的变量（`NODE_EXTRA_CA_CERTS`、`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`、`GIT_SSL_CAINFO`、`CURL_CA_BUNDLE`），`GH_TOKEN` 的值是占位符 `stillfail-secret:<授权号>`。请求发往条目允许的域名时，代理把请求头里的占位符换成原值；占位符发往别的域名就拒绝。不在 agent 的全局环境里设代理：keeper 出问题不能连累 agent 自己的 API 请求 | 看不到 | API key、Bearer token、GitHub token（`gh` 走 HTTPS） |
 | ssh-agent | `secret_run {grant, command: "git push"}`：给这个命令一个 keeper 的 `SSH_AUTH_SOCK`，只列出这次授权的那把钥匙，每次签名检查授权 | 看不到，私钥不离开 keeper | git over ssh、登其他机器 |
 | 环境变量 | `secret_run {grant, command}`：station 用这个值作为环境变量启动这一个进程，stdout/stderr 经过 station 返回给 agent，原值和它的 base64、URL 编码写法逐字换成 `[已隐藏]` | 子进程看得到；agent 只能从输出里拿到，而输出已经遮掉了 | 只认环境变量、不走 HTTP 的工具（数据库客户端之类） |
+| 文件 | `secret_run {grant, command}`：station 把文件写进一个只有本用户能读的临时目录（目录 0700、文件 0600，用条目的文件名），路径放进 `STILLFAIL_SECRET` 和条目的变量（`KUBECONFIG`），命令结束就删掉；输出里文件的全文和它的 base64 换成 `[已隐藏]` | 子进程看得到，和环境变量一样 | 只认文件路径的工具：kubeconfig、服务账号 JSON、证书 |
 
 - 环境变量方式的输出遮挡是按**确切的值**遮，比 `redact.ts` 按长相猜靠谱得多。但它防不住命令自己把值发出去，所以界面上把这一档标成「agent 能拿到」，条目默认不开这一档。
 - 代理只拦 HTTPS，并且只换占位符：agent 发出的其他请求原样通过，不影响它干别的事。
@@ -121,6 +122,16 @@ sequenceDiagram
 ### 记录
 
 每次申请、批准、拒绝、使用（时间、chat、方式、目标域名或命令，不含值）都写进 station 的 `vault_audit`，并作为一条系统消息显示在那个 chat 里。在库的页面能按条目查。记录按库同步给成员的设备（第一期只存在 station 上，同步下来放到界面那一步做）。
+
+## 文件（2026-10-29）
+
+chat EMBER/1793263359.091000（「我们密钥库缺一个文件类型的密钥」）。有的凭据是整份文件：kubeconfig、GCP 服务账号的 JSON key、`.p12` 证书、`.env`。
+
+- **条目**：`kind: file`，字段 `content`（文件的字节，标准 base64，最大 64 KB 字节）和 `filename`（不能带路径）。文本、二进制都存原字节。加锁、不加锁的库一样存；station（`plain.ts fileOk`）和 core（`views/vault.ts fileProblem`）都查大小和格式。
+- **给 agent**：只有一种方式 `file`（listing 的 `modes` 只能是 `["file"]`，别的类型也不能用 `file`），见上表。条目的 `env` 是放路径的变量名。
+- **存入**：`secret_save {kind: "file", path}`（`path` 等于 `command: cat -- <path>`，`station` 时在那台读），`filename` 默认是路径的文件名；`command` 时取命令输出的原字节（`capture` 的 `raw`；旧 station 没有，回「先更新那台」）；`value` 当文本存。都不给就是人来选：卡片上一个「选择文件」按钮，批准时 `vault.approve {request, typed: {secret: <base64>, filename}}`，agent 给了 `filename` 就用 agent 的。
+- **界面**：编辑器里「文件」一类，选文件后显示「文件名 · 大小」和「更换文件」；条目页显示文件名，内容是 UTF-8 文本时作为可显示/复制的秘密，否则显示「二进制 · 大小」。
+- **兼容**：旧 station 不认 `file`（listing 校验不过，副本补不上；明文库 `PUT` 被拒），旧 core 显示时类型为空。旧 station 收到 `vault.run` 的 `mode: file` 会拒绝，不会把 base64 当环境变量用。
 
 ## agent 存入（2026-10-24 用户定）
 
@@ -231,7 +242,8 @@ Item = {v: 1, ws, vault, id: "i_<ULID>", version, epoch, deleted?: true,
         at, sig}
 附加数据 = "stillfail-vault-item/1\0<ws>\0<vault>\0<id>\0<version>\0<epoch>"
 明文 = {kind: "token"|"ssh_key"|"login", name, fields: {…}, domains: [], notes}
-       token: {value}; ssh_key: {private_key(OpenSSH PEM), public_key}; login: {username, password, totp?}
+       token: {value}; ssh_key: {private_key(OpenSSH PEM), public_key}; login: {username, password, totp?};
+       file: {content(文件的字节，标准 base64), filename?}
 ```
 
 - 第一版 `version` 是 0。写入时 `epoch` 必须等于库现在的 `epoch`；删除那一版的 `epoch` 不大于它就行。删掉的条目不能再写。

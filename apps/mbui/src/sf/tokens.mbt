@@ -1806,6 +1806,10 @@ pub let grow : @ui.Len = Grow(1.0)
 pub let line_left : @ui.Size = Fill(1.0)
 
 ///|
+/// A card as wide as what holds it (card's `fill`): one whose words change as it is answered, its width not with them.
+pub let card_across : @ui.Size = Fill(1.0)
+
+///|
 /// A visualization in a message (Android ui/Viz.kt, chat/VizFiles.kt): its place while it comes (120 high), the ways
 /// under it (22 boxes); a whole page's corners (Smooth 20, the web's card) on its paper (#F6F2EA, dark #26272B); the
 /// full screen's name 18 in (Viz.kt VizFull).
@@ -2015,6 +2019,12 @@ pub let login_card_most : @ui.Len = Fixed(560.0)
 /// 560px): a Cut box's max in a column).
 // kept across runs: a value (no field of it changes)
 pub let ask_card_room : @ui.Style = @ui.css("w=Cut min_w=Within(320) max_w=Fixed(560)")
+
+///|
+/// The same as wide as it may be whatever it says (560, never wider than the room): one whose words change as it is
+/// answered (a file picked on it) and is not to change its width with them.
+// kept across runs: a value (no field of it changes)
+pub let ask_card_room_most : @ui.Style = @ui.css("w=Cut min_w=Within(560) max_w=Fixed(560)")
 
 ///|
 pub let login_card_corner : @ui.Radius = rounded(card_corner)

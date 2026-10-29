@@ -6,19 +6,22 @@
 // allowed a choice beside them that starts at the longest the item is given for (`vault.approve`, `vault.deny`). Only
 // the viewer's own request can be answered, and only in an app keeping keys; elsewhere a line says whose it is or where
 // it is approved. A secret to keep while the vault is not on on this device: 开启密钥库, to the vault's page. One the
-// person types in (the agent has none): its field over the answer (a login's account too, where the agent named none),
-// 存入 once something is in it, Enter as 存入; what was typed goes only with `vault.approve`, and is let go once it went.
+// person types in (the agent has none): its field over the answer (a login's account too, where the agent named none; a
+// file, the button that picks it, its name and size once picked), 存入 once something is in it, Enter as 存入; what was
+// typed goes only with `vault.approve`, and is let go once it went.
 
 ///|
 /// What a request's card says (VaultAsk.tsx Asked): the item's name, how it would be given (`mode`), the command it is
-/// for; one to keep a secret, what it is (`save_kind`: login, token, ssh_key), its account, and whether the person
-/// types it in (`typed`); another station of the workspace its commands run on, by name (empty: the chat's).
+/// for; one to keep a secret, what it is (`save_kind`: login, token, ssh_key, file), its account (a file: its name),
+/// and whether the person types it in (`typed`; a file: picks it); another station of the workspace its commands run
+/// on, by name (empty: the chat's).
 pub(all) struct Asked {
   name : String
   mode : String
   command : String
   save_kind : String
   username : String
+  filename : String
   typed : Bool
   station : String
 }
@@ -56,6 +59,13 @@ fn Asked::typed_in(self : Asked) -> Typed? {
 let vault_menu : Ref[String] = Ref("")
 
 ///|
+/// Whether what is asked is a file the person picks: its card fills its column, as wide before the file is picked as
+/// after.
+fn Asked::picks_file(self : Asked) -> Bool {
+  self.typed && self.save_kind == "file"
+}
+
+///|
 /// The length of use picked for each request; put back by `reset`.
 let vault_picked : Map[String, String] = {}
 
@@ -70,11 +80,21 @@ let vault_pending : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 let vault_typed : @sf.LiveMap[String, @ui.Field] = @sf.LiveMap::new()
 
 ///|
+/// The file picked for each request whose secret is a file the person picks: its bytes in base64 and its name, kept
+/// only till it went with `vault.approve`; and the system's picker while it asks. Put back by `reset`.
+let vault_files : @sf.LiveMap[String, (String, String)] = @sf.LiveMap::new()
+
+///|
+let vault_file_picks : Map[String, @ui.Pick] = {}
+
+///|
 fn vault_ask_reset() -> Unit {
   vault_menu.val = ""
   vault_picked.clear()
   vault_pending.clear()
   vault_typed.clear()
+  vault_files.clear()
+  vault_file_picks.clear()
 }
 
 ///|
@@ -174,7 +194,7 @@ pub fn vault_ask(
   said? : Array[String] = [],
 ) -> Unit {
   let answer = topic_answer(core, ws, request, mine, who)
-  @sf.card(c, fn() {
+  @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     for line in said {
       if line != "" {
@@ -193,7 +213,7 @@ pub fn vault_ask(
 /// Request `request` in workspace `ws` as its card where it is asked (a chat's, the 奏 page's): what is asked, and its
 /// answer at the foot as the card says it (`answer`: card_answer), whole with its message.
 pub fn vault_card(c : @ui.Ctx, core : Core, ws : String, request : String, ask : Asked, answer : Answer) -> Unit {
-  @sf.card(c, fn() {
+  @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), foot=answer is (Approve(_) | SetUp))
   })
@@ -222,14 +242,15 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
       fill("android-settings.vault.ask.use", [("name", ask.name)])
     }
     let runs = [@ui.span(title, weight=600, color=t.p.text)]
-    if save && ask.username != "" {
-      runs.push(@ui.span("  " + ask.username, color=t.p.muted))
+    let sub = if ask.username != "" { ask.username } else { ask.filename }
+    if save && sub != "" {
+      runs.push(@ui.span("  " + sub, color=t.p.muted))
     }
     c.rich(runs, style=ask_title) |> ignore
     if !save && ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=ask_command) |> ignore
     }
-    let risky = !save && ask.mode == "env"
+    let risky = !save && (ask.mode == "env" || ask.mode == "file")
     let elsewhere = !save && ask.station != ""
     if risky || elsewhere {
       let runs : Array[@ui.Run] = []
@@ -382,6 +403,7 @@ pub fn vault_foot(
         Ok(_) => {
           vault_typed.remove(request + "/secret")
           vault_typed.remove(request + "/username")
+          vault_files.remove(request)
         }
       }
     })
@@ -390,16 +412,48 @@ pub fn vault_foot(
   // its ends where theirs are on a page card (last on it: out in its foot corners)
   let mut secret = ""
   let mut username = ""
+  let mut filename = ""
   let mut entered = false
   match (answer, typed) {
     (Approve(_), Some(ty)) =>
+      // (reaching out to the foot's corners as the buttons do: a field's ends, a file's button, where theirs are)
       c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
         if ty.kind == "login" && ty.username == "" {
           let words = tr("android-settings.vault.ask.typed.username")
           username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
         }
         let words = tr("android-settings.vault.ask.typed." + ty.kind)
-        if ty.kind == "ssh_key" {
+        if ty.kind == "file" {
+          // the system's picker answered: the file it gave (one too big said so, and none kept)
+          match vault_file_picks.get(request) {
+            Some(p) =>
+              if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
+                vault_file_picks.remove(request)
+              }
+            None => ()
+          }
+          // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
+          // beside it, the row no higher)
+          c.box(style=ask_file, fn() {
+            if @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under) {
+              match @ui.pick(Files) {
+                Some(p) => vault_file_picks[request] = p
+                None => ()
+              }
+            }
+            match vault_files.get(request) {
+              Some((content, name)) => {
+                secret = content
+                filename = name
+                let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
+                c.rich([@ui.span(name + " · " + file_size(content), color=@sf.alpha(@sf.theme().p.text, shown))], style=ask_file_name)
+                |> ignore
+              }
+              None => ()
+            }
+          })
+          |> ignore
+        } else if ty.kind == "ssh_key" {
           secret = @sf.textarea(c, "vault/" + request + "/secret", rows=4, placeholder=words, solid=true, field=typed_field(request, "/secret"))
         } else {
           let f = @sf.input(c, "vault/" + request + "/secret", placeholder=words, secret=true, disabled=under, solid=true, field=typed_field(request, "/secret"))
@@ -417,6 +471,9 @@ pub fn vault_foot(
       let words : Array[(String, Json)] = [("secret", str(secret))]
       if username.trim(chars=" ").to_string() != "" {
         words.push(("username", str(username)))
+      }
+      if filename != "" {
+        words.push(("filename", str(filename)))
       }
       Some(obj(words))
     }
@@ -532,6 +589,15 @@ let ask_note : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color
 /// What the person types in, over the answer: its fields 8 apart, the card's width (VaultAsk.css.ts typed).
 // kept across runs: a value (no field of it changes)
 let ask_typed : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+/// A file to pick: its name and size, then the button that picks it, 8 apart (VaultAsk.css.ts typedFile).
+// kept across runs: a value (no field of it changes)
+let ask_file : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_file_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// The answer's buttons, 10 apart (pages.css.ts cardFoot).

@@ -769,6 +769,7 @@ android-settings.vault.ask.granted
 android-settings.vault.ask.kept
 android-settings.vault.ask.kind.login
 android-settings.vault.ask.kind.ssh_key
+android-settings.vault.ask.kind.file
 android-settings.vault.ask.kind.token
 android-settings.vault.ask.notKept
 android-settings.vault.ask.on
@@ -776,6 +777,7 @@ android-settings.vault.ask.plain
 android-settings.vault.ask.save
 android-settings.vault.ask.typed.login
 android-settings.vault.ask.typed.ssh_key
+android-settings.vault.ask.typed.file
 android-settings.vault.ask.typed.token
 android-settings.vault.ask.typed.username
 android-settings.vault.ask.use
@@ -801,6 +803,7 @@ android-settings.vault.how
 android-settings.vault.howNote
 android-settings.vault.items
 android-settings.vault.kind.login
+android-settings.vault.kind.file
 android-settings.vault.kind.ssh_key
 android-settings.vault.kind.token
 android-settings.vault.lasts
@@ -828,6 +831,7 @@ android-settings.vault.missing
 android-settings.vault.mode.env
 android-settings.vault.mode.proxy
 android-settings.vault.mode.ssh
+android-settings.vault.mode.file
 android-settings.vault.name
 android-settings.vault.namePlaceholder
 android-settings.vault.needsLock
@@ -872,6 +876,7 @@ android-settings.vault.scope.hour
 android-settings.vault.scope.once
 android-settings.vault.selfOnly
 android-settings.vault.sshNote
+android-settings.vault.fileTooBig
 android-settings.vault.title
 android-settings.vault.totp
 android-settings.vault.turnOn
@@ -1509,6 +1514,8 @@ web-pages.vault.addKind.profile
 web-pages.vault.addKind.profileDetail
 web-pages.vault.addKind.ssh_key
 web-pages.vault.addKind.ssh_keyDetail
+web-pages.vault.addKind.file
+web-pages.vault.addKind.fileDetail
 web-pages.vault.addKind.title
 web-pages.vault.addKind.token
 web-pages.vault.addKind.tokenDetail
@@ -1544,6 +1551,11 @@ web-pages.vault.editor.privateKey
 web-pages.vault.editor.proxyNote
 web-pages.vault.editor.publicKey
 web-pages.vault.editor.sshNote
+web-pages.vault.editor.fileNote
+web-pages.vault.editor.fileEnvPlaceholder
+web-pages.vault.editor.file
+web-pages.vault.editor.fileNamePlaceholder
+web-pages.vault.editor.pickFile
 web-pages.vault.editor.totp
 web-pages.vault.editor.username
 web-pages.vault.editor.value
@@ -1553,6 +1565,7 @@ web-pages.vault.forAgents
 web-pages.vault.hidden
 web-pages.vault.how
 web-pages.vault.kind.login
+web-pages.vault.kind.file
 web-pages.vault.kind.ssh_key
 web-pages.vault.kind.token
 web-pages.vault.lasts.chat

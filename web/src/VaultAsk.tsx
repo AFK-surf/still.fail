@@ -23,12 +23,12 @@ export const askTitle = (a: Asked): string =>
  */
 export function AskCard({ ask, fill = false, children }: { ask: Asked; fill?: boolean; children?: ReactNode }) {
   // Only what is out of the ordinary is said: a command that can read the secret itself, or runs on another station.
-  const risky = !ask.save && ask.mode === "env";
+  const risky = !ask.save && (ask.mode === "env" || ask.mode === "file");
   const elsewhere = !ask.save && ask.station ? t("web-pages.vault.ask.on", { station: ask.station }) : null;
   return (
     <div className={`${pagesCss.card} ${fill ? "" : css.card}`}>
       <div className={css.what}>
-        <div className={css.title}>{askTitle(ask)}{ask.save?.username && <span className={css.sub}>{ask.save.username}</span>}</div>
+        <div className={css.title}>{askTitle(ask)}{(ask.save?.username || ask.save?.filename) && <span className={css.sub}>{ask.save.username || ask.save.filename}</span>}</div>
         {!ask.save && ask.command && <div className={css.command} title={ask.command}>{ask.command}</div>}
         {(risky || elsewhere) && <div className={css.note}>{risky && <span className={css.risk}>{t("web-pages.vault.ask.plain")}</span>}{risky && elsewhere && " · "}{elsewhere}</div>}
       </div>

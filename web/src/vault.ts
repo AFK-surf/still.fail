@@ -10,9 +10,9 @@ import { t } from "./i18n.ts";
 
 export type { VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
 
-export type Kind = "token" | "ssh_key" | "login";
-export type Mode = "proxy" | "env" | "ssh";
-export const KINDS: Kind[] = ["token", "ssh_key", "login"];
+export type Kind = "token" | "ssh_key" | "login" | "file";
+export type Mode = "proxy" | "env" | "ssh" | "file";
+export const KINDS: Kind[] = ["token", "ssh_key", "login", "file"];
 /** How long a grant lasts, shortest first: one use, an hour, the chat until it is archived. */
 export type Scope = "once" | "hour" | "chat";
 export const SCOPES: Scope[] = ["once", "hour", "chat"];
@@ -54,10 +54,10 @@ export function useVaultUses(workspace: string, vault: string, item: string): Va
 export const itemPath = (workspace: string, vault: string, item: string) => `/w/${workspace}/settings/vault/${encodeURIComponent(vault)}/${encodeURIComponent(item)}`;
 
 /** The kinds the library lists after the profiles, a section each, in this order. */
-export const ITEM_SECTIONS: Kind[] = ["token", "ssh_key", "login"];
+export const ITEM_SECTIONS: Kind[] = ["token", "ssh_key", "login", "file"];
 
 export const kindName = (kind: string | undefined): string => (KINDS.includes(kind as Kind) ? t(`web-pages.vault.kind.${kind}`) : "");
-export const modeName = (mode: string): string => (["proxy", "env", "ssh"].includes(mode) ? t(`web-pages.vault.mode.${mode}`) : mode);
+export const modeName = (mode: string): string => (["proxy", "env", "ssh", "file"].includes(mode) ? t(`web-pages.vault.mode.${mode}`) : mode);
 
 /** The request a card names, while it waits on the viewer (the `vaults` topic's): none once decided, or not theirs. */
 export function useVaultRequest(workspace: string, request: string | undefined): { view: VaultsView | undefined; request: VaultRequest | undefined } {
@@ -112,6 +112,9 @@ export interface Form {
   username: string;
   password: string;
   totp: string;
+  /** A file's bytes in base64, and what it is called (as picked). */
+  fileContent: string;
+  fileName: string;
   agent: boolean;
   mode: Mode;
   hosts: string;
@@ -120,22 +123,64 @@ export interface Form {
   lasts: Lasts;
 }
 
-export const blankForm = (): Form => ({ kind: "token", name: "", value: "", privateKey: "", publicKey: "", username: "", password: "", totp: "", agent: false, mode: "proxy", hosts: "", env: "", lasts: "default" });
+export const blankForm = (): Form => ({ kind: "token", name: "", value: "", privateKey: "", publicKey: "", username: "", password: "", totp: "", fileContent: "", fileName: "", agent: false, mode: "proxy", hosts: "", env: "", lasts: "default" });
 
 /** The form for an item opened (with its row: how agents may ask for it). */
 export function formOf(opened: Opened, row: VaultItemRow | undefined): Form {
   const f = opened.plain.fields;
   const kind = KINDS.includes(opened.plain.kind) ? opened.plain.kind : "token";
-  const mode = (row?.modes[0] as Mode | undefined) ?? (kind === "ssh_key" ? "ssh" : "proxy");
+  const mode = (row?.modes[0] as Mode | undefined) ?? modesOf(kind)[0]!;
   return {
     ...blankForm(), kind, name: opened.plain.name, value: f.value ?? "", privateKey: f.private_key ?? "", publicKey: f.public_key ?? "",
-    username: f.username ?? "", password: f.password ?? "", totp: f.totp ?? "",
+    username: f.username ?? "", password: f.password ?? "", totp: f.totp ?? "", fileContent: f.content ?? "", fileName: f.filename ?? "",
     agent: row?.listed ?? false, mode, hosts: (row?.hosts ?? []).join(", "), env: row?.env ?? "", lasts: SCOPES.find((s) => s === row?.lasts) ?? "default",
   };
 }
 
-/** The modes a kind is given by: a token or a login through the proxy or an env variable, an SSH key by ssh-agent. */
-export const modesOf = (kind: Kind): Mode[] => (kind === "ssh_key" ? ["ssh"] : ["proxy", "env"]);
+/** The modes a kind is given by: a token or a login through the proxy or an env variable, an SSH key by ssh-agent, a
+ * file written out for the command. */
+export const modesOf = (kind: Kind): Mode[] => (kind === "ssh_key" ? ["ssh"] : kind === "file" ? ["file"] : ["proxy", "env"]);
+
+/** The most a file kept may be, its bytes (the core's and the station's). */
+export const FILE_MOST = 64 * 1024;
+
+/** A file picked to be kept: its bytes in base64 and its name; null when it is bigger than a file kept may be. */
+export async function pickedFile(file: File): Promise<{ content: string; name: string } | null> {
+  if (file.size > FILE_MOST) return null;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let raw = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) raw += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { content: btoa(raw), name: file.name };
+}
+
+/** The system's file picker for a file to keep: what was picked as `pickedFile` reads it (null: too big), or nothing
+ * when it was called off. */
+export function pickFile(): Promise<{ content: string; name: string } | null | undefined> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.addEventListener("cancel", () => resolve(undefined));
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) void pickedFile(file).then(resolve, () => resolve(undefined));
+      else resolve(undefined);
+    });
+    input.click();
+  });
+}
+
+/** A file picked into a form (`pickFile`): its fields changed, or, too big, said so. */
+export async function pickInto(change: (patch: Partial<Form>) => void, toast: (m: string) => void): Promise<void> {
+  const got = await pickFile();
+  if (got === null) toast(t("web-pages.vault.editor.fileTooBig"));
+  else if (got) change({ fileContent: got.content, fileName: got.name });
+}
+
+/** A file's size in words, from its base64: "820 B", "12 KB". */
+export const fileSize = (content: string): string => {
+  const n = Math.floor((content.length * 3) / 4) - (content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0);
+  return n < 1024 ? `${n} B` : `${Math.round(n / 1024)} KB`;
+};
 
 const hostsOf = (s: string) => s.split(/[,\s，、]+/).map((h) => h.trim().toLowerCase()).filter((h) => h !== "");
 
@@ -145,6 +190,7 @@ export function formProblem(f: Form): "name" | "value" | "hosts" | null {
   if (f.kind === "token" && !f.value.trim()) return "value";
   if (f.kind === "ssh_key" && !f.privateKey.trim()) return "value";
   if (f.kind === "login" && !f.username.trim() && !f.password) return "value";
+  if (f.kind === "file" && !f.fileContent) return "value";
   const mode = modesOf(f.kind).includes(f.mode) ? f.mode : modesOf(f.kind)[0]!;
   if (f.agent && mode === "proxy" && hostsOf(f.hosts).length === 0) return "hosts";
   return null;
@@ -155,6 +201,7 @@ export function putOf(f: Form, notes = ""): { plain: Plain; listing?: { name: st
   const fields: Record<string, string> =
     f.kind === "token" ? { value: f.value.trim() }
     : f.kind === "ssh_key" ? { private_key: f.privateKey.trim() + "\n", ...(f.publicKey.trim() ? { public_key: f.publicKey.trim() } : {}) }
+    : f.kind === "file" ? { content: f.fileContent, ...(f.fileName ? { filename: f.fileName } : {}) }
     : { username: f.username.trim(), password: f.password, ...(f.totp.trim() ? { totp: f.totp.trim().replace(/\s+/g, "") } : {}) };
   const name = f.name.trim();
   const plain: Plain = { kind: f.kind, name, fields, domains: [], notes };

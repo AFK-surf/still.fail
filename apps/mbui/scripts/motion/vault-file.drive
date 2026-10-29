@@ -1,0 +1,12 @@
+# chat-vault-file's request for a file the person picks (sfpages decision.mbt vault_ask_card, settings vault_ask.mbt
+# vault_foot): 选择文件 over 存入 (which waits for one), a file picked coming in beside it with nothing moving, 存入,
+# then 已存入文件「生产集群」 in its place.
+timeout 20000
+until 选择文件
+wait 800
+picks prod-kubeconfig.yaml:5321
+tap 选择文件
+wait 900
+tap =存入
+until 已存入
+wait 1200
