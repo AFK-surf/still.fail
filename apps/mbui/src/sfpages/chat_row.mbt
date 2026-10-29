@@ -213,17 +213,18 @@ pub fn chat_row(
         rows_left[key] = c.moment()
         c.moment()
       }
-      Some(at) if c.moment() < at + left_lit_ms + left_fade_ms => at
-      Some(_) => {
-        rows_left.remove(key)
-        -1.0
-      }
+      Some(at) => at
       None => -1.0
     }
   }
+  // (each step by the framework's wait, its row built again at it: lit, fading, gone)
   let left = left_at >= 0.0
   let lit = on || (left && !@kit.after(c, "row-left/" + key, left, left_lit_ms, later=true))
-  let fading = left && !lit
+  let gone = left && @kit.after(c, "row-gone/" + key, left, left_lit_ms + left_fade_ms, later=true)
+  if gone {
+    rows_left.remove(key)
+  }
+  let fading = left && !lit && !gone
   let draw = fn(tx : Double, apart : Bool) -> Int {
     let ground = if finger {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
