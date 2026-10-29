@@ -35,6 +35,16 @@ const keptForGood: Plugin = {
 };
 
 /**
+ * The core's formula typesetter (MathJax: a tenth of the demo's script, run as it loads) stood in for: the demo's
+ * made-up chats have no formulas, and one a visitor writes in it stays readable as its source, as one MathJax refuses.
+ */
+const noFormulas: Plugin = {
+  name: "stillfail-site-no-formulas",
+  enforce: "pre",
+  resolveId: (source, importer) => source === "./math.ts" && importer?.endsWith("/client/core-ts/src/markdown.ts") ? here("src/demo/stubs/math.js") : null,
+};
+
+/**
  * The last release whose notes are in the repository (docs/releases/<0.1.n>.md, written as each stable release goes
  * out), for the site to say what it brought (src/site/Site.tsx Shipped): its number, its day, how many of its lines are
  * new, better and fixed, and the first few new things (better ones where none are new), each only up to its first pause.
@@ -63,7 +73,7 @@ export default defineConfig({
   root: here("../site"),
   publicDir: here("public"),
   base: "/",
-  plugins: [react(), vanillaExtractPlugin(), keptForGood, ...(beta ? [betaHead] : [])],
+  plugins: [react(), vanillaExtractPlugin(), keptForGood, noFormulas, ...(beta ? [betaHead] : [])],
   define: {
     __SITE_BETA__: JSON.stringify(beta),
     __SITE_RELEASE__: JSON.stringify(lastRelease()),
