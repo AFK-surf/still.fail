@@ -162,7 +162,8 @@ for t in ${TARGETS:-native}; do
   # first it slowed them to 74 and 62 s, the second running 37, 40430734093.) (Contrast's on the first since the small
   # packages went to a runner of their own: the fourth's job was the part's longest, the pages' 72 s beside contrast's 25,
   # while the first ran its two corners runs in 26, fix/back-cancel-follows-system 40828675419, mbui-panel-ground
-  # 40843559612, 2026-10-29.)
+  # 40843559612, 2026-10-29.) (Then on the third: the first's job beside the corners runs was the part's longest but the
+  # pages', 152 s and 179, the second's and third's 96 and 101, main 9a748590, 40942683567, 2026-10-30.)
   app_group_of() {
     local n=$1
     shift
@@ -175,7 +176,7 @@ for t in ${TARGETS:-native}; do
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
-      "src/sfapp/contrast_wbtest.mbt  ") echo 1 ;;
+      "src/sfapp/contrast_wbtest.mbt  ") echo 3 ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
   }
