@@ -73,8 +73,16 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 
 ///|
 /// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
-/// or from elsewhere that says what runs (an agent's card's account). Not twice over itself.
-pub fn open_triple_panel(src : Source, station : String, of : String, from : @sf.Anchor, saved? : String = "") -> Unit {
+/// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Not twice over
+/// itself.
+pub fn open_triple_panel(
+  src : Source,
+  station : String,
+  of : String,
+  from : @sf.Anchor,
+  saved? : String = "",
+  side? : @ui.Side = Bottom,
+) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
     return
@@ -98,6 +106,7 @@ pub fn open_triple_panel(src : Source, station : String, of : String, from : @sf
     // (the line over its foot across the whole panel, out past its padding to its edges, over the foot where what it
     // holds scrolls: 2026-10-25 用户「分割线边上不要留空」)
     ruled=true,
+    side~,
   )
 }
 

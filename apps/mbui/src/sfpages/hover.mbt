@@ -96,6 +96,20 @@ fn hover_beside(c : @ui.Ctx, id : Int) -> @sf.Beside {
 }
 
 ///|
+/// The card being built, where it is drawn (its panel), for a panel opened from it to stand at its right, their tops
+/// level (what is pressed itself, where the card is not known).
+fn hover_card_rect(c : @ui.Ctx, id : Int) -> @sf.Anchor {
+  let card = match hover_now.val {
+    Some((_, panel)) => c.rect_of(panel)
+    None => None
+  }
+  match card {
+    Some((x, y, w, h)) => At(x, y, w, h)
+    None => Of(id)
+  }
+}
+
+///|
 /// The card being built kept open while what was just presented from it is.
 fn hover_hold() -> Unit {
   match hover_now.val {
@@ -162,7 +176,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
   let history = fn(entry : Int?) { open_page(History(r, key, entry)) }
   // how it runs, its picker beside what was pressed
   let runs = fn(id : Int) {
-    open_triple_panel(src, station, "session:" + key, hover_beside(c, id).anchor(), saved=@sf.t("web-pages.chat.pickSaved"))
+    open_triple_panel(src, station, "session:" + key, hover_card_rect(c, id), saved=@sf.t("web-pages.chat.pickSaved"), side=Right)
     hover_hold()
   }
   c.box(style=agent_card_box, fn() {
