@@ -503,6 +503,17 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  * it (a failure shows there too). Before the agent has a chat, what is sent waits in its outbox while the core has the
  * station make one, bound to the agent, and the page stays (the core shows the chat at the same address).
  */
+/** What a chat's composer shows of it (its host draws it, ChatHost.tsx): where it writes, what it says till something is
+ *  written, and what holds it back. */
+export function composerShown(view: ChatView, station: string): Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived" | "cacheCold"> {
+  return {
+    station, session: view.agents[0]?.session.key ?? null,
+    placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : view.cc?.some((o) => o.on) ? t("web-mobile.chat.placeholderCc", { place: view.cc.filter((o) => o.on).map((o) => o.place).join("、") }) : t("web-mobile.chat.placeholder"),
+    offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived,
+    ...(view.cacheCold ? { cacheCold: view.cacheCold } : {}),
+  };
+}
+
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const call = useCall();
@@ -522,9 +533,9 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
     void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : view.cc?.some((o) => o.on) ? t("web-mobile.chat.placeholderCc", { place: view.cc.filter((o) => o.on).map((o) => o.place).join("、") }) : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
+    ...composerShown(view, here.station), send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
-    ...(view.cacheCold ? { cacheCold: view.cacheCold } : {}), afresh: api.afresh,
+    afresh: api.afresh,
     ...(view.cc?.length && view.thread ? { cc: { to: view.cc, toggle: (o: ChatCcTo) => act(call("chat.cc", { station: here.station, thread: view.thread!.id, to: o.thread, on: !o.on }), t("web-mobile.chat.ccStart", { place: o.place })) } } : {}),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {

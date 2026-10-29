@@ -17,6 +17,7 @@
 import { createContext, createElement, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { outsideScroll } from "../scrollBounds.ts";
+import { Picture } from "../picture.ts";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
 import { glideClock, glided, glideShare } from "@stillfail/ui/motion.ts";
@@ -133,7 +134,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   model.setShort(short);
   model.setItems(items, trimmed);
   if (arrived !== null && model.mode.kind === "follow") model.follow(arrived);
-  const layout = model.layout();
+  // Drawn as a picture (../picture.ts), nothing measures it: all of it, from its start.
+  const layout = useContext(Picture) ? model.whole() : model.layout();
   made.drawn = signature(layout);
 
   const self = useMemo(() => {

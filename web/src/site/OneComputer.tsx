@@ -142,9 +142,8 @@ function drawnAs(row: HTMLElement, sheet: string[]): HTMLElement {
 }
 
 /**
- * A phone showing what it is for: the phone's app at its page, as built (featurePage) or run (site/phone.html?at=),
- * asked for once it is near the screen, by the page's script (as the one beside the computer is): nothing of it is read
- * while the page loads.
+ * A phone showing what it is for: the phone's app at its page, as built (featurePage), asked for once it is near the
+ * screen, by the page's script (as the one beside the computer is): nothing of it is read while the page loads.
  */
 function FeaturePhone({ at, title }: { at: string; title: string }) {
   const lang = useSiteLang();
@@ -155,8 +154,7 @@ function FeaturePhone({ at, title }: { at: string; title: string }) {
     const near = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return;
       near.disconnect();
-      const built = featurePage(at);
-      el.src = built ? `${lang === "en" ? "/en/" : "/"}${built}` : `${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(at)}`;
+      el.src = `${lang === "en" ? "/en/" : "/"}${featurePage(at)}`;
     }, { rootMargin: "600px 0px" });
     near.observe(el);
     return () => near.disconnect();

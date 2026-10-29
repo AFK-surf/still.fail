@@ -17,8 +17,7 @@ export function renderPhone(lang: SiteLang): string {
 
 /** The pages of the phones showing what it is for (featurePage), each the phone's app's opening frame at its page. */
 export function renderFeatures(lang: SiteLang): { file: string; html: string }[] {
-  return [...new Set(WORDS[lang].scenes.map((s) => s.at))].flatMap((at) => {
-    const page = at ? featurePage(at) : null;
-    return page ? [{ file: `${page}.html`, html: frameHtml({ phone: renderDemo({ at, lang }).phone }) }] : [];
-  });
+  const pages = [...new Set(WORDS[lang].scenes.map((s) => s.at).filter(Boolean))];
+  // A picture: nothing runs in its page.
+  return pages.map((at) => ({ file: `${featurePage(at)}.html`, html: frameHtml({ phone: renderDemo(at === "chat" ? { lang } : { at, lang }, true).phone }) }));
 }
