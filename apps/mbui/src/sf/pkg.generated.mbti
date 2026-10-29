@@ -1412,7 +1412,9 @@ pub fn playlist_of(Array[String], (String) -> Bool) -> Array[String]
 
 pub fn pointed_or_finger(@ui.Ctx, Bool) -> Bool
 
-pub fn pointer_image(@ui.Ctx) -> String
+pub fn pointer_hotspot(String) -> (Double, Double)
+
+pub fn pointer_image(@ui.Ctx, shape? : String) -> String
 
 pub fn pointer_rests() -> Bool
 
