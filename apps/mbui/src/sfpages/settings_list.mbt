@@ -225,15 +225,9 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
-  // 共享调试, the phone's (docs/adb-share.md): the chats it is lent to now
+  // 共享调试, the phone's (docs/adb-share.md): its page says which chats it is lent to
   if platform == 2 {
-    let grants = match field((core.topic)("adbShare", Map([])).value, "grants") {
-      Some(Array(a)) => a.filter(fn(g) { text(Some(g), "status") == "granted" }).length()
-      _ => 0
-    }
-    device.push(
-      settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title"), value=if grants > 0 { @sf.t("android-misc.adb.chats.count", args=[("n", grants.to_string())]) } else { "" }),
-    )
+    device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }
   device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=@settings.kept_said(c, core)))
   parts.push({ heading: @sf.t("android-settings.home.device"), rows: device })
