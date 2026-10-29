@@ -54,12 +54,12 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
   assert_eq(number(Some(asked[0]), "maxWidth"), 1280.0)
   assert_eq(number(Some(asked[0]), "maxHeight"), 720.0)
   assert_true(r.t.find("720p") is Some(_))
-  // back to 自动: the device's screen again
+  // back to 自动: as large as the stage is in the device's pixels again
   r.t.tap_text(tr("web-pages.screen.quality.auto"))
   r.t.draw()
   let again = r.told("screen.bounds")
   assert_eq(again.length(), 2)
-  assert_eq(number(Some(again[1]), "maxWidth"), 1920.0)
+  assert_eq(number(Some(again[1]), "maxWidth"), r.sess().stage_px.0.to_double())
   assert_eq(r.told("screen.view").length(), 1)
   assert_eq(r.quality.val, "")
   shut(r)
@@ -85,7 +85,7 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
   let asked = r.told("screen.bounds")
   assert_eq(asked.length(), 1)
   assert_eq(number(Some(asked[0]), "fps"), 30.0)
-  assert_eq(number(Some(asked[0]), "maxWidth"), 1920.0)
+  assert_eq(number(Some(asked[0]), "maxWidth"), r.sess().stage_px.0.to_double())
   assert_true(field(Some(asked[0]), "quality") is None)
   assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.cap", [("fps", "30")])) is Some(_))
   // 120: said so, its note saying the display must draw that many

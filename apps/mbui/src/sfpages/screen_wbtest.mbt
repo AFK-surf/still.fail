@@ -354,7 +354,7 @@ fn close_to(a : Double, b : Double) -> Bool {
 }
 
 ///|
-test "it asks for the view by its name, JPEG only here, at most the device's screen; 正在连接 said after a moment" {
+test "it asks for the view by its name, JPEG only here, as large as its stage; 正在连接 said after a moment" {
   let r = screen_rig()
   let asked = r.told("screen.view")
   assert_eq(asked.length(), 1)
@@ -362,7 +362,11 @@ test "it asks for the view by its name, JPEG only here, at most the device's scr
   assert_eq(text(Some(asked[0]), "screen"), "browser:tab-1")
   assert_eq(text(Some(asked[0]), "view"), r.sess().view)
   assert_eq(items(Some(asked[0]), "codecs"), [Json::string("jpeg")])
-  assert_eq(number(Some(asked[0]), "maxWidth"), 1920.0)
+  // 自动: the stage it is shown on, in the device's pixels
+  let (sw, sh) = r.sess().stage_px
+  assert_true(sw > 0 && sh > 0)
+  assert_eq(number(Some(asked[0]), "maxWidth"), sw.to_double())
+  assert_eq(number(Some(asked[0]), "maxHeight"), sh.to_double())
   // not said: the core decides (only looking while someone else drives it)
   assert_true(field(Some(asked[0]), "control") is None)
   // the device kept awake while it is looked at
@@ -1185,5 +1189,31 @@ test "鼠标左右键 in 控制中心 hides the mouse's buttons (the keys row's 
   assert_true(r.told("prefs.set").last() is Some(Object(o)) && o.get("screenMouse") == Some(Json::null()))
   shut(r)
   assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
+  screen_done(r.t)
+}
+
+///|
+test "自动 asks again as the stage grows a tenth a side, not as it grows less or shrinks" {
+  let r = screen_rig(w=1200.0, h=800.0, platform=0)
+  r.live()
+  let s = r.sess()
+  let (w, _) = s.stage_px
+  assert_true(w > 0)
+  // a little larger (as a window is dragged) or smaller: nothing asked again
+  r.t.resize(1230.0, 800.0)
+  r.t.draw()
+  r.t.resize(800.0, 600.0)
+  r.t.draw()
+  assert_eq(r.told("screen.bounds").length(), 0)
+  assert_eq(s.stage_px.0, w)
+  // much larger: asked again as large as the stage is now, the view going on
+  r.t.resize(2400.0, 1600.0)
+  r.t.draw()
+  let asked = r.told("screen.bounds")
+  assert_eq(asked.length(), 1)
+  assert_true(s.stage_px.0 > w)
+  assert_eq(number(Some(asked[0]), "maxWidth"), s.stage_px.0.to_double())
+  assert_eq(r.told("screen.view").length(), 1)
+  shut(r)
   screen_done(r.t)
 }

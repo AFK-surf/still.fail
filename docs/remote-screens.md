@@ -461,7 +461,8 @@ it, so the top of the screen (its windows' title bars) is never under it. Its li
 Beside 只看/控制 (web/src/screen/ScreenPanel.tsx), as a remote desktop's window has them: a signal mark with this
 device's round trip to the station (the `stationNet` view, in its colour), which opens the view's figures (frames and
 bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
-picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
+picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is in device pixels, the web at most 1920×1080 or 2560×1440, the mbui
+app as large as its stage has been, asked again as it grows a tenth a side; 流畅 1280×720, 高清 1920×1080, 原画
 the screen's own size; said to the station as `quality` too, 高清 and 原画 letting the bit rate go higher; another opens
 the view again), 帧率 (`prefs.screenFps`: 自动 as many as the station and the link give, or at most 120, 90, 60, 30 or
 15 a second, said to the station as `fps`; another opens the view again, `screen.bounds` saying it with the 画质), 组合键 while driving (the keys this device's system keeps for
