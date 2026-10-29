@@ -301,6 +301,16 @@ jobs:
         run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      # (shell-apple darwin-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
+      # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
+      # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
+      - name: The macOS shell's key
+        id: native-keys
+        run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/stillfail-native/shell-apple
+          key: ${{ steps.native-keys.outputs.key }}
       - uses: ./.github/actions/mbui-moonbit
       # moon's own build of the app (apps/mbui/_build, without the programs' objects the store keeps) as main's newest run
       # left it, as the iOS job's and check-mbui's: without, moonc made all of it again each run (the build and signing
@@ -397,6 +407,16 @@ jobs:
         run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      # (shell-apple ios-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
+      # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
+      # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
+      - name: The iOS shell's key
+        id: native-keys
+        run: echo "key=natives-shell-apple-ios-arm64-$(node scripts/native.ts key shell-apple ios-arm64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/stillfail-native/shell-apple
+          key: ${{ steps.native-keys.outputs.key }}
       - uses: ./.github/actions/mbui-moonbit
       # moon's own build of the app (moonc's C, what it checked) as main's newest run left it, as check-mbui keeps its
       # own: without, moonc made all of it again each run, ~2 of the .ipa step's 2-3 minutes, the release's longest job
