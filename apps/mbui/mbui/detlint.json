@@ -205,6 +205,17 @@
     "motion-spring": {
       "src/demo/main.mbt": 1,
       "src/kit/time.mbt": 1
+    },
+    "built-by-hand": {
+      "src/kit/pick.mbt": 3
+    },
+    "layout-read-back": {
+      "src/kit/disclosure.mbt": 1,
+      "src/kit/media.mbt": 2,
+      "src/kit/menu.mbt": 3,
+      "src/kit/pick.mbt": 1,
+      "src/kit/popover.mbt": 5,
+      "src/kit/toast.mbt": 1
     }
   },
   "excused": {
@@ -256,6 +267,8 @@
     "cursor-hand": {},
     "tier-outside-shell": {},
     "fixture-import": {},
-    "motion-spring": {}
+    "motion-spring": {},
+    "built-by-hand": {},
+    "layout-read-back": {}
   }
 }

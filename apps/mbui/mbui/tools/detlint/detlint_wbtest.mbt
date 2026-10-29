@@ -1922,3 +1922,52 @@ test "motion-read" {
   )
   assert_eq(lines(fs), [2])
 }
+
+///|
+test "built-by-hand" {
+  // the app's forgetting and its frame built again by hand; a test's and the framework's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/frame.mbt",
+        "fn v(c : @ui.Ctx) -> Unit {\n" +
+        "  if moved { c.forget_parts() }\n" +
+        "  c.built_from_changed(\"an edge dragged\")\n" +
+        "  c.forget()\n" +
+        "}\n",
+      ),
+      ("src/app/frame_wbtest.mbt", "test \"t\" {\n  c.forget_parts()\n}\n"),
+      ("src/ui/kept_part.mbt", "fn w(c : Ctx) -> Unit {\n  c.forget_parts()\n}\n"),
+    ],
+    "built-by-hand",
+    2,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 3])
+}
+
+///|
+test "layout-read-back" {
+  // what was laid out read back by the app; a test's and the framework's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/card.mbt",
+        "fn v(c : @ui.Ctx) -> Unit {\n" +
+        "  let w = c.laid_size(id).map(fn(s) { s.0 }).unwrap_or(0.0)\n" +
+        "  match c.rect_of(c.id(\"rail\")) { _ => () }\n" +
+        "  let r = c.laid_rect(id)\n" +
+        "  let m = @motion.measured_rect(c, \"thumb\")\n" +
+        "}\n",
+      ),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  t.ctx().rect_of(1)\n}\n"),
+      ("src/ui/list.mbt", "fn w(c : Ctx) -> Unit {\n  c.rect_of(1) |> ignore\n}\n"),
+    ],
+    "layout-read-back",
+    3,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 3, 4])
+}

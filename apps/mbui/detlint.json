@@ -395,6 +395,54 @@
     "motion-spring": {
       "src/gallery/view.mbt": 1,
       "src/shelf/reader.mbt": 1
+    },
+    "built-by-hand": {
+      "src/sf/parts.mbt": 2,
+      "src/sfbase/viewer.mbt": 1,
+      "src/sfdesk/frame.mbt": 1,
+      "src/sfdesk/rail_native.mbt": 1
+    },
+    "layout-read-back": {
+      "src/sf/markdown.mbt": 1,
+      "src/sf/parts.mbt": 5,
+      "src/sf/player.mbt": 2,
+      "src/sf/presenters.mbt": 9,
+      "src/sf/seg.mbt": 1,
+      "src/sf/submenu.mbt": 1,
+      "src/sf/viewer_frame.mbt": 1,
+      "src/sfapp/composer.mbt": 3,
+      "src/sfapp/decisions.mbt": 2,
+      "src/sfapp/drive_parts.mbt": 1,
+      "src/sfapp/pick.mbt": 1,
+      "src/sfapp/settings/vault_ask.mbt": 3,
+      "src/sfbase/pick.mbt": 5,
+      "src/sfbase/screen_links.mbt": 1,
+      "src/sfbase/viewer.mbt": 1,
+      "src/sfbase/viz_page.mbt": 2,
+      "src/sfdesk/chat_layers.mbt": 2,
+      "src/sfdesk/decision_page.mbt": 1,
+      "src/sfdesk/drag.mbt": 2,
+      "src/sfdesk/drive.mbt": 1,
+      "src/sfdesk/drive_views.mbt": 1,
+      "src/sfdesk/files.mbt": 1,
+      "src/sfdesk/frame.mbt": 1,
+      "src/sfdesk/pane_page.mbt": 1,
+      "src/sfdesk/rail.mbt": 1,
+      "src/sfpages/bars.mbt": 1,
+      "src/sfpages/chat_ref.mbt": 1,
+      "src/sfpages/composer.mbt": 1,
+      "src/sfpages/history_steps.mbt": 1,
+      "src/sfpages/hover.mbt": 4,
+      "src/sfpages/message_files.mbt": 1,
+      "src/sfpages/recent.mbt": 1,
+      "src/sfpages/relay.mbt": 1,
+      "src/sfpages/resources.mbt": 2,
+      "src/sfpages/screen_stage.mbt": 3,
+      "src/sfpages/screen_view.mbt": 1,
+      "src/sfpages/search.mbt": 3,
+      "src/sfpages/service.mbt": 3,
+      "src/sfpages/things.mbt": 2,
+      "src/sfpages/usage.mbt": 1
     }
   },
   "excused": {
@@ -454,6 +502,8 @@
     "cursor-hand": {},
     "tier-outside-shell": {},
     "fixture-import": {},
-    "motion-spring": {}
+    "motion-spring": {},
+    "built-by-hand": {},
+    "layout-read-back": {}
   }
 }
