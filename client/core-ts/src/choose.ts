@@ -233,10 +233,11 @@ export class Choose implements Owner {
     return [all.filter((s) => s.online === true), all.length > 0];
   }
 
-  /// The scope's stations as listed, up or not.
-  #listed(scope: string): J[] {
+  /// The station the scope's new chats last started on, as listed, up or not.
+  #held(scope: string): J {
+    const kept = this.#kept(scope);
     const v = this.#env.store.value({ topic: "stations", scope });
-    return v !== undefined && "ok" in v ? arr(v.ok) : [];
+    return kept !== "" && v !== undefined && "ok" in v ? arr(v.ok).find((s) => s.id === kept) : undefined;
   }
 
   #newChat(scope: string): J {
@@ -249,18 +250,13 @@ export class Choose implements Owner {
     }
     const [online, any] = found;
     view.any = any;
-    let station = structuredClone(online.find((s) => s.id === kept) ?? online[0]);
-    // None up, the one it was last written to down meanwhile (the network went as a person wrote): it stays, said to be
-    // down (`down`), what was written in it and what it runs as they were; what is sent waits for it (views/calls.ts
-    // `stationBack`). The page went to "no station" under a person's draft as the network went.
-    view.down = false;
-    if (station === undefined && kept !== "") {
-      const held = this.#listed(scope).find((s) => s.id === kept);
-      if (held !== undefined) {
-        station = structuredClone(held);
-        view.down = true;
-      }
-    }
+    // The station a person picked stays picked while it is down, others up or not: it is said to be down (`down`), what
+    // was written in it and what it runs as they were; what is sent waits for it (views/calls.ts `stationBack`). Moving
+    // to another station up would start the chat where they did not choose. Only one never picked, or no longer the
+    // workspace's, gives way to the first up.
+    const held = this.#held(scope);
+    const station = structuredClone(held ?? online[0]);
+    view.down = held !== undefined && held.online !== true;
     view.stations = view.down ? [...online, station] : online;
     if (station === undefined) return view;
     const id = typeof station.id === "string" ? station.id : "";
@@ -324,10 +320,10 @@ export class Choose implements Owner {
       let id: string;
       if (station !== null) id = station;
       else {
-        const kept = this.#kept(scope);
         const found = this.#online(scope);
         if (!Array.isArray(found)) throw CoreError.invalid(t("core-logic.choose.error.no_stations_yet"));
-        const current = found[0].find((s) => s.id === kept) ?? found[0][0];
+        // (the one the page shows: the one picked, up or not)
+        const current = this.#held(scope) ?? found[0][0];
         if (current === undefined) throw CoreError.invalid(t("core-logic.choose.error.none_online"));
         id = typeof current.id === "string" ? current.id : "";
       }

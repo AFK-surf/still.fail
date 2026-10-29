@@ -1012,6 +1012,39 @@ test("the_at_menu_written_on_one_station_finds_the_chats_of_every_station_of_its
   core.close();
 });
 
+test("a_new_chat_stays_on_the_station_picked_while_it_is_down_and_says_so", async () => {
+  // `ws/st2` (mini) is not reached.
+  const wire = (host: FakeHost) => {
+    const inner = new HostWire(host);
+    return {
+      request: (station: StationAddr, head: RequestHead, body: Uint8Array) => station.station === "st2" ? Effect.fail(new CoreError("mesh", "unreached")) : inner.request(station, head, body),
+    } as StationWire;
+  };
+  const { host, core } = await started(base(), 0, wire, (x) => {
+    x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: false, last_seen: null }] };
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+  await host.time.pass(500);
+  await host.settle();
+  apply(host, values);
+  // Never picked: the first up.
+  assert.deepEqual([v(values, 1).station.id, v(values, 1).down], ["st", false]);
+  call(core, ui, 2, "newChat.pick", { scope: "ws", station: "st2" });
+  await host.settle();
+  apply(host, values);
+  // Picked, down, another up: it stays, said to be down, and can still be left for the other.
+  assert.deepEqual([v(values, 1).station.id, v(values, 1).down], ["st2", true]);
+  assert.deepEqual(v(values, 1).stations.map((s: J) => s.id), ["st", "st2"]);
+  // What is picked on the page then is the down one's, not the other's.
+  call(core, ui, 3, "newChat.pick", { scope: "ws", effort: "high" });
+  await host.settle();
+  assert.equal((core.inner.data.record("choice", "ws:ws:station:st2") as J).effort, "high");
+  assert.equal(core.inner.data.record("choice", "ws:ws:station:st"), undefined);
+  core.close();
+});
+
 test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_as_last_edited", async () => {
   const row = (id: string, thread: number, title: string) => ({ id, session: id, thread, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
   const said = (thread: number, n: number, text: string, at: number) => ({ thread, n, kind: "message", ts: `${n}.0`, authorKind: "person", author: "a@x", authorName: "阿甲", text, at });
