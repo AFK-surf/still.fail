@@ -478,7 +478,7 @@ fn Ctx::push_inst(
   a[b + 37] = radius
   a[b + 38] = radius
   a[b + 39] = radius
-  if inst_owners.on {
+  if inst_owners_kept() {
     inst_owned(self.ninst)
   }
   self.ninst = self.ninst + 1
@@ -720,7 +720,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let h0 = self.next_hit_ids.length()
   // (whose each instance is, where a test asks: contrast.mbt)
   let was = inst_owners.painting
-  if inst_owners.on {
+  if inst_owners_kept() {
     inst_owners.painting = i
   }
   let passes = self.nodes[i].passes
@@ -739,7 +739,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if !dr.over_cover.is_empty() && dr.mode != mode_hits && dr.covers.contains(i) {
     self.paint_over_cover()
   }
-  if inst_owners.on {
+  if inst_owners_kept() {
     inst_owners.painting = was
   }
   if layer {

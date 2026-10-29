@@ -1148,7 +1148,7 @@ fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
     a[to] = v
     to = to + 1
   }
-  if inst_owners.on {
+  if inst_owners_kept() {
     inst_owners_raised(ranges, self.ninst)
   }
 }
@@ -1216,7 +1216,7 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     a[b + 15] = if a[b + 5] == 0.0 { a[b + 15] * look.alpha } else { a[b + 15] }
   }
   self.ninst = i0 + count
-  if inst_owners.on {
+  if inst_owners_kept() {
     for k in i0..<self.ninst {
       inst_owned(k)
     }

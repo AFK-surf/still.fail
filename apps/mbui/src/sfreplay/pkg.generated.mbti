@@ -75,7 +75,8 @@ pub fn Flow::see_n(Self, Int32, String) -> Unit
 pub fn Flow::share_files(Self, Array[String]) -> Unit raise
 pub fn Flow::share_in(Self, String, title? : String) -> Unit
 pub fn Flow::shrinks(Self, String, to~ : Double, ease~ : @ui.Ease, ms~ : Double, rest~ : Double) -> Unit
-pub fn Flow::start(String, seed? : UInt32, drop? : Array[String], w? : Double, h? : Double, env? : Array[(String, String)], platform? : Int32) -> Self
+#callsite(autofill(loc))
+pub fn Flow::start(String, seed? : UInt32, drop? : Array[String], w? : Double, h? : Double, env? : Array[(String, String)], platform? : Int32, loc~ : SourceLoc) -> Self
 pub fn Flow::tap(Self, String, top? : Bool) -> Unit
 pub fn Flow::tap_at(Self, Double, Double) -> Unit
 pub fn Flow::tap_notice(Self, String) -> Unit

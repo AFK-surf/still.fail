@@ -709,7 +709,8 @@ fn stuck_rows() -> (@ui.Ctx) -> Unit {
 
 ///|
 test "list: what a row holds stuck stays under the list's top as the row scrolls past, and leaves with its foot" {
-  let t = @ui.Tester::new(stuck_rows(), w=300.0, h=400.0)
+  // (each mark drawn over its row's words as it scrolls past, on purpose: words_over.mbt asks nothing of it)
+  let t = @ui.Tester::new(stuck_rows(), w=300.0, h=400.0, words_over_held=false)
   // its row at the list's top: held 8 under it already (as CSS's sticky is), its words at the top
   let (_, y0, _, _) = t.rect_of("Mark 0").unwrap()
   assert_eq(y0, 8.0)

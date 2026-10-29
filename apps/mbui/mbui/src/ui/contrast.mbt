@@ -14,16 +14,18 @@
 ///|
 /// Which node drew each instance of a frame, kept only while a test asks (Tester::contrast_faults): `owner[k]`
 /// instance k's (-1 none known), `painting` the node being painted; `own_colours` the nodes said to draw in their own
-/// colours (Ctx::own_colours).
+/// colours (Ctx::own_colours). `track`: the owners kept on every frame a Tester draws, and nothing else of `on`'s (its
+/// frame drawn as measured, each loop at its start, no row kept): what words lie over whose (words_over.mbt).
 priv struct InstOwners {
   mut on : Bool
+  mut track : Bool
   mut painting : Int
   owner : Array[Int]
   own_colours : Set[Int]
 }
 
 ///|
-let inst_owners : InstOwners = { on: false, painting: -1, owner: [], own_colours: Set::new() }
+let inst_owners : InstOwners = { on: false, track: false, painting: -1, owner: [], own_colours: Set::new() }
 
 ///|
 /// The frame's contrast asked again from nothing: no instance's owner known, no node said in its own colours.
@@ -43,6 +45,12 @@ pub fn Ctx::own_colours(self : Ctx, node : Int) -> Unit {
   if inst_owners.on {
     inst_owners.own_colours.add(node)
   }
+}
+
+///|
+/// Whether each instance's owner is kept (`on` or `track`).
+fn inst_owners_kept() -> Bool {
+  inst_owners.on || inst_owners.track
 }
 
 ///|
