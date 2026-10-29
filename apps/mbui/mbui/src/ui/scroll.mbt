@@ -95,6 +95,16 @@ fn Tracker::add(self : Tracker, t : Double, v : Double) -> Unit {
 }
 
 ///|
+/// When the newest sample was taken (ms; 0 with none).
+fn Tracker::newest(self : Tracker) -> Double {
+  if self.n == 0 {
+    0.0
+  } else {
+    self.times[self.index]
+  }
+}
+
+///|
 /// Units per ms at the newest sample (0 when it can't tell).
 fn Tracker::velocity(self : Tracker) -> Double {
   if self.n == 0 {
