@@ -288,10 +288,8 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           if !taking {
             c.layer(fn() {
               let side = @sf.theme().rows.check
-              let style = @ui.style(
-                ml=@sf.room_of(-(paper_in - paper_edge + ticks)),
-                pt=@sf.room_of((first_line_h(c, m) - side) / 2.0),
-              )
+              let down = @sf.room_of(centred_in(first_line_h(c, m), side))
+              let style = @ui.style(ml=@sf.room_of(-(paper_in - paper_edge + ticks)), pt=down)
               c.box(style=publish_message_tick.then(style), fn() {
                 let look = @kit.checkbox_look_of(size=side, radius=@sf.theme().rows.check_corner)
                 let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message"), look~).value
@@ -542,6 +540,12 @@ fn publish_tick_room() -> Double {
 
 ///|
 let publish_tick_gap : Double = 12.0
+
+///|
+/// How far down something `h` high is to be in the middle of a line `line` high.
+fn centred_in(line : Double, h : Double) -> Double {
+  (line - h) / 2.0
+}
 
 ///|
 /// How high message `m`'s first line is, from its top: its head's line (its name, its time; S6), or for the viewer's
