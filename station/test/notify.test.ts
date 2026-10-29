@@ -45,9 +45,11 @@ test("a blocked turn's ask is told once, while it waits", () => {
   store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
   const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
   store.joinThread(chat.id, "k", "ember");
-  const kinds = (id: string) => {
+  // `about`: the message (by its ts) the turn says it is about; without, the one it said last.
+  const kinds = (id: string, about?: string) => {
     const turn = reader.db.prepare("SELECT * FROM turns WHERE id = ?").get(id) as any;
-    const t = { declared: turn.declared, need: turn.need, startedAt: turn.started_at, endedAt: turn.ended_at, ...(turn.about_n === null ? {} : { about: { thread: turn.about_thread, seq: turn.about_n } }) };
+    const n = about === undefined ? null : (reader.db.prepare("SELECT n FROM entries WHERE thread = ? AND ts = ?").get(chat.id, about) as any).n;
+    const t = { declared: turn.declared, need: turn.need, startedAt: turn.started_at, endedAt: turn.ended_at, ...(n === null ? {} : { about: { thread: chat.id, seq: n } }) };
     return blockedAsk(reader, chat.id, "k", t as any);
   };
   // It asks, and the turn ends blocked on that: new.
@@ -61,7 +63,9 @@ test("a blocked turn's ask is told once, while it waits", () => {
   store.startTurn("t3", "k", "notice");
   store.insertMessage(newMessage(chat.id, "1.3", "agent", "k", "CI 过了"));
   store.endTurn("t3", "completed", null, "block", null);
-  assert.equal(kinds("t3")?.fresh, false);
+  assert.equal(kinds("t3", "1.2")?.fresh, false);
+  // Without saying what it is about, what it said last is what it asks: new.
+  assert.equal(kinds("t3")?.fresh, true);
   // Once a person has written, nothing waits for them, until it asks again.
   store.insertMessage(newMessage(chat.id, "1.4", "person", "ada@x.com", "先做别的"));
   store.startTurn("t4", "k", "input");
