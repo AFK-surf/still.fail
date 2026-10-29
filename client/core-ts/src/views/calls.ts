@@ -172,7 +172,7 @@ export class ViewCalls {
         yield* Effect.all(
           [
             this.#inner.stations.afterWrite(station, { kind: "session", key: null }, answer),
-            Effect.forEach(sends, ([id]) => Effect.ignore(this.deliver(station, thread, id, null)), { discard: true }),
+            Effect.forEach(sends, ([id]) => Effect.ignore(this.deliver(station, thread, id, null), { log: "Unhandled", message: "message delivered" }), { discard: true }),
           ],
           { concurrency: "unbounded", discard: true },
         );
@@ -198,7 +198,7 @@ export class ViewCalls {
           this.#local.firstFailed(station, key, made.failure.message);
           return;
         }
-        for (const [id] of this.#local.firstMade(station, key, made.success)) yield* Effect.ignore(this.deliver(station, made.success, id, null));
+        for (const [id] of this.#local.firstMade(station, key, made.success)) yield* Effect.ignore(this.deliver(station, made.success, id, null), { log: "Unhandled", message: "message delivered" });
       }),
     );
   }
@@ -210,7 +210,7 @@ export class ViewCalls {
     for (const key of chats) this.makeChat(key);
     for (const [thread, id] of messages) {
       this.#local.outboxState(station, thread, id, null);
-      this.#inner.runner.fork(Effect.ignore(this.deliver(station, thread, id, null, true)));
+      this.#inner.runner.fork(Effect.ignore(this.deliver(station, thread, id, null, true), { log: "Unhandled", message: "message delivered" }));
     }
   }
 
@@ -223,7 +223,7 @@ export class ViewCalls {
     }
     for (const [station, thread, list] of this.#local.outboxes()) {
       for (const m of list) {
-        if (m.state === "sending" && (m.seq === undefined || m.seq === null)) this.#inner.runner.fork(Effect.ignore(this.deliver(station, thread, String(m.id), null)));
+        if (m.state === "sending" && (m.seq === undefined || m.seq === null)) this.#inner.runner.fork(Effect.ignore(this.deliver(station, thread, String(m.id), null), { log: "Unhandled", message: "message delivered" }));
       }
     }
   }

@@ -134,7 +134,7 @@ export class Accounts {
       // A login is good for one try, whatever its outcome.
       const raw = parseJson(yield* Effect.orElseSucceed(this.#host.storageGet(LOGIN_KEY), () => null));
       const pending = isObject(raw) && ["verifier", "state", "return_to", "redirect_uri"].every((k) => typeof raw[k] === "string") ? (raw as unknown as PendingLogin) : null;
-      yield* Effect.ignore(this.#host.storageDelete(LOGIN_KEY));
+      yield* Effect.ignore(this.#host.storageDelete(LOGIN_KEY), { log: "Unhandled", message: "login removed" });
       const error = param("error");
       if (error !== undefined && error !== "") {
         return yield* Effect.fail(error === "login_cancelled" ? new CoreError("login_cancelled", t("core-logic.accounts.login.cancelled")) : new CoreError("login_failed", t("core-logic.accounts.login.failed")));
@@ -182,7 +182,7 @@ export class Accounts {
       const picture = yield* this.#picture(account.access);
       if (picture !== null) {
         account.picture = picture;
-        yield* Effect.ignore(this.#put(account));
+        yield* Effect.ignore(this.#put(account), { log: "Unhandled", message: "account kept" });
       }
       return view(account);
     });
@@ -219,7 +219,7 @@ export class Accounts {
   signOut(sub: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const account = this.#get(sub);
-      if (account) yield* Effect.ignore(this.#post("/v1/auth/logout", account.refresh, { all: false }, null));
+      if (account) yield* Effect.ignore(this.#post("/v1/auth/logout", account.refresh, { all: false }, null), { log: "Unhandled", message: "signed out at still.fail" });
       yield* this.#forget(sub);
     });
   }
@@ -310,7 +310,7 @@ export class Accounts {
         span.end();
       }
       if (response.status === 401) {
-        yield* Effect.ignore(this.#forget(sub));
+        yield* Effect.ignore(this.#forget(sub), { log: "Unhandled", message: "account forgotten" });
         return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.session_expired", { email: account.email })).withStatus(401));
       }
       if (!ok(response)) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_failed", { status: response.status }), response.status));
@@ -318,7 +318,7 @@ export class Accounts {
       if (!tokens) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_unreadable")));
       const name = tokens.name ? tokens.name : account.name;
       // The new tokens are good even if they cannot be written down.
-      yield* Effect.ignore(this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }));
+      yield* Effect.ignore(this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }), { log: "Unhandled", message: "refreshed account kept" });
       return tokens.access_token;
     });
   }
@@ -333,7 +333,7 @@ export class Accounts {
       if (!account || typeof picture !== "string") return Effect.void;
       const next = { ...account, picture, name: typeof name === "string" && name !== "" ? name : account.name };
       if (next.picture === account.picture && next.name === account.name) return Effect.void;
-      return Effect.ignore(this.#put(next));
+      return Effect.ignore(this.#put(next), { log: "Unhandled", message: "account kept" });
     });
   }
 

@@ -403,6 +403,7 @@ function owner(inner: Inner): Owner {
             if (t.topic !== "lockPrompts") part(inner, ws).base = m.deviceId();
             inner.store.invalidate(t);
           }),
+          { log: "Unhandled", message: "mesh brought up" },
         ),
       );
       // The prompts are of what each workspace's lock holds, read as their workspaces change.
@@ -710,8 +711,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     let result: unknown;
     switch (c.name) {
       case "state":
-        yield* Effect.ignore(lock.base());
-        yield* Effect.ignore(read(inner, c.workspace));
+        yield* Effect.ignore(lock.base(), { log: "Unhandled", message: "lock base read" });
+        yield* Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" });
         return lockView(inner, c.workspace);
       // The notice that the lock is off, closed for good on this device (prefs `lockNotice`).
       case "dismiss":
@@ -775,7 +776,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         return yield* Effect.fail(CoreError.invalid(`no lock call ${c.name}`));
     }
     // What changed is read again before the call answers (the pages show it at once).
-    yield* Effect.ignore(read(inner, c.workspace));
+    yield* Effect.ignore(read(inner, c.workspace), { log: "Unhandled", message: "lock read" });
     return result;
   });
 }
@@ -954,7 +955,7 @@ export class Lock {
       if (body.kind === "app" && typeof r.sign_key === "string") body.sign_key = r.sign_key;
       if (body.kind === "web") body.exp = now(self.#inner) + WEB_DEVICE_SECS;
       const done = yield* self.append("device", body);
-      yield* Effect.ignore(self.#cloud("DELETE", `/lock/requests/${encodeURIComponent(device)}`));
+      yield* Effect.ignore(self.#cloud("DELETE", `/lock/requests/${encodeURIComponent(device)}`), { log: "Unhandled", message: "lock request deleted" });
       return done;
     });
   }
@@ -1035,7 +1036,7 @@ export class Lock {
       yield* self.#cloud("POST", "/lock", { entries: [entry] });
       const stations = [...fold(chain).stations.keys()];
       const later = stations.filter((s) => !waitFor.includes(s));
-      if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later)));
+      if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));
       const pinned = yield* self.#bring(chain, stations.filter((s) => waitFor.includes(s)));
       return { head: { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis }, stations: pinned };
     });

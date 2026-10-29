@@ -194,7 +194,7 @@ export function install(): void {
       }),
     );
     if (was === null) return read;
-    inner.runner.fork(Effect.ignore(read));
+    inner.runner.fork(Effect.ignore(read, { log: "Unhandled", message: "station read" }));
     return Effect.succeed({ state: JSON.parse(was) as unknown });
   };
   handlers.chatOlder = (inner, call) => {
@@ -546,7 +546,7 @@ export function install(): void {
         const out = socket.send;
         send = (frame) => {
           if ("close" in frame) closing = frame.close;
-          inner.runner.fork(Effect.ignore(out.write(encodeFrame(frame))));
+          inner.runner.fork(Effect.ignore(out.write(encodeFrame(frame)), { log: "Unhandled", message: "frame sent" }));
         };
         for (const f of held.splice(0)) send(f);
         let buf: Uint8Array = new Uint8Array();

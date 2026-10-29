@@ -677,7 +677,7 @@ export function unsealOwn(inner: Inner, ws: string): Effect.Effect<{ plain: Plai
 export function writePlain(inner: Inner, ws: string, secrets: { plain: Plain; listing: Listing | null }[]): Effect.Effect<void> {
   const v = new Vaults(inner, ws, null);
   return Effect.forEach(secrets, (s) =>
-    Effect.ignore(Effect.retry(v.putPlain(null, s.plain, s.listing), { times: 30, schedule: Schedule.spaced("2 seconds"), while: (e) => e.code === "vault_locked" || e.code === "vault_no_station" })),
+    Effect.ignore(Effect.retry(v.putPlain(null, s.plain, s.listing), { times: 30, schedule: Schedule.spaced("2 seconds"), while: (e) => e.code === "vault_locked" || e.code === "vault_no_station" }), { log: "Unhandled", message: "vault item put" }),
   { discard: true });
 }
 
@@ -844,7 +844,7 @@ class Vaults {
         self_.#keep(v, key);
         return key;
       }),
-      (key) => Effect.sync(() => void (give && inner.runner.fork(Effect.ignore(self_.#give(v.id, v.epoch, key, null))))),
+      (key) => Effect.sync(() => void (give && inner.runner.fork(Effect.ignore(self_.#give(v.id, v.epoch, key, null), { log: "Unhandled", message: "vault key given" })))),
     );
   }
 
@@ -950,7 +950,7 @@ class Vaults {
       if (!published.some(([, ok]) => ok)) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
       change(inner, self.ws, (h) => void (h.boxes[cert.device] = cert));
       const stations = published.filter(([, ok]) => ok).map(([id]) => id);
-      for (const s of stations) yield* Effect.ignore(readStation(inner, `${self.ws}/${s}`));
+      for (const s of stations) yield* Effect.ignore(readStation(inner, `${self.ws}/${s}`), { log: "Unhandled", message: "vault station read" });
       // (not made, it is offered on the page as when there is none)
       const own = Object.values(held(inner, self.ws).vaults).some((v) => !v.deleted && trusted(lock, v) && v.owner === who.sub);
       const made = own ? null : yield* Effect.orElseSucceed(Effect.map(self.create(t("core-misc.vault.personal"), null), (m) => (m as { id: string }).id), () => null);
@@ -1092,7 +1092,7 @@ class Vaults {
     const station = held(this.#inner, this.ws).at[v.id] ?? "";
     return Effect.gen(function* () {
       const said = yield* Effect.tapError(self.#station(station, "PUT", "/vault/items", next), (e) =>
-        e.code === "vault_conflict" ? Effect.ignore(readItems(self.#inner, `${self.ws}/${station}`, v.id)) : Effect.void,
+        e.code === "vault_conflict" ? Effect.ignore(readItems(self.#inner, `${self.ws}/${station}`, v.id), { log: "Unhandled", message: "vault items read" }) : Effect.void,
       );
       const item = (get(said, "item") as Item | undefined) ?? next;
       changeItems(self.#inner, self.ws, v.id, (all) => void (all[item.id] = item));
@@ -1181,7 +1181,7 @@ class Vaults {
     return Effect.gen(function* () {
       const inner = self.#inner;
       if (!held(inner, self.ws).requests[id]) {
-        for (const s of stationsOf(inner, self.ws)) yield* Effect.ignore(readStation(inner, `${self.ws}/${s.id}`));
+        for (const s of stationsOf(inner, self.ws)) yield* Effect.ignore(readStation(inner, `${self.ws}/${s.id}`), { log: "Unhandled", message: "vault station read" });
       }
       const h = held(inner, self.ws);
       const r = h.requests[id];
@@ -1286,7 +1286,7 @@ class Vaults {
       const wrapped = vault.keys.find((k) => k.cert.device === who.device)!.wrapped;
       const key = kept && kept.until > inner.host.nowMs() ? kept.key : yield* Effect.try({ try: () => openSeal(priv, wrapped, keyContext(self.ws, vault.id, vault.epoch)), catch: asCoreError });
       self.#keep(vault, key);
-      inner.runner.fork(Effect.ignore(self.#give(vault.id, vault.epoch, key, null)));
+      inner.runner.fork(Effect.ignore(self.#give(vault.id, vault.epoch, key, null), { log: "Unhandled", message: "vault key given" }));
       // Written once: an approval tried again after the station was not told finds it there.
       const had = items(inner, self.ws, vault.id)[r.item];
       if (had?.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
@@ -1375,7 +1375,7 @@ class Vaults {
     const self = this;
     return Effect.gen(function* () {
       const said = yield* Effect.tapError(self.#station(station, "PUT", "/vault/plain", next), (e) =>
-        e.code === "vault_conflict" ? Effect.ignore(readStation(self.#inner, `${self.ws}/${station}`)) : Effect.void,
+        e.code === "vault_conflict" ? Effect.ignore(readStation(self.#inner, `${self.ws}/${station}`), { log: "Unhandled", message: "vault station read" }) : Effect.void,
       );
       const item = (get(said, "item") as PlainRow | undefined) ?? (({ fields: _, ...rest }) => rest)(next);
       change(self.#inner, self.ws, (h) => void (h.plain[item.id] = { ...item, station }));

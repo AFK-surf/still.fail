@@ -636,7 +636,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
 
     // A station whose screens are not known yet is asked first: one from before screens would take the view's stream
     // for a request and never answer it.
-    if (inner.stations.screens(station) === undefined) yield* Effect.ignore(inner.stations.readScreens(station));
+    if (inner.stations.screens(station) === undefined) yield* Effect.ignore(inner.stations.readScreens(station), { log: "Unhandled", message: "screens read" });
     if (inner.stations.screens(station)?.outdated) {
       state.phase = "outdated";
       state.message = t("core-views.screen.outdated");
@@ -645,7 +645,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     }
     // A view is opened only of a screen the station listed (docs/remote-screens.md): not listed as it was held, its
     // list is read again first.
-    if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station));
+    if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station), { log: "Unhandled", message: "screens read" });
     if (listedItem() === undefined && inner.stations.screens(station) !== undefined) {
       state.phase = "gone";
       state.message = t("core-views.screen.gone");
@@ -691,7 +691,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           ask();
           yield* Effect.addFinalizer(() => Effect.sync(() => (out = out === queue ? null : out)));
           // Its writer goes with the stream (the attempt's scope).
-          yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes)))));
+          yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes))), { log: "Unhandled", message: "screen input sent" }));
           const again = Deferred.makeUnsafe<void>();
           reopen = again;
           // Another mode or size asked while it opened: opened again with it.

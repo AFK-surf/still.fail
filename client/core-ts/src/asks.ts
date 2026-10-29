@@ -237,7 +237,7 @@ export class Asks {
         while (kept.kept.length > PICTURES_KEPT || total > PICTURES_BYTES) {
           const [gone, size] = kept.kept.shift()!;
           total -= size;
-          yield* Effect.ignore(this.#host.storageDelete(`picture-${gone}`));
+          yield* Effect.ignore(this.#host.storageDelete(`picture-${gone}`), { log: "Unhandled", message: "asked picture removed" });
         }
         yield* this.#writeIndex(kept);
       }),
@@ -258,7 +258,7 @@ export class Asks {
   #writeIndex(kept: Kept): Effect.Effect<void> {
     const names = new Set(kept.kept.map(([name]) => name));
     for (const [name, other] of Object.entries(kept.standIn)) if (!names.has(other)) delete kept.standIn[name];
-    return Effect.ignore(this.#host.storageSet(PICTURES_KEY, toJsonBytes(kept)));
+    return Effect.ignore(this.#host.storageSet(PICTURES_KEY, toJsonBytes(kept)), { log: "Unhandled", message: "asked pictures kept" });
   }
 }
 

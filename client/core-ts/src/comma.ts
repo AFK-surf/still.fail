@@ -221,14 +221,14 @@ export const commaAccountProvider =
           const answer = meOf(yield* as(sub, "GET", "/v1/comma/stations/me"));
           if (answer === null) return yield* Effect.fail(new CoreError("bad_response", t("core-misc.cloud.bad_response", { brand: "Comma", error: "no user" })));
           mes.set(sub, answer);
-          if ((answer.user as { id: string }).id !== sub) yield* Effect.ignore(identify(answer));
+          if ((answer.user as { id: string }).id !== sub) yield* Effect.ignore(identify(answer), { log: "Unhandled", message: "comma identified" });
           return answer as unknown;
         });
 
       const workspace = (sub: string, id: string) =>
         Effect.gen(function* () {
           const listed = yield* as(sub, "GET", `/v1/comma/workspaces/${id}/stations`);
-          if (!mes.has(sub)) yield* Effect.ignore(me(sub));
+          if (!mes.has(sub)) yield* Effect.ignore(me(sub), { log: "Unhandled", message: "comma me read" });
           return workspaceOf(decodeURIComponent(id), listed, mes.get(sub)) as unknown;
         });
 
@@ -324,9 +324,9 @@ export const commaAccountProvider =
                 ? Effect.tryPromise({ try: () => bearer(), catch: () => CoreError.signedOut(t("core-logic.accounts.signed_out")) })
                 : Effect.succeed("");
               const answer = yield* Effect.result(Effect.map(call(token, "GET", "/v1/comma/stations/me", null), meOf));
-              if (answer._tag === "Success" && answer.success !== null) yield* Effect.ignore(identify(answer.success));
+              if (answer._tag === "Success" && answer.success !== null) yield* Effect.ignore(identify(answer.success), { log: "Unhandled", message: "comma identified" });
               // Signed out of the app: what this device kept for the account goes with it.
-              else if (answer._tag === "Failure" && answer.failure.code === "signed_out" && answer.failure.status === 401) yield* Effect.ignore(accounts.set(null));
+              else if (answer._tag === "Failure" && answer.failure.code === "signed_out" && answer.failure.status === 401) yield* Effect.ignore(accounts.set(null), { log: "Unhandled", message: "comma signed out" });
             }),
           ),
         request: (sub, method, path, body) => request(sub, method, path, body),

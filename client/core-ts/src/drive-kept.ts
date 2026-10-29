@@ -129,7 +129,7 @@ export class DriveKept {
   }
 
   #forget(keys: string[]): Effect.Effect<void> {
-    return Effect.forEach(keys, (key) => Effect.ignore(this.#host.storageDelete(key)), { discard: true });
+    return Effect.forEach(keys, (key) => Effect.ignore(this.#host.storageDelete(key), { log: "Unhandled", message: "drive upload removed" }), { discard: true });
   }
 
   /// Bytes `offset` to `offset + length` of the file `id` as it was (`mtime`, `size`), with its type, if they are kept

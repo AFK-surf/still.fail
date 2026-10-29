@@ -155,7 +155,7 @@ export class Attention implements Owner {
             if (c.workspaces !== null) store.invalidateAll((t) => t.topic === "workspaceMarks");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             // what it shows changed: its registration given again (pushes made so), not waited on
-            else if ((c.kinds !== null || c.preview !== null || c.workspaces !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered()));
+            else if ((c.kinds !== null || c.preview !== null || c.workspaces !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered(), { log: "Unhandled", message: "push registration sent" }));
             return self.#notify();
           });
         case "permission":
@@ -183,7 +183,7 @@ export class Attention implements Owner {
       const c = call as Extract<Call, { kind: "pushRegister" }>;
       return Effect.gen(function* () {
         if (!attend.on()) return null;
-        yield* Effect.ignore(core.host.storageSet(PUSH_KEY, new TextEncoder().encode(JSON.stringify({ registration: c.registration, with: [], lang: null }))));
+        yield* Effect.ignore(core.host.storageSet(PUSH_KEY, new TextEncoder().encode(JSON.stringify({ registration: c.registration, with: [], lang: null }))), { log: "Unhandled", message: "push registration kept" });
         const r = (yield* self.#registered()) as { _tag: string; failure?: J };
         if (r._tag === "Failure") return yield* Effect.fail(r.failure);
         return null;
@@ -193,11 +193,11 @@ export class Attention implements Owner {
       Effect.gen(function* () {
         attend.setPushing(false);
         const kept = parseJson(yield* Effect.orElseSucceed(core.host.storageGet(PUSH_KEY), () => null)) as J;
-        yield* Effect.ignore(core.host.storageDelete(PUSH_KEY));
+        yield* Effect.ignore(core.host.storageDelete(PUSH_KEY), { log: "Unhandled", message: "push registration removed" });
         if (isObject(kept) && isObject(kept.registration)) {
           const gone: J = {};
           for (const k of ["endpoint", "token"]) if ((kept.registration as J)[k] !== undefined) gone[k] = (kept.registration as J)[k];
-          for (const account of core.accounts.list()) yield* Effect.ignore(core.provider.request(account.sub, "DELETE", "/v1/push", gone));
+          for (const account of core.accounts.list()) yield* Effect.ignore(core.provider.request(account.sub, "DELETE", "/v1/push", gone), { log: "Unhandled", message: "push registration deleted" });
         }
         return null;
       });

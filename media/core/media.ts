@@ -115,7 +115,7 @@ export const media: CoreModule = {
         Effect.gen(function* () {
           const reply = yield* env.stream(station, "/events");
           // Opened (again): what is shown may have changed meanwhile.
-          for (const t of shown.get(station)?.values() ?? []) yield* Effect.ignore(read(t));
+          for (const t of shown.get(station)?.values() ?? []) yield* Effect.ignore(read(t), { log: "Unhandled", message: "media read" });
           const parser = new SseParser();
           for (;;) {
             const chunk = yield* reply.body.take;
@@ -132,7 +132,7 @@ export const media: CoreModule = {
               if (!of) continue;
               // The photos changed: every window of the timeline shown, and the albums.
               if (event === "photos") {
-                for (const t of [...of.values()].filter((t) => t.topic === T.timeline || t.topic === T.albums)) yield* Effect.ignore(read(t));
+                for (const t of [...of.values()].filter((t) => t.topic === T.timeline || t.topic === T.albums)) yield* Effect.ignore(read(t), { log: "Unhandled", message: "media read" });
                 continue;
               }
               // The films and shows changed: the library and each shown; the viewer's place in one: it, and the library
@@ -146,18 +146,18 @@ export const media: CoreModule = {
                   }
                 })();
                 const which = [...of.values()].filter((t) => t.topic === T.videos || (event === "videos" ? t.topic === T.video : t.topic === T.progress && t.id === id));
-                for (const t of which) yield* Effect.ignore(read(t));
+                for (const t of which) yield* Effect.ignore(read(t), { log: "Unhandled", message: "media read" });
                 continue;
               }
               const asked = event === "shelf" ? topic.shelf(station) : event === "place" ? topic.place(station, book) : event === "notes" ? topic.notes(station, book) : null;
               // A book changed: its contents too, if shown.
               const also = event === "shelf" ? [...of.values()].filter((t) => t.topic === T.book) : [];
-              for (const t of [asked, ...also]) if (t && of.has(keyOf(t))) yield* Effect.ignore(read(t));
+              for (const t of [asked, ...also]) if (t && of.has(keyOf(t))) yield* Effect.ignore(read(t), { log: "Unhandled", message: "media read" });
             }
           }
         }),
       ).pipe(
-        Effect.ignore,
+        Effect.ignore({ log: "Unhandled", message: "media followed" }),
         // Ended or failed: opened again a moment later, for as long as anything is shown.
         Effect.andThen(Effect.sleep("5 seconds")),
         Effect.repeat(Schedule.forever),
@@ -181,7 +181,7 @@ export const media: CoreModule = {
           let of = shown.get(station);
           if (!of) shown.set(station, (of = new Map()));
           of.set(keyOf(t), t);
-          env.fork(Effect.ignore(read(t)));
+          env.fork(Effect.ignore(read(t), { log: "Unhandled", message: "media read" }));
           if (!following.has(station)) following.set(station, env.fork(follow(station)));
         },
         stop: (t) => {

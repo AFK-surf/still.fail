@@ -106,6 +106,7 @@ export function served(inner: Inner, connection: IrohConnection): void {
         }),
         Effect.sync(() => connection.close(0, "done")),
       ),
+      { log: "Unhandled", message: "pairing served" },
     ),
   );
 }
@@ -219,7 +220,7 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const signed = yield* Effect.result(new Lock(inner, p.ws, p.account, null, true).append("device", body));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
-      yield* Effect.ignore(read(inner, p.ws));
+      yield* Effect.ignore(read(inner, p.ws), { log: "Unhandled", message: "pairing workspace read" });
     }
     return { t: "approved", workspaces: done, failed };
   });
@@ -376,7 +377,7 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     if (approved !== null) {
       drop(y);
       y.state = "done";
-      for (const ws of arr(get(approved, "workspaces"))) if (typeof ws === "string") yield* Effect.ignore(read(inner, ws));
+      for (const ws of arr(get(approved, "workspaces"))) if (typeof ws === "string") yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
     } else if (y.met.size > 0) {
       y.state = "wrong";
       y.left = left;

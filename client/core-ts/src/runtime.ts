@@ -1,7 +1,7 @@
 // Where the core's work runs: fibers on Effect's runtime, in scopes, every timer on its Clock — the live one, or a
 // TestClock in tests. What arrives from outside (a UI's message, a host callback) is synchronous; it starts fibers
 // here. Nothing in the core calls setTimeout itself.
-import { Cause, Clock, Effect, Exit, Fiber, FiberSet, Scope } from "effect";
+import { Cause, Clock, Effect, Exit, Fiber, FiberSet, Logger, Scope } from "effect";
 
 /// A scope and the fibers forked in it: closing it interrupts them, and anything else that was opened in it.
 export type Scoped = { readonly scope: Scope.Closeable; readonly fibers: FiberSet.FiberSet<unknown, unknown> };
@@ -28,6 +28,18 @@ export class Runner {
   onDefect: (error: unknown) => void = (error) => {
     console.error("core fiber failed", error);
   };
+  /// Told of a failure let go of on purpose (`Effect.ignore(…, { log: "Unhandled", message: what })`): what nothing
+  /// waited on still leaves a trace (core.ts records it as a failed span).
+  onIgnored: (what: string, error: unknown) => void = (what, error) => {
+    console.warn("core let a failure go", what, error);
+  };
+  /// Where what the core's fibers log goes: only failures let go of are logged.
+  readonly #loggers = new Set([
+    Logger.make(({ message, cause }) => {
+      if (cause.reasons.length === 0) return;
+      this.onIgnored((Array.isArray(message) ? message : [message]).join(" "), Cause.squash(cause));
+    }),
+  ]);
 
   constructor(clock?: Clock.Clock) {
     this.clock = clock ?? null;
@@ -35,9 +47,10 @@ export class Runner {
     this.root = { scope, fibers: Effect.runSync(Scope.provide(FiberSet.make(), scope)) };
   }
 
-  /// The effect with the core's clock.
+  /// The effect with the core's clock and loggers.
   provide<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
-    return this.clock ? effect.pipe(Effect.provideService(Clock.Clock, this.clock)) : effect;
+    const logged = effect.pipe(Effect.provideService(Logger.CurrentLoggers, this.#loggers));
+    return this.clock ? logged.pipe(Effect.provideService(Clock.Clock, this.clock)) : logged;
   }
 
   /// Runs an effect as a fiber of `scoped` (the core's by default): interrupted when it closes. A failure that is no

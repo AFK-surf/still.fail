@@ -91,7 +91,7 @@ class Device {
     this.#writer = runner.fork(
       Effect.forever(
         Effect.flatMap(Queue.take(this.#writes), (table) =>
-          Effect.uninterruptible(Effect.suspend(() => (this.#dirty.has(table) ? Effect.ignore(this.#write(table)) : Effect.void))),
+          Effect.uninterruptible(Effect.suspend(() => (this.#dirty.has(table) ? Effect.ignore(this.#write(table), { log: "Unhandled", message: "table written" }) : Effect.void))),
         ),
       ),
     );
@@ -327,7 +327,7 @@ export class Data {
         this.#dbs.delete(sub);
         this.#setNote(sub, null);
         db.close();
-        if (this.#host.deleteDb) yield* Effect.ignore(this.#host.deleteDb(db.name));
+        if (this.#host.deleteDb) yield* Effect.ignore(this.#host.deleteDb(db.name), { log: "Unhandled", message: "database deleted" });
         this.#tellAll();
       }
       for (const sub of subs) if (!this.#dbs.has(sub)) yield* this.#open(sub);
@@ -441,7 +441,7 @@ export class Data {
       const marking = this.#damaged.get(name);
       if (marking) yield* Effect.promise(() => marking);
       this.#damaged.delete(name);
-      yield* Effect.ignore(this.#host.storageDelete(damagedKey(name)));
+      yield* Effect.ignore(this.#host.storageDelete(damagedKey(name)), { log: "Unhandled", message: "damage mark removed" });
       this.#report("LocalDbMadeAgain", `${why}; ${rows} rows of this device's kept`);
       return opened;
     });
@@ -451,7 +451,7 @@ export class Data {
   /// it waits for the mark before it ends (damageKept).
   #sawDamage(name: string, error: SqlError): void {
     if (this.#damaged.has(name)) return;
-    this.#damaged.set(name, this.#runner.run(Effect.ignore(this.#host.storageSet(damagedKey(name), toJsonBytes({ error: error.message })))));
+    this.#damaged.set(name, this.#runner.run(Effect.ignore(this.#host.storageSet(damagedKey(name), toJsonBytes({ error: error.message })), { log: "Unhandled", message: "damage mark kept" })));
   }
 
   /// Resolves once every damaged database found is marked so: what a core ending on a bug waits for (the hosts'

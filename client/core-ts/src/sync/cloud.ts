@@ -148,12 +148,12 @@ export class CloudSync {
   refreshAccount(sub: string): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const scheduler = this.#core.scheduler;
-      yield* Effect.ignore(scheduler.ask("cloud", `me/${sub}`, Priority.asked, this.#me(sub)));
+      yield* Effect.ignore(scheduler.ask("cloud", `me/${sub}`, Priority.asked, this.#me(sub)), { log: "Unhandled", message: "me read" });
       const me = this.#core.data.record("me", sub);
       const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
-      const reads = ids.filter((id) => this.#core.workspaces.owner(id) === sub).map((id) => Effect.ignore(scheduler.ask("cloud", `workspace/${id}`, Priority.asked, this.#workspace(id))));
-      if (this.#core.provider.supports("loginSessions")) reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub))));
-      if (this.#admins.has(sub)) reads.push(Effect.ignore(scheduler.ask("cloud", `admin/${sub}`, Priority.asked, this.#admin(sub))));
+      const reads = ids.filter((id) => this.#core.workspaces.owner(id) === sub).map((id) => Effect.ignore(scheduler.ask("cloud", `workspace/${id}`, Priority.asked, this.#workspace(id)), { log: "Unhandled", message: "workspace read" }));
+      if (this.#core.provider.supports("loginSessions")) reads.push(Effect.ignore(scheduler.ask("cloud", `sessions/${sub}`, Priority.asked, this.#loginSessions(sub)), { log: "Unhandled", message: "login sessions read" }));
+      if (this.#admins.has(sub)) reads.push(Effect.ignore(scheduler.ask("cloud", `admin/${sub}`, Priority.asked, this.#admin(sub)), { log: "Unhandled", message: "admin read" }));
       yield* Effect.all(reads, { concurrency: "unbounded" });
     });
   }
@@ -287,7 +287,7 @@ export class CloudSync {
     for (const w of isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []) {
       if (!isObject(w) || typeof w.id !== "string") continue;
       const key = `${CREDENTIAL_KEY}/${sub}/${w.id}`;
-      core.runner.fork(Effect.all([Effect.ignore(core.host.storageDelete(`${key}/${CREDENTIAL_OTHERS}`)), Effect.ignore(core.host.storageDelete(key))]));
+      core.runner.fork(Effect.all([Effect.ignore(core.host.storageDelete(`${key}/${CREDENTIAL_OTHERS}`), { log: "Unhandled", message: "credentials removed" }), Effect.ignore(core.host.storageDelete(key), { log: "Unhandled", message: "credentials removed" })]));
     }
   }
 
@@ -325,7 +325,7 @@ export class CloudSync {
       const first = known();
       if (first !== null) return first;
       yield* Effect.all(
-        core.accounts.list().map((a) => Effect.ignore(core.scheduler.ask("cloud", `me/${a.sub}`, Priority.asked, this.#me(a.sub)))),
+        core.accounts.list().map((a) => Effect.ignore(core.scheduler.ask("cloud", `me/${a.sub}`, Priority.asked, this.#me(a.sub)), { log: "Unhandled", message: "me read" })),
         { concurrency: "unbounded" },
       );
       const after = known();
@@ -345,7 +345,7 @@ export class CloudSync {
       }
       let last = CoreError.signedOut(t("core-misc.account.none"));
       for (const account of core.accounts.list()) {
-        yield* Effect.ignore(core.scheduler.ask("cloud", `me/${account.sub}`, Priority.asked, this.#me(account.sub)));
+        yield* Effect.ignore(core.scheduler.ask("cloud", `me/${account.sub}`, Priority.asked, this.#me(account.sub)), { log: "Unhandled", message: "me read" });
         const r = relaysOf(core.data.record("me", account.sub));
         if (r) return r;
         last = this.mes.get(account.sub) ?? last;
@@ -431,8 +431,8 @@ export class CloudSync {
       const k: KeptCredential = { device, ...c };
       if (other) {
         others = [k, ...others.filter((o) => o.device !== device)].slice(0, CREDENTIAL_OTHERS_KEPT);
-        yield* Effect.ignore(core.host.storageSet(othersKey, toJsonBytes(others)));
-      } else yield* Effect.ignore(core.host.storageSet(key, toJsonBytes(k)));
+        yield* Effect.ignore(core.host.storageSet(othersKey, toJsonBytes(others)), { log: "Unhandled", message: "credentials kept" });
+      } else yield* Effect.ignore(core.host.storageSet(key, toJsonBytes(k)), { log: "Unhandled", message: "credentials kept" });
       return c;
     });
   }
@@ -467,7 +467,7 @@ export class CloudSync {
         if (sent._tag === "Success") withSubs.push(account.sub);
         else failed = sent.failure;
       }
-      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang, shows })));
+      yield* Effect.ignore(core.host.storageSet(PUSH_KEY, toJsonBytes({ registration, with: withSubs, lang, shows })), { log: "Unhandled", message: "push registration kept" });
       if (failed) return yield* Effect.fail(failed);
       return null;
     });
@@ -489,7 +489,7 @@ export class CloudSync {
     this.syncSockets();
     void before;
     // Someone signed in: their devices hear pushes too.
-    core.runner.fork(Effect.ignore(this.pushRegistered()));
+    core.runner.fork(Effect.ignore(this.pushRegistered(), { log: "Unhandled", message: "push registration sent" }));
   }
 
   // ── still.fail cloud's events ──
