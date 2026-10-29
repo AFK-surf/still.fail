@@ -1132,7 +1132,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       continue
     }
     let gx = on_pixels(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
-    let gy = on_pixels(top + lay.line_base[l] + g.oy / z, sc)
+    let gy = on_glyph_row(top + lay.line_base[l], g.oy / z, sc)
     self.push_inst(
       gx,
       gy,

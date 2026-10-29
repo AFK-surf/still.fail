@@ -408,6 +408,15 @@ fn on_pixels(v : Double, sc : Double) -> Double {
 }
 
 ///|
+/// Where a glyph's picture goes down the screen: its line's baseline `base` set on the pixels first, then the glyph's
+/// own offset `oy` from it. A host draws each picture with the baseline on a pixel row (win_text.cpp), so every glyph
+/// of a line lands on the same row; rounded as one sum, a baseline half way between two rows went up for one glyph
+/// and down for the next, by how its offset's float rounded (at 150%, a flat-topped "u" a pixel above its "p" and "s").
+fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
+  on_pixels(on_pixels(base, sc) + oy, sc)
+}
+
+///|
 fn Ctx::push_inst(
   self : Ctx,
   x : Double,
@@ -628,7 +637,7 @@ fn Ctx::emit_text(
       0.0
     }
     let gx = on_pixels(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
-    let gy = on_pixels(top + tl.ascent + g.oy / z, sc)
+    let gy = on_glyph_row(top + tl.ascent, g.oy / z, sc)
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(
       gx,
