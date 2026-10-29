@@ -137,14 +137,20 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
-/// What 本机缓存's row in the settings' list says (SettingsHome.kt: KeptFiles.read's total): the chats' kept data in
-/// all, once the core has said it ("" until then).
+/// What 本机缓存's row in the settings' list says: all its page counts (kept_total), once the core has said it (""
+/// until then).
 pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
   kept_read(c, core)
   match kept.chats.get() {
-    Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
+    Some(chats) => size_words(kept_total(chats))
     None => ""
   }
+}
+
+///|
+/// All that is kept: the chats' (their messages and files), the files of no chat known and the drives' files.
+fn kept_total(chats : Array[Json]) -> Double {
+  chats.fold(init=kept.drive.get() + files_bytes(kept.loose.get()), fn(s, x) { s + chat_bytes(x) })
 }
 
 ///|
@@ -215,11 +221,14 @@ fn size_row(
 
 ///|
 /// What this device keeps while it is read (the library's Waiting, in its bones): made-up rows of sizes on their card,
-/// as size_row draws them (`chats`: by chat under their heading; else a chat's messages, then its files).
+/// as size_row draws them (`chats`: what all is made of, then the chats under their heading; else a chat's messages,
+/// then its files).
 fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
-  if !chats {
-    list_card(c, fn() { size_row(c, "", @sf.sample_words(4), @sf.sample_words(14), 1.0) |> ignore })
-  }
+  list_card(c, fn() {
+    for n in if chats { [6, 8, 5] } else { [4] } {
+      size_row(c, "", @sf.sample_words(n), if chats { "" } else { @sf.sample_words(14) }, 1.0) |> ignore
+    }
+  })
   section_header(c, @sf.sample_words(4), start=S6)
   let rows = [(8, 16), (6, 12), (10, 18), (7, 14)]
   for i, n in rows {
@@ -229,10 +238,11 @@ fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
 }
 
 ///|
-/// What this device keeps (KeptFilesScreen): by chat, what the core keeps of each (its messages, its transcripts, the
-/// files opened in it), each to look into; then what is of no chat: files of no chat known, the drives' files opened
-/// (`drive.kept.clear`); or everything. (The Android app also lists its web pages' cache, update packages, temporary
-/// files and the core's own data: this app keeps none of those apart.)
+/// What this device keeps: all of it first, as one figure over a bar of what it is made of (the chats' messages, the
+/// files opened in them, the drives' files, the files of no chat known), each part a row under it, those that can be
+/// gone into or let go so; then the chats, the one keeping most first, the first few until all are asked for; then
+/// whether opened files go on coming, and everything let go at once. (The Android app also lists its web pages' cache,
+/// update packages, temporary files and the core's own data: this app keeps none of those apart.)
 fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
   kept_read(c, core)
@@ -241,77 +251,37 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { large_title(c, tr("android-settings.files.title")) },
     fn() { page_note(c, tr("android-settings.files.note")) },
   ]
-  fill_blocks(c, core, blocks)
   match kept.chats.get() {
     None => blocks.push(fn() { waiting_rows(c, fn() { kept_sample(c, true) }) })
     Some(chats) => {
       let loose = kept.loose.get()
-      let total = chats.fold(init=kept.drive.get() + files_bytes(loose), fn(s, x) { s + chat_bytes(x) })
-      blocks.push(fn() {
-        section_header(c, tr("android-settings.files.byChat"), trailing=fill("android-settings.files.total", [("size", size_words(total))]), start=S6)
-      })
-      if chats.length() == 0 {
-        blocks.push(fn() { page_note(c, tr("android-settings.files.none")) })
-      } else {
+      let total = kept_total(chats)
+      blocks.push(fn() { kept_parts(c, core, chats, loose, total) })
+      if chats.length() > 0 {
+        blocks.push(fn() { section_header(c, tr("android-settings.files.byChat"), start=S6) })
         // a block each, one card's pieces: of many chats only the rows in view are laid out (one block of them all was
         // built whole each frame, every row's words with it)
-        let n = chats.length()
-        for i, x in chats {
+        let more = chats.length() > kept_first
+        let all = kept_all.get()
+        let shown = if more && !all { kept_first } else { chats.length() }
+        for i in 0..<shown {
+          let x = chats[i]
+          blocks.push(fn() { kept_chat_row(c, core, x, (i == 0, i == shown - 1 && !more)) })
+        }
+        if more {
           blocks.push(fn() {
-            let xv = Some(x)
-            let title = match text(xv, "title") {
-              "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
-              s => s
-            }
-            let files = items(xv, "files")
-            let messages = size_words(number(xv, "bytes"))
-            let sub = if files.length() == 0 {
-              fill("android-settings.files.chat.messages", [("size", messages)])
+            let words = if all {
+              tr("web-main.fold")
             } else {
-              fill("android-settings.files.chat.both", [
-                ("size", messages),
-                ("n", files.length().to_string()),
-                ("files", size_words(files_bytes(files))),
-              ])
+              fill("web-main.usage.showAll", [("n", chats.length().to_string())])
             }
-            if size_row(
-                c,
-                "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string(),
-                title,
-                sub,
-                chat_bytes(x),
-                more=true,
-                piece=(i == 0, i == n - 1),
-              ) {
-              (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
+            if list_row(c, key="kept-chats-all", piece=(false, true), fn() { row_title(c, words, color=t.p.muted) }) {
+              kept_all.set(!all)
             }
           })
         }
       }
-      // what is of no chat (KeptFiles.kt 其他): files of no chat known, the drives' files opened (文件浏览), each to
-      // delete when there are some
-      blocks.push(fn() { section_header(c, tr("android-settings.files.other"), start=S6) })
-      blocks.push(fn() {
-        list_card(c, fn() {
-          if loose.length() > 0 &&
-            size_row(
-              c,
-              "kept-loose",
-              tr("android-settings.files.loose"),
-              fill("android-settings.files.count", [("n", loose.length().to_string())]),
-              files_bytes(loose),
-              more=true,
-            ) {
-            (core.push)(KeptChat("", -1))
-          }
-          let drive = kept.drive.get()
-          if size_row(c, if drive > 0.0 { "kept-drive" } else { "" }, tr("android-settings.files.drive"), tr("android-settings.files.drive.sub"), drive) {
-            confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
-              (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
-            })
-          }
-        })
-      })
+      fill_blocks(c, core, blocks)
       if total > 0.0 {
         blocks.push(fn() {
           list_card(c, fn() {
@@ -342,6 +312,184 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "kept", blocks)
 }
+
+///|
+/// The chats shown until all are asked for (as 用量's lists show theirs).
+let kept_first : Int = 8
+
+///|
+/// Whether all the chats are shown on 本机缓存, not only the first kept_first.
+let kept_all : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// All that is kept, large, over a bar of what it is made of, each part a row with its colour's dot: the chats'
+/// messages, the files opened in them, the drives' files (let go when asked), the files of no chat known (gone into);
+/// those with nothing in them left out.
+fn kept_parts(c : @ui.Ctx, core : Core, chats : Array[Json], loose : Array[Json], total : Double) -> Unit {
+  let messages = chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") })
+  let opened = chats.fold(init=0.0, fn(s, x) { s + files_bytes(items(Some(x), "files")) })
+  let drive = kept.drive.get()
+  let parts = [
+    ("messages", tr("android-settings.files.messages"), messages),
+    ("opened", tr("android-settings.files.chatFiles"), opened),
+    ("drive", tr("android-settings.files.drive"), drive),
+    ("loose", tr("android-settings.files.looseShort"), files_bytes(loose)),
+  ].filter(fn(p) { p.2 > 0.0 })
+  list_card(c, fn() {
+    // (as a row of the card: the bar as far in as the rows' words, high enough over the row's foot to keep out of
+    // its corners)
+    list_row(c, fn() {
+      c.box(style=kept_whole, fn() {
+        c.text(size_words(total), style=kept_figure) |> ignore
+        if total > 0.0 {
+          c.box(style=kept_bar, fn() {
+            for i, p in parts {
+              let (_, _, size) = p
+              let share = @cmp.maximum(kept_bar_least, size / total)
+              c.box(style=kept_bar_part.then(@ui.style(w=Grow(share), bg=Data(@sf.usage_series(i)))), fn() {  }) |> ignore
+            }
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+    // the parts two by two under it, each its dot, its name over its size (as wide as half the card: what is in
+    // them a word or two)
+    for k in 0..<((parts.length() + 1) / 2) {
+      c.box(style=kept_parts_line, fn() {
+        for i in (k * 2)..<(k * 2 + 2) {
+          if i >= parts.length() {
+            c.box(style=kept_part_room, fn() {  }) |> ignore
+            continue
+          }
+          let (what, name, size) = parts[i]
+          let id = match what {
+            "drive" => c.id("kept-drive")
+            "loose" => c.id("kept-loose")
+            _ => 0
+          }
+          // (as high as a press's room at least, the native input's)
+          c.box(style=(if id != 0 { kept_part_lit } else { kept_part_room }).then(@sf.row_least_h()), id~, fn() {
+            c.box(style=kept_part_head, fn() {
+              c.box(style=kept_dot.then(@ui.style(bg=Data(@sf.usage_series(i)))), fn() {  }) |> ignore
+              c.text(name, style=kept_part_name) |> ignore
+            })
+            |> ignore
+            c.box(style=kept_part_size_room, fn() { c.text(size_words(size), style=kept_part_size) |> ignore }) |> ignore
+            if id != 0 {
+              @motion.ripple(c, id, @sf.row_corner)
+            }
+          })
+          |> ignore
+          if id != 0 && hit(c, id) {
+            if what == "drive" {
+              confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
+                (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
+              })
+            } else {
+              (core.push)(KeptChat("", -1))
+            }
+          }
+        }
+      })
+      |> ignore
+    }
+  })
+}
+
+///|
+/// A chat on 本机缓存: what it is called, what it keeps; gone into.
+fn kept_chat_row(c : @ui.Ctx, core : Core, x : Json, piece : (Bool, Bool)) -> Unit {
+  let xv = Some(x)
+  let title = match text(xv, "title") {
+    "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
+    s => s
+  }
+  let files = items(xv, "files")
+  let size = chat_bytes(x)
+  // (its messages alone: the size at its end says it)
+  let sub = if files.length() == 0 {
+    ""
+  } else {
+    fill("android-settings.files.chat.both", [
+      ("size", size_words(number(xv, "bytes"))),
+      ("n", files.length().to_string()),
+      ("files", size_words(files_bytes(files))),
+    ])
+  }
+  let key = "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string()
+  if list_row(c, key~, piece~, fn() {
+      row_lines(c, title, sub, end=fn() {
+        c.text(size_words(size), style=fill_size_words) |> ignore
+        chevron(c)
+      })
+    }) {
+    (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
+  }
+}
+
+///|
+/// The figure and the bar under it, 12 apart; 8 under the bar, out of its row's corners.
+// kept across runs: a value (no field of it changes)
+let kept_whole : @ui.Style = @ui.css("w=Full gap=S3 pb=S2")
+
+///|
+/// The least share of the bar a part has, seen however little it keeps.
+let kept_bar_least : Double = 0.01
+
+///|
+/// All that is kept, as 用量's totals are said (the heading's size, 600).
+// kept across runs: a value (no field of it changes)
+let kept_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Full)
+
+///|
+/// What all that is kept is made of: its parts side by side, 1 apart, as wide as what each keeps.
+// kept across runs: a value (no field of it changes)
+let kept_bar : @ui.Style = @ui.css("row w=Full h=S2 gap=SPx radius=Full bg=TintStrong clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let kept_bar_part : @ui.Style = @ui.css("h=Full")
+
+///|
+/// Two parts side by side.
+// kept across runs: a value (no field of it changes)
+let kept_parts_line : @ui.Style = @ui.css("row w=Full")
+
+///|
+/// A part: its name's line over its size, as far in as a row's words.
+// kept across runs: a value (no field of it changes)
+let kept_part_room : @ui.Style = @ui.css("gap=SPx radius=Inner").then(@ui.style(w=@sf.grow, p=@sf.list_words_room))
+
+///|
+/// One that is tapped: lit under the hand.
+// kept across runs: a value (no field of it changes)
+let kept_part_lit : @ui.Style = kept_part_room.then(@ui.css("hovered{bg=Hover}"))
+
+///|
+/// Its dot and its name, 8 apart.
+// kept across runs: a value (no field of it changes)
+let kept_part_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let kept_part_name : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
+
+///|
+/// Its size under its name, as far in as the name (past its dot's 8 and the 8 after it).
+// kept across runs: a value (no field of it changes)
+let kept_part_size_room : @ui.Style = @ui.css("w=Full pl=S4")
+
+///|
+// kept across runs: a value (no field of it changes)
+let kept_part_size : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=Full)
+
+///|
+/// A part's dot, its colour in the bar (用量's people's).
+// kept across runs: a value (no field of it changes)
+let kept_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 /// A row's words beside what is at its end (a switch, a ✕), as wide as it leaves them.

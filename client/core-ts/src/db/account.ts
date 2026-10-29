@@ -1720,14 +1720,14 @@ export class AccountDb {
   }
 
   /// What this database keeps of each chat (a thread): its entries, its sessions' transcripts and what it shows small, in
-  /// characters of their JSON (near enough their bytes), with its title and sessions; what a session has counted with
-  /// its first thread. For the device's page of what it keeps (`cache.usage`).
-  cacheUsage(): { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }[] {
-    const out = new Map<string, { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }>();
+  /// characters of their JSON (near enough their bytes), with its sessions and its row as held (`view`, null when none
+  /// is); what a session has counted with its first thread. For the device's page of what it keeps (`cache.usage`).
+  cacheUsage(): { station: string; thread: number; view: J | null; sessions: string[]; bytes: number }[] {
+    const out = new Map<string, { station: string; thread: number; view: J | null; sessions: string[]; bytes: number }>();
     const of = (station: string, thread: number) => {
       const k = `${station}\0${thread}`;
       let row = out.get(k);
-      if (row === undefined) out.set(k, (row = { station, thread, title: null, sessions: [], bytes: 0 }));
+      if (row === undefined) out.set(k, (row = { station, thread, view: null, sessions: [], bytes: 0 }));
       return row;
     };
     for (const r of this.sql.all("SELECT station, thread, sum(length(json)) FROM entry GROUP BY station, thread")) of(r[0] as string, r[1] as number).bytes += Number(r[2] ?? 0);
@@ -1756,8 +1756,7 @@ export class AccountDb {
     }
     for (const row of out.values()) {
       const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
-      const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
-      if (typeof title === "string" && title.trim() !== "") row.title = title;
+      if (json !== undefined) row.view = parse(json) as J;
     }
     return [...out.values()].filter((r) => r.bytes > 0);
   }

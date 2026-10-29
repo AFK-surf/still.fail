@@ -612,12 +612,10 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)
   t.draw()
-  // under 其他: 文件浏览, 38.5 MB of them; with the chats' 18.3 MB and the 900 KB of no chat known, 57.7 MB in all
-  // (KeptFiles.kt)
-  assert_true(t.find("其他") is Some(_))
+  // all of it first: 文件浏览, 38.5 MB of them; with the chats' 18.3 MB and the 900 KB of no chat known, 57.7 MB
   assert_true(t.find("文件浏览") is Some(_))
   assert_true(t.find("38.5 MB") is Some(_))
-  assert_true(t.find("共 57.7 MB") is Some(_))
+  assert_true(t.find("57.7 MB") is Some(_))
   // tapped, asked first; 删除: let go, read again
   t.tap_text("文件浏览")
   sheet_rested(t, "sf-present")
@@ -626,33 +624,38 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
     Some((_, x, y, w, h, _)) => t.tap(x + w / 2.0, y + h / 2.0)
     None => fail("no 删除")
   }
-  // (asked again once it is let go, drawn with the answer)
+  // (asked again once it is let go, drawn with the answer: nothing of it left, its row gone)
   t.draw()
   t.draw()
   assert_true(t.find("38.5 MB") is None)
-  assert_true(t.find("0 B") is Some(_))
-  assert_true(t.find("共 19.2 MB") is Some(_))
+  assert_true(t.find("19.2 MB") is Some(_))
 }
 
 ///|
-test "本机缓存 with many chats: only the rows in view laid out, one card all the same, the last one reached" {
+test "本机缓存 with many chats: the ones keeping most first, all when asked, only the rows in view laid out" {
   let t = settings_tester("kept", shows="settings-kept-many")
   t.draw()
-  // a block each: of 203 rows a screen's (one block of them all was built whole each frame, every row's words with it)
+  // the first few, the one keeping most first: of the 200 made up the biggest, not the smallest
   let built = fn() { t.words().filter(fn(w) { w.0.has_prefix("测试会话 ") }).length() }
-  assert_true(t.find("测试会话 1") is Some(_))
-  assert_true(built() > 0 && built() < 20)
-  // one card: its corners where it begins and ends only, as any (the pieces' patches its own ground)
+  let shows = fn(words : String) { t.words().iter().any(fn(w) { w.0 == words }) }
+  assert_true(shows("整理发布清单"))
+  assert_true(shows("测试会话 200"))
+  assert_true(!shows("测试会话 1"))
   assert_eq(t.corner_faults(), [])
   t.scroll_to_end()
   t.draw()
-  assert_true(t.find("测试会话 200") is Some(_))
-  assert_true(built() < 20)
+  t.tap_text("显示全部 203 个")
+  t.draw()
+  // a block each: of 203 rows a screen's (one block of them all was built whole each frame, every row's words with it)
+  t.scroll_to_end()
+  t.draw()
+  assert_true(shows("测试会话 1"))
+  assert_true(built() > 0 && built() < 20)
   assert_eq(t.corner_faults(), [])
   // the last row taps as any
-  t.tap_text("测试会话 200")
+  t.tap_text("测试会话 1")
   nav_rested(t)
-  assert_true(t.find("测试会话 200") is Some(_))
+  assert_true(t.find("测试会话 1") is Some(_))
   assert_true(t.find("消息记录") is Some(_))
 }
 
@@ -663,9 +666,15 @@ test "本机缓存: a chat's files opened, each let go by its bin; those of no c
   // the chat: its messages and its 2 files (KeptFiles.kt chat.both), what is kept of it all
   assert_true(t.find("消息 2.3 MB · 2 个文件 15.2 MB") is Some(_))
   assert_true(t.find("17.5 MB") is Some(_))
-  // of no chat known: a row of its own under 其他
-  assert_true(t.find("无法确定所属 chat 的文件") is Some(_))
-  assert_true(t.find("1 个文件") is Some(_))
+  // a chat of its messages alone: its size once, at its end
+  assert_true(t.find("夜里的构建又失败了") is Some(_))
+  assert_true(t.find("消息 40 KB") is None)
+  // of no chat known: a part of all that is kept, of its own, its page named in full
+  t.tap_text("其他文件")
+  nav_rested(t)
+  assert_true(t.find("无法确定所属对话的文件") is Some(_))
+  t.back()
+  nav_rested(t)
   t.tap_text("整理发布清单")
   t.run_for(@ui.move_most_ms)
   // its files: how much, when opened, or only a part of it come

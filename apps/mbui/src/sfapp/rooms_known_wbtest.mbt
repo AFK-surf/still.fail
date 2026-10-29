@@ -33,7 +33,7 @@
 /// (chat-things-side), what chat-letters-side has: its tab's close key, 3 more. A new chat whose station lends its files
 /// (newchat-lend), what newchat has: its station and model chips and its frequent ones, 7 more. The card to share swept
 /// (share-card and its looks), over a new chat's composer laid out Medium on a tablet: its chips, 10 more.)
-let rooms_known : Map[String, Int] = { "room": 315, "apart": 0, "hover": 0 }
+let rooms_known : Map[String, Int] = { "room": 314, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

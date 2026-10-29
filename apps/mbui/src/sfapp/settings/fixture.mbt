@@ -2030,7 +2030,8 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
                 ] +
-                fx_kept_many(),
+                fx_kept_many()
+                |> fx_kept_most_first,
               ),
             ),
             ("drive", Json::number(fx.drive_kept)),
@@ -2388,6 +2389,17 @@ fn fx_kept_many() -> Array[Json] {
       ("bytes", Json::number((4096 * (i + 1)).to_double())),
     ])
   })
+}
+
+///|
+/// The chats kept, the one keeping most (its messages and its files) first, as the core gives them.
+fn fx_kept_most_first(chats : Array[Json]) -> Array[Json] {
+  let all = fn(x : Json) {
+    items(Some(x), "files").fold(init=number(Some(x), "bytes"), fn(s, f) { s + number(Some(f), "bytes") })
+  }
+  let out = chats.copy()
+  out.sort_by(fn(a, b) { all(b).compare(all(a)) })
+  out
 }
 
 ///|

@@ -480,7 +480,7 @@ test("what_is_kept_of_each_chat_is_counted_and_forgotten", async () => {
   data.keepFile("w/a", "k1", "a.png", "thumb", "image/png", "q".repeat(1000));
   await flush();
   const usage = data.cacheUsage().sort((a, b) => a.thread - b.thread);
-  assert.deepEqual(usage.map((u) => [u.thread, u.title, u.sessions]), [[7, "大视频", ["k1"]], [8, null, []]]);
+  assert.deepEqual(usage.map((u) => [u.thread, u.view?.title ?? null, u.sessions]), [[7, "大视频", ["k1"]], [8, null, []]]);
   assert.ok(usage[0]!.bytes > 1150, "its entries, its session's transcript and what it shows small");
   data.forgetChat("w/a", 7);
   await flush();
