@@ -767,6 +767,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   events_seen.val = events
   let why = if said != "" {
     said
+  } else if bench_whole.val && bench_measuring.val {
+    "a bench building each frame whole"
   } else if watch.is_stale() {
     if clock_read_at.val != "" {
       "the clock read at \{clock_read_at.val}"
@@ -813,7 +815,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_coming.val = true
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
-    nodes_run.whole = false
+    nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
   let paint_why = if paint_told != "" {

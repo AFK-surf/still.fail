@@ -2271,6 +2271,7 @@ pub fn Tester::back_gesture(Self, Double, Bool, steps? : Int32) -> Unit
 pub fn Tester::backspace(Self) -> Unit
 pub fn Tester::badge(Self) -> Int32
 pub fn Tester::bench(Self, String, fps? : Double, max? : Int32, each~ : (Self, Bool) -> Unit) -> Array[String]
+pub fn Tester::bench_whole(Self, Bool) -> Unit
 pub fn Tester::beside_faults(Self) -> Array[String]
 pub fn Tester::between_frames(Self, () -> Unit, due? : () -> Double) -> Unit
 pub fn Tester::bold_wider(Self, Double) -> Unit

@@ -1,0 +1,12 @@
+# 中屏 (an opened fold upright), a finger: a chat chosen from the sidebar, then every frame for 3.75 s built whole,
+# keeping nothing (scripts/appbench.sh runs it MBUI_BENCH_WHOLE=1): what building the whole window anew costs, whatever
+# it is built for. Some 450 frames, some 300 ms of work in all: a bench sized so.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 500
+tap 夜里的构建又失败了
+wait 1000
+log measure
+wait 3750
+exit

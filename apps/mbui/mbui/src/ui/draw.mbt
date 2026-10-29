@@ -970,12 +970,11 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   match e.keep {
     Some(d) if e.keep_rel >= 0 => {
       let l = self.nodes[e.keep_rel]
-      d.insts.clear()
       d.segs.clear()
-      let a = self.inst
-      for b in (i0 * inst_size)..<(self.ninst * inst_size) {
-        d.insts.push(a[b])
-      }
+      // (copied whole, not a number at a time: every row of a list that may leave is kept so on every frame)
+      let len = (self.ninst - i0) * inst_size
+      d.insts.resize(len, 0.0)
+      Array::unsafe_blit_fixed(d.insts, 0, self.inst, i0 * inst_size, len)
       // its shapes' pieces, kept with it (the frame's go with the frame)
       let mut q = 0
       while q < d.insts.length() {

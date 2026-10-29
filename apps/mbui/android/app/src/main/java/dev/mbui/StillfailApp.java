@@ -72,7 +72,14 @@ public final class StillfailApp extends Application {
         boolean beta = Push.beta(c);
         new Thread(() -> {
             long t = android.os.SystemClock.uptimeMillis();
-            boolean on = CoreHost.startAlone(cloud, beta);
+            boolean on;
+            try {
+                on = CoreHost.startAlone(cloud, beta);
+            } catch (UnsatisfiedLinkError e) {
+                // (a build with no core of its own: sffix's, the made-up chats the measuring runs draw)
+                Host.log("core ahead: none in this build: " + e.getMessage());
+                return;
+            }
             Host.log("core ahead: " + (on ? "started" : "not started") + " in "
                     + (android.os.SystemClock.uptimeMillis() - t) + " ms, "
                     + (t - android.os.Process.getStartUptimeMillis()) + " ms after the process started");

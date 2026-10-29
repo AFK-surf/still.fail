@@ -9,7 +9,8 @@
 //
 //   MBUI_BENCH_DRIVE=<script> MBUI_BENCH_NAME=<scene> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_POINTING=finger|mouse] [MBUI_BENCH_FPS=120] [MBUI_BENCH_FRAMES=<file>: each of the display's frames, a line,
-//   with what asked for it and why it was built or painted]
+//   with what asked for it and why it was built or painted] [MBUI_BENCH_WHOLE=1: each frame from `log measure` on drawn
+//   and built whole, keeping nothing]
 
 ///|
 /// What one frame drawn did, as measured.
@@ -60,6 +61,8 @@ pub fn bench(
   )
   // (a frame of the looks alone drawn once, as a host draws it: a test's draws it whole too, frame_watch.mbt)
   t.check_looks(false)
+  // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
+  t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
   let buf = Ref::new(FixedArray::make(0, 0.0))
   let damage = @damage.Damage::new()
   let timing = FixedArray::make(2, 0.0)
@@ -182,7 +185,7 @@ pub fn bench(
   // (and a row of the table scripts/appbench.sh prints)
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
   say(
-    "APPROW | \{name} | \{drawn.length()}/\{ticks} (\{drawn.filter(fn(m) { m.perf.looks }).length()} looks, \{drawn.filter(fn(m) { m.perf.painted }).length()} painted, \{drawn.filter(fn(m) { m.perf.kept > 0 }).length()} kept rows) | \{ms(d(fn(m) { m.work_ms }))} | \{ms(d(fn(m) { m.perf.build_ms }))} | \{ms(d(fn(m) { m.perf.layout_ms }))} | \{ms(d(fn(m) { m.perf.paint_ms }))} | \{ms(d(fn(m) { m.encode_ms }))} | \{ms(d(fn(m) { m.gpu_ms }))} | \{centile(d(fn(m) { m.perf.nodes.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.laid.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.insts.to_double() }), 50)} | \{round2(centile(d(fn(m) { m.damage * 100.0 }), 50))}% | \{round2(centile(d(fn(m) { m.bytes.to_double() / 1024.0 }), 50))} |",
+    "APPROW | \{name} | \{drawn.length()}/\{ticks} (\{drawn.filter(fn(m) { m.perf.looks }).length()} looks, \{drawn.filter(fn(m) { m.perf.painted }).length()} painted, \{drawn.filter(fn(m) { m.perf.kept > 0 }).length()} kept rows) | \{total_ms(d(fn(m) { m.work_ms }))} | \{ms(d(fn(m) { m.work_ms }))} | \{ms(d(fn(m) { m.perf.build_ms }))} | \{ms(d(fn(m) { m.perf.layout_ms }))} | \{ms(d(fn(m) { m.perf.paint_ms }))} | \{ms(d(fn(m) { m.encode_ms }))} | \{ms(d(fn(m) { m.gpu_ms }))} | \{centile(d(fn(m) { m.perf.nodes.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.laid.to_double() }), 50)} | \{centile(d(fn(m) { m.perf.insts.to_double() }), 50)} | \{round2(centile(d(fn(m) { m.damage * 100.0 }), 50))}% | \{round2(centile(d(fn(m) { m.bytes.to_double() / 1024.0 }), 50))} |",
   )
   passed
 }
@@ -302,9 +305,21 @@ pub fn bench_log(name : String, log : String) -> Bool {
   say("APPBENCH " + out.stringify())
   let ms = fn(xs : Array[Double]) { "\{round2(centile(xs, 50))} / \{round2(centile(xs, 95))}" }
   say(
-    "APPROW | \{name} | \{frames.length()} in \{round2(secs)} s (\{frames.filter(fn(f) { f.get("looks").unwrap_or(0.0) > 0.0 }).length()} looks, \{frames.filter(fn(f) { f.get("painted").unwrap_or(0.0) > 0.0 }).length()} painted) | \{ms(col("work"))} | \{ms(col("build"))} | \{ms(col("layout"))} | \{ms(col("paint"))} | \{ms(col("present"))} | \{if gpu.is_empty() { "-" } else { ms(gpu) }} | \{centile(col("nodes"), 50)} | \{centile(col("laid"), 50)} | \{centile(col("insts"), 50)} | \{round2(centile(col("share"), 50) * 100.0)}% | \{round2(centile(upload, 50))} |",
+    "APPROW | \{name} | \{frames.length()} in \{round2(secs)} s (\{frames.filter(fn(f) { f.get("looks").unwrap_or(0.0) > 0.0 }).length()} looks, \{frames.filter(fn(f) { f.get("painted").unwrap_or(0.0) > 0.0 }).length()} painted) | \{total_ms(col("work"))} | \{ms(col("work"))} | \{ms(col("build"))} | \{ms(col("layout"))} | \{ms(col("paint"))} | \{ms(col("present"))} | \{if gpu.is_empty() { "-" } else { ms(gpu) }} | \{centile(col("nodes"), 50)} | \{centile(col("laid"), 50)} | \{centile(col("insts"), 50)} | \{round2(centile(col("share"), 50) * 100.0)}% | \{round2(centile(upload, 50))} |",
   )
   passed
+}
+
+///|
+/// All of `xs` (ms) as one whole number of ms: what a scene's frames took between them. A scene is sized to take some
+/// 300 ms so (a whole number easy to read, far past any fixed cost, quick enough to run again and again: matklad's
+/// "Benchmark In Milliseconds", 2026).
+fn total_ms(xs : Array[Double]) -> String {
+  let mut t = 0.0
+  for x in xs {
+    t = t + x
+  }
+  t.round().to_int().to_string()
 }
 
 ///|

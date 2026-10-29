@@ -246,6 +246,20 @@ fn native_side_now() -> Unit {
 }
 
 ///|
+/// Whether the column's cards are logged as they change (MBUI_NAV_LOG=1).
+fn nav_logged() -> Bool {
+  if nav_log_on.val < 0 {
+    nav_log_on.val = if @ui.env("MBUI_NAV_LOG") == "1" { 1 } else { 0 }
+  }
+  nav_log_on.val == 1
+}
+
+///|
+/// MBUI_NAV_LOG as the process was given it, asked once (-1: not yet).
+// kept across runs: the process's environment, the same for each
+let nav_log_on : Ref[Int] = Ref(-1)
+
+///|
 /// A frame of the app, `body`: the system's bars as it wants them handed to the host once it is drawn (only as they
 /// change: @hostapi.nav_bar), the page's actions in them, none where it wants none (a phone's frame).
 pub fn nav_frame(body : () -> Unit) -> Unit {
@@ -283,7 +297,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       let page = nav_page.filter(fn(p) { p.0.id.has_prefix("page/who/") })
       page.append(nav_page.filter(fn(p) { !p.0.id.has_prefix("page/who/") }))
       let card : Array[@hostapi.NavItem] = page.map(fn(p) { p.0 })
-      if @ui.env("MBUI_NAV_LOG") == "1" {
+      if nav_logged() {
         let said = card.map(fn(i) { i.id + (if i.menu.length() > 0 { "{" + i.menu.map(fn(m) { m.1 }).join(",") + "}" } else { "" }) }).join(" ")
         if said != nav_log_was.val {
           nav_log_was.val = said

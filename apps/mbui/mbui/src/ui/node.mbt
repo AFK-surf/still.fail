@@ -562,12 +562,23 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.label = ""
   self.name = ""
   self.rich = None
-  self.lines = []
-  self.shapes = []
+  // (none, shared: only ever put in place whole, Ctx::lines and Ctx::shapes; a new empty one for each node on every
+  // frame was two allocations a node)
+  self.lines = no_lines
+  self.shapes = no_shapes
   // (its cut runs go with its layout, kept with it: rl, rl_for, rl_whole)
   self.item = -1
   self.stick = 0.0 / 0.0
 }
+
+///|
+/// No lines, no shapes: what a node not drawing any holds (Node::reset_rest).
+// kept across runs: a table, never written
+let no_lines : Array[Line] = []
+
+///|
+// kept across runs: a table, never written
+let no_shapes : Array[Shape] = []
 
 ///|
 /// What Ctx::box sets, all of it.
