@@ -323,7 +323,10 @@ fn frame_inputs_read() -> Unit {
 /// come of its own: looks_left); the soonest moment anything but a look or a paint asked to be drawn at (-1: none),
 /// from its build on.
 priv struct LooksBase {
+  /// its instances, kept only where it has looks (a frame of the looks alone draws them again); what they were said
+  /// as one number (insts_said), for the next paint to know whether it drew the same
   mut inst : FixedArray[Double]
+  mut said : Int64
   mut n : Int
   mut looks : Bool
   mut ok : Bool
@@ -345,6 +348,7 @@ priv struct LooksBase {
 // kept across runs: put back with the globals (looks_reset), else made again by each frame painted
 let looks_base : LooksBase = {
   inst: FixedArray::make(0, 0.0),
+  said: 0L,
   n: 0,
   looks: false,
   ok: false,
@@ -591,34 +595,44 @@ fn looks_keep(c : Ctx) -> Unit {
       looks_nodes.push((nd.x, nd.y, nd.fw, nd.fh, nd.text, nd.id, nd.tx, nd.ty, nd.opacity))
     }
   }
+  // (what it drew said as one number, read once: not kept whole and compared with the paint before, two more passes
+  // over every instance; kept whole only where a frame of the looks alone draws it again)
   let len = c.ninst * inst_size
-  looks_base.settled = looks_base.built &&
-    c.ninst == looks_base.n &&
-    insts_same(c.inst, looks_base.inst, c.ninst)
+  let said = insts_said(c.inst, c.ninst)
+  looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
   looks_base.built = true
   looks_base.n = c.ninst
+  looks_base.said = said
   looks_base.looks = !cycle_frame.is_empty()
-  if looks_base.inst.length() < len {
-    looks_base.inst = FixedArray::make(len, 0.0)
+  if looks_base.looks {
+    if looks_base.inst.length() < len {
+      looks_base.inst = FixedArray::make(len, 0.0)
+    }
+    c.inst.blit_to(looks_base.inst, len~)
   }
-  c.inst.blit_to(looks_base.inst, len~)
 }
 
 ///|
-/// Whether the first `n` instances of `a` and `b` are drawn the same: the same numbers, but for the tags of the looks
-/// by the clock (slot 20 below 0: a tag each paint gives anew, cycle_look.mbt).
-fn insts_same(a : FixedArray[Double], b : FixedArray[Double], n : Int) -> Bool {
+/// The first `n` instances of `a` as one number (64 bits of FNV-1a over their numbers' bits): the same for instances
+/// drawn the same (the tags of the looks by the clock, slot 20 below 0, all one: a tag each paint gives anew,
+/// cycle_look.mbt; every NaN one).
+fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
+  let mut h = -3750763034362895579L
   for q in 0..<n {
     let o = q * inst_size
     for j in 0..<inst_size {
       let x = a[o + j]
-      let y = b[o + j]
-      if x != y && !(j == 20 && x < 0.0 && y < 0.0) && !(x.is_nan() && y.is_nan()) {
-        return false
+      let bits = if j == 20 && x < 0.0 {
+        -1L
+      } else if x.is_nan() {
+        -2L
+      } else {
+        x.reinterpret_as_int64()
       }
+      h = (h ^ bits) * 1099511628211L
     }
   }
-  true
+  h
 }
 
 ///|
