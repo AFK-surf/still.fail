@@ -189,8 +189,8 @@ What differs from macOS:
 - Hermes runs bytecode, so there is no JIT to miss on iOS (JavaScriptCore would have run without one there).
 - Lifecycle: a suspended app's timers and sockets stop. On becoming active again, the core's cloud socket notices on
   its own ping; a `mb_core_reset` sending the shell's `reset` (BridgeHost.resetConnections) would make it immediate.
-- Not yet: pushes (APNs), a share extension (sharing in), a signed build for a device or TestFlight (docs/stillfail-port.md,
-  "iOS").
+- Not yet: pushes (APNs), a signed build for a device or TestFlight (docs/ios.md; docs/mbui-testflight.md in the
+  repository's docs).
 
 ## Android
 

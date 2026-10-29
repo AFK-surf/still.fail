@@ -120,8 +120,8 @@ The composer's `composer.add` hands selected files to the core, which owns
 their upload and reports progress through the `composer` topic. A new chat's
 (`new:<workspace>`) wait (`waits`), kept on the device, and go up as its first
 message is taken (`composer.take {station}`), to the station it goes to. On the web,
-the worker receives a structured-cloned Blob. Electron cannot carry that DOM
-object into its Node utility process: its channel adapter (`src/hosts/file-port.ts`)
+the worker receives a structured-cloned Blob. A core in Node (the Electron desktop
+app's utility process, until 2026-10-26) cannot carry that DOM object: its channel adapter (`src/hosts/file-port.ts`)
 keeps the Blob in the page and sends a descriptor, restored to a `FileSource`
 before the core reads the call. The core pulls at most one 4 MB part at a time
 per upload; the adapter carries those bytes as ArrayBuffers on the same port.
@@ -130,8 +130,8 @@ the draft), keeps failed uploads' sources for the outbox's retry, and fails
 outstanding reads when the port closes.
 Only local file IO lives in this adapter: draft state,
 station requests, progress, errors and sending stay in the shared core.
-Android does the same through its engine (`src/hosts/bridge.ts`): the app holds
-the picked file (`CoreHost.java`) and sends `blob: { hostFile, size, type }`; the
+The apps (apps/mbui) do the same through their engine (`src/hosts/bridge.ts`): the app holds
+the picked file (Android's `CoreHost.java`) and sends `blob: { hostFile, size, type }`; the
 core reads it with `picked.read {file, start, end}` and lets it go with
 `picked.release {file}`, calls answered by the app rather than the shell. Its
 files go up in a composer of their own (a key no chat has), so a message sent

@@ -1,5 +1,5 @@
 // Motion's arithmetic against Compose's (its curves and springs, worked out
-// from their formulas, still.fail's apps/mbui/docs/stillfail-motion.md), and the motion layer frame
+// from their formulas), and the motion layer frame
 // by frame in a Tester.
 
 ///|

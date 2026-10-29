@@ -1,6 +1,6 @@
 # One app: the screen, the input, pages and the shell
 
-still.fail's mbui app is one app on every device (the user, 2026-10-24: 「应该得打成同一个 app 了」). There is no phone
+still.fail's app is one app on every device (the user, 2026-10-24: 「应该得打成同一个 app 了」). There is no phone
 app and desktop app. How it is arranged follows the screen, in three tiers, each arranged as is best for it (the user,
 2026-10-26: 「没必要把布局也三屏统一吧」「不然屏跟屏之间还有啥差距」). The input (touch, or keyboard and mouse) decides how
 it answers the hand and the size words and icons are drawn at, and only that: never what is shown, where, nor how much
@@ -8,8 +8,8 @@ room a thing has to be pressed (the user, 2026-10-25: 「布局不是按屏幕�
 A tablet given a trackpad, a laptop touched on its screen, stays arranged as it was. Each function exists once, one
 code and one data, and is drawn into whichever tier it lands in, on either kind of screen, with either hand.
 
-This replaces the earlier "the desktop and the phone are two apps" (two page sets: `sfapp`'s, ported from the Kotlin
-app, and `sfdesk`'s, ported from the web's desktop files). The way from here to there is at the end.
+This replaces the earlier "the desktop and the phone are two apps" (two page sets: `sfapp`'s, the phone's, and
+`sfdesk`'s, ported from the web's desktop files). The way from here to there is at the end.
 
 ## Six principles (the user, 2026-10-26)
 
@@ -220,8 +220,8 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 - **Its design:** made once, from what the page is for: what a person comes to it to see and to do, and in what
   order. What it shows and what can be done there are the same on every screen; how it is arranged is each screen's
   best (rule 5), and that choice is the library's parts', by `look()`, not the page's.
-  - The web's desktop and mobile files for it, and the Kotlin app's, are read for why they are as they are and so as
-    to miss nothing. They are not copied, and none is picked, neither one for every screen nor one for each screen
+  - The web's desktop and mobile files for it are read for why they are as they are and so as to miss nothing. They
+    are not copied, and none is picked, neither one for every screen nor one for each screen
     (the user, 2026-10-25: 「做最合理的，而不是从两个里选一个」; 「是不是又代码里 if 一下，直接把手机版代码复制进去」). Where
     they differ, the reason that holds decides; where both fall short, the page does better. Its PR says why it is
     laid out so before it is built.

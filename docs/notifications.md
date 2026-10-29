@@ -165,10 +165,10 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
   shows the local notices the core's `notify` says to show (it tells the core
   which chat it shows and whether it is in view and has focus). 设置 → 通知
   turns them on (asking the browser's permission) and off, kept by the core.
-- Desktop: the main process holds the core's `notify` (claiming each, as a
-  page would) and shows Electron notifications, so they are of the workspace
-  its windows are in; clicking one opens the chat as a `stillfail://o/…` link would. Pages show
-  none themselves. The setting is the same page.
+- Desktop (macOS, Windows, Linux): the app (apps/mbui, src/sfbase/notices.mbt) holds the core's `notify` while it
+  goes on, a window shown or not (in the notification area, minimized), claiming each as a page would, and shows the
+  system's notifications (UNUserNotificationCenter, Windows' toasts); clicking one opens the chat as a
+  `stillfail://o/…` link would. The setting is the same page.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM
   pushes while it is not (`notice.pushed`). A push shown also brings its

@@ -57,9 +57,10 @@ longer matters.
 - macOS lets an app reach its own subnet only once Local Network is switched on for it. On 2026-10-18 the desktop app
   on a MacBook on studio's Wi-Fi had not been let: it reached studio only at its other subnet's address, through the
   router (12 ms, a fifth of the packets lost), and mini1 over Tailscale, and moved between ways and relays every few
-  minutes. A station's net view says the addresses the station said (`lan`); the desktop app sends a byte to each
-  (apps/desktop/src/local-network.ts), and one on its subnet refused at once ("No route to host") has the station's row
-  say Local Network is off and its page the way to System Settings. The permissions page lists the app's own, the
+  minutes. A station's net view says the addresses the station said (`lan`). The Electron desktop app (until 2026-10-26)
+  sent a byte to each, and one on its subnet refused at once ("No route to host") had the station's row say Local
+  Network is off and its page the way to System Settings; the Mac app built in its place (apps/mbui) asks for Local
+  Network (its Info.plist's NSLocalNetworkUsageDescription) but does not tell yet that it was refused. The permissions page lists the app's own, the
   station's page the station's (docs/remote-screens.md, Grants).
 - A device off the station's LAN gets no answer at those addresses. It tries them once for each set the station says,
   and again after the network changes. While the station was reached directly in the last 10 minutes, it tries again

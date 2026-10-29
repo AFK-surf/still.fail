@@ -1,5 +1,4 @@
-// The UIs' bindings of the core's operations, made from their contracts (src/ops.ts `PARAMS`): web/src/core/operations.ts
-// (the Kotlin Android app's data/Operations.kt was made here too, until that app was frozen on 2026-10-23). `node scripts/operations.ts` writes them; `--check` fails when they are not what the contracts make. Optional fields keep "left out" apart from an explicit null; bodies the core leaves
+// The UIs' bindings of the core's operations, made from their contracts (src/ops.ts `PARAMS`): web/src/core/operations.ts. `node scripts/operations.ts` writes them; `--check` fails when they are not what the contracts make. Optional fields keep "left out" apart from an explicit null; bodies the core leaves
 // open (input/settings/state/access) stay JSON.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

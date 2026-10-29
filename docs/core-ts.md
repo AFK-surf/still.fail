@@ -4,7 +4,7 @@
 
 ## 目标与不做的事
 
-- 一份 TS core，各端共用：web（SharedWorker）、桌面和安卓（Hermes；桌面 2026-10-26 以前是 Electron 的 utilityProcess）。
+- 一份 TS core，各端共用：web（SharedWorker）、各个 app（Hermes；桌面 2026-10-26 以前是 Electron 的 utilityProcess）。
 - **UI 一行不改**：UI ↔ core 的 JSON 协议（docs/client-core.md「Protocol」）、所有 call 和 topic 的名字与形状原样保留；安卓的 `Engine` 接口（connect/receive/close）原样保留，只是换一个实现。
 - **数据兼容**：storage 里的键（账号、token、设备密钥）新旧 core 都能读；旧的记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块在每个账号的库第一次建出来时导入一次、原样留着（docs/core-db.md），升级不丢登录、不丢缓存，也能退回旧 core。
 - 不做：改 UI、改协议、改 cloud/station 的接口。
@@ -14,8 +14,7 @@
 | 端 | core 跑在哪 | Host（网络、存储、时间） | iroh（连 station） |
 |---|---|---|---|
 | Web | 现在的 SharedWorker（缺 SharedWorker 时的专用 Worker），直接跑 TS | 浏览器 API：fetch、WebSocket、IndexedDB | 一个只含 iroh 的小 wasm 包（relay-only，浏览器没 UDP），从现在的 `client/wasm` 里拆出来 |
-| 桌面 | 2026-10-26 起是 mbui 的 app（`apps/mbui`）：和安卓一样，专用线程上的 Hermes 跑字节码；之前是 Electron 的 utilityProcess（Node），直接跑 TS | Rust shell（`client/shell`），和安卓一样；Electron 时是 Node API | 在 Rust shell 里；Electron 时是 station 的 `mesh.node` |
-| 安卓 | 一个专用线程上的 Hermes，跑预编译的 Hermes 字节码 | Kotlin 实现，经 JSI 交给 JS：OkHttp、SQLite、文件 | Rust（现在 `client/ffi` 里的 iroh 部分），经 JNI 暴露 |
+| 桌面、安卓、iOS | mbui 写的 app（`apps/mbui`）：专用线程上的 Hermes，跑预编译的 Hermes 字节码（桌面 2026-10-26 以前是 Electron 的 utilityProcess，直接跑 TS） | Rust shell（`client/shell`）；`secure.*`、`listen.*` 由宿主答（安卓 `CoreHost.java`，苹果 `apple_core.mm`，Windows `win_core.c`） | 在 Rust shell 里 |
 
 为什么安卓选 Hermes：分支 `proto-rust-shell-ts` 的原型实测过，Hermes 跑 TS core 不比 Rust 慢、内存更省；QuickJS 慢 3–5 倍且没有 `Intl`。
 
@@ -51,7 +50,7 @@ Take `commaAccountProvider` from the same bundle as `start` (one copy of the cor
 
 ## 类型
 
-`client/shapes`（typeshare）现在从 Rust 生成 UI 用的 TS 和 Kotlin 类型。第一步不动它：TS core 直接 import 生成的 TS 类型，UI 那边什么都不变。等 Rust core 删掉后，再把类型的源头挪到 TS（从 TS 生成 Kotlin）。
+类型的源头在 core：`client/core-ts/src/shapes/schema.ts` 声明 core 给客户端的每个值，网页的类型（`web/src/core/shapes.ts`）由 `scripts/shapes.ts` 从它生成，CI 检查两边一致（docs/client-core.md「Types」）。
 
 ## 怎么验证
 

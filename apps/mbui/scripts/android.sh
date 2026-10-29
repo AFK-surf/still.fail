@@ -2,7 +2,7 @@
 # The Android app: mbui's scripts/android.sh (its commands: build | emu | run [script] | shot NAME | record NAME SECONDS
 # [drive] | log | stop | delete) on this module's apps, packed by this module's Gradle project (android/: the still.fail
 # mbui app, fail.still.mbui; the debug build fail.still.android.dev, still.fail dev), with the still.fail core in coredemo and stillfail
-# (scripts/android-core.sh; listen-test, its own command). APP=stillfail by default; VARIANT=release the beta app;
+# (scripts/android-core.sh; listen-test, its own command). APP=stillfail by default; VARIANT=release the build of every push (still.fail mbui, fail.still.mbui);
 # VARIANT=stable and beta still.fail's Android app's own (fail.still.android, fail.still.android.beta: android/apk.json).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
