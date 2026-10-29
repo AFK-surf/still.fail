@@ -144,7 +144,7 @@ jobs:
       - name: "The split's self-check: the app's C whole and split define the same symbols (scripts/mbc check)"
         run: |
           TC=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
-          scripts/mbc check "--cc=$TC/aarch64-linux-android29-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
+          scripts/mbc check "--cc=$TC/aarch64-linux-android30-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
             "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -Dmain=mbui_main" \
             out/android/mod/_build/native/release/build/demo/demo.c
       - uses: actions/upload-artifact@v4
@@ -193,9 +193,10 @@ jobs:
             apps/mbui/mbui/out/android/streams/
             apps/mbui/mbui/out/android/keyboard/
 
-  # The oldest Android the apps run on (minSdk 29, Android 10): the demo started there and its first frame shown, or
+  # The oldest Android the apps run on (minSdk 30, Android 11): the demo started there and its first frame shown, or
   # its crash. The other jobs' emulator is API 34's, so a call newer than the oldest system has went unseen until a
-  # person's phone aborted at each start (#2665: API 34's Paint.getFontMetricsInt overload, Android 10-13).
+  # person's phone aborted at each start (#2665: API 34's Paint.getFontMetricsInt overload, Android 10-13; and with
+  # minSdk 29, Android 10 never started at all: MainActivity's insets are API 30's).
   android-oldest:
     defaults:
       run:
@@ -213,12 +214,12 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       # (started, the app built meanwhile)
       - uses: ./.github/actions/mbui-android-emulator
-        with: { api: "29", target: default, profile: pixel_6, phase: start }
+        with: { api: "30", target: default, profile: pixel_6, phase: start }
       - name: Build the demo
         run: scripts/android.sh build
       - uses: ./.github/actions/mbui-android-emulator
-        with: { api: "29", target: default, profile: pixel_6, phase: wait }
-      - name: "Started on Android 10 (scripts/android-launch.sh: its first frame, or its crash)"
+        with: { api: "30", target: default, profile: pixel_6, phase: wait }
+      - name: "Started on Android 11 (scripts/android-launch.sh: its first frame, or its crash)"
         run: bash scripts/android-launch.sh
 
   # MediaCodec is diagnostic, and must not consume the contract job's time budget.

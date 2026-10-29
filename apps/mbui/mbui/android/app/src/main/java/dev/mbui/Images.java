@@ -117,7 +117,7 @@ final class Images {
             }
             String path = r.src.startsWith("file://") ? r.src.substring(7) : r.src;
             try {
-                // minSdk is 29, so ImageDecoder is always there; BitmapFactory
+                // minSdk is 30, so ImageDecoder is always there; BitmapFactory
                 // is the second try for what it can't read
                 b = ImageDecoder.decodeBitmap(data != null
                         ? ImageDecoder.createSource(ByteBuffer.wrap(data))

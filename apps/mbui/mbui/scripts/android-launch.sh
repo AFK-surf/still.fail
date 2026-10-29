@@ -1,6 +1,6 @@
 #!/bin/bash
 # The app (built already: scripts/android.sh build) started on the emulator scripts/android.sh runs (EMU_PORT as
-# there) and its first frame on the screen, or its crash: what CI's oldest Android (minSdk's, API 29) runs, so a call
+# there) and its first frame on the screen, or its crash: what CI's oldest Android (minSdk's, API 30) runs, so a call
 # the system there does not have (API 34's Paint.getFontMetricsInt run overload aborted every start below Android 14,
 # #2665) fails here, not on a person's phone.
 set -uo pipefail
