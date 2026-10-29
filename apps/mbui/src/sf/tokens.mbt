@@ -390,10 +390,11 @@ pub fn in_pane() -> Bool {
 /// foot: in a panel of its own (pane_round), each end in the foot corner it is in, as far in as makes it concentric
 /// with it where corner_fit lets it stand there (capsule_fit), its foot as far in as such an end (the left's, where
 /// both are: the right's apart from it there alone); an end that cannot, `side` in, as alone; none, `side` and `foot`
-/// in, as in a window's whole.
+/// in, as in a window's whole, its right end past the window's corner there.
 pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
   match pane_radii() {
-    None => (side, side, foot)
+    // (in a window's whole its right end in the window's foot corner: past it, window_corner_past)
+    None => (side, window_corner_past(side), foot)
     // (beside the system's action at the column's foot, as high as it: on its line, in the foot left corner made for
     // it (native_foot_corner) however far in that is, its other end as far from what it stands in)
     Some(k) if native_capsule_h() is Some(h) && (h - height).abs() < 0.5 && native_foot_corner_now(k[3]) => {
@@ -2178,12 +2179,36 @@ pub fn window_end_in(alone : Double) -> Double {
 }
 
 ///|
-/// How far in from the window's side what ends a bar stands at the window's top corner where it is a capsule (⌘F's
-/// field): clear of a corner too square for it to follow, as far in as it is round; else `alone`.
+/// How far in from the window's side what ends a bar stands at the window's top corner where it is a long capsule (⌘F's
+/// field, 复制图片, 只看/控制): past the window's corner by `alone` (window_corner_past); before the window's own buttons
+/// where they are the app's.
 pub fn window_clear_in(alone : Double) -> Double {
   if @ui.window_keys_own() {
     return window_keys_room() + alone
   }
+  window_corner_past(alone)
+}
+
+///|
+/// How far in from the window's side a long capsule stands that would be by the window's corner `alone` in (its other
+/// edge in the corner's band: a bar's, a page's foot's): past the corner by `alone` (a Mac's 16, 12: 28), not by an arc
+/// it cannot follow (the user, 2026-10-30: 只有长胶囊不行, a circle there a block following it, bar_keys_link); `alone`
+/// where that is past it already (Windows 11's 8), or there is none.
+pub fn window_corner_past(alone : Double) -> Double {
+  let window : @ui.CornerOf = Window
+  let r = window.radius()
+  if r > 0.0 && alone < r + corner_fit.near {
+    r + alone
+  } else {
+    alone
+  }
+}
+
+///|
+/// How far in from both its edges a circle floating in a corner of the window stands (a remote screen's 全屏 tools,
+/// its mouse's buttons): clear of a corner too square for it to be concentric with (a Mac's 16 for a 44 circle), as
+/// far in as it is round; else `alone`. Not a block following it: a floating button keeps its shape.
+pub fn window_corner_clear(alone : Double) -> Double {
   let window : @ui.CornerOf = Window
   dmax(alone, window.radius())
 }

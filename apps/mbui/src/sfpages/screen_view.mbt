@@ -297,7 +297,7 @@ pub fn screen_page(
           c.layer(fn() { mouse_float(c, s, u) }) |> ignore
         }
         c.layer(fn() {
-          c.box(style=screen_top_end.then(@sf.sides_clear(@ui.Space::S3.px())), fn() { full_tools(c, s, u, typing, catcher, close) }) |> ignore
+          c.box(style=screen_corner_end(screen_top_end), fn() { full_tools(c, s, u, typing, catcher, close) }) |> ignore
         })
         |> ignore
       })
@@ -1149,7 +1149,7 @@ fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
 fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let capsule = c.id("screen-mouse-capsule")
   let (laid_dx, laid_dy) = (u.mouse_moved.dx, u.mouse_moved.dy)
-  c.box(style=screen_foot_end.then(@sf.sides_clear(@ui.Space::S3.px())), fn() {
+  c.box(style=screen_corner_end(screen_foot_end), fn() {
     c.box(style=mouse_pair_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
       afloat_dragged(c, u.mouse_moved, capsule)
       for b in [

@@ -30,8 +30,10 @@
 /// edge pressed only where it is drawn, its line in the middle, as the web's (the user, 2026-10-28: 左右各 6px, 同
 /// web; @ui's as_drawn): 41 room fewer. A shared picture's attachments taken out by the composer's ✕ on their corner, not
 /// a box to tick on them: 6 room fewer. What was said in a chat besides words beside it a screen of its own
-/// (chat-things-side), what chat-letters-side has: its tab's close key, 3 more.)
-let rooms_known : Map[String, Int] = { "room": 298, "apart": 0, "hover": 0 }
+/// (chat-things-side), what chat-letters-side has: its tab's close key, 3 more. A new chat whose station lends its files
+/// (newchat-lend), what newchat has: its station and model chips and its frequent ones, 7 more. The card to share swept
+/// (share-card and its looks), over a new chat's composer laid out Medium on a tablet: its chips, 10 more.)
+let rooms_known : Map[String, Int] = { "room": 315, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
