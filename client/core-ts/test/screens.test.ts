@@ -128,7 +128,10 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["h265", "h264", "jpeg"] }) as J).call.ask.codecs, ["h265", "h264", "jpeg"]);
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1" }) as J).call.ask.codecs, ["h264", "jpeg"]);
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
-  assert.deepEqual((parseCall("screen.bounds", { view: "v1", maxWidth: 99999, maxHeight: 720.4 }) as J).call, { kind: "bounds", view: "v1", maxWidth: 7680, maxHeight: 720 });
+  assert.deepEqual((parseCall("screen.bounds", { view: "v1", maxWidth: 99999, maxHeight: 720.4 }) as J).call, { kind: "bounds", view: "v1", maxWidth: 7680, maxHeight: 720, quality: null, fps: null });
+  // With the 画质 and 帧率 chosen (one not offered: none, 自动).
+  assert.deepEqual((parseCall("screen.bounds", { view: "v1", maxWidth: 1280, maxHeight: 720, quality: "hd", fps: 30 }) as J).call, { kind: "bounds", view: "v1", maxWidth: 1280, maxHeight: 720, quality: "hd", fps: 30 });
+  assert.equal((parseCall("screen.bounds", { view: "v1", maxWidth: 1280, maxHeight: 720, fps: 45 }) as J).call.fps, null);
   for (const bad of [{ view: "v1", maxWidth: 1280 }, { view: "v1", maxWidth: 0, maxHeight: 720 }, { maxWidth: 1280, maxHeight: 720 }]) assert.throws(() => parseCall("screen.bounds", bad), JSON.stringify(bad));
   // The stage a phone shows it on goes with it (a tab of the station's browser is laid out for it); not a preview's.
   const fit = { width: 389.6, height: 701, scale: 3 };
@@ -141,6 +144,10 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality: "hd", peek: true }) as J).call.ask.quality, undefined);
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", gamut: "p3" }) as J).call.ask.gamut, "p3");
   for (const gamut of [undefined, "srgb", 1]) assert.equal("gamut" in (parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", gamut }) as J).call.ask, false, String(gamut));
+  // The 帧率 chosen goes to the station (the most frames a second); none for 自动, a preview or one not offered.
+  for (const fps of [120, 90, 60, 30, 15]) assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", fps }) as J).call.ask.fps, fps);
+  for (const fps of [undefined, 0, 45, 240, "60"]) assert.equal("fps" in (parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", fps }) as J).call.ask, false, String(fps));
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", fps: 30, peek: true }) as J).call.ask.fps, undefined);
 });
 
 test("a_screen_link_opens_the_screen", () => {
@@ -580,10 +587,19 @@ each("another_size_asked_opens_the_view_again_with_it_the_stream_before_kept_unt
   call(core, ui, 3, "screen.bounds", { view: "v", maxWidth: 1280, maxHeight: 720 });
   await host.settle();
   assert.equal(views.length, 2);
+  // Another 帧率 (and 画质) at the same size: opened again with them; 自动 again, without.
+  call(core, ui, 5, "screen.bounds", { view: "v", maxWidth: 1280, maxHeight: 720, quality: "smooth", fps: 30 });
+  await host.settle();
+  assert.equal(views.length, 3);
+  assert.deepEqual([views[2]!.ask.maxWidth, views[2]!.ask.fps, views[2]!.ask.quality], [1280, 30, "smooth"]);
+  call(core, ui, 6, "screen.bounds", { view: "v", maxWidth: 1280, maxHeight: 720 });
+  await host.settle();
+  assert.equal(views.length, 4);
+  assert.equal("fps" in views[3]!.ask || "quality" in views[3]!.ask, false);
   // Input goes to the new stream.
   call(core, ui, 4, "screen.input", { view: "v", input: { t: "text", text: "x" } });
   await host.settle();
-  assert.deepEqual(views[1]!.got, [{ input: { t: "text", text: "x" } }]);
+  assert.deepEqual(views[3]!.got, [{ input: { t: "text", text: "x" } }]);
   said(host, log);
   const all = states(log, 1);
   assert.equal(all.slice(all.findIndex((s: J) => s.phase === "live")).some((s: J) => s.phase !== "live"), false, "the last frame stays: no connecting in between");

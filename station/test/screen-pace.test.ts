@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CUT, DOWN, DOWNSIZE_MS, FrameLatency, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
+import { CUT, DOWN, DOWNSIZE_MS, FPS_CHOICES, FrameLatency, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -219,4 +219,41 @@ test("the most a view is asked at goes by its 画质: 原画 × 8 a pixel, 高�
   assert.equal(rateCeiling(3840, 2160, "original"), MAX_RATE);
   // A small picture's own (at least 1 Mbit/s) is never lowered.
   assert.equal(rateCeiling(320, 200, "original"), 1_000_000);
+});
+
+/// Frames offered every `every` ms (each acknowledged `trip` ms after it went) for `ms`, to a pacer asked `fps`: when
+/// each went.
+function capped(fps: number | undefined, every: number, ms: number, trip = 5): number[] {
+  let now = 0;
+  const pacer = new Pacer(() => now, null, fps);
+  const due: { at: number; ts: number }[] = [];
+  const went: number[] = [];
+  let ts = 0;
+  for (let t = 0; t < ms; t += 0.25) {
+    now = t;
+    while (due.length > 0 && due[0]!.at <= t) pacer.acked(due.shift()!.ts);
+    if (t % every < 0.25 && pacer.may() && pacer.wait() === 0) {
+      pacer.sent((ts += 1000), 10_000);
+      went.push(t);
+      due.push({ at: t + trip, ts });
+    }
+  }
+  return went;
+}
+
+test("a 帧率 asked: no second carries more frames than it (and one), and a source at that rate keeps it", () => {
+  for (const fps of FPS_CHOICES) {
+    // A source faster than any asked (a 240 Hz display's).
+    const went = capped(fps, 1000 / 240, 5000);
+    for (let i = 0; i < went.length; i++) {
+      const within = went.slice(i).filter((t) => t < went[i]! + 1000).length;
+      assert.ok(within <= fps + 1, `${fps}: ${within} in the second from ${went[i]}`);
+    }
+    assert.ok(went.length >= fps * 5 * 0.95, `${fps}: ${went.length} in 5 s`);
+  }
+  // A source at the rate asked (still.fail Helper's capture asked it, its frames a little early or late): all of them.
+  assert.ok(capped(60, 1000 / 60, 2000).length >= 119);
+  // None asked (自动): as many as come.
+  assert.equal(new Pacer(() => 0).wait(), 0);
+  assert.ok(capped(undefined, 1000 / 240, 1000).length >= 239);
 });

@@ -20,7 +20,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, rateCeiling } from "./screen-pace.ts";
+import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, isFps, rateCeiling } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -165,10 +165,11 @@ export function parseInput(v: any): ScreenInput | null {
 }
 
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), the 画质
-/// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), and the phone it is
+/// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), the 帧率 chosen (`fps`:
+/// 120, 90, 60, 30 or 15, the most frames a second; none for 自动 and from a client before it), and the phone it is
 /// laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it); `gamut: "p3"`: the client
 /// shows a video tagged Display P3 as such (none: sRGB's colours).
-export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; quality?: Quality; fit?: ViewFit; gamut?: "p3" } {
+export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; quality?: Quality; fps?: Fps; fit?: ViewFit; gamut?: "p3" } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
   // A preview (`peek`, a link's card in a chat) only looks.
@@ -178,7 +179,8 @@ export function asked(screen: any): { maxWidth: number; maxHeight: number; codec
   const side = (v: unknown) => num(v) && v >= 200 && v <= 2000;
   const fit = control && f && side(f.width) && side(f.height) && num(f.scale) && f.scale >= 1 && f.scale <= 4 ? { width: Math.round(f.width), height: Math.round(f.height), scale: f.scale } : undefined;
   const quality: Quality | undefined = ["smooth", "hd", "original"].includes(screen.quality) && !peek ? screen.quality : undefined;
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}), ...(screen.gamut === "p3" ? { gamut: "p3" as const } : {}) };
+  const fps: Fps | undefined = isFps(screen.fps) && !peek ? screen.fps : undefined;
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(quality ? { quality } : {}), ...(fps ? { fps } : {}), ...(fit ? { fit } : {}), ...(screen.gamut === "p3" ? { gamut: "p3" as const } : {}) };
 }
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
@@ -212,7 +214,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.fps ? { fps: ask.fps } : {}), ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}), ...(ask.gamut ? { gamut: ask.gamut } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -234,7 +236,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   }
   const access = accessShown(source.access?.(), lang);
   const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
-  const pacer = new Pacer(now, START_RATE);
+  const pacer = new Pacer(now, START_RATE, ask.fps);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ask.quality);
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
   await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep }).run();
@@ -469,6 +471,16 @@ class ViewSession {
       if (!this.pacer.may()) {
         this.#pace();
         await new Promise<void>((resolve) => (this.#wake = resolve));
+        continue;
+      }
+      // No sooner than the 帧率 asked lets it (the source asked it too, where it captures at a rate).
+      const wait = this.pacer.wait();
+      if (wait > 0) {
+        // (woken as the view ends, too)
+        await new Promise<void>((resolve) => {
+          this.#wake = resolve;
+          void this.#sleep(wait).then(resolve);
+        });
         continue;
       }
       let next: Frame | null;

@@ -550,6 +550,18 @@ test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).screenQuality, undefined);
+  // The 帧率: one of those offered, or none (自动); nothing else.
+  call(core, ui, 70, "prefs.set", { screenFps: 30 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenFps, 30);
+  call(core, ui, 71, "prefs.set", { screenFps: 45 });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 71).length, 1);
+  call(core, ui, 72, "prefs.set", { screenFps: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenFps, undefined);
   // The codec: H.264 only, or none (the best both ends have); nothing else.
   call(core, ui, 5, "prefs.set", { screenCodec: "h264" });
   await host.settle();

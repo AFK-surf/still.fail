@@ -5653,6 +5653,11 @@ export interface PrefsView {
 	 */
 	screenQuality?: string;
 	/**
+	 * The most frames a second a station's screen is asked to send this device: 120, 90, 60, 30 or 15, or
+	 * (none) as many as the station and the link give.
+	 */
+	screenFps?: number;
+	/**
 	 * The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends
 	 * have (H.265 where they do).
 	 */

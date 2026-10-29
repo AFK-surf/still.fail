@@ -28,11 +28,14 @@ export type ScreenInput =
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
+/// `fps`: the most frames a second the view asked (its 帧率; none: 自动, as many as the source makes): a source that
+/// captures and encodes at a rate (the desktop's helpers) does so at it; the view's pace lets no more go whatever the
+/// source.
 /// `fit`: the viewer's own screen (a phone), in its CSS pixels and their scale: a source that lays itself out (a tab of
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
 /// `gamut: "p3"`: the viewer shows a video tagged Display P3 as such: a source that has wider colours (this Mac's
 /// desktop) may send them; the others' stay sRGB, as they are without it.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
 /// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).

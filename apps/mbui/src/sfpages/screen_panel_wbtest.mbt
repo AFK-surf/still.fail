@@ -67,6 +67,59 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
 }
 
 ///|
+test "帧率 chosen in 控制中心 beside 画质 is kept on the device and asked of the open view" {
+  let r = screen_rig()
+  r.live()
+  open_center(r)
+  assert_true(r.t.find(tr("web-pages.screen.fps")) is Some(_))
+  assert_true(r.t.find(tr("web-pages.screen.fpsHint.auto")) is Some(_))
+  r.t.tap_text("30")
+  r.t.draw()
+  let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenFps") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_eq(number(Some(set[0]), "screenFps"), 30.0)
+  // the open view goes on, asked again at the same size with its 帧率 (the core opens its stream again before it lets
+  // the old one go), the frame shown kept meanwhile
+  assert_eq(r.told("screen.view").length(), 1)
+  assert_eq(r.cancelled, [])
+  let asked = r.told("screen.bounds")
+  assert_eq(asked.length(), 1)
+  assert_eq(number(Some(asked[0]), "fps"), 30.0)
+  assert_eq(number(Some(asked[0]), "maxWidth"), 1920.0)
+  assert_true(field(Some(asked[0]), "quality") is None)
+  assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.cap", [("fps", "30")])) is Some(_))
+  // 120: said so, its note saying the display must draw that many
+  r.t.tap_text("120")
+  r.t.draw()
+  assert_eq(number(Some(r.told("screen.bounds")[1]), "fps"), 120.0)
+  // back to 自动 (帧率's, below 画质's): no 帧率 said
+  let (ax, ay) = r.t.find_last(tr("web-pages.screen.fps.auto")).unwrap()
+  r.t.tap(ax, ay)
+  r.t.draw()
+  let again = r.told("screen.bounds")
+  assert_eq(again.length(), 3)
+  assert_true(field(Some(again[2]), "fps") is None)
+  assert_eq(r.fps.val, 0)
+  assert_eq(r.told("screen.view").length(), 1)
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+test "a 帧率 kept on the device is asked for as the view opens; 自动 says none" {
+  let r = screen_rig()
+  assert_true(field(Some(r.told("screen.view")[0]), "fps") is None)
+  r.fps.val = 60
+  // (the page opened again: a view of its own)
+  @sfbase.close_page(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false })) |> ignore
+  nav_rested(r.t)
+  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }))
+  nav_rested(r.t)
+  assert_eq(number(Some(r.told("screen.view").last().unwrap()), "fps"), 60.0)
+  screen_done(r.t)
+}
+
+///|
 test "a 画质 kept on the device is asked for as the view opens" {
   let r = screen_rig()
   r.quality.val = "original"
@@ -195,6 +248,9 @@ test "缩放 with more steps than fit side by side: picked from a list with no s
   }
   r.state("live", more={ "scale": scale })
   open_center(r)
+  // (缩放 below 画质 and 帧率: the panel scrolled to it)
+  r.t.wheel(150.0, 400.0, 1000.0)
+  r.t.run_for(@sf.later_ms)
   r.t.tap_text("100%")
   r.t.run_for(@ui.nav_push_ms)
   assert_true(r.t.find("350%") is Some(_))
@@ -228,6 +284,9 @@ test "分辨率 while driving a station that changes it: its modes, the one near
   }
   r.state("live", more={ "resolution": resolution })
   open_center(r)
+  // (分辨率 below 画质 and 帧率: the panel scrolled to it)
+  r.t.wheel(150.0, 400.0, 1000.0)
+  r.t.run_for(@sf.later_ms)
   assert_true(r.t.find(tr("web-pages.screen.resolution")) is Some(_))
   // (the stage a little wider than 4:3: 1600×1200 nearest)
   assert_true(r.t.find("1600×1200 最贴合") is Some(_))

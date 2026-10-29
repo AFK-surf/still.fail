@@ -103,8 +103,11 @@ export interface StationWire {
 /// `fit`: the stage it is shown on, on a phone or a tablet (its CSS pixels and their scale): a tab of the station's
 /// browser is laid out for it while the view drives it (docs/remote-screens.md).
 /// `quality`: the 画质 chosen (none: 自动): the most the station lets its bit rate go to (a station before it lets it be).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fit?: { width: number; height: number; scale: number }; gamut?: "p3" };
+/// `fps`: the 帧率 chosen (none: 自动): the most frames a second the station sends (a station before it lets it be).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3" };
 export type ScreenQuality = "smooth" | "hd" | "original";
+export const SCREEN_FPS = [120, 90, 60, 30, 15] as const;
+export type ScreenFps = (typeof SCREEN_FPS)[number];
 
 export function noMeasure(): Effect.Effect<void, CoreError> {
   return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));

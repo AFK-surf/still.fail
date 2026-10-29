@@ -84,6 +84,9 @@ JPEG frames are all key frames and their config has no `description`.
   With `"quality": "smooth" | "hd" | "original"` (the 画质 chosen on the client; none for 自动) the station lets the
   bit rate go higher than the source's own (Pace, "Bit rate"); a station from before it lets it be, and a client that
   says none gets the source's own as before. A preview's is not read.
+  With `"fps": 120 | 90 | 60 | 30 | 15` (the 帧率 chosen on the client; none for 自动) no more frames a second go
+  than that (Pace, "Frame rate"), and the desktop captures and encodes at it; a station from before it, or a value
+  not among these, lets it be: as many as the source makes and the link carries, as before. A preview's is not read.
   With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
   The desktop captures it on Windows and macOS; the Apple native client plays it. Older sources ignore the request.
   Previews never request or capture audio. No audio frames are sent without negotiation.
@@ -156,6 +159,20 @@ client, so any client that acknowledges what it drew is paced.
   the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
   4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
   smaller, rather than fewer and late.
+- **Frame rate.** A view that asked a 帧率 (`fps`) gets no more frames than that: each frame takes the next slot of
+  1000/fps ms, one that went up to half a slot late letting the next come that much sooner (`Pacer.wait`), so no
+  second carries more than fps + 1 and a source that captures at that very rate (and is a little early or late) keeps
+  all of its frames; the pace waits for the slot before it asks the source for the next. The source is opened with it
+  too (`ViewOptions.fps`): still.fail Helper's ScreenCaptureKit captures no more often (`minimumFrameInterval`);
+  stillfail-screen's capture is asked no more often (`MinUpdateInterval`, Windows 11 24H2 on; before, the pace holds
+  the rest back) and it pushes none sooner than its slot (native/screen/src/pace.rs). The encoders are set for that
+  many a second but never more than 60 (VideoToolbox's `ExpectedFrameRate`; stillfail-screen's frame rate, GOP and
+  each picture's duration, `encoder_fps`; 自动: 60, as before): asked 120, a 4K desktop on NVENC encoded ~55 a second,
+  and an encoder set for 120 sized each picture for 120 and sent half the bits (1.6 MB/s against 3.3 at 30). Key
+  frames come at least every 10 s by the clock (VideoToolbox's `MaxKeyFrameIntervalDuration`; stillfail-screen asks
+  one 10 s after the last, `KeyClock`), not every so many pictures. 90 and 120 come only where the display draws that
+  many (a 60 Hz display gives 60). A browser tab's and a simulator's frames are held to it by the pace alone. The bit
+  rate stays a rate: fewer frames a second, each of them larger.
 - **Start.** A view opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
   until it is first lowered: its first frame is a whole picture, its largest, and one at the source's own rate held a
   1 Mbit/s link up for a second. Rate is lowered only once 0.5 s of acknowledgements say what went through.
@@ -425,7 +442,8 @@ device's round trip to the station (the `stationNet` view, in its colour), which
 bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
 the screen's own size; said to the station as `quality` too, 高清 and 原画 letting the bit rate go higher; another opens
-the view again), 组合键 while driving (the keys this device's system keeps for
+the view again), 帧率 (`prefs.screenFps`: 自动 as many as the station and the link give, or at most 120, 90, 60, 30 or
+15 a second, said to the station as `fps`; another opens the view again, `screen.bounds` saying it with the 画质), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
 cannot be sent, Windows keeps it from any app), 常用键 while driving in the mbui app (F1–F12, Del, Home, End, PgUp,
 PgDn, with the modifiers the keys row holds; 控制中心 stays open for the next), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).

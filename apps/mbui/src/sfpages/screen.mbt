@@ -113,9 +113,10 @@ priv struct ScreenSess {
   /// the frames that came and their bytes, counted as they come (控制中心's 连接 reads a second's of them)
   mut frames : Int
   mut bytes : Int
-  /// the 画质 the open view was asked with (prefs `screenQuality`; "": as this device's screen is): another chosen
-  /// is asked of it (`screen.bounds`)
+  /// the 画质 the open view was asked with (prefs `screenQuality`; "": as this device's screen is), and its 帧率 (prefs
+  /// `screenFps`; 0: 自动): another chosen is asked of it (`screen.bounds`)
   mut asked : String
+  mut asked_fps : Int
 }
 
 ///|
@@ -182,6 +183,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         frames: 0,
         bytes: 0,
         asked: "",
+        asked_fps: 0,
       }
       screens_open[key] = s
       s
@@ -590,6 +592,34 @@ fn screen_quality(src : Source) -> String {
 }
 
 ///|
+/// The most frames a second this device asks for (prefs `screenFps`, 控制中心's 帧率): 120, 90, 60, 30 or 15, or 0 (自动:
+/// as many as the station and the link give).
+fn screen_fps(src : Source) -> Int {
+  let n = number((src.topic)("prefs", {}).value, "screenFps").to_int()
+  if screen_fps_choices.contains(n) && n > 0 {
+    n
+  } else {
+    0
+  }
+}
+
+///|
+/// 帧率's choices, 自动 (0) first (web/src/screen/frames.ts FPS_CHOICES).
+// kept across runs: a table, never written
+let screen_fps_choices : Array[Int] = [0, 120, 90, 60, 30, 15]
+
+///|
+/// The 画质 and 帧率 a view is asked with besides its size (none for 自动): `screen.view`'s and `screen.bounds`'s.
+fn asks_into(params : Map[String, Json], quality : String, fps : Int) -> Unit {
+  if quality != "" {
+    params["quality"] = Json::string(quality)
+  }
+  if fps > 0 {
+    params["fps"] = Json::number(fps.to_double())
+  }
+}
+
+///|
 /// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
 /// size).
 fn quality_bounds(quality : String) -> (Int, Int) {
@@ -604,7 +634,7 @@ fn quality_bounds(quality : String) -> (Int, Int) {
 ///|
 /// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.265 first where
 /// the host decodes it, H.264 where it does), as large as 画质 asks, and the 画质 itself (how high the station lets the
-/// bit rate go).
+/// bit rate go) and the 帧率 (the most frames a second it sends).
 fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   if self.call != 0 || own_screen(self.station, self.screen) {
     return
@@ -618,7 +648,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   // (a call of its own: the part in sight told it again)
   self.looked = ""
   let quality = screen_quality(src)
+  let fps = screen_fps(src)
   self.asked = quality
+  self.asked_fps = fps
   let (mw, mh) = quality_bounds(quality)
   let codecs = if @ui.h264_here() {
     [Json::string("h264"), Json::string("jpeg")]
@@ -636,9 +668,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "maxWidth": Json::number(mw.to_double()),
     "maxHeight": Json::number(mh.to_double()),
   }
-  if quality != "" {
-    params["quality"] = Json::string(quality)
-  }
+  asks_into(params, quality, fps)
   if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
   // Shown by the system's video layer (its frames tagged colours honoured, a wide-gamut screen's shown as wide): the
   // Mac's desktop sent in Display P3; the app's canvas (a faded or ended view's picture) has it converted to sRGB.
@@ -676,21 +706,25 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
 }
 
 ///|
-/// 画质 chosen otherwise since the open view was asked: the view goes on, its pictures asked this large
-/// (`screen.bounds`: the core opens its stream again, the one before kept until the new one has opened, so a Windows
-/// desktop keeps the display scale set from it), the frame on screen kept meanwhile.
+/// 画质 or 帧率 chosen otherwise since the open view was asked: the view goes on, its pictures asked this large and
+/// this often (`screen.bounds`: the core opens its stream again, the one before kept until the new one has opened, so a
+/// Windows desktop keeps the display scale set from it), the frame on screen kept meanwhile.
 fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
   let quality = screen_quality(src)
-  if self.call == 0 || self.asked == quality {
+  let fps = screen_fps(src)
+  if self.call == 0 || (self.asked == quality && self.asked_fps == fps) {
     return
   }
   self.asked = quality
+  self.asked_fps = fps
   let (mw, mh) = quality_bounds(quality)
-  screen_tell(src, "screen.bounds", {
+  let params : Map[String, Json] = {
     "view": Json::string(self.view),
     "maxWidth": Json::number(mw.to_double()),
     "maxHeight": Json::number(mh.to_double()),
-  })
+  }
+  asks_into(params, quality, fps)
+  screen_tell(src, "screen.bounds", params)
 }
 
 ///|

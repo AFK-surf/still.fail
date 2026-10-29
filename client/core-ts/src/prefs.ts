@@ -8,10 +8,11 @@ import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
 import { current, fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import * as keymap from "./keymap.ts";
+import { SCREEN_FPS, type ScreenFps } from "./station/wire.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -197,6 +198,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));
+  if ("screenFps" in prefs && !SCREEN_FPS.includes(prefs.screenFps as ScreenFps)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenFps" }));
   if ("screenCodec" in prefs && prefs.screenCodec !== "h264") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenCodec" }));
   if ("screenMouse" in prefs && prefs.screenMouse !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenMouse" }));
   if (isObject(prefs.previewSizes) && Object.values(prefs.previewSizes).some((v) => typeof v !== "string" || !/^[0-9]{1,4}(x[0-9]{1,4})?$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "previewSizes" }));

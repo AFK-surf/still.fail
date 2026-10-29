@@ -48,10 +48,13 @@ pub struct H264 {
     /// The bit rate asked, and whether the picture in it is a still one's, encoded finer (`push`'s `still`).
     bitrate: u32,
     finer: bool,
+    /// The pictures a second it is set for (pace.rs `encoder_fps`: the view's 帧率, at most 60; 60 where none is asked):
+    /// its rate control's bits a picture, its GOP (view.rs also asks a key frame every 10 s by the clock), each
+    /// picture's duration.
+    fps: u32,
     _manager: Option<IMFDXGIDeviceManager>,
 }
 
-const FPS: u32 = 60;
 /// A still picture's key frame: its QP at most this (of 51), at STILL_BOOST times the bit rate, where the bit rate asked
 /// is STILL_FROM or more (a narrow link's would take seconds to go).
 const STILL_QP: u32 = 28;
@@ -99,11 +102,11 @@ fn friendly(activate: &IMFActivate) -> String {
 
 impl H264 {
     /// The best H.265 encoder there is for `width`×`height`, on the hardware; an error where there is none.
-    pub fn hevc(gpu: &Gpu, width: u32, height: u32, bitrate: u32) -> Result<H264> {
+    pub fn hevc(gpu: &Gpu, width: u32, height: u32, bitrate: u32, fps: u32) -> Result<H264> {
         let mut last = None;
         for activate in hardware(true) {
             let name = friendly(&activate);
-            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, true, width, height, bitrate, name)) {
+            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, true, width, height, bitrate, fps, name)) {
                 Ok(encoder) => return Ok(encoder),
                 Err(error) => {
                     unsafe {
@@ -117,11 +120,11 @@ impl H264 {
     }
 
     /// The best encoder there is for `width`×`height`: hardware first (unless `software`), then software.
-    pub fn new(gpu: &Gpu, width: u32, height: u32, bitrate: u32, software: bool) -> Result<H264> {
+    pub fn new(gpu: &Gpu, width: u32, height: u32, bitrate: u32, fps: u32, software: bool) -> Result<H264> {
         let mut last = None;
         for activate in if software { Vec::new() } else { hardware(false) } {
             let name = friendly(&activate);
-            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, false, width, height, bitrate, name)) {
+            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, false, width, height, bitrate, fps, name)) {
                 Ok(encoder) => return Ok(encoder),
                 Err(error) => {
                     unsafe {
@@ -132,14 +135,14 @@ impl H264 {
             }
         }
         let software: Result<IMFTransform> = unsafe { CoCreateInstance(&CLSID_MSH264EncoderMFT, None, CLSCTX_INPROC_SERVER) };
-        match software.and_then(|t| H264::open(gpu, t, false, false, width, height, bitrate, "Microsoft H.264 (software)".into())) {
+        match software.and_then(|t| H264::open(gpu, t, false, false, width, height, bitrate, fps, "Microsoft H.264 (software)".into())) {
             Ok(encoder) => Ok(encoder),
             Err(error) => Err(last.unwrap_or(error)),
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, hevc: bool, width: u32, height: u32, bitrate: u32, name: String) -> Result<H264> {
+    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, hevc: bool, width: u32, height: u32, bitrate: u32, fps: u32, name: String) -> Result<H264> {
         unsafe {
             let attributes = transform.GetAttributes().ok();
             let asynchronous = attributes.as_ref().and_then(|a| a.GetUINT32(&MF_TRANSFORM_ASYNC).ok()).unwrap_or(0) != 0;
@@ -169,10 +172,10 @@ impl H264 {
                     || set(c, &CODECAPI_AVEncCommonRateControlMode, VARIANT::from(eAVEncCommonRateControlMode_CBR.0 as u32));
                 set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
                 set(c, &CODECAPI_AVEncMPVDefaultBPictureCount, VARIANT::from(0u32));
-                set(c, &CODECAPI_AVEncMPVGOPSize, VARIANT::from(FPS * 10));
+                set(c, &CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * 10));
             }
             let size = ((width as u64) << 32) | height as u64;
-            let rate = ((FPS as u64) << 32) | 1;
+            let rate = ((fps as u64) << 32) | 1;
             // H.264: constrained baseline, as every decoder takes it; baseline, then main (no B-frames asked) where not.
             // H.265: Main, 8 bits 4:2:0.
             let mut profile = "";
@@ -238,11 +241,12 @@ impl H264 {
                 staging: None,
                 width,
                 height,
-                name: format!("{name}, {profile}, {bitrate} bps"),
+                name: format!("{name}, {profile}, {bitrate} bps, {fps} fps"),
                 hevc,
                 header,
                 bitrate,
                 finer: false,
+                fps,
                 _manager: manager,
             })
         }
@@ -308,7 +312,7 @@ impl H264 {
             let sample = MFCreateSample()?;
             sample.AddBuffer(&buffer)?;
             sample.SetSampleTime(ts * 10)?;
-            sample.SetSampleDuration(10_000_000 / FPS as i64)?;
+            sample.SetSampleDuration(10_000_000 / self.fps as i64)?;
             if key {
                 if let Some(c) = self.codec.as_ref() {
                     set(c, &CODECAPI_AVEncVideoForceKeyFrame, VARIANT::from(1u32));

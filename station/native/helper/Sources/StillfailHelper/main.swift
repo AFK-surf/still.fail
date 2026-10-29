@@ -19,7 +19,7 @@
 //   screen.view         {maxWidth, maxHeight, display?, fps?, bitrate?, audio?, synthetic?}: a view of the display
 //                       (`audio: true`: and the Mac's system output, SystemAudio.swift); the connection then carries
 //                       ScreenView.swift's messages both ways until either side closes it
-//   simulator.view      {udid, maxWidth, maxHeight, codec, bitrate?}: a view of a booted iOS Simulator, its messages
+//   simulator.view      {udid, maxWidth, maxHeight, codec, fps?, bitrate?}: a view of a booted iOS Simulator, its messages
 //                       ScreenView's (SimulatorView.swift says its input)
 //   files.*             the drive's protected folders (Files.swift says them)
 //   watch               → {ok}, then held open for as long as this process is (the station's supervision); a grant
