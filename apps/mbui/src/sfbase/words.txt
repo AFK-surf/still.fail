@@ -1203,6 +1203,16 @@ web-main.switcher.noMatch
 web-main.switcher.none
 web-main.switcher.search
 web-main.switcher.title
+web-main.things.close
+web-main.things.files
+web-main.things.find
+web-main.things.links
+web-main.things.media
+web-main.things.none
+web-main.things.pulls
+web-main.things.pullsAll
+web-main.things.show
+web-main.things.title
 web-main.usage.costPrices
 web-main.usage.days
 web-main.usage.noModelUsage

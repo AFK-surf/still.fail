@@ -1,0 +1,9 @@
+# A chat's info's pull request pointed at: its card (MBUI_FIXTURE=chat MBUI_WIN=1280x800).
+timeout 20000
+until 整理发布清单
+wait 600
+tapxy 1216 22
+wait 900
+hover 首页列表按天分组
+wait 1200
+exit

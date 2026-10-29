@@ -1,0 +1,9 @@
+# As things.drive, then its pulls.
+timeout 20000
+until 图片、文件和链接
+wait 600
+tap 图片、文件和链接
+wait 1500
+tap PR 4
+wait 1200
+exit

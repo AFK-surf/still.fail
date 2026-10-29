@@ -757,6 +757,34 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     }
   })
   |> ignore
+  // the pull requests linked in it, the latest 3 (the user, 2026-10-29: most chats have one or two, seen at a look),
+  // 全部 N 个 to the rest beside the chat; pressed, one opens in the browser
+  let (said, pulls) = match th {
+    Some(id) => @sfpages.things_now(src, r.station, id)
+    None => (0, [])
+  }
+  if pulls.length() > 0 {
+    c.box(style=info_tools(false), fn() {
+      for i, p in pulls {
+        if i == info_pulls_most {
+          break
+        }
+        let pv = Some(p)
+        if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
+          chat_own.info_open = false
+          let url = text(pv, "url")
+          c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
+        }
+      }
+      if pulls.length() > info_pulls_most &&
+        info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
+        chat_own.info_open = false
+        @sfpages.things_choose(r, "pulls")
+        side_change(src, r, "open", Some("things"))
+      }
+    })
+    |> ignore
+  }
   let agents = items(chat, "agents")
   if agents.length() > 0 {
     c.box(style=info_agents, fn() {
@@ -801,8 +829,13 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     _ => None
   }
   let shares = th is Some(_) && (share is Some(Object(_)) || publish is Some(_))
-  if files || v.letters > 0 || relayable || slack != "" || feishu != "" {
+  if said > 0 || files || v.letters > 0 || relayable || slack != "" || feishu != "" {
     c.box(style=info_tools(!shares), fn() {
+      // what was said in it besides words, beside the chat (sfpages things.mbt)
+      if said > 0 && info_row(c, "info-pop/things", "photo", @sf.t("web-main.things.title"), said.to_string()) {
+        chat_own.info_open = false
+        side_change(src, r, "open", Some("things"))
+      }
       if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
         chat_own.info_open = false
         side_toggle(src, r, "files")
@@ -881,6 +914,44 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
   c.semantics(b, Button, id~, label~)
   c.clicked(id)
 }
+
+///|
+/// A pull request in the info (as info_row): its mark where a row's icon is, its title cut to the line, its number at
+/// the line's end, muted; pointed at, its card (as a message's link to it); held or right clicked, its menu (在对话中查看,
+/// its link copied). True on the frame after a press.
+fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Json?) -> Bool {
+  let id = c.id(key)
+  let title = @sfpages.pull_title(pull)
+  let b = c.box(style=info_tool(), id~, fn() {
+    c.box(style=info_tool_icon, fn() { @sfpages.pull_mark(c, pull, 14.0) }) |> ignore
+    c.box(style=info_pull_words, fn() { c.text(title, style=info_pull_title) |> ignore }) |> ignore
+    c.text("#" + count(pull, "number").to_string(), style=info_end) |> ignore
+  })
+  c.semantics(b, Link, id~, label=title)
+  let url = text(pull, "url")
+  // (at the info's left: under it, it would cover the info's rows after it; the user, 2026-10-29: 显示到左边)
+  @sfpages.web_peek(c, src, r.station, url, title, id, side=Left, show=Some(fn() {
+    chat_own.info_open = false
+    @sfbase.go_to(r, number(pull, "seq"))
+  }))
+  @sfpages.thing_menu(c, id, number(pull, "seq"), url, fn(seq) {
+    chat_own.info_open = false
+    @sfbase.go_to(r, seq)
+  })
+  c.clicked(id)
+}
+
+///|
+/// How many pull requests the info names itself (the rest: 全部 N 个).
+let info_pulls_most : Int = 3
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_pull_words : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_pull_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// A tool's words and what it says of it, at the line's two ends, 12 apart (one under the other where the line has

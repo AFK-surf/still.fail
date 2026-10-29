@@ -1,0 +1,6 @@
+# What was said in a chat besides words in its tab beside it (sfpages things.mbt): MBUI_FIXTURE=chat-things-side
+# MBUI_WIN=1280x800. things-side-pulls, things-side-files: then that kind.
+timeout 20000
+until 媒体 4
+wait 1500
+exit

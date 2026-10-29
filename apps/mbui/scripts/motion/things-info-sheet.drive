@@ -1,0 +1,5 @@
+# A chat's info sheet with its pull requests on a phone's window (MBUI_FIXTURE=chat-info: it opens at once).
+timeout 20000
+until 图片、文件和链接
+wait 1500
+exit

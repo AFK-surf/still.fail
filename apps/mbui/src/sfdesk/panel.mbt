@@ -18,6 +18,7 @@ fn side_shows(v : ChatView, tab : String) -> Bool {
   tab == "jobs" ||
   tab == "files" ||
   tab == "letters" ||
+  tab == "things" ||
   tab_service(tab) is Some(_) ||
   tab_file(tab) is Some(_) ||
   station_tab(tab) is Some(_) ||
@@ -529,6 +530,12 @@ fn side_panel(
           Some(th) => letters_tab(c, src, r, v, th)
           None => ()
         }
+      } else if front == "things" {
+        // what was said in it besides words (sfpages things.mbt): 在对话里看 goes to the message beside it
+        match v.thread {
+          Some(th) => @sfpages.things_body(c, src, r, th, false, fn(seq) { @sfbase.go_to(r, seq) })
+          None => ()
+        }
       } else if tab_service(front) is Some(job) {
         service_pane(c, src, r, job, close=if own_bar {
           Some(fn() { c.tell("side/close", fn() { side_change(src, r, "clear", None) }) })
@@ -593,6 +600,8 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
         @sf.t("web-pages.chat.jobs")
       } else if tab == "files" {
         @sf.t("web-pages.chat.files")
+      } else if tab == "things" {
+        @sf.t("web-main.things.title")
       } else {
         @sf.t("web-main.letters.title")
       }
@@ -604,6 +613,8 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
         @sf.t("web-pages.chat.closeJobs")
       } else if tab == "files" {
         @sf.t("web-pages.chat.closeFiles")
+      } else if tab == "things" {
+        @sf.t("web-main.things.close")
       } else {
         @sf.t("web-main.letters.close")
       }
@@ -644,6 +655,8 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
     "boxes"
   } else if tab == "files" {
     "folder"
+  } else if tab == "things" {
+    "photo"
   } else {
     "chats"
   }
@@ -682,7 +695,7 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     c.semantics(x, Button, id=close, label=closing)
   })
   c.semantics(b, Tab, id~, label~, selected=front)
-  if !(tab == "jobs" || tab == "files" || tab == "letters") {
+  if !(tab == "jobs" || tab == "files" || tab == "letters" || tab == "things") {
     @sf.tip(c, "side/tab-tip/" + tab, id, label)
   }
 }

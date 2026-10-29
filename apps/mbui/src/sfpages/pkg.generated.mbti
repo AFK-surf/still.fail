@@ -438,6 +438,10 @@ pub fn publish_reset() -> Unit
 
 pub fn publish_set(@sfbase.ChatRef, Double, Json) -> Unit
 
+pub fn pull_mark(@ui.Ctx, Json?, Double) -> Unit
+
+pub fn pull_title(Json?) -> String
+
 pub fn quota_dials(@ui.Ctx, Array[Json]) -> Unit
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool) -> Unit
@@ -574,6 +578,16 @@ pub let swipe_off_ms : Double
 
 pub fn switch_workspace(@sfbase.Source, String) -> Unit
 
+pub fn thing_menu(@ui.Ctx, Int32, Double, String, (Double) -> Unit) -> Unit
+
+pub fn things_body(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, Bool, (Double) -> Unit) -> Unit
+
+pub fn things_choose(@sfbase.ChatRef, String) -> Unit
+
+pub fn things_now(@sfbase.Source, String, Double) -> (Int32, Array[Json])
+
+pub fn things_params(String, Double, q? : String) -> Map[String, Json]
+
 pub let touch_row_h : Double
 
 pub let triple_models_least : Double
@@ -609,6 +623,8 @@ pub fn vault_recover_dialog(@settings.Core, String) -> Unit
 pub let video_least : Double
 
 pub let vt_actions : @ui.Style
+
+pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @ui.Side, show? : (() -> Unit)?) -> Unit
 
 pub fn workspace_mark(@ui.Ctx, @sfbase.Workspace, Double, Int64, @ui.TextStyle, still? : Bool) -> Unit
 

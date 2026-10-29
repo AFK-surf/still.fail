@@ -411,6 +411,57 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       |> ignore
     })
     |> ignore
+    // the pull requests linked in it, the latest 3 (the user, 2026-10-29: most chats have one or two, seen at a look),
+    // 全部 N 个 to the rest; tapped, one opens in the browser
+    let (said, pulls) = match opt_number(thread, "id") {
+      Some(th) => @sfpages.things_now(src, r.station, th)
+      None => (0, [])
+    }
+    if pulls.length() > 0 {
+      info_list(c, fn() {
+        for i, p in pulls {
+          if i == info_pulls_most {
+            break
+          }
+          let pv = Some(p)
+          // held or right clicked, its menu (在对话中查看, its link copied); pointed at, its card (sfpages things.mbt)
+          let pid = c.id("info/pull/" + text(pv, "key"))
+          @sfpages.thing_menu(c, pid, number(pv, "seq"), text(pv, "url"), fn(seq) {
+            close()
+            go_to(r, seq)
+          })
+          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left, show=Some(fn() {
+            close()
+            go_to(r, number(pv, "seq"))
+          }))
+          if info_row(c, "info/pull/" + text(pv, "key"), fn() {
+              @sfpages.pull_mark(c, pv, 16.0)
+              c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
+              c.text("#" + count(pv, "number").to_string(), style=letters_meta) |> ignore
+            }) {
+            close()
+            @sfbase.open_link_in(src, text(pv, "url"))
+          }
+        }
+        match opt_number(thread, "id") {
+          Some(th) if pulls.length() > info_pulls_most =>
+            if info_row(c, "info/pulls", fn() {
+                @sf.icon(c, "list", size=16.0, color=t.p.text) |> ignore
+                c.box(style=@sf.full_width, fn() {
+                  c.text(fill("web-main.things.pullsAll", [("n", pulls.length().to_string())]), style=info_words) |> ignore
+                })
+                |> ignore
+                chevron(c)
+              }) {
+              close()
+              @sfpages.things_choose(r, "pulls")
+              open_things(src, r, th)
+            }
+          _ => ()
+        }
+      })
+      c.box(style=info_lists_gap, fn() {  }) |> ignore
+    }
     if agents.length() > 0 {
       info_list(c, fn() {
         for a in agents {
@@ -454,8 +505,23 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       c.box(h=Px(10.0), fn() {  }) |> ignore
     }
     let letters = number(chat, "letters")
-    if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
+    if open || link != "" || letters > 0.0 || said > 0 || slack != "" || xshare is Some(_) {
       info_list(c, fn() {
+        // what was said in it besides words: a sheet of their own (sfpages things.mbt)
+        match opt_number(thread, "id") {
+          Some(th) if said > 0 =>
+            if info_row(c, "info/things", fn() {
+                @sf.icon(c, "photo", size=16.0, color=t.p.text) |> ignore
+                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.things.title"), style=info_words) |> ignore })
+                |> ignore
+                c.text(said.to_string(), style=letters_meta) |> ignore
+                chevron(c)
+              }) {
+              close()
+              open_things(src, r, th)
+            }
+          _ => ()
+        }
         // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
         match opt_number(thread, "id") {
           Some(th) if letters > 0.0 =>
@@ -1588,6 +1654,31 @@ fn open_letters(src : Source, r : ChatRef, thread : Double) -> Unit {
     letters_body(c, src, r, thread)
   })
 }
+
+///|
+/// Opens what was said in the chat besides words (the library's panel, as the letters'); 在对话里看 closes it and goes
+/// to the message in the chat.
+fn open_things(src : Source, r : ChatRef, thread : Double) -> Unit {
+  @sf.panel(tr("web-main.things.title"), from=Unanchored, tall=0.8, grows=true, fn(c, close) {
+    @sfpages.things_body(c, src, r, thread, true, fn(seq) {
+      close()
+      go_to(r, seq)
+    })
+  })
+}
+
+///|
+/// How many pull requests the info names itself (the rest: 全部 N 个).
+let info_pulls_most : Int = 3
+
+///|
+/// What is between the info's lists (its pull requests', its agents'): 10, as under its agents'.
+// kept across runs: a value (no field of it changes)
+let info_lists_gap : @ui.Style = @ui.css("h=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_pull_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// The params of a chat's letters (the core's `chatLetters` view).

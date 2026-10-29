@@ -9,10 +9,11 @@ const isObject = (v: unknown): v is Obj => v !== null && typeof v === "object" &
 const get = (v: unknown, k: string): unknown => (isObject(v) ? v[k] : undefined);
 
 /// The tabs that are not an agent's history: its agents' services and jobs (任务), the stations' files (文件), the
-/// letters its agents and other chats wrote each other (往来).
+/// letters its agents and other chats wrote each other (往来), what was said in it besides words (图片、文件和链接).
 export const JOBS = "jobs";
 export const FILES = "files";
 export const LETTERS = "letters";
+export const THINGS = "things";
 
 export type Tabs = { open: string[]; shown?: string; auto?: true };
 /// What is kept for a chat: its tabs, and the one in front when there is one.
@@ -82,7 +83,7 @@ export function tabsOf(kept: unknown, agents: readonly unknown[], noChat: boolea
   const auto = chosen === null && noChat && session !== null;
   const tabs = chosen ?? (auto && session !== null ? [session] : []);
   const has = chatHas(agents);
-  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || isScreen(key) || isStationPage(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
+  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || key === THINGS || isFile(key) || isScreen(key) || isStationPage(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
   const open = agents.length ? tabs.filter(known) : tabs;
   const active = isObject(kept) && typeof kept.active === "string" ? kept.active : null;
   const shown = active !== null && open.includes(active) ? active : open[0];
