@@ -1974,12 +1974,15 @@ pub fn Viewer::draw_flight(
   let l = self.lifted()
   let dy = lift_of(from) * l
   let (sx, sy, sw, sh) = from.seen.unwrap_or((from.x, from.y, from.w, from.h))
+  // (a side cut by what it is in stays where that cuts it, on the screen; a side nothing cut goes with the box, its
+  // corners whole all the way)
   let (sx, sy, sw, sh) = if dy == 0.0 {
     (sx, sy, sw, sh)
   } else {
-    let to = fn(a : Double, b : Double) { a + (b - a) * l }
-    let (x0, y0) = (to(sx, from.x), to(sy, from.y + dy))
-    (x0, y0, to(sx + sw, from.x + from.w) - x0, to(sy + sh, from.y + dy + from.h) - y0)
+    let cut = 0.5
+    let y0 = if sy > from.y + cut { sy } else { from.y + dy }
+    let y1 = if sy + sh < from.y + from.h - cut { sy + sh } else { from.y + dy + from.h }
+    (sx, y0, sw, y1 - y0)
   }
   let from = { ..from, y: from.y + dy }
   let (tx, ty, tw, th) = to
