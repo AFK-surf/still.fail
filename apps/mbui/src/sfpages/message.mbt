@@ -300,10 +300,10 @@ pub fn agent_avatar(
   })
   c.bone_whole(b)
   if agent != "" {
-    let station = here.station
+    let r = here_ref(here)
     hover(c, "agent-hover/" + key, id, tile=true, fn() {
-      match agent_json((src.topic)("chat", chat_params(here_ref(here))).value, agent) {
-        Some(j) => agent_card(c, src, station, j)
+      match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
+        Some(j) => agent_card(c, src, r, j)
         None => ()
       }
     })

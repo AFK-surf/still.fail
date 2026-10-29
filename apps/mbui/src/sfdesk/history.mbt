@@ -8,25 +8,19 @@
 
 ///|
 /// What the history keeps of its own (the rest is the core's): 只看收发 (for every history, as the web keeps it), its
-/// details folded; where its runtime keeps each session's transcript (by station and session; "" none), asked once;
-/// its context's 管理 menu open (its session's, and from which: its tile or its line), clearing it asked to confirm
-/// (its session's key, "" none).
+/// details folded; where its runtime keeps each session's transcript (by station and session; "" none), asked once.
 priv struct HistoryOwn {
   mut shut : Bool
   transcripts : Map[String, String]
-  mut context_menu : String
-  mut clear_asking : String
 }
 
 ///|
-let history_own : HistoryOwn = { shut: false, transcripts: {}, context_menu: "", clear_asking: "" }
+let history_own : HistoryOwn = { shut: false, transcripts: {} }
 
 ///|
 fn history_reset() -> Unit {
   history_own.shut = false
   history_own.transcripts.clear()
-  history_own.context_menu = ""
-  history_own.clear_asking = ""
 }
 
 ///|
@@ -150,7 +144,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
     let tiles = text(card, "cost") != "" || field(card, "cache") is Some(_) || field(card, "context") is Some(_)
     if tiles {
       let entry : ContextEntry? = if compacts || clears {
-        Some({ open: fn() { history_own.context_menu = me + "\u{1}tile" }, busy, compacts })
+        Some({ open: fn() { @sfpages.open_context_actions(src, station, key, s, Of(context_tile_id(c))) }, busy, compacts })
       } else {
         None
       }
@@ -228,7 +222,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
         fn() {
           @settings.doing_mark(c, busy, failed, inline=true)
           if wh_link(c, "history/context", @sf.t("web-pages.chat.contextManage")) {
-            history_own.context_menu = me + "\u{1}line"
+            @sfpages.open_context_actions(src, station, key, s, Of(c.id("history/context")))
           }
         },
       )
@@ -236,7 +230,6 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
     wh_transcript(c, src, station, key, me)
   })
   |> ignore
-  wh_context_menu(c, src, station, key, me, compacts, clears, busy)
 }
 
 ///|
@@ -306,66 +299,6 @@ fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me :
         },
       )
     }
-  }
-}
-
-///|
-/// Its context's 管理 (useContextActions): 压缩上下文 at once, 清空上下文 (in red) asked first; neither while one is under
-/// way.
-fn wh_context_menu(
-  c : @ui.Ctx,
-  src : Source,
-  station : String,
-  key : String,
-  me : String,
-  compacts : Bool,
-  clears : Bool,
-  busy : Bool,
-) -> Unit {
-  let open = history_own.context_menu.has_prefix(me + "\u{1}")
-  let anchor = if history_own.context_menu == me + "\u{1}tile" {
-    context_tile_id(c)
-  } else {
-    c.id("history/context")
-  }
-  let entries : Array[@kit.Entry] = []
-  if compacts {
-    entries.push(@kit.menu_item("compact", label=@sf.t("web-pages.chat.compact"), disabled=busy))
-  }
-  if clears {
-    entries.push(@kit.menu_item("clear", label=@sf.t("web-pages.chat.clear"), disabled=busy))
-  }
-  let m = @sf.dropdown(c, "context-menu/" + me, open, anchor, entries, { "compact": "shrink", "clear": "refresh" }, 180.0)
-  if open && !m.open {
-    history_own.context_menu = ""
-  }
-  let params : Json = { "station": Json::string(station), "key": Json::string(key) }
-  match m.chosen {
-    Some("compact") => {
-      history_own.context_menu = ""
-      act(src, @sf.t("web-pages.chat.compact"), "", "session.compact", params)
-    }
-    Some("clear") => {
-      history_own.context_menu = ""
-      history_own.clear_asking = me
-    }
-    _ => ()
-  }
-  // asked as the web asks it (ChatPage.tsx: Confirm)
-  let asked = @sf.confirm_dialog(
-    c,
-    "clear-context/" + me,
-    history_own.clear_asking == me,
-    @sf.t("web-pages.chat.clearConfirm"),
-    @sf.t("web-pages.chat.clearBody"),
-    @sf.t("web-pages.chat.clear"),
-    cancel=@sf.t("common.cancel"),
-  )
-  if asked.confirmed {
-    history_own.clear_asking = ""
-    act(src, @sf.t("web-pages.chat.clear"), "", "session.clear", params)
-  } else if history_own.clear_asking == me && !asked.open {
-    history_own.clear_asking = ""
   }
 }
 

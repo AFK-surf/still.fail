@@ -72,6 +72,36 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 }
 
 ///|
+/// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
+/// or from elsewhere that says what runs (an agent's card's account). Not twice over itself.
+pub fn open_triple_panel(src : Source, station : String, of : String, from : @sf.Anchor, saved? : String = "") -> Unit {
+  let me = station + "\u{1}" + of
+  if triple.open == me {
+    return
+  }
+  triple.open = me
+  triple.field.set("")
+  triple.query = ""
+  pick_draft(src, station, of, { "open": Json::boolean(true) })
+  @sf.panel(
+    @sf.t("android-chat.new.model"),
+    fn(c, _) { triple_panel(c, src, station, of) },
+    from~,
+    w=triple_panel_w,
+    // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
+    fits=true,
+    foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
+    gone=fn() { triple.open = "" },
+    focus=false,
+    // (the models scroll by themselves, what goes with the one picked beside them in view)
+    lists=true,
+    // (the line over its foot across the whole panel, out past its padding to its edges, over the foot where what it
+    // holds scrolls: 2026-10-25 用户「分割线边上不要留空」)
+    ruled=true,
+  )
+}
+
+///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
 /// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
 /// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once 确定 kept it
@@ -107,26 +137,7 @@ pub fn model_triple(
   let open = triple.open == me
   if can && !open && (c.clicked(id) || triple.asked == me) {
     triple.asked = ""
-    triple.open = me
-    triple.field.set("")
-    triple.query = ""
-    pick_draft(src, station, of, { "open": Json::boolean(true) })
-    @sf.panel(
-      @sf.t("android-chat.new.model"),
-      fn(c, _) { triple_panel(c, src, station, of) },
-      from=Of(id),
-      w=triple_panel_w,
-      // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
-      fits=true,
-      foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
-      gone=fn() { triple.open = "" },
-      focus=false,
-      // (the models scroll by themselves, what goes with the one picked beside them in view)
-      lists=true,
-      // (the line over its foot across the whole panel, out past its padding to its edges, over the foot where what it
-      // holds scrolls: 2026-10-25 用户「分割线边上不要留空」)
-      ruled=true,
-    )
+    open_triple_panel(src, station, of, Of(id), saved~)
   }
   let runtime = text(value, "runtime")
   let (words, muted) = if small { (triple_words_xs, triple_muted_xs) } else { (triple_words, triple_muted) }

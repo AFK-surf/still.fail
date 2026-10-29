@@ -22,7 +22,7 @@ pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
-pub fn agent_card(@ui.Ctx, @sfbase.Source, String, Json) -> Unit
+pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Json) -> Unit
 
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit
 
@@ -348,6 +348,8 @@ pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Un
 
 pub fn offered_image() -> String
 
+pub fn open_context_actions(@sfbase.Source, String, String, Json?, @sf.Beside) -> Unit
+
 pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit) -> Unit
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
@@ -361,6 +363,8 @@ pub fn open_screen_fixture(String) -> Unit
 pub fn open_search_mode(String) -> Unit
 
 pub fn open_triple(String, String) -> Unit
+
+pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String) -> Unit
 
 pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
