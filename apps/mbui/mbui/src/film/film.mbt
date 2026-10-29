@@ -78,6 +78,9 @@ pub fn film(
     // (the app's words in the language the film says: MBUI_LOCALE, as a device's; MBUI_DARK=1, an app's own reading of
     // it (sffix's fixture choosing its dark theme) as a program's)
     env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE")), ("MBUI_DARK", arg("MBUI_DARK"))],
+    // (a film is for people to see a motion as it is, words over words too: what a test holds it to, words_over.mbt,
+    // is the tests', not a film's to stop at)
+    words_over_held=false,
     live={ host, turn: fn() { spin(1.0) } },
     window_corner~,
   )
