@@ -596,6 +596,10 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     Some(Object(_)) as context => out.push(fn() { station_context(c, core, address, context, manager) })
     _ => ()
   }
+  match field(o, "diagnostics") {
+    Some(Object(_)) as diagnostics => out.push(fn() { station_diagnostics(c, core, address, diagnostics, manager) })
+    _ => ()
+  }
   match field(o, "elevation") {
     Some(Object(_)) as elevation if online => out.push(fn() { station_elevation(c, core, address, elevation) })
     _ => ()
@@ -892,6 +896,35 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, search : Json?, ma
           @sf.t("web-pages.stations.search.what"),
           "search.setPersonal",
           obj([("station", str(address)), ("personal", Json::boolean(now))]),
+        )
+      }
+    })
+  })
+}
+
+///|
+/// What it sends still.fail to find its problems by (StationDiagnostics.tsx): whether its log goes, scrubbed, said by the
+/// workspace's managers (others read it).
+fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics : Json?, manager : Bool) -> Unit {
+  st_section(c, @sf.t("web-pages.stations.diagnostics.section"), fn() {
+    @sf.group(c, fn() {
+      let busy = is_doing(core, ["diagnostics.setLogs"], [("station", address)])
+      let on = flag(diagnostics, "logs")
+      let now = @sf.switch_row(
+        c,
+        "diagnostics-logs/" + address,
+        @sf.t("web-pages.stations.diagnostics.logs"),
+        on,
+        note=@sf.t("web-pages.stations.diagnostics.logsLine"),
+        disabled=!manager,
+        busy~,
+      )
+      if now != on {
+        @settings.act(
+          core,
+          @sf.t("web-pages.stations.diagnostics.what"),
+          "diagnostics.setLogs",
+          obj([("station", str(address)), ("logs", Json::boolean(now))]),
         )
       }
     })

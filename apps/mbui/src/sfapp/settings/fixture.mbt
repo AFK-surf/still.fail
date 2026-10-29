@@ -16,6 +16,8 @@ priv struct SettingsFixture {
   /// the station going on afresh by itself once a session's cache is over
   mut congestion : String
   mut afresh : Bool
+  /// the station sending its log to still.fail
+  mut logs : Bool
   /// a program granted Studio's data (docs/data-outflow.md: its overview's `outflowGrants`), as a test sets it
   mut outflow : Bool
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
@@ -66,6 +68,7 @@ let fx : SettingsFixture = {
   auto: false,
   congestion: "cubic",
   afresh: false,
+  logs: true,
   outflow: false,
   elevation: None,
   none: false,
@@ -145,6 +148,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.afresh = false
+  fx.logs = true
   fx.outflow = false
   fx.elevation = None
   fx.congestion = "cubic"
@@ -931,6 +935,7 @@ fn fx_station(address : String) -> Json {
           ),
           ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
           ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
+          ("diagnostics", obj([("logs", Json::boolean(fx.logs))])),
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 1.0 } else { 0.0 })),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
@@ -2035,6 +2040,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     }
     "context.setAfresh" => {
       fx.afresh = flag(p, "afreshWhenCold")
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "diagnostics.setLogs" => {
+      fx.logs = flag(p, "logs")
       fx_changed()
       Some(Ok(obj([])))
     }

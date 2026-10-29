@@ -18,6 +18,7 @@ import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
 import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
+import { diagnosticsView } from "./routes/diagnostics.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 
 export type OverviewDeps = {
@@ -152,6 +153,8 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     agentEnv: agentEnvView(raw),
     // How a session whose prompt cache is over goes on (routes/context.ts): afresh, by itself, when set.
     context: contextView(raw),
+    // Whether it sends its log to still.fail (routes/diagnostics.ts).
+    diagnostics: diagnosticsView(raw),
     network: networkView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
     // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and

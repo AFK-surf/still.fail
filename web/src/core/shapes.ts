@@ -5062,6 +5062,15 @@ export interface StationContext {
 	afreshWhenCold: boolean;
 }
 
+/** What a station sends still.fail to find its problems by (`Overview.diagnostics`). */
+export interface StationDiagnostics {
+	/**
+	 * It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what
+	 * people wrote), for problems to be found from our side (`diagnostics.setLogs`).
+	 */
+	logs: boolean;
+}
+
 /** One of a station's grants. */
 export interface StationGrant {
 	/**
@@ -5175,6 +5184,8 @@ export interface Overview {
 	 * does not offer it.
 	 */
 	context?: StationContext;
+	/** Whether it sends its log to still.fail. None from a station older than it, which then does not offer it. */
+	diagnostics?: StationDiagnostics;
 	/**
 	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
 	 * shows nothing).

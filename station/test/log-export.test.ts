@@ -1,8 +1,14 @@
 // The station's log as it leaves the machine (ops/log-export.ts): scrubbed, on unless turned off, held until it can go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { LogExport, record, scrubText } from "../src/ops/log-export.ts";
 import type { Line } from "../src/ops/log.ts";
+import { ConfigFile } from "../src/ops/config.ts";
+import { diagnosticsView, routes } from "../src/api/routes/diagnostics.ts";
+import type { Request } from "../src/api/request.ts";
 
 const HOME = "/Users/alice";
 const line = (message: string, fields: Record<string, unknown> = {}, level: Line["level"] = "INFO"): Line => ({ ms: 1_000, level, at: "share", message, fields });
@@ -27,6 +33,30 @@ test("fields people wrote are not sent; a workspace goes by its id, not its name
   assert.equal(attrs(record(line("x", { workspace: "01M3DB2N6P5SY7PJ7RG1F62TRX" }), HOME))["log.workspace"], "01M3DB2N6P5SY7PJ7RG1F62TRX");
   // Within an object too, its keys kept.
   assert.equal(attrs(record(line("x", { by: { email: "a@b.co", n: 1 } }), HOME))["log.by"], JSON.stringify({ email: "<email>", n: 1 }));
+});
+
+test("the station's managers turn it off and on from a client; the rest of telemetry stays as it was", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "diagnostics-"));
+  try {
+    const config = new ConfigFile(dir);
+    config.update((raw) => { raw.telemetry = { errors: true }; });
+    assert.deepEqual(diagnosticsView(config.raw()), { logs: true });
+    let changed = 0;
+    const route = routes({ config, changed: () => changed++ })[0]!;
+    const request = (role: string, logs: unknown): Request => ({
+      method: "PUT", path: "/diagnostics/settings", query: [], headers: {}, lang: "zh",
+      body: Buffer.from(JSON.stringify({ logs })),
+      viewer: { sub: "a", email: "a@x", name: "A", role, workspace: "w", device: "d" },
+    });
+    assert.equal((await route.handle(request("member", false), [])).status, 403);
+    assert.equal((await route.handle(request("owner", "no"), [])).status, 400);
+    assert.equal((await route.handle(request("admin", false), [])).status, 200);
+    assert.deepEqual(new ConfigFile(dir).raw().telemetry, { errors: true, logs: false });
+    assert.deepEqual(diagnosticsView(config.raw()), { logs: false });
+    assert.equal((await route.handle(request("owner", true), [])).status, 200);
+    assert.deepEqual(new ConfigFile(dir).raw().telemetry, { errors: true });
+    assert.equal(changed, 2);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("lines wait for the control plane, go in batches with the station, and stop at once when turned off", async () => {

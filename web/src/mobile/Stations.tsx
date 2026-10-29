@@ -36,6 +36,7 @@ import { PermissionsCard } from "./StationPermissions.tsx";
 import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { useSetPersonal } from "../StationSearch.tsx";
 import { useSetAfresh } from "../StationContext.tsx";
+import { useSetLogs } from "../StationDiagnostics.tsx";
 import { useSetElevation } from "../StationElevation.tsx";
 import * as elevationCss from "../StationElevation.css.ts";
 import * as connectsCss from "./Connects.css.ts";
@@ -322,6 +323,7 @@ function StationPage({ s, manager, login }: { s: StationView; manager: boolean; 
       {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
       {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
       {s.overview?.context && <ContextCard station={s.station} on={s.overview.context.afreshWhenCold} manager={manager} />}
+      {s.overview?.diagnostics && <DiagnosticsCard station={s.station} on={s.overview.diagnostics.logs} manager={manager} />}
       {s.online && s.overview?.elevation && <ElevationCard station={s.station} elevation={s.overview.elevation} />}
       <Logins station={s.station} marked={login} />
       {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
@@ -574,6 +576,23 @@ function ContextCard({ station, on, manager }: { station: string; on: boolean; m
       <ListCard>
         <button type="button" className={connectsCss.mSwitchRow} disabled={!manager || busy} onClick={() => void set(!on)}>
           <span className={partsCss.mGrow}><b>{t("web-pages.stations.context.afresh")}</b><span>{t("web-pages.stations.context.afreshLine")}</span></span>
+          {busy ? <Spinner /> : <span className={connectsCss.mSwitch} data-on={on || undefined} />}
+        </button>
+      </ListCard>
+    </>
+  );
+}
+
+/** Whether the station sends its log to still.fail (the wide page's StationDiagnostics.tsx): its managers switch it,
+ *  others read it. */
+function DiagnosticsCard({ station, on, manager }: { station: string; on: boolean; manager: boolean }) {
+  const { busy, set } = useSetLogs(station);
+  return (
+    <>
+      <SectionHeader title={t("web-pages.stations.diagnostics.section")} start={24} />
+      <ListCard>
+        <button type="button" className={connectsCss.mSwitchRow} disabled={!manager || busy} onClick={() => void set(!on)}>
+          <span className={partsCss.mGrow}><b>{t("web-pages.stations.diagnostics.logs")}</b><span>{t("web-pages.stations.diagnostics.logsLine")}</span></span>
           {busy ? <Spinner /> : <span className={connectsCss.mSwitch} data-on={on || undefined} />}
         </button>
       </ListCard>

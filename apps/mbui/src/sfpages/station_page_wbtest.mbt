@@ -154,6 +154,36 @@ test "network settings stay folded and save the selected controller" {
 }
 
 ///|
+test "a station's 设置 switches sending its log to still.fail off" {
+  let asked : Array[Json] = []
+  let t = setting_tester(
+    Station("ws1/st1"),
+    390.0,
+    platform=2,
+    h=2400.0,
+    over=fn(s) {
+      {
+        ..s,
+        call: fn(name, params, done) {
+          if name == "diagnostics.setLogs" {
+            asked.push(params)
+          }
+          (s.call)(name, params, done)
+        },
+      }
+    },
+    ready=fn() { @settings.station_parts["ws1/st1"] = "settings" },
+  )
+  t.run_for(@ui.nav_push_ms)
+  scrolled_to(t, 390.0, "发送运行日志给 still.fail")
+  assert_true(t.find("发送运行日志给 still.fail") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Switch, label="发送运行日志给 still.fail")
+  t.draw()
+  assert_eq(asked.length(), 1, msg="switched")
+  assert_eq(field(Some(asked[0]), "logs"), Some(Json::boolean(false)))
+}
+
+///|
 test "a login's link opens its station's page at 设置, where its card is" {
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, ready=fn() {
     @settings.mark_login("ws1/st1", "login-2")

@@ -856,6 +856,7 @@ export const SHAPES: Record<string, Shape> = {
     ["search", opt("StationSearch"), { doc: "What its search finds of the machine (docs/search.md). None from a station older than it." }],
     ["network", opt("StationNetwork"), { doc: "Advanced network settings, applied on station restart. Absent on older stations." }],
     ["context", opt("StationContext"), { doc: "How it goes on with a session whose prompt cache is over. None from a station older than it, which then\ndoes not offer it." }],
+    ["diagnostics", opt("StationDiagnostics"), { doc: "Whether it sends its log to still.fail. None from a station older than it, which then does not offer it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
     ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
@@ -2210,6 +2211,9 @@ export const SHAPES: Record<string, Shape> = {
   StationContext: struct([
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
   ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),
+  StationDiagnostics: struct([
+    ["logs", "bool", { doc: "It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what\npeople wrote), for problems to be found from our side (`diagnostics.setLogs`)." }],
+  ], { doc: "What a station sends still.fail to find its problems by (`Overview.diagnostics`)." }),
   StationSearch: struct([
     ["files", "String", { doc: "spotlight (macOS: Spotlight finds the machine's files) | walk (its folders walked as a search comes)" }],
     ["personal", "bool", { doc: "The machine's person's own mail, messages, calendars, contacts, notes and photos are found too." }],

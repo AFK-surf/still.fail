@@ -72,6 +72,7 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
   "context.setAfresh": "afreshWhenCold:boolean",
+  "diagnostics.setLogs": "logs:boolean",
   "elevation.set": "on:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
@@ -313,6 +314,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
+    // Whether it sends its log to still.fail, scrubbed (its station's routes/diagnostics.ts); set by the workspace's
+    // owners and admins.
+    case "diagnostics.setLogs":
+      return op("PUT", () => "/diagnostics/settings", p.pick(["logs"]), OVERVIEW);
     // Whether a Windows station runs as the machine's administrator (its station's elevation/elevation.ts): asked of
     // Windows there, then the station restarted; set by the workspace's owners and admins.
     case "elevation.set":
