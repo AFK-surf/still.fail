@@ -619,7 +619,7 @@ export class Link {
 }
 
 /// An opening shared by everyone who asks for the same station address meanwhile.
-type Opening = { done: Deferred.Deferred<Link, CoreError>; result: { ok: Link } | { err: CoreError } | null };
+type Opening = { done: Deferred.Deferred<Link, CoreError>; result: { ok: Link } | { err: CoreError; unanswered: boolean } | null };
 
 /// A link tried beside an opening still under way (`hedge`).
 type Hedge = { serial: number; credentials: CredentialSource; tx: Deferred.Deferred<Link, CoreError> | null };
@@ -1040,7 +1040,19 @@ export class Mesh {
       const existing = this.#links.get(addr);
       let fresh = false;
       if (existing) {
-        if (existing.result === null) return yield* Deferred.await(existing.done);
+        if (existing.result === null) {
+          // Being opened: as that dial ends, unless it gave up for no answer before this waited CONNECT_TIMEOUT_MS on
+          // it. Begun earlier (while the network was down, perhaps), that says nothing of now: dialled again (side run
+          // seed 39248349, 2026-10-30: a read asked as its relay came back was told no answer came, the device not
+          // having dialled since).
+          const asked = this.now();
+          const joined = yield* Effect.result(Deferred.await(existing.done));
+          if (joined._tag === "Success") return joined.success;
+          const ended = existing.result as Opening["result"];
+          const unanswered = ended !== null && "err" in ended && ended.unanswered;
+          if (!unanswered || this.now() - asked >= CONNECT_TIMEOUT_MS) return yield* Effect.fail(joined.failure);
+          return yield* this.link(addr, credentials, theirs, off);
+        }
         if ("ok" in existing.result) {
           if (existing.result.ok.usable()) return existing.result.ok;
           // Refused for the workspace lock, the credential was fine: no new one asked of the cloud each time.
@@ -1095,6 +1107,8 @@ export class Mesh {
           link = raced.hedged;
         } else link = yield* Effect.result(first);
         if (self.#hedges.get(addr)?.serial === serial) self.#hedges.delete(addr);
+        // (asked before `failedIn` says it with the time it failed at)
+        const unanswered = link._tag === "Failure" && link.failure.message === noAnswer();
         if (link._tag === "Success") {
           self.#stuck = false;
           const path = link.success.path();
@@ -1102,7 +1116,7 @@ export class Mesh {
           const via = link.success.via();
           if (via !== null) span.set("stillfail.via", relayHost(via));
         } else {
-          if (link.failure.message === noAnswer()) self.#stuck = true;
+          if (unanswered) self.#stuck = true;
           failedIn(span, link.failure);
           span.set("stillfail.relay", relayStatus(endpoint));
           // What a dial that failed was given and had beside it: the addresses it was told the station is reached straight
@@ -1115,7 +1129,7 @@ export class Mesh {
           if (beside !== "") span.set("stillfail.beside", beside);
         }
         span.end();
-        opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure };
+        opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure, unanswered };
         if (link._tag === "Success") self.#adopt(addr, link.success);
         Deferred.doneUnsafe(opening.done, link._tag === "Success" ? Effect.succeed(link.success) : Effect.fail(link.failure));
       });

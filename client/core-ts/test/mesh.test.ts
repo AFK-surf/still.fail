@@ -454,6 +454,24 @@ sim("a_read_asked_as_its_station_drops_every_connection_is_answered", async (s) 
   await close(s, station, mesh);
 });
 
+/// The side run, seed 39248349 (2026-10-30): the station's one relay went down, and a dial begun then (its link lost)
+/// was never answered. The relay back, a read was asked as that dial was still waiting; it was told no answer came when
+/// that dial gave up, six seconds on, the device not having dialled since the relay was back.
+sim("a_read_asked_as_a_dial_begun_while_the_relay_was_down_waits_is_answered", async (s) => {
+  const r = s.relay("https://a.relay.test/", { device: { ms: 80 }, station: { ms: 80 } });
+  const { station, mesh, id } = await onRelays(s, [r]);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${id}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
+  const ask = () => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  s.net.down(r, 4_000);
+  const dialled = s.runner.run(Effect.result(mesh.link(`w/${id}`, grants("ok", { n: 0 }))));
+  await s.time.pass(5_000);
+  assert.equal(await s.settle(ask()), 200);
+  await s.settle(dialled);
+  await close(s, station, mesh);
+});
+
 sim("a_write_is_asked_again_only_of_a_station_that_does_it_once", async (s) => {
   const { mesh, station } = await setup(s);
   const wire = wireOf(s, mesh);
