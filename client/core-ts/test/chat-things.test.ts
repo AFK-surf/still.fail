@@ -73,6 +73,29 @@ test("a_chats_things_are_its_files_links_and_pull_requests_each_once_the_latest_
   core.close();
 });
 
+test("every_pull_request_of_a_chat_says_what_its_card_says_not_only_one_whose_card_showed", async () => {
+  const pr = (n: number) => `https://github.com/acme/app/pull/${n}`;
+  const card = (n: number) => ({
+    kind: "github_pull_request", url: pr(n), repository: "acme/app", number: n, title: `标题 ${n}`, state: "open",
+    author: { login: "lin" }, additions: 1, deletions: 1, changedFiles: 1, updatedAt: 3000,
+  });
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [threadView(7, 4)],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 4, entries: [
+      said(1, { text: `开了 ${pr(1)}` }), said(2, { text: `还有 ${pr(2)}` }), said(3, { text: `和 ${pr(3)}` }), said(4),
+    ] },
+    ...Object.fromEntries([1, 2, 3].map((n) => [`GET /link-preview?url=${encodeURIComponent(pr(n))}`, card(n)])),
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chatThings", station: S, thread: 7 });
+  await host.time.pass(2000, 20);
+  apply(host, values);
+  assert.deepEqual(v(values, 1).pulls.map((t: J) => [t.number, t.title ?? null]), [[3, "标题 3"], [2, "标题 2"], [1, "标题 1"]]);
+  core.close();
+});
+
 test("a_messages_links_are_those_drawn_and_a_pull_request_is_known_by_its_address", () => {
   // A person's words are not Markdown: their addresses as written bare, without the marks closing them.
   assert.deepEqual(linksOf({ authorKind: "person", text: "[x](https://a.com) 和 https://b.com/c。" }).map((l) => l.url), ["https://a.com", "https://b.com/c"]);

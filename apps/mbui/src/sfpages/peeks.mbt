@@ -67,8 +67,8 @@ pub fn web_peek(
 }
 
 ///|
-/// A web link's address to copy, on its card (link_card `copy`): a mark to press, 已复制 a moment once copied (its
-/// mark a tick then), as a file's path is copied (file_foot).
+/// A web link's address to copy, on its card (link_card `copy`): 复制链接 to press, 已复制 a moment once copied, as a
+/// file's path is copied (file_foot).
 fn link_copy(c : @ui.Ctx, href : String) -> Unit {
   let key = "link-peek/copy/" + href
   let said = copied_paths.contains(href) &&
@@ -78,7 +78,8 @@ fn link_copy(c : @ui.Ctx, href : String) -> Unit {
     } else {
       true
     })
-  if @sf.panel_icon_button(c, key, if said { "check" } else { "copy" }, @sf.t(if said { "common.copied" } else { "common.link.copy" })) {
+  // (its words, as a file's path's copy: the user, 2026-10-29: 图标改成文字复制链接吧)
+  if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet) {
     c.copy_text(href)
     @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
     copied_paths.add(href)

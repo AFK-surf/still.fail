@@ -16,7 +16,7 @@ import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Hover.css.ts";
 import { Bones, sampleWords } from "@stillfail/ui/waiting.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
-import { PanelButton, PanelIconButton } from "./ui.tsx";
+import { PanelButton } from "./ui.tsx";
 import { chipPath, pathIn, shownPath } from "./paths.ts";
 
 export { pathIn };
@@ -103,7 +103,8 @@ function LinkCopy({ href }: { href: string }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
-  return <PanelIconButton className={css.copy} label={copied ? t("common.copied") : t("common.link.copy")} onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />}</PanelIconButton>;
+  // (its words, as a file's path's copy: the user, 2026-10-29: 图标改成文字复制链接吧)
+  return <PanelButton className={css.copy} tone="quiet" onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.link.copy")}</PanelButton>;
 }
 
 function LinkCard({ href, label }: { href: string; label: string }) {

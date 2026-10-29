@@ -37,5 +37,12 @@ export const rowMark = style({ flex: "none", display: "flex", color: vars.muted 
 export const rowWords = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" });
 export const rowName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textUi, fontWeight: "500" });
 export const rowMeta = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textMeta, color: vars.muted });
-/** A pull request's mark: grey, red where something is wrong with it. */
-export const pullMark = style({ flex: "none", color: vars.muted, selectors: { "&[data-wrong]": { color: vars.red } } });
+/** A pull request's mark: in its state's colour, as its card's pill (Hover.css.ts state). */
+export const pullMark = style({
+  flex: "none", color: vars.muted,
+  selectors: {
+    '&[data-state="open"]': { color: vars.green },
+    '&[data-state="merged"]': { color: vars.purple },
+    '&[data-state="closed"]': { color: vars.red },
+  },
+});

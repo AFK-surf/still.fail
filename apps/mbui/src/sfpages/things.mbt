@@ -71,15 +71,14 @@ pub fn things_now(src : Source, station : String, thread : Double) -> (Int, Arra
 }
 
 ///|
-/// A pull request's mark (GitHub's octicon for how it stands, peeks.mbt pr_glyph), `side` square: in the quiet grey
-/// while it stands as it should, red where something is wrong (closed without being merged, a check failed).
+/// A pull request's mark (GitHub's octicon for how it stands, peeks.mbt pr_glyph), `side` square, in its state's
+/// colour as its card's pill has it (state_colours: open green, merged purple, closed red, a draft grey; the user,
+/// 2026-10-29: 为啥没颜色), grey until its card is read.
 pub fn pull_mark(c : @ui.Ctx, pull : Json?, side : Double) -> Unit {
-  let p = @sf.theme().p
   let state = text(pull, "state")
-  let wrong = state == "closed" || count(field(pull, "checks"), "failed") > 0
-  let ink = if wrong { p.red } else { p.muted }
+  let (ink, _) = state_colours(state)
   match pr_glyph(state) {
-    Some(d) => @sf.vector(c, "thing-pull/" + state + "/" + (if wrong { "wrong" } else { "fine" }), glyph_of(d, ink), side) |> ignore
+    Some(d) => @sf.vector(c, "thing-pull/" + state, glyph_of(d, ink), side) |> ignore
     None => ()
   }
 }
