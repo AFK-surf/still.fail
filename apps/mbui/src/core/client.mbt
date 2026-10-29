@@ -74,6 +74,11 @@ pub struct Client {
   /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
   /// (StillFailCore.kt `focus`), which would else take the app for out of view
   priv mut focus : Json?
+  /// Client::leave_unread: since when each subscription of a topic let go of so has been read by nothing, by its id
+  priv unread_since : Map[Int, Double]
+  /// what those let go of last held (value, error) and when, by their key: a subscription to it asked again starts
+  /// from it, as the core sends its own at once (it keeps the topic EVICT_AFTER_MS after the last let it go)
+  priv left : Map[String, (Json?, Json?, Double)]
 }
 
 ///|
@@ -101,6 +106,8 @@ pub fn Client::new(
     start_wait: fn(_) { 0 },
     end_wait: fn(_) {  },
     focus: None,
+    unread_since: {},
+    left: {},
     call_waits: {},
     sub_waits: {},
     echo_waits: {},
@@ -208,11 +215,20 @@ pub fn Client::subscribe(
   let t = topic_json(topic, params)
   let key = t.stringify()
   match self.by_key.get(key) {
-    Some(s) => s
+    Some(s) => {
+      self.unread_since.remove(s.id)
+      s
+    }
     None => {
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, key, changes: @signals.signal(0) }
+      // (one let go of a moment ago: what it held shows till the core's value comes, the next frame)
+      let (value, error) = match self.left.get(key) {
+        Some((v, e, _)) => (v, e)
+        None => (None, None)
+      }
+      self.left.remove(key)
+      let s = { id, topic: t, value, error, version: 0, key, changes: @signals.signal(0) }
       self.subs[id] = s
       self.by_key[key] = s
       self.ask(s)
@@ -243,6 +259,7 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
 pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
   if self.subs.contains(s.id) {
     self.end_sub_wait(s.id)
+    self.unread_since.remove(s.id)
     self.subs.remove(s.id)
     self.by_key.remove(s.key)
     s.changed(ended=true)
@@ -252,6 +269,53 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
     }
     (self.send)(Json::object(m).stringify())
   }
+}
+
+///|
+/// How long a subscription read by nothing is kept (Client::leave_unread), and how long what one let go of held is
+/// kept for it asked again: the core's own (store.ts EVICT_AFTER_MS).
+pub let left_kept_ms : Double = 60000.0
+
+///|
+/// The subscriptions of the topics `names` that nothing has read (no computed, no frame follows their changes: what
+/// read them is gone, a page closed, a search's words changed) for `after_ms` by `now` (ms) are let go of: the core
+/// stops them, and what it does for them while they are shown (a station searched again as it changes, a folder
+/// watched, a log or a session's steps followed, the host sampled). Read again, a subscription is asked anew, what it
+/// held shown till the core's value comes (`left`, for left_kept_ms). Asked as frames are built; answers when the next
+/// is due (the earliest one read by nothing will have been so for `after_ms`), or -1.0 when none waits.
+pub fn Client::leave_unread(self : Client, now : Double, after_ms : Double, names : Array[String]) -> Double {
+  let gone : Array[Sub] = []
+  let mut due = -1.0
+  for id, s in self.subs {
+    if !names.contains(topic_name(s.topic)) {
+      continue
+    }
+    if s.changes.watched() {
+      self.unread_since.remove(id)
+      continue
+    }
+    let since = match self.unread_since.get(id) {
+      Some(t) => t
+      None => {
+        self.unread_since[id] = now
+        now
+      }
+    }
+    if now - since >= after_ms {
+      gone.push(s)
+    } else if due < 0.0 || since + after_ms < due {
+      due = since + after_ms
+    }
+  }
+  for s in gone {
+    self.left[s.key] = (s.value, s.error, now)
+    self.unsubscribe(s)
+  }
+  let old = self.left.to_array().filter(fn(kv) { now - (kv.1).2 >= left_kept_ms }).map(fn(kv) { kv.0 })
+  for k in old {
+    self.left.remove(k)
+  }
+  due
 }
 
 ///|
@@ -588,6 +652,8 @@ pub fn Client::reset(self : Client) -> Unit {
     s.changed(ended=true)
   }
   self.by_key.clear()
+  self.unread_since.clear()
+  self.left.clear()
   self.calls.clear()
   self.progress.clear()
   self.quiet_calls.clear()

@@ -104,6 +104,31 @@ pub fn subscribe(topic : String, params? : Map[String, Json] = {}) -> Sub {
 }
 
 ///|
+/// The topics let go of once nothing has read them for `leave_after_ms` (Client::leave_unread): those a page reads for
+/// a thing it shows (a search's words, a folder, a log, a session's steps, a card) whose subscriptions the core works
+/// for while they are shown (asks a station again as it changes, watches, follows, samples). Not the app's own (prefs,
+/// accounts, workspaces, stations, chats, marks, notices: read by every page, some in what an input does) nor those a
+/// page lets go of itself as it closes (`chat`, `chatJobs`, `chatLetters`, `history`, `imageNear`, `notify`: a chat's
+/// window held at the core while any of them is).
+pub let left_when_unread : Array[String] = [
+  "search", "chatSearch", "drive", "live", "jobLog", "host", "stationNet", "linkPreview", "filePeek", "job",
+  "previewLoad", "screenCard", "adbCard", "agentCard", "railCard", "chatThings", "fleet",
+]
+
+///|
+/// How long a topic of `left_when_unread` is kept read by nothing: past a page's going and coming back (a sheet
+/// closed and opened, a tab switched), and far within the core's keeping it (EVICT_AFTER_MS, 60 s), so one read
+/// again within a minute is the core's at once.
+pub let leave_after_ms : Double = 5000.0
+
+///|
+/// The app's subscriptions of `left_when_unread` read by nothing for `leave_after_ms` let go of (Client::leave_unread),
+/// asked as a frame is built, `now` its moment: when to ask again (a wake then), or -1.0.
+pub fn leave_unread(now : Double) -> Double {
+  client.leave_unread(now, leave_after_ms, left_when_unread)
+}
+
+///|
 /// Calls `name` (see Client::call); `bytes` beside it.
 pub fn call(
   name : String,

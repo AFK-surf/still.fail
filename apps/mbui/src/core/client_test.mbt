@@ -364,3 +364,52 @@ test "a quiet call's values and an unread call's answer may be taken as they com
   c.receive_json({ "id": view, "ok": {} })
   assert_false(said({ "id": view, "value": { "frame": { "ts": 3 } } }))
 }
+
+///|
+test "a page's topic read by nothing for a while is let go of, asked anew as it is read again; the app's own stay" {
+  let (c, sent) = recorder()
+  let names = ["search"]
+  let search = c.subscribe("search", params={ "query": "update" })
+  let prefs = c.subscribe("prefs")
+  c.receive("{\"id\":1,\"value\":{\"found\":1}}") |> ignore
+  // read by a frame (a watch follows its changes): kept however long
+  let frame = @signals.watch(fn() {  })
+  frame.read(fn() { search.followed() |> ignore })
+  assert_eq(c.leave_unread(0.0, 5000.0, names), -1.0)
+  assert_eq(c.leave_unread(60000.0, 5000.0, names), -1.0)
+  assert_eq(sent.length(), 2)
+  // the page gone (the frame reads it no more): let go of 5 s after it is first found so, not before
+  frame.read(fn() {  })
+  assert_eq(c.leave_unread(61000.0, 5000.0, names), 66000.0)
+  assert_eq(c.leave_unread(65999.0, 5000.0, names), 66000.0)
+  assert_eq(sent.length(), 2)
+  assert_eq(c.leave_unread(66000.0, 5000.0, names), -1.0)
+  assert_eq(sent[2].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+  // the app's own, read by nothing all along, stays
+  assert_true(prefs.id == 2 && sent.length() == 3)
+  // read again: asked anew, what it held shown till the core's value comes
+  let again = c.subscribe("search", params={ "query": "update" })
+  assert_eq(again.id, 3)
+  assert_eq(again.value.unwrap().stringify(), "{\"found\":1}")
+  assert_eq(again.version, 0)
+  assert_eq(
+    sent[3].stringify(),
+    ({ "id": 3, "subscribe": { "topic": "search", "query": "update" }, "keyed": true } : Json).stringify(),
+  )
+  // read by something now and then (not followed: an input's handler): each read starts the wait anew
+  assert_eq(c.leave_unread(70000.0, 5000.0, names), 75000.0)
+  c.subscribe("search", params={ "query": "update" }) |> ignore
+  assert_eq(c.leave_unread(74000.0, 5000.0, names), 79000.0)
+}
+
+///|
+test "what a topic let go of held is not shown for it asked again once the core no longer keeps it" {
+  let (c, _) = recorder()
+  let s = c.subscribe("job", params={ "id": "j" })
+  c.receive("{\"id\":1,\"value\":{\"tone\":\"ok\"}}") |> ignore
+  c.leave_unread(0.0, 5000.0, ["job"]) |> ignore
+  c.leave_unread(5000.0, 5000.0, ["job"]) |> ignore
+  c.leave_unread(5000.0 + @core.left_kept_ms, 5000.0, ["job"]) |> ignore
+  assert_true(c.subscribe("job", params={ "id": "j" }).value is None)
+  assert_true(s.value is Some(_))
+}

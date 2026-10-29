@@ -382,3 +382,14 @@ pub fn env_text(name : String) -> String {
     @hostapi.from_base64(@ui.env(name + "_B64"))
   }
 }
+
+///|
+/// Each frame as it is built: the core's topics a page read and nothing reads any more let go of once they have been
+/// so a while (@core.leave_unread), a wake at the moment the next will have been.
+pub fn leave_unread(c : @ui.Ctx) -> Unit {
+  let now = c.moment()
+  let due = @core.leave_unread(now)
+  if due >= 0.0 {
+    c.wake_in(due - now, later=true)
+  }
+}

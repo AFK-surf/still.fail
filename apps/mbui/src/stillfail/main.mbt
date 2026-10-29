@@ -442,6 +442,7 @@ fn main {
     // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
     let accounts = @core.subscribe("accounts")
     @sfcore.frame(accounts)
+    @sfcore.leave_unread(c)
     report_signed_in(c, accounts)
     @sfapp.view(c, core_source)
   })

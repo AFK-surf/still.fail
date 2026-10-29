@@ -200,5 +200,7 @@ pub fn app(c : @ui.Ctx) -> Unit {
     @sfcore.begin()
   }
   @sfcore.frame(@core.subscribe("accounts"))
+  // (no topic let go of read by nothing, as src/stillfail's frame does: @sfcore.leave_unread; a tape has the asks of
+  // the run it was taken from, and one from before it none of its letting go nor of what it asked again after)
   @sfapp.view(c, the_source)
 }
