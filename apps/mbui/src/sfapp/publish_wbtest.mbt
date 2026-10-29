@@ -159,9 +159,11 @@ fn ticks_before_words(t : @ui.Tester, reach : Double) -> Bool {
     return false
   }
   let middle = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
+  // (the viewer's own words' first line: however many it wraps to)
+  let words_line = t.ctx().style_size(@sf.theme().t.words).1
   ticks.iter().all(fn(n) { n.rect.0 == x }) &&
   x + w + 12.0 <= title_x - reach &&
-  (middle(ticks[0].rect) - (mine_y + mine_h / 2.0)).abs() < 0.5 &&
+  (middle(ticks[0].rect) - (mine_y + dmin(mine_h, words_line) / 2.0)).abs() < 0.5 &&
   (middle(ticks[3].rect) - (ana_y + ana_h / 2.0)).abs() < 0.5
 }
 
@@ -169,8 +171,9 @@ fn ticks_before_words(t : @ui.Tester, reach : Double) -> Bool {
 /// Whether the viewer's message stands further along than someone else's in the picture shown (its bubble at the
 /// column's end, as the chat's list has it).
 fn picture_mine_at_end(t : @ui.Tester) -> Bool {
-  match (t.find("帮我把登录页部署到预发，token 是 [已隐藏]"), t.find("截图、日志和构建缓存都附上了")) {
-    (Some((mx, _)), Some((ox, _))) => mx > ox
+  // (where their words start: however wide each wraps to, the viewer's in its bubble further along)
+  match (t.rect_of("帮我把登录页部署到预发，token 是 [已隐藏]"), t.rect_of("截图、日志和构建缓存都附上了")) {
+    (Some((mx, _, _, _)), Some((ox, _, _, _))) => mx > ox
     _ => false
   }
 }
