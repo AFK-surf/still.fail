@@ -1178,6 +1178,7 @@ pub fn Ctx::set_theme(Self, Theme, narrow? : Theme, narrow_below? : Double) -> U
 pub fn Ctx::shapes(Self, Array[Shape], w~ : Size, h~ : Size, name? : String, by_ink? : Bool) -> Int32
 pub fn Ctx::shortcut(Self, Char, shift? : Bool) -> Bool
 pub fn Ctx::shot(Self, String, Double, () -> Unit) -> Unit
+pub fn Ctx::show(Self, Int32) -> Unit
 pub fn Ctx::shown_across(Self, Int32, but? : String) -> (Double, Double)?
 pub fn Ctx::shows_motion(Self, Mover, Bool) -> Unit
 pub fn Ctx::shows_until(Self, Double) -> Unit

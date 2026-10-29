@@ -139,6 +139,8 @@ pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
   self.focus = id
   if visible {
     self.focus_visible = true
+    // (as the keys moved it: in view where it scrolls)
+    self.show(id)
   }
   self.read_changed("the focus given")
 }
@@ -303,10 +305,12 @@ fn Ctx::tab(self : Ctx, back : Bool) -> Unit {
 }
 
 ///|
-/// The focus moved to `id` by the keyboard: it shows; its group (if any) has it as its current item.
+/// The focus moved to `id` by the keyboard: it shows, brought into view where it scrolls (Ctx::show); its group (if
+/// any) has it as its current item.
 fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
   self.focus = id
   self.focus_visible = true
+  self.show(id)
   self.focus_roved = roved
   for f in self.last_focusables {
     if f.id == id && f.group != 0 {

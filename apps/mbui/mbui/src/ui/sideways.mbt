@@ -33,10 +33,8 @@ priv struct Sideways {
   /// what it was last sent to its end for (Ctx::sideways's `to_end`), and whether it is to go there once laid out
   mut end_for : String
   mut to_end : Bool
-  /// the part last asked to be in view (Ctx::sideways's `show`, an id), and the one to bring there once laid out (0:
-  /// none)
+  /// the part last asked to be in view (Ctx::sideways's `show`, an id: Ctx::show as it becomes another)
   mut show_last : Int
-  mut show_want : Int
   /// its scroll bar (scroll_bar.mbt), when it last scrolled, and the theme it was built in (its bar's colour)
   bar : Bar
   mut last_scroll : Double
@@ -116,7 +114,7 @@ pub fn Ctx::sideways(
   }
   if show != 0 && show != st.show_last {
     st.show_last = show
-    st.show_want = show
+    self.show(show)
   }
   self.sideways_built(st, b, inner)
   row_said_sideways(id, b, inner)
@@ -171,7 +169,6 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         end_for: "",
         to_end: false,
         show_last: 0,
-        show_want: 0,
         bar: Bar::new(),
         last_scroll: -1.0e9,
         theme: self.theme,
@@ -351,6 +348,7 @@ pub fn Ctx::sideways_rest(self : Ctx, key : String, capped? : Bool = false) -> D
 /// Once laid out: how far each box built this frame can scroll; the rest forgotten.
 fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
   if sideways.is_empty() {
+    self.shows_after_layout()
     return
   }
   let gone : Array[Int] = []
@@ -391,38 +389,106 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
     if st.x > st.max {
       st.x = st.max
     }
-    // a part brought into view: from where it is in what the box holds, scrolled as little as that takes
-    if st.show_want != 0 {
-      let want = st.show_want
-      st.show_want = 0
-      let mut k = st.inner + 1
-      while k < self.count && self.nodes[k].id != want {
-        k = k + 1
-      }
-      if k < self.count {
-        let p = self.nodes[k]
-        let from = p.x - i.x
-        let to = if from < st.x {
-          from
-        } else if from + p.fw > st.x + o.fw {
-          from + p.fw - o.fw
-        } else {
-          st.x
-        }
-        let to = dclamp(to, 0.0, dmax(st.max, 0.0))
-        if to != st.x {
-          st.x = to
-          if self.bar_drawn(id) is Some(_) {
-            self.sideways_scrolled(st)
-          }
-          // (built again before this frame goes out: drawn there at once)
-          self.read_changed("a sideways box's part brought into view")
-        }
-      }
-    }
   })
   for id in gone {
     sideways.remove(id)
+  }
+  self.shows_after_layout()
+}
+
+///|
+/// What was asked into view (Ctx::show): the id, and the frame it was asked in.
+let shows_asked : Array[(Int, Int)] = []
+
+///|
+/// What `id` names brought into view once laid out, in every box that scrolls round it (Ctx::capped, Ctx::sideways),
+/// the innermost first, each as little as that takes (the web's scrollIntoView, block and inline "nearest"): where
+/// the keyboard moves what is chosen (the focus, a menu's option chosen while the focus stays in a field), as it moves
+/// it. Asked as the cause comes, not each frame: a box the person scrolled stays where they left it. Not in a list's
+/// rows (Ctx::list_scroll_to).
+pub fn Ctx::show(self : Ctx, id : Int) -> Unit {
+  if id != 0 {
+    shows_asked.push((id, self.frame_no))
+  }
+}
+
+///|
+/// Once laid out: what was asked into view (Ctx::show) brought there, scrolled at once (a step of the keys, as a
+/// browser's menu: no glide behind each press); one not laid out this frame waits for the next (a menu laid out the
+/// frame after the key that opened it), then is forgotten.
+fn Ctx::shows_after_layout(self : Ctx) -> Unit {
+  if shows_asked.is_empty() {
+    return
+  }
+  // the boxes scrolling this build, by their node: their id and state
+  let boxes : Map[Int, (Int, Sideways)] = {}
+  sideways.each(fn(id, st) {
+    if st.frame == self.build_no && !st.field && st.box >= 0 {
+      boxes[st.box] = (id, st)
+    }
+  })
+  let left : Array[(Int, Int)] = []
+  for ask in shows_asked {
+    let (want, frame) = ask
+    let mut k = 0
+    while k < self.count && self.nodes[k].id != want {
+      k = k + 1
+    }
+    if k >= self.count {
+      if self.frame_no <= frame + 1 {
+        left.push(ask)
+      }
+      continue
+    }
+    // its rect as laid out (each box's scroll in it already), less how much further the boxes inside the one looked at
+    // were scrolled here
+    let p = self.nodes[k]
+    let mut shift_x = 0.0
+    let mut shift_y = 0.0
+    let mut a = p.parent
+    while a >= 0 && a < self.count {
+      match boxes.get(a) {
+        Some((sid, st)) => {
+          let o = self.nodes[st.box]
+          let i = self.nodes[st.inner]
+          let (from, size, view) = if st.vertical {
+            (p.y - shift_y - i.y, p.fh, o.fh)
+          } else {
+            (p.x - shift_x - i.x, p.fw, o.fw)
+          }
+          let to = if from < st.x || size > view {
+            from
+          } else if from + size > st.x + view {
+            from + size - view
+          } else {
+            st.x
+          }
+          let to = dclamp(to, 0.0, dmax(st.max, 0.0))
+          let moved = to - st.x
+          if to != st.x {
+            st.x = to
+            st.rest = -1.0
+            st.vel = 0.0
+            if self.bar_drawn(sid) is Some(_) {
+              self.sideways_scrolled(st)
+            }
+            // (built again before this frame goes out: drawn there at once)
+            self.read_changed("a part brought into view in a box that scrolls")
+          }
+          if st.vertical {
+            shift_y = shift_y + moved
+          } else {
+            shift_x = shift_x + moved
+          }
+        }
+        None => ()
+      }
+      a = self.nodes[a].parent
+    }
+  }
+  shows_asked.clear()
+  for ask in left {
+    shows_asked.push(ask)
   }
 }
 

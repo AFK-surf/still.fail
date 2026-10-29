@@ -30,11 +30,14 @@ fn ref_menu(
           toast_later(@sf.t("web-main.composer.refFailed", args=[("title", item.title), ("error", why)]))
         })
       }
+      let mut keyed = false
       if n > 0 {
         if c.key_pressed(@ui.key_code_down, in_field=true) {
           @sfbase.refs_active(w.key, n, by=1) |> ignore
+          keyed = true
         } else if c.key_pressed(@ui.key_code_up, in_field=true) {
           @sfbase.refs_active(w.key, n, by=-1) |> ignore
+          keyed = true
         }
         if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
           pick(chats[@sfbase.refs_active(w.key, n)])
@@ -63,7 +66,7 @@ fn ref_menu(
         },
         fn() {
           c.box(style=@sf.full_width, fn() {
-            ref_menu_body(c, query, topic, chats, @sfbase.refs_active(w.key, n), pick, w.key)
+            ref_menu_body(c, query, topic, chats, @sfbase.refs_active(w.key, n), keyed, pick, w.key)
           })
           |> ignore
         },
@@ -123,6 +126,7 @@ fn ref_menu_body(
   topic : @sfbase.Topic,
   chats : Array[Json],
   active : Int,
+  keyed : Bool,
   pick : (Json) -> Unit,
   draft : String,
 ) -> Unit {
@@ -161,6 +165,10 @@ fn ref_menu_body(
     // (the pointer moving over a chat chooses it, as the keys do; resting, it leaves the keys' choice be)
     if c.hand_on(id) && i != active {
       @sfbase.refs_active(draft, chats.length(), to=i) |> ignore
+    }
+    // (moved to by the keys: in view where the menu scrolls)
+    if keyed && i == active {
+      c.show(id)
     }
     let b = c.box(style=(if i == active { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {
       c.box(style=ref_logo, fn() {

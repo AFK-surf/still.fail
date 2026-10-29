@@ -247,11 +247,14 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     }
   }
   // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
+  let mut keyed = false
   if c.key_pressed(@ui.key_code_down, in_field=true) && go.at.get() < rows.length() - 1 {
     go.at.set(go.at.get() + 1)
+    keyed = true
   }
   if c.key_pressed(@ui.key_code_up, in_field=true) && go.at.get() > 0 {
     go.at.set(go.at.get() - 1)
+    keyed = true
   }
   if c.key_pressed(@ui.key_tab, in_field=true) {
     match rows.get(go.at.get()) {
@@ -309,6 +312,10 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
         }
         if c.lit(id) {
           go.at.set(i)
+        }
+        // (moved to by the keys: in view where the dialog scrolls)
+        if keyed && i == go.at.get() {
+          c.show(id)
         }
         let row = c.box(style=if i == go.at.get() { go_row_on } else { go_row }, id~, fn() {
           @sf.icon(c, "folder", size=go_icon, color=t.p.muted) |> ignore

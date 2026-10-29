@@ -232,11 +232,14 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
     relaying.note.set(text(Some(p), "note"))
     relay_focus.val = "relay/note"
   }
+  let mut keyed = false
   if open {
     if c.key_pressed(@ui.key_code_down, in_field=true) {
       relay_mention_active(n, by=1) |> ignore
+      keyed = true
     } else if c.key_pressed(@ui.key_code_up, in_field=true) {
       relay_mention_active(n, by=-1) |> ignore
+      keyed = true
     }
     if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
       pick(mentions[relay_mention_active(n)])
@@ -276,6 +279,10 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
         for i, p in mentions {
           if relay_person(c, src, p, i == active) {
             pick(p)
+          }
+          // (moved to by the keys: in view where the menu scrolls)
+          if keyed && i == active {
+            c.show(c.id("relay/person/" + text(Some(p), "id")))
           }
           // (the pointer moving over one chooses it, as the keys do)
           if c.hand_on(c.id("relay/person/" + text(Some(p), "id"))) && i != active {
