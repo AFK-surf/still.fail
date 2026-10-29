@@ -57,8 +57,8 @@ case "${1:-}" in
     exe=./_build/native/release/build/stillfail/sfbench/sfbench.exe
     commit=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null)}
     echo "commit $commit ${LABEL:+($LABEL)}, a phone"
-    echo "| scene | frames in seconds | work ms med / p95 | build | layout | paint | present | GPU | nodes | laid anew | instances | redrawn area | upload KB |"
-    echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+    echo "| scene | frames in seconds | work ms in all | work ms med / p95 | build | layout | paint | present | GPU | nodes | laid anew | instances | redrawn area | upload KB |"
+    echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     lines=()
     while read -r scene fixture; do
       [ -f out/bench/phone-$scene.log ] || continue

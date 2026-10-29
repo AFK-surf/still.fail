@@ -64,8 +64,8 @@ while read -r scene fixture win platform pointing; do
   lines+=("$(echo "$best" | grep '^APPBENCH ' | cut -c10-)")
 done <<< "$table"
 echo "commit $commit ${LABEL:+($LABEL)}"
-echo "| scene | frames drawn / display frames | work ms med / p95 | build | layout | paint | encode | GPU | nodes | laid anew | instances | redrawn area | upload KB |"
-echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+echo "| scene | frames drawn / display frames | work ms in all | work ms med / p95 | build | layout | paint | encode | GPU | nodes | laid anew | instances | redrawn area | upload KB |"
+echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
 for r in "${rows[@]}"; do echo "$r"; done
 {
   printf '{"time": %s, "commit": "%s", "label": "%s", "scenes": [' "$(date +%s)" "$commit" "${LABEL:-}"
