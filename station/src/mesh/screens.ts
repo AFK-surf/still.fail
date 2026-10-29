@@ -236,7 +236,11 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   }
   const access = accessShown(source.access?.(), lang);
   const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
-  const stall = loopStall.use();
+  // How long the loop stood still, on the host's own clock: what the pacer's times on the view's clock leave out only
+  // when that clock is the host's (the live one). On another (a TestClock) the host's stands are no part of its time,
+  // and taken from it they let a frame go past a queue the view's own time says is there (screens.test.ts, main
+  // 167113d7, 40953448608: 18 frames asked for, not 17, on a loaded runner).
+  const stall = clock === liveClock ? loopStall.use() : { stalled: () => 0, done: () => {} };
   const pacer = new Pacer(now, START_RATE, ask.fps, stall.stalled);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ask.quality);
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
