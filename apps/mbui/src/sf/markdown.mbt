@@ -1489,7 +1489,6 @@ fn Md::table_frame(
     radius=card_corner,
     bg=theme().p.card,
     padx=table_in_x,
-    pady=table_in_y,
     clip=true,
     fn() {
       for r, row in rows {
@@ -1543,13 +1542,11 @@ let table_cell_x : Double = 12.0
 let table_cell_y : Double = 7.0
 
 ///|
-/// How far a table's cells are in from its card's sides and from its top and foot: its rows as a list card's, list_pad
-/// in from its top and foot, their words as far in from its sides as a menu's and a list card's (6 + 10: the app's
-/// 边距, docs/ui-panels.md).
+/// How far a table's cells are in from its card's sides: their words as far in as a menu's and a list card's (6 + 10:
+/// the app's 边距, docs/ui-panels.md). Not in from its top and foot: its rows are the bands its rules part, the card's
+/// edge the first's top and the last's foot, each as tall as the others (no row has a ground of its own, as a list
+/// card's does, to be in from them).
 let table_in_x : Double = list_pad + text_in - table_cell_x
-
-///|
-let table_in_y : Double = list_pad
 
 ///|
 /// A cell of only the message's images (`| ![](before.png) | ![](after.png) |`, Markdown.kt cellImages): each one's
