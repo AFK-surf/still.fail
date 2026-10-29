@@ -117,6 +117,10 @@ priv struct ScreenSess {
   /// `screenFps`; 0: 自动): another chosen is asked of it (`screen.bounds`)
   mut asked : String
   mut asked_fps : Int
+  /// the bounds the open view was asked with (画质's, or 自动's: `stage_px`)
+  mut asked_bounds : (Int, Int)
+  /// the most device pixels the stage it is shown on has had (0 × 0 before it is laid out): 自动 asks that large
+  mut stage_px : (Int, Int)
 }
 
 ///|
@@ -128,8 +132,7 @@ let screens_open : Map[String, ScreenSess] = Map([])
 let screens_made : Ref[Int] = Ref(0)
 
 ///|
-/// The largest frame worth asking for, its longer side first (ScreenActivity.kt limit: this device's screen, at most
-/// 1920×1080).
+/// The frame 自动 asks for before the stage it is shown on is laid out (then as large as the stage is: stage_px).
 let screen_max_w : Int = 1920
 
 ///|
@@ -184,6 +187,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         bytes: 0,
         asked: "",
         asked_fps: 0,
+        asked_bounds: (0, 0),
+        stage_px: (0, 0),
       }
       screens_open[key] = s
       s
@@ -583,7 +588,7 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
 
 ///|
 /// How large a picture this device asks for (prefs `screenQuality`, 控制中心's 画质): `smooth`, `hd`, `original`, or
-/// "" (as this device's screen is: screen_max_w × screen_max_h).
+/// "" (自动: as large as the stage it is shown on, in device pixels: ScreenSess::bounds).
 fn screen_quality(src : Source) -> String {
   match text((src.topic)("prefs", {}).value, "screenQuality") {
     "smooth" | "hd" | "original" as q => q
@@ -621,13 +626,29 @@ fn asks_into(params : Map[String, Json], quality : String, fps : Int) -> Unit {
 
 ///|
 /// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
-/// size).
-fn quality_bounds(quality : String) -> (Int, Int) {
+/// size); 自动 as large as the stage the picture is shown on, in this device's pixels (the user, 2026-10-29: a 4K
+/// window was sent 1920×1080 and its text blurred), screen_max_w × screen_max_h before it is laid out.
+fn ScreenSess::bounds(self : ScreenSess, quality : String) -> (Int, Int) {
   match quality {
     "smooth" => (1280, 720)
     "hd" => (1920, 1080)
     "original" => (7680, 4320)
-    _ => (screen_max_w, screen_max_h)
+    _ =>
+      match self.stage_px {
+        (w, h) if w > 0 && h > 0 => (@cmp.minimum(w, 7680), @cmp.minimum(h, 4320))
+        _ => (screen_max_w, screen_max_h)
+      }
+  }
+}
+
+///|
+/// The stage the picture is shown on laid out `w` × `h` device pixels: 自动 asks that large from now where it is a
+/// tenth larger a side than the most it had (a window made larger by a little, as it is dragged, asks nothing again;
+/// one made smaller keeps what it asked).
+fn ScreenSess::stage_is(self : ScreenSess, w : Int, h : Int) -> Unit {
+  let (pw, ph) = self.stage_px
+  if w * 10 > pw * 11 || h * 10 > ph * 11 {
+    self.stage_px = (@cmp.maximum(w, pw), @cmp.maximum(h, ph))
   }
 }
 
@@ -651,7 +672,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   let fps = screen_fps(src)
   self.asked = quality
   self.asked_fps = fps
-  let (mw, mh) = quality_bounds(quality)
+  let (mw, mh) = self.bounds(quality)
+  self.asked_bounds = (mw, mh)
   let codecs = if @ui.h264_here() {
     [Json::string("h264"), Json::string("jpeg")]
   } else {
@@ -706,18 +728,19 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
 }
 
 ///|
-/// 画质 or 帧率 chosen otherwise since the open view was asked: the view goes on, its pictures asked this large and
-/// this often (`screen.bounds`: the core opens its stream again, the one before kept until the new one has opened, so a
+/// 画质 or 帧率 chosen otherwise since the open view was asked, or 自动's stage grown (stage_is): the view goes on, its
+/// pictures asked this large and this often (`screen.bounds`: the core opens its stream again, the one before kept until the new one has opened, so a
 /// Windows desktop keeps the display scale set from it), the frame on screen kept meanwhile.
 fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
   let quality = screen_quality(src)
   let fps = screen_fps(src)
-  if self.call == 0 || (self.asked == quality && self.asked_fps == fps) {
+  let (mw, mh) = self.bounds(quality)
+  if self.call == 0 || (self.asked == quality && self.asked_fps == fps && self.asked_bounds == (mw, mh)) {
     return
   }
   self.asked = quality
   self.asked_fps = fps
-  let (mw, mh) = quality_bounds(quality)
+  self.asked_bounds = (mw, mh)
   let params : Map[String, Json] = {
     "view": Json::string(self.view),
     "maxWidth": Json::number(mw.to_double()),

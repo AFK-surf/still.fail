@@ -195,6 +195,10 @@ pub fn screen_page(
     if @sf.soft_keyboard() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
       s.fit = Some((u.box_w, u.box_h, c.scale))
     }
+    // 自动 asks for a picture as large as the stage is in this device's pixels
+    if u.box_w > 0.0 && u.box_h > 0.0 {
+      s.stage_is((u.box_w * c.scale).round().to_int(), (u.box_h * c.scale).round().to_int())
+    }
     if shown {
       // 画质 chosen otherwise: opened again with it; open again where it was let go, not where it is over (重新打开
       // opens that)
