@@ -15,9 +15,10 @@ priv struct ScreenRig {
   cancelled : Array[Int]
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
-  /// the prefs' `screenTouch`, `screenQuality`
+  /// the prefs' `screenTouch`, `screenQuality`, `screenFps` (0: none)
   touch : Ref[String]
   quality : Ref[String]
+  fps : Ref[Int]
 }
 
 ///|
@@ -58,6 +59,7 @@ fn screen_rig(
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
   let touch_ = Ref(touch)
   let quality_ = Ref("")
+  let fps_ = Ref(0)
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -74,7 +76,7 @@ fn screen_rig(
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && (touch_.val != "" || quality_.val != "") {
+      if name == "prefs" && (touch_.val != "" || quality_.val != "" || fps_.val != 0) {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
@@ -84,6 +86,9 @@ fn screen_rig(
         }
         if quality_.val != "" {
           m["screenQuality"] = Json::string(quality_.val)
+        }
+        if fps_.val != 0 {
+          m["screenFps"] = Json::number(fps_.val.to_double())
         }
         { ..tp, value: Some(Json::object(m)) }
       } else {
@@ -100,6 +105,11 @@ fn screen_rig(
         match field(Some(params), "screenQuality") {
           Some(String(v)) => quality_.val = v
           Some(Null) => quality_.val = ""
+          _ => ()
+        }
+        match field(Some(params), "screenFps") {
+          Some(Number(n, ..)) => fps_.val = n.to_int()
+          Some(Null) => fps_.val = 0
           _ => ()
         }
       }
@@ -152,7 +162,7 @@ fn screen_rig(
   t.draw()
   app.nav.push(Screen({ station: "ws-1/st-1", screen, title: "Chrome", until_gone }))
   nav_rested(t)
-  { t, calls, views, cancelled, answer, touch: touch_, quality: quality_ }
+  { t, calls, views, cancelled, answer, touch: touch_, quality: quality_, fps: fps_ }
 }
 
 ///|

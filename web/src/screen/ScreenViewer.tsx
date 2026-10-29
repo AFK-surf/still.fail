@@ -27,7 +27,7 @@ import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
-import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead, type Quality } from "./frames.ts";
+import { ScreenFrames, asks, decodable, fpsOf, viewSize, type FrameConfig, type FrameHead, type Fps, type Quality } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
 import { PAD_SETTLE_MS, PadPointer, Zoom, fitIn } from "./zoom.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
@@ -125,6 +125,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   /** The 画质 a view opens with; another chosen while it is open asks it of that view (`screen.bounds`). */
   const qualityRef = useRef(quality);
   qualityRef.current = quality;
+  /** The most frames a second asked (its panel's 帧率): another asks it of the open view as 画质 does. */
+  const fps: Fps = fpsOf(usePrefs((p) => p.screenFps));
+  const fpsRef = useRef(fps);
+  fpsRef.current = fps;
   /** The codec asked (its panel's 编码): `h264` only, or the best both ends have. Another opens the view again. */
   const codec: "auto" | "h264" = usePrefs((p) => p.screenCodec) === "h264" ? "h264" : "auto";
   /** What came of the view: its panel reads the frames and bits a second from it. */
@@ -281,7 +285,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
       // On a phone, the stage it is shown on: a tab of the station's browser is laid out for it.
       const s = stage.current;
       const fit = phone && s && s.clientWidth > 0 && s.clientHeight > 0 ? { fit: { width: s.clientWidth, height: s.clientHeight, scale: window.devicePixelRatio || 1 } } : {};
-      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(qualityRef.current), ...(qualityRef.current !== "auto" ? { quality: qualityRef.current } : {}), ...fit }, (value, bytes) => {
+      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(qualityRef.current), ...asks(qualityRef.current, fpsRef.current), ...fit }, (value, bytes) => {
         if (!open) return;
         const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
         if (v.frame) {
@@ -308,14 +312,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
     };
   }, [station, screen, attempt, codec, place, drawPointer, phone]);
 
-  // Another 画质: the open view goes on, its pictures asked this large (the core opens its stream again, the one before
-  // kept until the new one has opened: a Windows desktop keeps the display scale set from it).
-  const boundsAsked = useRef(quality);
+  // Another 画质 or 帧率: the open view goes on, its pictures asked this large and this often (the core opens its stream
+  // again, the one before kept until the new one has opened: a Windows desktop keeps the display scale set from it).
+  const boundsAsked = useRef(`${quality} ${fps}`);
   useEffect(() => {
-    if (boundsAsked.current === quality) return;
-    boundsAsked.current = quality;
-    if (view.current) tell("screen.bounds", { view: view.current, ...viewSize(quality) });
-  }, [quality]);
+    if (boundsAsked.current === `${quality} ${fps}`) return;
+    boundsAsked.current = `${quality} ${fps}`;
+    if (view.current) tell("screen.bounds", { view: view.current, ...viewSize(quality), ...asks(quality, fps) });
+  }, [quality, fps]);
 
   // What is done over the picture, while driving.
   useEffect(() => {
@@ -470,6 +474,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
     <>
       {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
       <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })} scale={scale} onScale={setScale}
+        fps={fps} onFps={(f) => setPrefs({ screenFps: f === "auto" ? null : f })}
         codec={codec} onCodec={(c) => setPrefs({ screenCodec: c === "auto" ? null : c })}
         combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
         onWindow={onWindow} full={full} onFull={goFull} chat={tab.chat} onClose={tab.close} onLeave={onBack} />

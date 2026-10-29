@@ -66,6 +66,10 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   var transfer: VTPixelTransferSession?
   var pool: CVPixelBufferPool?
   var poolSize = (0, 0)
+  /// The most frames a second (the view's 帧率, `fps`: 1…120; none asked, 60): what ScreenCaptureKit captures at most
+  /// (`minimumFrameInterval`); the encoder's rate control expects no more than 60 of them (`ExpectedFrameRate`: fewer
+  /// than 90 or 120 are often encoded, and each picture's bits would be sized for that many). A display that draws
+  /// fewer (60 Hz) gives fewer.
   let fps: Int
   /// The bit rate asked when the view opened, then as the station asks (`rate`); none: the picture's size's.
   var bitrate: Int?
@@ -520,7 +524,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       }
       let rate = bitrate ?? max(1_000_000, width * height * 3)
       _ = set(kVTCompressionPropertyKey_AverageBitRate, rate)
-      _ = set(kVTCompressionPropertyKey_ExpectedFrameRate, fps)
+      _ = set(kVTCompressionPropertyKey_ExpectedFrameRate, min(fps, 60))
       // A key frame when asked for, and at least every 10 s besides.
       _ = set(kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, 10)
       // The pictures' colours in the stream's VUI (as each picture is tagged: `colors`).

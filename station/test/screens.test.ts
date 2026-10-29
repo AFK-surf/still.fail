@@ -448,6 +448,45 @@ test("原画 asked: the rate goes up past the source's own, to its pixels × 8; 
   }
 });
 
+test("a view's ask: its 帧率 among those offered, none for 自动, another or a preview's", () => {
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] };
+  for (const fps of [120, 90, 60, 30, 15]) assert.equal(asked({ ...ask, fps }).fps, fps);
+  for (const fps of [undefined, 0, 45, 240, "60"]) assert.equal("fps" in asked({ ...ask, fps }), false, String(fps));
+  assert.equal(asked({ ...ask, fps: 30, peek: true }).fps, undefined);
+});
+
+test("a 帧率 asked: its source opened with it, and no more frames a second go than it", async () => {
+  for (const fps of [15, undefined]) {
+    const hub = new ScreenHub();
+    const source = new FakeSource();
+    hub.add(source);
+    const time = testClock();
+    const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, ...(fps ? { fps } : {}) }, undefined, time.clock);
+    assert.equal(source.opened[0]!.fps, fps);
+    await until(v.frames, KIND.video);
+    // (what comes read as it comes)
+    const read = (async () => {
+      while ((await v.frames.next()) !== null);
+    })();
+    const view = source.views[0]!;
+    // Each frame acknowledged 5 ms on, for a second of the view's clock (自动: a tenth of one), its source with a new
+    // picture each time.
+    const from = view.asked;
+    for (let ms = 0; ms < (fps ? 1000 : 100); ms += 5) {
+      await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+      await settle();
+      await time.adjust(5);
+      await settle();
+    }
+    const went = view.asked - from;
+    if (fps) assert.ok(went >= fps - 1 && went <= fps + 1, `${went} at ${fps}`);
+    else assert.ok(went > 15, `自动: ${went} in 100 ms`);
+    await v.stream.finish();
+    await v.served;
+    await read;
+  }
+});
+
 test("a view's ask: its 画质 among those known, none for a preview's", () => {
   const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h265", "h264"] };
   assert.equal(asked({ ...ask, quality: "original" }).quality, "original");
@@ -982,6 +1021,10 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   assert.equal((await asked.next())?.config?.codec, "h264");
   assert.equal(readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).at(-1).codec, "h265");
   asked.close();
+  // The 帧率 asked: in its request (it captures and encodes at it); none asked, none said (above).
+  const capped = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"], fps: 120 });
+  assert.equal(readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).at(-1).fps, 120);
+  capped.close();
   // One that cannot capture says why.
   await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
   await desktop.close();
@@ -1361,6 +1404,10 @@ test("the desktop for a view without H.264 (an agent's): JPEG pictures, its conf
   assert.equal(fake.views[0].codec, "jpeg");
   assert.deepEqual((await view.next())!.config, { codec: "jpeg", width: 64, height: 36 });
   view.close();
+  // The 帧率 asked goes to the helper (ScreenCaptureKit's frame interval, the encoder's expected rate).
+  const capped = await desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: ["h264"], fps: 30 });
+  assert.equal(fake.views.at(-1).fps, 30);
+  capped.close();
   await desktop.close();
   fake.close();
 });

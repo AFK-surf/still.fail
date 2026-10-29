@@ -57,6 +57,13 @@ export function rateCeiling(width: number, height: number, quality?: Quality): n
   return per === 0 ? own : Math.max(own, Math.min(MAX_RATE, width * height * per));
 }
 
+/// The frame rates a view may ask (the client's `fps`, its 帧率): at most this many frames a second, fewer where the
+/// link or the screen gives fewer. None asked (自动, or a client before it): as many as the source makes and the link
+/// carries (still.fail Helper's 60 a second; stillfail-screen's as many as the display draws).
+export const FPS_CHOICES = [120, 90, 60, 30, 15] as const;
+export type Fps = (typeof FPS_CHOICES)[number];
+export const isFps = (v: unknown): v is Fps => FPS_CHOICES.includes(v as Fps);
+
 export class Pacer {
   /// The frames sent and not acknowledged, oldest first: their timestamps, sizes and when they went.
   readonly #out: { ts: number; bytes: number; at: number }[] = [];
@@ -74,11 +81,25 @@ export class Pacer {
   #since: number | null = null;
   #held = -Infinity;
   #first = Infinity;
+  /// The 帧率 asked: ms between frames (none: as many as come), and when the next may go. Each frame takes the next
+  /// slot of 1000/fps ms; one late by up to half a slot lets the next come that much sooner, so a source that makes
+  /// frames at the same rate (still.fail Helper's capture, asked it) is not cut to fewer by the jitter of its frames,
+  /// and no second carries more than fps + 1.
+  readonly #gap: number | null;
+  #due = -Infinity;
   readonly #now: () => number;
-  /// `start`: the bit rate the source was opened at (none: its own).
-  constructor(now: () => number, start: number | null = null) {
+  /// `start`: the bit rate the source was opened at (none: its own); `fps`: the 帧率 asked (none: 自动).
+  constructor(now: () => number, start: number | null = null, fps?: number) {
     this.#now = now;
     this.#rate = start;
+    this.#gap = fps !== undefined && fps > 0 ? 1000 / fps : null;
+  }
+
+  /// How long until the next frame may go by the 帧率 asked, in whole ms (0: now; none asked, always 0): a clock read in
+  /// nanoseconds a hair short of the slot waits a ms, not 0 ms again and again.
+  wait(): number {
+    const left = this.#gap === null ? 0 : this.#due - this.#now();
+    return left > 0 ? Math.ceil(left) : 0;
   }
 
   get unacked(): number {
@@ -92,7 +113,9 @@ export class Pacer {
   }
 
   sent(ts: number, bytes: number) {
-    this.#out.push({ ts, bytes, at: this.#now() });
+    const now = this.#now();
+    this.#out.push({ ts, bytes, at: now });
+    if (this.#gap !== null) this.#due = Math.max(this.#due + this.#gap, now + this.#gap / 2);
   }
 
   /// The client decoded every frame up to `ts`; the newest of them gives a round trip.

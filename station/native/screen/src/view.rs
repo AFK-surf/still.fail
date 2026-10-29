@@ -23,6 +23,7 @@ use super::clipboard::{Clipboard, PNG_MAX};
 use super::encode::H264;
 use super::image::{Images, Pixels};
 use super::input::Input;
+use super::pace::{self, Gate, KeyClock};
 use super::region::{self, Region};
 
 /// Its coordinates in pixels, whatever the display's scale.
@@ -67,6 +68,8 @@ struct Options {
     hevc: bool,
     max: (u32, u32),
     bitrate: Option<u32>,
+    /// The most pictures a second asked (the view's 帧率; none: as many as the display draws).
+    fps: Option<u32>,
     /// The software encoder even where there is hardware (a test of it): never asked by the station.
     software: bool,
 }
@@ -81,6 +84,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
         hevc: request["codec"].as_str() == Some("h265"),
         max: (request["maxWidth"].as_u64().unwrap_or(1920).max(16) as u32, request["maxHeight"].as_u64().unwrap_or(1080).max(16) as u32),
         bitrate: request["bitrate"].as_u64().map(|b| b as u32),
+        fps: pace::fps(request["fps"].as_u64()),
         software: request["encoder"].as_str() == Some("software"),
     };
     let (tx, rx) = channel();
@@ -190,6 +194,11 @@ struct View {
     pushed_at: Instant,
     /// When which display is the main one was looked at last.
     looked: Instant,
+    /// No picture sooner than the 帧率 asked lets it (ms since `opened`).
+    gate: Gate,
+    opened: Instant,
+    /// A key frame at least every 10 s by the clock (the encoder's GOP counts pictures, fewer than asked may come).
+    keys: KeyClock,
 }
 
 fn failed(out: &Out, error: &windows::core::Error, code: &str) -> windows::core::Error {
@@ -201,7 +210,7 @@ impl View {
     fn open(options: Options, tx: Sender<Msg>, out: &Out) -> windows::core::Result<View> {
         let gpu = Gpu::new().map_err(|e| failed(out, &e, "capture"))?;
         let (monitor, rect) = main_display();
-        let capture = Capture::start(&gpu, monitor, tx, options.jpeg).map_err(|e| failed(out, &e, "capture"))?;
+        let capture = Capture::start(&gpu, monitor, tx, options.jpeg, options.fps).map_err(|e| failed(out, &e, "capture"))?;
         if !options.jpeg {
             super::cursor::follow(out.clone());
         }
@@ -209,6 +218,7 @@ impl View {
             out.json(4, json!({ "hdr": { "sdrWhiteNits": white } }));
         }
         let (width, height) = fitted((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32, options.max.0, options.max.1);
+        let options_fps = options.fps;
         let mut view = View {
             gpu,
             capture,
@@ -237,6 +247,9 @@ impl View {
             told_region: None,
             pushed_at: Instant::now(),
             looked: Instant::now(),
+            gate: Gate::new(options_fps),
+            opened: Instant::now(),
+            keys: KeyClock::default(),
         };
         let encoder = if view.options.jpeg {
             "JPEG, quality 0.8".to_string()
@@ -254,9 +267,10 @@ impl View {
         let bitrate = self.options.bitrate.unwrap_or((width * height * 3).max(1_000_000));
         // H.265 where it was asked and the hardware has it (a size's encoder made anew keeps the codec it had).
         let hevc = self.options.hevc && self.encoder_hevc.unwrap_or(true);
-        let encoder = match hevc.then(|| H264::hevc(&self.gpu, width, height, bitrate)) {
+        let fps = pace::encoder_fps(self.options.fps);
+        let encoder = match hevc.then(|| H264::hevc(&self.gpu, width, height, bitrate, fps)) {
             Some(Ok(encoder)) => encoder,
-            _ => H264::new(&self.gpu, width, height, bitrate, self.options.software)?,
+            _ => H264::new(&self.gpu, width, height, bitrate, fps, self.options.software)?,
         };
         self.encoder_hevc = Some(encoder.hevc);
         let name = encoder.name.clone();
@@ -390,6 +404,11 @@ impl View {
         }
     }
 
+    /// ms since the view opened (the 帧率's clock).
+    fn ms(&self) -> f64 {
+        self.opened.elapsed().as_secs_f64() * 1000.0
+    }
+
     fn timestamp(&mut self) -> i64 {
         let ts = (self.last_ts + 1).max(self.latest_at);
         self.last_ts = ts;
@@ -418,7 +437,7 @@ impl View {
             self.force_key = true;
             self.fresh = self.latest.is_some();
         }
-        if self.wanted == 0 || !self.fresh || self.latest.is_none() {
+        if self.wanted == 0 || !self.fresh || self.latest.is_none() || !self.gate.open(self.ms()) {
             return Ok(());
         }
         let (crop, size, part) = self.framing();
@@ -440,13 +459,18 @@ impl View {
         }
         let texture = self.scaled(crop, size, DXGI_FORMAT_NV12)?;
         let ts = self.timestamp();
-        // Another part of the display: from a key frame (the client's config says the part).
-        let key = self.force_key || part != self.pushed_region;
+        // Another part of the display: from a key frame (the client's config says the part); one 10 s after the last.
+        let now = self.ms();
+        let key = self.force_key || part != self.pushed_region || self.keys.due(now);
+        if key {
+            self.keys.keyed(now);
+        }
         self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key, self.still)?;
         self.still = false;
         self.pushed_region = part;
         self.regions.push((ts, part));
         self.pushed_at = Instant::now();
+        self.gate.went(self.ms());
         self.wanted -= 1;
         self.fresh = false;
         self.force_key = false;
@@ -487,6 +511,10 @@ impl View {
             self.pps = pps;
         }
         let key = key || encoded.clean;
+        if key {
+            let now = self.ms();
+            self.keys.keyed(now);
+        }
         if encoded.asked && !key {
             self.force_unheeded = true;
             self.force_key = true;
@@ -516,7 +544,8 @@ impl View {
 
     /// The latest picture as one JPEG, when one is wanted and it is new (or a key frame was asked for: every one is).
     fn pump_jpeg(&mut self, out: &Out) -> windows::core::Result<()> {
-        while self.wanted > 0 && self.fresh && self.latest.is_some() {
+        while self.wanted > 0 && self.fresh && self.latest.is_some() && self.gate.open(self.ms()) {
+            self.gate.went(self.ms());
             let (crop, size, part) = self.framing();
             let texture = self.scaled(crop, size, DXGI_FORMAT_B8G8R8A8_UNORM)?;
             let (bytes, pitch) = self.gpu.read(&texture, &mut self.staging)?;

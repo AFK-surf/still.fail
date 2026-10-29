@@ -74,6 +74,16 @@ export function viewSize(quality: Quality = "auto"): { maxWidth: number; maxHeig
   return { maxWidth: Math.min(w, Math.round(window.innerWidth * ratio)), maxHeight: Math.min(h, Math.round(window.innerHeight * ratio)) };
 }
 
+/** The most frames a second asked on this device (prefs `screenFps`, 控制中心's 帧率): `auto` as many as come. */
+export type Fps = "auto" | 120 | 90 | 60 | 30 | 15;
+export const FPS_CHOICES: readonly Fps[] = ["auto", 120, 90, 60, 30, 15];
+/** The 帧率 a pref says (`auto` for none, or one not offered). */
+export const fpsOf = (v: unknown): Fps => (FPS_CHOICES.includes(v as Fps) && v !== "auto" ? (v as Fps) : "auto");
+/** What a view asks of its 画质 and 帧率 besides its size (none for 自动). */
+export function asks(quality: Quality, fps: Fps): { quality?: Exclude<Quality, "auto">; fps?: Exclude<Fps, "auto"> } {
+  return { ...(quality !== "auto" ? { quality } : {}), ...(fps !== "auto" ? { fps } : {}) };
+}
+
 /** A part of the screen, 0..1 of its width and height. */
 export type Region = { x: number; y: number; w: number; h: number };
 export interface FrameConfig { codec: string; width: number; height: number; region?: Region }

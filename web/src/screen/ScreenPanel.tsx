@@ -5,11 +5,11 @@
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import type { ScreenScale, ScreenViewState, StationNet } from "../core/shapes.ts";
-import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Play, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Keys } from "../ui.tsx";
 import { t } from "../i18n.ts";
-import type { DecodeStats, Quality } from "./frames.ts";
+import { FPS_CHOICES, type DecodeStats, type Fps, type Quality } from "./frames.ts";
 import * as css from "./ScreenViewer.css.ts";
 
 /** What came of the view so far: frames and their bytes (counted as they come; read each second while shown), and how
@@ -191,10 +191,16 @@ export function ScaleButton({ scale, onScale, className }: { scale: ScreenScale;
   );
 }
 
+/** A 帧率 as the menu says it: 自动, or its frames a second. */
+const fpsLabel = (f: Fps) => (f === "auto" ? t("web-pages.screen.fps.auto") : String(f));
+
 /** 控制中心: what can be done with the view, as a menu (画质, 缩放 and 组合键 open beside it). */
-export function ControlCenter({ quality, onQuality, codec, onCodec, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
+export function ControlCenter({ quality, onQuality, fps, onFps, codec, onCodec, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
   quality: Quality;
   onQuality: (q: Quality) => void;
+  /** The most frames a second asked (帧率): `auto` as many as come. */
+  fps: Fps;
+  onFps: (f: Fps) => void;
   /** The codec asked: the best both ends have, or H.264 only. */
   codec: "auto" | "h264";
   onCodec: (c: "auto" | "h264") => void;
@@ -239,6 +245,25 @@ export function ControlCenter({ quality, onQuality, codec, onCodec, scale, onSca
                       <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
                       <span className={css.menuWords}>{t(`web-pages.screen.quality.${q}`)}</span>
                       <span className={css.menuEnd}>{t(`web-pages.screen.qualityHint.${q}`)}</span>
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger className={item}>
+              <Play size={16} /><span className={css.menuWords}>{t("web-pages.screen.fps")}</span>
+              <span className={css.menuEnd}>{fpsLabel(fps)}</span><ChevronRight size={14} />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent className={list} sideOffset={6} collisionPadding={8}>
+                <DropdownMenu.RadioGroup value={String(fps)} onValueChange={(v) => onFps(v === "auto" ? "auto" : (Number(v) as Fps))}>
+                  {FPS_CHOICES.map((f) => (
+                    <DropdownMenu.RadioItem key={f} value={String(f)} className={item}>
+                      <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
+                      <span className={css.menuWords}>{fpsLabel(f)}</span>
+                      {f === "auto" && <span className={css.menuEnd}>{t("web-pages.screen.fpsHint.auto")}</span>}
                     </DropdownMenu.RadioItem>
                   ))}
                 </DropdownMenu.RadioGroup>

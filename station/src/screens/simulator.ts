@@ -243,7 +243,7 @@ export class Simulator implements ScreenSource {
     // H.264 (the helper's encoder; H.265 where asked and this Mac has it), else a JPEG a picture (an agent's view).
     const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
-    const socket = await this.#helper.connect({ op: "simulator.view", udid: this.#device.udid, codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}) });
+    const socket = await this.#helper.connect({ op: "simulator.view", udid: this.#device.udid, codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.fps ? { fps: options.fps } : {}) });
     const view = new HelperView(codec, socket, () => this.#views.delete(view), new SimInput(), "CoreSimulator");
     this.#views.add(view);
     try {

@@ -4,8 +4,8 @@
 // (protocol.ts), and the UI acknowledges each one it decoded, which is what lets the station send the next: a slow link
 // or a slow decoder lowers the frame rate rather than queueing. What the page draws of the view (its phase, 只看/控制,
 // who else is on it) is said whole as `{state}` each time it changes; the page only draws it. The link dropping opens
-// the view again; switching 只看/控制 opens it again with the other, and another size asked (`screen.bounds`, 画质) with
-// that, the stream before kept until the new one has opened (a Windows desktop puts its display's scale back once its
+// the view again; switching 只看/控制 opens it again with the other, and another size, 画质 or 帧率 asked (`screen.bounds`)
+// with that, the stream before kept until the new one has opened (a Windows desktop puts its display's scale back once its
 // last view ends). While it drives the screen, the screen's clipboard
 // goes both ways (`screen.clipboard` sets it and pastes; a copy made on it comes as `{clipboard}`), and where a file
 // dropped into it goes (`drop`) is in its state, for the page to upload it with the drive's upload. Zoomed in, the page
@@ -20,7 +20,7 @@ import { encode } from "./ops.ts";
 import { unavailable } from "./permissions.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, type Region, ackFrame, clipboardFrame, inputFrame, keyframeFrame, lookFrame } from "./screen-frames.ts";
 import { StationAddr } from "./station/addr.ts";
-import type { ScreenAsk, WireSocket } from "./station/wire.ts";
+import { SCREEN_FPS, type ScreenAsk, type ScreenFps, type ScreenQuality, type WireSocket } from "./station/wire.ts";
 import type { ClientId, RequestId } from "./protocol.ts";
 import type { SpanContext } from "./trace.ts";
 import { fromUtf8, get, isObject, utf8 } from "./util.ts";
@@ -53,8 +53,8 @@ export type ScreenCall =
   | { kind: "keyframe"; view: string }
   | { kind: "input"; view: string; input: J }
   | { kind: "control"; view: string; control: boolean }
-  /// The size the view's pictures are asked to fit in from now on (another 画质).
-  | { kind: "bounds"; view: string; maxWidth: number; maxHeight: number }
+  /// The size the view's pictures are asked to fit in from now on, and the 画质 and 帧率 asked (another chosen; none: 自动).
+  | { kind: "bounds"; view: string; maxWidth: number; maxHeight: number; quality: ScreenQuality | null; fps: ScreenFps | null }
   /// The part of the screen the page shows (null: the whole), in `width`×`height` of this device's pixels.
   | { kind: "look"; view: string; region: Region | null; width: number; height: number }
   /// The screen's clipboard set to text or a PNG (its bytes), then pasted where its focus is unless `paste` is false.
@@ -70,6 +70,16 @@ function text(params: unknown, field: string): string {
   const v = get(params, field);
   if (typeof v !== "string" || v === "") throw CoreError.invalid(t("core-misc.params.missing", { field }));
   return v;
+}
+
+/// A 画质 said (`quality`), or null (自动, or not one).
+function qualityOf(q: unknown): ScreenQuality | null {
+  return q === "smooth" || q === "hd" || q === "original" ? q : null;
+}
+
+/// A 帧率 said (`fps`: 120, 90, 60, 30 or 15), or null (自动, or not one).
+function fpsOf(v: unknown): ScreenFps | null {
+  return SCREEN_FPS.includes(v as ScreenFps) ? (v as ScreenFps) : null;
 }
 
 /// The `screen.*` calls by name; null for any other.
@@ -92,9 +102,10 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       const f = get(params, "fit");
       const [w, h, scale] = [get(f, "width"), get(f, "height"), get(f, "scale")];
       const fit = !peek && finite(w) && finite(h) && finite(scale) && w > 0 && h > 0 && scale > 0 ? { width: Math.round(w), height: Math.round(h), scale } : null;
-      // The 画质 chosen (none: 自动): how high the station lets the bit rate go.
-      const q = get(params, "quality");
-      const quality = !peek && (q === "smooth" || q === "hd" || q === "original") ? q : null;
+      // The 画质 chosen (none: 自动): how high the station lets the bit rate go; the 帧率 (none: 自动): how many frames
+      // a second at most.
+      const quality = peek ? null : qualityOf(get(params, "quality"));
+      const fps = peek ? null : fpsOf(get(params, "fps"));
       // The UI shows a video tagged Display P3 as such: the station may send wider colours than sRGB's.
       const p3 = get(params, "gamut") === "p3";
       return {
@@ -102,7 +113,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}), ...(p3 ? { gamut: "p3" as const } : {}) },
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fps ? { fps } : {}), ...(fit ? { fit } : {}), ...(p3 ? { gamut: "p3" as const } : {}) },
         auto: !peek && typeof control !== "boolean",
       };
     }
@@ -155,7 +166,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
         if (!finite(v) || v < 1) throw CoreError.invalid(t("core-misc.params.missing", { field }));
         return Math.min(Math.round(v), LIMIT);
       };
-      return { kind: "bounds", view: text(params, "view"), maxWidth: size("maxWidth"), maxHeight: size("maxHeight") };
+      return { kind: "bounds", view: text(params, "view"), maxWidth: size("maxWidth"), maxHeight: size("maxHeight"), quality: qualityOf(get(params, "quality")), fps: fpsOf(get(params, "fps")) };
     }
     default:
       return null;
@@ -384,7 +395,7 @@ type Open = {
   keyframe(): void;
   input(input: J): void;
   control(on: boolean): void;
-  bounds(maxWidth: number, maxHeight: number): void;
+  bounds(maxWidth: number, maxHeight: number, quality: ScreenQuality | null, fps: ScreenFps | null): void;
   look(region: Region | null, width: number, height: number): void;
   /// Fails (why, in words) while the view does not drive the screen, or the screen carries no such clipboard.
   clipboard(type: ClipType, data: Uint8Array, paste: boolean): CoreError | null;
@@ -408,6 +419,11 @@ function openIn(inner: Inner): Map<string, Open> {
 /// The station's list of screens changed: the views of its screens hear (who is on them).
 export function screensChanged(inner: Inner, station: string): void {
   for (const view of openIn(inner).values()) if (view.station === station) view.listed();
+}
+
+/// Whether two asks are of the same size, 画质 and 帧率 (what `screen.bounds` changes).
+function sameAsk(a: ScreenAsk, b: ScreenAsk): boolean {
+  return a.maxWidth === b.maxWidth && a.maxHeight === b.maxHeight && a.quality === b.quality && a.fps === b.fps;
 }
 
 /// A view's next stream, opened before the one it takes the place of closed: its socket, the scope it closes with, and
@@ -453,7 +469,7 @@ export function install(): void {
         target.control(c.control);
         break;
       case "bounds":
-        target.bounds(c.maxWidth, c.maxHeight);
+        target.bounds(c.maxWidth, c.maxHeight, c.quality, c.fps);
         break;
       case "look":
         target.look(c.region, c.width, c.height);
@@ -487,7 +503,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     let driving: string[] | null = null;
     // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
-    // What the station is asked for: as the view opened, its size as last asked (`screen.bounds`).
+    // What the station is asked for: as the view opened, its size, 画质 and 帧率 as last asked (`screen.bounds`).
     let bounds = c.ask;
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
@@ -603,9 +619,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         wanted = next;
         if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
       },
-      bounds: (maxWidth, maxHeight) => {
-        if (maxWidth === bounds.maxWidth && maxHeight === bounds.maxHeight) return;
-        bounds = { ...bounds, maxWidth, maxHeight };
+      bounds: (maxWidth, maxHeight, quality, fps) => {
+        // (a preview's are none, as it opened)
+        const next: ScreenAsk = { ...bounds, maxWidth, maxHeight };
+        delete next.quality;
+        delete next.fps;
+        if (quality && !c.ask.peek) next.quality = quality;
+        if (fps && !c.ask.peek) next.fps = fps;
+        if (sameAsk(next, bounds)) return;
+        bounds = next;
         if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
       },
       listed: () => tell(),
@@ -673,7 +695,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           const again = Deferred.makeUnsafe<void>();
           reopen = again;
           // Another mode or size asked while it opened: opened again with it.
-          if (wanted !== control || bounds.maxWidth !== sent.maxWidth || bounds.maxHeight !== sent.maxHeight) Deferred.doneUnsafe(again, Effect.void);
+          if (wanted !== control || !sameAsk(bounds, sent)) Deferred.doneUnsafe(again, Effect.void);
           state.control = control;
           if (state.phase !== "live" || state.message !== undefined) {
             state.phase = state.width !== undefined ? "live" : "connecting";

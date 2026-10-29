@@ -10,8 +10,10 @@
 //                             one JSON line: the main display's resolution {width, height, modes: [{width, height}…]}
 //                             (landscape, at its depth, the largest first), set to `WxH` first when it is given (one of
 //                             its modes; for now, not kept in the registry); or {error}
-//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, audio?: true, encoder?: "software"},
-//                             then messages
+//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, fps?, audio?: true, encoder?: "software"}
+//                             (`fps`: the most pictures a second, 1…120, captured at it, the encoder set for it up
+//                             to 60: pace.rs; none, as many as the display draws, the encoder set for 60), then
+//                             messages
 //                             (a kind byte, the payload's length in 4 bytes big-endian, the payload) both ways until
 //                             its input ends:
 //   in   1 next      (empty)  the next new picture, encoded
@@ -70,6 +72,8 @@ mod hdr;
 mod image;
 #[cfg(windows)]
 mod input;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod pace;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod region;
 #[cfg_attr(not(windows), allow(dead_code))]

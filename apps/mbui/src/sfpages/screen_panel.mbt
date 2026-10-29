@@ -405,8 +405,8 @@ fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
 
 ///|
 /// What 控制中心 holds, the most used first (as UU 远程's control bar has it): the combos as tiles (while driving: their
-/// names, a tap sends their keys), how the view goes (live: its round trip, pressed its figures), 画质 and 缩放 (where
-/// the station changes it) a row each, then sending files, 在新窗口打开 (a desktop's), 全屏, and 断开.
+/// names, a tap sends their keys), how the view goes (live: its round trip, pressed its figures), 画质, 帧率 and 缩放
+/// (where the station changes it) a row each, then sending files, 在新窗口打开 (a desktop's), 全屏, and 断开.
 fn center_panel(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -469,6 +469,25 @@ fn center_panel(
     })
     |> ignore
     @sf.panel_note(c, @sf.t("web-pages.screen.qualityHint." + screen_qualities[now].1))
+  })
+  // the most frames a second (自动: as many as the station and the link give), beside 画质
+  let fps = screen_fps(src)
+  @sf.panel_group(c, label=@sf.t("web-pages.screen.fps"), fn() {
+    let now = screen_fps_choices.search(fps).unwrap_or(0)
+    c.box(style=center_choice, fn() {
+      let chosen = @sf.segmented(
+        c,
+        "screen-fps",
+        screen_fps_choices.map(fn(f) { if f == 0 { @sf.t("web-pages.screen.fps.auto") } else { "\{f}" } }),
+        now,
+      )
+      if chosen != now {
+        let f = screen_fps_choices[chosen]
+        prefs_set(c, s, "screenFps", "\{f}", if f == 0 { Json::null() } else { Json::number(f.to_double()) })
+      }
+    })
+    |> ignore
+    @sf.panel_note(c, fps_note(fps))
   })
   match s.scale() {
     Some((percent, recommended, steps)) =>
@@ -658,7 +677,22 @@ fn key_tiles(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// A choice of 控制中心 kept on this device for every screen (`prefs.set`, null for the default): the view takes it
 /// once the prefs say so (screen_page's asked_again: 画质 asked of the open view).
 fn prefs_chosen(c : @ui.Ctx, s : ScreenSess, name : String, value : String) -> Unit {
-  let v = if value == "" { Json::null() } else { Json::string(value) }
+  prefs_set(c, s, name, value, if value == "" { Json::null() } else { Json::string(value) })
+}
+
+///|
+/// What 帧率's note says of the one chosen: 自动 goes by the link; 90 and 120 only where the display draws that many.
+fn fps_note(fps : Int) -> String {
+  if fps == 0 {
+    @sf.t("web-pages.screen.fpsHint.auto")
+  } else {
+    @sf.t(if fps > 60 { "web-pages.screen.fpsHint.high" } else { "web-pages.screen.fpsHint.cap" }, args=[("fps", "\{fps}")])
+  }
+}
+
+///|
+/// A choice kept on this device (`prefs.set` `name`: `v`, null for the default), `value` naming it.
+fn prefs_set(c : @ui.Ctx, s : ScreenSess, name : String, value : String, v : Json) -> Unit {
   c.tell("screen-prefs/" + s.view + "/" + name + "/" + value, fn() {
     let p : Map[String, Json] = {}
     p[name] = v

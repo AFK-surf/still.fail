@@ -4,7 +4,7 @@
 // as NV12 (for the encoder) or BGRA (for a JPEG).
 use std::sync::mpsc::Sender;
 
-use windows::Foundation::TypedEventHandler;
+use windows::Foundation::{TimeSpan, TypedEventHandler};
 use windows::Graphics::Capture::{Direct3D11CaptureFramePool, GraphicsCaptureAccess, GraphicsCaptureAccessKind, GraphicsCaptureItem, GraphicsCaptureSession};
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
@@ -125,7 +125,9 @@ pub struct Capture {
 
 impl Capture {
     /// `cursor`: the pointer drawn in the pictures (a JPEG's: an agent's view); a video's leave it out (cursor.rs says it).
-    pub fn start(gpu: &Gpu, monitor: HMONITOR, arrived: Sender<super::view::Msg>, cursor: bool) -> Result<Capture> {
+    /// `fps`: the most pictures a second the view asked (its 帧率), the capture asked no more often (Windows 11 24H2 on;
+    /// before, as often as the display draws, the view's own pace holding the rest back); none, as often as it draws.
+    pub fn start(gpu: &Gpu, monitor: HMONITOR, arrived: Sender<super::view::Msg>, cursor: bool, fps: Option<u32>) -> Result<Capture> {
         let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
         let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(monitor)? };
         let dxgi: IDXGIDevice = gpu.device.cast()?;
@@ -152,6 +154,9 @@ impl Capture {
         let session = pool.CreateCaptureSession(&item)?;
         let _ = session.SetIsCursorCaptureEnabled(cursor);
         let _ = session.SetIsBorderRequired(false);
+        if let Some(fps) = fps.filter(|&f| f > 0) {
+            let _ = session.SetMinUpdateInterval(TimeSpan { Duration: 10_000_000 / fps as i64 });
+        }
         session.StartCapture()?;
         Ok(Capture { pool, session, device, size, token, item, closed, format, sdr, monitor })
     }
