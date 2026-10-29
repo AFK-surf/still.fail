@@ -114,6 +114,8 @@ pub fn button(
     None if (tone == Ghost || tone == GhostDanger) && at_row_end() => Some(outset_end(button_padx))
     r => r
   }
+  // (its words' node, as built: how they move with it)
+  let mut words_at = -1
   let b = c.box(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
@@ -156,6 +158,7 @@ pub fn button(
         wrap=false,
         line=t.t.ui_line,
       )
+      words_at = words
       if icon == "" && turning > 0.0 {
         c.look(words, @ui.look(alpha=1.0 - turning))
         c.layer(fn() {
@@ -166,6 +169,13 @@ pub fn button(
       }
     },
   )
+  // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
+  // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
+  // its words: docs/motion.md 3)
+  if key != "" {
+    @motion.reshape(c, b, "sf-btn/shape/" + key, by=label, spec=button_reshape)
+    @motion.layout(c, words_at, "sf-btn/words/" + key, by=label, spec=button_reshape)
+  }
   // (in a page's bones, one piece where it has a ground; one of words alone, its words)
   if tone != Ghost && tone != GhostDanger {
     c.bone_whole(b)
@@ -178,6 +188,10 @@ pub fn button(
   }
   live && c.clicked(id)
 }
+
+///|
+/// How a button whose words changed goes to its new width (button): a near Move.
+let button_reshape : @motion.Spec = @motion.tween(@ui.move_near_ms, ease=Move)
 
 ///|
 /// How far a button's words are in from its sides.
@@ -3071,19 +3085,22 @@ pub fn panel_button(
 ) -> Bool {
   let id = c.id(key)
   let hot = !disabled && c.lit(id)
+  let mut words_at = -1
   let b = c.box(
     style=if tone == Filled { panel_button_filled } else { panel_button_box },
     disabled~,
     id=if disabled { 0 } else { id },
     fn() {
-      c.text(words, style=match tone {
+      words_at = c.text(words, style=match tone {
         Accent | Filled => panel_button_accent
         Quiet => if hot { panel_button_words } else { panel_button_quiet }
         Plainly => panel_button_words
       })
-      |> ignore
     },
   )
+  // (its words changed, 复制链接 to 已复制: to its new width as a button does)
+  @motion.reshape(c, b, "sf-pbtn/shape/" + key, by=words, spec=button_reshape)
+  @motion.layout(c, words_at, "sf-pbtn/words/" + key, by=words, spec=button_reshape)
   c.semantics(b, Button, id~, label=words, disabled~)
   !disabled && c.clicked(id)
 }
