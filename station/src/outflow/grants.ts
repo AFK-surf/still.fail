@@ -38,6 +38,10 @@ export function identityKey(i: Identity): string {
 export type Reach = "station" | "workspace";
 
 /// `station`: the station read, when not this one.
+/// Whose a request or grant is: its program, and the key that program gave it (one program can ask for several
+/// grants under keys of its own, each its own; a grant from before has none).
+const whose = (i: Identity, key: string | undefined) => `${identityKey(i)}\u0000${key ?? ""}`;
+
 export type Read = { at: number; scope: Scope; rows: number; station?: string };
 
 export type Grant = {
@@ -47,6 +51,8 @@ export type Grant = {
   identity: Identity;
   /// What the program said of itself when it asked (shown as its own words).
   said: { name: string; purpose: string };
+  /// The key the program asked under (absent: none).
+  key?: string;
   scopes: Scope[];
   /// Absent on a grant from before: this station.
   reach?: Reach;
@@ -66,6 +72,7 @@ export type Request = {
   id: string;
   identity: Identity;
   said: { name: string; purpose: string };
+  key: string;
   scopes: Scope[];
   reach: Reach;
   askedAt: number;
@@ -108,20 +115,21 @@ export class OutflowGrants {
     return this.#requests.filter((r) => r.answer === null);
   }
 
-  /// A program asks: its request, a new one, or the one it already has that its program has not taken (asked again
-  /// while no admin answered, it says now what it asks for). One a request of it refused before is asked anew.
-  ask(identity: Identity, said: Request["said"], scopes: Scope[], reach: Reach): Request {
+  /// A program asks under `key`: its request, a new one, or the one it already has under that key that it has not
+  /// taken (asked again while no admin answered, it says now what it asks for). One a request of it refused before is
+  /// asked anew.
+  ask(identity: Identity, said: Request["said"], scopes: Scope[], reach: Reach, key = ""): Request {
     this.#expire();
-    const key = identityKey(identity);
-    const had = this.#requests.find((r) => identityKey(r.identity) === key && r.answer?.allow !== false);
+    const it = whose(identity, key);
+    const had = this.#requests.find((r) => whose(r.identity, r.key) === it && r.answer?.allow !== false);
     if (had?.answer === null) {
       Object.assign(had, { identity, said, scopes: [...scopes], reach });
       this.#save();
       return had;
     }
     if (had) return had;
-    const request: Request = { id: randomBytes(8).toString("hex"), identity, said, scopes: [...scopes], reach, askedAt: this.#now(), answer: null };
-    this.#requests = [...this.#requests.filter((r) => identityKey(r.identity) !== key), request];
+    const request: Request = { id: randomBytes(8).toString("hex"), identity, said, key, scopes: [...scopes], reach, askedAt: this.#now(), answer: null };
+    this.#requests = [...this.#requests.filter((r) => whose(r.identity, r.key) !== it), request];
     this.#save();
     return request;
   }
@@ -145,7 +153,7 @@ export class OutflowGrants {
 
   /// What request `id`'s program is given, once answered (null while asking, or when there is no such request): the
   /// grant made of it and its token (said once, never kept), or refused. Either way the request goes. Another grant
-  /// of the same program goes: what it asked for now is what it has.
+  /// of the same program under the same key goes: what it asked for now is what it has.
   take(id: string): Taken | null {
     this.#expire();
     const request = this.#requests.find((r) => r.id === id);
@@ -156,10 +164,10 @@ export class OutflowGrants {
       return "refused";
     }
     const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
-    const key = identityKey(request.identity);
+    const it = whose(request.identity, request.key);
     const { scopes, reach, by, at } = request.answer;
-    const grant: Grant = { id: randomBytes(8).toString("hex"), token: digest(token), identity: request.identity, said: request.said, scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
-    this.#grants = [...this.#grants.filter((g) => identityKey(g.identity) !== key), grant];
+    const grant: Grant = { id: randomBytes(8).toString("hex"), token: digest(token), identity: request.identity, said: request.said, ...(request.key === "" ? {} : { key: request.key }), scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
+    this.#grants = [...this.#grants.filter((g) => whose(g.identity, g.key) !== it), grant];
     this.#save();
     return { grant: this.list().find((g) => g.id === grant.id)!, token };
   }

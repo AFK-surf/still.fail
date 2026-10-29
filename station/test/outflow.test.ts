@@ -158,11 +158,12 @@ test("a program asks, an admin allows what they leave in still.fail, and the pro
   // Its reads are kept, for the members to see.
   assert.deepEqual(r.grants.list()[0]!.reads.map((x) => [x.scope, x.rows]), [["usage", 2], ["usage", 2]]);
 
-  // The token copied to another program reads nothing; nor does no token.
+  // The token is what reads: the program updated (another build, another hash) reads on; no token reads nothing.
   r.caller.now = OTHER;
-  assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token), { status: 401, body: { error: "this token was given to another program" } });
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token)).status, 200);
   r.caller.now = COMMA;
   assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1")).status, 401);
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, "sfo_not-it")).status, 401);
 
   // Revoked from still.fail: refused from then on.
   assert.equal(await m.revoke(grant!.id), 200);
@@ -260,6 +261,25 @@ test("granted the workspace: the program lists its stations and reads each, the 
   assert.equal((await call(r, "GET", "/v1/chats?station=st-nowhere", undefined, body.token)).status, 404);
   assert.equal((await call(r, "GET", "/v1/chats", undefined, body.token)).body.chats[0].thread, 1, "this station's without one named");
   assert.deepEqual(r.grants.list()[0]!.reads.map((x) => [x.scope, x.station ?? null]), [["usage", "st-there"], ["chats", "st-there"], ["chats", null]]);
+});
+
+test("one program asking under keys of its own holds a grant for each key; asking again under one replaces that one", async () => {
+  const r = await rig();
+  const m = members(r);
+  const grantFor = async (key: string) => {
+    const asking = (await asked(r, ["usage"], { key })).answer;
+    assert.deepEqual(r.grants.asking().map((q) => q.key), [key]);
+    assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["usage"] }), 200);
+    return (await asking).body.token as string;
+  };
+  const one = await grantFor("station-1");
+  const two = await grantFor("station-2");
+  assert.deepEqual(r.grants.list().map((g) => g.key).sort(), ["station-1", "station-2"]);
+  const again = await grantFor("station-1");
+  assert.deepEqual(r.grants.list().map((g) => g.key).sort(), ["station-1", "station-2"]);
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, one)).status, 401, "replaced");
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, two)).status, 200);
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, again)).status, 200);
 });
 
 test("asked for the workspace, an admin may leave it to this station", async () => {

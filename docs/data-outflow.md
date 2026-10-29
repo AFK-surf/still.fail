@@ -10,7 +10,7 @@
 | 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`，指向当前进程自己的 `outflow-<pid>-<n>.sock`：station 自更新时新旧进程并存，旧进程停下时只删自己的），网络、mesh、cloud 都到不了 |
 | 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程 → macOS 上是它的代码签名（Team ID 和签名标识）和可执行文件路径，Linux 上是可执行文件路径和它的 SHA-256 |
 | 怎么批准 | 申请出现在 still.fail app 里这台 station 的设置页「数据外流」，只有 home workspace 的 owner / admin 能答：逐项勾掉不给的数据和「整个 workspace」，点允许后再出一次摘要确认 |
-| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上、由同一个程序拿来用才有效 |
+| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上有效；读数据只认 token，程序升级后照样能读 |
 | 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，单独一项，写明对方能读到对话内容）；范围是这台 station，或整个 workspace 的所有 station |
 | 怎么收回 | 「数据外流」页列出每份授权、申请方、谁批准的、最近读了什么；取消后立即失效 |
 
@@ -30,22 +30,23 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 ## 防谁、不防谁
 
 - 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据；一个程序冒充另一个程序（批准页上写的是系统核实的签名，不是申请方自报
-  的名字）；token 被抄走后换个程序或换台机器来用。
-- 不防的是：同一系统用户下存心要拿数据的程序。它本来就能直接读 `stillfail.db`（agent 也是同一个用户，docs/vault.md 说过同样的事）。
+  的名字）；token 被抄到别的机器上用（它只在这台机器的本机 socket 上有效）。
+- 不防的是：同一系统用户下存心要拿数据的程序，包括抄走了 token 的程序。它本来就能直接读 `stillfail.db`（agent 也是同一个用户，docs/vault.md 说过同样的事）。
   这里做的是一条经过人同意、看得见、能收回、格式稳定的正式通道，让外面的程序不用去读 station 的库。
 
 ## 申请
 
 本机 socket 上是 HTTP（每个连接一次请求）：
 
-- `POST /v1/request`：`{ name, purpose, scopes: ["usage", "chats"], workspace: true }`。`name`、`purpose` 只当说明显示，标明是申请方
-  自己说的；`workspace: true` 申请整个 workspace（不写就是这台 station）。申请记下来，等管理员答，请求最多挂 10 分钟：
+- `POST /v1/request`：`{ name, purpose, scopes: ["usage", "chats"], workspace: true, key }`。`name`、`purpose` 只当说明显示，标明是申请方
+  自己说的；`workspace: true` 申请整个 workspace（不写就是这台 station）；`key` 是申请方自己的键（比如它的 station id）：同一个程序
+  在不同的键下各有各的申请和授权，同一个键下再申请就替换那一份。申请记下来，等管理员答，请求最多挂 10 分钟：
   - 允许：`200 { token, grant, scopes, reach }`，`scopes` 是管理员最后留下的那几类，`reach` 是 `station` 或 `workspace`；
   - 不允许：`403 { error: "refused" }`，这份申请随之作废，再申请就是新的一份；
   - 10 分钟里还没人答：`202 { request, state: "asking" }`。程序过一会儿再 `POST /v1/request`，还是同一份申请（按它这次说的范围更新），
     管理员在这期间答了的话立刻拿到结果。程序挂断也一样：申请留着，答案等它下次来取。
   - 一份申请，没人答过一周，或答了允许、程序一周没来取，就作废。
-  - 同一个申请方已有一份授权：照常申请，批准后旧的那份作废。
+  - 同一个申请方在同一个键下已有一份授权：照常申请，批准后旧的那份作废。
 - 申请方核实（station 一侧）：
   - 对端进程：macOS 用 `LOCAL_PEERTOKEN` 取审计令牌（防 PID 复用），Linux 用 `SO_PEERCRED`（mesh 插件 `peerProcess(fd)`）；
   - macOS：still.fail Helper 按审计令牌取 `SecCode`，查签名有效，取 Team ID、签名标识、可执行文件路径；没签名或签名无效的程序
@@ -68,7 +69,7 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 
 ## 读数据
 
-带 `Authorization: Bearer sfo_…`，在同一个本机 socket 上，对端必须和授权记的签名一样，否则 `401`（token 对、程序不对也是 `401`）：
+带 `Authorization: Bearer sfo_…`，在同一个本机 socket 上；只认 token，不再核对读的是哪个程序（程序身份只在申请时核实，写在批准页上）。没有 token 或 token 不对：`401`。
 
 - `GET /v1/stations`：能读的 station，`{ stations: [{ id, name, here }] }`，这台在最前（`here: true`）。授权只到这台 station 的，就只有
   这一台。
