@@ -829,8 +829,8 @@ notification by its words on Android (the app's own active notifications; the ta
 macOS (the kept ones): drive.mbt `noticed`, `nonotice`, `notice`.
 
 Firebase Cloud Messaging (android/…/Push.java, as the Android app's Push.kt): Firebase set up by hand from the app's
-resources (res/values/push.xml, firebase.properties' values) for the package's Firebase app (fail.still.android.beta's;
-none registered for the others, whose pushes stay off), its components merged into the app's manifest by hand (apk.json
+resources (res/values/push.xml, firebase.properties' values) for the package's Firebase app (fail.still.android's and
+fail.still.android.beta's; none registered for the others, whose pushes stay off), its components merged into the app's manifest by hand (apk.json
 `merged`). The token is asked for as the process starts; the app registers it as the core's `notify` says, at its
 start and as a token comes later. The FirebaseMessagingService does what PushService does, on FCM's thread, with the
 core: the app's where it runs (its own Java client, AdbCore's ids), else one started for the push

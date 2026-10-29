@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Firebase Cloud Messaging for the pushes (Push.java), as still.fail's Android apps have it (apps/android/
      firebase.properties): the values google-services.json has, not secrets (they are in every APK). The app id is the
-     Firebase app of the package the app is built as: fail.still.android.beta's (the beta app's); the others have none
-     registered yet (fail.still.android, fail.still.mbui), and their pushes stay off. -->
+     Firebase app of the package the app is built as: fail.still.android's (the released app's) and
+     fail.still.android.beta's (the beta app's); the others have none registered (fail.still.mbui,
+     fail.still.android.dev), and their pushes stay off. -->
 <resources>
     <string name="fcm_project_id" translatable="false">stillfail</string>
     <string name="fcm_sender_id" translatable="false">1020833989895</string>
     <string name="fcm_api_key" translatable="false">AIzaSyAfRzYhnNdk16Yb2dm84zfSoOm1ZQJt7kI</string>
+    <string name="fcm_stable_app_id" translatable="false">1:1020833989895:android:88dc8c76315b811402f1a2</string>
     <string name="fcm_beta_app_id" translatable="false">1:1020833989895:android:8564328f69d93e3102f1a2</string>
 </resources>
