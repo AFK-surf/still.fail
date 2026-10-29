@@ -39,8 +39,9 @@ pub(crate) struct RelayTransport {
     _actor_handle: AbortOnDropHandle<()>,
     my_relay: HomeRelayWatch,
     my_endpoint_id: EndpointId,
-    /// ember: the relays this transport is the endpoint's way to (`Builder::home_on_every_relay`).
+    /// ember: the relays this transport is the endpoint's way to (`Builder::home_on_every_relay`), but `excludes`.
     relay_map: iroh_relay::RelayMap,
+    excludes: Vec<RelayUrl>,
 }
 
 impl std::fmt::Display for RelayTransport {
@@ -60,6 +61,7 @@ impl RelayTransport {
         let my_endpoint_id = config.secret_key.public();
         let my_relay = config.my_relay.clone();
         let relay_map = config.relay_map.clone();
+        let excludes = config.excludes.clone();
 
         let relay_actor = RelayActor::new(config, relay_datagram_recv_tx, cancel_token);
 
@@ -81,6 +83,7 @@ impl RelayTransport {
             my_relay,
             my_endpoint_id,
             relay_map,
+            excludes,
         }
     }
 
@@ -88,6 +91,7 @@ impl RelayTransport {
         RelaySender {
             sender: PollSender::new(self.relay_datagram_send_channel.clone()),
             relay_map: self.relay_map.clone(),
+            excludes: self.excludes.clone(),
         }
     }
 
@@ -265,12 +269,13 @@ impl RelayNetworkChangeSender {
 pub(crate) struct RelaySender {
     sender: PollSender<RelaySendItem>,
     relay_map: iroh_relay::RelayMap,
+    excludes: Vec<RelayUrl>,
 }
 
 impl RelaySender {
     /// ember: whether `url` is one of this transport's relays.
     pub(super) fn owns(&self, url: &RelayUrl) -> bool {
-        self.relay_map.contains(url)
+        self.relay_map.contains(url) && !self.excludes.contains(url)
     }
 
     pub(super) fn is_valid_send_addr(&self, _url: &RelayUrl, _endpoint_id: &EndpointId) -> bool {

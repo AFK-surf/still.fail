@@ -49,6 +49,18 @@ the same.
   is selected are kept, and sent at once to addresses that Address Lookup finds afterwards. Without it a station
   found by mDNS a moment after the dial (the relay down or unreachable) was only tried at QUIC's next Initial
   retransmit, 1 s or 3 s after the first: LAN connections took 1–6 s.
+- **iroh 1.0.3** (src/endpoint.rs `Builder::home_on_every_relay`, src/socket.rs, src/socket/transports.rs,
+  src/socket/transports/relay.rs and relay/actor.rs): one endpoint home on all its relays at once, a relay transport
+  for each (the first with the endpoint's whole map, home on what the others are not; the others one relay each), its
+  address naming each, a datagram for a relay sent through the transport whose relay it is. Upstream takes one relay
+  transport and is home on one relay: an endpoint was out of reach on the others (the station kept itself on them
+  with a keeper endpoint for each, keep.rs), and a device that wanted another relay took a key of its own for it, a
+  connection of its own, all on it ending as it moved.
+- **iroh 1.0.3** (src/socket/remote_map/remote_state.rs): a connection opens a path through every relay the remote
+  is on, its first path a relay's too (upstream: only beside a first path over IP). On an endpoint home on several
+  relays a relay's path is given up as any other (the connection's path idle timeout, not 30 s: the connection goes on
+  through another relay meanwhile) and opened again 2 s later until it is back. Together: a relay going away moves
+  the connection's packets to another and its streams go on (`endpoint_home_on_every_relay_survives_a_relay_gone`).
 - **noq-udp 1.3.0** (src/linux.rs): no UDP segmentation offload (GSO) on Android, each datagram sent on its own. An
   Android emulator's network accepts a segmented burst and drops all of it; QUIC on a direct path then got nothing
   through once it sent more than a packet or two at once, until iroh dropped the path 15 s later (docs/mesh-lan.md).

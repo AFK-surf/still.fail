@@ -940,6 +940,7 @@ impl EndpointInner {
             tls_config: tls_config.clone(),
             metrics: metrics.socket.clone(),
             relay_map: relay_map.clone(),
+            excludes: Vec::new(),
         };
 
         let shutdown_state = ShutdownState::default();

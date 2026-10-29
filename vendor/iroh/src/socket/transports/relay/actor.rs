@@ -879,6 +879,10 @@ pub(crate) struct Config {
     /// Per-relay configuration. Consulted when starting a connection to
     /// look up the auth token and any future per-relay options.
     pub relay_map: RelayMap,
+    /// ember: relays of `relay_map` this actor is not home on, another relay transport's
+    /// (`Builder::home_on_every_relay`: the first transport has the endpoint's whole map, relays inserted later with it,
+    /// the others one relay each).
+    pub excludes: Vec<RelayUrl>,
 }
 
 /// Connection state of the home relay.
@@ -1129,17 +1133,36 @@ impl RelayActor {
         }
     }
 
-    /// ember: the relay a transport of a single relay is home on, whatever net_report finds best of all of them
-    /// (`Builder::home_on_every_relay`: each relay's transport is home on its own).
-    fn only_relay(&self) -> Option<RelayUrl> {
+    /// ember: the relays this actor may be home on: its map's, but those another relay transport is home on
+    /// (`Config::excludes`).
+    fn homes(&self) -> Vec<RelayUrl> {
         let mut urls = self.config.relay_map.urls::<Vec<RelayUrl>>();
+        urls.retain(|u| !self.config.excludes.contains(u));
+        urls
+    }
+
+    /// ember: the one relay this actor may be home on, if it is one alone.
+    fn only_relay(&self) -> Option<RelayUrl> {
+        let mut urls = self.homes();
         if urls.len() == 1 { urls.pop() } else { None }
     }
 
     async fn on_network_change(&mut self, report: Report) {
         let prev = self.config.my_relay.get();
         let prev_url = prev.as_ref().map(RelayStatus::url);
-        let preferred = self.only_relay().or(report.preferred_relay);
+        // ember: net_report's choice if this actor may be home on it, else the nearest of those it may be (its one
+        // relay, as a relay transport of `Builder::home_on_every_relay` has).
+        let homes = self.homes();
+        let preferred = match report.preferred_relay {
+            Some(url) if homes.contains(&url) => Some(url),
+            _ if homes.len() == 1 => homes.first().cloned(),
+            _ => report
+                .relay_latency
+                .iter()
+                .filter(|(_, url, _)| homes.contains(url))
+                .min_by_key(|(_, _, latency)| *latency)
+                .map(|(_, url, _)| url.clone()),
+        };
         if preferred.as_ref() == prev_url {
             // No change.
             return;

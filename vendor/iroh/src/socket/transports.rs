@@ -234,12 +234,21 @@ impl Transports {
                 _ => None,
             })
             .collect();
-        let several = relay_maps.len() > 1;
+        // The first has the endpoint's whole map (shared: relays inserted later are its), home on what the others are
+        // not.
+        let others: Vec<RelayUrl> = relay_maps
+            .iter()
+            .skip(1)
+            .flat_map(|m| m.urls::<Vec<RelayUrl>>())
+            .collect();
         let relay = relay_maps
             .into_iter()
-            .map(|relay_map| {
+            .enumerate()
+            .map(|(i, relay_map)| {
                 let mut config = relay_actor_config.clone();
-                if several {
+                if i == 0 {
+                    config.excludes = others.clone();
+                } else {
                     config.relay_map = relay_map.clone();
                     config.my_relay = HomeRelayWatch::default();
                 }
@@ -1228,14 +1237,14 @@ impl TransportsSender {
             FourTuple::Relay { url, endpoint_id } => {
                 let mut has_valid_sender = false;
                 // ember: through the relay transport whose relay it is (its connection to that relay is the one the
-                // relay knows this endpoint by: another opened beside it would take its place there), else the first.
-                let owned = self.relay.iter().any(|s| s.owns(url));
+                // relay knows this endpoint by: another opened beside it would take its place there), else the first
+                // (whose map is the endpoint's: any relay not another's).
+                let owner = self.relay.iter().position(|s| s.owns(url)).unwrap_or(0);
                 for sender in self
                     .relay
                     .iter_mut()
-                    .enumerate()
-                    .filter(|(i, s)| if owned { s.owns(url) } else { *i == 0 })
-                    .map(|(_, s)| s)
+                    .skip(owner)
+                    .take(1)
                     .filter(|s| s.is_valid_send_addr(url, endpoint_id))
                 {
                     has_valid_sender = true;

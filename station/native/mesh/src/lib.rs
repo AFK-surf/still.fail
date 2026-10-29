@@ -1,6 +1,7 @@
 //! The station's iroh for the station in TypeScript (docs/station-ts-native.md §3): its endpoint as
 //! mesh/station/src/main.rs `serve_mesh` makes it (the station's key, its relays, found on the LAN by mDNS and by relay
-//! through the Mainline DHT, Cubic by default with a 256 KiB initial window), keepers on every relay (keep.rs), connections both
+//! through the Mainline DHT, Cubic by default with a 256 KiB initial window), home on every one of its relays at once
+//! (one connection to it has a path through each, PATH_IDLE), keepers on relays added since (keep.rs), connections both
 //! ways and their streams. Which relays, when to add iroh's public ones, who may connect and what is said: the
 //! TypeScript's. And the image codecs of the thumbnails (thumbs.rs).
 
@@ -25,6 +26,13 @@ const FORMER_MDNS_SERVICE: &str = "ember";
 fn failed(error: impl std::fmt::Display) -> napi::Error {
     napi::Error::from_reason(error.to_string())
 }
+
+/// How often each path of a connection is kept alive, and how long one may hear nothing before it is given up: its
+/// packets go on on another path meanwhile (another relay, direct), and a relay's is opened again as it comes back.
+/// iroh's own (5 s, 15 s; 30 s for a relay's) held a connection on a way that was gone that long (a relay down, a path
+/// punched through that stopped answering), every stream on it waiting.
+const PATH_KEEP_ALIVE: Duration = Duration::from_secs(1);
+const PATH_IDLE: Duration = Duration::from_secs(3);
 
 fn relay_url(url: &str) -> napi::Result<RelayUrl> {
     url.parse().map_err(failed)
@@ -54,6 +62,8 @@ pub struct Options {
 pub struct Endpoint {
     inner: IrohEndpoint,
     keepers: Arc<StdMutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+    /// The relays it was bound with: home on each, no keeper wanted there.
+    homes: Vec<RelayUrl>,
     /// Connections coming that are held unanswered, not even their handshake (`hold_incoming`), and those held.
     held: Arc<StdMutex<(u32, Vec<iroh::endpoint::Incoming>)>>,
     /// The connections whose handshakes are done, as each finishes (`accept`), once one was first asked for.
@@ -83,7 +93,14 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
         .secret_key(key.clone())
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
         .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
-        .transport_config(QuicTransportConfig::builder().congestion_controller_factory(controller).build());
+        .home_on_every_relay()
+        .transport_config(
+            QuicTransportConfig::builder()
+                .congestion_controller_factory(controller)
+                .default_path_keep_alive_interval(PATH_KEEP_ALIVE)
+                .default_path_max_idle_timeout(PATH_IDLE)
+                .build(),
+        );
     if let Some(addr) = &options.bind_addr {
         builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(failed)?).map_err(failed)?;
     }
@@ -101,7 +118,7 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key));
     }
-    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), held: Arc::default(), accepted: Arc::default() })
+    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
 }
 
 #[napi(object)]
@@ -178,11 +195,13 @@ impl Endpoint {
         }
     }
 
-    /// Keeps the station on exactly these relays, besides its home one (keep.rs): a keeper for each new one, those of
-    /// relays no longer named stopped.
+    /// Keeps the station on exactly these relays, besides those it is home on (bound with): a keeper for each new one
+    /// (keep.rs), those of relays no longer named stopped.
     #[napi]
     pub fn keep(&self, urls: Vec<String>) -> napi::Result<()> {
-        let relays: Vec<RelayUrl> = urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
+        let mut relays: Vec<RelayUrl> = urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
+        relays.retain(|r| !self.homes.contains(r));
+        let urls: Vec<String> = relays.iter().map(ToString::to_string).collect();
         let mut keepers = self.keepers.lock().unwrap();
         keepers.retain(|url, task| {
             let named = urls.contains(url);
