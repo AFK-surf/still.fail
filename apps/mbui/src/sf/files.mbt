@@ -499,9 +499,14 @@ pub fn composer_card() -> @ui.Style {
 let composer_card_ground : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, A(Fg, O10))}")
 
 ///|
-/// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle.
+/// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle, and its
+/// sheet's ink as far from its side as from its top and foot, its words' end as far from the other side, as a
+/// message's card holds them (its 52: 9 every way round the ink, file_sheet_in 7 and the sheet's 2 at its side) and
+/// the web's composer card does (14 round its sheet in its 64). Its 56 leaves 11 over and under the sheet's ink (10 and
+/// the sheet's 1): 12 at its sides, the scale's nearest (10 and the sheet's 2; 12 at its end, rule 4's as far in from
+/// both). With file_sheet_in it stood 9 in, 2 short of over and under it (the user, 2026-10-30: 距离左边太近了).
 // kept across runs: a value (no field of it changes)
-let card_waiting : @ui.Style = @ui.css("h=S14")
+let card_waiting : @ui.Style = @ui.css("h=S14 pl=S2_5 pr=S3")
 
 ///|
 fn card_composer() -> @ui.Style {
