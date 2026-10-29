@@ -107,7 +107,10 @@
   --radius-field: var(--radius-lg);
   --radius-small: var(--radius-sm);
 
-  background: transparent;
+  /* The chat's own ground, not transparent: a frame is composited apart from its page, and a part of it not yet drawn
+     as the chat scrolls is filled with its ground made opaque, black for a transparent one (2026-10-29, a black band
+     along a frame's edge as it scrolled in). */
+  background: var(--background);
   color: var(--foreground);
   font: var(--font-size-base) / var(--line-height-normal) var(--font-sans);
   /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */
