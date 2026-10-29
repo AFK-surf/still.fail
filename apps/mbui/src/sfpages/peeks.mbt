@@ -201,7 +201,7 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool) -> Unit {
     })
     |> ignore
     c.text(text(v, "title"), style=peek_title) |> ignore
-    c.box(style=peek_facts, flow=true, line_gap=peek_facts_gap, fn() {
+    c.box(style=peek_facts, flow=true, line_gap=@ui.Space::S2.px(), fn() {
       match field(v, "author") {
         Some(Object(_)) as a =>
           c.box(style=peek_person, fn() {
@@ -908,15 +908,13 @@ let peek_meta_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let peek_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its facts: in a line that goes on to another, 8 apart; its first (who opened it, or a fact's pill) in the card's
-/// bottom left corner, concentric with it as its state is in its top left.
+/// Its facts: in a line that goes on to another, 8 apart across and between its lines (Hover.css.ts facts' gap); its
+/// first (who opened it, or a fact's pill) in the card's bottom left corner, concentric with it as its state is in its
+/// top left.
 // kept across runs: a value (no field of it changes)
 let peek_facts : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then(
   @ui.style(mb=@sf.room_of(peek_capsule_in), ml=@sf.room_of(peek_capsule_in)),
 )
-
-///|
-let peek_facts_gap : Double = 4.0
 
 ///|
 /// Who opened it: their picture (round, a capsule's height) 6 from their name, in the words' colour.
