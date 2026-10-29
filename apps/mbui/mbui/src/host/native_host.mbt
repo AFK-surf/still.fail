@@ -980,3 +980,9 @@ impl @hostapi.Host for Native with st_audio_here(_) { st_audio_here() }
 
 ///|
 impl @hostapi.Host for Native with st_audio(_, id, data) { st_audio(id, data) }
+
+///|
+impl @hostapi.Host for Native with st_h265_here(_) { st_h265_here() }
+
+///|
+impl @hostapi.Host for Native with st_hevc(_, id, hvcc, w, h) { st_hevc(id, hvcc, w, h) }

@@ -203,6 +203,47 @@ static void configure(MBStream *s, NSData *avcc, int w, int h) {
   start(s);
 }
 
+// H.265: an hvcC's (ISO/IEC 14496-15 8.3.3) VPS, SPS and PPS, into a format as configure's (its access units are fed
+// as H.264's are: each NAL after its length).
+static void configure_hevc(MBStream *s, NSData *hvcc, int w, int h) {
+  const uint8_t *b = hvcc.bytes;
+  size_t n = hvcc.length;
+  const uint8_t *sets[3 * MB_AVC_SETS];
+  size_t sizes[3 * MB_AVC_SETS];
+  int count = 0, length_size = 0, sound = n >= 23 && b[0] == 1;
+  if (sound) length_size = (b[21] & 3) + 1;
+  int arrays = sound ? b[22] : 0;
+  size_t at = 23;
+  for (int a = 0; sound && a < arrays; a++) {
+    if (at + 3 > n) { sound = 0; break; }
+    int type = b[at] & 0x3f, units = (b[at + 1] << 8) | b[at + 2];
+    at += 3;
+    for (int i = 0; sound && i < units; i++) {
+      size_t len = at + 2 <= n ? (((size_t)b[at] << 8) | b[at + 1]) : 0;
+      at += 2;
+      if (len == 0 || at + len > n) { sound = 0; break; }
+      if (type >= 32 && type <= 34) {
+        if (count == 3 * MB_AVC_SETS) { sound = 0; break; }
+        sets[count] = b + at;
+        sizes[count++] = len;
+      }
+      at += len;
+    }
+  }
+  CMVideoFormatDescriptionRef f = NULL;
+  OSStatus st = sound && length_size != 3 && count >= 3
+    ? CMVideoFormatDescriptionCreateFromHEVCParameterSets(NULL, (size_t)count, sets, sizes, length_size, NULL, &f)
+    : kCMFormatDescriptionError_InvalidParameter;
+  if (s.format) CFRelease(s.format);
+  s.format = st == noErr ? f : NULL;
+  if (st != noErr) NSLog(@"stream %d: an hvcC not taken (%d, %lu bytes)", s.sid, (int)st, (unsigned long)n);
+  s.lengthSize = length_size;
+  s.w = w;
+  s.h = h;
+  if (s.format) start(s);
+  else stop(s);
+}
+
 static void feed(MBStream *s, NSData *data, BOOL key, double ts) {
   if (!s.session || (s.needKey && !key)) {
     say(s, [@"d " stringByAppendingString:num(ts)]);
@@ -325,6 +366,13 @@ void mb_host_stream_h264(int32_t sid, moonbit_bytes_t avcc, int32_t w, int32_t h
   dispatch_async(s.queue, ^{ configure(s, d, w, h); });
 }
 
+void mb_host_stream_hevc(int32_t sid, moonbit_bytes_t hvcc, int32_t w, int32_t h) {
+  MBStream *s = stream_of(sid);
+  if (!s) return;
+  NSData *d = [NSData dataWithBytes:hvcc length:(NSUInteger)Moonbit_array_length(hvcc)];
+  dispatch_async(s.queue, ^{ configure_hevc(s, d, w, h); });
+}
+
 void mb_host_stream_frame(int32_t sid, moonbit_bytes_t data, int32_t key, double ts) {
   MBStream *s = stream_of(sid);
   if (!s) return;
@@ -414,6 +462,9 @@ void mb_host_stream_close(int32_t sid) {
 
 // VideoToolbox decodes H.264 on every Mac and iPhone (in hardware, else in software).
 int32_t mb_host_h264_here(void) { return 1; }
+
+// H.265 where this Mac or iPhone decodes it on its hardware (every Apple silicon Mac, iPhone 7 and later).
+int32_t mb_host_h265_here(void) { return VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) ? 1 : 0; }
 
 // (VideoToolbox decodes here by itself, frame for frame: nothing for the framework to drive, @hostapi.stream_feeds)
 int32_t mb_host_stream_feeds(void) { return 0; }

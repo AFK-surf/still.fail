@@ -20,7 +20,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { FrameLatency, Pacer, STILL_MS, START_RATE, Sharpener, Sizer, ownRate } from "./screen-pace.ts";
+import { FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, rateCeiling } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -164,9 +164,10 @@ export function parseInput(v: any): ScreenInput | null {
   }
 }
 
-/// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), and the
-/// phone it is laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it).
-export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; fit?: ViewFit } {
+/// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), the 画质
+/// chosen (`quality`: the most its bit rate goes to; none for 自动 and from a client before it), and the phone it is
+/// laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it).
+export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; quality?: Quality; fit?: ViewFit } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
   // A preview (`peek`, a link's card in a chat) only looks.
@@ -175,7 +176,8 @@ export function asked(screen: any): { maxWidth: number; maxHeight: number; codec
   const f = screen.fit;
   const side = (v: unknown) => num(v) && v >= 200 && v <= 2000;
   const fit = control && f && side(f.width) && side(f.height) && num(f.scale) && f.scale >= 1 && f.scale <= 4 ? { width: Math.round(f.width), height: Math.round(f.height), scale: f.scale } : undefined;
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(fit ? { fit } : {}) };
+  const quality: Quality | undefined = ["smooth", "hd", "original"].includes(screen.quality) && !peek ? screen.quality : undefined;
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}) };
 }
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
@@ -232,9 +234,9 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const access = accessShown(source.access?.(), lang);
   const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
   const pacer = new Pacer(now, START_RATE);
-  const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
+  const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ask.quality);
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, now, sleep }).run();
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, ...(ask.quality ? { quality: ask.quality } : {}), now, sleep }).run();
 }
 
 /// One view while it lasts.
@@ -275,6 +277,8 @@ class ViewSession {
   readonly access: AccessShown | undefined;
   readonly pacer: Pacer;
   readonly sizer: Sizer;
+  /// The 画质 the view asked (none: 自动, or a client before it): the most its bit rate goes to (screen-pace.ts rateCeiling).
+  readonly quality: Quality | undefined;
   /// How late its frames are (the statistics' 帧延时).
   readonly latency = new FrameLatency();
   /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
@@ -284,7 +288,7 @@ class ViewSession {
   readonly #own: { maxWidth: number; maxHeight: number };
   #region: Region | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; now: () => number; sleep: (ms: number) => Promise<void> }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; quality?: Quality; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -298,6 +302,7 @@ class ViewSession {
     this.access = o.access;
     this.pacer = o.pacer;
     this.sizer = o.sizer;
+    this.quality = o.quality;
     this.#own = o.bounds;
     this.#now = o.now;
     this.#sleep = o.sleep;
@@ -476,7 +481,7 @@ class ViewSession {
       if (next === null) return this.#stop("gone");
       if (next.config) {
         if (next.config.codec !== "jpeg") {
-          this.pacer.ceiling(ownRate(next.config.width, next.config.height));
+          this.pacer.ceiling(rateCeiling(next.config.width, next.config.height, this.quality));
           this.#size = { width: next.config.width, height: next.config.height };
         }
         void this.#send(KIND.config, configPayload(next.config));

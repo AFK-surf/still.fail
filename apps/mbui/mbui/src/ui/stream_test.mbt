@@ -163,6 +163,33 @@ test "where the host decodes no H.264, frames are let go; JPEG still shows" {
 }
 
 ///|
+test "H.265: its config handed over and its frames decoded where the host decodes it; let go where it does not" {
+  let v = screen()
+  assert_false(@ui.h265_here())
+  v.s.hevc(b"\x01\x01", 1920, 1080)
+  v.s.frame(b"\x00\x00\x00\x01\x26", true, 5.0)
+  // not here: nothing handed over, the frame let go
+  assert_eq(v.t.stream_fed(v.s.id()), [])
+  v.t.draw()
+  assert_eq(v.acks, [5.0])
+  v.t.set_h265(true)
+  assert_true(@ui.h265_here())
+  v.s.hevc(b"\x01\x01", 1920, 1080)
+  v.s.frame(b"\x00\x00\x00\x01\x02", false, 6.0)
+  v.s.frame(b"\x00\x00\x00\x01\x26", true, 7.0)
+  assert_eq(v.t.stream_fed(v.s.id()), ["hevc 1920x1080 hvcc=2", "frame key=true ts=7 bytes=5"])
+  v.t.stream_shows(v.s.id(), 7.0, 1920, 1088)
+  v.t.draw()
+  assert_eq(v.acks, [5.0, 6.0, 7.0])
+  assert_eq(v.s.size(), Some((1920, 1080)))
+  // H.264 again after it: as before
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 8.0)
+  assert_eq(v.t.stream_fed(v.s.id()).last(), Some("frame key=true ts=8 bytes=5"))
+  v.s.close()
+}
+
+///|
 test "closed: the host told, its frames out no longer awaited, nothing more said or drawn" {
   let v = screen(h264=false)
   v.s.jpeg(b"\xff\xd8", 1.0)

@@ -496,3 +496,7 @@ void mb_streams_lost(void) {
 
 int32_t mb_host_stream_audio_here(void) { return 0; }
 void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }
+
+// H.265 not decoded here (a remote screen asks H.264): apple_stream.m's is the one that does.
+int32_t mb_host_h265_here(void) { return 0; }
+void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h) { (void)id; (void)hvcc; (void)w; (void)h; }

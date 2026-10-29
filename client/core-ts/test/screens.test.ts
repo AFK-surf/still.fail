@@ -135,6 +135,10 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", codecs: ["jpeg"], fit }) as J).call.ask.fit, { width: 390, height: 701, scale: 3 });
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", codecs: ["jpeg"], fit, peek: true }) as J).call.ask.fit, undefined);
   for (const bad of [{ ...fit, width: 0 }, { ...fit, scale: "3" }, null]) assert.equal((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", fit: bad }) as J).call.ask.fit, undefined, JSON.stringify(bad));
+  // The 画质 chosen goes to the station (how high the bit rate goes); none for 自动, a preview or one not known.
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality: "original" }) as J).call.ask.quality, "original");
+  for (const quality of [undefined, "best", 3]) assert.equal("quality" in (parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality }) as J).call.ask, false, String(quality));
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality: "hd", peek: true }) as J).call.ask.quality, undefined);
 });
 
 test("a_screen_link_opens_the_screen", () => {

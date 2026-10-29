@@ -44,4 +44,10 @@ extern "js" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit =
 fn st_audio_here() -> Int { 0 }
 
 ///|
+fn st_h265_here() -> Int { 0 }
+
+///|
+fn st_hevc(_id : Int, _hvcc : Bytes, _w : Int, _h : Int) -> Unit { () }
+
+///|
 fn st_audio(_id : Int, _data : Bytes) -> Unit { () }

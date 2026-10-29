@@ -78,6 +78,31 @@ test "a 画质 kept on the device is asked for as the view opens" {
   let asked = r.told("screen.view")
   assert_eq(number(Some(asked[asked.length() - 1]), "maxWidth"), 7680.0)
   assert_eq(number(Some(asked[asked.length() - 1]), "maxHeight"), 4320.0)
+  // the 画质 itself said: how high the station lets the bit rate go
+  assert_eq(text(Some(asked[asked.length() - 1]), "quality"), "original")
+  screen_done(r.t)
+}
+
+///|
+test "a host that decodes H.265 asks for it first; 自动 says no 画质" {
+  let r = screen_rig()
+  r.t.set_h265(true)
+  let s = screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  s.pause(s.src)
+  s.open(s.src)
+  let asked = r.told("screen.view").last().unwrap()
+  assert_eq(items(Some(asked), "codecs"), [Json::string("h265"), Json::string("jpeg")])
+  assert_true(field(Some(asked), "quality") is None)
+  // its config to the stream as H.265, its frames handed over after it
+  r.live()
+  r.say({ "config": { "codec": "h265", "width": 1920, "height": 1080 } }, bytes=b"\x01\x01")
+  r.say({ "frame": { "key": true, "ts": 2000 } }, bytes=b"\x00\x00\x00\x01\x26")
+  let fed = r.t.stream_fed(s.stream.unwrap().id())
+  assert_true(fed.contains("hevc 1920x1080 hvcc=2"), msg=fed.to_string())
+  assert_true(fed.contains("frame key=true ts=2000 bytes=5"), msg=fed.to_string())
+  r.t.stream_shows(s.stream.unwrap().id(), 2000.0, 1920, 1080)
+  r.t.draw()
+  s.pause(s.src)
   screen_done(r.t)
 }
 

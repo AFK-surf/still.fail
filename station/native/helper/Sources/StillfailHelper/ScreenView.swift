@@ -96,6 +96,13 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   var wanted = 0
   var encoding = false
   var forceKey = true
+  /// The key frame asked is of the picture last encoded (the screen at rest, sent again sharper: docs/remote-screens.md
+  /// "Still"), and whether the session encodes finer now: its QP at most `stillQP`, at twice the bit rate, where that is
+  /// `stillFrom` or more (a narrow link's would take seconds to go). The next moving picture as before.
+  var still = false
+  var finer = false
+  let stillQP = 28
+  let stillFrom = 4_000_000
   var lastTs: Int64 = 0
   var lastConfig = Data()
   var tick = 0
@@ -357,6 +364,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     latest = buffer
     latestAt = at
     fresh = true
+    still = false
     pump()
   }
 
@@ -452,6 +460,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       // A key frame when asked for, and at least every 10 s besides.
       _ = set(kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, 10)
       VTCompressionSessionPrepareToEncodeFrames(made)
+      finer = false
       session = made
       size = (width, height)
       codec = kind
@@ -480,6 +489,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     fresh = false
     let key = forceKey
     forceKey = false
+    setFiner(key && still && (bitrate ?? 0) >= stillFrom, current)
+    still = false
     let ts = max(lastTs + 1, latestAt)
     lastTs = ts
     let properties = key ? [kVTEncodeFrameOptionKey_ForceKeyFrame: kCFBooleanTrue!] as CFDictionary : nil
@@ -648,16 +659,30 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     queue.async {
       self.bitrate = max(100_000, bits)
       if let session = self.session {
-        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: self.bitrate! as CFTypeRef)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: (self.finer ? self.bitrate! * 2 : self.bitrate!) as CFTypeRef)
       }
+    }
+  }
+
+  /// The pictures from the next on encoded finer (a still one's key frame) or as the moving ones are. An encoder that
+  /// takes no QP bound keeps its own (the bit rate's rise alone).
+  func setFiner(_ on: Bool, _ session: VTCompressionSession) {
+    if on == finer { return }
+    finer = on
+    VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxAllowedFrameQP, value: (on ? stillQP : 51) as CFTypeRef)
+    if let bitrate {
+      VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: (on ? bitrate * 2 : bitrate) as CFTypeRef)
     }
   }
 
   func keyframe() {
     queue.async {
       self.forceKey = true
-      // The same picture again, as a key frame, when the screen does not change.
-      if self.latest != nil { self.fresh = true }
+      // The same picture again, as a key frame, when the screen does not change: encoded finer.
+      if self.latest != nil {
+        self.still = !self.fresh
+        self.fresh = true
+      }
       self.pump()
     }
   }

@@ -209,6 +209,8 @@ struct FakeHost {
   /// stream_broken; a run's, Tester::view_said), taken as the next frame begins
   mut audio_here : Bool
   mut h264 : Bool
+  /// whether it decodes H.265 (Tester::set_h265; a run's ENV line)
+  mut h265_here : Bool
   /// whether its H.264 decoder is driven from here (stream_feed.mbt: Tester::set_stream_feeds; a run's ENV line)
   mut stream_feeds : Bool
   mut stream_ids : Int

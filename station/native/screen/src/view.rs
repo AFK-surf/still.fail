@@ -165,6 +165,8 @@ struct View {
     fresh: bool,
     wanted: u32,
     force_key: bool,
+    /// The key frame asked is of the picture last encoded (the screen at rest: sent again sharper), encoded finer.
+    still: bool,
     last_ts: i64,
     scaler: Option<Scaler>,
     encoder: Option<H264>,
@@ -217,6 +219,7 @@ impl View {
             fresh: false,
             wanted: 0,
             force_key: true,
+            still: false,
             last_ts: 0,
             scaler: None,
             encoder: None,
@@ -314,6 +317,7 @@ impl View {
                     self.force_key = true;
                     // The same picture again, as a key frame, when the screen does not change.
                     if self.latest.is_some() {
+                        self.still = !self.fresh;
                         self.fresh = true;
                     }
                 }
@@ -325,6 +329,7 @@ impl View {
                     Ok(Some(at)) => {
                         self.latest_at = at;
                         self.fresh = true;
+                        self.still = false;
                     }
                     Ok(None) => {}
                     Err(e) => {
@@ -437,7 +442,8 @@ impl View {
         let ts = self.timestamp();
         // Another part of the display: from a key frame (the client's config says the part).
         let key = self.force_key || part != self.pushed_region;
-        self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key)?;
+        self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key, self.still)?;
+        self.still = false;
         self.pushed_region = part;
         self.regions.push((ts, part));
         self.pushed_at = Instant::now();

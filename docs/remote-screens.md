@@ -72,6 +72,9 @@ JPEG frames are all key frames and their config has no `description`.
   body never ends).
 - **View**: a stream whose head line carries a `screen` object:
   `{"method":"POST","path":"/admin/api/screens/<id>/view","headers":{},"screen":{"maxWidth":1920,"maxHeight":1080,"codecs":["h264","jpeg"],"control":true}}`.
+  With `"quality": "smooth" | "hd" | "original"` (the 画质 chosen on the client; none for 自动) the station lets the
+  bit rate go higher than the source's own (Pace, "Bit rate"); a station from before it lets it be, and a client that
+  says none gets the source's own as before. A preview's is not read.
   With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
   Windows desktop currently captures it; the Apple native client plays it. Older sources ignore the request.
   Previews never request or capture audio. No audio frames are sent without negotiation.
@@ -120,20 +123,27 @@ How many frames are on the way and how large they are follows the client's `ack`
 client, so any client that acknowledges what it drew is paced.
 
 - **Frames on the way.** Before the first `ack`, 2. Then frames go while the oldest not acknowledged has waited no
-  longer than the quickest round trip (sent → acknowledged) of the last 10 s and 15 ms, at most 16: a far link holds
+  longer than the quickest round trip (sent → acknowledged) of the last 10 s and 30 ms or half the round trip, whichever
+  is more (`queueMs`: a far link's round trip varies more), at most 16: a far link holds
   as many frames as its round trip takes, so it carries 60 a second as a near one does (a fixed 2 gave 2 a round trip:
   13 a second at 150 ms). Once the oldest waits longer, a queue is building in front of the link (frames larger than
   it carries, a packet lost and sent again) and none goes until an `ack`.
-- **Bit rate.** A queue that stays longer than two round trips and 200 ms means the link carries less than the
-  frames: the source is asked (`ScreenView.rate`) for 85% of what went through in the last second, at least 300
-  kbit/s, again each round trip and 200 ms it stays. A packet lost and sent again holds the frames behind it for about
-  a round trip and then they all come: that lowers nothing. Once nothing queued for 1 s it goes up by 15% each 0.5 s,
-  to the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s). So a slow link gets as many
-  frames, smaller, rather than fewer and late.
+- **Bit rate.** Frames held back (the oldest waited too long as the next was ready) again and again for longer than
+  two round trips and 200 ms mean the link carries less than the frames: the source is asked (`ScreenView.rate`) for
+  85% of what went through in the last second, never less than half of what it was asked before (`CUT`) nor 300
+  kbit/s, again each round trip and 200 ms it stays. Only frames held back lower it: an acknowledgement late alone (a
+  still screen's large picture, a screen that changes little, a packet lost and sent again, which holds the frames
+  behind it for about a round trip and then they all come) lowers nothing, as what went through then says nothing of
+  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, to the most the view is asked at
+  (`rateCeiling`): the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s), or by the 画质
+  the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
+  4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
+  smaller, rather than fewer and late.
 - **Start.** A view opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
   until it is first lowered: its first frame is a whole picture, its largest, and one at the source's own rate held a
   1 Mbit/s link up for a second. Rate is lowered only once 0.5 s of acknowledgements say what went through.
-- **Size.** While the rate stays at a quarter or less of what the picture's size is encoded at for 3 s, the source is
+- **Size.** Unless the view asked 原画 (whose picture is never made smaller): while the rate stays at a quarter or less
+  of what the picture's size is encoded at for 3 s, the source is
   asked for a picture fitted into 1280×720 (`ScreenView.bounds`; the helper's message 8): fewer pixels, each sharper,
   where a 1080p picture at a few hundred kbit/s blurs its text. Once the smaller picture's rate stays at its own for
   3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
@@ -167,11 +177,16 @@ client, so any client that acknowledges what it drew is paced.
   the rate go up a step, and so on to the source's own (screen-pace.ts `Sharpener`): the picture sharp a few steps after
   the screen stopped, as a still image is refined. A screen that keeps changing never waits that long; a link that
   cannot carry the larger picture lowers the rate, and nothing more is sent. A source with no rate of its own (a tab's
-  JPEGs, each as sharp as the next) is not asked.
+  JPEGs, each as sharp as the next) is not asked. The desktop's helpers encode such a picture (a key frame asked while
+  the screen did not change) finer than the moving ones where the rate asked is 4 Mbit/s or more: its QP at most 28 and
+  twice the bit rate for that frame (macOS: VideoToolbox's `MaxAllowedFrameQP`; Windows: `CODECAPI_AVEncVideoMaxQP`,
+  where the encoder takes it), the next moving picture as before, so moving frames keep their latency.
 - **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
-  (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web and by
-  MediaCodec's hardware decoder on Android. A client whose decoder fails on it before its first frame opens the view
-  again asking H.264 (for as long as the app or page runs).
+  (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web, and in
+  the app by VideoToolbox on macOS and iOS where the hardware decodes it (`@ui.h265_here`; the app asks `h265` first
+  there, its hvcC made a format with CMVideoFormatDescriptionCreateFromHEVCParameterSets). The app elsewhere (Android,
+  Windows, Linux, the browser) asks H.264. The station picks H.265 whenever the codecs asked include it. A web client
+  whose decoder fails on it before its first frame opens the view again asking H.264 (for as long as the page runs).
 - **The link.** The mesh's QUIC uses Cubic (station/native/mesh), which halves what goes at each loss: at 1% loss and
   40 ms, a screen falls to 24 frames a second and a file to 2.8 Mbit/s (noq's BBR measured there: 52, 31 Mbit/s). BBR
   was used from #1203 until 2026-10-28, when on real ways with nothing lost it held what went to a device at 20–30
@@ -346,8 +361,8 @@ The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topi
 station's list (read as its stream opens, then its `screens` events; kept with the station's documents, station/memory.ts) and opens views. A view's frames
 go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
 desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
-page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; MediaCodec or a
-bitmap on Android, which asks H.265 where it has a hardware decoder of it) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
+page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; the app's host
+decoders, which ask H.265 where the host decodes it: VideoToolbox on macOS and iOS) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
 changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the
 station's page), it only looks while someone other than the viewer drives the screen (an agent at work, another
 person); the viewer's own views, however many the list names (another window, or those an app killed with the view
@@ -390,7 +405,8 @@ Beside 只看/控制 (web/src/screen/ScreenPanel.tsx), as a remote desktop's win
 device's round trip to the station (the `stationNet` view, in its colour), which opens the view's figures (frames and
 bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
-the screen's own size; another opens the view again), 组合键 while driving (the keys this device's system keeps for
+the screen's own size; said to the station as `quality` too, 高清 and 原画 letting the bit rate go higher; another opens
+the view again), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
 cannot be sent, Windows keeps it from any app), 常用键 while driving in the mbui app (F1–F12, Del, Home, End, PgUp,
 PgDn, with the modifiers the keys row holds; 控制中心 stays open for the next), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).

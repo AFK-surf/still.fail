@@ -281,7 +281,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
       // On a phone, the stage it is shown on: a tab of the station's browser is laid out for it.
       const s = stage.current;
       const fit = phone && s && s.clientWidth > 0 && s.clientHeight > 0 ? { fit: { width: s.clientWidth, height: s.clientHeight, scale: window.devicePixelRatio || 1 } } : {};
-      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(qualityRef.current), ...fit }, (value, bytes) => {
+      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(qualityRef.current), ...(qualityRef.current !== "auto" ? { quality: qualityRef.current } : {}), ...fit }, (value, bytes) => {
         if (!open) return;
         const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
         if (v.frame) {

@@ -39,5 +39,12 @@ extern "C" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit = "mb_host_
 extern "C" fn st_audio_here() -> Int = "mb_host_stream_audio_here"
 
 ///|
+extern "C" fn st_h265_here() -> Int = "mb_host_h265_here"
+
+///|
+#borrow(hvcc)
+extern "C" fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_hevc"
+
+///|
 #borrow(data)
 extern "C" fn st_audio(id : Int, data : Bytes) -> Unit = "mb_host_stream_audio"
