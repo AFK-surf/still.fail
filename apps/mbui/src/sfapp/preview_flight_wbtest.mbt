@@ -179,22 +179,21 @@ test "the chat moved under the viewer: the picture flies back to where its thumb
 }
 
 ///|
-test "the chat's bars over the picture flying back into it, coming back as it lands: none of it over them, landed or not" {
+test "the chat's bars under the viewer's ground while the picture is grown, the page's as the rest of it: the picture over them, landed whole under them" {
   let held : Ref[(() -> Unit)?] = Ref(None)
   let t = photo_sent(Ref(0.0), held, bar=true)
   let at = t.locate("img:sent-key")
   t.tap(at[0].0, at[0].1)
   t.run_for(fly_open_ms)
   t.back()
-  // on its way back: the bar over the picture, as much as the picture has come back
-  t.run_for(fly_close_ms / 2.0)
+  // on its way back, grown still: the bar the page's, drawn under the picture (and under the ground over the page)
+  t.run_for(fly_close_ms / 4.0)
   let v = pv_leaving.val.unwrap()
   assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
   let order = t.drawn_order()
   let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
-  assert_true(bar is Some(b) && b > picture, msg="\{order}")
-  assert_true((order[bar.unwrap()].5 - (1.0 - v.flying())).abs() < 0.05)
+  assert_true(bar is Some(b) && b < picture, msg="\{order}")
   // landed: the bar whole, in its place over the list
   t.run_for(fly_close_ms)
   assert_true(pv_leaving.val is None)
@@ -245,8 +244,11 @@ test "a picture under the composer goes out from under it at its own size first,
   t.run_for(out * open_ms - near)
   assert_eq(v.flying(), 0.0)
   assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
+  assert_true(composer_over_picture(t))
   t.run_for(near * 2.0)
   assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  // growing: the composer the page's, under the ground and the picture
+  assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
   t.run_for(start + open_ms - t.time())
   let to = v.zoom.rect().unwrap()
@@ -257,12 +259,26 @@ test "a picture under the composer goes out from under it at its own size first,
   let close_ms = fly_close_ms / (1.0 - lift)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
   assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(!composer_over_picture(t))
   t.run_for(near * 2.0)
   assert_eq(v.flying(), 0.0)
   assert_true(v.lifted() < 1.0)
+  assert_true(composer_over_picture(t))
   t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.val is None)
   assert_true(drawn_at(t, (th.x, th.y, th.w, th.h)))
+}
+
+///|
+/// Whether the composer over the chat's foot is drawn after the picture in flight (over it).
+fn composer_over_picture(t : @ui.Tester) -> Bool {
+  let order = t.drawn_order()
+  let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 })
+  let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
+  match (picture, bar) {
+    (Some(p), Some(b)) => b > p
+    _ => false
+  }
 }
 
 ///|

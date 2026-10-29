@@ -462,20 +462,16 @@ pub fn thumb_shows(id : String) -> Double {
 
 ///|
 /// A chat's page's bar or composer (node `i`) as the viewer flies from one of its pictures or back into it: over the
-/// picture, as much as the picture has not got away from its thumbnail, as a photo app's bars come back over the
-/// grid as a photo goes back into it. Its thumbnail lies under them, so the picture lands under them as the page then
-/// has it, and leaves from under them; while it is out on the stage they are gone with the rest of the page (over the
-/// viewer's layer: @ui.Stratum's OverLayers).
+/// picture while it is at its thumbnail's size (going out from under them, or in under them as it lands: lift_of), as
+/// the page has it there (over the viewer's layer: @ui.Stratum's OverLayers); once it grows, the page's again, under the
+/// viewer's ground as the rest of the page is, gone as it darkens (not drawn over the ground, standing out of it).
 pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
   let v = match viewer.val {
     Some(v) => Some(v)
     None => pv_leaving.val
   }
   match v {
-    Some(v) if v.flies => {
-      c.stratum(i, OverLayers)
-      c.look(i, @ui.look(alpha=dmax(0.0, 1.0 - v.flying())))
-    }
+    Some(v) if v.flies && v.flying() <= 0.0 => c.stratum(i, OverLayers)
     _ => ()
   }
 }
