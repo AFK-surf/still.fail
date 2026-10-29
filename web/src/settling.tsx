@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, LEAVE, motionMs, play } from "@stillfail/ui/motion.ts";
 import * as css from "./Chat.css.ts";
 import { after, listPaneOf, listQueue } from "./listQueue.ts";
+import { listSizing } from "./virtual/list.tsx";
 
 /** Its room opening, by the list's law (motion.ts GLIDE_*), as its pane goes along with it. */
 const OPEN = { duration: GLIDE_MS, easing: GLIDE_EASE };
@@ -71,6 +72,8 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     if (drawnOpen || was === null || !el || !el.isConnected) return;
     const now = el.getBoundingClientRect().height;
     if (Math.abs(now - was) < 0.5) return;
+    const pane = listPaneOf(el);
+    if (pane) listSizing(pane, motionMs(OPEN.duration));
     play(el, [{ height: `${was}px`, overflow: "clip" }, { height: `${now}px`, overflow: "clip" }], OPEN);
     for (const child of el.children) play(child, [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
   }, [box, drawnOpen]);
@@ -103,6 +106,8 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
       if (!moving() || !inSight(el)) return void setKept(false);
       for (const child of el.children) play(child, [{ opacity: 1 }, { opacity: 0 }], { ...LEAVE, fill: "forwards" });
       const height = el.getBoundingClientRect().height;
+      const pane = listPaneOf(el);
+      if (pane) listSizing(pane, motionMs(OPEN.duration));
       const closing = play(el, [{ height: `${height}px`, overflow: "clip" }, { height: "0px", overflow: "clip" }], { ...OPEN, fill: "forwards" });
       given.current = takeGap(el);
       const gap = given.current;
@@ -115,6 +120,8 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     const out = listQueue(el).take(() => {
       el.style.removeProperty("display");
       const height = el.getBoundingClientRect().height;
+      const pane = listPaneOf(el);
+      if (pane) listSizing(pane, motionMs(OPEN.duration));
       play(el, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], OPEN);
       // The gap before it opens with it, given up by the item before until then.
       given.current = giveGap(el);

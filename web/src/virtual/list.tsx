@@ -317,7 +317,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       if (opening && heights.length) model.stay();
       // What grows at the end as the reader watches (a reply coming, an image loading) is followed gliding; the pane
       // itself resized lays everything out anew, taken at once.
-      if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
+      if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(!sizingNow(el));
       model.measured(heights);
       if (deferResize) {
         if (!resizeFrame) resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; self.sync(el); });
@@ -372,7 +372,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         glided(now);
         made.last = now;
       }
-      if (performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
+      if (performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(!sizingNow(el));
       model.measured(heights);
       self.sync(el);
     });
@@ -467,6 +467,18 @@ function spacer(key: string, height: number, where: "first" | "between" | "last"
 /** Each list's pane, and whether it is where it goes (its glide over, or within `px` of it): listQueue.ts. */
 const stills = new WeakMap<Element, (px: number) => boolean>();
 export const isListPane = (el: Element): boolean => stills.has(el);
+
+/** Until when rows of a list's pane go to new heights of their own (listSizing): what grows or shrinks then is laid
+ *  out where it is at each frame, the pane held to its end with it, not glided after (docs/list-motion.md, 2026-10-30). */
+const sizingUntil = new WeakMap<Element, number>();
+
+/** Rows of `pane` going to their new heights for `ms` from now (a row's room opening or closing by the list's law). */
+export function listSizing(pane: Element, ms: number): void {
+  sizingUntil.set(pane, Math.max(sizingUntil.get(pane) ?? 0, performance.now() + ms));
+}
+
+/** Whether rows of `pane` go to their new heights now. */
+const sizingNow = (pane: Element): boolean => (sizingUntil.get(pane) ?? 0) > performance.now();
 export const listStill = (pane: Element, px = 0.5): boolean => stills.get(pane)?.(px) ?? true;
 
 /** What of a layout the rows drawn depend on. */

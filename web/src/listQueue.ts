@@ -4,7 +4,8 @@
 //
 // A row waiting its turn takes no room (`data-queued`, not displayed: the list counts it as it does a message held back,
 // virtual/list.tsx): its room comes when its turn does.
-import { isListPane } from "./virtual/list.tsx";
+import { GLIDE_EASE, GLIDE_MS, motionMs, play } from "@stillfail/ui/motion.ts";
+import { isListPane, listSizing } from "./virtual/list.tsx";
 
 class ListQueue {
   constructor(private readonly pane: Element) {}
@@ -44,12 +45,22 @@ export function listQueue(el: Element): ListQueue {
  * room comes) says when it is over. What this answers takes it out of the queue (it shows at once, if still waiting).
  */
 export function queueRow(row: HTMLElement, start: () => Promise<unknown> | void = () => undefined): () => void {
-  row.dataset.queued = "";
   const out = listQueue(row).take(() => {
-    delete row.dataset.queued;
+    growRow(row);
     return start();
   });
-  return () => { delete row.dataset.queued; out(); };
+  return () => out();
+}
+
+/** `row`, just come into its list, opens its room from nothing by the list's law, the list held to its end with it
+ *  (listSizing): the rows over it go up as it opens, never put up at once nor glided after. */
+export function growRow(row: HTMLElement): void {
+  const pane = listPaneOf(row);
+  if (!pane || document.visibilityState !== "visible") return;
+  const height = row.getBoundingClientRect().height;
+  if (height < 0.5) return;
+  listSizing(pane, motionMs(GLIDE_MS));
+  play(row, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
 }
 
 /** A promise over in `ms` (a motion of that length played). */
