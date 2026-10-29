@@ -671,7 +671,7 @@ fn page_view(
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
-    tx=app.switch_way.to_double() * 30.0 * (1.0 - e),
+    tx=app.switch_way.to_double() * switch_slide * (1.0 - e),
     opacity=e,
     fn() {
       match page {
@@ -758,7 +758,7 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
   bar_placed(from, place)
   let fade = place_switch(c)
   fade.snap(0.0)
-  fade.animate(1.0, if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.tween(switch_side_ms, ease=Move) })
+  fade.animate(1.0, if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) })
 }
 
 ///|
@@ -820,7 +820,8 @@ let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 pub let switch_fade_ms : Double = 180.0
 
 ///|
-pub let switch_side_ms : Double = @ui.move_page_ms
+/// How far a place switched to on the bar comes in from its side (points), a Move as long as that is far.
+pub let switch_slide : Double = 30.0
 
 ///|
 /// How far a place switched to on the bar has come in (0 … 1).

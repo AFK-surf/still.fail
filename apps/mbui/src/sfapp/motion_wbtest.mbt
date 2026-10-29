@@ -44,13 +44,13 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.tap_text("整理发布清单")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索全部内容") is None)
   // while the chat shows: news in 盯着 CI, which goes to the top; a new chat
   clock.val = 3601.0
   t.frame()
   t.back()
-  let end = t.time() + @ui.nav_push_ms + 600.0
+  let end = t.time() + @ui.move_most_ms + 600.0
   while t.time() < end {
     assert_eq(home_moving(t), [])
     for words in ["盯着 CI，绿了告诉我", "看一下新的崩溃报告", "整理发布清单"] {
@@ -131,9 +131,9 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   ignore(x)
   t.drag(300.0, y + h / 2.0, 300.0 - 390.0 * 0.6, y + h / 2.0, steps=12)
   // going off: not archived yet
-  t.run_for(@sfpages.swipe_off_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("把旧的截图都换成新的") is Some(_))
-  t.run_for(@sfpages.swipe_off_ms)
+  t.run_for(@ui.move_most_ms)
   t.frame()
   assert_true(t.locate("=把旧的截图都换成新的").is_empty())
   // gone with no copy fading where it was; the rows under it close over the room
@@ -150,7 +150,7 @@ test "words sent fly from the field into their bubble" {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("发布前再看一眼签名")
   t.tap_once(390.0 - 10.0 - 8.0 - 18.0, 844.0 - 10.0 - 8.0 - 18.0)
@@ -191,11 +191,11 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
   // (its box grown to the three lines)
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
   let reshaping = fn() { t.moving().iter().any(fn(m) { m.contains("layout composer/") }) }
   let tall = box()
@@ -232,11 +232,11 @@ test "words sent set out from where they were typed and land where their message
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   let words = "第一行\n第二行\n第三行"
   t.type_text(words)
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   tap_send(t)
   t.frame()
   // as they set out: a piece a line, each drawn where it was in the field (a copy of the message's words, cut to it)
@@ -271,10 +271,10 @@ test "words sent break their lines in their message where the composer broke the
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("帮我看一下登录按钮在深色模式下的颜色是不是不对，还有注册页输入框的边框也要再核对一遍")
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   tap_send(t)
   t.frame()
   let f = flight_of("ws1/st1:s-c1").unwrap()
@@ -333,7 +333,7 @@ test "send tapped while the composer grows goes at once, the field emptied" {
   let (_, after, _, _) = t.ime()
   assert_eq(after, "")
   // the words sent wait for their row, which this core never gives; the composer's room let go after
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
@@ -362,7 +362,7 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
     _ => fail("no quote went")
   }
   // the words sent wait for their row, which this core never gives; the composer's room let go after
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
@@ -431,7 +431,7 @@ test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under 
 test "a row's sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
   let t = drive_tester("drive")
   // the drive pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // held: what can be done to it, a sheet from the foot
   hold(t, "季度数据.csv")
   assert_true(t.find("重命名") is Some(_))
@@ -447,8 +447,8 @@ test "a row's sheet going down takes no tap: its 重命名 tapped meanwhile does
 test "the bar going down under a page pushed takes no tap: the field tapped where it was is the field's" {
   let t = tester("home")
   tap_once_on(t, "夜里的构建又失败了")
-  // the chat half way in (its composer in the window), the bar still going down over it
-  t.run_for(@ui.nav_push_ms / 2.0)
+  // the chat half way in (its composer in the window: a page's Move across the phone), the bar still going down over it
+  t.run_for(phone_page_ms / 2.0)
   assert_true(bar.vis.value > 0.01 && bar.vis.value < 0.5, msg="\{bar.vis.value}")
   let (x, y, w, h) = t.rect_of("发消息").unwrap()
   assert_true(y + h > 844.0 - 22.0 - 56.0)

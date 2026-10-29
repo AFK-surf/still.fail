@@ -290,7 +290,7 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let rd = @sfbase.reading_of("ws1/st1\u{1}s-c1")
   let rows = rd.motion_keys
   assert_true(rows.length() > 30)

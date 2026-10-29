@@ -469,9 +469,9 @@ fn row_lifted(ink : Double) -> @ui.Style {
 }
 
 ///|
-/// A finger's row whose chat was gone back from: how long its ground stays (the page's slide off and as long again),
-/// and how long it then takes to fade.
-pub let left_lit_ms : Double = @ui.nav_push_ms * 2.0
+/// A finger's row whose chat was gone back from: how long its ground stays (about a phone's page sliding off, 350, and
+/// as long again), and how long it then takes to fade.
+pub let left_lit_ms : Double = 700.0
 
 ///|
 pub let left_fade_ms : Double = 400.0
@@ -892,10 +892,8 @@ let fling_speed : Double = 0.5
 let fling_from : Double = 16.0
 
 ///|
-/// How long a swiped row takes to go off to the left, and its 归档 to fill in ink.
-pub let swipe_off_ms : Double = 200.0
-
-///|
+/// How long a swiped row's 归档 takes to fill in ink. Let go to archive, it goes off to the left on a Move as long as
+/// what is left of its width, as fast as the finger let it go.
 let swipe_fill_ms : Double = 140.0
 
 ///|
@@ -943,7 +941,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(-width, @motion.tween(swipe_off_ms, ease=Out))
+            off.animate(-width, @motion.move(), velocity=v)
           }
         } else {
           back(v)

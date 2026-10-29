@@ -30,7 +30,7 @@ test "file links: an escaped link to a picture opens it in the preview" {
   t.frame()
   assert_true(t.find("界面草图.png") is None)
   t.tap_run("界面草图")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("界面草图.png") is Some(_))
 }
 
@@ -44,6 +44,6 @@ test "a table's cells of the message's pictures (MBUI_FIXTURE=chat-table-images)
   // the picture itself, opening in the preview
   t.click(Button, label=@sf.t("web-main.file.view", args=[("name", "phone.png")]))
   // (on its way in)
-  t.run_for(fly_open_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("phone.png") is Some(_))
 }

@@ -680,10 +680,10 @@ test "kept layouts: pages pushed and popped, mid-slide" {
     nav.push(2)
     // mid-slide: half its push
     t.draw()
-    t.run_for(nav_push_ms / 2.0)
+    t.run_for(move_ms(390.0) / 2.0)
     nav.pop() |> ignore
     t.draw()
-    t.run_for(nav_push_ms / 2.0)
+    t.run_for(move_ms(390.0) / 2.0)
     t.back_gesture(150.0, false)
     t.draw()
     t.back_gesture(300.0, true)

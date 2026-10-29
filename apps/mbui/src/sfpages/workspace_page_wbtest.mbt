@@ -26,7 +26,7 @@ test "the workspace's ways its devices reach its stations, at each width: one ro
     assert_true(t.find("已关闭 1 项") is Some(_), msg=at)
     assert_true(t.find("Tailscale") is None, msg=at)
     t.tap_text("连接方式")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("北京") is Some(_), msg=at)
     assert_eq(t.get(Switch, label="打洞").check, Some(Off), msg=at)

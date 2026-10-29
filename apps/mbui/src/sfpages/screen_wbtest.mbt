@@ -606,21 +606,21 @@ test "only looking, a double tap zooms in where it is and another back to fitted
   assert_false(u.zoom.zoomed())
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_true(u.zoom.zoomed())
   assert_eq(r.inputs().length(), 0)
   // the same point of the screen, still under the finger
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_false(u.zoom.zoomed())
   // one tap, then the wait over before the next: no zoom
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_false(u.zoom.zoomed())
   screen_done(r.t)
 }
@@ -1055,10 +1055,10 @@ fn tr(key : String) -> String {
 
 ///|
 /// On to where the stack's slide is over (the page put on it or taken off): the stack the shell draws, not drawn here,
-/// its slide's time (@ui.nav_push_ms).
+/// its slide's time (@ui.move_most_ms).
 fn nav_rested(t : @ui.Tester) -> Unit {
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
 }
 
 ///|

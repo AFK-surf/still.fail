@@ -5,7 +5,7 @@ test "75-open-link" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("open-link"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("给个链接 082947 md:链接 082947")
@@ -14,7 +14,7 @@ test "75-open-link" {
     f.gone("正在发送")
     f.see("example.com/e2e")
     // (the answer's room open to it, its link wholly shown: Ctx::row_size)
-    f.run_for(@ui.row_size_ms)
+    f.run_for(@ui.move_most_ms)
     f.tap("example.com/e2e")
     // (what the link opens asked of the core first, as Android's AppState.openLink: not one of still.fail's, the system's)
     f.answered("link.parse", 1)

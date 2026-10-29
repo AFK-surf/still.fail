@@ -43,8 +43,10 @@ priv struct RowSizing {
 }
 
 ///|
-/// How long a row's height takes to go to its new one: a row's move (docs/motion.md Curves).
-pub let row_size_ms : Double = move_near_ms
+/// How long a row's height takes to go to its new one: a near Move's (docs/motion.md Curves). Not yet as long as its
+/// way is far, as every other move is: a row's height is worked out by its key as the list is laid out (ListRows),
+/// its way's length to come with that.
+pub let row_size_ms : Double = 300.0
 
 ///|
 /// Whether the row `key` of list `list` is gone (its way to nothing over by `now`): what keeps it in the list till

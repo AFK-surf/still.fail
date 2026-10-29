@@ -744,7 +744,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     t.draw()
     t.tap(450.0, 500.0 - 16.0 - 22.0)
     t.type_text("先看第三项")
-    t.run_for(2.0 * @sfpages.morph_ms)
+    t.run_for(2.0 * @ui.move_most_ms)
     t.draw()
     let (cx, cy) = t.locate("icon:arrow-up")[0]
     let half = @sf.theme().round.side / 2.0
@@ -761,7 +761,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     t.frame()
     assert_true(t.text_runs().length() > lines, msg="no line more: \{t.text_runs()}")
     assert_eq(over(), 0, msg="as it sets off, platform \{platform}")
-    t.run_for(@sfpages.morph_ms / 2.0)
+    t.run_for(@ui.move_most_ms / 2.0)
     assert_eq(over(), 0, msg="half way, platform \{platform}")
   }
 }
@@ -773,11 +773,11 @@ test "a chat's composer growing a line as it is typed in keeps its send whole on
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=400.0, h=800.0, platform=2, pointing=Finger)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (px, py) = t.locate("icon:plus")[0]
   t.tap(px + 120.0, py)
   t.type_text("先看第三项")
-  t.run_for(2.0 * @sfpages.morph_ms)
+  t.run_for(2.0 * @ui.move_most_ms)
   t.draw()
   let (cx, cy) = t.locate("icon:arrow-up")[0]
   let side = @sf.theme().round.side
@@ -794,7 +794,7 @@ test "a chat's composer growing a line as it is typed in keeps its send whole on
   t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
   t.frame()
   assert_eq(send(), [1.0], msg="as it sets off")
-  t.run_for(@sfpages.morph_ms / 4.0)
+  t.run_for(@ui.move_most_ms / 4.0)
   assert_eq(send(), [1.0], msg="a quarter of the way")
 }
 
@@ -807,7 +807,7 @@ test "a composer growing a line as it is typed in fades none of its words on its
     t.draw()
     t.tap(450.0, 500.0 - 16.0 - 22.0)
     t.type_text("先看第三项")
-    t.run_for(2.0 * @sfpages.morph_ms)
+    t.run_for(2.0 * @ui.move_most_ms)
     t.draw()
     // (its words: the glyphs drawn in its field (focused) as laid out, to a line under its foot)
     let faded = fn() {
@@ -825,9 +825,9 @@ test "a composer growing a line as it is typed in fades none of its words on its
     t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
     t.frame()
     assert_eq(faded(), 0, msg="as it sets off, platform \{platform}")
-    t.run_for(@sfpages.morph_ms / 4.0)
+    t.run_for(@ui.move_most_ms / 4.0)
     assert_eq(faded(), 0, msg="a quarter of the way, platform \{platform}")
-    t.run_for(@sfpages.morph_ms / 2.0)
+    t.run_for(@ui.move_most_ms / 2.0)
     assert_eq(faded(), 0, msg="three quarters of the way, platform \{platform}")
   }
 }
@@ -841,7 +841,7 @@ test "the line a composer grows by comes out fading to its foot pixel by pixel, 
     t.draw()
     t.tap(450.0, 500.0 - 16.0 - 22.0)
     t.type_text("先看第三项")
-    t.run_for(2.0 * @sfpages.morph_ms)
+    t.run_for(2.0 * @ui.move_most_ms)
     t.draw()
     // (its glyphs: in its field, as laid out, to a line under its foot; each its top, height and how it fades to its
     // foot: where 0, over how far)
@@ -867,11 +867,11 @@ test "the line a composer grows by comes out fading to its foot pixel by pixel, 
     t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
     t.frame()
     untouched("as it sets off") |> ignore
-    t.run_for(@sfpages.morph_ms / 4.0)
+    t.run_for(@ui.move_most_ms / 4.0)
     assert_true(untouched("a quarter of the way"), msg="the new line not fading on its way, platform \{platform}")
-    t.run_for(@sfpages.morph_ms / 2.0)
+    t.run_for(@ui.move_most_ms / 2.0)
     untouched("three quarters of the way") |> ignore
-    t.run_for(2.0 * @sfpages.morph_ms)
+    t.run_for(2.0 * @ui.move_most_ms)
     assert_eq(glyphs().filter(fn(g) { g.3 > 0.0 }).length(), 0, msg="once it is there, platform \{platform}")
   }
 }
@@ -956,7 +956,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing=Mouse)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (send_x, _) = t.locate("icon:arrow-up")[0]
   let xs : Array[Double] = []
   let watch = fn(ms : Double) raise {
@@ -972,16 +972,16 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   // opened: where it copies to just before send, 抄送 just before that, not at the row's start
   let (cc_x, _) = t.locate("=抄送")[0]
   assert_true(cc_x > send_x - 200.0, msg="抄送 at \{cc_x}, send at \{send_x}")
-  watch(@sfpages.morph_ms)
+  watch(@ui.move_most_ms)
   // let go of (one line): the place said just before send, where it was; nothing to press
   t.ctx().blur()
   // (its shape changing once it is let go of, and as long again after)
-  watch(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
+  watch(@sfpages.let_go_ms + 2.0 * @ui.move_most_ms)
   assert_true(t.locate("=抄送") is [], msg="抄送 only once opened")
   // opened again
   let (px, py) = t.locate("icon:plus")[0]
   t.tap(px + 200.0, py)
-  watch(2.0 * @sfpages.morph_ms)
+  watch(2.0 * @ui.move_most_ms)
   // (going with send, which stands a pixel further in on one line)
   let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 1.5 })
   assert_true(moved.is_empty(), msg="went across: \{xs}")

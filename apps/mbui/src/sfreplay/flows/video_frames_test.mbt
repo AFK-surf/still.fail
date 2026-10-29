@@ -12,7 +12,7 @@ test "97-video-frames" {
     f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")
     f.see("一段视频 201493")
     f.tap("一段视频 201493")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.see("e2e-clip.mp4")
     f.tap("e2e-clip.mp4")

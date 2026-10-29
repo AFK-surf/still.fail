@@ -8,7 +8,7 @@ test "04-chinese-enter" {
     // (the run's first flow: its app gave the core the account it was started with, migrate)
     let f = @sfreplay.Flow::start(@sfreplay.trace("chinese-enter"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.compose("ni'hao")

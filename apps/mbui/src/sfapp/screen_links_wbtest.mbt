@@ -35,7 +35,7 @@ fn screen_links_core(
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -91,7 +91,7 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   assert_true(t.find("林 正在查看") is Some(_))
   assert_true(t.find("发布清单 - localhost") is None)
   t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // 共享调试 bare in a sentence: its title, a link; alone: its card
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
@@ -163,7 +163,7 @@ fn adb_button_at(t : @ui.Tester, label : String) -> (Double, Double)? {
 test "共享调试's card: lent from the chat where the phone has all it takes; else what it lacks first, its page a tap away" {
   let t = screen_links_core([], [], [])
   t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // all it takes (the fixture's phone): the question, and 共享 lending to this station from here, the page not opened
   assert_true(t.find("一小时后自动停止") is Some(_))
   guard adb_button_at(t, "共享") is Some((x, y)) else { fail("the card's 共享") }
@@ -209,7 +209,7 @@ test "共享调试's card while it is lent there: how it stands, 停止共享 st
     }
   })
   t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("正在共享调试给 Studio") is Some(_))
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
@@ -228,7 +228,7 @@ test "共享调试's card on a device with no adb to lend: why, and nothing to p
     }
   })
   t.wheel(195.0, 400.0, 2000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("仅安卓 app 支持共享调试") is Some(_))
   assert_true(adb_button_at(t, "共享") is None)
   assert_true(adb_button_at(t, "详情") is None)
@@ -263,7 +263,7 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
     }
     t.wheel(195.0, 400.0, -300.0)
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("林 正在查看") is None)
   assert_eq(running(streams, cancelled).length(), 0)
   // back, its card on the screen (built is not enough: a row is built a little before it shows): a view of its own
@@ -274,7 +274,7 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
     }
     t.wheel(195.0, 400.0, 150.0)
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let again = running(streams, cancelled)
   assert_eq(again.length(), 1)
   assert_true(text(Some(streams[again[0] - 1].params), "view") != first_view)
@@ -296,7 +296,7 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   // (its frame told here, not by a host: built whole, as a host's answer builds what is kept)
   (s.on_value)({ "frame": { "ts": 101 } }, Some(fixture_file_png("peek.png")))
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
   t.keep_parts(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
@@ -359,10 +359,10 @@ test "a preview stops as the app goes behind, and is asked for again as it comes
   assert_eq(running(streams, cancelled).length(), 1)
   t.app_state(false, false)
   assert_eq(running(streams, cancelled).length(), 0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(running(streams, cancelled).length(), 0)
   t.app_state(true, true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(running(streams, cancelled).length(), 1)
   assert_eq(streams.length(), 2)
   t.assert_idle()

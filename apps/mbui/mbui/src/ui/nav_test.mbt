@@ -1,4 +1,8 @@
 ///|
+/// How long a page takes across a Tester's window (390 wide): a Move as long as that (350 ms).
+let page_ms : Double = @ui.move_ms(390.0)
+
+///|
 /// Page i: its title, a button to the next, and a long list.
 fn nav_view(nav : @ui.Nav[Int]) -> (@ui.Ctx) -> Unit {
   fn(c) {
@@ -31,14 +35,14 @@ test "a page pushed slides in from the right, the one under it out to the left" 
   t.tap_text("open 1")
   // the state at once; the picture once it has slid in
   assert_eq(nav.depth(), 2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   assert_true(t.rect_of("title 0") is None)
   assert_true(t.takes_back())
   // halfway through a push: side by side, edge to edge
   nav.push(2)
   t.draw()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   let x2 = t.rect_of("title 2").unwrap().0
   let x1 = t.rect_of("title 1").unwrap().0
   assert_true(x2 > 0.0 && x2 < 390.0)
@@ -56,39 +60,39 @@ test "a page from the left comes in from there, the one under it out to the righ
   let nav = @ui.Nav::new(0, from_left=fn(i) { i == 1 })
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   // halfway: coming from the left, page 0 going out to the right beside it
   let x1 = t.rect_of("title 1").unwrap().0
   let x0 = t.rect_of("title 0").unwrap().0
   assert_true(x1 < 0.0 && x1 > -390.0)
   assert_eq((x0 - x1).round(), 390.0)
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   // a page pushed over it comes from the right as any does, page 1 going out to the left
   t.tap_text("open 2")
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   assert_true(t.rect_of("title 2").unwrap().0 > 0.0)
   assert_true(t.rect_of("title 1").unwrap().0 < 0.0)
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   // back from page 1: it goes back out to the left, page 0 coming from the right
   t.back()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   let x1 = t.rect_of("title 1").unwrap().0
   let x0 = t.rect_of("title 0").unwrap().0
   assert_true(x1 < 0.0 && x0 > 0.0)
   assert_eq((x0 - x1).round(), 390.0)
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   assert_eq(nav.depth(), 1)
   // swiped back: as far as the finger has gone, to the left, page 0 beside it on the right
   t.tap_text("open 1")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   t.hold_drag(5.0, 400.0, 200.0, 400.0)
   assert_eq(t.rect_of("title 1").unwrap().0, -195.0)
   assert_eq(t.rect_of("title 0").unwrap().0, 195.0)
   t.release(200.0, 400.0)
-  t.run_for(@ui.nav_let_go_ms)
+  t.run_for(page_ms)
   assert_eq(nav.depth(), 1)
   assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
   t.assert_idle()
@@ -103,20 +107,20 @@ test "back pops; the page under keeps where its list was scrolled" {
   let before = t.visible()
   assert_true(before.0 > 10)
   t.tap_text("open 1")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   // page 1's own list starts at its top
   assert_eq(t.visible().0, 0)
   t.wheel(100.0, 400.0, 600.0)
   t.back()
   assert_eq(nav.depth(), 1)
   // on_leave told in the frame its slide ends: nothing more drawn for it
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   assert_eq(left, [1])
   assert_eq(t.visible(), before)
   assert_false(t.takes_back())
   // page 1 again is a new page: its list at the top, not where it was left
   t.tap_text("open 1")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   assert_eq(t.visible().0, 0)
 }
 
@@ -125,7 +129,7 @@ test "swiped from the left edge the page follows the finger, then goes back" {
   let nav = @ui.Nav::new(0)
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   t.hold_drag(5.0, 400.0, 200.0, 400.0)
   // the page where the finger has it, the one under it beside it
   assert_eq(t.rect_of("title 1").unwrap().0, 195.0)
@@ -200,7 +204,7 @@ test "a page asks the stack where it stands: the root under a page sliding in ov
   })
   nav.push(1)
   t.draw()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   // both built as page 1 slides in: the root with none under it, though the stack is two deep
   assert_eq(told.get(0), Some(None))
   assert_eq(told.get(1), Some(Some(0)))
@@ -214,7 +218,7 @@ test "a page asks the stack where it stands: the root under a page sliding in ov
   told.clear()
   nav.pop() |> ignore
   t.draw()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   assert_eq(told.get(2), Some(Some(1)))
   assert_eq(told.get(1), Some(Some(0)))
   t.run_for(nav.rest() - t.time())
@@ -259,9 +263,9 @@ test "a stack's slide starts at its first frame, whoever asks its end before or 
   t.draw()
   let e = nav.rest()
   assert_eq(e, quiet_nav.rest())
-  assert_eq(e, t.time() + @ui.nav_push_ms)
+  assert_eq(e, t.time() + page_ms)
   // asked again half-way, the same
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   assert_eq(nav.rest(), e)
   t.run_for(e - t.time())
   t.assert_idle()
@@ -276,7 +280,7 @@ test "nav_rest: a test runs to the end of the stacks' slides, holding none of th
   // the slide sets out in the tap's frame, drawn at its moment: its end the push's length on
   let tapped = t.time()
   t.tap_text("open 1")
-  assert_eq(@ui.nav_rest(), tapped + @ui.nav_push_ms)
+  assert_eq(@ui.nav_rest(), tapped + page_ms)
   t.run_for(@ui.nav_rest() - t.time())
   t.assert_idle()
   assert_eq(@ui.nav_rest(), -1.0)
@@ -346,7 +350,7 @@ test "a page pushed whose first frame is late to the screen moves from where tha
   let on_time = @ui.Tester::new(nav_view(on_time_nav))
   on_time.tap_text("open 1")
   let tapped = on_time.time()
-  on_time.run_for(@ui.nav_push_ms / 2.0)
+  on_time.run_for(page_ms / 2.0)
   let half = on_time.rect_of("title 1").unwrap().0
   // its first frame (the tap's, the page built in it) 40 ms late to the screen, as the host says in the next
   let nav = @ui.Nav::new(0)
@@ -357,9 +361,9 @@ test "a page pushed whose first frame is late to the screen moves from where tha
   t.run_for(@ui.first_frame_ms)
   // it has not moved yet: where its first frame drew it, at its start
   assert_true(t.rect_of("title 1") is None || t.rect_of("title 1").unwrap().0 >= 390.0)
-  assert_eq(nav.rest(), tapped + test_first_late_ms + @ui.nav_push_ms)
+  assert_eq(nav.rest(), tapped + test_first_late_ms + page_ms)
   // from then, as the one on time from its frame
-  t.run_for(tapped + test_first_late_ms + @ui.nav_push_ms / 2.0 - t.time())
+  t.run_for(tapped + test_first_late_ms + page_ms / 2.0 - t.time())
   // (to the last bits a start moved on rounds otherwise)
   assert_true((t.rect_of("title 1").unwrap().0 - half).abs() < 1.0e-6)
   t.run_for(nav.rest() - t.time())
@@ -375,7 +379,7 @@ test "a page pushed whose first frame is very late to the screen waits nav_late_
   let tapped = t.time()
   t.frame_late(test_first_very_late_ms)
   t.run_for(@ui.first_frame_ms)
-  assert_eq(nav.rest(), tapped + @ui.nav_late_most + @ui.nav_push_ms)
+  assert_eq(nav.rest(), tapped + @ui.nav_late_most + page_ms)
   t.run_for(nav.rest() - t.time())
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   t.assert_idle()
@@ -391,7 +395,7 @@ test "a page gone back to whose first frame is late to the screen moves from whe
   let back = t.time()
   t.frame_late(test_first_late_ms)
   t.run_for(@ui.first_frame_ms)
-  assert_eq(nav.rest(), back + test_first_late_ms + @ui.nav_push_ms)
+  assert_eq(nav.rest(), back + test_first_late_ms + page_ms)
   t.run_for(nav.rest() - t.time())
   assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
   t.assert_idle()
@@ -427,8 +431,8 @@ test "a page pushed waits for what it shows: the slide starts as it comes, from 
   t.draw()
   let came = t.time()
   assert_true(came < pushed + test_page_wait_ms)
-  assert_eq(@ui.nav_rest(), came + @ui.nav_push_ms)
-  t.run_for(@ui.nav_push_ms)
+  assert_eq(@ui.nav_rest(), came + page_ms)
+  t.run_for(page_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   t.assert_idle()
 }
@@ -442,8 +446,8 @@ test "a page pushed whose data never comes slides in once it has waited the most
   let pushed = t.time()
   // (held from the frame after the one it was pushed in: at rest by the latest its slide could end)
   t.draw()
-  assert_eq(@ui.nav_rest(), pushed + test_page_wait_ms + @ui.nav_push_ms)
-  t.run_for(test_page_wait_ms + @ui.nav_push_ms)
+  assert_eq(@ui.nav_rest(), pushed + test_page_wait_ms + page_ms)
+  t.run_for(test_page_wait_ms + page_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   t.assert_idle()
 }
@@ -471,7 +475,7 @@ test "a page covered by one sliding in takes no press: one where its button stil
   // pushed: a little way in, page 0's button still showing to the left of page 1's
   nav.push(1)
   t.draw()
-  t.run_for(@ui.nav_push_ms / 10.0)
+  t.run_for(page_ms / 10.0)
   let (x, y, w, h) = t.rect_of("press 0").unwrap()
   assert_true(x + w > 0.0)
   t.tap((if x > 0.0 { x } else { 0.0 }) + 2.0, y + h / 2.0)
@@ -493,7 +497,7 @@ test "a page covered by one sliding in takes no press: one where its button stil
   // going back: halfway, page 1 leaving takes nothing where its button still shows
   nav.pop() |> ignore
   t.draw()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   let (x, y, _, h) = t.rect_of("press 1").unwrap()
   t.tap(x + 2.0, y + h / 2.0)
   // (page 0 coming may be under it: its own press is its)
@@ -575,7 +579,7 @@ test "nav_flat stacking: one pushed over slides in, back takes it off sliding; o
   // pushed over it: it slides in from the right, the one under it beside it
   nav.push_over("opened")
   t.draw()
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(page_ms / 2.0)
   let x = t.rect_of("opened").unwrap().0
   assert_true(x > 0.0 && x < 390.0, msg="halfway in at \{x}")
   assert_true(t.rect_of("chosen") is Some(_))
@@ -603,7 +607,7 @@ test "nav_flat stacking: what is put in place of one pushed over is over too; po
   let t = @ui.Tester::new(stacking_view(nav))
   nav.push("chosen")
   nav.push_over("opened")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(page_ms)
   nav.replace("opened again")
   t.draw()
   assert_true(nav.top_over())

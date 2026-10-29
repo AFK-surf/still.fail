@@ -12,6 +12,9 @@
 pub(all) enum Spec {
   Spring(Double, Double, Double, Double)
   Tween(Double, @ui.Ease, Double)
+  /// a Move as long as its way is far (@ui.move_ms): how many points one of its units is, how far it goes in points if
+  /// that is said for it (< 0: its own way, from where it is to where it goes), its delay
+  Moved(Double, Double, Double)
   Snap(Double)
   /// one of Motion's transitions (transition.mbt: spring_to, tween_to, keyframes_to, inertia_to)
   Motion(Transition)
@@ -35,6 +38,59 @@ pub fn spring(
 /// what the motion is (@ui.Ease: one curve for each).
 pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
   Tween(ms, ease, delay)
+}
+
+///|
+/// A thing moved, seen where it was and where it goes (@ui.Ease's Move): as long as its way is far (@ui.move_ms of it,
+/// from where it is as it is told to where it goes, so a way told anew mid-way takes what is left of it), going on as
+/// fast as it went (or as the hand let it go: Anim::animate's `velocity`). `points`: how many points one of its units
+/// is (a progress from 0 to 1 over a way 300 points long: 300); `over`: how far it goes, said for it (what moves
+/// together, the furthest of them: Spec::over).
+pub fn move(points? : Double = 1.0, over? : Double = -1.0, delay? : Double = 0.0) -> Spec {
+  Moved(points, over, delay)
+}
+
+///|
+/// A Move said to go `points` far (what moves with others of the same cause, as long as the furthest of them); any
+/// other spec as it is.
+pub fn Spec::over(self : Spec, points : Double) -> Spec {
+  match self {
+    Moved(per, _, delay) => Moved(per, points, delay)
+    s => s
+  }
+}
+
+///|
+/// Whether it is a Move whose way is said for it (`over`): as long as that, whatever its own way.
+pub fn Spec::way_said(self : Spec) -> Bool {
+  self is Moved(_, over, _) && over >= 0.0
+}
+
+///|
+/// A Move whose one unit is `points` points (a share of a height: that height); any other spec as it is.
+pub fn Spec::per_unit(self : Spec, points : Double) -> Spec {
+  match self {
+    Moved(_, over, delay) => Moved(points, over, delay)
+    s => s
+  }
+}
+
+///|
+/// The same spec after `delay` ms.
+pub fn Spec::delayed(self : Spec, delay : Double) -> Spec {
+  match self {
+    Spring(a, b, t, _) => Spring(a, b, t, delay)
+    Tween(a, b, _) => Tween(a, b, delay)
+    Moved(a, b, _) => Moved(a, b, delay)
+    Snap(_) => Snap(delay)
+    Motion(tr) => Motion(tr.delayed(delay))
+  }
+}
+
+///|
+/// How long a Move takes from `from` to `to` (its delay not counted).
+fn moved_ms(per : Double, over : Double, from : Double, to : Double) -> Double {
+  @ui.move_ms(if over >= 0.0 { over } else { (to - from).abs() * per })
 }
 
 ///|
@@ -191,6 +247,7 @@ pub fn Spec::duration(self : Spec, from : Double, to : Double, v : Double) -> Do
     Spring(ratio, k, thr, delay) =>
       delay + spring_duration(ratio, k, from - to, v, thr)
     Tween(ms, _, delay) => delay + ms
+    Moved(per, over, delay) => if from == to && v == 0.0 { delay } else { delay + moved_ms(per, over, from, to) }
     Snap(delay) => delay
     Motion(tr) => tr.delay + generator_duration(tr.generator(from, to, v))
   }
@@ -244,6 +301,14 @@ pub fn Spec::value_at(
       // its speed as Compose's tween says it: over the millisecond before
       let x = at(t)
       (x, (x - at(t - 1.0)) * 1000.0)
+    }
+    Moved(per, over, delay) => {
+      if t < delay {
+        return (from, v)
+      }
+      // (its speed per second, the way's per ms)
+      let (x, xv) = @ui.move_path(from - to, v / 1000.0, t - delay, moved_ms(per, over, from, to))
+      (to + x, xv * 1000.0)
     }
     Snap(_) => (from, v)
     Motion(_) => (from, v)

@@ -8,7 +8,7 @@ test "70-card-motion" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("card-motion"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("选一个颜色 083209 card:按钮用什么颜色 083209|橙色 083209*|灰色 083209")

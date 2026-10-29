@@ -67,13 +67,13 @@ test "a row tapped pushes its chat, its title in the bar; back comes home" {
   let t = tester("home")
   t.tap_text("夜里的构建又失败了")
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索全部内容") is None)
   assert_true(t.find("夜里的构建又失败了") is Some(_))
   assert_true(t.takes_back())
   t.back()
   assert_eq(app.nav.depth(), 1)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索全部内容") is Some(_))
 }
 
@@ -318,7 +318,7 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
   t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 0)
-  t.run_for(@sfpages.swipe_off_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
@@ -406,11 +406,11 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   // half way: the list switched from going out to the left, the one picked coming in from the right (where words
   // are drawn: their lists' looks move them)
   let drawn = fn() { t.words().filter(fn(w) { w.0 == "和 Ana 一起看新版的引导页" }).map(fn(w) { w.1 }) }
-  t.run_for(@sfpages.list_slide_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let xs = drawn()
   assert_true(xs.length() == 2)
   assert_true(xs.iter().any(fn(x) { x < 0.0 }) && xs.iter().any(fn(x) { x > 22.0 }))
-  t.run_for(@sfpages.list_slide_ms)
+  t.run_for(@ui.move_most_ms)
   // at rest: only the list picked, where a list is
   let xs = drawn()
   assert_eq(xs.length(), 1)
@@ -455,7 +455,7 @@ test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我�
   }
   // 已归档: its page
   t.tap_text("已归档")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Archived)
 }
 

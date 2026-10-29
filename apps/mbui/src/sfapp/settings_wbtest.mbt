@@ -18,7 +18,7 @@ fn settings_tester(
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -33,10 +33,10 @@ test "settings come in from the left, as the gear is at the list's top left, and
   t.draw()
   t.draw()
   let end = @ui.nav_rest()
-  assert_true(end - t.time() <= @ui.nav_push_ms)
+  assert_true(end - t.time() <= @ui.move_most_ms)
   // from a page's width to the left of where they stand, rightwards
   let x0 = t.find("lin@example.com").unwrap().0
-  t.run_for(end - @ui.nav_push_ms / 2.0 - t.time())
+  t.run_for(end - @ui.move_most_ms / 2.0 - t.time())
   let x1 = t.find("lin@example.com").unwrap().0
   t.run_for(end - t.time())
   let x = t.find("lin@example.com").unwrap().0
@@ -51,7 +51,7 @@ test "settings come in from the left, as the gear is at the list's top left, and
   t.back()
   t.draw()
   let end = @ui.nav_rest()
-  t.run_for(end - @ui.nav_push_ms / 2.0 - t.time())
+  t.run_for(end - @ui.move_most_ms / 2.0 - t.time())
   assert_true(t.find("lin@example.com").unwrap().0 < x - 195.0)
   t.run_for(end - t.time())
   assert_true(t.find("lin@example.com") is None)
@@ -69,7 +69,7 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   assert_true(t.find("外观") is Some(_))
   // a tap on the account's card: the account
   t.tap_text("lin@example.com")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("lin@example.com · Google 账号") is Some(_))
   assert_true(t.find("Chrome · macOS") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
@@ -81,7 +81,7 @@ test "settings: the account, the workspace's rows and how each stands, this devi
 
 ///|
 /// How late a phone's core gives each topic's first value, in the test below (round_trip): well after a page has slid
-/// in (@ui.nav_push_ms).
+/// in (@ui.move_most_ms).
 let core_late_ms : Double = 600.0
 
 ///|
@@ -96,7 +96,7 @@ test "settings: the vault's row there before the core has said how it stands, th
   t.run_for(core_late_ms * 5.0)
   open_setting("home")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // in, the core yet to answer: the rows there, their words not yet
   assert_true(t.find("1/2 在线") is None)
   assert_true(t.find("安全") is Some(_))
@@ -118,11 +118,11 @@ test "settings: 关于 says the build, as Android's versionName (0.1.<build>), i
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0, app_version=case.0)
     open_setting("home")
     t.draw()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("关于") is Some(_))
     assert_true(t.find(case.1) is Some(_))
     t.tap_text("关于")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("still.fail mbui " + case.1) is Some(_))
     assert_true(t.find("更新日志") is Some(_))
   }
@@ -132,7 +132,7 @@ test "settings: 关于 says the build, as Android's versionName (0.1.<build>), i
 test "settings: the workspace's card opens its page" {
   let t = settings_tester("home")
   t.tap_text("星火工作室")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("zhou@example.com") is Some(_))
 }
 
@@ -183,7 +183,7 @@ test "a station renamed from its page's …: the new name is the station's" {
   assert_true(t.find("Studio") is Some(_))
   assert_true(t.find("MBA") is Some(_))
   t.tap_text("Studio")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // its page (src/sfpages station_page.mbt), its overview first
   assert_true(t.find("概览") is Some(_))
   // its ⋯ (the presenters' menu, a sheet on a phone) → 重命名, the name asked
@@ -273,7 +273,7 @@ test "memory: a station's global memory, its projects, a skill's page" {
   assert_true(t.find("全局记忆") is Some(_))
   assert_true(t.find("发布流程") is Some(_))
   t.tap_text("发布流程")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("步骤") is Some(_))
   assert_true(t.find("checklist") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
@@ -480,7 +480,7 @@ fn stations_unread_net() -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_setting("stations")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -667,7 +667,7 @@ test "本机缓存: a chat's files opened, each let go by its bin; those of no c
   assert_true(t.find("无法确定所属 chat 的文件") is Some(_))
   assert_true(t.find("1 个文件") is Some(_))
   t.tap_text("整理发布清单")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // its files: how much, when opened, or only a part of it come
   assert_true(t.find("已打开的文件") is Some(_))
   assert_true(t.find("2 个 · 15.2 MB") is Some(_))
@@ -722,7 +722,7 @@ fn profile_whole(page : String) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0)
   open_setting(page)
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -771,10 +771,10 @@ test "a subscription's page signed in: 重新登录 and the way by hand, rows of
   // the command to run by hand, shown once asked
   assert_true(t.find("claude setup-token") is None)
   t.tap_text("也可以在服务器上手动登录")
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("claude setup-token") is Some(_))
   t.key(@ui.key_escape)
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   // 重新登录: begun on the station, its steps on the page
   t.tap_text("重新登录")
   t.draw()
@@ -808,5 +808,5 @@ test "a connect's page: its model the one its station's profiles turned on, at i
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
   let rest = @kit.sheet_rest("sf-present")
-  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.nav_push_ms })
+  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }

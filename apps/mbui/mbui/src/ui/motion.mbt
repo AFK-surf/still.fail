@@ -64,7 +64,7 @@ pub(all) enum Ease {
   /// panel, the composer's shape, a picture flown open, the search rising. A critically damped spring's way from rest
   /// (Motion's spring, no bounce): no step in its first frame (a curve fast from its start puts a fifth of a long way
   /// there at once, then creeps), its speed at its most a tenth of the way in, under twice its mean. Its length is
-  /// one of the three `move_*_ms`, by how far it goes.
+  /// `move_ms` of how far it goes; told on from a way under way or from the hand, `move_path` (as fast as it went).
   Move
   /// (.2, .7, .2, 1), the web's --ease-out: what comes (faded in, grown from a little smaller, up from a line below),
   /// a control answering (pointed at, pressed, a switch's knob, a fill), and what goes on from the hand's let go where
@@ -83,35 +83,70 @@ pub(all) enum Ease {
 ///|
 /// Move's spring: ω·T where it rests (its way within 0.5% of its end, landing at 3% of its mean speed: nothing seen
 /// of a tail longer than that but a wait, the user 2026-10-29: 「动效有点太墨迹了」), and how far it has got there, so
-/// that the curve ends at 1. A spring of visual duration v (Motion's, ω = 2π / 1.2v) rests at T = move_k · 1.2v / 2π;
-/// nine tenths of the way at half of T.
+/// that the curve ends at 1. Nine tenths of the way at half of T.
 let move_k : Double = 7.4
 
 ///|
 let move_end : Double = 1.0 - (1.0 + move_k) * @dmath.exp(-move_k)
 
 ///|
-/// How long a Move takes, by how far it goes: near (a row, the composer, a card: 0.22 s), a page (pushed, risen, a
-/// sheet, a picture, the search: 0.26 s), far (across the window: the tape, the sidebar: 0.32 s); each to whole frames
-/// (300, 350, 450 ms: nine tenths of the way by 150, 180, 230).
-pub let move_near_ms : Double = spring_move_ms(0.22)
-
-///|
-pub let move_page_ms : Double = spring_move_ms(0.26)
-
-///|
-pub let move_far_ms : Double = spring_move_ms(0.32)
-
-///|
-fn spring_move_ms(visual : Double) -> Double {
-  let ms = move_k * 1.2 * visual / (2.0 * 3.141592653589793) * 1000.0
-  (ms / whole_frames_ms).round() * whole_frames_ms
+/// How long a Move takes over `points` (how far it goes this time, from where it is drawn now to where it goes: the
+/// user 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」): 200 + 7.5·√points ms, so a row's 64 points
+/// take about 260, a phone's page width 350, across a 1000-point window 450; the further the longer, not in
+/// proportion. Between `move_least_ms` and `move_most_ms`, to whole frames: three at 60 Hz, six at 120, so that it ends
+/// on a frame there (as a page's 300 ms did), not between two.
+pub fn move_ms(points : Double) -> Double {
+  let d = if points > 0.0 { points } else { 0.0 }
+  let ms = ((200.0 + 7.5 * d.sqrt()) / whole_frames_ms).round() * whole_frames_ms
+  // (NaN, a way not known: the longest)
+  if ms < move_least_ms {
+    move_least_ms
+  } else if ms > move_most_ms || ms.is_nan() {
+    move_most_ms
+  } else {
+    ms
+  }
 }
 
 ///|
-/// What a Move's length is a whole number of: three frames at 60 Hz, six at 120, so that it ends on a frame there (as
-/// a page's 300 ms did), not between two.
+/// What a Move's length is a whole number of: three frames at 60 Hz, six at 120.
 let whole_frames_ms : Double = 50.0
+
+///|
+/// The shortest and the longest a Move takes (move_ms): what goes nowhere far takes `move_least_ms`, what has gone the
+/// furthest is there by `move_most_ms`.
+pub let move_least_ms : Double = 200.0
+
+///|
+pub let move_most_ms : Double = 500.0
+
+///|
+/// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then
+/// (what it was told to go on from: a move under way, the hand's speed as it let go). A critically damped spring's way
+/// (ω = move_k / dur), its rest at `dur` made exact by taking off what it would still have left there in the measure
+/// of Ease::Move (so from rest it is Ease::Move's way, and it leaves as fast as `v`). Its offset from its end and how
+/// fast it goes (per ms).
+pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, Double) {
+  if dur <= 0.0 || t >= dur {
+    return (0.0, 0.0)
+  }
+  if t <= 0.0 {
+    return (d, v)
+  }
+  let w = move_k / dur
+  let b = v + w * d
+  let at = fn(t : Double) {
+    let e = @dmath.exp(-w * t)
+    ((d + b * t) * e, (b - w * (d + b * t)) * e)
+  }
+  let (x, xv) = at(t)
+  let (xt, _) = at(dur)
+  // Ease::Move's way and speed at t (per ms)
+  let s = move_k * t / dur
+  let m = (1.0 - (1.0 + s) * @dmath.exp(-s)) / move_end
+  let mv = s * @dmath.exp(-s) * move_k / dur / move_end
+  (x - xt * m, xv - xt * mv)
+}
 
 ///|
 /// The curve at `t` (0-1 of the time).

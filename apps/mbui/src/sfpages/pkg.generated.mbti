@@ -288,8 +288,6 @@ pub let list_filters : Array[String]
 
 pub fn list_key(@sfbase.ChatRef) -> String
 
-pub let list_slide_ms : Double
-
 pub let lists_top_in : Double
 
 pub let local_open : @ref.Ref[Bool]
@@ -327,8 +325,6 @@ pub fn message_row(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message) -> Uni
 pub fn mine_to(MessageHere, String) -> Bool
 
 pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? : Json?, small? : Bool, floating? : Bool, saved? : String) -> Unit
-
-pub let morph_ms : Double
 
 pub let msg_name : @ui.TextStyle
 
@@ -379,8 +375,6 @@ pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 pub fn open_xshare(@sfbase.Source, @sfbase.ChatRef, Double?, from~ : @sf.Anchor) -> Unit
 
 pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
-
-pub let page_move_ms : Double
 
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit
 
@@ -516,15 +510,11 @@ pub fn search_away(@ui.Ctx) -> Double
 
 pub fn search_bar_away() -> Bool
 
-pub let search_in_ms : Double
-
 pub fn search_leaving() -> Bool
 
 pub let search_list_rise : Double
 
 pub fn search_opened() -> Bool
-
-pub let search_out_ms : Double
 
 pub fn search_over(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Double) -> Unit
 
@@ -579,8 +569,6 @@ pub fn station_state(@ui.Ctx, Json?) -> Unit
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
 pub let steps_marked_ms : Double
-
-pub let swipe_off_ms : Double
 
 pub fn switch_workspace(@sfbase.Source, String) -> Unit
 

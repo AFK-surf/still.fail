@@ -150,7 +150,7 @@ pub let mouse_chat_list : ChatList = {
   waiting_noted: 6,
   keys: true,
   found: mouse_found,
-  slide: @motion.tween(list_slide_ms, ease=Move),
+  slide: @motion.move(),
   move: @motion.move_spring,
 }
 
@@ -205,7 +205,7 @@ pub let touch_chat_list : ChatList = {
   waiting_noted: 4,
   keys: false,
   found: touch_found,
-  slide: @motion.tween(list_slide_ms, ease=Move),
+  slide: @motion.move(),
   move: @motion.row_spring,
 }
 
@@ -373,10 +373,6 @@ let touch_meta_h : Double = 20.0
 
 ///|
 let touch_face_d : Double = 18.0
-
-///|
-/// How long the lists' track slides (navTrack, mHomePane: 240).
-pub let list_slide_ms : Double = @ui.move_page_ms
 
 ///|
 /// Keyboard and mouse's face at a row's end, its row's padding over its foot (row_in) and its second line's height (meta: S4_5).

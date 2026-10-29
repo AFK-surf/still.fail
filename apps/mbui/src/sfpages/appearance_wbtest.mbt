@@ -15,7 +15,7 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
     assert_true(t.find("默认") is Some(_), msg=at)
     // (its last sections: the page scrolled to its end)
     t.wheel(w - 200.0, 450.0, 3000.0)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("语言") is Some(_), msg=at)
     assert_eq(t.find("拖入 chat 的文件") is Some(_), platform == 0, msg=at)
     // the rail changed where it is: laid out wide alone, asked of the shell
@@ -30,9 +30,9 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
     // the faces' row (字体, the faces chosen, after 主题: the page scrolled back to its top) opens 字体's page (its
     // words whole: 拖入 chat 的文件's note says 默认 too)
     t.wheel(w - 200.0, 450.0, -3000.0)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     tap_words(t, "默认")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Fonts), msg=at)
   }
 }

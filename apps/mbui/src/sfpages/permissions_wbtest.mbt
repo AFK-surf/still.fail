@@ -22,7 +22,7 @@ test "归档, at each width and with either hand: the hint, its three ways, each
     assert_true(t.find("按模型判断") is Some(_), msg=at)
     assert_true(t.find("空闲就归档 · 1 天 · Slack：3 天") is Some(_), msg=at)
     t.tap_text("Studio")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(StationArchiving("ws1/st1")), msg=at)
   }
 }

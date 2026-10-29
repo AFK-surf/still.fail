@@ -256,13 +256,6 @@ pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACente
 pub let side_pane : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
-/// How long the side panel takes to slide in and out (ChatSide.tsx useSidePanel: 0.28 s and 0.24 s, the page's ease-out).
-pub let side_in_ms : Double = @ui.move_page_ms
-
-///|
-pub let side_out_ms : Double = @ui.move_page_ms
-
-///|
 /// What the panel keeps of its own (its tabs are the core's): the width it was dragged to (None: its own), and its
 /// slide (useSidePanel), for the page it is beside (a chat's, a workspace's new chat's): what it was last built as
 /// (open or not), whether a change asked of the core here opens or closes it (`asked`: it slides then), and while it
@@ -338,7 +331,8 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   match panel_own.was {
     Some((k, was)) if k == key && was != open && panel_own.asked == key => {
       panel_own.asked = ""
-      c.move_state([("side-panel", [name])], duration=if open { side_in_ms } else { side_out_ms })
+      // (in and out on a Move as long as it is wide)
+      c.move_state([("side-panel", [name])])
     }
     _ => ()
   }

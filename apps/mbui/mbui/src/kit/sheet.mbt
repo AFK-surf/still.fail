@@ -52,11 +52,10 @@ fn scrim_fade() -> @motion.Spec {
 }
 
 ///|
-/// A sheet's spring at rest at `x`: still.fail's (@motion.sheet_spring, Motion.kt SheetSpring: motionSpring(0.32),
-/// critically damped, at rest within half a point).
+/// A sheet's way at rest at `x`: a Move as long as it goes far (a short sheet risen sooner than a tall one), from where
+/// it is, as fast as it goes or as the finger let it go.
 fn sheet_spring(x : Double) -> @ui.SpringPath {
-  guard @motion.sheet_spring is Spring(_, k, rest, _) else { abort("the sheet's spring is a spring") }
-  @ui.SpringPath::new(x, k~, c=2.0 * k.sqrt(), rest~)
+  @ui.SpringPath::moved(x)
 }
 
 ///|

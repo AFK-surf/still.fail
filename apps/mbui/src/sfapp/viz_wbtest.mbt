@@ -165,7 +165,7 @@ test "the whole window with the window's buttons in the app's top row (a Mac's):
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   t.set_window_inset(true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   viz_open_full("release.html", "ws1/st1", "s-c1", "work/s-c1/release.html", "s-c1")
   t.frame()
   t.frame()
@@ -191,7 +191,7 @@ test "beside: the visualization as a page of its own, served from here with what
   let (page, _) = viz_views(t)
   let (x, y, w, h) = view_rect(t, page).unwrap()
   t.tap(x + w - 11.0, y + h + 2.0 + 11.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("release.html") is Some(_))
   let sites = opened_views(t, 3)
   assert_eq(sites.length(), 1)
@@ -285,7 +285,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   // an opened fold's inner screen upright, a finger: laid out Medium
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.tape)
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
@@ -304,7 +304,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
   // over and in use: the page takes a finger there again
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = view_rect(t, page).unwrap()
   t.tap(x + w / 2.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
@@ -316,7 +316,7 @@ test "a page opened over the chat on a wide window shows over the chat's visuali
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.frame()
   let (page, _) = viz_views(t)
   assert_true(view_rect(t, page) is Some(_))
@@ -364,7 +364,7 @@ test "a page that said its height stays covered till its host has drawn it (its 
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2, finish=false)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)
   assert_true(view_covered(t, page))
   // its height said (its page loaded): still covered, the host not done drawing it
@@ -432,7 +432,7 @@ test "an inline page not drawn yet holds its place with a placeholder, gone once
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2, finish=false)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)
   // the line's grey (whatever its breath's alpha), over all its place
   let line = @sf.palette_of(false).line >> 8

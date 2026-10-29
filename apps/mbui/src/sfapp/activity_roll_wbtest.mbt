@@ -24,14 +24,14 @@ test "activity: rolling from one long step to the next, its line no wider than a
   t.run_for(squeeze_opening)
   assert_eq(past_edge(t, @sffixture.working_step, 360.0), [])
   @sffixture.fix_later(1.0, fn() { @sffixture.fix_working_now.val = ("call:2", next_step) })
-  // a quarter of its roll at a time, three of them, and at its end
+  // a quarter of the shortest a roll can take at a time (a Move of nothing far), three of them, and at its end
   for i in 1..<4 {
-    t.run_for(@ui.move_near_ms / 4.0)
+    t.run_for(@ui.move_least_ms / 4.0)
     assert_true(t.rect_of(@sffixture.working_step) is Some(_), msg="\{i}/4: the step it was on still rolling out")
     assert_eq(past_edge(t, @sffixture.working_step, 360.0), [], msg="\{i}/4")
     assert_eq(past_edge(t, next_step, 360.0), [], msg="\{i}/4")
   }
-  t.run_for(@ui.move_near_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.rect_of(@sffixture.working_step) is None)
   assert_eq(past_edge(t, next_step, 360.0), [])
 }

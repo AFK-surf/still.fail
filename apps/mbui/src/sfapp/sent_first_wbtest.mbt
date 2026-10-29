@@ -33,7 +33,7 @@ test "words sent are in the list the frame they are sent, the core not answering
   // still there, as sent, till the core has it
   assert_eq(sent_rows(), ["o:local:1"])
   assert_true(t.find("先上屏") is Some(_))
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.assert_idle()
 }
 
@@ -93,7 +93,7 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("先上屏")
   tap_send(t)

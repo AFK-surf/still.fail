@@ -107,6 +107,8 @@ test "a new workspace from each tier's way in, on either screen: Home's name lai
     t.tap(mx, my)
     t.frame()
     t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    // (the list's own sheet sinking as far as it is tall: any way is over by then)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("workspace 是一组人和他们共用的 station。你会成为它的 owner。") is Some(_), msg="\{at}: \{t.words().map(fn(x) { x.0 }).join("|")}")
     // in place of the list that opened it, not over it
     assert_true(t.find("切换 workspace") is None, msg=at)

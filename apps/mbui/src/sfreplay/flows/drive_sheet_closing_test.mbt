@@ -9,7 +9,7 @@ test "52-drive-sheet-closing" {
     // 文件 over Home from the start, as the run's MBUI_OPEN_PAGE=files had it
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-084126")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("说明.txt")
     f.right_click("说明.txt")
     f.run_for(@kit.presence_in_ms)

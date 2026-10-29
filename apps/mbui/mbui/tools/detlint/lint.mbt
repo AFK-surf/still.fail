@@ -367,6 +367,15 @@ fn lint_mbt(
       ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "method") {
       add("motion-spring", c.at, f.line_text(c.at))
     }
+    // a move of a length of its own: a thing moved takes as long as its way is far (the app's docs/motion.md, Curves)
+    if c.name == "tween" &&
+      !in_t &&
+      ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "bare") &&
+      c.args.iter().any(fn(a) {
+        a.0 == Some("ease") && a.1.length() > 0 && f.toks[a.1[a.1.length() - 1]].text == "Move"
+      }) {
+      add("motion-length", c.at, f.line_text(c.at))
+    }
     // the app as it is screenshotted is not the app
     if c.name == "stable" &&
       c.kind == "method" &&

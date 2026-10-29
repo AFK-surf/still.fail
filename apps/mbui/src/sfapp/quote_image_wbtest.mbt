@@ -65,7 +65,7 @@ test "a person's image held: quoted (whose, the file named), its file once in th
 test "an image quoted: its picture in its card in the composer; sent, it grows from there to its place in the message, never there at once" {
   let (t, x, y) = image_in_chat("插画参考.png")
   hold_quote(t, x, y)
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.draw()
   // its tile in its card (as a picture waiting is: 56 square)
   let tile = match t.drawn_images().iter().find_first(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 }) {
@@ -94,7 +94,7 @@ test "an agent's video and file card right clicked: 引用 quotes each, its file
   let src = fixture("chat-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   for name in ["演示录屏", "发布包"] {
     let words = t.words().filter(fn(w) { w.0.has_prefix(name) })
     assert_true(words.length() > 0, msg=name)
@@ -143,7 +143,7 @@ test "an image right clicked: its one menu, again on that menu still the one; in
   t.key(@ui.key_escape)
   t.draw()
   t.tap(x, y)
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(viewer.val is Some(_))
   // where the chat's image is under it: never that image's menu (its 引用 into the draft the preview covers)
   t.right_click(x, y)
@@ -159,3 +159,5 @@ test "an image right clicked: its one menu, again on that menu still the one; in
   assert_true(t.reachable("复制图片").length() > 0)
   assert_eq(quotes(), 0)
 }
+
+

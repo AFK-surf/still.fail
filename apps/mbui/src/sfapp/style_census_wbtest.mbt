@@ -58,7 +58,7 @@ test "styles: how many values of each kind the app's screens use" {
           open_setting(s.1)
         }
         t.draw()
-        t.run_for(@ui.nav_push_ms)
+        t.run_for(@ui.move_most_ms)
         take(t.census())
       }
     }

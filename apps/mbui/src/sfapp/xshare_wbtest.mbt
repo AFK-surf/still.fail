@@ -23,7 +23,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
   }
   open_fixture_over("chat-info", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -60,6 +60,8 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // the one it is shared with let go: none left
+  // (the chat's own sheet sinking as far as it is tall: any way is over by then)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("开源")
   t.click(Switch, label="可发送消息")
   t.tap_text("完成")

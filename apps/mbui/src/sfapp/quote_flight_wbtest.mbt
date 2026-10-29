@@ -135,7 +135,7 @@ fn quoting(calls : Array[Made]) -> @ui.Tester {
     "text": quote_passage,
     "ts": "ts8",
   })
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.type_text("这里要对齐")
   t.draw()
   t

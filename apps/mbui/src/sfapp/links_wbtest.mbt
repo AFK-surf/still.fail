@@ -101,7 +101,7 @@ fn links_core(
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -147,10 +147,10 @@ test "a chat's link followed on the wide frame: that chat over this one, back co
     let t = links_core(calls, "chat", w=size.0, h=size.1, platform=0)
     t.frame()
     open_link("https://app.still.fail/w/ws1/s/st1/chats/s-c2")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_eq(at(), Some(("ws1/st1", "s-c2")), msg="the linked chat")
     assert_true(@sfbase.go_back(), msg="back taken")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_eq(at(), Some(("ws1/st1", "s-c1")), msg="back at \{size.0}: the chat the link was in")
   }
 }
@@ -193,14 +193,14 @@ test "an item's link from another app (an App Link): its chat alone over its wor
   let calls : Array[Made] = []
   let t = links_core(calls, "chat")
   app.nav.push(Settings)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/o/ws1/st1/s-c2\"}")
   t.frame()
   let pages = app.nav.pages()
   assert_eq(pages.length(), 2)
   assert_true(pages[0] == Home)
   assert_true(top_chat() == Some(chat_ref("ws1/st1", "s-c2")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("好的，我来处理。") is Some(_))
   // taken once
   t.frame()
@@ -262,7 +262,7 @@ test "a history's link with an entry: its page over the chat, that entry's item 
     }
     _ => fail("not the history")
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // entries 11–15: the third item (h3), marked (sfpages' history_steps.mbt), its mark gone after
   assert_eq(@sfpages.history_marked().1, "h3")
   t.run_for(@sfpages.steps_marked_ms)
@@ -276,7 +276,7 @@ test "an entry before what is loaded: the page before asked for first" {
   let t = links_core(calls, "chat", history=Some(h))
   // (its items start at entry 1: one before them)
   app.nav.push(History(chat_ref("ws1/st1", "s-c1"), "s-c1", Some(0)))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "history.older").length(), 1)
   // (nothing gone to yet: what it goes to comes with the page before)
   assert_eq(@sfpages.history_marked().1, "")
@@ -288,7 +288,7 @@ test "an invitation's link: what it leads to, then joined as the account (Invite
   let t = links_core(calls, "home")
   t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok1\"}")
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("加入「新的工作室」") is Some(_))
   assert_true(t.find("周邀请你以成员身份加入。") is Some(_))
   let read = named(calls, "invitation.preview")
@@ -307,7 +307,7 @@ test "an invitation that cannot be used: why, and only 关闭" {
   let t = links_core(calls, "home", invitation=Err({ "code": "gone", "message": "邀请已过期" }))
   t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok2\"}")
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("邀请无效") is Some(_))
   assert_true(t.find("邀请已过期") is Some(_))
   assert_true(t.find("使用其他链接") is None)
@@ -321,7 +321,7 @@ test "an invitation's link opened signed out: sign in first" {
   let t = links_core(calls, "signin")
   t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok3\"}")
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("登录 still.fail") is Some(_))
   assert_true(t.find("你收到了一个 still.fail workspace 的邀请。先登录，再决定是否加入。") is Some(_))
   assert_eq(named(calls, "invitation.preview").length(), 0)
@@ -389,7 +389,7 @@ test "a login's page on this device: the notice that holds the app up says which
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("在浏览器里登录")
   assert_eq(named(calls, "machineLogin.open").length(), 1)
   assert_eq(t.hold_words(), Some(("登录", "在 Studio 上登录 gcloud", "正在等待浏览器")))

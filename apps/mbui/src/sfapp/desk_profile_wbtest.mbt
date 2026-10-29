@@ -19,7 +19,7 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
   let t = wide_tester(calls, mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the core's step: its title and hint, its groups and their providers
   assert_true(t.find("选择服务商") is Some(_))
   assert_true(t.find("模型厂商") is Some(_) && t.find("中转站") is Some(_))
@@ -44,7 +44,7 @@ test "wide: the station's Hermes profile can be selected from its custom variabl
   let t = wide_tester(calls, mode="settings-new-profile-hermes")
   t.draw()
   app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   desk_shown(t, "Hermes Agent")
   match t.find("Hermes Agent") {
     Some((x, y)) => t.tap(x, y)
@@ -63,13 +63,13 @@ test "wide: a new profile's models chosen on a page of their own, then on to its
   let t = wide_tester(calls, mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::PickModels("ws1/st1", "cc")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Opus 5.5") is Some(_) && t.find("Haiku 5") is Some(_), msg="its whole list to tick")
   match t.find("完成") {
     Some((x, y)) => t.tap(x, y)
     None => abort("no 完成")
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="on to its page")
 }
 
@@ -78,7 +78,7 @@ test "wide: a secret's page says what it is, how agents may get it and when they
   let t = wide_tester([], mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::VaultItem("v1", "it1")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("GitHub token") is Some(_))
   // the core's words of it
   assert_true(t.find("代理 · 限 api.github.com") is Some(_), msg="how it is given")
@@ -94,7 +94,7 @@ test "wide: the Station place with none in the workspace is the first to add, no
   let t = wide_tester([], mode="settings-first-station")
   t.draw()
   app.nav.replace(Place("stations"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // its scene and its one thing to do (the sidebar's 添加 station too)
   assert_true(t.find_last("添加 station") is Some(_))
 }

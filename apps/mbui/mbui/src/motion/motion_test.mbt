@@ -27,8 +27,8 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
 
 ///|
 test "a Move is a critically damped spring's way from rest, ending at 1" {
-  // a critically damped spring at rest (within 0.5%) at the page's length: ωT = 7.4
-  let len = @ui.move_page_ms / 1000.0
+  // a critically damped spring at rest (within 0.5%) at its length: ωT = 7.4
+  let len = @ui.move_ms(390.0) / 1000.0
   let w = 7.4 / len
   let (rest, _) = @motion.spring_at(1.0, w * w, 1.0, 0.0, len)
   for t in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9] {
@@ -39,8 +39,55 @@ test "a Move is a critically damped spring's way from rest, ending at 1" {
   assert_eq(@ui.Move.at(0.0), 0.0)
   assert_eq(@ui.Move.at(1.0), 1.0)
   // no step in its first frame (120 Hz): under 1% of the way
-  assert_true(@ui.Move.at(8.4 / @ui.move_far_ms) < 0.01)
-  assert_eq((@ui.move_near_ms, @ui.move_page_ms, @ui.move_far_ms), (300.0, 350.0, 450.0))
+  // (a far one's: across a window)
+  assert_true(@ui.Move.at(8.4 / @ui.move_ms(1000.0)) < 0.01)
+}
+
+///|
+test "a Move takes as long as its way is far: the further the longer, not in proportion, 200 to 500 ms" {
+  // a phone's page width about as a page's push was; nothing far, the least; across anything, the most
+  assert_eq(@ui.move_ms(390.0), 350.0)
+  assert_eq(@ui.move_ms(0.0), 200.0)
+  assert_eq(@ui.move_ms(1.0e6), @ui.move_most_ms)
+  let mut was = 0.0
+  for d in [0.0, 4.0, 20.0, 64.0, 200.0, 390.0, 700.0, 1000.0, 2000.0, 4000.0] {
+    let ms = @ui.move_ms(d)
+    assert_true(ms >= was && ms >= @ui.move_least_ms && ms <= @ui.move_most_ms, msg="\{d}: \{ms}")
+    was = ms
+  }
+  // a line's way well under a window's
+  assert_true(@ui.move_ms(24.0) < @ui.move_ms(1000.0) - 150.0)
+}
+
+///|
+test "a Move told on from a way under way leaves as fast as it went, and is there at its end" {
+  let dur = @ui.move_ms(300.0)
+  // from rest: Ease::Move's way
+  for t in [0.0, 0.1, 0.3, 0.5, 0.8] {
+    let (x, _) = @ui.move_path(300.0, 0.0, t * dur, dur)
+    assert_true(near(x, 300.0 * (1.0 - @ui.Move.at(t)), 1.0e-6), msg="at \{t}: \{x}")
+  }
+  // going 2 points a ms away from its end as it sets out: that fast at first, on away a while, then back, there at the end
+  let (x0, v0) = @ui.move_path(100.0, 2.0, 0.0, dur)
+  assert_eq((x0, v0), (100.0, 2.0))
+  let (_, v) = @ui.move_path(100.0, 2.0, 0.01, dur)
+  assert_true(near(v, 2.0, 0.01), msg="\{v}")
+  let (x, _) = @ui.move_path(100.0, 2.0, 20.0, dur)
+  assert_true(x > 100.0)
+  assert_eq(@ui.move_path(100.0, 2.0, dur, dur), (0.0, 0.0))
+  let (near_end, _) = @ui.move_path(100.0, 2.0, dur - 1.0, dur)
+  assert_true(near_end.abs() < 0.5, msg="\{near_end}")
+  // an Anim told anew mid-way: on from where it is as fast as it went, as long as what is left of its way
+  let a = @motion.Anim::new(0.0)
+  let s = @motion.move()
+  assert_eq(s.duration(0.0, 400.0, 0.0), @ui.move_ms(400.0))
+  assert_eq(s.duration(380.0, 400.0, 0.0), @ui.move_ms(20.0))
+  let (x1, v1) = s.value_at(0.0, s.duration(380.0, 400.0, 900.0), 380.0, 400.0, 900.0)
+  assert_eq((x1, v1), (380.0, 900.0))
+  ignore(a)
+  // a progress of 0 to 1 over 300 points: as long as those
+  assert_eq(@motion.move(points=300.0).duration(0.0, 1.0, 0.0), @ui.move_ms(300.0))
+  assert_eq(@motion.move(over=40.0).duration(0.0, 1.0, 0.0), @ui.move_ms(40.0))
 }
 
 ///|

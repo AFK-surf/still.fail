@@ -15,7 +15,7 @@ test "自动决策, at each width and with either hand: 归档建议, what it do
       assert_true(t.find("标记完成后判断是否推荐归档") is Some(_), msg=at)
     }
     t.tap_text("归档建议")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(AutoCompletion), msg=at)
   }
 }

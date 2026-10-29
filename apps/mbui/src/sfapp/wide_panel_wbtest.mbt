@@ -7,7 +7,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   let src = fixture("chat-letters-info")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("agent 往来") is None)
   // what is done with it, under its "…": agent 往来 among it, saying how many
@@ -19,7 +19,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("参与") is Some(_), msg="its facts")
   t.tap_text("agent 往来")
   // (the popover goes as a popover does: gone once its going is over; the panel slid in)
-  t.run_for(dmax(@kit.presence_out_ms, @sfdesk.side_in_ms))
+  t.run_for(dmax(@kit.presence_out_ms, @ui.move_most_ms))
   // beside the chat, at its right: the chats written with
   let (x, _) = t.find("接手监督 mbui").unwrap()
   assert_true(x > 800.0, msg="at the pane's right")
@@ -27,10 +27,10 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("参与") is None, msg="the popover gone")
   // its switch closes it; the bar's opens it again, at the first agent's history
   t.click(Button, label="收起侧栏")
-  t.run_for(@sfdesk.side_out_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("接手监督 mbui") is None)
   t.click(Button, label="打开侧栏")
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("只看收发") is Some(_), msg="its history's head")
 }
 
@@ -41,10 +41,10 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the bar's switch: its first agent's history beside it
   t.click(Button, label="打开侧栏")
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(side_now(r), (["s-c1"], "s-c1"))
   // (where its transcript is: asked once the frame is built, answered at once)
   t.frame()
@@ -102,9 +102,9 @@ test "wide: a quota running out beside an agent's history's control is whole how
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1600.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="打开侧栏")
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   let figure = fn() { t.words().filter(fn(w) { w.0 == "23%" && w.5 > 0.5 }) }
   let wide = figure()
   assert_true(wide.length() == 1, msg="\{wide}")
@@ -133,12 +133,12 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()
   t.tap_text("Station 文件")
-  t.run_for(dmax(@kit.presence_out_ms, @sfdesk.side_in_ms))
+  t.run_for(dmax(@kit.presence_out_ms, @ui.move_most_ms))
   let opened = named(calls, "chat.tabs.open")
   assert_eq(opened.length(), 1)
   assert_eq(text(Some(opened[0].params), "chat"), "ws1/st1:s-c1")
@@ -189,18 +189,18 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == NewChat)
   // kept open for the workspace's new chat: its tab, the station's home in it
   assert_true(t.find("主目录") is Some(_))
   t.click(Button, label="收起侧栏")
-  t.run_for(@sfdesk.side_out_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("主目录") is None)
   let closed = named(calls, "chat.tabs.close")
   assert_eq(closed.length(), 1)
   assert_eq(text(Some(closed[0].params), "chat"), "new:ws1")
   t.click(Button, label="Station 文件")
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("主目录") is Some(_))
   // a file's 添加到消息: into the new chat's draft, named by its path
   @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
@@ -226,7 +226,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(side_now(r), ([], ""))
   side_change(r, "open", Some("jobs"))
   t.frame()
@@ -234,7 +234,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
   t.frame()
   // (the history after the histories open, before the other tabs; in front as it is opened)
   assert_eq(side_now(r), (["s-c1", "jobs"], "s-c1"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("只看收发") is Some(_), msg="its history in front")
   side_change(r, "close", Some("s-c1"))
   t.frame()
@@ -252,29 +252,29 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="打开侧栏")
   t.frame()
   // on its way in: its head further right than it will rest, as the column it shows through has widened so far
-  t.run_for(@sfdesk.side_in_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (mid, _) = t.find("只看收发").unwrap()
-  t.run_for(@sfdesk.side_in_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (end, _) = t.find("只看收发").unwrap()
   assert_true(mid > end, msg="in from the right: \{mid} then \{end}")
   // as it rests, no further
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
   // closed: still there on its way out (what it showed), gone at its end
   t.click(Button, label="收起侧栏")
   t.frame()
-  t.run_for(@sfdesk.side_out_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (going, _) = t.find("只看收发").unwrap()
   assert_true(going > end, msg="out to the right: \{going}")
-  t.run_for(@sfdesk.side_out_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("只看收发") is None)
   // opened again: in again, to where it rested
   t.click(Button, label="打开侧栏")
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
 }
 
@@ -285,14 +285,14 @@ test "wide: an agent's history asked as a page (a link's ?history=…&entry=…)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   app.nav.push(History(r, "s-c1", Some(3)))
   t.frame()
   t.frame()
   // the chat's page, in place of the page asked; the history in front beside it
   assert_true(app.nav.top() == Chat(r), msg="the chat's page")
   assert_eq(side_now(r), (["s-c1"], "s-c1"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("只看收发") is Some(_))
 }
 
@@ -322,7 +322,7 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   let src = slack_only(fixture("chat"))
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()

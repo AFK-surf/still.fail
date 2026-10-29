@@ -9,14 +9,14 @@ test "activity: its ring steps round" {
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
   // delivered: its agent at work (the station's clock stays, so its turn's time does too)
   clock.val = clock.val + fix_deliver_ms
   t.draw()
-  t.run_for(flight_wait_ms + composer_morph_ms + 1000.0)
+  t.run_for(flight_wait_ms + @ui.move_most_ms + 1000.0)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   // the keyboard put away: the field's caret no longer blinks
   t.keyboard_gone()
@@ -46,7 +46,7 @@ test "activity: its line coming in at the list's end is followed, the list glidi
   // (its line's first frame laid out twice, its room not opened yet at the first: a glide that set out then is under
   // way at the second, not over with the line still to open under the composer)
   t.set_frame_period(display_frame_ms)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)

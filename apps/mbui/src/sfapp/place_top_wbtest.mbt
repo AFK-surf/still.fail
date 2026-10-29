@@ -61,7 +61,7 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
       let t = @ui.Tester::new(fn(c) { view(c, src) }, w=360.0, h=640.0, env=[("MBUI_LOCALE", "en-US")], platform=2)
       t.set_font_scale(fs)
       t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":48,\"left\":0,\"right\":0}}")
-      t.run_for(@ui.nav_push_ms)
+      t.run_for(@ui.move_most_ms)
       t.frame()
       let at = "\{if from_settings { "from settings" } else { "the place's bar" }}, words \{fs}"
       // (2026-10-26 用户's phone: 「Us…」, the days filling half the line beside it)

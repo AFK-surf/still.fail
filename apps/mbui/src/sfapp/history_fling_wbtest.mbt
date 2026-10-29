@@ -73,7 +73,7 @@ test "touch wide: an agent's history flung toward its start rests further that w
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   side_change(r, "open", Some("s-c1"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   let marker = "等 CI 跑完再合并"
   let (x, y) = match t.find(marker) {
     Some(at) => at
@@ -153,9 +153,9 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   side_change(r, "open", Some("s-c1"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   // (the panel come and the tape at rest: nothing moving builds the frame)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("在看") is Some(_))
   // its words coming, a few at a time: the items before them, the same JSON, kept as they were built
   let words = ["在看 CI", "在看 CI 的日志", "在看 CI 的日志，慢在安装"]

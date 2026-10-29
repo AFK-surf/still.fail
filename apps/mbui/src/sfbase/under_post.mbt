@@ -3,10 +3,10 @@
 // in its turn among what changes the list's height (list_turns.mbt).
 
 ///|
-/// The room under a post going to its new height: a row's move, as every row's height in a chat's list goes
-/// (docs/list-motion.md: what changes together moves as one, on one curve from one moment).
+/// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
+/// list goes (docs/list-motion.md: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
-pub let close_gap : @motion.Spec = @motion.tween(@ui.row_size_ms, ease=Move)
+pub let close_gap : @motion.Spec = @motion.move()
 
 ///|
 /// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
@@ -71,9 +71,11 @@ pub fn under_post(
       @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit~, start_at?)
     }
   }
+  // (a share of its room: a Move as long as the room is tall)
+  let spec = (if shown { open } else { close }).per_unit(@motion.reveal_height("under/" + key))
   match start_at {
-    Some(at) if h.target() != to => h.animate(to, if shown { open } else { close }, start_at=at)
-    _ => h.follow(to, if shown { open } else { close })
+    Some(at) if h.target() != to => h.animate(to, spec, start_at=at)
+    _ => h.follow(to, spec)
   }
   under_ends[key] = h
   let share = h.get()

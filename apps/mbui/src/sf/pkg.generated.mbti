@@ -278,8 +278,6 @@ pub let composer_pad : Double
 
 pub let composer_pad_room : @ui.Space
 
-pub let composer_page_ms : Double
-
 pub fn composer_radius() -> @ui.Radius
 
 pub let composer_round : @ref.Ref[Double]
@@ -862,8 +860,6 @@ pub fn list_row_line(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn list_row_slot(ListAt) -> @ui.Style
 
-pub let list_slide_ms : Double
-
 pub let list_words_room : @ui.Space
 
 pub let lit_apart : Double
@@ -1061,8 +1057,6 @@ pub let mouse_chat_list : ChatList
 pub let mouse_found : Found
 
 pub let move_spring : @motion.Spec
-
-pub let move_state_ms : Double
 
 pub let name_max : @ui.Len
 
@@ -1671,8 +1665,6 @@ pub fn setting(@ui.Ctx, String, () -> Unit, note? : String) -> Unit
 pub fn setting_link(@ui.Ctx, String, String, String, note? : String) -> Bool
 
 pub fn settings(@ui.Ctx, Array[() -> Unit]) -> Array[() -> Unit]
-
-pub let shape_ms : Double
 
 pub let share_bar : Int64
 

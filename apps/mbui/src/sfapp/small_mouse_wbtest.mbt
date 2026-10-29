@@ -23,7 +23,7 @@ test "small with a mouse: a chat's row held is no long press, a click that opens
   t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
   assert_true(t.find("复制会话链接") is None)
   t.release(x, y)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Chat(r) => assert_eq(r.title, "夜里的构建又失败了")
     _ => fail("not opened")

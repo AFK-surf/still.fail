@@ -2,13 +2,13 @@
 // (margins, a share of the parent's, a place in it).
 
 ///|
-/// How long a move takes by default: a far Move.
-let move_ms : Double = move_far_ms
+/// How long the dock's move takes: a Move as long as the furthest of it goes (its width, 300 to 56).
+let dock_ms : Double = move_ms(300.0 - 56.0)
 
 ///|
 /// A dock that folds (the web's sidebar block, shell.css.ts dock): 300 wide, flush, square and on the page's ground
 /// open; 56 wide, 6 in, rounded and on a panel's ground folded. `fold` set: the view folds or opens it as it builds,
-/// moving `props` (all of them by default) over 380 ms. Its node, each frame.
+/// moving `props` (all of them by default) on a Move as long as the furthest of them goes. Its node, each frame.
 priv struct Dock {
   folded : Ref[Bool]
   fold : Ref[Bool]
@@ -66,10 +66,11 @@ test "a state moved to: each property from what it showed to what is built, on t
   // as it sets out: what it showed, the change not seen at once
   let start = t.time()
   assert_eq(width_of(d.node.val), 300.0)
-  // half its time in: the web's ease-out (0.2, 0.7, 0.2, 1) at a half, of each property
-  let half = move_ms / 2.0
+  // half its time in: a Move's way at a half, of each property
+  // (its time in whole ms, as a motion's goes)
+  let half = (dock_ms / 2.0).floor()
   t.run_for(half)
-  let p = Ease::Move.at(0.5)
+  let p = Ease::Move.at(half / dock_ms)
   let w = 300.0 + (56.0 - 300.0) * p
   assert_true((width_of(d.node.val) - w).abs() < 0.01)
   let (x, y, _, _) = g().node_rect(d.node.val)
@@ -79,8 +80,8 @@ test "a state moved to: each property from what it showed to what is built, on t
   let (px, _, _, _) = g().node_rect(d.page.val)
   assert_true((px - (6.0 * p + w + 6.0 * p + 8.0 * p)).abs() < 0.01)
   // its end: what is built, and nothing moves after it
-  t.run_for(move_ms - half)
-  assert_true((t.time() - (start + move_ms)).abs() < 1.0e-6)
+  t.run_for(dock_ms - half)
+  assert_true((t.time() - (start + dock_ms)).abs() < 1.0e-6)
   assert_eq(width_of(d.node.val), 56.0)
   t.assert_idle()
 }
@@ -101,7 +102,7 @@ test "a move whose first frames are late one after another (its state built over
   t.draw()
   on_time.fold.val = true
   t.draw()
-  t.run_for(move_ms / 2.0)
+  t.run_for(dock_ms / 2.0)
   let half = width_of(on_time.node.val)
   let d = Dock::new()
   let t = Tester::new(d.view(), w=800.0, h=600.0)
@@ -114,9 +115,9 @@ test "a move whose first frames are late one after another (its state built over
   t.frame_late(move_first_late_ms)
   t.run_for(first_frame_ms)
   // (each late frame's time not run: as on time, from the second's)
-  t.run_for(start + 2.0 * move_first_late_ms + move_ms / 2.0 - t.time())
+  t.run_for(start + 2.0 * move_first_late_ms + dock_ms / 2.0 - t.time())
   assert_true((width_of(d.node.val) - half).abs() < 1.0e-6, msg="\{width_of(d.node.val)} against \{half}")
-  t.run_for(start + 2.0 * move_first_late_ms + move_ms - t.time())
+  t.run_for(start + 2.0 * move_first_late_ms + dock_ms - t.time())
   assert_eq(width_of(d.node.val), 56.0)
   t.assert_idle()
 }
@@ -129,7 +130,7 @@ test "a move whose first frame is late to the screen moves from where that frame
   t.draw()
   on_time.fold.val = true
   t.draw()
-  t.run_for(move_ms / 2.0)
+  t.run_for(dock_ms / 2.0)
   let half = width_of(on_time.node.val)
   // its first frame (the one it set out in, the new state built in it) late to the screen, as the host says in the next
   let d = Dock::new()
@@ -143,9 +144,9 @@ test "a move whose first frame is late to the screen moves from where that frame
   // not moved yet: where its first frame drew it
   assert_eq(width_of(d.node.val), 300.0)
   // from then, as the one on time from its frame
-  t.run_for(start + move_first_late_ms + move_ms / 2.0 - t.time())
+  t.run_for(start + move_first_late_ms + dock_ms / 2.0 - t.time())
   assert_true((width_of(d.node.val) - half).abs() < 1.0e-6)
-  t.run_for(start + move_first_late_ms + move_ms - t.time())
+  t.run_for(start + move_first_late_ms + dock_ms - t.time())
   assert_eq(width_of(d.node.val), 56.0)
   t.assert_idle()
   // far later: it waits nav_late_most, no more
@@ -154,9 +155,9 @@ test "a move whose first frame is late to the screen moves from where that frame
   let start = t.time()
   t.frame_late(move_first_very_late_ms)
   t.run_for(first_frame_ms)
-  t.run_for(start + nav_late_most + move_ms / 2.0 - t.time())
-  assert_true((width_of(d.node.val) - (56.0 + (300.0 - 56.0) * Ease::Move.at(0.5))).abs() < 1.0e-6)
-  t.run_for(start + nav_late_most + move_ms - t.time())
+  t.run_for(start + nav_late_most + (dock_ms / 2.0).floor() - t.time())
+  assert_true((width_of(d.node.val) - (56.0 + (300.0 - 56.0) * Ease::Move.at((dock_ms / 2.0).floor() / dock_ms))).abs() < 1.0e-6)
+  t.run_for(start + nav_late_most + dock_ms - t.time())
   assert_eq(width_of(d.node.val), 300.0)
   t.assert_idle()
 }
@@ -169,18 +170,19 @@ test "a move said again over one going on goes on from where that had got to" {
   d.fold.val = true
   t.draw()
   // (some way in, not half: a point the curve does not come back to)
-  t.run_for(move_ms * 0.4)
+  t.run_for(dock_ms * 0.4)
   let there = width_of(d.node.val)
   assert_true(there < 300.0 && there > 56.0)
   // opened again: from where it was, not from its folded width
   d.fold.val = true
   t.draw()
   assert_eq(width_of(d.node.val), there)
-  t.run_for(move_ms / 4.0)
+  t.run_for(dock_ms / 4.0)
   let later = width_of(d.node.val)
   assert_true(later > there && later < 300.0)
-  // its own whole length from when it was said
-  t.run_for(move_ms * 3.0 / 4.0)
+  // as long as what was left of its way from when it was said: no longer than its whole
+  assert_true(move_ms(300.0 - there) <= dock_ms)
+  t.run_for(move_ms(300.0 - there) * 3.0 / 4.0)
   assert_eq(width_of(d.node.val), 300.0)
 }
 
@@ -191,7 +193,7 @@ test "what a move does not list is at once what is built" {
   t.draw()
   d.fold.val = true
   t.draw()
-  t.run_for(move_ms / 2.0)
+  t.run_for(dock_ms / 2.0)
   // its width not listed: folded at once; its margin moving
   assert_eq(width_of(d.node.val), 56.0)
   let (x, _, _, _) = g().node_rect(d.node.val)
@@ -219,9 +221,10 @@ test "a value of the view's own moves with the boxes that list it" {
   assert_eq(line.val, 0.0)
   fold.val = true
   t.draw()
-  t.run_for(move_ms / 2.0)
+  // (a value of 0 to 1: as long as a Move of a point)
+  t.run_for(move_ms(1.0) / 2.0)
   assert_true((line.val - Ease::Move.at(0.5)).abs() < 0.000001)
-  t.run_for(move_ms / 2.0)
+  t.run_for(move_ms(1.0) / 2.0)
   assert_eq(line.val, 1.0)
 }
 

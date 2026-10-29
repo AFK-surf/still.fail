@@ -293,21 +293,15 @@ pub fn side_changing(String, Array[String], String, Bool) -> Unit
 
 pub fn side_folded() -> Bool
 
-pub let side_in_ms : Double
-
 pub let side_max : Double
 
 pub let side_min : Double
-
-pub let side_move_ms : Double
 
 pub fn side_now(@sfbase.Source, @sfbase.ChatRef) -> (Array[String], String)
 
 pub fn side_of(@sfbase.ChatView) -> (Array[String], String)
 
 pub fn side_open_for(@sfbase.Source, @sfbase.Workspace, @sfbase.Page) -> SideOf?
-
-pub let side_out_ms : Double
 
 pub let side_pane : @ui.Style
 

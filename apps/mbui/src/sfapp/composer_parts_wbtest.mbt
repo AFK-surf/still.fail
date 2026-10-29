@@ -27,7 +27,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   let src = made.val.unwrap()
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
   t.draw()
-  t.run_for(@sfpages.morph_ms)
+  t.run_for(@ui.move_most_ms)
   let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
   let seen = "ws1/st1//draft:" + id
   let tile = match thumb_of(t.ctx(), seen) {
@@ -67,7 +67,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     @sfbase.writing_add(src, w, "ws1/st1", "第二张.png", png_head())
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
-    t.run_for(@sfpages.morph_ms)
+    t.run_for(@ui.move_most_ms)
     let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
@@ -121,7 +121,7 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
-    t.run_for(@sfpages.morph_ms)
+    t.run_for(@ui.move_most_ms)
     let (x, y, cw, ch) = match t.query(Group, label="build.log") {
       Some(g) => g.rect
       None => fail("no card for build.log (platform \{platform})")
@@ -168,7 +168,7 @@ test "an archived chat's restore failing says why under it, in red; tapped again
   // tried again: what failed before is not said meanwhile
   assert_true(t.find("station 没有回应") is None)
   // the capsule back to its height without the line
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
@@ -251,7 +251,7 @@ test "a notice over the composer wrapped to lines: round as one line is, its mar
       _ => tp
     }
   })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (wx, wy, _, wh) = t.rect_of(said).unwrap()
   let line = @sf.theme().t.meta_line
   assert_true(wh > 1.5 * line, msg="wrapped (\{wh} high)")
@@ -317,11 +317,11 @@ test "files sent fly from their tiles to their places in the message, then are i
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // a picture up at once (the fixture's station takes it), its tile in the composer
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "截图.png", png_head())
   t.draw()
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("看这张")
   tap_send(t)
@@ -366,7 +366,7 @@ test "a chat linked to one Slack thread: 抄送 while writing opens it to tick, 
   })
   // (the capsule says nothing of it; opened to write, its row under the words has it)
   t.tap_text("发消息")
-  t.run_for(@sfpages.morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label=@sf.t("web-main.composer.ccLabel"))
   t.click(MenuItemCheckbox, label="#still-fail")
   let asked = named(calls, "chat.cc")

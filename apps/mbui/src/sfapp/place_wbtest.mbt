@@ -15,17 +15,17 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
     }
     t.draw()
     t.tap_text("夜里的构建又失败了")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() is Chat(_), msg=at)
     // laid out Small the bottom bar shows on a place's root only: back to the chats' first; on the tape the chat's page
     // came over to show it, the rail in the sidebar beside it: back brings that over
     if @sfdesk.wide.tape {
       t.back()
-      t.run_for(@sfdesk.side_move_ms)
+      t.run_for(@ui.move_most_ms)
       assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
     } else if t.query(Tab, label="文件") is None && t.query(Button, label="文件") is None {
       t.back()
-      t.run_for(@ui.nav_push_ms)
+      t.run_for(@ui.move_most_ms)
       assert_eq(app.nav.depth(), 1, msg=at)
     }
     let place = fn() raise {
@@ -37,7 +37,7 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
       let (x, y, bw, bh) = n.rect
       t.tap(x + bw / 2.0, y + bh / 2.0)
       t.frame()
-      t.run_for(@ui.nav_push_ms)
+      t.run_for(@ui.move_most_ms)
     }
     place()
     assert_eq(app.nav.depth(), 1, msg=at)

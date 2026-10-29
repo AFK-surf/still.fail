@@ -76,7 +76,7 @@ test "an agent's card over its name, as over its picture: its background work an
   assert_eq(t.corner_faults(), [])
   // pressed: its execution history, beside the chat
   t.tap(line[0].1 + 10.0, line[0].2 + line[0].4 / 2.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(@sf.t("web-main.history.onlyIo")) is Some(_), msg="its history open")
 }
 
@@ -88,7 +88,7 @@ test "the history's details: its turns' line says its work after it, none withou
   decide_src.val = Some(src)
   open_fixture_over("chat-history-side", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let forms = fn() { word("后台 4 · 2/6") + word("4 · 2/6") + word("4") }
   // nothing in the background, no checklist: no mark; the line, the tabs, the head and what is under the line
@@ -145,7 +145,7 @@ test "on a phone, its details' turns say its work after them, its head as it was
   decide_src.val = Some(src)
   open_fixture_over("history-details", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let turns = word("8 轮 · 共干了 1 小时 12 分")
   assert_eq(turns.length(), 1)

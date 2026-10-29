@@ -28,7 +28,7 @@ test "the side panel at rest cuts nothing past its left edge: its edge's handle,
   side_changing("test", ["a"], "a", false)
   open.val = false
   t.draw()
-  t.run_for(side_out_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   match t.shown_of("past its edge") {
     Some((x, _, _, _)) => assert_true(x > 1000.0, msg="\{x}")
     None => ()

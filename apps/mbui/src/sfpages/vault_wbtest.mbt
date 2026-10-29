@@ -32,7 +32,7 @@ test "密钥, at each width and with either hand: the request's card, encrypted,
     scrolled_to(t, w, "全部密钥")
     tap_words(t, "全部密钥")
     t.frame()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(VaultItems), msg=at)
     scrolled_to(t, w, "部署机")
     assert_true(t.find("部署机") is Some(_), msg=at)
@@ -139,5 +139,5 @@ fn page_add(t : @ui.Tester) -> @ui.SemNode? {
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
   let rest = @kit.sheet_rest("sf-present")
-  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.nav_push_ms })
+  t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }

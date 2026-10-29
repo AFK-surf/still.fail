@@ -8,7 +8,7 @@ test "30-new-chat" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("new-chat"), seed~)
     f.see("端到端测试")
     f.tap("icon:ling")
-    f.run_for(@ui.nav_rise_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("想让 agent 做什么？")
     f.tap("做任何事")
     f.type_text("新对话来自 mbui 084656 post:新对话里的回答 084656")
@@ -20,7 +20,7 @@ test "30-new-chat" {
     f.see("=新对话里的回答 084656")
     f.tap("icon:chevron-left")
     // the chat off, Home's bar back up (longer than the page's going)
-    f.run_for(@sfapp.bar_show_ms)
+    f.run_for(@ui.move_most_ms)
     // its row: no one named it (新对话), how its agent's turn ended under it
     f.see("=新对话")
     f.see("answered the question that was asked")

@@ -5,7 +5,7 @@ fn chat_tester(mode : String) -> @ui.Tester {
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -124,7 +124,7 @@ test "a reference to another chat is its chip, and opens that chat" {
     _ => fail("not a chat")
   }
   // the chat pushed in
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // and the scroll bar of the list under it gone: shown since its last wheel, then faded out
   if scrolled >= 0.0 {
     t.run_for(scrolled + @ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms - t.time())
@@ -210,7 +210,7 @@ test "a file card in the chat opens its preview" {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.move(195.0, 400.0)
   // (up the list till its card shows: its name's stem, its extension after it)
   let mut tries = 0
@@ -227,7 +227,7 @@ test "a file card in the chat opens its preview" {
   assert_true(viewer.val is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "build.log")
   // the preview flown open, and left alone a while: its bars there still (only a tap hides them)
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   t.run_for(left_alone_ms)
   assert_true(viewer.val.unwrap().bars_shown())
   t.assert_idle()
@@ -262,7 +262,7 @@ test "what waits to be decided and is out of view: a bell over the way to the en
 test "a chat opened with a card to decide in view: its first frame lays the card out as it rests, nothing read back of it" {
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (pressed and let go between frames, one frame drawn: the one the chat opens in)
   let (x, y) = t.find("整理发布清单").unwrap()
   t.touch(0, x, y)
@@ -274,7 +274,7 @@ test "a chat opened with a card to decide in view: its first frame lays the card
   t.frame()
   assert_true(!t.wanted_why().contains("read back moved"), msg=t.wanted_why())
   let first = t.rect_of("先不换")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let rest = t.rect_of("先不换")
   assert_true(rest is Some(_), msg="the card in view at rest")
   assert_eq(first.map(fn(r) { (r.2, r.3) }), rest.map(fn(r) { (r.2, r.3) }))
@@ -284,14 +284,14 @@ test "a chat opened with a card to decide in view: its first frame lays the card
 test "a chat opened with what waits to be decided in view: no bell from its first frame on" {
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("整理发布清单")
   let bell = @sf.t("web-main.chat.asks.go")
   // its first frame, the list not laid out yet: nothing known to be out of view
   assert_true(t.query(Button, label=bell) is None, msg="a bell at its first frame")
-  t.run_for(@ui.nav_push_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.query(Button, label=bell) is None, msg="a bell as it slides in")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label=bell) is None, msg="a bell at rest")
 }
 
@@ -323,7 +323,7 @@ test "a chat's place: told the core as the list comes to rest (the message at th
       _ => tp
     }
   })
-  t2.run_for(@ui.nav_push_ms)
+  t2.run_for(@ui.move_most_ms)
   let back = named(again, "chat.place")
   assert_true(back.length() > 0)
   let q = back[back.length() - 1].params
@@ -376,10 +376,10 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(left, [])
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let held = Json::object(chat_params(r)).stringify()
   // (else the core keeps the thread's window as first read: the chat opened again where it was first opened, not
   // where it was left)
@@ -408,20 +408,20 @@ test "left short of its end, a chat opens again where it was left, though the co
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   open_chat(r)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let k = "ws1/st1\u{1}s-c1"
   let left_at = readings.get(k).unwrap().top_seq
   let left_off = readings.get(k).unwrap().top_off
   assert_true(left_at > 0.0 && !readings.get(k).unwrap().at_end)
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // told where it was left
   assert_eq(place.val.map(fn(p) { p.get("seq") }), Some(Some(Json::number(left_at))))
   open_chat(r)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // opened there, not at its end where the core's view, kept a minute after the page left it, still opens it
   assert_eq(readings.get(k).unwrap().top_seq, left_at)
   assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
@@ -481,7 +481,7 @@ test "opened short of its end, the core is told the messages shown whole: read u
       _ => tp
     }
   })
-  t2.run_for(@ui.nav_push_ms)
+  t2.run_for(@ui.move_most_ms)
   let (end2, seen) = focus_seen(again)
   assert_true(!end2)
   assert_true(seen >= 0.0)
@@ -515,7 +515,7 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (a window whose list is wide, its table wider than its words with its key past it)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=760.0, h=800.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let cell = "只排可见的行"
   let (x, y) = t.drawn_of(cell).unwrap()
   // the words' column: the card's room before its cells (4) and the cell's 12 before the cell
@@ -542,7 +542,7 @@ test "a message said just after the chat opened comes in with the list gliding a
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // a moment on (well within the half second the list once waited), someone says something in it (said while it
   // shows: new to the list)
   let words = "我也在看这个"
@@ -581,7 +581,7 @@ test "what was said while the app was away, brought after its chat opened at its
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // a moment on, three come at once, more than a screen of them, said before it opened: caught up on, the unread line
   // over the first (the core's, attend.ts)
   let first = "这份清单在每次发布前过一遍"
@@ -594,7 +594,7 @@ test "what was said while the app was away, brought after its chat opened at its
   })
   clock.val = said_soon_ms
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the first of them from its top, under the line: not the list at the end of the newest
   guard t.drawn_of(first) is Some((_, y)) else { fail("the first of what came is not in view") }
   assert_true(y > bar_foot() && y < 844.0 / 2.0, msg="the first of what came, from its top: at \{y}")

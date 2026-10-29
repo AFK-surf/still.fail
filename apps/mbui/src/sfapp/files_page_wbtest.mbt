@@ -11,7 +11,7 @@ fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -20,7 +20,7 @@ fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
 fn files_page_over(t : @ui.Tester, w : Double, h : Double) -> Unit {
   if @sfdesk.wide.tape && @sfdesk.wide.tape_at != @sfdesk.TapePane::Page {
     t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
-    t.run_for(@sfdesk.side_move_ms)
+    t.run_for(@ui.move_most_ms)
   }
 }
 
@@ -48,7 +48,7 @@ test "文件's page narrow in every frame: what the folder holds in a line, its 
     if platform == 0 {
       t.tap(x, y)
     }
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     match app.nav.top() {
       Drive(d) => assert_eq(d.path, "设计稿", msg=at)
       _ => fail(at + ": no folder open")
@@ -63,21 +63,21 @@ test "on the tape a folder opened in the files' page in use goes over it: back c
   files_page_over(t, 690.0, 840.0)
   let (x, y) = rightmost(t, "设计稿")
   t.tap(x, y)
-  t.run_for(page_local_ms + @ui.nav_push_ms)
+  t.run_for(page_local_ms + @ui.move_most_ms)
   match app.nav.top() {
     Drive(d) => assert_eq(d.path, "设计稿")
     _ => fail("no folder open")
   }
   assert_true(app.nav.top_over())
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Drive(d) => assert_eq(d.path, "")
     _ => fail("not the folder it was opened from")
   }
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   t.back()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
 }
 
@@ -92,7 +92,7 @@ test "文件's page wide with a finger and with a mouse: its ways, its heads; a 
     if platform == 0 {
       t.tap(x, y)
     }
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     match app.nav.top() {
       Drive(d) => assert_eq(d.path, "设计稿", msg="\{platform}")
       _ => fail("\{platform}: no folder open")
@@ -120,7 +120,7 @@ test "a narrow folder's row held with a finger: what can be done to it in a shee
   // (laid out Medium, the sidebar in use: a right click on what shows of the page beside it brings it over, as a
   // press does, and asks nothing of what it holds)
   m.right_click(720.0 - @sfdesk.tape_shows / 2.0, 450.0)
-  m.run_for(@sfdesk.side_move_ms)
+  m.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   assert_false(@sf.presenting())
   let (x, y) = rightmost(m, "季度数据.csv")
@@ -159,7 +159,7 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
   sheet_rested(t, "sf-present")
   // (two stations it can be done on: which first)
@@ -264,7 +264,7 @@ test "a phone's folder: a name changed in place, its row kept in view over the s
   // the keyboard up: the window laid out above it, as the host lays it out
   t.set_ime_inset(keyboard_h)
   t.resize(390.0, 844.0 - keyboard_h)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match t.focused() {
     Some(n) => {
       let (_, fy, _, fh) = n.rect

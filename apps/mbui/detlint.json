@@ -443,7 +443,8 @@
       "src/sfpages/service.mbt": 3,
       "src/sfpages/things.mbt": 2,
       "src/sfpages/usage.mbt": 1
-    }
+    },
+    "motion-length": {}
   },
   "excused": {
     "frame-request": {},
@@ -504,6 +505,9 @@
     "fixture-import": {},
     "motion-spring": {},
     "built-by-hand": {},
-    "layout-read-back": {}
+    "layout-read-back": {},
+    "motion-length": {
+      "src/sfpages/composer.mbt": 3
+    }
   }
 }

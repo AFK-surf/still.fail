@@ -19,7 +19,7 @@ fn finder_tester(w : Double, platform : Int, regular : Bool, words : String) -> 
     t.scroll_to(0)
     t.draw()
     tap_search_field(t)
-    t.run_for(@sfpages.search_in_ms)
+    t.run_for(@ui.move_most_ms)
   } else {
     // a mouse's: ⌘K, in every tier
     t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
@@ -54,7 +54,7 @@ test "a chat the search found, pressed: its chat; ⌘K closed as it opens, the p
       fail("\{at}: not found: \{t.words().map(fn(x) { x.0 }).join("|")}")
     }
     t.tap(x, y)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() is Chat(_), msg=at)
     ignore(wide)
     if platform == 2 {
@@ -137,15 +137,16 @@ test "a finger's search field comes up from the list and goes back as itself: it
     let at = w.to_string()
     guard search_field_drawn(t, false) is Some(list) else { fail("\{at}: no field in the list") }
     tap_search_field(t)
-    t.run_for(@sfpages.search_in_ms)
+    t.run_for(@ui.move_most_ms)
     assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up")
     // 取消: on its way back, then the list's again, as it was
     guard t.find_last("取消") is Some((x, y)) else { fail("\{at}: no 取消") }
     t.tap(x, y)
-    t.run_for(@sfpages.search_out_ms / 2.0)
+    // (well within its way back: none is shorter than a Move of nothing far)
+    t.run_for(@ui.move_least_ms / 2.0)
     assert_true(@sfpages.search_leaving(), msg=at)
     assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: going back")
-    t.run_for(@sfpages.search_out_ms)
+    t.run_for(@ui.move_most_ms)
     t.draw()
     assert_false(@sfpages.search_opened(), msg=at)
     assert_eq(search_field_drawn(t, false), Some(list), msg="\{at}: back")
@@ -161,7 +162,7 @@ test "a finger's search on a wide frame: in the lists' column; a row pressed, it
   assert_true(t.find("取消") is Some(_))
   let (x, y) = t.find_last("签名证书续期").unwrap()
   t.tap(x, y)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat(_))
   assert_true(@sfpages.search_opened())
   assert_true(t.find("取消") is Some(_))
@@ -204,7 +205,7 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   // Enter: the line chosen (the first) opened
   t.enter()
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat(_))
   // Esc on Home's: closed, the lists as they were
   let t = small_mouse(calls)
@@ -223,7 +224,7 @@ test "small with a mouse, ⌘K in a chat: the search's page over it; Esc back to
   let calls : Array[Made] = []
   let t = small_mouse(calls)
   t.tap_text("夜里的构建又失败了")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.frame()
@@ -244,7 +245,7 @@ test "small with a mouse, ⌘K in a chat: the search's page over it; Esc back to
   t.frame()
   let (x, y) = t.find_last("签名证书续期").unwrap()
   t.tap(x, y)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfpages.search_opened())
   assert_true(app.nav.top() is Chat({ title: "签名证书续期", .. }))
 }
@@ -291,18 +292,18 @@ test "small with a mouse: back (⌘[, the keymap's nav.back) goes back one page 
   let calls : Array[Made] = []
   let t = small_mouse(calls)
   t.tap_text("夜里的构建又失败了")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   let chat = app.nav.top()
   // ⌘[: the system's back, once (Ctx::back: the stack's, as a back key's)
   t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 1)
   // ⌘]: what back took off, put back
   t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   assert_true(app.nav.top() == chat)
   // forward again: nothing more to bring
@@ -312,11 +313,11 @@ test "small with a mouse: back (⌘[, the keymap's nav.back) goes back one page 
   // the system's back (a mouse's back button), then a mouse's forward button (the hosts' key_forward)
   t.back()
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 1)
   t.key(@ui.key_forward)
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == chat)
 }
 

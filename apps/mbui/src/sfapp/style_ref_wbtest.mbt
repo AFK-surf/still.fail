@@ -33,7 +33,7 @@ fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -
     open_setting(page)
   }
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.drawlist()
 }
 
@@ -57,22 +57,22 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58539:45f3317f
     #|waiting-dark narrow 28178:b2c72701
     #|waiting-dark wide 58365:4a3ea5a7
-    #|finding narrow 33121:b0d9560a
-    #|finding wide 64076:8fc6d7aa
-    #|finding-dark narrow 33234:b51ac261
-    #|finding-dark wide 64099:4d8bdb7b
-    #|code narrow 25068:61af9ae1
+    #|finding narrow 33121:74cd6aa0
+    #|finding wide 64076:a0d6f2e4
+    #|finding-dark narrow 33234:345996f3
+    #|finding-dark wide 64099:ac2ecca1
+    #|code narrow 24991:3529413b
     #|code wide 55385:ffe8e655
-    #|code-dark narrow 24982:c8ccca51
+    #|code-dark narrow 24905:bf972447
     #|code-dark wide 55209:ffee963f
-    #|wrong narrow 26277:91929809
+    #|wrong narrow 26200:35b20434
     #|wrong wide 56614:26f93748
-    #|wrong-dark narrow 26401:2f3e5965
+    #|wrong-dark narrow 26324:e14beda0
     #|wrong-dark wide 56648:a2526c58
-    #|checking narrow 35333:f953139c
-    #|checking wide 66323:71985a3b
-    #|checking-dark narrow 35425:88eb83f3
-    #|checking-dark wide 66325:4ed3ae5a
+    #|checking narrow 35248:cde21a98
+    #|checking wide 66323:ec6c140d
+    #|checking-dark narrow 35340:bebe791b
+    #|checking-dark wide 66325:c59d7448
     #|none narrow 27730:74bfcc56
     #|none wide 58015:a239d1ed
     #|none-dark narrow 27650:2336e7e0
@@ -90,6 +90,7 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|nocode-dark narrow 28178:b2c72701
     #|nocode-dark wide 58365:4a3ea5a7
     #|
+
 
 
 
@@ -143,17 +144,18 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   inspect(out.to_string(), content=(
     #|settings narrow 84810:b665b714
     #|station narrow 91340:3e6ef941
-    #|me-reading narrow 15718:86ad578d
+    #|me-reading narrow 15718:bc76477a
     #|settings wide 154731:3c6c81af
     #|station wide 201571:301f751f
-    #|me-reading wide 149377:44a12ac8
+    #|me-reading wide 149377:3c3a5a0b
     #|settings-dark narrow 85171:a814463c
     #|station-dark narrow 91128:5f04e45e
-    #|me-reading-dark narrow 15786:72799863
+    #|me-reading-dark narrow 15808:e5c51641
     #|settings-dark wide 154671:6a325821
     #|station-dark wide 201265:6a41074c
-    #|me-reading-dark wide 149371:3b77d36
+    #|me-reading-dark wide 149393:4ef2592c
     #|
+
 
 
 

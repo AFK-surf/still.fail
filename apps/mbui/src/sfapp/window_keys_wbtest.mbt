@@ -41,7 +41,7 @@ fn past_rule(t : @ui.Tester, x : Double) -> String? {
 test "a Windows window laid out Large: its own buttons at the top row's right, 12 in and on the bars' line, the page's keys before their rule" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat", platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the last as a bar's last key stands at a corner it cannot follow (Windows 11's 8), 2 apart, 6 under the top
   guard named_at(t, "关闭窗口") is Some((cx, cy, cw, ch)) else { fail("no close button") }
   assert_eq((cx + cw, cy, cw, ch), (1268.0, 6.0, 32.0, 32.0))
@@ -62,14 +62,14 @@ test "a Windows window laid out Large: its own buttons at the top row's right, 1
 test "a Windows window laid out Large: a new chat's Station 文件 before the window's buttons' rule, its panel open or closed" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="newchat-files", platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == NewChat)
   guard named_at(t, "最小化") is Some((mx, _, _, _)) else { fail("no minimize button") }
   // kept open: the panel's bar's switch before them
   assert_eq(past_rule(t, mx - 17.0), None)
   // closed: 文件 at the page's end before their rule, as a chat's bar's last is (it stood under close)
   t.click(Button, label="收起侧栏")
-  t.run_for(@sfdesk.side_out_ms)
+  t.run_for(@ui.move_most_ms)
   guard named_at(t, "Station 文件") is Some((fx, _, fw, _)) else { fail("no Station 文件") }
   assert_eq(fx + fw, mx - 17.0 - 12.0)
   assert_eq(past_rule(t, mx - 17.0), None)
@@ -79,7 +79,7 @@ test "a Windows window laid out Large: a new chat's Station 文件 before the wi
 test "a Windows window's buttons: minimize and close do what the window's do; maximize as the host says the pointer stands on it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   guard named_at(t, "最小化") is Some((mx, my, mw, mh)) else { fail("no minimize button") }
   t.tap(mx + mw / 2.0, my + mh / 2.0)
   guard named_at(t, "关闭窗口") is Some((cx, cy, cw, ch)) else { fail("no close button") }
@@ -102,7 +102,7 @@ test "a Windows window's buttons: minimize and close do what the window's do; ma
 test "a Windows window laid out Small: its buttons in the band over the page; on the tape, on its line, the strip at the right holding them" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   guard named_at(t, "关闭窗口") is Some((cx, cy, cw, _)) else { fail("no close button") }
   assert_eq((cx + cw, cy), (378.0, 6.0))
   // nothing of the page's in the band (44) under them
@@ -116,7 +116,7 @@ test "a Windows window laid out Small: its buttons in the band over the page; on
   // 28, 6 in: 18), the sidebar in use and the page's strip at the right as wide as holds them (the rule's 8 before
   // them on it, its edge 6 past that)
   let t = wide_tester(calls, mode="chat", w=690.0, h=840.0, platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   guard named_at(t, "关闭窗口") is Some((cx, cy, cw, _)) else { fail("no close button") }
   let line = @sf.window_in + @sf.tape_line
   assert_eq((cx + cw, cy), (690.0 - line, line))
@@ -124,7 +124,7 @@ test "a Windows window laid out Small: its buttons in the band over the page; on
   assert_true((@sfdesk.tape_shows_right() - (690.0 - (mx - 17.0) + 6.0)).abs() < 1.0e-9)
   // the page's panel brought over: where they are the same, its bar's keys before them
   t.tap(650.0, 400.0)
-  t.run_for(@sfdesk.side_move_ms * 2.0)
+  t.run_for(@ui.move_most_ms * 2.0)
   assert_eq(named_at(t, "关闭窗口").map(fn(r) { (r.0 + r.2, r.1) }), Some((690.0 - line, line)))
   assert_eq(past_rule(t, mx - 17.0), None)
 }
@@ -133,17 +133,17 @@ test "a Windows window laid out Small: its buttons in the band over the page; on
 test "a Windows window: the top row drags it on every page but for what is pressed there, its own buttons among that" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   row_drags(t, "新建对话", 400.0)
   let t = wide_tester(calls, mode="chat", platform=3, window_corner=8.0, window_inset=true)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   row_drags(t, "a chat", 400.0)
   let t = wide_tester(calls, platform=3, window_corner=8.0, window_inset=true)
   app.nav.replace(Files)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   row_drags(t, "文件", 400.0)
   let t = wide_tester(calls, platform=3, window_corner=8.0, window_inset=true)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   row_drags(t, "settings", 400.0)
 }

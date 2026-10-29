@@ -10,7 +10,7 @@ test "44-notice-cancel" {
     f.peer("peer send 打开就消失 083209 card:看一眼就行 083209|好 083209|不好 083209")
     f.noticed("看一眼就行 083209")
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see_n(2, "看一眼就行 083209")
     f.no_notice("看一眼就行 083209")
     // the bottom bar at its end

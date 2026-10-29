@@ -29,22 +29,22 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h~, platform=2, env=[("MBUI_LOCALE", locale)])
   say_room(t, "medium", "medium")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   tap_said(t, @sf.t("web-pages.settings.title"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.wheel(200.0, h / 2.0, 3000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let about = @sf.t("web-pages.settings.nav.about")
   guard side_row_at(t, about, 400.0) is Some((x, y, w, rh)) else { fail("no \{about} in the sidebar") }
   t.tap(x + w / 2.0, y + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms * 2.0)
+  t.run_for(@ui.move_most_ms * 2.0)
   assert_true(app.nav.top() == Setting(@settings.Route::About))
   // (its page beside the sidebar, the sidebar still in use)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   // (said once 关于 has asked still.fail cloud: what it answered, none newer, said over)
   if newer != "" {
     update.available.set(Some({ "versionName": Json::string(newer) }))
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
   }
   t
 }

@@ -22,7 +22,7 @@ test "96-viewer" {
     f.peer("peer createfiles 两张图片 201493 post:收到两张图片 201493 -- e2e-photo.jpg e2e-photo2.png")
     f.see("两张图片 201493")
     f.tap("两张图片 201493")
-    f.run_for(@ui.nav_push_ms)
+    f.run_to(@ui.nav_rest())
     f.see("=studio")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")

@@ -98,7 +98,7 @@ test "an agent's request for this phone while it lacks something to be lent: wha
   assert_eq(only("允许"), 0)
   assert_eq(only("拒绝"), 1)
   t.tap_text("查看步骤")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("本机设置") is Some(_))
   // all it takes there (Wireless debugging the app turns on itself): 允许, which turns it on
   let t = chat_tester("chat-phone")

@@ -8,7 +8,7 @@ fn service_tester(mode : String) -> @ui.Tester {
   open_drive_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the page opened slid in
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 

@@ -328,12 +328,22 @@ pub struct SpringPath {
   priv c : Double
   priv rest : Double
   priv id : Mover
+  /// a Move's way instead (SpringPath::moved): as long as it goes far, from where it is sent (0: a spring's)
+  priv mut dur : Double
+  priv moves : Bool
 }
 
 ///|
 /// A spring at rest at `x`.
 pub fn SpringPath::new(x : Double, k~ : Double, c~ : Double, rest? : Double = 0.001) -> SpringPath {
-  { x0: x, v0: 0.0, to: x, t0: 0.0, end: -1.0, k, c, rest, id: Mover::new() }
+  { x0: x, v0: 0.0, to: x, t0: 0.0, end: -1.0, k, c, rest, id: Mover::new(), dur: 0.0, moves: false }
+}
+
+///|
+/// At rest at `x`, sent on a Move's way (move_path) as long as its way is far (move_ms: its units points), as fast
+/// as it goes (or is let go at): a sheet risen, sunk, let go.
+pub fn SpringPath::moved(x : Double) -> SpringPath {
+  { x0: x, v0: 0.0, to: x, t0: 0.0, end: -1.0, k: 0.0, c: 0.0, rest: 0.0, id: Mover::new(), dur: 0.0, moves: true }
 }
 
 ///|
@@ -341,6 +351,10 @@ pub fn SpringPath::new(x : Double, k~ : Double, c~ : Double, rest? : Double = 0.
 pub fn SpringPath::at(self : SpringPath, now : Double) -> (Double, Double) {
   if now >= self.end {
     return (self.to, 0.0)
+  }
+  if self.moves {
+    let (d, v) = move_path(self.x0 - self.to, self.v0 / 1000.0, dmax(0.0, now - self.t0), self.dur)
+    return (self.to + d, v * 1000.0)
   }
   let (d, v) = spring_at(self.x0 - self.to, self.v0, self.k, self.c, dmax(0.0, now - self.t0) / 1000.0)
   (self.to + d, v)
@@ -382,7 +396,12 @@ pub fn SpringPath::go(
   self.v0 = v.unwrap_or(v1)
   self.to = to
   self.t0 = now
-  self.end = now + 1000.0 * spring_end(x - to, self.v0, self.k, self.c, self.rest)
+  if self.moves {
+    self.dur = if x == to && self.v0 == 0.0 { 0.0 } else { move_ms((x - to).abs()) }
+    self.end = now + self.dur
+  } else {
+    self.end = now + 1000.0 * spring_end(x - to, self.v0, self.k, self.c, self.rest)
+  }
   g().moving(self.id, self as &Moving, what=what + " to \{to}", loc~)
 }
 
