@@ -49,7 +49,8 @@ fn main {
     @sfapp.view(c, s)
   }
   @sf.kept_call.val = Some(@sfkept.answer)
-  let t = @ui.Tester::new(view, w~, h~, platform=0, live=@film.live())
+  // (a measure of where things are laid out: words over words while something moves are the tests' to hold, words_over.mbt)
+  let t = @ui.Tester::new(view, w~, h~, platform=0, live=@film.live(), words_over_held=false)
   // what the story shares into the app as it opens (stories.tsx `share`: the page's offerShare), shared into mbui's as
   // another app's share comes
   match field(web, "share") {

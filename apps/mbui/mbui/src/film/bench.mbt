@@ -56,6 +56,7 @@ pub fn bench(
     live={ host, turn: fn() { spin(1.0) } },
     // (a test's own check of each frame at rest not run: not the app's work)
     corners_held=false,
+    words_over_held=false,
   )
   // (a frame of the looks alone drawn once, as a host draws it: a test's draws it whole too, frame_watch.mbt)
   t.check_looks(false)
