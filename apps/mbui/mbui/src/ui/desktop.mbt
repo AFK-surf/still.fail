@@ -152,6 +152,11 @@ pub let key_code_delete_paragraph_back : Int = 34
 pub let key_code_delete_paragraph_on : Int = 35
 
 ///|
+/// Forward, as hosts send it: a mouse's forward button (its fifth), and Alt+→ on Windows (as Alt+← is its back: the
+/// system's back, set_back). What goes forward is the app's to read (Ctx::key_pressed), as a browser's forward.
+pub let key_forward : Int = 40
+
+///|
 /// Whether a focused field takes key `code` as its own (its moves and deletions, Enter, select all, copy, cut), not
 /// Escape, Tab or a character's key.
 fn field_key(code : Int) -> Bool {

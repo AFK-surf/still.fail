@@ -111,6 +111,9 @@ struct Nav[P] {
   mut moved_progress : Double
   mut moved_p : Double
   on_leave : (P) -> Unit
+  // told of a page back took off (its own back: the edge's swipe, the system's, Ctx::back): the page, whether it was
+  // pushed over the one under it, whether it rose from the foot, and the pages left
+  went_back : (P, Bool, Bool, Array[P]) -> Unit
   // the pages that come in from the left and go back that way
   from_left : (P) -> Bool
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
@@ -145,10 +148,12 @@ struct Nav[P] {
 /// A stack of pages, `root` at the bottom. `on_leave` is told of each page
 /// that leaves it for good (popped, once it has slid away); a page
 /// `from_left` says yes to slides in from the left and back out that way
-/// (App.kt transition: Settings), swiped back too.
+/// (App.kt transition: Settings), swiped back too. `went_back` is told of each page its own back takes off (the edge's
+/// swipe, the system's back, Ctx::back), as it goes: what a forward puts back.
 pub fn[P] Nav::new(
   root : P,
   on_leave? : (P) -> Unit = fn(_) {  },
+  went_back? : (P, Bool, Bool, Array[P]) -> Unit = fn(_, _, _, _) {  },
   from_left? : (P) -> Bool = fn(_) { false },
 ) -> Nav[P] {
   {
@@ -171,6 +176,7 @@ pub fn[P] Nav::new(
     moved_progress: -1.0,
     moved_p: 0.0,
     on_leave,
+    went_back,
     from_left,
     mover: Mover::new(),
     asked: -1,
@@ -625,7 +631,10 @@ fn[P] Nav::gesture(
       if self.mode == 3 {
         self.let_go()
       } else if self.pages.length() > self.floor + 1 {
-        self.pop() |> ignore
+        let e = self.pages[self.pages.length() - 1]
+        if self.pop() {
+          (self.went_back)(e.page, e.over, e.rise, self.pages())
+        }
       }
   }
 }
@@ -634,6 +643,10 @@ fn[P] Nav::gesture(
 /// Gone back from where a finger left the page: on from there, easing out.
 fn[P] Nav::let_go(self : Nav[P]) -> Unit {
   self.leaving = self.pages.pop()
+  match self.leaving {
+    Some(e) => (self.went_back)(e.page, e.over, e.rise, self.pages())
+    None => ()
+  }
   self.topped()
   self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), Out)
 }

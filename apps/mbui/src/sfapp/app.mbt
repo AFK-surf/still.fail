@@ -147,7 +147,7 @@ fn back_where() -> (() -> Unit)? {
     return @sfdesk.wide_back()
   }
   if app.nav.depth() > 1 {
-    Some(fn() { app.nav.pop() |> ignore })
+    Some(@sfbase.back_pop)
   } else if app.nav.top() != Home {
     Some(fn() { go_place(c, "chats", [], -1) })
   } else {
@@ -207,6 +207,7 @@ fn new_chat_beside() -> Unit {
   if app.nav.top() is NewChat {
     return
   }
+  chats_left()
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -216,6 +217,21 @@ fn new_chat_beside() -> Unit {
     app.nav.replace(Home)
   }
   app.nav.push(NewChat)
+}
+
+///|
+/// The chats in the page pane given up for another chat or a new one there, kept for back beside the sidebar (sfbase's
+/// chat_left); on the tape back goes to the list, as a phone's does.
+fn chats_left() -> Unit {
+  if @sfdesk.wide.tape {
+    return
+  }
+  for p in app.nav.pages() {
+    match p {
+      Chat(open) => @sfbase.chat_left(open)
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -244,6 +260,7 @@ fn open_chat_beside(r : ChatRef) -> Unit {
       }
     }
   }
+  chats_left()
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
