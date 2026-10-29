@@ -114,6 +114,19 @@ fn top_chat() -> ChatRef? {
 }
 
 ///|
+test "message links jump to the specified message in this chat or another chat" {
+  for path in ["/o/ws1/st1/s-c1", "/o/ws1/st1/s-c2", "/w/ws1/s/st1/chats/s-c2"] {
+    let calls : Array[Made] = []
+    let t = links_core(calls, "chat")
+    open_link("https://app.still.fail" + path + "?message=11")
+    let session = if path.has_suffix("s-c1") { "s-c1" } else { "s-c2" }
+    assert_eq(@sfbase.go_tos.get("ws1/st1\u{1}" + session), Some(11.0))
+    assert_eq(top_chat().map(fn(r) { r.session }), Some(session))
+    assert_eq(t.opened().length(), 0)
+  }
+}
+
+///|
 test "a link to an item tapped in a chat: its chat over this one, its web service over that (AppState.open item)" {
   let calls : Array[Made] = []
   let t = links_core(calls, "chat")

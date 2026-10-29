@@ -119,6 +119,10 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     "m:" + m.ts,
     m.time,
     emits=emits.map(fn(l) { (l.emits, l.rk, m.seq) }),
+    share_link=@sfbase.message_link(here.station, here.session, m.seq),
+    share=if here.list is Some(_) {
+      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(m.seq)) } })
+    } else { None },
     fn() { message_avatar(c, src, here, m, agent) },
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
@@ -196,13 +200,17 @@ pub fn others_message(
   key : String,
   time : Stamp?,
   emits? : (Emits, String, Double)? = None,
+  share? : (() -> Unit)? = None,
+  share_link? : String = "",
   avatar : () -> Unit,
   name : () -> Unit,
   route : (() -> Unit)?,
   body : () -> Unit,
 ) -> Unit {
-  c.box(style=msg_row, fn() {
-    let col = c.box(style=msg_main, fn() {
+  let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
+  if row != 0 { c.cursor(row, Arrow) }
+  c.box(style=if share is Some(_) { msg_row_share } else { msg_row }, id=row, fn() {
+    let col = c.box(style=if share is Some(_) { msg_main_share } else { msg_main }, fn() {
       c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
         name()
         if !inline {
@@ -212,6 +220,13 @@ pub fn others_message(
           }
         }
         message_time(c, key, time)
+        match share {
+          Some(go) => {
+            c.spacer()
+            @sfbase.share_turn_tool(c, key, row, share_link, go)
+          }
+          None => ()
+        }
       })
       |> ignore
       if inline {
@@ -374,7 +389,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
         absolute_times.val = !absolute_times.val
       }
       @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
-      c.box(id~, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
+      c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
   }
 }
@@ -982,8 +997,17 @@ let route_mark : Double = 12.0
 let msg_row : @ui.Style = @ui.css("w=Full")
 
 ///|
+/// Keep the header actions clear of the preceding message's time at the same edge.
+// kept across runs: a value (no field of it changes)
+let msg_row_share : @ui.Style = @ui.css("w=Full mt=S1_5")
+
+///|
 // kept across runs: a value (no field of it changes)
 let msg_main : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let msg_main_share : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Its head (msgHead): 24 high at least, its name, route and time 6 apart.
@@ -1015,11 +1039,11 @@ let avatar_held_at : Double = 53.0
 ///|
 /// A name (msgHead msgName): 13 in 600, the accent's ink, 240 at most; the accent itself under the pointer.
 // kept across runs: a value (no field of it changes)
-pub let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
+pub let msg_name_room : @ui.Style = @ui.style(w=Cut, max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false)
+pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false, w=Cut)
 
 
 ///|

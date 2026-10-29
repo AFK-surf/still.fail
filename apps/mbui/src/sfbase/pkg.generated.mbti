@@ -819,6 +819,8 @@ pub let menu_bar_given : @ref.Ref[String]
 
 pub fn menu_bar_json(Json?, Bool) -> String
 
+pub fn message_link(String, String, Double) -> String
+
 pub fn message_of(Json) -> Message
 
 pub fn message_runs(String, Int64, chat_title? : (String) -> String?, marks? : Array[(Int32, Int32)]) -> Array[@ui.Run]
@@ -1314,6 +1316,8 @@ pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit)?]
 
 pub let share_over : @ref.Ref[Bool]
+
+pub fn share_turn_tool(@ui.Ctx, String, Int32, String, () -> Unit) -> Unit
 
 pub let shared_into : Map[String, Array[@hostapi.Picked]]
 
@@ -2290,6 +2294,7 @@ pub(all) struct LinkTarget {
   service : String
   history : String
   entry : Int32?
+  message : Double?
   screen : String
   login : String
 }

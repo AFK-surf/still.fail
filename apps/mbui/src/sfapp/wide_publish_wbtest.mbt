@@ -77,3 +77,55 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
   assert_eq(number(Some(asked[0].params), "turn"), 11.0)
 }
+
+///|
+test "wide: the message header offers its position link and its turn's picture separately" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let before = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  t.move(x + 24.0, y + 8.0)
+  t.frame()
+  t.frame()
+  assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
+  t.click(Button, label="复制链接")
+  assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
+  assert_eq(named(calls, "chat.publishPreview").length(), 0)
+  let button = t.get(Button, label="分享图片").rect
+  // Both actions stay on the header line, with the picture after the link.
+  assert_true(button.1 + button.3 <= before.1)
+  let link = t.get(Button, label="复制链接").rect
+  assert_true(link.0 + link.2 <= button.0)
+  assert_eq(link.1, button.1)
+  t.move(button.0 + button.2 / 2.0, button.1 + button.3 / 2.0)
+  t.frame()
+  assert_true(t.query(Button, label="分享图片") is Some(_))
+  t.click(Button, label="分享图片")
+  t.frame()
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_eq(number(Some(asked[0].params), "thread"), 7.0)
+  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+}
+
+///|
+test "touch: both message sharing entries are visible without hovering" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  let link = t.all(Button, label="复制链接").last().unwrap().rect
+  assert_true(t.all(Button, label="分享图片").length() > 0)
+  t.tap(link.0 + link.2 / 2.0, link.1 + link.3 / 2.0)
+  assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
+  assert_eq(named(calls, "chat.publishPreview").length(), 0)
+}

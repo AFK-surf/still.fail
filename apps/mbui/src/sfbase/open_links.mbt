@@ -29,6 +29,7 @@ pub(all) struct LinkTarget {
   service : String
   history : String
   entry : Int?
+  message : Double?
   screen : String
   login : String
 }
@@ -47,6 +48,10 @@ pub fn link_target(v : Json) -> LinkTarget {
     history: text(j, "history"),
     entry: match field(j, "entry") {
       Some(Number(n, ..)) => Some(n.to_int())
+      _ => None
+    },
+    message: match field(j, "message") {
+      Some(Number(n, ..)) if n > 0.0 => Some(n)
       _ => None
     },
     screen: text(j, "screen"),
@@ -131,6 +136,7 @@ pub fn open_link_in(
 ///|
 /// What a link opens, opened (AppState.open): false when it opens nothing here.
 pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bool {
+  let at = match at { Some(_) => at; None => t.message }
   let ws = t.workspace
   let address = ws + "/" + t.station
   let current = link_workspace.val
@@ -154,6 +160,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         return false
       }
       let r = chat_ref(address, t.chat)
+      match at { Some(seq) => go_to(r, seq); None => () }
       match app.nav.top() {
         Chat(top) if top.station == address && top.session == t.chat => ()
         _ =>
@@ -172,6 +179,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       if t.session == "" {
         return false
       }
+      match at { Some(seq) => go_to(chat_ref(address, t.session), seq); None => () }
       let service = if t.service == "" { None } else { Some(t.service) }
       let top = app.nav.top()
       let here = match top {

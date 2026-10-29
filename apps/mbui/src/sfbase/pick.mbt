@@ -32,6 +32,47 @@ pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, sel: @kit.P
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit)?] = Ref(None)
 
 ///|
+/// Links to this message and pictures of its turn, beside its author's name and time.
+/// A resting pointer reveals them; touch keeps both visible because there is no hover.
+pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go : () -> Unit) -> Unit {
+  match c.menu_asked(row) {
+    Some((x, y)) if !@sf.more_held() => share_offered.val = Some((c.frame_number(), x, y, go))
+    _ => ()
+  }
+  let touch = @sf.more_held()
+  c.box(style=if touch { share_tools_touch } else { share_tools_mouse }, fn() {
+    c.box(style=share_turn_room, fn() {
+      c.hand_shown(touch || c.hovered(row), fn() {
+        if @sf.icon_button(c, "link", key=key + "/message-link", size=24.0, label=@sf.t("common.link.copy"), disabled=link == "") {
+          c.copy_text(link)
+          say(c, @sf.t("common.link.copied"))
+        }
+      })
+    }) |> ignore
+    c.box(style=share_turn_room, fn() {
+      c.hand_shown(touch || c.hovered(row), fn() {
+        if @sf.icon_button(c, "photo", key=key + "/share-turn", size=24.0, label=@sf.t("web-pages.chat.shareImage")) {
+          pick_clear()
+          go()
+        }
+      })
+    }) |> ignore
+  }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_tools_mouse : @ui.Style = @ui.css("row w=Hug gap=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_tools_touch : @ui.Style = @ui.css("row w=Hug pl=S3_5 gap=S5")
+
+///|
 /// Let go of what is picked.
 pub fn pick_clear() -> Unit {
   pk.ts = ""

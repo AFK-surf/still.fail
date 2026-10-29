@@ -48,6 +48,17 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.ok(devCloud(dev) && devCloud("http://localhost:1") && !devCloud(cloud) && !devCloud("http://10.0.2.2"));
 });
 
+test("message links keep their exact destination and reject invalid sequence numbers", () => {
+  const cloud = "https://app.still.fail";
+  for (const path of ["/o/ws1/st1/ember%3Ac-1", "/w/ws1/s/st1/chats/c-1"]) {
+    assert.equal(linkTarget(`${cloud}${path}?message=11`, cloud).message, 11);
+    for (const value of ["0", "-1", "1.5", "x", "9007199254740992"]) {
+      assert.equal(linkTarget(`${cloud}${path}?message=${value}`, cloud).message, undefined);
+    }
+  }
+  assert.equal(linkTarget(`${cloud}/o/ws1/st1/ember%3Ac-1?message=11`, cloud).session, "ember:c-1");
+});
+
 test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
   const host = new FakeHost();
   host.onFetch((req) => {
