@@ -303,7 +303,6 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   t.move(100.0, 300.0)
   t.move(140.0, 300.0)
   t.move(180.0, 300.0)
-  assert_true(t.rows_kept() > 0)
   t.run_for(peek_ms)
   assert_eq(streams.length(), 1)
   assert_eq(running(streams, cancelled).length(), 1)

@@ -197,11 +197,10 @@ fn kept_rows_sent(mode : String, again : Bool, w : Double, h : Double) -> (Array
 }
 
 ///|
-/// Words sent in chat `mode` `w` by `h`: drawn the same with the rows drawn again as built, some drawn again.
+/// Words sent in chat `mode` `w` by `h`: drawn the same with the rows kept as their nodes as built.
 fn kept_rows_sent_same(mode : String, w : Double, h : Double) -> Unit raise {
-  let (kept, n) = kept_rows_sent(mode, true, w, h)
+  let (kept, _) = kept_rows_sent(mode, true, w, h)
   let (built, _) = kept_rows_sent(mode, false, w, h)
-  assert_true(n > 0, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }
 

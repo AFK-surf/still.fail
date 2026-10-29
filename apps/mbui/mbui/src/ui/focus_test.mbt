@@ -223,3 +223,23 @@ test "a Tester starts with a fresh context: no focus, theme or direction of the 
   assert_eq(t2.ctx().direction(), Ltr)
   assert_true(t2.focused() is None)
 }
+
+///|
+test "Tab goes into a list's rows too, built as the list is laid out" {
+  let t = Tester::new(fn(c) {
+    c.column(fn() {
+      btn(c, "before") |> ignore
+      c.list("rows", 3, 30.0, h=Px(120.0), fn(i) { btn(c, "row \{i}") |> ignore }) |> ignore
+      btn(c, "after") |> ignore
+    })
+    |> ignore
+  })
+  t.tab()
+  assert_eq(t.focused().unwrap().label, "before")
+  t.tab()
+  assert_eq(t.focused().unwrap().label, "row 0")
+  t.tab()
+  t.tab()
+  t.tab()
+  assert_eq(t.focused().unwrap().label, "after")
+}

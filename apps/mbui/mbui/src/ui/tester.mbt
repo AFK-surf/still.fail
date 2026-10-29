@@ -366,7 +366,6 @@ pub fn Tester::new(
   corners_hold.val = corners_held
   // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
   // Tester::keep_parts)
-  parts_on.val = false
   drawn_again_on.val = true
   rows_grid_test.val = false
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)

@@ -51,7 +51,7 @@ priv struct KeptPart {
   cycles : Map[Int, CycleLook]
   /// read out (Ctx::kept_part's `read_out`: a panel in use): what its build said to what reads the widgets (relative
   /// to its box, as a row's: RowKept's `sems`), said again as it is drawn again; whether its last build was read out
-  mut read : Bool
+  read : Bool
   sems : Array[SemNode]
   mut read_out : Bool
   /// its last build drew what is built each frame wherever it is: a native view's hole (put where it is each frame:
@@ -210,26 +210,15 @@ fn outside_came() -> Unit {
 }
 
 ///|
-/// Whether parts are kept at all, and with them a list's rows (kept_rows.mbt): off, every frame built whole, on a
-/// host's frames as in a Tester's but where a test of them says so (Tester::keep_parts). Drawing a part or a row again
-/// from what its build and its paint drew and said, every kind of thing it may hold (a move set after it was laid out,
-/// how opaque what holds it is, what floats over it, the words a run looks for) has to be recorded and said again by
-/// hand, and each one left out shows on the screen wrongly (2026-10-27: a reshaped composer, a page sliding out, the
-/// sidebar's rows): off until what is built is a value of its own, kept by what it read, with nothing to record
-/// (docs/incremental.md).
-// kept across runs: set by each Tester (Tester::new, keep_parts)
-let parts_on : Ref[Bool] = Ref(false)
-
-///|
-/// Parts kept as a host keeps them (Ctx::kept_part), from now on, or not (every frame built whole: a Tester's own); a
-/// list's rows with them (kept_rows.mbt).
+/// A list's rows laid on the device's pixels as a host lays them (Ctx::rows_on_grid), from now on, or not (as every
+/// frame of a Tester's was always laid out).
 pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {
   ignore(self)
   // (how frames are built changed by the test, a list's rows set on the pixels with it: the next built whole)
-  if parts_on.val != on {
+  if rows_grid_test.val != on {
     test_stepped()
   }
-  parts_on.val = on
+  rows_grid_test.val = on
 }
 
 ///|
@@ -323,139 +312,8 @@ fn parts_forget() -> Unit {
 /// row kept, semantics.mbt), built each frame while it holds what is built each frame wherever it is (a native view, the
 /// field that takes the keys).
 pub fn Ctx::kept_part(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
-  // parts not kept as drawn (parts_on): kept as its nodes, under a watch of its own (kept_nodes.mbt)
-  if !parts_on.val {
-    self.part_nodes(id, key, body, read_out)
-    return
-  }
-  let st = match kept_parts.get(id) {
-    Some(st) => st
-    None => {
-      let st = kept_new(id, row=false)
-      kept_parts[id] = st
-      st
-    }
-  }
-  // (shown in the frame before, or in this one's build before: else it comes now, built)
-  if st.shown < self.frame_no - 1 {
-    st.built = -1
-  }
-  st.shown = self.frame_no
-  // (a finger or a button held down on it: what it holds may take the press, a hold picking its words)
-  let (rx, ry, rw, rh) = st.rect
-  let held = self.down &&
-    self.press_x >= rx &&
-    self.press_x < rx + rw &&
-    self.press_y >= ry &&
-    self.press_y < ry + rh
-  // (the mouse's pointer over it, or what the pointer is over one of its targets as it was built or now: it lights what
-  // it points at, a frame late)
-  let pointed = st.lit ||
-    self.part_lit(st) ||
-    (pointing() is Mouse && self.px >= rx && self.px < rx + rw && self.py >= ry && self.py < ry + rh)
-  let same = parts_on.val &&
-    drawn_again_on.val &&
-    !held &&
-    !pointed &&
-    !inst_owners.on &&
-    st.built >= 0 &&
-    st.built != self.frame_no &&
-    st.drawn == st.built &&
-    st.key == key &&
-    st.outside == outside_events.val &&
-    st.epoch == self.epoch &&
-    st.scale == self.scale &&
-    st.pointing == pointing() &&
-    !st.shifted &&
-    !(read_out && (st.holds_live || st.came_built)) &&
-    st.read == read_out &&
-    // (read out: what it said taken as it was built, else built so that it is)
-    (!read_out || st.read_out || !self.reads_out)
-  st.read = read_out
-  st.body.val = body
-  if !same {
-    st.tracker.invalidate()
-  }
-  let mut ran = false
-  // (what holds it, a part or a row being built, reads what it read: its computed is none of what holds it reads, so
-  // that what holds it never runs its build to see whether it changed)
-  let holder = part_holder()
-  let i = self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
-    let part = part_now.part
-    part_now.part = id
-    let build = fn() {
-      let reading = @signals.set_active_sub(None)
-      let stamp = st.tracker.get()
-      @signals.set_active_sub(reading) |> ignore
-      if stamp != st.stamp {
-        ran = true
-        st.stamp = stamp
-      }
-    }
-    // (not read out: it is only drawn, built or drawn again alike)
-    if read_out {
-      build()
-    } else {
-      self.hidden_from_semantics(build)
-    }
-    part_now.part = part
-  })
-  match holder {
-    Some(h) => st.tracker.lend(h)
-    None => ()
-  }
-  let e = self.drawn_of(i)
-  st.again = !ran
-  if ran {
-    // (its rows say theirs as its lists are laid out)
-    st.rows_said.clear()
-    // (what it says to what reads the widgets taken as the frame's tree is: semantics.mbt)
-    st.sems.clear()
-    st.read_out = false
-    // (built while rows are not kept, a frame measured for contrast, parts off: its lists' rows said nothing to say
-    // again, so it is not drawn again from it)
-    st.built = if self.rows_on() { self.frame_no } else { -1 }
-    st.came_built = st.outside != outside_events.val
-    st.key = key
-    st.outside = outside_events.val
-    st.epoch = self.epoch
-    st.scale = self.scale
-    st.pointing = pointing()
-    // what it draws taken as it is painted
-    e.part = id
-  } else {
-    // drawn again: what it draws from kept through this frame, the frame it asked for coming
-    e.again = Some(st)
-    // what its build said of the frame said again where it said it, of its box (said.mbt)
-    self.say_again(st.built_said, moved_to(i))
-    // (where its box is laid out: drawn there, the packages told, Ctx::parts_placed)
-    parts_again.push((i, st))
-    // (the rows of its lists its drawing holds: shown with it, not let go, the packages told of them as of it, and what
-    // they said said again where its box is laid out, as they said it as its lists were: Ctx::parts_rows_laid)
-    for rid in st.rows_said {
-      match kept_rows.get(rid) {
-        Some({ row: Some(rk), .. } as rp) => {
-          rp.shown = self.frame_no
-          rp.again = true
-          rk.kept = true
-        }
-        _ => ()
-      }
-    }
-    if !st.rows_said.is_empty() {
-      parts_laid_again[i] = st
-    }
-    for p in st.plots {
-      if p >= part_colour_plot {
-        atlas_for(true).0.drawn(p - part_colour_plot)
-      } else {
-        atlas_for(false).0.drawn(p)
-      }
-    }
-    for img in st.images {
-      img.used = self.frame_no
-    }
-  }
+  // kept as its nodes, under a watch of its own (kept_nodes.mbt)
+  self.part_nodes(id, key, body, read_out)
 }
 
 ///|
@@ -539,17 +397,10 @@ let part_stamp : Ref[Int] = Ref(0)
 let part_colour_plot : Int = 1 << 20
 
 ///|
-/// How many parts the last frame drew again as their last build drew them (Ctx::kept_part), not built.
+/// How many parts the last frame kept as their nodes (Ctx::kept_part, kept_nodes.mbt), not built.
 pub fn Tester::parts_kept(self : Tester) -> Int {
   ignore(self)
-  let c = g()
-  let mut n = 0
-  for _, st in kept_parts {
-    if st.shown == c.frame_no && st.again {
-      n = n + 1
-    }
-  }
-  n
+  nodes_run.kept_at.iter().filter(fn(k) { k.1 < 0 }).count()
 }
 
 ///|

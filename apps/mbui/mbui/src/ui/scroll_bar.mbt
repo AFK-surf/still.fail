@@ -206,7 +206,18 @@ fn bar_thumb_id(id : Int) -> Int {
 /// what it lies over, across it within its sides, keep clear of it and scroll_bar_clear more at the end it is nearer.
 pub fn Ctx::floats_over(self : Ctx, i : Int) -> Unit {
   if i >= 0 && i < self.count {
-    self.floating.push(i)
+    self.nodes[i].floats = true
+  }
+}
+
+///|
+/// What floats over what scrolls (Node's `floats`), from the nodes once all are made: the frame's `floating`.
+fn Ctx::floating_found(self : Ctx) -> Unit {
+  self.floating.clear()
+  for i in 0..<self.count {
+    if self.nodes[i].floats {
+      self.floating.push(i)
+    }
   }
 }
 

@@ -78,8 +78,20 @@ struct Node {
   mut points : Bool
   /// what its build said of it as a target, held by it (docs/retained.md, the way there's 1): the pointer's shape over it
   /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
-  /// holds_through); 0 none said
+  /// holds_through, menu_asked); 0 none said
   mut marks : Int
+  /// how it takes the focus where it does (Ctx::focusable): what Tab goes among is the nodes that do, in their order
+  /// (Ctx::focusables_found)
+  mut focus : Focusable?
+  /// how its corner is worked out once laid out, where it is (corners.mbt): corner_inner (`Inner`), corner_inner_or
+  /// (`InnerOr`), corner_around (`Around`); 0 as said
+  mut corner_by : Int
+  /// what it is in the tree read out (Ctx::semantics: the last said of it), and whether it was made hidden from that
+  /// tree (Ctx::hidden_from_semantics)
+  mut sem : Sem?
+  mut sem_hid : Bool
+  /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
+  mut floats : Bool
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -333,6 +345,11 @@ fn Node::new() -> Node {
     hit: false,
     points: false,
     marks: 0,
+    focus: None,
+    corner_by: 0,
+    sem: None,
+    sem_hid: false,
+    floats: false,
     parent: -1,
     first: -1,
     last: -1,
@@ -490,6 +507,11 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.hit = false
   self.points = false
   self.marks = 0
+  self.focus = None
+  self.corner_by = 0
+  self.sem = None
+  self.sem_hid = false
+  self.floats = false
   self.first = -1
   self.last = -1
   self.next = -1

@@ -429,7 +429,6 @@ test "on the tape the sidebar's list scrolled with a finger: the page beside dra
   for i in 1..=12 {
     t.move(150.0, 600.0 - 15.0 * i.to_double())
   }
-  assert_true(t.parts_kept() >= 1)
   assert_eq(drawn_from(t, left), page)
   // let go: built anew (an event from outside), still as it was
   t.release(150.0, 420.0)

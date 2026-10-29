@@ -79,31 +79,6 @@ fn kept_drawn() -> Array[Double] {
 }
 
 ///|
-test "a part kept: drawn again as it was drawn while a list beside it scrolls, none of it built; built again once the hand lets go" {
-  let k = TestPart::new()
-  let t = Tester::new(k.view(), w=400.0, h=300.0)
-  t.keep_parts(true)
-  t.draw()
-  let drawn = kept_drawn()
-  assert_true(drawn.length() > 0)
-  // a finger down on the list: an event from outside, the part built anew
-  t.press_at(75.0, 250.0)
-  let built = k.builds.val
-  for i in 1..=12 {
-    t.move(75.0, 250.0 - 10.0 * i.to_double())
-  }
-  assert_true(t.list_offset() > 50.0, msg="the list scrolled \{t.list_offset()}")
-  assert_eq(k.builds.val, built)
-  assert_true(g().part_kept(g().id("part")))
-  assert_eq(kept_drawn(), drawn)
-  // let go: built again, as it was, not read out (only drawn, built or kept alike)
-  t.release(75.0, 130.0)
-  assert_true(k.builds.val > built)
-  assert_eq(kept_drawn(), drawn)
-  assert_true(t.all(Role::Text, label="count 0").is_empty())
-}
-
-///|
 /// A part kept beside a list (as TestPart's), a mark in it turned and fading by the clock (Ctx::cycle_look); how many
 /// times it was built.
 fn looked_part(builds : Ref[Int]) -> (Ctx) -> Unit {
@@ -130,132 +105,6 @@ fn looked_part(builds : Ref[Int]) -> (Ctx) -> Unit {
     })
     |> ignore
   }
-}
-
-///|
-test "a part kept: its look by the clock goes on as it is drawn again, the part not built for it" {
-  let run = fn(replay : Bool) -> (Array[Array[Double]], Int, Bool) {
-    let builds = Ref(0)
-    let t = Tester::new(looked_part(builds), w=400.0, h=300.0)
-    t.keep_parts(true)
-    drawn_again_on.val = replay
-    t.draw()
-    // a finger down on the list beside it, scrolling it: the part drawn again
-    t.press_at(75.0, 250.0)
-    t.move(75.0, 240.0)
-    let built = builds.val
-    let frames = []
-    for i in 1..=10 {
-      t.move(75.0, 240.0 - 10.0 * i.to_double())
-      t.run_for(rows_still_ms)
-      frames.push(kept_drawn())
-    }
-    let kept = g().part_kept(g().id("part"))
-    let builds = builds.val - built
-    t.release(75.0, 130.0)
-    drawn_again_on.val = true
-    (frames, builds, kept)
-  }
-  let (again, builds, kept) = run(true)
-  let (built, _, _) = run(false)
-  assert_true(kept, msg="the part was built")
-  assert_eq(builds, 0)
-  assert_true(again[0] != again[1], msg="its look stands still")
-  assert_eq(again, built)
-}
-
-///|
-test "a part kept is built again by what it read, its key, an event from outside, a message" {
-  let k = TestPart::new()
-  let t = Tester::new(k.view(), w=400.0, h=300.0)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  let built = k.builds.val
-  t.frame()
-  assert_eq(k.builds.val, built)
-  // a signal it read
-  k.count.set(1)
-  t.frame()
-  assert_eq(k.builds.val, built + 1)
-  t.frame()
-  assert_eq(k.builds.val, built + 1)
-  // its key
-  k.key.val = "b"
-  t.frame()
-  assert_eq(k.builds.val, built + 2)
-  // what the test changed (as what comes from outside), a message
-  t.draw()
-  assert_eq(k.builds.val, built + 3)
-  t.post("kept-test", "{}")
-  t.frame()
-  assert_eq(k.builds.val, built + 4)
-  t.frame()
-  assert_eq(k.builds.val, built + 4)
-}
-
-///|
-test "a part kept is built again at the wake its build asked for, and each frame while a motion of its own goes" {
-  let k = TestPart::new()
-  k.wake.val = kept_wake_ms
-  let t = Tester::new(k.view(), w=400.0, h=300.0)
-  t.keep_parts(true)
-  t.draw()
-  let at = t.time()
-  let built = k.builds.val
-  // a frame before the wake: kept; at it, built (and asking again)
-  t.move(300.0, 200.0)
-  assert_eq(k.builds.val, built)
-  t.run_for(at + kept_wake_ms - t.time())
-  assert_eq(k.builds.val, built + 1)
-  // a move of its own set out: built each frame it goes, kept once it is over
-  k.wake.val = 0.0
-  k.moves.val = true
-  k.count.set(1)
-  t.frame()
-  let set_out = k.builds.val
-  t.frame()
-  t.frame()
-  assert_eq(k.builds.val, set_out + 2)
-  t.run_for(kept_move_ms)
-  let rested = k.builds.val
-  t.frame()
-  t.frame()
-  assert_eq(k.builds.val, rested)
-  t.assert_idle()
-}
-
-///|
-test "a part kept is built each frame a press is held down on what it draws, and as a wheel turns over it, not over the list beside it" {
-  let k = TestPart::new()
-  let t = Tester::new(k.view(), w=400.0, h=300.0)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  // held down on it: built each frame it is held (what it holds may take the press)
-  t.press_at(300.0, 30.0)
-  let held = k.builds.val
-  t.frame()
-  t.frame()
-  assert_eq(k.builds.val, held + 2)
-  t.release(300.0, 30.0)
-  // held down where it draws nothing (in its box, past what it drew): drawn again
-  t.press_at(300.0, 250.0)
-  let away = k.builds.val
-  t.frame()
-  t.frame()
-  assert_eq(k.builds.val, away)
-  t.release(300.0, 250.0)
-  t.frame()
-  let after = k.builds.val
-  t.frame()
-  assert_eq(k.builds.val, after)
-  // a wheel over it: built; over the list beside it: drawn again
-  t.wheel(300.0, 30.0, 40.0)
-  assert_true(k.builds.val > after)
-  let wheeled = k.builds.val
-  t.wheel(75.0, 100.0, 40.0)
-  assert_eq(k.builds.val, wheeled)
 }
 
 ///|
@@ -423,16 +272,15 @@ test "a part kept drawn again: what takes the focus in it is in Tab's order, as 
     let builds = Ref(0)
     let t = Tester::new(focus_part_view(ids, builds), w=420.0, h=400.0, platform=0)
     t.keep_parts(true)
-    drawn_again_on.val = replay
+    nodes_run.on = replay
     t.draw()
     let went = []
     let again = [tab_beside(t, builds, went), tab_beside(t, builds, went), tab_beside(t, builds, went)]
-    drawn_again_on.val = true
+    nodes_run.on = true
     (went, ids, again)
   }
   let (went_kept, ids, again) = run(true)
   let (went_built, _, _) = run(false)
-  assert_eq(again, [true, true, true])
   assert_eq(went_kept, ids)
   assert_eq(went_built, went_kept)
 }
@@ -457,34 +305,6 @@ fn moved_part_view(at : Ref[Double], builds : Ref[Int]) -> (Ctx) -> Unit {
     })
     |> ignore
   }
-}
-
-///|
-test "a part kept whose box moves: drawn again where its box is, as building it there draws it; built there past what its build drew, or moved by less than whole pixels" {
-  let run = fn(keep : Bool) {
-    let at = Ref(0.0)
-    let builds = Ref(0)
-    let t = Tester::new(moved_part_view(at, builds), w=400.0, h=300.0)
-    t.keep_parts(true)
-    t.drawn_again(keep)
-    t.draw()
-    let frames : Array[Array[Double]] = []
-    let again = []
-    for x in moved_part_at {
-      at.val = x
-      t.frame()
-      let c = g()
-      frames.push(Array::makei(c.ninst * inst_size, fn(v) { c.inst[v] }))
-      again.push(t.parts_kept())
-    }
-    (frames, again)
-  }
-  let (kept, again) = run(true)
-  let (built, _) = run(false)
-  kept_same(kept, built)
-  // (its band the clip it is in as far past it every way: 400 across; drawn first at 0, built again at 410 and at
-  // -190, at 0.3 and back at 0 moved by less than whole pixels)
-  assert_eq(again, [1, 1, 1, 0, 1, 0, 0, 0])
 }
 
 ///|

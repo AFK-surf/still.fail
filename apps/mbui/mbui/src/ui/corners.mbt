@@ -57,6 +57,37 @@ fn Node::pressed_row(self : Node) -> Bool {
 }
 
 ///|
+/// How a box's corner is worked out once laid out (Node's `corner_by`): from its container's (`Inner`), the same but
+/// its own where it is in none (`InnerOr`), from what lies in it (`Around`).
+let corner_inner : Int = 1
+
+///|
+let corner_inner_or : Int = 2
+
+///|
+let corner_around : Int = 3
+
+///|
+/// The boxes whose corner is worked out once laid out, from the nodes (in the order they were made): the frame's
+/// inners, inners_or and arounds.
+fn Ctx::corners_found(self : Ctx) -> Unit {
+  self.inners.clear()
+  self.inners_or.clear()
+  self.arounds.clear()
+  for i in 0..<self.count {
+    match self.nodes[i].corner_by {
+      1 => self.inners.push(i)
+      2 => {
+        self.inners.push(i)
+        self.inners_or.push(i)
+      }
+      3 => self.arounds.push(i)
+      _ => ()
+    }
+  }
+}
+
+///|
 /// Whether node `p` is a row whose corner says it follows its container's (`Inner`, `InnerOr`: a list's row the
 /// ladder's inset in), wider than tall: a row of the list whether it can be pressed or not, what is in it its, as in a
 /// pressed row (pressed_row).

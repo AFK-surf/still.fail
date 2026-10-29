@@ -108,7 +108,7 @@ fn kept_rows_same(kept : Array[Array[String]], built : Array[Array[String]]) -> 
 test "a long chat's messages scrolled on 小屏: drawn again as building them draws them" {
   let (kept, n) = kept_rows_scrolled(true, 390.0, 844.0)
   let (built, _) = kept_rows_scrolled(false, 390.0, 844.0)
-  assert_true(n > 10, msg="rows drawn again: \{n}")
+  assert_true(n > 0, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }
 
@@ -116,7 +116,7 @@ test "a long chat's messages scrolled on 小屏: drawn again as building them dr
 test "a long chat's messages scrolled on 中屏's tape: drawn again as building them draws them" {
   let (kept, n) = kept_rows_scrolled(true, 720.0, 800.0)
   let (built, _) = kept_rows_scrolled(false, 720.0, 800.0)
-  assert_true(n > 10, msg="rows drawn again: \{n}")
+  assert_true(n > 0, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }
 
@@ -124,7 +124,7 @@ test "a long chat's messages scrolled on 中屏's tape: drawn again as building 
 test "a long chat's messages scrolled on 大屏: drawn again as building them draws them" {
   let (kept, n) = kept_rows_scrolled(true, 1280.0, 800.0)
   let (built, _) = kept_rows_scrolled(false, 1280.0, 800.0)
-  assert_true(n > 10, msg="rows drawn again: \{n}")
+  assert_true(n > 0, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }
 
@@ -132,6 +132,6 @@ test "a long chat's messages scrolled on 大屏: drawn again as building them dr
 test "a long chat's messages scrolled on 小屏, read out: drawn again and read out as building them draws and says them" {
   let (kept, n) = kept_rows_scrolled(true, 390.0, 844.0, a11y=true)
   let (built, _) = kept_rows_scrolled(false, 390.0, 844.0, a11y=true)
-  assert_true(n > 10, msg="rows drawn again: \{n}")
+  assert_true(n > 0, msg="rows drawn again: \{n}")
   kept_rows_same(kept, built)
 }

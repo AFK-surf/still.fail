@@ -162,7 +162,7 @@ priv struct Drawn {
   mut ground_bg : Int64?
   /// a part kept (Ctx::kept_part): built this frame, what it draws taken as it is painted (its id, 0 none); else drawn again
   /// as its last build drew it, in place of what it holds; a list's row kept so (kept_rows.mbt: its id among the rows')
-  mut part : Int
+  part : Int
   mut again : KeptPart?
   mut row : Int
   /// a list's row: the row whose build said what it said of the frame (its id among the rows', 0 none), said where its

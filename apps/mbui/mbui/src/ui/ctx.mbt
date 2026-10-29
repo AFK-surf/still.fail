@@ -281,8 +281,6 @@ pub struct Ctx {
   /// a stack's page in the hand this frame (Ctx::nav: swiped back, a finger's or the system's gesture), between where it
   /// rests and where it goes: what is drawn on it stands anywhere, as in a motion (Tester::hold_corners)
   mut page_in_hand : Bool
-  /// what is held near the top of a list as its row scrolls past (Ctx::stick), in the order built this frame
-  stuck : Array[Int]
   // hit targets of the last frame, in paint order, and those being collected
   mut hit_ids : Array[Int]
   mut hit_rects : Array[Double]
@@ -304,6 +302,8 @@ pub struct Ctx {
   // made, to be marked on it as it is
   built_ids : Map[Int, Int]
   marks_ahead : Map[Int, Int]
+  /// what was said to take the focus by its id before its node was made (Ctx::focusable), to be marked on it as it is
+  focus_ahead : Map[Int, Focusable]
   // the hit targets of the last frame (and of this one, collected) that are pointed at and never pressed (Ctx::box's
   // `points`): a press, or a finger reaching round it, goes past them to what holds them
   mut points : Map[Int, Bool]
@@ -497,9 +497,9 @@ pub struct Ctx {
   mut theme_narrow : Theme?
   mut narrow_below : Double
   mut narrow : Bool
-  // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
-  // those that could not be (Tester::corner_faults says them); of them, those `InnerOr`, their own corner where they lie
-  // in no container's
+  // the boxes of the frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and those
+  // that could not be (Tester::corner_faults says them); of them, those `InnerOr`, their own corner where they lie in
+  // no container's: found from the nodes once laid out (Node's `corner_by`, corners_found)
   inners : Array[Int]
   inners_or : Array[Int]
   // what move_state moves (move_state.mbt): the moves going on; what each box named to be moved was shown as, this
@@ -508,7 +508,8 @@ pub struct Ctx {
   mut shown_now : Map[String, MoveShown]
   mut shown_last : Map[String, MoveShown]
   move_seen : Map[String, Int]
-  // the boxes built this frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt)
+  // the boxes of the frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt), found as
+  // the inners are
   arounds : Array[Int]
   inner_faults : Array[String]
   // the corner ladder of the theme the view was built under (Theme::corner_ladder: the frame's, or one put in force
@@ -542,11 +543,11 @@ pub struct Ctx {
   /// each of the window's corners as the system draws them (top left, then round it), window_corner the roundest
   window_corners : FixedArray[Double]
   mut direction : Direction
-  // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
-  // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
+  // what the widgets of the frame say they are (semantics.mbt: found from the nodes, sems_found), and how deep in a
+  // part hidden from it the view builds; the actions asked of them (by the host's accessibility, a test) for the next
+  // frame, and this frame's
   sems : Array[Sem]
   mut sem_hide : Int
-  sem_hidden : Array[(Int, Int)]
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
   // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
@@ -631,7 +632,6 @@ fn Ctx::new() -> Ctx {
     frame_by: None,
     wake_by: None,
     page_in_hand: false,
-    stuck: [],
     hit_ids: [],
     hit_rects: [],
     next_hit_ids: [],
@@ -644,6 +644,7 @@ fn Ctx::new() -> Ctx {
     next_hit_marks: [],
     built_ids: {},
     marks_ahead: {},
+    focus_ahead: {},
     points: {},
     passes: {},
     next_passes: {},
@@ -782,7 +783,6 @@ fn Ctx::new() -> Ctx {
     direction: Ltr,
     sems: [],
     sem_hide: 0,
-    sem_hidden: [],
     asked_actions: [],
     actions: [],
     a11y_sent: "",
@@ -908,6 +908,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int
   let n = self.nodes[i]
   n.kind = kind
   n.in_sideways = self.sideways_depth > 0
+  n.sem_hid = self.sem_hide > 0
   n.bones = self.bones
   n.parent = self.cur
   if self.cur >= 0 {
@@ -1292,16 +1293,12 @@ pub fn Ctx::box(
     }
   }
   // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt); `InnerOr`, its own till then
-  if radius is None && st.radius is Some(Inner) {
-    self.inners.push(i)
-  }
-  if radius is None && st.radius is Some(InnerOr(_)) {
-    self.inners.push(i)
-    self.inners_or.push(i)
-  }
   // `Around`: from what lies in its corner, once laid out
-  if radius is None && st.radius is Some(Around) {
-    self.arounds.push(i)
+  n.corner_by = match (radius, st.radius) {
+    (None, Some(Inner)) => corner_inner
+    (None, Some(InnerOr(_))) => corner_inner_or
+    (None, Some(Around)) => corner_around
+    _ => 0
   }
   n.border_w = first(
     border,

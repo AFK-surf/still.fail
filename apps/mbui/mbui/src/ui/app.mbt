@@ -297,10 +297,18 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
         c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
         late = late + 1
       }
+      // what floats over what scrolls, all of it made now (a list's rows as it was laid out), for the parts drawn again
+      // to read where they are (scroll_bar.mbt)
+      c.floating_found()
       // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where
       // its box is, or built there where it cannot be (kept_part.mbt)
       c.parts_rows_left()
       c.parts_placed()
+      // what the nodes hold of the frame, all of them made now (a list's rows as it was laid out): what Tab goes among
+      // (focus.mbt), the corners worked out once laid out (corners.mbt)
+      c.focusables_found()
+      c.corners_found()
+      c.sems_found()
       // what rows left out where they had not the room, drawn nowhere (readback.mbt)
       c.left_out_after_layout()
       // what covers an item, over it as laid out now (cover.mbt)
@@ -564,10 +572,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes_known()
   // (the rows kept as their nodes out of the frame's, for this build to make its own: kept_nodes.mbt)
   c.rows_detach()
-  c.inners.clear()
-  c.inners_or.clear()
   c.moves_build_start()
-  c.arounds.clear()
   c.corner_ladder = c.theme.corner_ladder
   c.corner_fit = c.theme.corner_fit
   c.lit_asked.clear()
@@ -585,6 +590,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   desk_build_start()
   c.built_ids.clear()
   c.marks_ahead.clear()
+  c.focus_ahead.clear()
   // (where the build says streams, native views and pictures at a rect of their own are drawn, by node: kept till the
   // next build, a frame painted again alone drawing them where its build said: frame_watch.mbt)
   stream_nodes.clear()
@@ -592,16 +598,12 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   picture_at.clear()
   c.layers.clear()
   c.focusables.clear()
-  c.sems.clear()
   c.sem_hide = 0
-  c.sem_hidden.clear()
   c.layer_cur = 0
   c.group_cur = 0
   c.count = 0
   c.cur = -1
-  c.stuck.clear()
   c.press_owners.clear()
-  c.floating.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)
@@ -1392,12 +1394,6 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
       // (where it stands its signal's: what lays it out lays it out again, nothing taken by what is built; where parts
       // are kept as drawn, kept_part.mbt, an event from outside for the part or the row it turns in)
       st.hand_moved()
-      if parts_on.val {
-        inputs_taken.val = true
-        if part_under(x, y) || row_scroller_under(x, y) {
-          outside_came()
-        }
-      }
       h_request_frame()
     }
     None => wheel_taken()

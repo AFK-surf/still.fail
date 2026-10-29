@@ -652,7 +652,6 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
     !c.read_back_moved &&
     !held &&
     bench.mode == 0 &&
-    !parts_on.val &&
     // (a host that tells no events of its own (a picture decoded, a view ready) is read each build: every frame
     // built whole there)
     (fake.val is Some(_) || outside_told.val)
