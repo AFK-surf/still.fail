@@ -54,6 +54,9 @@ void *mb_render_context(void);  // ID3D11DeviceContext *, the UI thread's
 void *mb_render_dcomp(void);
 void *mb_render_views_visual(void);
 void mb_render_commit(void);  // the composition's changes shown
+// the composition's changes shown with the next frame presented (just after its Present): a view moved as the hole
+// the canvas paints for it moves, not a frame before it
+void mb_render_commit_with_frame(void);
 
 // images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
 void *mb_image_srv(int id);

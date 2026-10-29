@@ -381,7 +381,7 @@ static void apply_place(View *v) {
   }
   // (a player's kept visible to its page, hidden by its clip: a page the browser takes for hidden may stop its video)
   v->ctl->put_IsVisible(v->shown || v->kind == 1 ? TRUE : FALSE);
-  mb_render_commit();
+  mb_render_commit_with_frame();
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
   if (v->shown) {
     double k0 = v->round ? fmax(0, v->r[0]) * s : 0.0, k1 = v->round ? fmax(0, v->r[1]) * s : 0.0;

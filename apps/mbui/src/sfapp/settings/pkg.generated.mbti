@@ -304,7 +304,7 @@ pub let vault_kinds : Array[String]
 
 pub let vault_lasts : Array[String]
 
-pub fn vault_outcome(@ui.Ctx, Asked, String, String) -> Unit
+pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool) -> Unit
 
 pub fn vault_problem(String, Map[String, String], Bool, String) -> String
 

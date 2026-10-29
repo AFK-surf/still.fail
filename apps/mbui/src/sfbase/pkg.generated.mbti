@@ -411,6 +411,8 @@ pub fn faces(Source, Bool) -> Unit
 
 pub let faces_in : Array[String]
 
+pub let faces_web : Array[(String, String)]
+
 pub fn failed_lately(@ui.Ctx, String) -> Bool
 
 pub fn feel_hold(@ui.Ctx, String) -> Unit
@@ -1555,7 +1557,7 @@ pub fn viz_close_full() -> Unit
 
 pub let viz_components : String
 
-pub fn viz_csp() -> String
+pub fn viz_csp(sheets? : Array[String]) -> String
 
 pub let viz_css : String
 
@@ -1636,6 +1638,8 @@ pub let viz_runaway : Int32
 pub fn viz_said(VizFrame, VizHears, String) -> Unit
 
 pub fn viz_served(String, Json?, Bool, Int64, String) -> String
+
+pub fn viz_sheets() -> Array[String]
 
 pub fn viz_tag_end(String, String) -> Int32
 
@@ -3187,6 +3191,7 @@ pub(all) struct VizFrame {
   mut dark : Bool
   mut font_scale : Double
   mut ground : Int64
+  mut faces : String
 }
 
 pub(all) struct VizFull {

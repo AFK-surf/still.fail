@@ -28,6 +28,8 @@ pub(all) struct VizFrame {
   mut dark : Bool
   mut font_scale : Double
   mut ground : Int64
+  /// the faces it was told (viz_faces_key)
+  mut faces : String
 }
 
 ///|
@@ -157,6 +159,7 @@ pub fn viz_frame(
         dark,
         font_scale: @ui.font_scale(),
         ground,
+        faces: viz_faces_key(),
       }
       cell.val = Some(f)
       viz_frames[key] = f
@@ -164,10 +167,11 @@ pub fn viz_frame(
     }
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
-  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() {
+  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() || f.faces != viz_faces_key() {
     f.dark = dark
     f.font_scale = @ui.font_scale()
     f.ground = ground
+    f.faces = viz_faces_key()
     let scheme = if dark { "dark" } else { "light" }
     let g = viz_css_color(ground)
     c.tell("viz/theme/" + key, fn() {
@@ -176,7 +180,9 @@ pub fn viz_frame(
         viz_tokens_json(dark) +
         ",scheme:\"" +
         scheme +
-        "\"},\"*\");var g=document.getElementById(\"mbui-ground\");if(g)g.textContent=\":root:root{background:" +
+        "\",sheets:" +
+        Json::array(viz_sheets().map(fn(h) { Json::string(h) })).stringify().replace_all(old="<", new="\\u003c") +
+        "},\"*\");var g=document.getElementById(\"mbui-ground\");if(g)g.textContent=\":root:root{background:" +
         g +
         "}\"",
       )
@@ -222,6 +228,12 @@ pub fn viz_frame(
     })
     |> ignore
   }
+}
+
+///|
+/// The faces a page is set in, as one string: told again when it changes.
+fn viz_faces_key() -> String {
+  faces_web.map(fn(f) { f.0 + "\n" + f.1 }).join("\n")
 }
 
 ///|
