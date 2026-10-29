@@ -305,6 +305,12 @@ fn pages_left(src : Source) -> Unit {
       Service(station, job) => service_left(src, station, job)
       PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
       History(r, key, _) => history_left(src, r, key)
+      // the drive's folders read, watched for changes while shown: let go of once no page of the drive is left on
+      // the stack (a folder entered over another, its columns reading those above it, keeps them)
+      Files | Drive(_) =>
+        if !app.nav.pages().iter().any(fn(q) { q is (Files | Drive(_) | DriveRead(_) | DrivePlay(_)) }) {
+          @sfbase.let_go(src, @sfbase.drive_scope)
+        }
       Screen(at) => @sfpages.screen_left(src, at.station, at.screen)
       _ => ()
     }
@@ -322,6 +328,7 @@ let page_whole : @ui.Style = @ui.css("w=Full h=Full")
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // (the made-up core, where one is linked, on this frame's runtime)
   (@sfbase.made_frame.val)(c)
+  @sfbase.held_build(c.build_number())
   shell.val = pages_shell(src)
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built

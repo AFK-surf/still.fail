@@ -223,6 +223,8 @@ pub fn reset() -> Unit {
   app.toast_action = ""
   app.toast_run = fn() {  }
   left_pages.clear()
+  // the topics read for what has not ended yet (held.mbt)
+  held_reset()
   felt_holds.clear()
   nav_tapped.clear()
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)

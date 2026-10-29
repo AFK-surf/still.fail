@@ -76,6 +76,10 @@ priv struct Finder {
   lines : @signals.Signal[Array[FindLine]]
   picks : @signals.Signal[Array[Int]]
   mut to_top : Bool
+  /// the `search` topic read last (its params), let go of as the next words are read or the search closes: one read
+  /// and kept is shown to the core, which asks its stations again with each change of theirs (each a search of the
+  /// machine's files there)
+  mut held : Map[String, Json]?
 }
 
 ///|
@@ -94,7 +98,12 @@ let finder : Finder = {
   lines: @signals.signal([]),
   picks: @signals.signal([]),
   to_top: false,
+  held: None,
 }
+
+///|
+/// How the search read last is let go of as the search closes.
+let finder_leave : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
 fn finder_reset() -> Unit {
@@ -107,6 +116,12 @@ fn finder_reset() -> Unit {
 ///|
 /// What one opening of the search leaves behind, put back as it closes (its frame says when).
 pub fn finder_cleared() -> Unit {
+  match finder_leave.val {
+    Some(leave) => leave()
+    None => ()
+  }
+  finder_leave.val = None
+  finder.held = None
   finder.kind = ""
   finder.chosen = 0
   finder.query = ""
@@ -264,6 +279,12 @@ fn search_of(src : Source, scope : String, query : String) -> SearchView? {
   if finder.kind != "" {
     params["kind"] = Json::string(finder.kind)
   }
+  match finder.held {
+    Some(before) if before != params => (src.leave)("search", before)
+    _ => ()
+  }
+  finder.held = Some(params)
+  finder_leave.val = Some(fn() { (src.leave)("search", params) })
   let topic = (src.topic)("search", params)
   finder.failed.set(topic.error is Some(_))
   match topic.value {

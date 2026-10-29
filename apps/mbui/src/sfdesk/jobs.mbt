@@ -189,7 +189,7 @@ fn job_notices(c : @ui.Ctx, job : Json?, limit? : Int = 0, clock? : Bool = false
 ///|
 /// The last line a job wrote, and when (LastOutput: the job's own word for it until its output is read).
 fn job_last(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit {
-  let log = (src.topic)("jobLog", {
+  let log = @sfbase.hold(src, @sfbase.jobs_scope(station), "jobLog", {
     "station": Json::string(station),
     "job": Json::string(text(job, "id")),
     "lines": Json::number(1.0),
