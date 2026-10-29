@@ -300,6 +300,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // what floats over what scrolls, all of it made now (a list's rows as it was laid out), for the parts drawn again
       // to read where they are (scroll_bar.mbt)
       c.floating_found()
+      c.sideways_found()
       // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where
       // its box is, or built there where it cannot be (kept_part.mbt)
       c.parts_rows_left()

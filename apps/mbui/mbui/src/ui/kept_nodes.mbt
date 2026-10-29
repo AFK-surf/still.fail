@@ -58,8 +58,6 @@ priv struct RowNodes {
   /// what it marked used this frame; the cycles and the moments it said come again (for what says why a frame is drawn)
   said : Array[&SaidAgain]
   marks : Array[Int]
-  /// what scrolls in it (sideways.mbt: its id, its box and what that holds)
-  sideways : Array[(Int, Int, Int)]
   /// what it showed of the boxes named to be moved (move_state.mbt), the names built, and what it read of how lists
   /// stand (Ctx::list_info_as, read back)
   moves_shown : Array[(String, FixedArray[Double])]
@@ -379,7 +377,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     why: "",
     said: [],
     marks: [],
-    sideways: [],
     moves_shown: [],
     moves_seen: [],
     info: [],
@@ -555,7 +552,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.laid.clear()
   rn.moves_shown.clear()
   rn.moves_seen.clear()
-  rn.sideways.clear()
   {
     census,
     info: self.info_reads.length(),
@@ -779,12 +775,6 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
         st.built = self.frame_no
         st.fresh = false
       }
-      None => ()
-    }
-  }
-  for s in rn.sideways {
-    match sideways.get(s.0) {
-      Some(st) => self.sideways_built(st, s.1 + by, s.2 + by)
       None => ()
     }
   }
@@ -1222,12 +1212,3 @@ fn row_said_seen(name : String) -> Unit {
   }
 }
 
-///|
-/// A box scrolling what `inner` holds (sideways.mbt's, `id`) built as `b` in the row or part being built: said again of
-/// its nodes where they are each frame it is put back.
-fn row_said_sideways(id : Int, b : Int, inner : Int) -> Unit {
-  match nodes_run.building {
-    Some(rn) => rn.sideways.push((id, b, inner))
-    None => ()
-  }
-}

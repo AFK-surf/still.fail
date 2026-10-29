@@ -92,6 +92,10 @@ struct Node {
   mut sem_hid : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
+  /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
+  /// first child's (`scroller_inner`: a field's words are its own); found from the nodes once laid out (sideways_found)
+  mut scroller : Int
+  mut scroller_inner : Bool
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -350,6 +354,8 @@ fn Node::new() -> Node {
     sem: None,
     sem_hid: false,
     floats: false,
+    scroller: 0,
+    scroller_inner: false,
     parent: -1,
     first: -1,
     last: -1,
@@ -512,6 +518,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem = None
   self.sem_hid = false
   self.floats = false
+  self.scroller = 0
+  self.scroller_inner = false
   self.first = -1
   self.last = -1
   self.next = -1

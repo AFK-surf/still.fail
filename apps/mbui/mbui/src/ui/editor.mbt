@@ -900,8 +900,7 @@ pub fn Ctx::editor(
     sw.field = true
     sw.theme = self.theme
     sw.built_frame = self.frame_no
-    self.sideways_built(sw, i, -1)
-    row_said_sideways(id, i, -1)
+    self.nodes[i].scroller = id
   }
   let res = { submitted: st.submitted, focused, text: st.text, pasted: st.pasted }
   st.submitted = None
