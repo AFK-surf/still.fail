@@ -9,7 +9,8 @@
 #include "../host/win_core.c"
 #include "../core/core_client.h"
 
-static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, mb_core_data_dir, NULL, mb_post, mb_post_drop};
+// (a remote screen's frames acknowledged straight to its station by the shell: mb_core_screen_ack)
+static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, mb_core_data_dir, NULL, mb_post, mb_post_drop, mb_core_screen_ack};
 
 // The computer's name (设置 › 系统 › 系统信息: its device name) in MBUI_DEVICE_NAME, the machine the core names this
 // device by where the person's devices are listed (signin.mbt tell_device): which of their computers it is. Not over
@@ -21,8 +22,17 @@ static void device_name(void) {
   _wputenv_s(L"MBUI_DEVICE_NAME", name);
 }
 
+// mbui's (win_stream.cpp): a remote screen's records taken straight from the shell into the stream the app routed them
+// to, and how what it took is acknowledged to the station
+int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len);
+void mb_stream_route_acks(int (*ack)(double route, double ts));
+
 // (MSVC's C has no constructor attribute: the app hands it over itself, before it starts the core, src/stillfail/win_engine.c)
 static void use_hermes_engine(void) {
   device_name();
   mbc_use(&hermes_engine);
+  // a remote screen's frames the shell reads itself go to the stream the app routed them to, past its queue (mbui's
+  // win_stream.cpp), acknowledged to the station through the shell
+  mb_core_route_media(mb_stream_route_take);
+  mb_stream_route_acks(mb_core_screen_ack);
 }

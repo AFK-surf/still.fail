@@ -46,11 +46,19 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "uuid.lib")
 #pragma comment(lib, "stillfail_engine.lib")
+// the shell's own (client/shell's C ABI: stillfail_shell.dll beside the engine, its import library from scripts/native.ts
+// part `shell`, found through LIB: scripts/win.sh), for what the app asks of it past the core (a remote screen's frames)
+#pragma comment(lib, "stillfail_shell.dll.lib")
+void sf_shell_set_say(const void *shell, void (*say)(void *, const uint8_t *, size_t, const uint8_t *, size_t), void *ctx);
+uint8_t sf_shell_screen_ack(const void *shell, uint64_t call, double ts);
+void sf_shell_set_media(const void *shell, uint8_t (*media)(void *, uint64_t, uint8_t, uint8_t, uint64_t, uint64_t, const uint8_t *, size_t),
+                        void *ctx);
 
 
 static struct {
   sf_engine *engine;  // under `gate`: answers from other threads look at it there
   SRWLOCK gate;
+  void *shell;  // the engine's shell (engine.h `shell`), under `gate`: NULL before it starts and once the core stops
   mb_core_message_fn on_message;
   void *ctx;
   WCHAR *secure_dir;
@@ -561,6 +569,55 @@ static void on_say(void *ctx, const char *json, size_t len, const uint8_t *bytes
   if (W.on_message) W.on_message(json, len, bytes, blen, W.ctx);
 }
 
+// What the shell says to the app itself (a remote screen's picture and sound: client/shell `istream.tap`), from its
+// threads, as the core says it; nothing once the core is stopping.
+static void on_shell_say(void *ctx, const uint8_t *json, size_t len, const uint8_t *bytes, size_t blen) {
+  (void)ctx;
+  AcquireSRWLockShared(&W.gate);
+  if (W.engine && W.on_message) W.on_message((const char *)json, len, bytes, blen, W.ctx);
+  ReleaseSRWLockShared(&W.gate);
+}
+
+// Where a remote screen's records are offered before they are said (mb_core_route_media): the app's host's.
+static mb_core_media_fn volatile media_take;
+
+void mb_core_route_media(mb_core_media_fn take) { InterlockedExchangePointer((PVOID volatile *)&media_take, (PVOID)take); }
+
+// A remote screen's record the shell reads itself, offered to the app's host first (client/shell `Media`): whether it
+// took it (decoded, shown and acknowledged there; nothing said); nothing once the core is stopping.
+static uint8_t on_shell_media(void *ctx, uint64_t call, uint8_t kind, uint8_t key, uint64_t seq, uint64_t ts, const uint8_t *bytes,
+                              size_t len) {
+  (void)ctx;
+  mb_core_media_fn take = (mb_core_media_fn)InterlockedCompareExchangePointer((PVOID volatile *)&media_take, NULL, NULL);
+  if (!take) return 0;
+  int took = 0;
+  AcquireSRWLockShared(&W.gate);
+  if (W.engine) took = take(call, kind, key, seq, ts, bytes, len);
+  ReleaseSRWLockShared(&W.gate);
+  return took ? 1 : 0;
+}
+
+// The shell started (engine.h `shell`, on the core's thread before its script runs): a remote screen's frames said to
+// the app by it, not through the core's JS (its views tapped: client/shell `istream.tap`), and offered first to the
+// app's host, which decodes and shows those it routes past the app's queue (mb_core_route_media).
+static void on_shell(void *ctx, void *shell) {
+  (void)ctx;
+  AcquireSRWLockExclusive(&W.gate);
+  W.shell = shell;
+  ReleaseSRWLockExclusive(&W.gate);
+  sf_shell_set_say(shell, on_shell_say, NULL);
+  sf_shell_set_media(shell, on_shell_media, NULL);
+}
+
+int mb_core_screen_ack(double call, double ts) {
+  int done = 0;
+  if (call < 1) return 0;
+  AcquireSRWLockShared(&W.gate);
+  if (W.engine && W.shell) done = sf_shell_screen_ack(W.shell, (uint64_t)call, ts) != 0;
+  ReleaseSRWLockShared(&W.gate);
+  return done;
+}
+
 // ── kept.read ──
 
 static void core_kept(uint64_t id, const char *op, const char *json) {
@@ -714,7 +771,7 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
     say_fatal(why);
     return;
   }
-  sf_engine_host host = {NULL, on_say, on_app_call, on_log, NULL, on_app_sync};
+  sf_engine_host host = {NULL, on_say, on_app_call, on_log, NULL, on_app_sync, on_shell};
   sf_engine *e = sf_engine_start(script, len, "core.hbc", data_dir, cloud_origin, beta, "windows", &host);
   free(script);
   if (!e) {
@@ -740,6 +797,7 @@ void mb_core_stop(void) {
   AcquireSRWLockExclusive(&W.gate);
   sf_engine *e = W.engine;
   W.engine = NULL;  // no answer reaches it after this
+  W.shell = NULL;   // nor an ack its shell (stopped with it)
   ReleaseSRWLockExclusive(&W.gate);
   if (!e) return;
   listen_close_all();

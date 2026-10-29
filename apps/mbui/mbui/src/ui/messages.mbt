@@ -170,7 +170,7 @@ fn messages_between() -> Unit {
   messages_take(came)
   // (what is left: a frame, which hands it on)
   if messages_in.length() > 0 {
-    outside_counted()
+    outside_left()
   }
 }
 

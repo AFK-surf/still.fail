@@ -301,6 +301,16 @@ fn outside_counted() -> Unit {
 }
 
 ///|
+/// Between frames, what came from outside left for the next (messages_between, streams_said): counted, and that frame
+/// asked for of the host itself. The watch tells the host only the first time since a frame (a value set before, while
+/// the window is away: its frame not drawn), and a host that draws only what is asked from outside while away
+/// (win_app.c told_between) must hear it again, as it heard each post before it was told between frames.
+fn outside_left() -> Unit {
+  outside_counted()
+  h_frame_owed()
+}
+
+///|
 /// What the frame reads of what came from outside and of the host's settings, as it has taken them (frame_body):
 /// followed. (Of the hand, what reads it reads it: hand.mbt.)
 fn frame_inputs_read() -> Unit {

@@ -10,7 +10,12 @@
 // view_open answers 0 and the app says it cannot show it. MBUI_WEBVIEW2_DIR: a fixed-version runtime's folder instead
 // of the installed runtime (one that is not there: as on a machine without it).
 //
-// Every kind loads from a host of its own that never reaches the network (https://*.stillfail.invalid, its requests
+// Kind 4, a stream's picture (its argument the stream's id: @hostapi.stream_layers): no web view, a visual of its own
+// that the stream's system video layer is put in (win_stream.cpp mb_stream_attach: a swap chain stretched to the view's
+// rect, its pointer over it), shown as the others are through the hole the app paints; it takes no input. Ready at
+// once, with or without WebView2.
+//
+// Every kind of web view loads from a host of its own that never reaches the network (https://*.stillfail.invalid, its requests
 // taken by WebResourceRequested), as Android's WebView does: a page's HTML from here, a site's from the app, a
 // player's page from here and its file from the app.
 //
@@ -224,6 +229,7 @@ struct MediaRead {
 
 struct View {
   int vid, kind;
+  int sid = 0;  // a stream's picture's (kind 4): the stream's id
   long long z = 0;  // where it is stacked: over those of a lower z (opened later, or raised later: view_tell 5)
   double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0;
   double r[4] = {0, 0, 0, 0};                // its corners (top left, then round it)
@@ -338,7 +344,7 @@ static void say_stack(void) {
 
 // Placed as it was last told: its box at the clip, the web view at its rect within it, hidden by an empty clip.
 static void apply_place(View *v) {
-  if (!v->box || !v->ctl) return;
+  if (!v->box || (!v->ctl && v->kind != 4)) return;
   double s = scale_now();
   double bx = round(v->cx0 * s), by = round(v->cy0 * s);
   v->box->SetOffsetX((float)bx);
@@ -353,7 +359,7 @@ static void apply_place(View *v) {
   v->content->SetOffsetX((float)(px0 - bx));
   v->content->SetOffsetY((float)(py0 - by));
   RECT r = {0, 0, (LONG)pw, (LONG)ph};
-  v->ctl->put_Bounds(r);
+  if (v->ctl) v->ctl->put_Bounds(r);
   // its corners round (as the hole the app paints for it): its content's visual cut to its rect, rounded
   if (v->r[0] > 0 || v->r[1] > 0 || v->r[2] > 0 || v->r[3] > 0) {
     IDCompositionDevice *dc = (IDCompositionDevice *)mb_render_dcomp();
@@ -380,8 +386,10 @@ static void apply_place(View *v) {
     v->round.Reset();
   }
   // (a player's kept visible to its page, hidden by its clip: a page the browser takes for hidden may stop its video)
-  v->ctl->put_IsVisible(v->shown || v->kind == 1 ? TRUE : FALSE);
+  if (v->ctl) v->ctl->put_IsVisible(v->shown || v->kind == 1 ? TRUE : FALSE);
   mb_render_commit_with_frame();
+  // (a stream's picture stretched to its rect, its pointer where it points in it: committed with the frame too)
+  if (v->kind == 4) mb_stream_placed(v->sid, pw, ph, s);
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
   if (v->shown) {
     double k0 = v->round ? fmax(0, v->r[0]) * s : 0.0, k1 = v->round ? fmax(0, v->r[1]) * s : 0.0;
@@ -983,7 +991,41 @@ static bool runtime_here(void) {
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
+// A stream's picture (kind 4): its box and the visual its layer goes in, ready at once (told as the app has its ticket:
+// at the next frame).
+static View *open_stream_view(int sid) {
+  IDCompositionDevice *dc = (IDCompositionDevice *)mb_render_dcomp();
+  if (!dc || sid <= 0 || !mb_stream_layers_here()) return NULL;
+  View *v = new View;
+  if (FAILED(dc->CreateVisual(&v->box)) || FAILED(dc->CreateVisual(&v->content))) {
+    delete v;
+    return NULL;
+  }
+  v->sid = sid;
+  v->touch = "through";  // a picture takes no input: the app's over it
+  v->loaded = true;
+  v->loading = false;
+  v->box->AddVisual(v->content.Get(), FALSE, NULL);
+  v->box->SetClip(D2D_RECT_F{0, 0, 0, 0});
+  return v;
+}
+
 extern "C" int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
+  if (kind == 4) {
+    std::wstring a = wstr(arg);
+    View *v = open_stream_view(_wtoi(a.c_str()));
+    if (!v) return 0;
+    if (!hwnd_main) hwnd_main = (HWND)mb_app_hwnd();
+    v->vid = ++next_vid;
+    v->kind = 4;
+    v->z = ++next_z;
+    views[v->vid] = v;
+    stack(v);
+    mb_stream_attach(v->sid, v->content.Get());
+    vlog("view %d: open stream %d's layer", v->vid, v->sid);
+    tell(v, 1);
+    return v->vid;
+  }
   if (kind != 1 && kind != 2 && kind != 3) return 0;
   if (!mb_render_dcomp() || !runtime_here()) return 0;
   if (!hwnd_main) hwnd_main = (HWND)mb_app_hwnd();
@@ -1049,6 +1091,8 @@ extern "C" void mb_host_view_close(int32_t vid) {
   }
   v->reads.clear();
   if (v->ctl) v->ctl->Close();
+  // (a stream's layer taken off it first)
+  if (v->kind == 4) mb_stream_attach(v->sid, NULL);
   IDCompositionVisual *under = (IDCompositionVisual *)mb_render_views_visual();
   if (under && v->box) under->RemoveVisual(v->box.Get());
   mb_render_commit();
@@ -1518,7 +1562,10 @@ extern "C" void mb_views_draw_under(uint8_t *out, int w, int h, double scale) {
       if (sy < 0) sy = 0;
       if (sy >= v->snap_h) sy = v->snap_h - 1;
       for (int x = x0; x < x1; x++, d += 4) {
-        if (v->snap_w) {
+        if (v->kind == 4) {
+          // (a stream's picture is the system's, not taken: black, as its layer before a frame)
+          d[0] = d[1] = d[2] = 0;
+        } else if (v->snap_w) {
           int sx = (int)((x + 0.5 - rx) / rw * v->snap_w);
           if (sx < 0) sx = 0;
           if (sx >= v->snap_w) sx = v->snap_w - 1;

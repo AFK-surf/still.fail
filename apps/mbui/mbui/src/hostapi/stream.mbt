@@ -109,9 +109,17 @@ pub fn stream_audio(id : Int, data : Bytes) -> Unit { st_audio(id, data) }
 /// Whether a stream's H.264 frames may be shown by a system video layer of the host's own (a native view of kind 4,
 /// its argument the stream's id: @ui's Stream with `layer`), under the canvas where the app paints its hole: each
 /// frame shown (`stream_show`) put on that layer as well, nothing of the app drawn for it. macOS and iOS
-/// (apple_views.m: a layer whose contents are the decoded frame's IOSurface); none elsewhere.
+/// (apple_views.m: a layer whose contents are the decoded frame's IOSurface), Windows (win_stream.cpp: a composition
+/// swap chain in the views' DirectComposition tree, the frame put there by the GPU); none elsewhere.
 pub fn stream_layers() -> Bool {
   st_layers() != 0
+}
+
+///|
+/// Whether that layer shows a frame in the colours its stream is tagged with (Display P3's wider than sRGB's): the
+/// host's st_layers 1 (Apple's); 2 a layer that shows it as sRGB (Windows'), whose station is not asked for more.
+pub fn stream_layers_tagged() -> Bool {
+  st_layers() == 1
 }
 
 ///|
@@ -137,7 +145,8 @@ pub fn stream_pointer_at(id : Int, x : Double, y : Double, shown : Bool) -> Unit
 /// nothing changes, and the app routes it again as it takes the next); those not asked for no longer. Taken so, a frame
 /// is decoded, shown and acknowledged by the host, a packet played, nothing of the app's run for them; the app is told
 /// what came in one event when it next reads the stream's (`D TS N BYTES`: @ui's Stream). A config of the route stops
-/// it until the app routes it again. macOS and iOS (apple_stream.m); elsewhere nothing, the app takes them all.
+/// it until the app routes it again. macOS and iOS (apple_stream.m), Windows' frames (win_stream.cpp: no sound there);
+/// elsewhere nothing, the app takes them all.
 pub fn stream_direct(id : Int, route : Double, after : Double, video~ : Bool, audio~ : Bool) -> Unit {
   st_direct(id, route, after, (if video { 1 } else { 0 }) + (if audio { 2 } else { 0 }))
 }

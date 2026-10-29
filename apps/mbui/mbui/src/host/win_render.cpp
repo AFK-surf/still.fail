@@ -368,9 +368,9 @@ static ID3DBlob *compile(const char *entry, const char *target, const char *src 
   return code;
 }
 
-static HRESULT make_device(D3D_DRIVER_TYPE type) {
+static HRESULT make_device(D3D_DRIVER_TYPE type, UINT flags) {
   D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0};
-  return D3D11CreateDevice(NULL, type, NULL, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 3,
+  return D3D11CreateDevice(NULL, type, NULL, D3D11_CREATE_DEVICE_BGRA_SUPPORT | flags, levels, 3,
                            D3D11_SDK_VERSION, &dev, NULL, &ctx);
 }
 
@@ -424,7 +424,9 @@ static int make_composed(IDXGIDevice1 *xdev, IDXGIFactory2 *factory, HWND hwnd) 
 static void make_pipeline(void);
 
 int mb_render_init(void *hwnd) {
-  if (FAILED(make_device(D3D_DRIVER_TYPE_HARDWARE)) && FAILED(make_device(D3D_DRIVER_TYPE_WARP))) {
+  // (with its video side where the GPU has one: a remote screen decoded and shown by the GPU, win_stream.cpp)
+  if (FAILED(make_device(D3D_DRIVER_TYPE_HARDWARE, D3D11_CREATE_DEVICE_VIDEO_SUPPORT)) &&
+      FAILED(make_device(D3D_DRIVER_TYPE_HARDWARE, 0)) && FAILED(make_device(D3D_DRIVER_TYPE_WARP, 0))) {
     fprintf(stderr, "no Direct3D 11 device\n");
     return 0;
   }
@@ -542,6 +544,9 @@ extern "C" void mb_host_request_frame(void);
 void mb_render_commit_with_frame(void) {
   commit_after_present = true;
   mb_host_request_frame();
+}
+void mb_render_commit_soon(void) {
+  if (!commit_after_present) mb_render_commit();
 }
 static void commit_presented(void) {
   if (!commit_after_present) return;
@@ -1039,7 +1044,7 @@ static ID3D11Texture2D *off_target;
 
 extern "C" void mb_render_init_offscreen(double w, double h, double scale) {
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-  if (FAILED(make_device(D3D_DRIVER_TYPE_WARP))) {
+  if (FAILED(make_device(D3D_DRIVER_TYPE_WARP, 0))) {
     fprintf(stderr, "no Direct3D 11 WARP device\n");
     return;
   }

@@ -42,6 +42,11 @@ typedef struct {
   /// JSON (UTF-8, NUL-terminated, malloc'd: the engine frees it), or NULL for the shell's answer. Called on the core's
   /// thread. May be NULL.
   char *(*app_sync)(void *ctx, const char *op, const char *json, size_t len);
+  /// The Rust shell the core runs on (client/shell's, from sf_shell_start), as it has started, on the core's thread
+  /// before the core's script runs: for what the host asks of it itself, past the core (sf_shell_set_say: a remote
+  /// screen's frames said to the app straight from the shell; sf_shell_screen_ack). Valid until sf_engine_stop, which
+  /// stops it: the host stops asking it before. May be NULL.
+  void (*shell)(void *ctx, void *shell);
 } sf_engine_host;
 
 /// Starts a core: its script (Hermes bytecode or source; copied), named `script_url` in its stack traces, its files in

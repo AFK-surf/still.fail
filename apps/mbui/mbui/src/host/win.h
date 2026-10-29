@@ -17,7 +17,15 @@ typedef void (*mb_text_fn)(int32_t, moonbit_string_t, int32_t, int32_t);
 typedef void (*mb_outside_fn)(int32_t, int32_t, int32_t);
 // the kinds of what the host does for the app, named as src/ui/hostcall.mbt's outside_* (this host has no gallery,
 // marks or update of its own yet)
-enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_PICK = 3, MB_OUTSIDE_GRAB = 6, MB_OUTSIDE_CLIP = 9 };
+enum {
+  MB_OUTSIDE_IMAGE = 1,
+  MB_OUTSIDE_VIEW = 2,
+  MB_OUTSIDE_PICK = 3,
+  MB_OUTSIDE_GRAB = 6,
+  MB_OUTSIDE_CLIP = 9,
+  MB_OUTSIDE_POSTED = 11,
+  MB_OUTSIDE_STREAMED = 12,
+};
 
 typedef struct {
   mb_frame_fn frame;
@@ -57,6 +65,9 @@ void mb_render_commit(void);  // the composition's changes shown
 // the composition's changes shown with the next frame presented (just after its Present): a view moved as the hole
 // the canvas paints for it moves, not a frame before it
 void mb_render_commit_with_frame(void);
+// the composition's changes shown now, unless a frame presented next is to show the views' (then with it): a stream's
+// layer changed between frames (win_stream.cpp)
+void mb_render_commit_soon(void);
 
 // images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
 void *mb_image_srv(int id);
@@ -75,6 +86,11 @@ void mb_images_tell(mb_outside_fn f);
 
 // app (win_app.c): asks for a frame from any thread
 void mb_app_wake(void);
+// stream id, shown by its system video layer, said something (win_stream.cpp), from any thread: the app told between
+// frames (MB_OUTSIDE_STREAMED: ui's streams_said), a frame asked for only where what it said changes what is drawn
+void mb_app_streamed(int id);
+// fn(arg) run on the window's thread between frames, from any thread (a stream's routed frame shown: win_stream.cpp)
+void mb_app_call(void (*fn)(void *), void *arg);
 // the app's identity and its name ("" none: win_life.h), and the window's message that a notification was tapped
 // (win_notify.cpp: the window brought back)
 const wchar_t *mb_win_app_id(void);
@@ -108,6 +124,13 @@ int mb_views_busy(void);       // one still opening, or its picture being taken
 void mb_views_snap_all(void);  // pictures taken anew before a snapshot
 // their pictures into w × h premultiplied BGRA (zeroed), for a snapshot
 void mb_views_draw_under(uint8_t *out, int w, int h, double scale);
+// streams' system video layers (win_stream.cpp): whether there are any here (a composition, the GPU's video side);
+// stream sid's put in a view's (kind 4: win_views.cpp) content visual (IDCompositionVisual *; NULL, taken off it as the
+// view closes), and that visual placed w × h device pixels at `scale` pixels a point (the views' commit, with the
+// frame's, shows it)
+int mb_stream_layers_here(void);
+void mb_stream_attach(int sid, void *content);
+void mb_stream_placed(int sid, double w, double h, double scale);
 
 // text (win_text.cpp)
 // rasterize at this many pixels per point; a change starts a new atlas

@@ -97,7 +97,8 @@ JPEG frames are all key frames and their config has no `description`.
   sRGB came out washed out. The Apple app asks it where its frames go on the system's video layer
   (@hostapi.stream_layers: Core Animation shows the decoded IOSurface in its tagged colour space); a frame it draws
   itself there (a faded or ended view's) is converted to sRGB first (apple_stream.m). A client that draws the frames
-  into an sRGB canvas (the web, Android, Windows) asks none. Other sources and older stations ignore it.
+  into an sRGB canvas (the web, Android) or shows them on a layer as sRGB (Windows' app: @hostapi.stream_layers_tagged
+  false) asks none. Other sources and older stations ignore it.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
   `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
@@ -224,8 +225,9 @@ client, so any client that acknowledges what it drew is paced.
 - **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
   (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web, and in
   the app by VideoToolbox on macOS and iOS where the hardware decodes it (`@ui.h265_here`; the app asks `h265` first
-  there, its hvcC made a format with CMVideoFormatDescriptionCreateFromHEVCParameterSets). The app elsewhere (Android,
-  Windows, Linux, the browser) asks H.264. The station picks H.265 whenever the codecs asked include it. A web client
+  there, its hvcC made a format with CMVideoFormatDescriptionCreateFromHEVCParameterSets), and on Windows where the GPU
+  decodes HEVC Main through the system's decoder (Windows' HEVC Video Extensions: win_stream.cpp, its hvcC's parameter
+  sets put before each key frame). The app elsewhere (Android, Linux, the browser) asks H.264. The station picks H.265 whenever the codecs asked include it. A web client
   whose decoder fails on it before its first frame opens the view again asking H.264 (for as long as the page runs).
 - **The link.** The mesh's QUIC uses Cubic (station/native/mesh), which halves what goes at each loss: at 1% loss and
   40 ms, a screen falls to 24 frames a second and a file to 2.8 Mbit/s (noq's BBR measured there: 52, 31 Mbit/s). BBR
