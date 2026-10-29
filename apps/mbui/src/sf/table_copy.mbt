@@ -5,6 +5,9 @@
 // message has room, past its end, scrolled to, where it is as wide as the message. Its menu copies the table as
 // Markdown or as CSV (as the core wrote them: markdown.ts tableMarkdown, tableCsv) or as a picture of it (its shot: the
 // table whole, as wide as its columns, on the page's ground; on a phone saved to its photo album: picture_out_way).
+// Shown as the table is pointed at (2026-10-30 用户：「表格右边的按钮改成 hover 表格那一行才显示」), its menu open or
+// it saying it copied, always to a finger: what a pointer over a thing shows (@sf.pointed_or_finger); its room kept
+// either way, so nothing moves as it comes and goes.
 
 ///|
 /// The key's size (icon_button's), and how far it is from the table and from what follows it (a press's room round it).
@@ -44,7 +47,8 @@ fn table_shot(key : String) -> String {
 ///|
 /// The copy key of the table `key` names (`table`, as the core wrote it to copy), table_key_gap past it and before what
 /// follows, its middle on the head's row's (as the frame measured it: `key`/head; at its top till then). Pressed, its
-/// menu (table_menu); once one is copied, a check a moment (copied_ms).
+/// menu (table_menu); once one is copied, a check a moment (copied_ms). Faded in as the table is pointed at (`key`/beside,
+/// it and its key), out as the pointer leaves it, its menu gone and its check said; not pressed while not seen.
 fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
   let c = self.c
   let id = c.id(key + "/copy")
@@ -54,10 +58,33 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
     None => 0.0
   }
   let copied = c.within(id, copied_ms)
+  let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(key) || copied
+  let seen = @kit.animate(
+    c,
+    key + "/copy-seen",
+    if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 },
+    transition=nav_fade,
+  )
   let label = if copied { t("common.copied") } else { t("web-main.prose.copyTable") }
   c.box(style=@ui.style(px=room_of(table_key_gap), pt=room_of(y)), fn() {
+    if seen == 0.0 {
+      // (its room, nothing in it to press)
+      c.box(style=@ui.style(w=Fixed(table_key_size), h=Fixed(table_key_size)), fn() {  }) |> ignore
+      return
+    }
+    // (faded as its icon's ink: the button's own colours, so far on)
+    let th = theme()
     let icon = if copied { "check" } else { "copy" }
-    if icon_button(c, icon, key=key + "/copy", size=table_key_size, round=true, label~) {
+    if icon_button(
+        c,
+        icon,
+        key=key + "/copy",
+        size=table_key_size,
+        round=true,
+        label~,
+        ink=alpha(th.p.text, seen),
+        quiet=alpha(th.p.muted, seen),
+      ) {
       self.table_menu(key, table, id)
     }
   })
@@ -65,15 +92,23 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
 }
 
 ///|
+/// The tables whose key's menu is open, by their key: their key shown till it closes.
+let table_menus : LiveMap[String, Bool] = LiveMap::new()
+
+///|
 /// The menu of the table `key` names (`table`, as the core wrote it to copy), opened by its key (`id`), along its end:
 /// copy it as Markdown, as CSV, as a picture (or on a phone save that); once one is copied, the key says so a moment.
+/// Open, it is in table_menus.
 fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
   let c = self.c
+  table_menus[key] = true
+  let closed = fn() { table_menus.remove(key) }
   let said = fn() {
     c.mark(id)
     c.wake_in(copied_ms, later=true)
   }
   let words = fn(s : String) {
+    closed()
     @ui.clipboard_set(s)
     said()
   }
@@ -87,6 +122,7 @@ fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
   }
   let album = picture_to_album()
   let picture = fn() {
+    closed()
     c.take_shot(
       table_shot(key),
       fn(png) { if (picture_out_by.val)(c, png, !album) && !album { said() } },
@@ -94,5 +130,5 @@ fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
     )
   }
   items.push(Some(menu_item_of(picture_out_way().0, picture)))
-  menu(items, from=Of(id), along=End)
+  menu(items, from=Of(id), along=End, gone=closed)
 }

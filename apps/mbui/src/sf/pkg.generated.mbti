@@ -992,7 +992,7 @@ pub let media_track_share : Double
 
 pub let medium_from : Double
 
-pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @ui.Along) -> Unit
+pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @ui.Along, gone? : () -> Unit) -> Unit
 
 pub fn menu_along(@ui.Ctx, Double) -> Double
 

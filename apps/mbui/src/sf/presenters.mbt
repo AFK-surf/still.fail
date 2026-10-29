@@ -191,9 +191,16 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
 
 ///|
 /// A menu of `items` (None: a line between; parts.tsx Menu), opened by `from`: chosen, it closes and the item's
-/// `select` goes on. `title` over them ("" none); `along`: how it lines up with what opened it beside it.
-pub fn menu(items : Array[MenuItem?], from~ : Beside, title? : String = "", along? : @ui.Along = Start) -> Unit {
-  present(Menu(items, title, along), from.anchor())
+/// `select` goes on. `title` over them ("" none); `along`: how it lines up with what opened it beside it. `gone`: what
+/// is let go of as it closes with nothing chosen (back, Escape, a press outside).
+pub fn menu(
+  items : Array[MenuItem?],
+  from~ : Beside,
+  title? : String = "",
+  along? : @ui.Along = Start,
+  gone? : () -> Unit = fn() {  },
+) -> Unit {
+  present(Menu(items, title, along), from.anchor(), gone~)
 }
 
 ///|

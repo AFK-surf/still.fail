@@ -1447,7 +1447,8 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let hang = if self.copy && bleed >= table_key_room { table_key_room } else { 0.0 }
   c.box(mx=-bleed, id~, taps=false, fn() {
     c.sideways(key, padx=bleed, bar_in=bleed, fn() {
-      c.box(style=table_beside.then(@ui.style(mr=room_of(-hang))), fn() {
+      // (pointed at as a whole, its key with it: what shows its key, table_key)
+      c.box(style=table_beside.then(@ui.style(mr=room_of(-hang))), id=c.id(key + "/beside"), taps=false, points=true, fn() {
         self.table_frame(rows, widths, total, key + "/head")
         if self.copy {
           self.table_key(key, t)

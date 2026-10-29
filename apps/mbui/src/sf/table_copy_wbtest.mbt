@@ -82,6 +82,10 @@ test "a table as wide as the message on a wide chat: its key out in the margin, 
   let t = table_tester(0, 1080.0, 800.0, text~, margin=160.0)
   t.draw()
   t.draw()
+  // (pointed at: its key shown)
+  let (ox, oy, _, _) = t.rect_of("一").unwrap()
+  t.move(ox, oy)
+  t.run_for(dur_ms)
   // past the table's last words, in the margin, whole
   let (kx, _, kw, _) = table_key_of(t)
   let (lx, ly, lw, _) = t.rect_of("three a long").unwrap()
@@ -95,10 +99,41 @@ test "a table as wide as the message on a wide chat: its key out in the margin, 
 }
 
 ///|
+test "a table's copy key with a mouse: shown as the table is pointed at, its menu open, gone as the pointer leaves" {
+  let t = table_tester(0, 1280.0, 800.0)
+  t.draw()
+  t.draw()
+  // (built, under its menu too: hidden from a reader there)
+  let keys = fn() {
+    t.semantics().filter(fn(s) { s.role == Button && s.label == "web-main.prose.copyTable" }).length()
+  }
+  // at rest: none
+  assert_eq(keys(), 0)
+  // pointed at the table's last row: there, faded in
+  let (lx, ly, _, lh) = t.rect_of("Sonnet 5").unwrap()
+  t.move(lx, ly + lh / 2.0)
+  t.run_for(dur_ms)
+  assert_eq(keys(), 1)
+  // its menu open, the pointer gone into it: still there
+  t.click(Button, label="web-main.prose.copyTable")
+  t.run_for(@kit.presence_in_ms)
+  t.move(lx, 780.0)
+  t.run_for(dur_ms)
+  assert_eq(keys(), 1)
+  // the menu closed by a press outside it, the pointer off the table: gone
+  t.tap(lx, 780.0)
+  t.run_for(@kit.presence_in_ms + dur_ms)
+  assert_eq(keys(), 0)
+}
+
+///|
 test "a table's copy key with a mouse: its picture copied whole, the key not in it" {
   let t = table_tester(0, 1280.0, 800.0)
   t.draw()
   t.draw()
+  let (lx, ly, _, _) = t.rect_of("缓存读").unwrap()
+  t.move(lx, ly)
+  t.run_for(dur_ms)
   t.click(Button, label="web-main.prose.copyTable")
   t.run_for(@kit.presence_in_ms)
   t.tap_text("desktop.contextMenu.copyImage")
@@ -110,6 +145,7 @@ test "a table's copy key with a mouse: its picture copied whole, the key not in 
   assert_true(shots[0].iter().any(fn(w) { w.contains("缓存读") }) && shots[0].iter().any(fn(w) { w.contains("Sonnet 5") }))
   assert_true(t.clipboard_png() is Some(_))
   let _ = table_key_of(t, copied=true)
+  t.move(lx, ly)
   t.run_for(copied_ms)
   let _ = table_key_of(t)
 }
