@@ -200,7 +200,7 @@ export class FakeDriver implements AgentDriver {
   /// Times every process it started was ended.
   shutdowns = 0;
   /// What the runner of a station that crashed keeps, taken up with no snapshot (as the driver finds it on its own).
-  left: { id: string; busy: boolean } | null = null;
+  left: { id: string; busy: boolean; mcpUrl?: string } | null = null;
 
   constructor(kind: "claude" | "codex") {
     this.kind = kind;
