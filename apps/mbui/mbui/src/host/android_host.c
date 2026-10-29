@@ -1789,6 +1789,13 @@ int32_t mb_host_h264_here(void) {
 
 int32_t mb_host_stream_audio_here(void) { return 0; }
 void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }
+// (no system video layer here: a stream drawn by the app, @hostapi.stream_layers)
+int32_t mb_host_stream_layers(void) { return 0; }
+// (nor a pointer on one: the app draws its own, @hostapi.stream_pointer)
+void mb_host_stream_pointer(int32_t id, moonbit_bytes_t png, double w, double h, double hx, double hy) {
+  (void)id; (void)png; (void)w; (void)h; (void)hx; (void)hy;
+}
+void mb_host_stream_pointer_at(int32_t id, double x, double y, int32_t shown) { (void)id; (void)x; (void)y; (void)shown; }
 
 // H.265 not decoded here (a remote screen asks H.264): apple_stream.m's is the one that does.
 int32_t mb_host_h265_here(void) { return 0; }

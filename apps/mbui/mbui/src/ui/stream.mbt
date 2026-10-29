@@ -24,6 +24,15 @@
 //
 // Under a Tester the host is the test's (Tester::new's `h264`; Tester::stream_fed, stream_shows, stream_drops,
 // stream_broken), its picture a placeholder in the draw list: `image N PX "stream WxH ts=TS"`.
+//
+// Shown by the system (`layer`, where the host has a layer of its own for it: @hostapi.stream_layers, macOS's and
+// iOS's, whose contents are the decoded frame's IOSurface): an H.264 stream drawn whole and as it is (`Ctx::stream`'s
+// `layer`, stretched to its rect, not faded) is a native view of kind 4 under the canvas, its hole painted where the
+// picture would be (native.mbt), each frame shown put on that layer by the host as well. While that view shows, a frame
+// decoded of the picture's size (and one its app says may: Stream::new's `quiet`) changes nothing the app draws: its
+// event is taken as it comes (streams_arrive; between frames, streams_said), the frame shown and said shown at once,
+// nothing built or painted for it, no frame asked, as a video plays under the app's canvas. Its first frame, another
+// size, what the app let go of itself and whatever else comes, as before.
 
 ///|
 /// A picture decoded frame by frame.
@@ -56,6 +65,13 @@ pub struct Stream {
   priv mut closed : Bool
   /// its H.264 decoder, driven from here where the host's is (@hostapi.stream_feeds: stream_feed.mbt)
   priv mut feed : Feed?
+  /// shown by a system video layer where the host has one (Stream::new's `layer`): the native view it is in, once
+  /// opened
+  priv layer : Bool
+  priv mut view : NativeView?
+  /// whether a frame of `ts` decoded may be shown as it comes, nothing of the app's built for it (Stream::new's
+  /// `quiet`: the app's say, where what it draws around the picture follows the frame shown); None: any of its size
+  priv quiet : ((Double) -> Bool)?
 }
 
 ///|
@@ -81,13 +97,22 @@ fn streams_reset() -> Unit {
   open_streams.clear()
   stream_nodes.clear()
   stream_tickets.val = 0
+  pointers_told.clear()
 }
 
 ///|
 /// A stream: `shown(ts)` once frame `ts` is drawn or let go (the sender's acknowledgement), `broken()` once its
 /// decoder lost its state (the sender asked for a key frame). Nothing shows until a frame decodes. The host is not
 /// asked for anything until the first config or frame (made where a view builds, it does nothing outside it).
-pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Stream {
+/// `layer`: shown by the host's own video layer where it has one (@hostapi.stream_layers), drawn as it is
+/// (Ctx::stream's `layer`); `quiet(ts)`: whether its frame of `ts` may then be shown as it comes, nothing built for it
+/// (false: what the app draws around it changes with it, as a part of a screen over the whole: the frame built).
+pub fn Stream::new(
+  shown~ : (Double) -> Unit,
+  broken~ : () -> Unit,
+  layer? : Bool = false,
+  quiet? : ((Double) -> Bool)? = None,
+) -> Stream {
   let s = {
     id: 0,
     opened: false,
@@ -106,6 +131,9 @@ pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Stream {
     taken: -1,
     closed: false,
     feed: None,
+    layer,
+    view: None,
+    quiet,
   }
   open_streams.push(s)
   s
@@ -296,6 +324,11 @@ pub fn Stream::close(self : Stream) -> Unit {
   self.own.clear()
   self.acks.clear()
   self.feed = None
+  match self.view {
+    Some(v) => v.close()
+    None => ()
+  }
+  self.view = None
   if self.id != 0 {
     h_stream_close(self.id)
   }
@@ -308,6 +341,71 @@ fn Stream::open(self : Stream) -> Unit {
   if !self.opened {
     self.opened = true
     self.id = h_stream_open()
+    // its system video layer, where the host has one: a native view of its own (kind 4, the stream's id)
+    if self.layer && self.id != 0 && h_stream_layers() {
+      let v = NativeView::make(4, self.id.to_string(), None)
+      if v.here() {
+        self.view = Some(v)
+      }
+    }
+  }
+}
+
+///|
+/// Whether its frames are shown by its system video layer now, nothing of the app's drawn for them: its view shown
+/// in the last frame painted, its decoder the host's own.
+fn Stream::shows_itself(self : Stream) -> Bool {
+  match self.view {
+    Some(v) => !v.closed && v.told_shown && self.feed is None
+    None => false
+  }
+}
+
+///|
+/// A host's event taken as it comes, while the stream shows itself (streams_arrive): a frame decoded of the size it
+/// shows (shown on its layer and said shown at once), one let go (said), its decoder broken. False for one that
+/// changes what the app draws (the first frame, another size): taken as the frame is built, as before.
+fn Stream::take_quietly(self : Stream, e : String) -> Bool {
+  let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()
+  match w {
+    ["f", t, pw, ph, ..] =>
+      match (stream_num(t), stream_num(pw), stream_num(ph)) {
+        (Some(ts), Some(fw), Some(fh)) => {
+          let size = if self.h264 && self.cw > 0 && self.ch > 0 {
+            Some((self.cw, self.ch))
+          } else {
+            Some((fw.to_int(), fh.to_int()))
+          }
+          if self.at is None || size != self.size {
+            return false
+          }
+          match self.quiet {
+            Some(f) if !f(ts) => return false
+            _ => ()
+          }
+          self.at = Some(ts)
+          self.settled_to(ts, wake=false)
+          h_stream_show(self.id, ts)
+          (self.shown)(ts)
+          true
+        }
+        _ => false
+      }
+    ["d", t, ..] =>
+      match stream_num(t) {
+        Some(ts) => {
+          self.settled_to(ts, wake=false)
+          (self.shown)(ts)
+          true
+        }
+        None => false
+      }
+    ["b", ..] => {
+      self.need_key = true
+      (self.broken)()
+      true
+    }
+    _ => false
   }
 }
 
@@ -341,12 +439,12 @@ fn Stream::owe(self : Stream) -> Unit {
 }
 
 ///|
-/// The frames up to `ts` are no longer the host's.
-fn Stream::settled_to(self : Stream, ts : Double) -> Unit {
+/// The frames up to `ts` are no longer the host's (`wake` false: nothing shown changes for it, no frame asked).
+fn Stream::settled_to(self : Stream, ts : Double, wake? : Bool = true) -> Unit {
   let left = []
   for o in self.out {
     if o.0 <= ts {
-      outside_end(outside_stream, o.1)
+      outside_end(outside_stream, o.1, wake~)
     } else {
       left.push(o)
     }
@@ -371,21 +469,57 @@ fn stream_num(s : String) -> Double? {
 fn streams_arrive() -> Unit {
   let mut came = false
   for s in open_streams {
-    if s.closed || s.id == 0 {
-      continue
-    }
-    // (a bound, so a host that says without end cannot hold the frame)
-    for _ in 0..<256 {
-      let e = h_stream_next(s.id)
-      if e == "" {
-        break
-      }
-      s.own.push(e)
+    if s.take_said() {
       came = true
     }
   }
   if came {
     outside_counted()
+  }
+}
+
+///|
+/// What its host said since, taken: while it shows itself (its system video layer), what changes nothing drawn taken
+/// now, in order, till one does; the rest kept for the frame that takes it (streams_frame_start). Whether any was.
+fn Stream::take_said(self : Stream) -> Bool {
+  if self.closed || self.id == 0 {
+    return false
+  }
+  let s = self
+  let quiet = s.shows_itself()
+  let mut came = false
+  // (a bound, so a host that says without end cannot hold the frame)
+  for _ in 0..<256 {
+    let e = h_stream_next(s.id)
+    if e == "" {
+      break
+    }
+    if quiet && s.own.is_empty() && s.take_quietly(e) {
+      continue
+    }
+    s.own.push(e)
+    came = true
+  }
+  came
+}
+
+///|
+/// Between frames, stream `id`'s host said something (hostcall.mbt's outside_streamed: a host whose streams show
+/// themselves): taken now; a frame asked for only where something is left for it, none for a frame its layer shows.
+fn streams_said(id : Int) -> Unit {
+  if in_frame.val {
+    // (the frame being drawn takes it, or the next: streams_arrive)
+    outside_counted()
+    return
+  }
+  for s in open_streams {
+    if s.id == id {
+      // (what is left: a frame, which takes it)
+      if s.take_said() {
+        outside_counted()
+      }
+      return
+    }
   }
 }
 
@@ -487,7 +621,9 @@ fn streams_after_paint() -> Unit {
 /// Where `s` is drawn: a node of `w` × `h` (filling its parent by default), its picture stretched to it (`fit`: as an
 /// image's), or drawn at `at` (x, y, w, h from the node's top left: zoomed, panned; only what is inside the clip it is
 /// painted in shows). Drawn as an image is, at the box's opacity, in its clip and transforms, under what is painted
-/// after it; nothing until a frame shows.
+/// after it; nothing until a frame shows. `layer`: a stream shown by its system video layer (Stream::new's `layer`)
+/// shown there, under the canvas, once an H.264 frame of it shows (JPEG's are drawn here; stretched to its rect: `fit` FitFill; whole, not faded:
+/// what is painted over it draws over it, a glass over it frosts the canvas alone); else drawn by the app.
 pub fn Ctx::stream(
   self : Ctx,
   s : Stream,
@@ -496,7 +632,13 @@ pub fn Ctx::stream(
   fit? : Fit = FitFill,
   radius? : Double = 0.0,
   at? : (Double, Double, Double, Double)? = None,
+  layer? : Bool = true,
 ) -> Int {
+  match s.view {
+    Some(v) if layer && s.h264 && fit is FitFill && radius == 0.0 && !s.closed && s.at is Some(_) =>
+      return self.native(v, w~, h~, content=at)
+    _ => ()
+  }
   let i = self.image("", w~, h~, fit~, radius~, bg=0L, fade=false)
   stream_nodes[i] = (s, at)
   // (its frames come as they are decoded: a part kept builds it each frame, kept_part.mbt)
@@ -655,6 +797,25 @@ fn h_stream_feeds() -> Bool {
 let feeds_known : Ref[Int] = Ref::new(-1)
 
 ///|
+/// Whether a stream may be shown by the host's own video layer (@hostapi.stream_layers): Tester::set_stream_layers, a
+/// run's ENV line.
+fn h_stream_layers() -> Bool {
+  match fake.val {
+    Some(f) => f.stream_layers
+    None => {
+      if layers_known.val < 0 {
+        layers_known.val = if @hostapi.stream_layers() { 1 } else { 0 }
+      }
+      layers_known.val == 1
+    }
+  }
+}
+
+///|
+// kept across runs: the real host's (asked once)
+let layers_known : Ref[Int] = Ref::new(-1)
+
+///|
 fn h_stream_close(id : Int) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "close")
@@ -747,6 +908,13 @@ pub fn Tester::stream_broken(self : Tester, id : Int) -> Unit {
 /// stream_fed ("do CMD", "do queue … bytes=N"), what it says is the test's to give (stream_codec_said).
 pub fn Tester::set_stream_feeds(self : Tester, on : Bool) -> Unit {
   self.fake.stream_feeds = on
+}
+
+///|
+/// Whether a stream asking for one is shown by a system video layer (@hostapi.stream_layers): a native view of kind 4
+/// opened with it (Tester's views), its frames taken as they come while it shows.
+pub fn Tester::set_stream_layers(self : Tester, on : Bool) -> Unit {
+  self.fake.stream_layers = on
 }
 
 ///|

@@ -1420,6 +1420,8 @@ pub fn pointer_hotspot(String) -> (Double, Double)
 
 pub fn pointer_image(@ui.Ctx, shape? : String) -> String
 
+pub fn pointer_png(@ui.Ctx, shape? : String) -> (String, () -> Bytes)
+
 pub fn pointer_rests() -> Bool
 
 pub let pointer_size : Double

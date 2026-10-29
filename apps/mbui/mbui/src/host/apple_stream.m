@@ -64,6 +64,19 @@ void mb_host_request_frame(void);
 @property uint32_t generation;
 @property BOOL needKey, closed;
 @property NSMutableArray<NSNumber *> *inside;
+// the system video layer its frames are put on as they are shown (a native view's of kind 4: apple_views.m), if any;
+// the picture's format there, made again as its size changes
+@property(weak) CALayer *display;
+@property CVPixelBufferRef displayed;  // retained: the last shown, put on a layer attached later
+@property NSMutableArray *onLayer;     // the pixel buffers last put on it (display)
+// a pointer over its picture on that layer (@hostapi.stream_pointer): its own sublayer, its picture and size (points),
+// its hot spot, where it points (0..1 of the layer's bounds) and whether it shows
+@property CALayer *pointer;
+@property(strong) id pointerImage;  // a CGImage
+@property double pointerW, pointerH, pointerHx, pointerHy, pointerX, pointerY;
+// the layer's size as its view was last placed (points; 0: its bounds'), what AppKit may give its layer later
+@property double placedW, placedH;
+@property BOOL pointerShown;
 @end
 @implementation MBStream
 @end
@@ -77,15 +90,32 @@ static NSString *num(double v) {
   return [NSString stringWithFormat:@"%.17g", v];
 }
 
+static MBStream *stream_of(int32_t sid);
+
 static void say(MBStream *s, NSString *e) {
   @synchronized(s) {
     if (s.closed) return;
     [s.events addObject:e];
   }
-  dispatch_async(dispatch_get_main_queue(), ^{ mb_host_request_frame(); });
+  int32_t sid = s.sid;
+  // shown by its system video layer: the app told (ui's streams_said), a frame asked for only where what it said
+  // changes what is drawn; else a frame, which takes it
+  dispatch_async(dispatch_get_main_queue(), ^{
+    MBStream *live = stream_of(sid);
+    if (live && live.display) mb_host_outside(MB_OUTSIDE_STREAMED, sid, 0);
+    else mb_host_request_frame();
+  });
 }
 
-static MBStream *stream_of(int32_t sid) { return streams[@(sid)]; }
+// (from any thread: the decoder's output looks its stream up where it comes, not on the main thread)
+static NSLock *streams_lock;
+static MBStream *stream_of(int32_t sid) {
+  [streams_lock lock];
+  MBStream *s = streams[@(sid)];
+  [streams_lock unlock];
+  return s;
+}
+static void display(MBStream *s, CVPixelBufferRef px);
 
 // ---- H.264 (the stream's queue) ----
 
@@ -102,7 +132,8 @@ static void decoded(void *out_ref, void *frame_ref, OSStatus status, VTDecodeInf
   uint64_t bits = (uint64_t)(uintptr_t)frame_ref;
   memcpy(&ts, &bits, sizeof ts);
   if (image) CVPixelBufferRetain(image);
-  dispatch_async(dispatch_get_main_queue(), ^{
+  // (to the stream's queue at once: not by way of the main thread, which has frames to draw)
+  {
     MBStream *s = stream_of(sid);
     if (!s) {
       if (image) CVPixelBufferRelease(image);
@@ -137,7 +168,7 @@ static void decoded(void *out_ref, void *frame_ref, OSStatus status, VTDecodeInf
       }
       say(s, [NSString stringWithFormat:@"f %@ %d %d", num(ts), f.w, f.h]);
     });
-  });
+  }
 }
 
 // What was inside the decoder let go (taken, as far as the sender is concerned), the session gone.
@@ -354,8 +385,12 @@ int32_t mb_host_stream_open(void) {
   s.decoded = [NSMutableArray new];
   s.retired = [NSMutableArray new];
   s.inside = [NSMutableArray new];
+  s.onLayer = [NSMutableArray new];
   s.needKey = YES;
+  if (!streams_lock) streams_lock = [NSLock new];
+  [streams_lock lock];
   streams[@(s.sid)] = s;
+  [streams_lock unlock];
   return s.sid;
 }
 
@@ -419,6 +454,12 @@ void mb_host_stream_show(int32_t sid, double ts) {
     }
     s.decoded = left;
   }
+  // on its system video layer (if it has one) as well: what shows there
+  if (f.pixels) {
+    if (s.displayed) CVPixelBufferRelease(s.displayed);
+    s.displayed = CVPixelBufferRetain(f.pixels);
+    display(s, f.pixels);
+  }
   id held = nil;
   id<MTLTexture> tex = f.tex;
   if (f.pixels) {
@@ -440,6 +481,39 @@ void mb_host_stream_show(int32_t sid, double ts) {
   if (texture_cache) CVMetalTextureCacheFlush(texture_cache, 0);
 }
 
+// Pixel buffer `px` put on the stream's layer: its IOSurface the layer's contents, in the transaction the frame that
+// shows it puts the layer where it goes in (the canvas's hole with it: one refresh, never the new picture where the old
+// was), or one of its own between frames. Kept with the last few shown, so their surfaces are not decoded into again
+// while the screen may still show them.
+static void display(MBStream *s, CVPixelBufferRef px) {
+  CALayer *layer = s.display;
+  if (!layer || !px) return;
+  IOSurfaceRef surface = CVPixelBufferGetIOSurface(px);
+  if (!surface) return;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  layer.contents = (__bridge id)surface;
+  [CATransaction commit];
+  [s.onLayer addObject:(__bridge id)px];
+  while (s.onLayer.count > 3) [s.onLayer removeObjectAtIndex:0];
+}
+
+static void pointer_put(MBStream *s);
+
+void mb_stream_attach_layer(int sid, CALayer *layer) {
+  MBStream *s = stream_of(sid);
+  if (!s) return;
+  s.display = layer;
+  s.placedW = 0;
+  s.placedH = 0;
+  pointer_put(s);
+  // (what it shows already, at once: not black until the next frame)
+  if (s.display && s.displayed) display(s, s.displayed);
+}
+
+// A system video layer here (apple_views.m's views of kind 4): what a stream shows put there, nothing drawn of it.
+int32_t mb_host_stream_layers(void) { return 1; }
+
 void mb_host_stream_close(int32_t sid) {
   MBStream *s = stream_of(sid);
   if (!s) return;
@@ -452,12 +526,102 @@ void mb_host_stream_close(int32_t sid) {
   [s.audioEngine stop];
   s.audioGeneration++;
   s.audioQueued = 0;
+  s.display = nil;
+  pointer_put(s);
+  if (s.displayed) CVPixelBufferRelease(s.displayed);
+  s.displayed = NULL;
+  [s.onLayer removeAllObjects];
+  [streams_lock lock];
   [streams removeObjectForKey:@(sid)];
+  [streams_lock unlock];
   dispatch_async(s.queue, ^{
     stop(s);
     if (s.format) CFRelease(s.format);
     s.format = NULL;
   });
+}
+
+// ---- its pointer (main thread) ----
+
+// The pointer's sublayer where the stream's layer is (none without one), its picture, at its place: its hot spot at
+// (x, y) of the layer's bounds, its size its own whatever the picture's. In a transaction of its own unless one is
+// open (the frame's that places the layer: mb_stream_layout), never animated.
+static void pointer_put(MBStream *s) {
+  CALayer *display = s.display;
+  if (!display || !s.pointerImage) {
+    [s.pointer removeFromSuperlayer];
+    return;
+  }
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  if (!s.pointer) {
+    CALayer *l = [CALayer layer];
+    l.contentsGravity = kCAGravityResize;
+    l.anchorPoint = CGPointZero;
+    // over the picture whatever it is given after (its contents are its own)
+    l.zPosition = 1;
+    s.pointer = l;
+  }
+  CALayer *l = s.pointer;
+  if (l.superlayer != display) [display addSublayer:l];
+  if (l.contents != s.pointerImage) {
+    l.contents = s.pointerImage;
+    size_t pw = CGImageGetWidth((__bridge CGImageRef)s.pointerImage);
+    if (s.pointerW > 0 && pw > 0) l.contentsScale = (double)pw / s.pointerW;
+  }
+  CGRect b = display.bounds;
+  if (s.placedW > 0 && s.placedH > 0) b = CGRectMake(0, 0, s.placedW, s.placedH);
+  l.bounds = CGRectMake(0, 0, s.pointerW, s.pointerH);
+  double top = s.pointerY * b.size.height - s.pointerHy;
+#if TARGET_OS_OSX
+  // (a Mac's layers count up from their foot unless flipped on the way down to this one: AppKit's flipped view
+  // places its own sublayers, not ours)
+  BOOL down = NO;
+  for (CALayer *k = display; k; k = k.superlayer) down ^= k.geometryFlipped;
+  if (!down) top = b.size.height - top - s.pointerH;
+#endif
+  l.position = CGPointMake(b.origin.x + s.pointerX * b.size.width - s.pointerHx, b.origin.y + top);
+  l.hidden = !s.pointerShown;
+  [CATransaction commit];
+}
+
+void mb_host_stream_pointer(int32_t sid, moonbit_bytes_t png, double w, double h, double hx, double hy) {
+  MBStream *s = stream_of(sid);
+  if (!s) return;
+  CGImageRef img = NULL;
+  NSUInteger n = (NSUInteger)Moonbit_array_length(png);
+  if (n > 0) {
+    NSData *d = [NSData dataWithBytes:png length:n];
+    CGImageSourceRef src = CGImageSourceCreateWithData((__bridge CFDataRef)d, NULL);
+    if (src) {
+      img = CGImageSourceCreateImageAtIndex(src, 0, NULL);
+      CFRelease(src);
+    }
+  }
+  s.pointerImage = img ? (__bridge_transfer id)img : nil;
+  s.pointerW = w;
+  s.pointerH = h;
+  s.pointerHx = hx;
+  s.pointerHy = hy;
+  pointer_put(s);
+}
+
+void mb_host_stream_pointer_at(int32_t sid, double x, double y, int32_t shown) {
+  MBStream *s = stream_of(sid);
+  if (!s) return;
+  s.pointerX = x;
+  s.pointerY = y;
+  s.pointerShown = shown != 0;
+  pointer_put(s);
+}
+
+// Stream sid's layer placed anew (apple_views.m, in the frame's transaction): its pointer where it points on it.
+void mb_stream_layout(int sid, double w, double h) {
+  MBStream *s = stream_of(sid);
+  if (!s) return;
+  s.placedW = w;
+  s.placedH = h;
+  if (s.pointer) pointer_put(s);
 }
 
 // VideoToolbox decodes H.264 on every Mac and iPhone (in hardware, else in software).

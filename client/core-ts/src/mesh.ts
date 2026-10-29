@@ -380,6 +380,9 @@ export type Reply = {
   body: Pull<Uint8Array>;
   /// Lets go of it: the stream is stopped both ways (what is not read any more, the station stops sending).
   cancel(): void;
+  /// A screen view's body read by the host from here (IrohStream.tap), before any of it was taken; false where it is
+  /// not (the host's has none, or it was read already).
+  tap?: (call: number) => Effect.Effect<boolean>;
 };
 
 function headersOf(v: J): [string, string][] {
@@ -452,11 +455,23 @@ export class Link {
     }).pipe(Effect.onExit((exit) => (exit._tag === "Success" ? Effect.void : Effect.sync(() => opened?.reset(0)))));
   }
 
-  static #body(stream: IrohStream, lines: Lines): Pull<Uint8Array> {
+  static #body(stream: IrohStream, lines: Lines): Pull<Uint8Array> & { claim(): Uint8Array | null; restore(prefix: Uint8Array): void } {
     let carry: Uint8Array | null = lines.carry.length > 0 ? lines.carry : null;
     let done = false;
+    let started = false;
     return {
+      // what came past the reply, none of it taken yet (null once it was): the host's to read from (IrohStream.tap)
+      claim: () => {
+        if (started) return null;
+        const c = carry ?? new Uint8Array(0);
+        carry = null;
+        return c;
+      },
+      restore: (prefix) => {
+        carry = prefix.length > 0 ? prefix : null;
+      },
       take: Effect.suspend(() => {
+        started = true;
         if (carry !== null) {
           const c = carry;
           carry = null;
@@ -500,7 +515,22 @@ export class Link {
         write: (bytes) => Effect.mapError(stream.write(bytes), cut),
         finish: () => void Effect.runFork(Effect.ignore(stream.finish())),
       };
-      return [{ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }, out] as [Reply, SocketOut];
+      const body = Link.#body(stream, lines);
+      const tapping = stream.tap;
+      // (what came past the reply goes to the host with it, so it reads the frames from their start)
+      const tap =
+        tapping === undefined
+          ? undefined
+          : (call: number) =>
+              Effect.suspend(() => {
+                const prefix = body.claim();
+                if (prefix === null) return Effect.succeed(false);
+                return Effect.map(Effect.orElseSucceed(tapping.call(stream, call, prefix), () => false), (tapped) => {
+                  if (!tapped) body.restore(prefix);
+                  return tapped;
+                });
+              });
+      return [{ status: reply.status, headers: headersOf(reply.headers), body, cancel: () => stream.reset(0), tap }, out] as [Reply, SocketOut];
     });
   }
 
@@ -2191,7 +2221,7 @@ export class MeshWire implements StationWire {
       const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace)));
       const [reply, send] = yield* link.screen(head, screen);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
-      return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
+      return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send, tap: reply.tap };
     });
   }
 }

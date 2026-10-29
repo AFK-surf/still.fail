@@ -38,3 +38,8 @@ fn ffi_now() -> Double {
 ///|
 extern "js" fn ffi_wall_ms() -> Double =
   #|() => Date.now()
+
+///|
+fn ffi_screen_ack(_call : Double, _ts : Double) -> Int {
+  0
+}

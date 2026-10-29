@@ -51,6 +51,9 @@ void sf_shell_call(const void *shell, uint64_t id, const char *op, const uint8_t
 uint8_t *sf_shell_call_sync(const void *shell, const char *op, const uint8_t *json, size_t json_len, size_t *out_len);
 void sf_free(uint8_t *ptr, size_t len);
 void sf_shell_stop(void *shell);
+void sf_shell_set_say(const void *shell, void (*say)(void *, const uint8_t *, size_t, const uint8_t *, size_t), void *ctx);
+uint8_t sf_shell_screen_ack(const void *shell, uint64_t call, double ts);
+uint8_t *sf_shell_stats(size_t *out_len);
 int32_t sf_utc_offset_min(double at_ms);
 }
 
@@ -194,6 +197,15 @@ void on_complete(void *ctx, uint64_t id, const uint8_t *json, size_t jl, const u
   if (!gate->open) return;
   completed(id, std::string(reinterpret_cast<const char *>(json), jl), std::string(reinterpret_cast<const char *>(error), el),
             has ? std::string(reinterpret_cast<const char *>(bytes), bl) : std::string(), has != 0);
+}
+
+/// What the shell says to the app itself (a remote screen's picture and sound: client/shell `istream.tap`), from its
+/// threads, as the core says it; nothing once the core is stopping.
+void shell_say(void *ctx, const uint8_t *json, size_t jl, const uint8_t *bytes, size_t bl) {
+  auto *gate = static_cast<Gate *>(ctx);
+  std::lock_guard<std::mutex> lock(gate->mutex);
+  if (!gate->open) return;
+  say(reinterpret_cast<const char *>(json), jl, bytes, bl);
 }
 
 }  // namespace
@@ -741,6 +753,8 @@ static void run(void) {
     double t0 = clock_ms(CLOCK_MONOTONIC);
     C.shell = sf_shell_start(C.dataDir.c_str(), on_complete, C.gate);
     if (!C.shell) fatal("the core's files cannot be kept: " + C.dataDir);
+    // (a remote screen's frames said to the app by the shell itself, not through the core's JS)
+    else sf_shell_set_say(C.shell, shell_say, C.gate);
     NSString *path = script_path();
     NSData *script = path ? [NSData dataWithContentsOfFile:path] : nil;
     if (C.shell && !script) fatal(std::string("no core script (MB_CORE_BUNDLE, or core.hbc in the app): ") + (path ? path.UTF8String : "-"));
@@ -828,8 +842,11 @@ static void stop_at_exit(void) {
   if (!pthread_equal(pthread_self(), C.thread)) mb_core_stop();
 }
 
+static void probe_taps(void);
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   if (C.running) return;
+  probe_taps();
   static bool at_exit = false;
   if (!at_exit) at_exit = atexit(stop_at_exit) == 0;
   C.on_message = on_message;
@@ -871,6 +888,41 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
     else
       sf.getPropertyAsFunction(rt, "receive").callWithThis(rt, sf, jsi::Value(C.client), jsi::String::createFromUtf8(rt, j));
   });
+}
+
+int mb_core_screen_ack(double call, double ts) {
+  void *shell = C.shell;
+  if (!shell || !C.running || call < 1) return 0;
+  return sf_shell_screen_ack(shell, (uint64_t)call, ts);
+}
+
+// MBUI_PROBE=1: what the shell did of remote screens every 5 s (`PROBE core: tap views=… video=… audio=… acks=…`,
+// those said to the app and the acks it sent itself, and how many reads of streams the core asked meanwhile): whether
+// the views are tapped (client/shell istream.tap).
+static void probe_taps(void) {
+  static dispatch_source_t timer;
+  if (timer || !getenv("MBUI_PROBE")) return;
+  timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+  dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, NSEC_PER_SEC);
+  static NSDictionary *was;
+  dispatch_source_set_event_handler(timer, ^{
+    size_t n = 0;
+    uint8_t *out = sf_shell_stats(&n);
+    if (!out) return;
+    NSDictionary *calls = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:out length:n] options:0 error:nil][@"calls"];
+    sf_free(out, n);
+    if (![calls isKindOfClass:NSDictionary.class]) return;
+    auto count = [&](NSDictionary *d, NSString *k) -> long long {
+      NSArray *a = [d[k] isKindOfClass:NSArray.class] ? d[k] : nil;
+      return a.count ? [a[0] longLongValue] : 0;
+    };
+    NSMutableString *line = [NSMutableString stringWithString:@"PROBE core:"];
+    for (NSString *k in @[ @"tap.views", @"tap.video", @"tap.audio", @"tap.acks", @"istream.read", @"istream.write" ])
+      [line appendFormat:@" %@=%lld", k, count(calls, k) - count(was, k)];
+    was = calls;
+    fprintf(stderr, "%s\n", line.UTF8String);
+  });
+  dispatch_resume(timer);
 }
 
 void mb_core_stop(void) {

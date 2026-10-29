@@ -24,6 +24,9 @@ typedef struct {
   /// to: given with the engine, as the app links both, so mbui/core's own tests link no host.
   void (*post)(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
   void (*post_drop)(const char *channel);
+  /// A remote screen's frame `ts` acknowledged straight to its station, by the shell that reads its view (`call`, the
+  /// app's call id) itself: 1, else 0 (the app asks the core). NULL: never.
+  int (*screen_ack)(double call, double ts);
 } mbc_engine;
 
 // mbui's (its src/host/post_api.h, the host's own file): for an engine to hand over (`post`, `post_drop`)

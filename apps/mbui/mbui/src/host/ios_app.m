@@ -14,6 +14,7 @@
 #import <mach/mach.h>
 #import <os/log.h>
 #import "apple.h"
+#include <pthread.h>
 #include <sys/resource.h>
 #include "post.h"
 
@@ -932,6 +933,49 @@ static void watch_keyboard(void);
 
 double mb_host_cpu_ms(void);
 
+// With MBUI_PROBE=1, the threads that took most of a CPU since it was last asked (each thread's own time, by its name:
+// the core's engine, the decoder, the network, the UI's), as `PROBE ios threads: name=N% …`: where the process's share
+// goes while nothing is drawn.
+static void probe_threads(double span_ms) {
+  static NSMutableDictionary<NSNumber *, NSNumber *> *was;
+  if (!was) was = [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSNumber *, NSNumber *> *now = [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSString *, NSNumber *> *by = [NSMutableDictionary dictionary];
+  thread_act_array_t threads;
+  mach_msg_type_number_t n = 0;
+  if (task_threads(mach_task_self(), &threads, &n) != KERN_SUCCESS) return;
+  for (mach_msg_type_number_t i = 0; i < n; i++) {
+    thread_identifier_info_data_t id;
+    mach_msg_type_number_t idn = THREAD_IDENTIFIER_INFO_COUNT;
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t cnt = THREAD_BASIC_INFO_COUNT;
+    if (thread_info(threads[i], THREAD_IDENTIFIER_INFO, (thread_info_t)&id, &idn) == KERN_SUCCESS &&
+        thread_info(threads[i], THREAD_BASIC_INFO, (thread_info_t)&info, &cnt) == KERN_SUCCESS) {
+      double ms = info.user_time.seconds * 1000.0 + info.user_time.microseconds / 1000.0 +
+                  info.system_time.seconds * 1000.0 + info.system_time.microseconds / 1000.0;
+      NSNumber *key = @(id.thread_id);
+      now[key] = @(ms);
+      double d = ms - (was[key] ? was[key].doubleValue : ms);
+      char name[64] = "";
+      pthread_t pt = pthread_from_mach_thread_np(threads[i]);
+      if (pt) pthread_getname_np(pt, name, sizeof name);
+      NSString *label = name[0] ? @(name) : (pt == pthread_self() ? @"main" : @"?");
+      by[label] = @(by[label].doubleValue + d);
+    }
+    mach_port_deallocate(mach_task_self(), threads[i]);
+  }
+  vm_deallocate(mach_task_self(), (vm_address_t)threads, n * sizeof(thread_act_t));
+  was = now;
+  NSArray<NSString *> *top = [by keysSortedByValueUsingComparator:^(NSNumber *a, NSNumber *b) { return [b compare:a]; }];
+  NSMutableString *line = [NSMutableString stringWithString:@"PROBE ios threads:"];
+  for (NSUInteger i = 0; i < MIN(top.count, (NSUInteger)8); i++) {
+    double pct = by[top[i]].doubleValue * 100.0 / MAX(1, span_ms);
+    if (pct < 0.5) break;
+    [line appendFormat:@" %@=%.0f%%", [top[i] stringByReplacingOccurrencesOfString:@" " withString:@"_"], pct];
+  }
+  fprintf(stderr, "%s\n", line.UTF8String);
+}
+
 // How warm the device is said to be (ProcessInfo's thermal state: 0 nominal, 1 fair, 2 serious, 3 critical), on the
 // log as it changes; with MBUI_PROBE=1 also the process's share of a CPU every 5 s, frames or none (the app's probe
 // says it only as it draws: what the core does while nothing is drawn shows here).
@@ -946,10 +990,12 @@ static void watch_heat(void) {
   const char *probe = getenv("MBUI_PROBE");
   if (!probe || probe[0] != '1') return;
   __block double was_cpu = mb_host_cpu_ms(), was_at = mb_now_ms();
+  probe_threads(1);
   [NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *t) {
     double cpu = mb_host_cpu_ms(), at = mb_now_ms();
     fprintf(stderr, "PROBE ios: cpu=%.0f%% thermal=%ld\n", (cpu - was_cpu) * 100.0 / MAX(1, at - was_at),
             (long)NSProcessInfo.processInfo.thermalState);
+    probe_threads(at - was_at);
     was_cpu = cpu;
     was_at = at;
   }];
@@ -1060,9 +1106,14 @@ int32_t mb_host_platform(void) { return 1; }
 void mb_host_request_frame(void) { [the_view requestFrame]; }
 
 // A message posted from outside the frames (post.h), on whatever thread: its frame asked for on the main thread.
+// (who is told what the host did: set as the app starts, below)
+static mb_outside_fn outside_cb;
 static void mb_post_wake(void) {
+  // the app told what came (ui's messages_between): it takes what changes only signals now, and asks for a frame only
+  // where something is left for one
   dispatch_async(dispatch_get_main_queue(), ^{
-    mb_host_request_frame();
+    if (outside_cb) outside_cb(MB_OUTSIDE_POSTED, 0, 0);
+    else mb_host_request_frame();
   });
 }
 

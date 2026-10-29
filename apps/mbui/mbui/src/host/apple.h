@@ -52,6 +52,11 @@ id<MTLTexture> mb_image_texture(int iid);
 // MB_STREAM_TEX + sid is it (src/hostapi/stream.mbt)
 #define MB_STREAM_TEX 4194304
 id<MTLTexture> mb_stream_texture(int sid);
+// the layer stream sid's frames are put on as they are shown as well (their IOSurfaces, the contents of a native view's
+// of kind 4, apple_views.m), nil none: what it shows now on it at once
+void mb_stream_attach_layer(int sid, CALayer *layer);
+// that layer placed anew (its view's rect: apple_views.m): what is over it on it (its pointer) put where it goes
+void mb_stream_layout(int sid, double w, double h);
 
 // text (apple_text.m)
 // drawn at this many pixels a point; a change draws every glyph again
@@ -77,6 +82,8 @@ enum {
   MB_OUTSIDE_GRAB = 6,
   MB_OUTSIDE_UPDATE = 7,
   MB_OUTSIDE_CLIP = 9,
+  MB_OUTSIDE_POSTED = 11,
+  MB_OUTSIDE_STREAMED = 12,
 };
 void mb_host_outside(int32_t kind, int32_t id, int32_t state);
 // whether a native view's picture for snapshots is being taken (apple_views.m): a snapshot waits for it

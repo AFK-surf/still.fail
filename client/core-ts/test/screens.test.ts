@@ -152,13 +152,14 @@ test("a_screen_link_opens_the_screen", () => {
 
 /// One view the fake station has open: what the client asked, what it sent, and the station's side of the stream.
 /// `alongside`: how many of the others were still open as it opened.
-type Viewing = { head: RequestHead; ask: ScreenAsk; got: ClientFrame[]; closed: boolean; alongside: number; send(bytes: Uint8Array): void; end(): void };
+type Viewing = { head: RequestHead; ask: ScreenAsk; got: ClientFrame[]; closed: boolean; alongside: number; tapped?: number; send(bytes: Uint8Array): void; end(): void };
 
 /// A wire whose requests go over the host's fetch (station-fixture.ts) and whose screen views a test drives: `answer`
 /// says how the station answers each (200, or a status and its error).
 function screenWire(seed: number) {
   const views: Viewing[] = [];
-  const opts: { answer: (v: Viewing) => number | [number, string] } = { answer: () => 200 };
+  // `tap`: the host reads the picture and sound itself (IrohStream.tap, Apple's shell), the core only the rest
+  const opts: { answer: (v: Viewing) => number | [number, string]; tap?: boolean } = { answer: () => 200 };
   const draw = random(seed);
   const make = (host: FakeHost): StationWire => {
     const plain = new HostWire(host);
@@ -196,6 +197,7 @@ function screenWire(seed: number) {
                 }),
               finish: () => {},
             },
+            ...(opts.tap ? { tap: (call: number) => Effect.sync(() => ((v.tapped = call), true)) } : {}),
           };
         }),
     };
@@ -366,6 +368,28 @@ test("a_station_from_before_screens_has_none_and_needs_an_update", async () => {
   assert.equal(views.length, 0);
   assert.equal(lastState(log, 2).phase, "outdated");
   assert.deepEqual(log.find((m) => m.id === 2 && "ok" in m), { id: 2, ok: null });
+  core.close();
+});
+
+each("a_view_its_host_reads_says_none_of_its_picture_and_is_live_by_the_head_it_is_left", async (seed) => {
+  const { host, core, ui, views, opts } = await viewing(seed);
+  opts.tap = true;
+  const log: J[] = [];
+  call(core, ui, 7, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264", "jpeg"] });
+  await host.settle();
+  const [v] = views;
+  assert.equal(v!.tapped, 7);
+  // what the host leaves the core: the config, a video frame's head without its picture
+  v!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 1_000, new Uint8Array(0))]));
+  await host.settle();
+  said(host, log);
+  assert.equal(log.filter((m) => m.id === 7 && (m.value?.config || m.value?.frame)).length, 0, "said by the host, not again");
+  const live = lastState(log, 7);
+  assert.deepEqual([live.phase, live.width, live.height, live.codec], ["live", 1280, 720, "h264"]);
+  // acks still go on the stream
+  call(core, ui, 8, "screen.ack", { view: "v", ts: 1_000 });
+  await host.settle();
+  assert.deepEqual(v!.got, [{ ack: 1_000 }]);
   core.close();
 });
 

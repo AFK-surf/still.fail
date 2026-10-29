@@ -144,6 +144,40 @@ fn messages_arrive() -> Unit {
         }
       }
   }
+  messages_take(came)
+  if messages_in.length() > 0 {
+    outside_counted()
+  }
+}
+
+///|
+/// Between frames, something was posted (hostcall.mbt's outside_posted: a host that says so rather than asking for a
+/// frame): taken now, what changes only signals handed to its handler as it comes (a topic's change, a remote screen's
+/// frame), the rest kept for the next frame, which is asked for only then. Under a Tester the frame takes what came.
+fn messages_between() -> Unit {
+  // (while a frame runs, or under a Tester: the frame takes it, as it begins)
+  if fake.val is Some(_) || in_frame.val || frame_running.val {
+    outside_counted()
+    return
+  }
+  if @hostapi.post_take() == 0 {
+    return
+  }
+  let came : Array[(String, String, Bytes?)] = []
+  while @hostapi.post_next() is Some((channel, json, b)) {
+    came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
+  }
+  messages_take(came)
+  // (what is left: a frame, which hands it on)
+  if messages_in.length() > 0 {
+    outside_counted()
+  }
+}
+
+///|
+/// What came, in the order it came: while nothing is left for a handler, what changes only signals taken now
+/// (`on_message_said`); from the first that is not, it and all after it left for the frame (messages_in).
+fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
   // (what changes only signals taken now, in the order they came, till one is left for its handler: messages_in)
   for m in came {
     if messages_in.is_empty() {
@@ -163,9 +197,6 @@ fn messages_arrive() -> Unit {
       }
     }
     messages_in.push(m)
-  }
-  if messages_in.length() > 0 {
-    outside_counted()
   }
 }
 

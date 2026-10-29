@@ -331,3 +331,36 @@ test "a subscription's changes are pushed: what read it in a computed follows ea
   assert_true(c.receive("{\"id\":2,\"value\":[7,8]}"))
   assert_eq(seen.get(), 2)
 }
+
+///|
+test "a quiet call's values and an unread call's answer may be taken as they come; the rest may not" {
+  let (c, _) = recorder()
+  c.quiet("screen.view", fn(v) { v is Object(o) && o.keys().all(fn(k) { k == "frame" }) })
+  c.unread("screen.ack")
+  let values : Array[String] = []
+  let view = c.stream("screen.view", on_value=fn(v, _) { values.push(v.stringify()) })
+  let ack = c.call("screen.ack")
+  let other = c.call("prefs.set")
+  let said = fn(m : Json) {
+    guard m is Object(o) else { return false }
+    c.call_said(o)
+  }
+  // a frame alone: quiet; a state: what a frame reads
+  assert_true(said({ "id": view, "value": { "frame": { "ts": 1 } } }))
+  assert_false(said({ "id": view, "value": { "state": {} } }))
+  assert_false(said({ "id": view, "value": { "frame": { "ts": 1 }, "config": {} } }))
+  // its answer is read
+  assert_false(said({ "id": view, "ok": {} }))
+  // the ack's answer nobody reads; another call's is read
+  assert_true(said({ "id": ack, "ok": {} }))
+  assert_true(said({ "id": ack, "error": {} }))
+  assert_false(said({ "id": other, "ok": {} }))
+  // answered: nothing more of it is said
+  c.receive_json({ "id": ack, "ok": {} })
+  assert_false(said({ "id": ack, "ok": {} }))
+  c.receive_json({ "id": view, "value": { "frame": { "ts": 2 } } })
+  assert_eq(values, ["{\"frame\":{\"ts\":2}}"])
+  // over: its values no longer quiet
+  c.receive_json({ "id": view, "ok": {} })
+  assert_false(said({ "id": view, "value": { "frame": { "ts": 3 } } }))
+}

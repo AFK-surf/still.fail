@@ -32,6 +32,11 @@ export interface IrohStream {
   stopped(): Effect.Effect<number | null, HostError>;
   /// Ends it at once, both ways.
   reset(code: number): void;
+  /// A remote screen's view (docs/remote-screens.md) read by the host from now on, beginning with `prefix` (what was
+  /// read past its reply): its picture's and sound's frames said to the app itself as the progress of its call `call`
+  /// (as screens.ts would say them), `read` answering only the rest (a config too, and the first video frame's head
+  /// after each). False where the host does not (then nothing changed). Hosts whose shell says to the app (Apple's).
+  tap?(call: number, prefix: Uint8Array): Effect.Effect<boolean, HostError>;
 }
 
 export interface IrohConnection {

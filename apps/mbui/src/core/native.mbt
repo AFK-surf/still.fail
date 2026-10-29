@@ -21,3 +21,5 @@ extern "C" fn ffi_web_auth(token : Int, url : String, scheme : String) -> Int = 
 extern "C" fn ffi_now() -> Double = "mbc_now_ms"
 
 extern "C" fn ffi_wall_ms() -> Double = "mbc_wall_ms"
+
+extern "C" fn ffi_screen_ack(call : Double, ts : Double) -> Int = "mbc_screen_ack"

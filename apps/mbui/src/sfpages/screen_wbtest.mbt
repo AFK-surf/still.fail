@@ -36,6 +36,7 @@ fn screen_rig(
   until_gone? : Bool = false,
   screen? : String = "browser:tab-1",
   here? : String = "",
+  h264? : Bool = false,
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -146,6 +147,7 @@ fn screen_rig(
     w~,
     h~,
     platform~,
+    h264~,
   )
   t.draw()
   app.nav.push(Screen({ station: "ws-1/st-1", screen, title: "Chrome", until_gone }))

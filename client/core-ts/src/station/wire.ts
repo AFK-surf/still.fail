@@ -63,8 +63,10 @@ export interface SocketOut {
   finish(): void;
 }
 
-/// A socket stream as it opened: the station's reply (101 once the service took it), and where the client's frames go.
-export type WireSocket = { reply: WireReply; send: SocketOut };
+/// A socket stream as it opened: the station's reply (101 once the service took it), and where the client's frames go;
+/// a screen view's, `tap`: its picture and sound read by the host and said to the app itself (IrohStream.tap), where
+/// it can: whether it does.
+export type WireSocket = { reply: WireReply; send: SocketOut; tap?: (call: number) => Effect.Effect<boolean> };
 
 /// How requests reach a station. A request for an event stream carries `accept: text/event-stream`. What is open (a
 /// reply's body, a socket) closes with the scope it was asked in.

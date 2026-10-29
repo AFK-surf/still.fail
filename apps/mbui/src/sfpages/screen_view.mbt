@@ -171,6 +171,8 @@ pub fn screen_page(
   let title = at.title
   let key = screen_key(station, screen)
   let s = screen_sess(src, station, screen)
+  // (built again for each state that changed what it reads: taken as they come, a pointer's move alone builds nothing)
+  s.said.get() |> ignore
   let u = screen_ui(key)
   u.in_tab = in_tab
   // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen

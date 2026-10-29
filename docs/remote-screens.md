@@ -376,7 +376,9 @@ except while this device's own mouse is over the picture and drives it: then tha
 screen's shape (a text cursor over text), and nothing is drawn. Hidden on the screen (`none`), neither is. The app
 (apps/mbui, `@sf.pointer_image`) draws its pointer at its own size in the screen's shape too, as a Mac draws each (the
 arrow, a text cursor, a hand, the resizing arrows, a cross, a hand grabbing, not allowed, waiting), the point each points
-with where the station says.
+with where the station says. Where the picture shows on a system video layer (macOS, iOS: @hostapi.stream_layers), the app's pointer is a
+sublayer of it drawn by the host (@hostapi.stream_pointer), composited with the picture: the station's pointer moving
+alone is taken as it comes and told the host, nothing of the app built or drawn for it.
 
 On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
 (`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:

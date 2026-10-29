@@ -138,6 +138,28 @@ pub fn stream(
 }
 
 ///|
+/// A remote screen's frame `ts` acknowledged straight to its station, where the engine's shell reads the view of call
+/// `call` itself (Apple's: client/shell `istream.tap`): no message to the core, no answer. False: not so (the app
+/// calls `screen.ack`).
+pub fn screen_ack(call : Int, ts : Double) -> Bool {
+  ffi_screen_ack(call.to_double(), ts) != 0
+}
+
+///|
+/// The values of call `name` for which `f` says true change nothing a frame reads: taken as they come, they build
+/// nothing (Client::quiet). Said once, as the app starts.
+pub fn quiet(name : String, f : (Json) -> Bool) -> Unit {
+  client.quiet(name, f)
+}
+
+///|
+/// Nobody reads the answer of call `name`: taken as it comes, it builds nothing (Client::unread). Said once, as the app
+/// starts.
+pub fn unread(name : String) -> Unit {
+  client.unread(name)
+}
+
+///|
 /// Calls `name` and hears how it goes, for an answer with bytes beside it (see Client::stream_bytes); the call's id,
 /// for `cancel`.
 pub fn stream_bytes(
@@ -190,12 +212,15 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
 
 ///|
 /// What the core said, taken as it comes where it is a topic's change alone (Client::topic_said: what it changes is its
-/// topic's signal and nothing else), before the frame decides what it does: what read the topic is built again, nothing
-/// else (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
+/// topic's signal and nothing else) or a call's that changes nothing a frame reads (Client::call_said: a quiet value, an
+/// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
+/// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
   let msg = @json.parse(text) catch { _ => return false }
   match msg {
-    Object(m) if !m.contains("mbui_auth") && !m.contains("clocked") && client.topic_said(m) => {
+    Object(m) if !m.contains("mbui_auth") &&
+      !m.contains("clocked") &&
+      (client.topic_said(m) || client.call_said(m)) => {
       take(msg, bytes)
       true
     }

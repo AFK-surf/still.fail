@@ -51,3 +51,12 @@ fn st_hevc(_id : Int, _hvcc : Bytes, _w : Int, _h : Int) -> Unit { () }
 
 ///|
 fn st_audio(_id : Int, _data : Bytes) -> Unit { () }
+
+///|
+fn st_layers() -> Int { 0 }
+
+///|
+fn st_pointer(_id : Int, _png : Bytes, _w : Double, _h : Double, _hx : Double, _hy : Double) -> Unit { () }
+
+///|
+fn st_pointer_at(_id : Int, _x : Double, _y : Double, _shown : Int) -> Unit { () }

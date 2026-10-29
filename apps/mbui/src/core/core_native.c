@@ -115,6 +115,8 @@ static void auth_done(const char *url, const char *error, void *ctx) {
   free(buf);
 }
 
+int32_t mbc_screen_ack(double call, double ts) { return engine && engine->screen_ack ? engine->screen_ack(call, ts) : 0; }
+
 int32_t mbc_has_web_auth(void) { return engine && engine->web_auth ? 1 : 0; }
 
 int32_t mbc_web_auth(int32_t token, moonbit_string_t url, moonbit_string_t scheme) {
