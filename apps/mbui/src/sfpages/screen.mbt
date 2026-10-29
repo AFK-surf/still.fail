@@ -61,6 +61,12 @@ priv struct ScreenSess {
   view : String
   /// the core's latest state of the view (ScreenViewState, whole each time); None before the first
   mut state : Json?
+  /// each state taken that changed more than where the pointer drawn on a picture's layer points (ScreenSess::take):
+  /// what the page reads of the state is built again for it, however it was taken
+  said : @signals.Signal[Int]
+  /// the pointer as the last build had it drawn: on a picture's system video layer by its host (moved there as the
+  /// station's pointer moves, nothing built for it: ScreenSess::pointer_moved), or None here, by the app
+  mut pointer_layer : PointerLayer?
   /// the call failed (the core said why), rather than the view ending
   failure : @signals.Signal[String?]
   /// the call answered: the view ended (the last state says why)
@@ -147,6 +153,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         screen,
         view: "mbui-\{screens_made.val}",
         state: None,
+        said: @signals.signal(0),
+        pointer_layer: None,
         failure: @signals.signal(None),
         finished: @signals.signal(false),
         audio_ready: false,
@@ -187,13 +195,35 @@ fn ScreenSess::part_stream(self : ScreenSess) -> @ui.Stream {
   match self.part {
     Some(st) => st
     None => {
-      let st = @ui.Stream::new(shown=fn(ts) { screen_ack(self.src, self, ts) }, broken=fn() {
-        screen_tell(self.src, "screen.keyframe", { "view": Json::string(self.view) })
-      })
+      let st = @ui.Stream::new(
+        shown=fn(ts) { screen_ack(self.src, self, ts) },
+        broken=fn() { screen_tell(self.src, "screen.keyframe", { "view": Json::string(self.view) }) },
+        // on the system's video layer too, over the whole's: a frame of the part shown now shown as it comes, one of
+        // another part (or while the whole's shows) built, the picture put where its part is
+        layer=true,
+        quiet=Some(fn(ts) {
+          match self.part_shown() {
+            Some(now) => self.part_at(ts) == Some(now)
+            None => false
+          }
+        }),
+      )
       self.part = Some(st)
       st
     }
   }
+}
+
+///|
+/// The part a frame of `ts` of the part's decoder shows (the last begun by then).
+fn ScreenSess::part_at(self : ScreenSess, ts : Double) -> Part? {
+  let mut at = None
+  for p in self.parts {
+    if p.0 <= ts {
+      at = Some(p.1)
+    }
+  }
+  at
 }
 
 ///|
@@ -260,6 +290,10 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
         screen_ack(self.src, self, ts)
       },
       broken=fn() { screen_tell(self.src, "screen.keyframe", { "view": Json::string(self.view) }) },
+      // shown by the system's video layer where the host has one: a frame of it builds and draws nothing of the app's,
+      // unless a part is drawn over it (a frame of the whole newer than the part's puts the part away: built)
+      layer=true,
+      quiet=Some(fn(_) { self.part_shown() is None }),
     ),
   )
 }
@@ -277,7 +311,12 @@ fn screen_ack(src : Source, s : ScreenSess, ts : Double) -> Unit {
     return
   }
   s.acked = ts
-  screen_tell(src, "screen.ack", { "view": Json::string(s.view), "ts": Json::number(ts) })
+  // (its call: where the engine's shell reads the view itself, the ack goes from there: src/stillfail's call)
+  screen_tell(src, "screen.ack", {
+    "view": Json::string(s.view),
+    "ts": Json::number(ts),
+    "call": Json::number(s.call.to_double()),
+  })
 }
 
 ///|
@@ -752,11 +791,96 @@ fn ScreenSess::reveal(
 }
 
 ///|
-/// A value of the call: taken apart, the heavy parts handed on (ScreenSession.kt take).
+/// Whether a value of `screen.view` changes nothing a frame reads, as ScreenSess::take takes it: a frame or a sound's
+/// packet alone, handed to the decoder (which says what it shows: what it said is taken as the frame begins) and counted
+/// where only 控制中心's second reads it; so the core takes it as it comes and builds nothing for it (@core.quiet, said
+/// as the app starts: src/stillfail). A state, a config or a copy made on the screen changes what is shown: not so.
+pub fn screen_value_quiet(value : Json) -> Bool {
+  guard value is Object(o) else { return false }
+  if o.length() > 0 && o.keys().all(fn(k) { k == "frame" || k == "audio" }) {
+    return true
+  }
+  // a state that only moves the pointer of a view whose pointer is on its picture's layer (ScreenSess::take hands it
+  // to the host); taken by another view, more changed there, its `said` builds what reads it
+  match o.get("state") {
+    Some(Object(_) as st) if o.length() == 1 =>
+      screens_open.values().any(fn(s) { s.pointer_layer is Some(_) && cursor_moved_only(s.state, st) })
+    _ => false
+  }
+}
+
+///|
+/// Where the pointer is on a picture's system video layer, as the last build had it (screen_stage): the stream it is
+/// drawn over, the part of the screen that one shows (None: the whole), and whether it follows the station's pointer
+/// (not the trackpad's, nor hidden while this device's mouse drives it).
+priv struct PointerLayer {
+  on : @ui.Stream
+  part : Part?
+  follows : Bool
+}
+
+///|
+/// Whether state `new` differs from `old` only in where the station's pointer is (its shape the same).
+fn cursor_moved_only(old : Json?, new : Json) -> Bool {
+  guard old is Some(Object(a)) && new is Object(b) && a.length() == b.length() else { return false }
+  b.iter().all(fn(kv) {
+    let (k, v) = kv
+    match a.get(k) {
+      Some(was) if k == "cursor" =>
+        match (was, v) {
+          (Object(c0), Object(c1)) =>
+            c0.length() == c1.length() &&
+            c0.get("shape") == c1.get("shape") &&
+            c1.iter().all(fn(e) { e.0 == "shape" || e.0 == "x" || e.0 == "y" })
+          _ => false
+        }
+      Some(was) => was == v
+      None => false
+    }
+  })
+}
+
+///|
+/// A point of the whole screen (0..1) on the picture of `part` (None: the whole): 0..1 of the part, outside it too.
+fn point_on(at : (Double, Double), part : Part?) -> (Double, Double) {
+  match part {
+    Some(p) => ((at.0 - p.x) / p.w, (at.1 - p.y) / p.h)
+    None => at
+  }
+}
+
+///|
+/// The station's pointer moved, nothing else of the state changed: where it is drawn on a picture's layer, the host told
+/// (nothing built or painted for it); while it is the trackpad's or hidden, nothing.
+fn ScreenSess::pointer_moved(self : ScreenSess) -> Unit {
+  guard self.pointer_layer is Some(pl) && pl.follows else { return }
+  pl.on.pointer_at(self.cursor().map(fn(at) { point_on(at, pl.part) }))
+}
+
+///|
+/// The calls of a screen whose answers nobody reads (screen_tell's `screen.ack`): taken as they come, they build nothing
+/// (@core.unread, said as the app starts).
+pub fn screen_unread_calls() -> Array[String] {
+  ["screen.ack"]
+}
+
+///|
+/// A value of the call: taken apart, the heavy parts handed on (ScreenSession.kt take). What screen_value_quiet says
+/// changes nothing a frame reads is taken as it comes, before the frame is built: what a frame or a sound's packet sets
+/// here is read by no build.
 fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
   guard value is Object(o) else { return }
   match o.get("state") {
-    Some(Object(_) as s) => self.state = Some(s)
+    Some(Object(_) as s) => {
+      // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
+      let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
+      self.state = Some(s)
+      if moved {
+        self.pointer_moved()
+      } else {
+        self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+      }
+    }
     _ => ()
   }
   match o.get("audioConfig") {

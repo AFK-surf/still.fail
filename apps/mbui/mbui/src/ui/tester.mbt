@@ -342,6 +342,7 @@ pub fn Tester::new(
     audio_here: false,
     h265_here: false,
     stream_feeds: false,
+    stream_layers: false,
     stream_ids: 0,
     streams_fed: {},
     stream_said: {},

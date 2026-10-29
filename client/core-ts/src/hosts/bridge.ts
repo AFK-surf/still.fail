@@ -37,7 +37,8 @@
 //   conn.openBi / conn.acceptBi / conn.openUni {id} → {id} (acceptBi: {end} once gone); conn.closed {id} → reason;
 //     conn.close {id, code, reason}
 //   istream.read {id} → bytes or {end}; istream.write {id} + bytes; istream.finish {id}; istream.stopped {id} → {code};
-//     istream.reset {id, code}
+//     istream.reset {id, code}; istream.tap {id, call} + what was read past the reply → {tapped} (a remote screen's
+//     picture and sound said to the app by the shell itself, where its host gave it a way to: Apple's)
 // And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
 //   sql.close {id}; sql.delete {name}; storage.path {key} → the file it is kept in, or null while none is;
@@ -406,6 +407,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     finish: () => Effect.asVoid(bridge.call("istream.finish", { id })),
     stopped: () => Effect.map(bridge.call("istream.stopped", { id }), (a) => (typeof (a.json as J)?.code === "number" ? (a.json as J).code : null)),
     reset: (code) => void Effect.runFork(Effect.ignore(bridge.call("istream.reset", { id, code }))),
+    tap: (call, prefix) => Effect.map(bridge.call("istream.tap", { id, call }, prefix), (a) => (a.json as J)?.tapped === true),
   });
   const connection = (id: number): IrohConnection => ({
     remoteId: () => String(bridge.sync("conn.remoteId", { id })),

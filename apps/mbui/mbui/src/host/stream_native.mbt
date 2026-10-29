@@ -48,3 +48,13 @@ extern "C" fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit = "mb_ho
 ///|
 #borrow(data)
 extern "C" fn st_audio(id : Int, data : Bytes) -> Unit = "mb_host_stream_audio"
+
+///|
+extern "C" fn st_layers() -> Int = "mb_host_stream_layers"
+
+///|
+#borrow(png)
+extern "C" fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit = "mb_host_stream_pointer"
+
+///|
+extern "C" fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) -> Unit = "mb_host_stream_pointer_at"

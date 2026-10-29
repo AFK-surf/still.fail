@@ -27,11 +27,15 @@ pub fn own_clock(ClockRuntime) -> Unit
 
 pub fn query_of(String) -> String
 
+pub fn quiet(String, (Json) -> Bool) -> Unit
+
 pub fn receive(String, Bytes?) -> Unit
 
 pub fn receive_said(String, Bytes?) -> Bool
 
 pub let restarted_text : @ref.Ref[String]
+
+pub fn screen_ack(Int32, Double) -> Bool
 
 pub fn sign_in((Result[Json, Json]) -> Unit) -> Unit
 
@@ -57,6 +61,8 @@ pub fn trace_to((String) -> Unit, bytes_max? : Int32) -> Unit
 
 pub fn track((String) -> Int32, (Int32) -> Unit) -> Unit
 
+pub fn unread(String) -> Unit
+
 pub fn unsubscribe(Sub) -> Unit
 
 pub fn wall_ms() -> Double
@@ -71,8 +77,10 @@ pub struct Client {
 }
 pub fn Client::call(Self, String, params? : Json, bytes? : Bytes?, on_done? : (Result[Json, Json]) -> Unit) -> Int32
 pub fn Client::call_bytes(Self, String, params? : Json, on_done~ : (Result[(Json, Bytes?), Json]) -> Unit) -> Int32
+pub fn Client::call_said(Self, Map[String, Json]) -> Bool
 pub fn Client::cancel(Self, Int32) -> Unit
 pub fn Client::new((String) -> Unit, send_bytes? : (String, Bytes) -> Unit) -> Self
+pub fn Client::quiet(Self, String, (Json) -> Bool) -> Unit
 pub fn Client::receive(Self, String) -> Bool
 pub fn Client::receive_json(Self, Json, bytes? : Bytes?) -> Unit
 pub fn Client::reset(Self) -> Unit
@@ -83,6 +91,7 @@ pub fn Client::subscribe(Self, String, params? : Map[String, Json]) -> Sub
 pub fn Client::time_topics(Self, ((Int32, String, Json?, Bool) -> Unit)?) -> Unit
 pub fn Client::topic_said(Self, Map[String, Json]) -> Bool
 pub fn Client::track(Self, (String) -> Int32, (Int32) -> Unit) -> Unit
+pub fn Client::unread(Self, String) -> Unit
 pub fn Client::unsubscribe(Self, Sub) -> Unit
 
 pub(all) struct ClockRuntime {

@@ -982,6 +982,13 @@ impl @hostapi.Host for Native with st_audio_here(_) { st_audio_here() }
 impl @hostapi.Host for Native with st_audio(_, id, data) { st_audio(id, data) }
 
 ///|
+impl @hostapi.Host for Native with st_layers(_) { st_layers() }
+
+///|
+impl @hostapi.Host for Native with st_pointer(_, id, png, w, h, hx, hy) { st_pointer(id, png, w, h, hx, hy) }
+
+///|
+impl @hostapi.Host for Native with st_pointer_at(_, id, x, y, shown) { st_pointer_at(id, x, y, shown) }
 impl @hostapi.Host for Native with st_h265_here(_) { st_h265_here() }
 
 ///|

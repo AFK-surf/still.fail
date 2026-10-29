@@ -104,3 +104,28 @@ pub fn stream_audio_here() -> Bool { st_audio_here() != 0 }
 /// One 20 ms packet (3840 bytes, interleaved little-endian PCM16). Empty: stop and discard queued sound.
 /// Hosts bound queued audio and drop stale sound; closing the stream releases its player too.
 pub fn stream_audio(id : Int, data : Bytes) -> Unit { st_audio(id, data) }
+
+///|
+/// Whether a stream's H.264 frames may be shown by a system video layer of the host's own (a native view of kind 4,
+/// its argument the stream's id: @ui's Stream with `layer`), under the canvas where the app paints its hole: each
+/// frame shown (`stream_show`) put on that layer as well, nothing of the app drawn for it. macOS and iOS
+/// (apple_views.m: a layer whose contents are the decoded frame's IOSurface); none elsewhere.
+pub fn stream_layers() -> Bool {
+  st_layers() != 0
+}
+
+///|
+/// A pointer drawn by the host over stream `id`'s picture on its system video layer (`stream_layers`), composited with
+/// it by the system: its picture `png` (a PNG; empty: none), `w` × `h` points whatever the picture's size, its hot spot
+/// (`hx`, `hy` points in from its top left) where it points. Moved by `stream_pointer_at`, nothing of the app drawn for
+/// it. Hosts without layers draw none (the app draws its own).
+pub fn stream_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
+  st_pointer(id, png, w, h, hx, hy)
+}
+
+///|
+/// Where stream `id`'s pointer (`stream_pointer`) points: (`x`, `y`) of its picture on its layer (0..1 of the rect the
+/// layer is placed at, outside it too), `shown` false none; it goes where the layer goes (zoomed, panned) by itself.
+pub fn stream_pointer_at(id : Int, x : Double, y : Double, shown : Bool) -> Unit {
+  st_pointer_at(id, x, y, if shown { 1 } else { 0 })
+}

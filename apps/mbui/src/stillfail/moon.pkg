@@ -8,6 +8,7 @@ import {
   "stillfail/sfcore",
   "stillfail/sfbase",
   "stillfail/sfapp",
+  "stillfail/sfpages",
   "stillfail/sf",
 }
 

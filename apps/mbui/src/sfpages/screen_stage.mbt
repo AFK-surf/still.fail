@@ -57,6 +57,67 @@ fn pointer_shape(s : ScreenSess) -> String {
 }
 
 ///|
+/// The picture the pointer may be drawn over on its system video layer, if it shows there (@ui.Stream::layered): the
+/// part's over the whole's while a part is drawn over it (that part with it), else the whole's. None while what it is
+/// drawn over is drawn here (the part's not on a layer, faded, under the dark…): the pointer drawn here too.
+fn pointer_layer_of(s : ScreenSess) -> (@ui.Stream, Part?)? {
+  match (s.part, s.part_shown()) {
+    (Some(pst), Some(p)) => if pst.layered() { Some((pst, Some(p))) } else { None }
+    _ =>
+      match s.stream {
+        Some(st) if st.layered() => Some((st, None))
+        _ => None
+      }
+  }
+}
+
+///|
+/// The pointer on the picture's layer `on_layer` (None: drawn here, none on any layer): in the station's shape, where
+/// pointer_now has it, told the host once built; what the session follows of it between builds (ScreenSess::
+/// pointer_moved). A layer it is not on has none.
+fn screen_pointer_layer(
+  c : @ui.Ctx,
+  s : ScreenSess,
+  u : ScreenUi,
+  on_layer : (@ui.Stream, Part?)?,
+  key : String,
+) -> Unit {
+  let at = pointer_now(s, u)
+  s.pointer_layer = match on_layer {
+    Some((st, part)) =>
+      Some({
+        on: st,
+        part,
+        // (the station's: not the trackpad's, nor hidden under this device's mouse or on the screen)
+        follows: !u.mouse.over && !(s.driving() && s.pad(s.src)) && pointer_shape(s) != "none",
+      })
+    None => None
+  }
+  let shape = match pointer_shape(s) {
+    "none" => "default"
+    sh => sh
+  }
+  let (image, png) = @sf.pointer_png(c, shape~)
+  let (hx, hy) = @sf.pointer_hotspot(shape)
+  c.after_build("screen-pointer/" + key, fn() {
+    for st in [s.stream, s.part] {
+      match (st, on_layer) {
+        (Some(st), Some((on, _))) if physical_equal(st, on) => ()
+        (Some(st), _) => st.pointer_at(None)
+        (None, _) => ()
+      }
+    }
+    match on_layer {
+      Some((on, part)) => {
+        on.pointer_image(image, png, @sf.pointer_size, @sf.pointer_size, hx, hy)
+        on.pointer_at(at.map(fn(a) { point_on(a, part) }))
+      }
+      None => ()
+    }
+  })
+}
+
+///|
 /// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it.
 fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
   let phase = s.phase()
@@ -117,6 +178,14 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   c.drag_on(stage, axis=Free)
   // the wheel over it is its own (a mouse's, sent to the screen)
   @ui.capture(c, stage)
+  // where the pointer is drawn: over the picture on its system video layer where it shows there (by the host, moved
+  // as the station's pointer moves with nothing built: ScreenSess::pointer_moved), else here, over the frame
+  let on_layer = if size is Some(_) && fit.w > 0.0 && !over && !(phase != "live" && s.shown_any) {
+    pointer_layer_of(s)
+  } else {
+    None
+  }
+  screen_pointer_layer(c, s, u, on_layer, key)
   // this device's mouse over the picture driving it: in the screen's pointer's shape
   if u.mouse.over {
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
@@ -139,14 +208,20 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
           ty=shown.y,
           fn() {
             match s.stream {
-              Some(st) => c.stream(st, w=Fill(1.0), h=Fill(1.0)) |> ignore
+              // (live: on the system's video layer where it has one; faded or under the dark, drawn here)
+              Some(st) => c.stream(st, w=Fill(1.0), h=Fill(1.0), layer=!still && !over) |> ignore
               None => ()
             }
             // zoomed in, the part of the screen the station sends alone, sharper, over the whole where it is
             match (s.part, s.part_shown()) {
               (Some(pst), Some(p)) =>
                 c.layer(fn() {
-                  c.stream(pst, at=Some((p.x * shown.w, p.y * shown.h, p.w * shown.w, p.h * shown.h))) |> ignore
+                  c.stream(
+                    pst,
+                    at=Some((p.x * shown.w, p.y * shown.h, p.w * shown.w, p.h * shown.h)),
+                    layer=!still && !over,
+                  )
+                  |> ignore
                 })
                 |> ignore
               _ => ()
@@ -175,8 +250,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         |> ignore
       } else {
         // drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says
+        // (on the picture's layer where it is there: screen_pointer_layer)
         match pointer_now(s, u) {
-          Some((ax, ay)) =>
+          Some((ax, ay)) if on_layer is None =>
             c.layer(fn() {
               // in the station's shape, its hot spot where it points (the trackpad's, hidden there, an arrow)
               let shape = match pointer_shape(s) {
@@ -202,7 +278,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
               |> ignore
             })
             |> ignore
-          None => ()
+          _ => ()
         }
       }
     }

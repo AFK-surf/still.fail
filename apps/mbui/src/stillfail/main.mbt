@@ -163,6 +163,15 @@ let core_source : @sfapp.Source = {
       done(Err(refused(name)))
       return
     }
+    // a remote screen's frame acknowledged straight to its station, where the engine's shell reads its view itself:
+    // nothing through the core (sfpages' screen_ack says the view's call)
+    if name == "screen.ack" {
+      let view_call = @sfapp.number(Some(params), "call")
+      if view_call > 0.0 && @core.screen_ack(view_call.to_int(), @sfapp.number(Some(params), "ts")) {
+        done(Ok(Json::null()))
+        return
+      }
+    }
     if call_log {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
@@ -361,6 +370,12 @@ fn main {
       }
       @core.trace_note(m)
     })
+  }
+  // (a remote screen's frames and sound, and its acknowledgements' answers, change nothing a frame reads: taken as they
+  // come, they build nothing, sfpages' screen.mbt)
+  @core.quiet("screen.view", @sfpages.screen_value_quiet)
+  for name in @sfpages.screen_unread_calls() {
+    @core.unread(name)
   }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()

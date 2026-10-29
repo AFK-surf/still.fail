@@ -73,6 +73,20 @@ static const double kPlayAhead = 1000;
 - (CALayer *)makeBackingLayer { return [AVPlayerLayer layer]; }
 - (NSView *)hitTest:(NSPoint)p { return nil; }  // a video takes no input: the app's taps over it
 @end
+
+// A stream's (kind 4): its own layer what its frames are put on (their IOSurfaces: apple_stream.m).
+@interface MBStreamView : MBFlipView
+@end
+@implementation MBStreamView
+- (instancetype)initWithFrame:(NSRect)f {
+  self = [super initWithFrame:f];
+  self.wantsLayer = YES;
+  // (its layer's contents the stream's, never drawn by the view)
+  self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
+  return self;
+}
+- (NSView *)hitTest:(NSPoint)p { return nil; }  // a picture takes no input: the app's gestures over it
+@end
 static PView *new_box(void) {
   MBFlipView *v = [[MBFlipView alloc] initWithFrame:NSZeroRect];
   v.wantsLayer = YES;
@@ -86,6 +100,10 @@ static CGColorRef black_color(void) { return NSColor.blackColor.CGColor; }
 @end
 @implementation MBPlayerView
 + (Class)layerClass { return [AVPlayerLayer class]; }
+@end
+@interface MBStreamView : UIView
+@end
+@implementation MBStreamView
 @end
 static PView *new_box(void) {
   UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
@@ -172,6 +190,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) AVPlayerItem *item;
 @property(nonatomic, strong) AVPlayerLayer *playerLayer;
 @property(nonatomic, strong) AVPlayerItemVideoOutput *output;
+// a stream's (kind 4): the stream whose frames its layer shows
+@property(nonatomic) int32_t streamSid;
 @property(nonatomic, strong) MBLoader *loader;
 @property(nonatomic, strong) dispatch_queue_t lq;
 @property(nonatomic, copy) NSString *uti;
@@ -1138,12 +1158,37 @@ static MBNative *open_site(int32_t vid, NSString *start) {
   return v;
 }
 
+// A stream's picture (kind 4, `sid` its stream's id: @hostapi.stream_layers): a layer whose contents are the frame the
+// app shows (its decoded IOSurface, apple_stream.m), stretched to the rect the app gives; ready at once.
+static MBNative *open_stream_view(int32_t vid, int32_t sid) {
+  MBNative *v = [MBNative new];
+  MBStreamView *sv = [[MBStreamView alloc] initWithFrame:CGRectZero];
+#if TARGET_OS_IOS
+  sv.userInteractionEnabled = NO;
+#endif
+  CALayer *layer = sv.layer;
+  layer.contentsGravity = kCAGravityResize;  // the app gives the picture's own rect
+  layer.backgroundColor = black_color();
+  v.content = sv;
+  v.streamSid = sid;
+  mb_stream_attach_layer(sid, layer);
+  vlog(@"view %d: open stream %d's layer", vid, sid);
+  // (told as the app has its ticket: after it opened it)
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (!v.closed) [v tell:1];
+  });
+  return v;
+}
+
+static BOOL is_page(MBNative *v) { return v.kind == 2 || v.kind == 3; }
+
 int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
-  if (kind < 1 || kind > 3) return 0;
+  if (kind < 1 || kind > 4) return 0;
   if (!views) views = [NSMutableDictionary new];
   int32_t vid = ++next_vid;
   NSString *a = mb_ns_from_string(arg);
-  MBNative *v = kind == 1 ? open_video(vid, a) : kind == 2 ? open_web(vid, a) : open_site(vid, a);
+  MBNative *v = kind == 1 ? open_video(vid, a) : kind == 2 ? open_web(vid, a) : kind == 3 ? open_site(vid, a)
+                                                                                        : open_stream_view(vid, a.intValue);
   v.vid = vid;
   v.kind = kind;
   v.z = ++next_z;
@@ -1248,6 +1293,8 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.box.hidden = !s;
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
+  // (a stream's pointer on its layer where it points on it now)
+  if (v.kind == 4) mb_stream_layout(v.streamSid, fmax(0, w), fmax(0, h));
   // its corners round (as the hole the app paints for it): its own layer cut to them, what it holds with it
   if (r0 > 0 || r1 > 0 || r2 > 0 || r3 > 0 || v.r0 > 0 || v.r1 > 0 || v.r2 > 0 || v.r3 > 0) {
 #if TARGET_OS_OSX
@@ -1275,7 +1322,7 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
          b.origin.x * px, b.origin.y * px, (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px,
          fmax(fmax(k0, k1), fmax(k2, k3)) * px, k0 * px, k1 * px, k2 * px, k3 * px);
   }
-  if (resized && v.kind >= 2) [v refreshSnap];
+  if (resized && is_page(v)) [v refreshSnap];
 }
 
 void mb_host_view_close(int32_t vid) {
@@ -1292,6 +1339,9 @@ void mb_host_view_close(int32_t vid) {
     [v.player replaceCurrentItemWithPlayerItem:nil];
     v.playerLayer.player = nil;
     vlog(@"view %d: closed (%.0f bytes read)", vid, v.answered);
+  } else if (v.kind == 4) {
+    mb_stream_attach_layer(v.streamSid, nil);
+    vlog(@"view %d: closed", vid);
   } else {
     [v.web stopLoading];
     v.web.navigationDelegate = nil;
@@ -1305,7 +1355,7 @@ void mb_host_view_close(int32_t vid) {
 
 void mb_host_view_control(int32_t vid, int32_t op, double value) {
   MBNative *v = views[@(vid)];
-  if (v && v.kind >= 2 && op == 21) {
+  if (v && is_page(v) && op == 21) {
     [v grabPage];
     return;
   }
@@ -1354,14 +1404,14 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
 // A video's frames' times and a frame grabbed (native.mbt `frames`, `grabbed`).
 moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
   MBNative *v = views[@(vid)];
-  if (v && v.kind >= 2 && what == 2) return mb_string_from_ns([NSString stringWithFormat:@"%d", v.stillState]);
+  if (v && is_page(v) && what == 2) return mb_string_from_ns([NSString stringWithFormat:@"%d", v.stillState]);
   if (!v || v.kind != 1) return moonbit_make_string_raw(0);
   return mb_string_from_ns(what == 1 ? (v.frames ?: @"") : [NSString stringWithFormat:@"%d", v.stillState]);
 }
 
 int32_t mb_host_view_text_known(int32_t vid, int32_t what) {
   MBNative *v = views[@(vid)];
-  if (v && v.kind >= 2 && what == 2) return 1;
+  if (v && is_page(v) && what == 2) return 1;
   if (!v || v.kind != 1) return 0;
   return what == 1 ? (v.frames != nil) : 1;
 }
@@ -1385,6 +1435,7 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
     out[6] = v.loaded ? 1 : 0;
     return v.failed ? -1 : v.loaded ? 1 : 0;
   }
+  if (v.kind == 4) return 1;
   if (v.kind == 2) {
     out[5] = v.htmlLen;
     out[6] = v.loaded ? 1 : 0;
@@ -1450,7 +1501,7 @@ void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, do
 
 moonbit_string_t mb_host_view_site_next(int32_t vid) {
   MBNative *v = views[@(vid)];
-  if (!v || v.kind < 2 || v.said.count == 0) return mb_string_from_ns(@"");
+  if (!v || !is_page(v) || v.said.count == 0) return mb_string_from_ns(@"");
   NSString *e = v.said.firstObject;
   [v.said removeObjectAtIndex:0];
   return mb_string_from_ns(e);
@@ -1567,7 +1618,7 @@ void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
     vlog(@"%@", line);
     return;
   }
-  if (!v || v.kind < 2) return;
+  if (!v || !is_page(v)) return;
   NSString *t = mb_ns_from_string(text);
   if (what == 1) {
     [v.scripts addObject:t];
@@ -1603,7 +1654,7 @@ static MBNative *page_at(double x, double y) {
   MBNative *top = nil;
   for (MBNative *v in views.allValues) {
     if (top && top.z > v.z) continue;
-    if (v.kind < 2 || !v.shown || !v.placed || covered_at(v, x, y)) continue;
+    if (!is_page(v) || !v.shown || !v.placed || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) top = v;
@@ -1622,7 +1673,7 @@ const char *mb_views_touch_at(double x, double y, double *slop) {
 
 int mb_views_pass_through(double x, double y) {
   for (MBNative *v in views.allValues) {
-    if (v.kind < 2 || !v.shown || !v.placed) continue;
+    if (!is_page(v) || !v.shown || !v.placed) continue;
     // (a page that takes no finger: the canvas's)
     if ([v.touchMode isEqualToString:@"through"] || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
@@ -1650,7 +1701,7 @@ int mb_views_snapping(void) {
 // A snapshot is about to be taken: every page loaded and placed has its picture taken anew (apple.h).
 void mb_views_snap_all(void) {
   for (MBNative *v in views.allValues)
-    if (v.kind >= 2 && !v.closed && v.loaded) [v refreshSnap];
+    if (is_page(v) && !v.closed && v.loaded) [v refreshSnap];
 }
 
 void mb_views_draw_under(CGContextRef ctx, double scale) {
@@ -1667,10 +1718,10 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
     CGContextScaleCTM(ctx, scale, -scale);
     CGContextClipToRect(ctx, CGRectMake(v.cx0, v.cy0, fmax(0, v.cx1 - v.cx0), fmax(0, v.cy1 - v.cy0)));
     CGRect r = CGRectMake(v.x, v.y, v.w, v.h);
-    if (v.kind == 1) CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
+    if (!is_page(v)) CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
     else CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
     CGContextFillRect(ctx, r);
-    CGImageRef img = v.kind == 1 ? [v copyFrame] : [v copySnap];
+    CGImageRef img = v.kind == 1 ? [v copyFrame] : v.kind == 4 ? NULL : [v copySnap];
     if (img) {
       // upright in its rect
       CGContextTranslateCTM(ctx, r.origin.x, r.origin.y + r.size.height);

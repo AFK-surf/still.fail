@@ -31,6 +31,10 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
 /// Ends the core and waits for its thread; no message comes after it returns. Not from the core's thread.
 void mb_core_stop(void);
 
+/// A remote screen's frame `ts` acknowledged straight to its station by the shell, where it reads the view of the app's
+/// call `call` itself (client/shell `istream.tap`): 1, else 0. Apple's (apple_core.mm) alone.
+int mb_core_screen_ack(double call, double ts);
+
 #ifdef __cplusplus
 }
 #endif

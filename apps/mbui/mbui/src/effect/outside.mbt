@@ -15,8 +15,9 @@ pub fn Runtime::outside_start(self : Runtime, what : String) -> Int {
 
 ///|
 /// Its answer is in (or it was given up: what asked for it is gone). A ticket ended already, or never given, is
-/// nothing.
-pub fn Runtime::outside_end(self : Runtime, ticket : Int) -> Unit {
+/// nothing. `wake` false: no frame asked for it (what came changes nothing shown: a frame a stream's video layer
+/// shows, stream.mbt).
+pub fn Runtime::outside_end(self : Runtime, ticket : Int, wake? : Bool = true) -> Unit {
   if self.awaited.contains(ticket) {
     let what = self.awaited.get(ticket).unwrap().0
     self.awaited.remove(ticket)
@@ -25,7 +26,9 @@ pub fn Runtime::outside_end(self : Runtime, ticket : Int) -> Unit {
     }
     self.ended_n += 1
     // a frame soon: what was waited on may change what is shown
-    (self.waker)()
+    if wake {
+      (self.waker)()
+    }
   }
 }
 

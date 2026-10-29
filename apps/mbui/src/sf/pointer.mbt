@@ -411,12 +411,34 @@ fn pointer_rgba(shape : PointerShape, px : Int) -> FixedArray[Byte] {
 /// arrow for one it has none of its own for), `pointer_size` square, its hot spot `pointer_hotspot(shape)` in from the
 /// top left, rasterised at the screen's pixels once.
 pub fn pointer_image(c : @ui.Ctx, shape? : String = "default") -> String {
-  let px = px_of(c, pointer_size)
-  let s = pointer_shape_of(shape)
-  let key = "mem:sf/pointer/\{pointer_name(s)}/\{px}"
+  let (key, png) = pointer_png(c, shape~)
   if !made.contains(key) {
     made[key] = true
-    @ui.add_image(key, @pixels.png(px, px, pointer_rgba(s, px)))
+    @ui.add_image(key, png())
   }
   key
 }
+
+///|
+/// The pointer's picture as pointer_image has it, for a host that draws it itself (a remote screen's pointer on its
+/// system video layer: @ui.Stream::pointer_image): its key, and its PNG (made as it is asked for, once).
+pub fn pointer_png(c : @ui.Ctx, shape? : String = "default") -> (String, () -> Bytes) {
+  let px = px_of(c, pointer_size)
+  let s = pointer_shape_of(shape)
+  let key = "mem:sf/pointer/\{pointer_name(s)}/\{px}"
+  (key, fn() {
+    match pointer_pngs.get(key) {
+      Some(b) => b
+      None => {
+        let b = @pixels.png(px, px, pointer_rgba(s, px))
+        pointer_pngs[key] = b
+        b
+      }
+    }
+  })
+}
+
+///|
+/// The pointers' PNGs made, by their keys (pointer_png).
+// kept across runs: each a function of its key alone
+let pointer_pngs : Map[String, Bytes] = {}

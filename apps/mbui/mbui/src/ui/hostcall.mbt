@@ -213,6 +213,9 @@ struct FakeHost {
   mut h265_here : Bool
   /// whether its H.264 decoder is driven from here (stream_feed.mbt: Tester::set_stream_feeds; a run's ENV line)
   mut stream_feeds : Bool
+  /// whether a stream may be shown by a system video layer of the host's (stream.mbt: Tester::set_stream_layers; a
+  /// run's ENV line)
+  mut stream_layers : Bool
   mut stream_ids : Int
   streams_fed : Map[Int, Array[String]]
   stream_said : Map[Int, Array[String]]
@@ -1031,6 +1034,17 @@ let outside_clip = 9
 let outside_native = 10
 
 ///|
+/// Something posted since the last frame took what was (messages.mbt): told by a host that has the app take, between
+/// frames, what changes only signals (messages_between), a frame asked for only where something is left for one.
+let outside_posted = 11
+
+///|
+/// A stream's host said something since (stream.mbt): told by a host whose streams show themselves (a system video
+/// layer: @hostapi.stream_layers), what changes nothing drawn taken between frames (streams_said), a frame asked for
+/// only where something is left for one.
+let outside_streamed = 12
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
@@ -1046,6 +1060,8 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("stream", outside_stream),
     ("clip", outside_clip),
     ("native", outside_native),
+    ("posted", outside_posted),
+    ("streamed", outside_streamed),
   ]
 }
 
@@ -1068,12 +1084,12 @@ fn outside_start(kind : Int, id : Int, what : String) -> Unit {
 }
 
 ///|
-fn outside_end(kind : Int, id : Int) -> Unit {
+fn outside_end(kind : Int, id : Int, wake? : Bool = true) -> Unit {
   let k = outside_key(kind, id)
   match outside_tickets.get(k) {
     Some(t) => {
       outside_tickets.remove(k)
-      runtime().outside_end(t)
+      runtime().outside_end(t, wake~)
     }
     None => ()
   }
@@ -1138,6 +1154,15 @@ let views_told : Map[Int, Bool] = Map::new()
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
+  // (not an answer: what came taken as it is, a frame only where something is left for one)
+  if kind == outside_posted {
+    messages_between()
+    return
+  }
+  if kind == outside_streamed {
+    streams_said(id)
+    return
+  }
   outside_came()
   if kind == outside_update {
     // (how it goes changed: what it says now set, followed by what reads it; held while the host works at it)

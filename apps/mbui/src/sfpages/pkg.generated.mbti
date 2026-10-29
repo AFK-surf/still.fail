@@ -498,6 +498,10 @@ pub fn screen_left(@sfbase.Source, String, String) -> Unit
 
 pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_close? : () -> Unit, in_tab? : Bool) -> Unit
 
+pub fn screen_unread_calls() -> Array[String]
+
+pub fn screen_value_quiet(Json) -> Bool
+
 pub fn search_away(@ui.Ctx) -> Double
 
 pub fn search_bar_away() -> Bool

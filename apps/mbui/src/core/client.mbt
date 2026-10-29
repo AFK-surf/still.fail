@@ -44,6 +44,13 @@ pub struct Client {
   priv calls : Map[Int, (Result[Json, Json]) -> Unit]
   /// what calls that say how they go are told before their answer (`{id, value}`), by the call's id
   priv progress : Map[Int, (Json, Bytes?) -> Unit]
+  /// what of a call's values changes nothing a frame reads (Client::quiet), by the call's name; and by the id of each
+  /// such call under way
+  priv quiet_names : Map[String, (Json) -> Bool]
+  priv quiet_calls : Map[Int, (Json) -> Bool]
+  /// the calls whose answers nobody reads (Client::unread), by name; and the ids of those under way
+  priv unread_names : Map[String, Bool]
+  priv unread_calls : Map[Int, Bool]
   priv mut next_id : Int
   /// the bytes beside the message being taken, if any
   priv mut beside : Bytes?
@@ -83,6 +90,10 @@ pub fn Client::new(
     by_key: {},
     calls: {},
     progress: {},
+    quiet_names: {},
+    quiet_calls: {},
+    unread_names: {},
+    unread_calls: {},
     next_id: 1,
     beside: None,
     version: 0,
@@ -261,7 +272,12 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
-  self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
+  // (one whose answer nobody reads is awaited by nothing: its answer, taken as it comes, asks for no frame)
+  if self.unread_names.contains(name) {
+    self.unread_calls[id] = true
+  } else {
+    self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
+  }
   match self.echo_of(name, params) {
     Some(e) => self.echo_waits[id] = (e.id, false, false)
     None => ()
@@ -309,8 +325,13 @@ pub fn Client::stream(
 ) -> Int {
   let id = self.next_id
   self.progress[id] = on_value
+  match self.quiet_names.get(name) {
+    Some(f) => self.quiet_calls[id] = f
+    None => ()
+  }
   self.call(name, params~, bytes~, on_done=fn(r) {
     self.progress.remove(id)
+    self.quiet_calls.remove(id)
     on_done(r)
   })
 }
@@ -338,6 +359,7 @@ pub fn Client::stream_bytes(
 pub fn Client::cancel(self : Client, id : Int) -> Unit {
   if self.progress.contains(id) {
     self.progress.remove(id)
+    self.quiet_calls.remove(id)
     self.calls.remove(id)
     self.end_call_wait(id)
     let m : Map[String, Json] = { "id": Json::number(id.to_double()), "cancel": Json::boolean(true) }
@@ -365,6 +387,47 @@ pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
       !self.echo_waits.values().any(fn(w) { w.0 == id }) &&
       (m.contains("value") || m.contains("delta") || m.contains("error"))
     None => false
+  }
+}
+
+///|
+/// The values of a call `name` (a `stream`'s) for which `f` says true change nothing a frame reads: what takes them
+/// hands them on (a decoder's frame, a sound's packet) and keeps what it counts where no build reads it as it comes. So
+/// they may be taken as they come, before the frame decides what it does (Client::call_said): a stream of them builds
+/// nothing (a remote screen's frames and sound, sfpages' screen_value_quiet). Said once, as the app starts.
+pub fn Client::quiet(self : Client, name : String, f : (Json) -> Bool) -> Unit {
+  self.quiet_names[name] = f
+}
+
+///|
+/// Nobody reads the answer of a call `name` (a call told and let go: `screen.ack`): nothing awaits it (no wait of the
+/// runtime's) and it changes nothing a frame reads, so it may be taken as it comes (Client::call_said). Said once, as
+/// the app starts.
+pub fn Client::unread(self : Client, name : String) -> Unit {
+  self.unread_names[name] = true
+}
+
+///|
+/// Whether message `m` is a call's alone and changes nothing a frame reads: a value of a call that says it changes
+/// nothing (Client::quiet), or the answer of one whose answer nobody reads (Client::unread, its wait ended with it),
+/// so it may be taken as it comes, before the frame decides what it does (@ui.on_message_said).
+pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
+  if m.contains("fatal") {
+    return false
+  }
+  let id = match m.get("id") {
+    Some(Number(d, ..)) => d.to_int()
+    _ => return false
+  }
+  if self.subs.contains(id) {
+    return false
+  }
+  if m.contains("ok") || m.contains("error") {
+    return self.unread_calls.contains(id) && !self.echo_waits.contains(id)
+  }
+  match (m.get("value"), self.quiet_calls.get(id)) {
+    (Some(v), Some(f)) => self.progress.contains(id) && f(v)
+    _ => false
   }
 }
 
@@ -402,6 +465,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
+      self.unread_calls.clear()
       self.echo_waits.clear()
       for c in calls {
         self.end_call_wait(c.0)
@@ -477,6 +541,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
 
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
+  self.unread_calls.remove(id)
   match self.echo_waits.get(id) {
     // (an edit answered before its draft came: awaited still, until it does; refused: nothing to come)
     Some((sub, _, false)) if r is Ok(_) => self.echo_waits[id] = (sub, true, false)
@@ -525,6 +590,8 @@ pub fn Client::reset(self : Client) -> Unit {
   self.by_key.clear()
   self.calls.clear()
   self.progress.clear()
+  self.quiet_calls.clear()
+  self.unread_calls.clear()
   self.echo_waits.clear()
   self.focus = None
   self.next_id = 1

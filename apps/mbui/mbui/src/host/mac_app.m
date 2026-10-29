@@ -1877,8 +1877,11 @@ void mb_host_request_frame(void) { [the_view requestFrame]; }
 
 // A message posted from outside the frames (post.h), on whatever thread: its frame asked for on the main thread.
 static void mb_post_wake(void) {
+  // the app told what came (ui's messages_between): it takes what changes only signals now, and asks for a frame only
+  // where something is left for one
   dispatch_async(dispatch_get_main_queue(), ^{
-    mb_host_request_frame();
+    if (outside_cb) outside_cb(MB_OUTSIDE_POSTED, 0, 0);
+    else mb_host_request_frame();
   });
 }
 

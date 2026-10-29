@@ -8,4 +8,6 @@ EXPORTS
   sf_shell_stats
   sf_free
   sf_shell_stop
+  sf_shell_set_say
+  sf_shell_screen_ack
   sf_utc_offset_min

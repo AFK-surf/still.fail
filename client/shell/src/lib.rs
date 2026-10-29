@@ -53,6 +53,10 @@ impl Answer {
 
 type Done = Result<Answer, String>;
 
+/// `say(ctx, json, json_len, bytes, bytes_len)`: a message for the app, as the core says one (its JSON, and the bytes
+/// beside it, or none: `bytes` null), straight from the shell (a remote screen's frames: `istream.tap`). Any thread.
+pub type Say = extern "C" fn(*mut c_void, *const u8, usize, *const u8, usize);
+
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -67,6 +71,164 @@ struct Halves {
     /// Read to its end; finished (or no sending half). Both: the handle goes.
     ended: std::sync::atomic::AtomicBool,
     finished: std::sync::atomic::AtomicBool,
+    /// A remote screen's view, tapped (`istream.tap`): its frames read here, the picture's and the sound's said to the
+    /// app as they come, the rest left for the core to read.
+    tap: Mutex<Option<ScreenTap>>,
+}
+
+/// A remote screen's stream read in the shell (docs/remote-screens.md, Wire; client/core-ts screen-frames.ts): its
+/// frames taken apart as its pieces come; a config, a video frame, the sound's config and its packets said to the app at
+/// once as the core's progress of the view's call (`{id, value}`, the bytes beside it: what screens.ts says of them),
+/// so they go through neither the core's JS nor its thread; the rest (its state, a clipboard, what is not one of them)
+/// kept, as they came, for the core's next read, with a video frame's head alone the first time one comes after a
+/// config (what tells the core the picture is live).
+struct ScreenTap {
+    /// the app's call the view is (its progress' id)
+    call: u64,
+    /// what came and is not a whole frame yet
+    pending: Vec<u8>,
+    /// frames for the core, whole
+    out: Vec<u8>,
+    /// a video frame's head given the core since the last config
+    told_video: bool,
+}
+
+const FRAME_CONFIG: u8 = 1;
+const FRAME_VIDEO: u8 = 2;
+const FRAME_AUDIO_CONFIG: u8 = 5;
+const FRAME_AUDIO: u8 = 6;
+/// A frame longer than this is no frame (screen-frames.ts MAX_FRAME): left to the core, which says so.
+const FRAME_MAX: usize = 64 * 1024 * 1024;
+
+impl ScreenTap {
+    /// What came next: its whole frames said or kept.
+    fn take(&mut self, chunk: &[u8], say: &dyn Fn(Value, Option<&[u8]>)) {
+        // (whole frames read where they came, not copied first; what is left of one kept)
+        if self.pending.is_empty() {
+            let used = self.frames_in(chunk, say);
+            self.pending.extend_from_slice(&chunk[used..]);
+            return;
+        }
+        let mut pending = std::mem::take(&mut self.pending);
+        pending.extend_from_slice(chunk);
+        let used = self.frames_in(&pending, say);
+        pending.drain(..used);
+        self.pending = pending;
+    }
+
+    /// The whole frames at the start of `data` said or kept: how many bytes they were.
+    fn frames_in(&mut self, data: &[u8], say: &dyn Fn(Value, Option<&[u8]>)) -> usize {
+        let mut at = 0;
+        loop {
+            let rest = &data[at..];
+            if rest.len() < 5 {
+                break;
+            }
+            let len = u32::from_be_bytes([rest[1], rest[2], rest[3], rest[4]]) as usize;
+            if len > FRAME_MAX {
+                // out of step: all of it the core's, which fails the view
+                self.out.extend_from_slice(rest);
+                at = data.len();
+                break;
+            }
+            if rest.len() < 5 + len {
+                break;
+            }
+            let (kind, body) = (rest[0], &rest[5..5 + len]);
+            if !self.said(kind, body, say) {
+                self.out.extend_from_slice(&rest[..5 + len]);
+            }
+            at += 5 + len;
+        }
+        at
+    }
+
+    /// Frame `kind` said to the app (and what the core needs of it kept: a config, a video frame's head); false: one
+    /// for the core alone.
+    fn said(&mut self, kind: u8, body: &[u8], say: &dyn Fn(Value, Option<&[u8]>)) -> bool {
+        let id = self.call;
+        match kind {
+            FRAME_VIDEO if body.len() >= 9 => {
+                let ts = u64::from_be_bytes(body[1..9].try_into().unwrap());
+                say(json!({ "id": id, "value": { "frame": { "key": body[0] & 1 == 1, "ts": ts } } }), Some(&body[9..]));
+                tally("tap.video");
+                if !self.told_video {
+                    self.told_video = true;
+                    self.out.extend_from_slice(&[FRAME_VIDEO, 0, 0, 0, 9]);
+                    self.out.extend_from_slice(&body[..9]);
+                }
+                true
+            }
+            FRAME_AUDIO if body.len() == 3848 => {
+                let ts = u64::from_be_bytes(body[..8].try_into().unwrap());
+                say(json!({ "id": id, "value": { "audio": { "ts": ts } } }), Some(&body[8..]));
+                tally("tap.audio");
+                true
+            }
+            FRAME_AUDIO_CONFIG => {
+                let Ok(c) = serde_json::from_slice::<Value>(body) else { return false };
+                if c.get("codec").and_then(Value::as_str) != Some("pcm_s16le") || c.get("sampleRate").and_then(Value::as_f64) != Some(48000.0) || c.get("channels").and_then(Value::as_f64) != Some(2.0) {
+                    return false;
+                }
+                say(json!({ "id": id, "value": { "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } } }), None);
+                true
+            }
+            FRAME_CONFIG => {
+                // said as screen-frames.ts reads it and screens.ts says it; the core keeps it too (its state's size)
+                let Ok(c) = serde_json::from_slice::<Value>(body) else { return false };
+                let Some(codec) = c.get("codec").and_then(Value::as_str) else { return false };
+                let whole = |k: &str| c.get(k).and_then(Value::as_f64).filter(|v| v.is_finite() && *v > 0.0).map(|v| v.round()).unwrap_or(0.0);
+                let description = match c.get("description").and_then(Value::as_str) {
+                    Some(d) if !d.is_empty() => match base64_decode(d) {
+                        Some(b) => Some(b),
+                        None => return false,
+                    },
+                    _ => None,
+                };
+                let mut config = json!({ "codec": codec, "width": whole("width"), "height": whole("height") });
+                if let Some(r) = region_of(c.get("region")) {
+                    config["region"] = r;
+                }
+                say(json!({ "id": id, "value": { "config": config } }), description.as_deref());
+                self.told_video = false;
+                false
+            }
+            _ => false,
+        }
+    }
+}
+
+/// A part of the screen as a station says it (screen-frames.ts regionOf): within the screen, more than nothing each way.
+fn region_of(v: Option<&Value>) -> Option<Value> {
+    let v = v?.as_object()?;
+    let n = |k: &str| v.get(k).and_then(Value::as_f64).filter(|x| x.is_finite());
+    let (x, y, w, h) = (n("x")?, n("y")?, n("w")?, n("h")?);
+    (x >= 0.0 && y >= 0.0 && w > 0.0 && h > 0.0 && x + w <= 1.0001 && y + h <= 1.0001).then(|| json!({ "x": x, "y": y, "w": w, "h": h }))
+}
+
+/// Standard base64 (padded or not); None when it is not.
+fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in s.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            _ => return None,
+        } as u32;
+        acc = (acc << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
 }
 
 /// The connections coming to an endpoint whose handshakes are done, as each finishes (`iroh.accept`), once one was
@@ -139,6 +301,8 @@ struct Inner {
     next: AtomicU64,
     /// The accounts' databases open, by id, with their files.
     sqls: Mutex<HashMap<u64, (Option<PathBuf>, rusqlite::Connection)>>,
+    /// Where a message for the app goes straight from here (`sf_shell_set_say`): none, nothing is tapped.
+    say: Mutex<Option<(Say, Ctx)>>,
 }
 
 pub struct Shell {
@@ -308,6 +472,13 @@ struct Stats {
 
 static STATS: std::sync::LazyLock<Mutex<Stats>> = std::sync::LazyLock::new(Mutex::default);
 
+/// One more of `what` (the shell's own doings, beside the operations asked: `tap.video`, a remote screen's frame said to
+/// the app), as counted operations are.
+fn tally(what: &str) {
+    let mut stats = STATS.lock().unwrap();
+    stats.calls.entry(what.to_string()).or_default().0 += 1;
+}
+
 fn counted(op: &str, started: bool) {
     let mut stats = STATS.lock().unwrap();
     let c = stats.calls.entry(op.to_string()).or_default();
@@ -335,6 +506,17 @@ fn stats_json() -> Value {
 }
 
 impl Inner {
+    /// A message for the app said from here (`say`), as the core says one.
+    fn say_to_app(&self, json: &Value, bytes: Option<&[u8]>) {
+        let Some((say, ctx)) = &*self.say.lock().unwrap() else { return };
+        let text = serde_json::to_vec(json).unwrap_or_default();
+        let (b, blen) = match bytes {
+            Some(b) => (if b.is_empty() { [0u8; 1].as_ptr() } else { b.as_ptr() }, b.len()),
+            None => (std::ptr::null(), 0),
+        };
+        say(ctx.0, text.as_ptr(), text.len(), b, blen);
+    }
+
     fn keep(&self, handle: Handle) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         self.handles.lock().unwrap().insert(id, handle);
@@ -643,6 +825,7 @@ impl Inner {
                     send: tokio::sync::Mutex::new(send),
                     recv: tokio::sync::Mutex::new(recv),
                     reset: tokio::sync::watch::channel(false).0,
+                    tap: Mutex::default(),
                 };
                 Ok(Answer::json(json!({ "id": self.keep(Handle::IStream(Arc::new(halves))) })))
             }
@@ -661,12 +844,69 @@ impl Inner {
                 conn.close(code.into(), a.get("reason").and_then(Value::as_str).unwrap_or("").as_bytes());
                 Ok(Answer::json(json!({})))
             }
+            "istream.tap" => {
+                // A remote screen's view (`call` the app's): its frames read here from now on, beginning with `bytes`
+                // (what the core read past the stream's reply); false where nothing says to the app from here.
+                let Handle::IStream(halves) = self.handle(id_of(&a)?)? else { return Err("not a stream".into()) };
+                let call = a.get("call").and_then(Value::as_u64).ok_or("no call")?;
+                if self.say.lock().unwrap().is_none() {
+                    return Ok(Answer::json(json!({ "tapped": false })));
+                }
+                let mut tap = ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false };
+                tap.take(&bytes.unwrap_or_default(), &|json, bytes| self.say_to_app(&json, bytes));
+                *halves.tap.lock().unwrap() = Some(tap);
+                tally("tap.views");
+                Ok(Answer::json(json!({ "tapped": true })))
+            }
             "istream.read" => {
                 let id = id_of(&a)?;
                 let Handle::IStream(halves) = self.handle(id)? else { return Err("not a stream".into()) };
                 let mut reset = halves.reset.subscribe();
                 if *reset.borrow() {
                     return Ok(Answer::json(json!({ "end": true })));
+                }
+                // tapped: read on here, saying what is the app's, until something is the core's (or the end)
+                if halves.tap.lock().unwrap().is_some() {
+                    let mut buf = vec![0u8; 64 * 1024];
+                    loop {
+                        {
+                            let mut tap = halves.tap.lock().unwrap();
+                            let tap = tap.as_mut().unwrap();
+                            if !tap.out.is_empty() {
+                                return Ok(Answer::bytes(json!({}), std::mem::take(&mut tap.out)));
+                            }
+                        }
+                        let read = {
+                            let mut recv = halves.recv.lock().await;
+                            let Some(recv) = recv.as_mut() else { return Ok(Answer::json(json!({ "end": true }))) };
+                            tokio::select! {
+                                read = recv.read(&mut buf) => read.map_err(err)?,
+                                _ = reset.changed() => None,
+                            }
+                        };
+                        match read {
+                            Some(n) => {
+                                let mut tap = halves.tap.lock().unwrap();
+                                tap.as_mut().unwrap().take(&buf[..n], &|json, bytes| self.say_to_app(&json, bytes));
+                            }
+                            None => {
+                                // what is left (a frame cut short) the core's, which says so
+                                let left = {
+                                    let mut tap = halves.tap.lock().unwrap();
+                                    let tap = tap.as_mut().unwrap();
+                                    let mut left = std::mem::take(&mut tap.out);
+                                    left.append(&mut tap.pending);
+                                    left
+                                };
+                                if !left.is_empty() {
+                                    return Ok(Answer::bytes(json!({}), left));
+                                }
+                                halves.ended.store(true, Ordering::Relaxed);
+                                self.istream_done(id, &halves);
+                                return Ok(Answer::json(json!({ "end": true })));
+                            }
+                        }
+                    }
                 }
                 let mut buf = vec![0u8; 64 * 1024];
                 let read = {
@@ -964,7 +1204,7 @@ impl Shell {
         let tls = Arc::new(tls_config());
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default() });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), say: Mutex::default() });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
@@ -1067,6 +1307,44 @@ pub unsafe extern "C" fn sf_free(ptr: *mut u8, len: usize) {
     }
 }
 
+/// Where a message for the app goes straight from the shell (a remote screen's frames, `istream.tap`): `say` with
+/// `ctx`, from any of the shell's threads, until `sf_shell_stop`.
+///
+/// # Safety
+/// `shell` from `sf_shell_start`; `say` may be called with `ctx` from any thread.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sf_shell_set_say(shell: *const Shell, say: Say, ctx: *mut c_void) {
+    // SAFETY: made by `sf_shell_start`.
+    let shell = unsafe { &*shell };
+    *shell.inner.say.lock().unwrap() = Some((say, Ctx(ctx)));
+}
+
+/// A remote screen's frame `ts` acknowledged by the app straight to the station, on the stream its view `call` is
+/// tapped on (`istream.tap`), not through the core (an ack frame: screen-frames.ts ackFrame); 0 when no tapped stream
+/// is that view's (the app asks the core then).
+///
+/// # Safety
+/// `shell` from `sf_shell_start`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sf_shell_screen_ack(shell: *const Shell, call: u64, ts: f64) -> u8 {
+    // SAFETY: made by `sf_shell_start`.
+    let shell = unsafe { &*shell };
+    let halves = shell.inner.handles.lock().unwrap().values().find_map(|h| match h {
+        Handle::IStream(halves) if halves.tap.lock().unwrap().as_ref().is_some_and(|t| t.call == call) => Some(halves.clone()),
+        _ => None,
+    });
+    let Some(halves) = halves else { return 0 };
+    let mut frame = vec![17u8, 0, 0, 0, 8];
+    frame.extend_from_slice(&(ts.max(0.0).floor() as u64).to_be_bytes());
+    tally("tap.acks");
+    shell.runtime.spawn(async move {
+        if let Some(send) = halves.send.lock().await.as_mut() {
+            let _ = send.write_all(&frame).await;
+        }
+    });
+    1
+}
+
 /// Stops a shell: what is under way is dropped, its answers never come.
 ///
 /// # Safety
@@ -1121,6 +1399,64 @@ pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
 mod tests {
     use super::*;
     use std::sync::{Condvar, Mutex as StdMutex};
+
+    fn frame(kind: u8, body: &[u8]) -> Vec<u8> {
+        let mut f = vec![kind];
+        f.extend_from_slice(&(body.len() as u32).to_be_bytes());
+        f.extend_from_slice(body);
+        f
+    }
+
+    #[test]
+    fn a_tapped_screen_says_its_picture_and_sound_and_keeps_the_rest_for_the_core() {
+        let said: StdMutex<Vec<(Value, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());
+        let say = |j: Value, b: Option<&[u8]>| said.lock().unwrap().push((j, b.map(<[u8]>::to_vec)));
+        let mut tap = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+        let config = frame(FRAME_CONFIG, br#"{"codec":"h264","width":1919.6,"height":1080,"description":"AQID","region":{"x":0.5,"y":0,"w":0.5,"h":0.5}}"#);
+        let mut video = vec![1u8];
+        video.extend_from_slice(&5u64.to_be_bytes());
+        video.extend_from_slice(b"pic");
+        let mut later = vec![0u8];
+        later.extend_from_slice(&6u64.to_be_bytes());
+        later.extend_from_slice(b"pic2");
+        let mut audio = 9u64.to_be_bytes().to_vec();
+        audio.extend_from_slice(&[0u8; 3840]);
+        let state = frame(3, br#"{"cursor":null}"#);
+        let mut wire = config.clone();
+        for f in [frame(FRAME_VIDEO, &video), frame(FRAME_VIDEO, &later), frame(FRAME_AUDIO, &audio), state.clone()] {
+            wire.extend(f);
+        }
+        // cut anywhere
+        for piece in wire.chunks(7) {
+            tap.take(piece, &say);
+        }
+        let said = said.into_inner().unwrap();
+        assert_eq!(said.len(), 4);
+        assert_eq!(said[0].0, json!({ "id": 7, "value": { "config": { "codec": "h264", "width": 1920.0, "height": 1080.0, "region": { "x": 0.5, "y": 0.0, "w": 0.5, "h": 0.5 } } } }));
+        assert_eq!(said[0].1.as_deref(), Some(&[1u8, 2, 3][..]));
+        assert_eq!(said[1].0, json!({ "id": 7, "value": { "frame": { "key": true, "ts": 5 } } }));
+        assert_eq!(said[1].1.as_deref(), Some(&b"pic"[..]));
+        assert_eq!(said[2].0, json!({ "id": 7, "value": { "frame": { "key": false, "ts": 6 } } }));
+        assert_eq!(said[3].0, json!({ "id": 7, "value": { "audio": { "ts": 9 } } }));
+        assert_eq!(said[3].1.as_ref().map(Vec::len), Some(3840));
+        // the core's: the config, the first video frame's head alone, the state
+        let mut core = config;
+        core.extend(frame(FRAME_VIDEO, &video[..9]));
+        core.extend(state);
+        assert_eq!(tap.out, core);
+        assert!(tap.pending.is_empty());
+        // as it came whole, or a frame cut across two pieces: the same
+        for cut in [wire.len(), wire.len() - 3] {
+            let n = std::sync::atomic::AtomicUsize::new(0);
+            let count = |_: Value, _: Option<&[u8]>| {
+                n.fetch_add(1, Ordering::Relaxed);
+            };
+            let mut again = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+            again.take(&wire[..cut], &count);
+            again.take(&wire[cut..], &count);
+            assert_eq!((n.load(Ordering::Relaxed), &again.out, again.pending.len()), (4, &core, 0));
+        }
+    }
 
     static ANSWERS: StdMutex<Vec<(u64, String, String, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());
     static ANSWERED: Condvar = Condvar::new();

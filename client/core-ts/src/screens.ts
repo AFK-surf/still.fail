@@ -678,6 +678,9 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
             delete state.message;
           }
           tell();
+          // Its picture and sound read by the host and said to the app itself where it can (Apple's shell: no frame
+          // through here), what it leaves here the config (its size, for the state) and a video frame's head after it.
+          const tapped = socket.tap === undefined ? false : yield* socket.tap(at[1]);
           const reader = new FrameReader();
           let seen = false;
           for (;;) {
@@ -715,7 +718,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 state.codec = codec;
                 state.width = ww;
                 state.height = wh;
-                progress({ config: { codec, width, height, ...(region ? { region } : {}) } }, description ?? undefined);
+                if (!tapped) progress({ config: { codec, width, height, ...(region ? { region } : {}) } }, description ?? undefined);
                 if (changed) tell();
               } else if ("video" in frame) {
                 seen = true;
@@ -723,7 +726,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                   state.phase = "live";
                   tell();
                 }
-                progress({ frame: { key: frame.video.key, ts: frame.video.ts } }, frame.video.data);
+                if (!tapped) progress({ frame: { key: frame.video.key, ts: frame.video.ts } }, frame.video.data);
               } else if ("audioConfig" in frame) {
                 progress({ audioConfig: frame.audioConfig });
               } else if ("audio" in frame) {
