@@ -2,6 +2,20 @@
 // bots are in as the core offers them, one picked with its note, relayed there.
 
 ///|
+/// 「那里由 … 回复」 at the right under the place picked: its end in line with the place's note's (更换), right of its name.
+fn relay_via_at_right(t : @ui.Tester) -> Unit raise {
+  let (name_x, _, _, _) = t.rect_of("#dev").unwrap()
+  let (via_x, _, _, _) = t.rect_of("那里由").unwrap()
+  let (end_x, _, end_w, _) = t.rect_of("回复").unwrap()
+  let change = match t.rect_of("更换") {
+    Some(r) => r
+    None => t.rect_of("新 thread · 更换").unwrap()
+  }
+  assert_true(via_x > name_x)
+  assert_eq(end_x + end_w, change.0 + change.2)
+}
+
+///|
 test "wide: 接力到频道… from a row's menu: the dialog lists the bot's places, one picked shows who replies there, 接力 relays it (chat.relay)" {
   reset()
   let calls : Array[Made] = []
@@ -34,10 +48,8 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   t.frame()
   assert_true(t.find("接力到 #dev") is Some(_))
   assert_true(t.find("开头附一句（可选）") is Some(_))
-  // who replies there, in line with the place's name
-  let (name_x, _, _, _) = t.rect_of("#dev").unwrap()
-  let (via_x, _, _, _) = t.rect_of("那里由").unwrap()
-  assert_eq(via_x, name_x)
+  // who replies there, under the place at its right: its end in line with the place's 更换
+  relay_via_at_right(t)
   t.tap_text("接力到 #dev")
   t.frame()
   let relayed = named(calls, "chat.relay")

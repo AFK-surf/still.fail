@@ -357,9 +357,8 @@ fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Boo
 }
 
 ///|
-/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, its words
-/// in line with the place's name; with none before the bot (「[picture] Claude replies there」), its picture in the
-/// place's mark's column and its name in line with the place's.
+/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, at its
+/// right, its end in line with the place's note's.
 fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   let conn = match relay_connect(bot) {
     Some(conn) => conn
@@ -367,13 +366,12 @@ fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   }
   let words = @sf.t("web-main.relay.via", args=[("bot", "\u{E000}")])
   let split : Array[String] = words.split("\u{E000}").map(fn(w) { w.to_owned() }).collect()
-  let lead = split[0] == ""
   c.box(style=relay_via_box, fn() {
-    if !lead {
-      c.box(style=relay_via_indent, fn() {  }) |> ignore
+    c.box(style=relay_grow, fn() {  }) |> ignore
+    if split[0] != "" {
       c.text(split[0], style=relay_via_words) |> ignore
     }
-    c.box(style=if lead { relay_via_bot_lead } else { relay_via_bot }, fn() {
+    c.box(style=relay_via_bot, fn() {
       relay_avatar(c, src, conn)
       c.text(text(Some(conn), "name"), style=relay_via_name) |> ignore
     })
@@ -531,15 +529,10 @@ let relay_note_field : @ui.Style = @ui.css("w=Full gap=S1_5")
 let relay_note_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// Via: in line with the place's name (2 down, the row's 10 in, its mark's 16 and the 8 after it: 34), the meta's
+/// Via: under the place picked, at its right (2 down, its end the row's 10 in, as the place's note's), the meta's
 /// size, muted; the bot (viaBot) its picture 4 before its name, in the text's colour.
 // kept across runs: a value (no field of it changes)
 let relay_via_box : @ui.Style = @ui.css("row w=Full pt=S0_5 px=S2_5 align=ACenter")
-
-///|
-/// As wide as a place's mark and the 8 after it.
-// kept across runs: a value (no field of it changes)
-let relay_via_indent : @ui.Style = @ui.css("w=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -549,10 +542,6 @@ let relay_via_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 // kept across runs: a value (no field of it changes)
 let relay_via_bot : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
-///|
-/// The bot first: its picture as a place's mark is, 8 before its name.
-// kept across runs: a value (no field of it changes)
-let relay_via_bot_lead : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

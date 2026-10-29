@@ -52,15 +52,11 @@ export const unread = style({ margin: "0", padding: "4px 8px", fontSize: vars.te
 export const empty = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.muted });
 export const noteField = style({ display: "grid", gap: "6px" });
 export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
-/** Which bot the agent speaks through there, under the place picked: in line with the place's name (the row's 10 in,
- * its mark's 16 and the 8 after it). */
-export const via = style({
-  display: "flex", alignItems: "center", flexWrap: "wrap", margin: "0", padding: "2px 10px 0 34px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre",
-  // (the bot first: its picture in the mark's column, 10 in, its name 8 after it, as the place's)
-  selectors: { "&[data-lead]": { paddingLeft: "10px" } },
-});
+/** Which bot the agent speaks through there, under the place picked: at its right, its end in line with the place's
+ * note's (the row's 10 in). */
+export const via = style({ display: "flex", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", margin: "0", padding: "2px 10px 0", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
 /** The bot: its picture before its name. */
-export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text, selectors: { [`${via}[data-lead] &`]: { gap: "8px" } } });
+export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text });
 /** A person the note can mention: their picture (their initial till it is here), in the row's 16 for a mark. */
 export const person = style({
   flex: "none", display: "inline-grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "999px",
