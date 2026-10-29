@@ -250,6 +250,8 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   // document, in a dark theme a black box, then its text set again as its faces come (2026-10-29). Shown anyway after
   // a while, should it never say so (a script of its own that never finishes loading).
   const [shown, setShown] = useState(false);
+  // What it waited under stays till it has faded out behind the frame coming in (vizHeld's reveal).
+  const [waited, setWaited] = useState(true);
   const show = () => {
     if (shownNow.current) return;
     shownNow.current = true;
@@ -260,6 +262,7 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   useEffect(() => {
     shownNow.current = false;
     setShown(false);
+    setWaited(true);
     const timer = setTimeout(show, SHOWN_ANYWAY);
     return () => clearTimeout(timer);
   }, [srcDoc]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -268,11 +271,12 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   const source = host === null
     ? { srcDoc }
     : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: srcDoc }, "*") };
-  const iframe = <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={{ ...(page ? {} : { height }), ...(shown ? {} : { visibility: "hidden" }) }} />;
+  const iframe = <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={{ ...(page ? {} : { height }), ...(shown ? {} : { visibility: "hidden" }) }} {...(shown && !page ? { "data-reveal": "" } : {})} />;
   if (page) return iframe;
   // While hidden, its place is held as while its file came (vizWait), not left an empty gap (2026-10-29); the frame
-  // always in the same place in it, not loaded again as that goes.
-  return <div className={css.vizHeld}>{!shown && <div className={css.vizWait} style={{ position: "absolute", inset: 0 }} aria-busy="true" />}{iframe}</div>;
+  // always in the same place in it, not loaded again as that goes. Shown, it comes in over that as an image does.
+  const wait = waited && <div className={css.vizWait} style={{ position: "absolute", inset: 0 }} aria-busy={!shown} {...(shown ? { "data-gone": "", onAnimationEnd: () => setWaited(false) } : {})} />;
+  return <div className={css.vizHeld}>{wait}{iframe}</div>;
 }
 
 /** An HTML file's content drawn as a visualization, where its file is not read through a station's session (the share
