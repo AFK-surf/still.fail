@@ -114,7 +114,11 @@ export class StationTopics implements Owner {
   #changed(address: string, what: string, key?: string): void {
     const store = this.#core.store;
     const of = (pick: (t: Topic) => boolean) => store.invalidateAll((t) => t.station === address && pick(t));
-    if (what === "link") of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard" || t.topic === "drive");
+    if (what === "link") {
+      of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard" || t.topic === "drive");
+      // 添加 station's list says which of another workspace's stations are online, as their links find them.
+      store.invalidateAll((t) => t.topic === "joinable");
+    }
     else if (what === "live") of((t) => t.topic === "live" && (key === undefined || t.key === key));
     else if (what === "host") of((t) => t.topic === "host");
     else if (what === "screens") {

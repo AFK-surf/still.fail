@@ -24,6 +24,7 @@ import { Priority } from "../sync/scheduler.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { markOf, places, type Place } from "./xshare.ts";
 import { enrolled, takeInJoined } from "./lock.ts";
+import { down } from "./views.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -94,7 +95,8 @@ export function joinable(inner: Inner, workspace: string): J {
       const id = str(get(s, "id"));
       if (id === null || here.has(id) || seen.has(id)) continue;
       seen.add(id);
-      const online = get(s, "online") === true;
+      // As its link finds it, as every list of stations says it: still.fail cloud lists no `online` of its own.
+      const online = !down(inner.stations.link(`${p.id}/${id}`)?.state ?? { state: "offline" });
       items.push({
         station: `${p.id}/${id}`,
         id,
