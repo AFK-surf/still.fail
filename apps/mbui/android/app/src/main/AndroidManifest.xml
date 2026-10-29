@@ -9,6 +9,8 @@
     <!-- LoginService: the app held up while a loopback listener waits for the browser (BrowserLogin, the core's listen.*) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 共享调试 lent again for chats' grants as the phone starts again (AdbBoot) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- the system's notifications (mbui's Notices: a chat's notices, as still.fail's Android app shows them) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 共享调试 (AdbShare.java): Wireless debugging turned on by the app itself, once the station's adb granted it
@@ -119,6 +121,13 @@
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>
+        <!-- The phone started again, the app updated: lent again for the chats' grants live as it went (AdbBoot). -->
+        <receiver android:name=".AdbBoot" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- This phone's adb lent to a station's agents (AdbShare.java): held up meanwhile, saying so. -->
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />

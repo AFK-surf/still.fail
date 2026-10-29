@@ -105,6 +105,8 @@ export interface AdbShareView {
 	grants?: AdbGrant[];
 	/** The stations a live grant lends this phone to now. */
 	wanted?: string[];
+	/** Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started). */
+	known?: boolean;
 	/** This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`). */
 	lasts?: string;
 	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */

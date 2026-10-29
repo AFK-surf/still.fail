@@ -64,7 +64,8 @@ public final class StillfailApp extends Application {
         });
     }
 
-    private static void startAhead(android.content.Context c) {
+    /** (also for the chats' grants the phone was lent for as the process went: AdbShare.install) */
+    static void startAhead(android.content.Context c) {
         if (coreStarted) return;
         coreStarted = true;
         String cloud = Push.cloud(c);

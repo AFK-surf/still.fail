@@ -258,13 +258,33 @@ final class AdbShare {
                         texts.put(k, words.optString(k));
                     }
                 }
+                // (kept for a start with no app shown: the phone started again, lent for the grants before the app is)
+                kept(c).edit().putString(GRANT_TEXTS, words.toString()).apply();
                 reply.ok("{}");
             } catch (Exception e) {
                 reply.fail(String.valueOf(e));
             }
         });
         resume(c, System.currentTimeMillis() + 30_000);
-        if (supported()) followGrants(c, System.currentTimeMillis() + 30_000);
+        if (supported()) {
+            // lent for chats' grants when the process went (the phone started again, the app updated, Android ended it):
+            // the core started for them now, whatever started the process, not once the app is next opened; the
+            // notification's words as the app gave them last
+            if (kept(c).getLong(GRANTS_UNTIL, 0) > System.currentTimeMillis()) {
+                try {
+                    JSONObject words = new JSONObject(kept(c).getString(GRANT_TEXTS, "{}"));
+                    synchronized (texts) {
+                        for (java.util.Iterator<String> it = words.keys(); it.hasNext(); ) {
+                            String k = it.next();
+                            if (!texts.containsKey(k)) texts.put(k, words.optString(k));
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                StillfailApp.startAhead(c);
+            }
+            followGrants(c, System.currentTimeMillis() + 60_000);
+        }
         if (!supported()) return;
         // Wireless debugging switched (by the app, by the person, or by Android as the Wi-Fi goes)
         c.getContentResolver().registerContentObserver(wirelessUri(), false, new ContentObserver(new Handler(Looper.getMainLooper())) {
@@ -309,6 +329,10 @@ final class AdbShare {
 
     private static final String TEXTS = "texts";
     private static final String UNTIL = "until";
+    /** When the last of the chats' grants the phone is lent for ends (ms; none: lent for none), and the notification's
+     *  words as the app last gave them: kept for the process that starts while one is live (AdbShareService). */
+    static final String GRANTS_UNTIL = "grantsUntil";
+    private static final String GRANT_TEXTS = "grantTexts";
 
     /** Whether the service was started for chats' grants and not yet seen to end. */
     private static boolean granting;
@@ -320,6 +344,8 @@ final class AdbShare {
     private static void followGrants(Context c, long by) {
         long id = AdbCore.follow("adbShare", value -> {
             if (!(value instanceof JSONObject)) return;
+            // (the grants kept on the device not read yet: none wanted is not none granted)
+            if (!((JSONObject) value).optBoolean("known", true)) return;
             org.json.JSONArray wanted = ((JSONObject) value).optJSONArray("wanted");
             boolean want = wanted != null && wanted.length() > 0;
             if (want && !granting) {
@@ -345,8 +371,9 @@ final class AdbShare {
         if (k.contains(STATION) && k.getLong(UNTIL, 0) != until) k.edit().putLong(UNTIL, until).apply();
     }
 
+    /** The share of the switch's let go (the grants' kept apart: they end as the grants do, AdbShareService). */
     static void letGo(Context c) {
-        kept(c).edit().clear().apply();
+        kept(c).edit().remove(STATION).remove(NAME).remove(TEXTS).remove(UNTIL).apply();
     }
 
     /**

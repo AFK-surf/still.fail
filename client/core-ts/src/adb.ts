@@ -1,7 +1,8 @@
 // This phone's adb, lent to a station's agents (adb.rs; docs/adb-share.md): the `adbShare` topic and the `adb.*`
 // calls. While it is offered (until stopped or its hour is up) a stream on the station's link says so, opened again on
 // each link that takes the place of one, and every stream the station opens on that link is a tunnel to the phone's
-// own adbd. Kept in memory only: a core started anew offers nothing. Only a host with TCP reaches adbd.
+// own adbd. The offers kept in memory only: a core started anew offers again as its app asks (the grants it lends
+// for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
 import { Deferred, Effect, Fiber, Scope } from "effect";
 import type { AdbCall, Offer } from "./adb-parse.ts";
 import { CoreError } from "./error.ts";
@@ -20,6 +21,10 @@ import { fromUtf8, parseJson, utf8 } from "./util.ts";
 type J = any;
 
 const RETRY_MS = 1_000;
+/// Where this person's chats' grants of their phone are kept on the device, as the stations last said them: a core
+/// started anew (the app's process gone and back, the phone started again) lends it to them at once, not only once
+/// each station is reached again.
+export const GRANTS_KEY = "adb-grants";
 const RETRY_MAX_MS = 30_000;
 
 type Ended = { changed: true } | { expired: true } | { refused: string } | { lost: string | null; pause: boolean };
@@ -422,10 +427,34 @@ export class Adb {
   readonly #grants = new Map<string, Map<string, J>>();
   /// Their 默认最长授权 as last set here or said by a station.
   #lasts: "hour" | "chat" = "chat";
+  /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
+  #known = false;
 
   constructor(env: AdbEnv) {
     this.#env = env;
     this.#legacy = new Lend(env);
+    env.runner.fork(
+      Effect.ensuring(
+        Effect.map(Effect.orElseSucceed(env.host.storageGet(GRANTS_KEY), () => null), (bytes) => {
+          const kept = bytes === null ? null : (parseJson(bytes) as J);
+          if (kept === null || typeof kept !== "object") return;
+          // (what a station said since it started, read whole or heard, wins over what was kept)
+          for (const [station, list] of Object.entries(kept))
+            if (!this.#grants.has(station) && Array.isArray(list)) this.#grants.set(station, new Map((list as J[]).filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+        }),
+        Effect.sync(() => {
+          this.#known = true;
+          this.#sync();
+        }),
+      ),
+    );
+  }
+
+  /// The grants as they stand kept on the device (the live ones and the requests waiting: those ended let go).
+  #keep(): void {
+    const out: Record<string, J[]> = {};
+    for (const g of this.grants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), { log: "Unhandled", message: "debugging grants kept" }));
   }
 
   run(call: AdbCall): Effect.Effect<unknown, CoreError> {
@@ -475,6 +504,7 @@ export class Adb {
     if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
     else at.delete(d.id);
     this.#grants.set(station, at);
+    this.#keep();
     this.#sync();
   }
 
@@ -485,6 +515,7 @@ export class Adb {
       if (list === null) return;
       if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
       this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+      this.#keep();
       this.#sync();
     });
   }
@@ -530,7 +561,7 @@ export class Adb {
       const v = l.value();
       return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };
     });
-    return { ...first.value(), grants: this.grants(), wanted: this.wanted(), lends, lasts: this.#lasts };
+    return { ...first.value(), grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts };
   }
 
   card(station: string): J {

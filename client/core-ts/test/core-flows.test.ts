@@ -2110,8 +2110,28 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", tunnels: 0, grants: [], wanted: [], lasts: "chat", lends: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
   core.close();
+});
+
+test("a_phone_s_grants_kept_on_the_device_lend_it_from_a_core_started_anew", async () => {
+  // (lent for a chat's grant; the app's process gone and back, the phone started again: no station reached yet)
+  const { host, core } = await started();
+  const exp = Math.floor(host.nowMs() / 1000) + 3600;
+  core.inner.adb.heard("ws1/st1", { id: "g1", session: "ember:c1", chat: "c1", reason: "调试", status: "granted", scope: "chat", exp, at: 1 });
+  await host.settle();
+  host.takeEmitted();
+  core.close();
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui = again.connect();
+  subscribe(again, ui, 1, { topic: "adbShare" });
+  await host.time.pass(500);
+  await host.settle();
+  const emitted = host.takeEmitted();
+  const values = new Map(emitted.map(([, m]) => m as J).filter((m) => "value" in m).map((m) => [m.id, m.value]));
+  assert.ok(values.has(1), JSON.stringify(emitted).slice(0, 2000));
+  assert.deepEqual([v(values, 1).known, v(values, 1).wanted, v(values, 1).grants.map((g: J) => g.id)], [true, ["ws1/st1"], ["g1"]]);
+  again.close();
 });
 
 test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", async () => {

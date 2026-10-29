@@ -69,7 +69,7 @@ export const AdbLive = Layer.effectDiscard(
       phoneTools(grants, async (owner, grant) => {
         const phones = lent.list().filter((p) => p.owner.email.toLowerCase() === owner);
         const server = phones.length > 0 ? await servers.ensure(grant) : null;
-        return reached(phones, server?.port ?? null);
+        return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null);
       }),
     );
     parts.tools(

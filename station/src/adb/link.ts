@@ -152,6 +152,9 @@ export class Share {
 /// The phones offered now, by whose and which (`key`).
 export class Shares {
   readonly byKey = new Map<string, Share>();
+  /// When each person's phone was last offered no longer, and why (`stopped`: the phone ended it; else its link went):
+  /// what phone_use says of a granted phone not lent now.
+  readonly gone = new Map<string, { at: number; ended: string }>();
   readonly options: SharesOptions;
   readonly limits: { quick: number | null; long: number | null };
   private stopping = false;
@@ -341,6 +344,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     shares.byKey.delete(device);
     share.server.close();
     log.info("adb", "phone no longer offered for adb", { email: viewer.email, port: share.port, ended });
+    shares.gone.set(viewer.email.toLowerCase(), { at: wall.now(), ended: String(ended) });
     const adb = shares.adb();
     if (adb) for (const server of (await serversOf(shares, share)) ?? [[]]) await run(adb, [...server, "disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
@@ -553,7 +557,10 @@ async function connectIn(shares: Shares, share: Share, server: string[]) {
   }
   const state = () => run(adb, ["-s", serial, "get-state"], shares.limits.quick).catch(() => "");
   // Held already (another offer: the pairing port opened, a new link): it stays so.
-  if ((await state()) === "device") return share.set("connected");
+  if ((await state()) === "device") {
+    keepLending(shares, share, server);
+    return share.set("connected");
+  }
   share.set("connecting");
   share.refused = null;
   // What adb kept of a tunnel gone (the phone's adbd on another port now) goes first.
@@ -578,8 +585,10 @@ async function connectIn(shares: Shares, share: Share, server: string[]) {
   );
   const refused = share.refused;
   share.refused = null;
-  if (now === "device") share.set("connected");
-  else if (now === "unauthorized") share.set("unauthorized", tr(speaks, "station.adb.allowPrompt"));
+  if (now === "device") {
+    keepLending(shares, share, server);
+    share.set("connected");
+  } else if (now === "unauthorized") share.set("unauthorized", tr(speaks, "station.adb.allowPrompt"));
   else if (refused !== null) {
     // adb would go on dialling it a few times a second (260 refusals in 12 s): let go until the next offer.
     await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
@@ -622,6 +631,28 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   if (!said.includes("Successfully paired")) throw new Error(tr(lang, "station.adb.pairFailed", { said }));
   void connect(shares, share).catch(() => {});
   return tr(lang, "station.adb.paired");
+}
+
+/// As the station's adb comes to hold the phone, what keeps it lending with no one at it, done through that adb (in
+/// `server`), the phone's person having lent it (each time: what an app installed anew lost, given again): the app may turn Wireless debugging on itself
+/// (`WRITE_SECURE_SETTINGS`: after the phone starts again, or as its Wi-Fi changes, Android turns it off), and Android's
+/// idling leaves the app's connection be (`deviceidle whitelist`: a phone left aside put the app's network to sleep,
+/// its tunnels not taken). What the phone refuses (MIUI and ColorOS refuse the shell's grant until a switch of
+/// Developer options is on) is logged, not said: the person turns it on from 共享调试 (grant).
+function keepLending(shares: Shares, share: Share, server: string[]): void {
+  const pkg = share.info.package;
+  const adb = shares.adb();
+  if (!pkg || !isPackage(pkg) || adb === null) return;
+  const asks = [
+    ["shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
+    ["shell", "cmd", "deviceidle", "whitelist", `+${pkg}`],
+  ];
+  void (async () => {
+    for (const ask of asks) {
+      const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
+      log.info("adb", "adb kept the phone lending", { ask: ask.slice(1, 3).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
+    }
+  })();
 }
 
 /// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`), as its person asked.

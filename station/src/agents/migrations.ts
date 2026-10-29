@@ -92,6 +92,7 @@ export const NOTES: [number, string][] = [
   [85, "Cards are no longer an optional extra: when you ask people to choose among answers you can name or to confirm one (a single yes, 合并), post the question with an options card (a text card when they must write a value), so they answer with a tap and it reaches their 奏 list. Asking without one is only for what they must word themselves or for information you wait on from others."],
   [86, "The vault keeps credential files too (kind file, at most 64 KB: a kubeconfig, a service account's JSON key, a certificate): secret_save {kind: \"file\", path} keeps a file as it is (none of path, command or value: the person picks it on the card), and secret_run with its grant writes it out for that command alone, its path in env (KUBECONFIG, GOOGLE_APPLICATION_CREDENTIALS) and STILLFAIL_SECRET."],
   [87, "adb_devices no longer gives a 共享调试 link: that page no longer lends a phone, so a link to it asks for nothing. Ask for the phone of the person you work for only with phone_use (its card is how they grant it)."],
+  [88, "A phone granted with phone_use lends itself with no one at it (its app keeps it up in the background, started again with the phone; the station lets it turn Wireless debugging on itself). When phone_use says it is not lent now, it says when and why it was last offered: call it again in a minute and look at that before asking its person to do anything."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
