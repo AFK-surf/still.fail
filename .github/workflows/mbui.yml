@@ -316,6 +316,7 @@ jobs:
         id: native-keys
         run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
+        id: shell
         with:
           path: ~/Library/Caches/stillfail-native/shell-apple
           key: ${{ steps.native-keys.outputs.key }}
@@ -336,6 +337,15 @@ jobs:
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
           touch "$RUNNER_TEMP/start"
+      # (the shell's cargo build, its dependencies kept, as main's newest that built it left it: a shell changed is built
+      # here when not prebuilt yet, and from nothing that was 180-320 s of the job, a crate of its own again and again
+      # (2026-10-29, five times on main); its dependencies change with Cargo.lock alone)
+      - if: steps.shell.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
       - name: The macOS app, built (and signed with still.fail's identity, on main)
         if: github.ref == 'refs/heads/main'
         env:
@@ -352,6 +362,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: bash apps/mbui/scripts/beta.sh publish mac
       # (by what it holds, as the android job's)
+      # (main's, when it built the shell here)
+      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
       - name: The cache's key, by what it holds
         if: github.ref == 'refs/heads/main'
         run: |
@@ -384,6 +400,8 @@ jobs:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      # (the shell's cargo build in the checkout, as the macOS job's is (mac-app.sh's), for the cache below)
+      CARGO_TARGET_DIR: ${{ github.workspace }}/apps/mbui/out/core-target
     steps:
       - name: iOS's SDK 27.1 or later
         run: |
@@ -428,6 +446,7 @@ jobs:
         id: native-keys
         run: echo "key=natives-shell-apple-ios-arm64-$(node scripts/native.ts key shell-apple ios-arm64)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
+        id: shell
         with:
           path: ~/Library/Caches/stillfail-native/shell-apple
           key: ${{ steps.native-keys.outputs.key }}
@@ -446,6 +465,15 @@ jobs:
           restore-keys: mbui-ios-moon-
       - run: touch "$RUNNER_TEMP/start"
       # Always unsigned. TestFlight signing/upload is a separate manual workflow.
+      # (the shell's cargo build, its dependencies kept, as main's newest that built it left it: a shell changed is built
+      # here when not prebuilt yet, and from nothing that was 180-320 s of the job, a crate of its own again and again
+      # (2026-10-29, five times on main); its dependencies change with Cargo.lock alone)
+      - if: steps.shell.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-
       - name: The iOS app for a device, as an .ipa
         run: |
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
@@ -458,6 +486,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       # (by what it holds, as the android job's)
+      # (main's, when it built the shell here)
+      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
       - name: The cache's key, by what it holds
         if: github.ref == 'refs/heads/main'
         run: |
