@@ -8,11 +8,9 @@
 // (from the left edge with a finger or a mouse here; on Android, the system's
 // back gesture, its predictive back, and no edge of mbui's), the page follows
 // the finger and the one under it comes along beside it, edge to edge; let
-// go past a third of the way (or flung; on Android, as the system says) it
-// goes on from there, else it comes back, either way on the let-go spring
-// (a sheet's: still.fail's docs/motion.md, kind 1) as fast as the finger went:
-// from where the finger last had it, at its time, so the frames after the
-// finger lifts do not show it standing where it was let go.
+// go past a third of the way (or flung) it goes on from there, easing out
+// (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
+// comes back in 200 ms.
 //
 // A page brought in (pushed, risen, gone back to) is built whole in the frame its slide starts in, which may take longer
 // than the display's frame (its words shaped, its rows laid out for the first time): its slide's clock does not run
@@ -106,9 +104,12 @@ struct Nav[P] {
   mut x0 : Double
   mut vel : Double
   track : Tracker
-  // let go of a finger (modes 2 and 4 after 3): its way on the let-go spring, in its widths, from where the finger
-  // left it (none: on `curve` over `dur`)
-  mut sprung : SpringPath?
+  // the system's gesture (Android's): where its finger last moved to, when, and the progress and the page's place
+  // then; the system's progress said with it after that is its own going back as it calls the gesture off
+  mut moved_x : Double
+  mut moved_at : Double
+  mut moved_progress : Double
+  mut moved_p : Double
   on_leave : (P) -> Unit
   // the pages that come in from the left and go back that way
   from_left : (P) -> Bool
@@ -165,7 +166,10 @@ pub fn[P] Nav::new(
     x0: 0.0,
     vel: 0.0,
     track: Tracker::new(),
-    sprung: None,
+    moved_x: 0.0,
+    moved_at: 0.0,
+    moved_progress: -1.0,
+    moved_p: 0.0,
     on_leave,
     from_left,
     mover: Mover::new(),
@@ -247,7 +251,6 @@ fn[P] Nav::go(
   self.p1 = p1
   self.dur = dur
   self.curve = curve
-  self.sprung = None
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
   // frame that builds it (Ctx::nav)
   self.t0 = if in_frame.val { g().clock } else { -1.0 }
@@ -311,7 +314,6 @@ fn[P] Nav::settle(self : Nav[P]) -> Unit {
   self.leaving = None
   self.mode = 0
   self.p = 0.0
-  self.sprung = None
 }
 
 ///|
@@ -323,16 +325,16 @@ pub let nav_push_ms : Double = move_page_ms
 pub let nav_rise_ms : Double = move_page_ms
 
 ///|
-/// A page a finger let go of (swiped back, gone on or come back): the let-go spring of a large thing (still.fail's
-/// docs/motion.md, kind 1: a sheet's, Motion.kt SheetSpring, motionSpring(.32)), critically damped, its stiffness
-/// (2π / 1.2·0.32)²; at rest within half a point.
-let nav_let_go_k : Double = {
-  let w = 2.0 * 3.141592653589793 / (1.2 * 0.32)
-  w * w
-}
+/// How long a page let go short of going back takes to come back to its place.
+pub let nav_return_ms : Double = 200.0
 
 ///|
-let nav_let_go_rest : Double = 0.5
+/// A page let go to go back goes on for this much of the way it had left (at most, from where the finger had it),
+/// and never for less than `nav_let_go_min_ms`.
+pub let nav_let_go_ms : Double = 280.0
+
+///|
+pub let nav_let_go_min_ms : Double = 120.0
 
 ///|
 /// A slide held (Nav::comes_when): its start, until it goes.
@@ -556,8 +558,16 @@ let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 /// Back as a back gesture asks: kind 0 started at x (in a view `w` wide), 1
 /// moved to x, 2 let go there (back if past a third or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
-/// with none); `t` the time. Never past its floor (Ctx::nav's `floor`).
-fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double) -> Unit {
+/// with none); `t` the time; `progress` the system's (-1 none: mbui's own
+/// edge). Never past its floor (Ctx::nav's `floor`).
+fn[P] Nav::gesture(
+  self : Nav[P],
+  kind : Int,
+  x : Double,
+  w : Double,
+  t : Double,
+  progress? : Double = -1.0,
+) -> Unit {
   let w = dmax(w, 1.0)
   match kind {
     0 =>
@@ -569,12 +579,33 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         self.vel = 0.0
         self.track.reset()
         self.track.add(t, x)
+        self.moved_x = x
+        self.moved_at = t
+        self.moved_progress = progress
+        self.moved_p = 0.0
       }
     1 =>
       if self.mode == 3 {
-        self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
-        self.finger.set(self.p)
-        self.track.add(t, x)
+        if progress >= 0.0 && x == self.moved_x {
+          // the system's step with its finger where it was, longer than a moving finger's steps are apart: lifted,
+          // the system going back on its own before it says it is called off (Android's BackProgressAnimator takes
+          // its progress to 0 first, on its spring, the finger's place kept); the page goes back with that progress,
+          // not standing where the finger left it. (A finger held still: its progress comes to where the finger is,
+          // by no more than it lagged.)
+          if t - self.moved_at > tracker_gap_ms && self.moved_progress > 0.0 && progress < self.moved_progress {
+            self.p = self.moved_p * progress / self.moved_progress
+            self.finger.set(self.p)
+            self.track.add(t, self.x0 + self.p * w)
+          }
+        } else {
+          self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
+          self.finger.set(self.p)
+          self.track.add(t, x)
+          self.moved_x = x
+          self.moved_at = t
+          self.moved_progress = progress
+          self.moved_p = self.p
+        }
       }
     2 =>
       if self.mode == 3 {
@@ -584,16 +615,15 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         self.vel = self.track.velocity()
         let flung = dx > 40.0 && self.vel > 0.6
         if self.p > 1.0 / 3.0 || flung {
-          self.let_go(w, t)
+          self.let_go()
         } else {
-          self.come_back(w, t)
+          self.go(4, 0.0, nav_return_ms, Out)
         }
       }
-    // (the system's: let go where its last step had the finger)
-    3 => if self.mode == 3 { self.come_back(w, self.lifted(t)) }
+    3 => if self.mode == 3 { self.go(4, 0.0, nav_return_ms, Out) }
     _ =>
       if self.mode == 3 {
-        self.let_go(w, self.lifted(t))
+        self.let_go()
       } else if self.pages.length() > self.floor + 1 {
         self.pop() |> ignore
       }
@@ -601,47 +631,11 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 }
 
 ///|
-/// The finger the system's gesture followed lifted, told at `t` (its steps come a frame or so after the finger's, the
-/// end of them later still): how fast it went (`vel`) and from when the page goes on. Its last step said within the
-/// time a moving finger's are apart (scroll.mbt's tracker_gap_ms), it was moving as its steps say, from that step's
-/// time; longer ago, it was held still before it lifted: from now, at rest.
-fn[P] Nav::lifted(self : Nav[P], t : Double) -> Double {
-  let last = self.track.newest()
-  if t - last > tracker_gap_ms {
-    self.vel = 0.0
-    t
-  } else {
-    self.vel = self.track.velocity()
-    last
-  }
-}
-
-///|
-/// Gone back from where a finger left the page (at `at`, the page `w` wide): on from there on the let-go spring, as
-/// fast as the finger went.
-fn[P] Nav::let_go(self : Nav[P], w : Double, at : Double) -> Unit {
+/// Gone back from where a finger left the page: on from there, easing out.
+fn[P] Nav::let_go(self : Nav[P]) -> Unit {
   self.leaving = self.pages.pop()
   self.topped()
-  self.spring_to(2, 1.0, w, at)
-}
-
-///|
-/// Let go short of going back: back to its place on the let-go spring, as fast as the finger went.
-fn[P] Nav::come_back(self : Nav[P], w : Double, at : Double) -> Unit {
-  self.spring_to(4, 0.0, w, at)
-}
-
-///|
-/// On to `p1` (mode 2 or 4) on the let-go spring from where the finger left the page `w` wide at `at` (the frames'
-/// clock), moving as the finger did (`vel`, points a ms): where it is in the frames after it comes from that time, so
-/// the first of them shows it gone on as far as the finger would have taken it.
-fn[P] Nav::spring_to(self : Nav[P], mode : Int, p1 : Double, w : Double, at : Double) -> Unit {
-  self.go(mode, p1, 0.0, Linear)
-  let s = SpringPath::new(self.p, k=nav_let_go_k, c=2.0 * nav_let_go_k.sqrt(), rest=nav_let_go_rest / w)
-  s.go(at, p1, v=self.vel * 1000.0 / w, what="a page let go")
-  self.sprung = Some(s)
-  self.t0 = at
-  self.dur = s.end() - at
+  self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), Out)
 }
 
 ///|
@@ -740,7 +734,7 @@ pub fn[P] Ctx::nav(
   if self.back_next is Some(_) && !leaving && takes_back {
     ()
   } else if takes_back && (n > floor + 1 || nav.mode >= 3 || (floor == 0 && nav.mode != 0)) {
-    self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
+    self.back_next = Some(fn(kind, x, w, t, progress) { nav.gesture(kind, x, w, t, progress~) })
     self.back_node_next = i
     self.back_edge_next = edge
   } else {
@@ -826,11 +820,7 @@ fn[P] Nav::at(self : Nav[P], c : Ctx) -> Double {
     } else {
       dmax((c.now() - self.t0) / self.dur, 0.0)
     }
-    self.p = match self.sprung {
-      // (at most all the way: a fast finger's spring past it would show the page under it go by)
-      Some(s) if t < 1.0 => dclamp(s.at(c.now()).0, 0.0, 1.0)
-      _ => self.p0 + (self.p1 - self.p0) * self.curve.at(dmin(t, 1.0))
-    }
+    self.p = self.p0 + (self.p1 - self.p0) * self.curve.at(dmin(t, 1.0))
   }
   // (following a finger: where it has it, read so)
   if self.mode == 3 {
@@ -914,7 +904,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 pub fn Ctx::back(self : Ctx) -> Bool {
   match self.back {
     Some(f) => {
-      f(4, 0.0, 1.0, self.clock)
+      f(4, 0.0, 1.0, self.clock, -1.0)
       self.read_changed("gone back")
       true
     }
@@ -926,7 +916,7 @@ pub fn Ctx::back(self : Ctx) -> Bool {
 /// Back taken by what is drawn over the stack (a viewer, a sheet), on the frames it calls this, after the stack is
 /// drawn: the system's back, a back button (Ctx::back) call `f` once let go; no edge swipe of its own.
 pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
-  self.back_next = Some(fn(kind, _x, _w, _t) {
+  self.back_next = Some(fn(kind, _x, _w, _t, _) {
     if kind == 2 || kind == 4 {
       f()
     }
@@ -953,7 +943,7 @@ pub(all) enum BackStep {
 /// for what moves back with the finger as a stack's page does without being one (a tape's panels). No edge swipe of
 /// its own.
 pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
-  self.back_next = Some(fn(kind, x, _w, t) {
+  self.back_next = Some(fn(kind, x, _w, t, _) {
     match kind {
       0 => f(Began(x, t))
       1 => f(Moved(x, t))

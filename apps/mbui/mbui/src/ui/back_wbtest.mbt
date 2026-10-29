@@ -46,54 +46,34 @@ test "on Android the swipe from the edge is the system's: the finger taken from 
 }
 
 ///|
-test "on Android the page the system's back lets go goes on as fast as the finger went: no frame stands where it lifted" {
+test "on Android a swipe called off goes back with the system's progress as it falls, not standing where the finger lifted" {
   let nav = Nav::new(1)
   let t = Tester::new(back_view(nav), platform=2)
   nav.push(2)
   t.run_for(nav_push_ms)
   on_back(0, 0.0, 0.0, 0)
   back_step(t)
-  for x in [20.0, 40.0, 60.0, 80.0, 100.0, 120.0] {
-    on_back(1, x, 0.0, 0)
+  // out, then quickly back, and lifted: the system's progress a little behind the finger
+  for step in [(40.0, 0.08), (80.0, 0.17), (120.0, 0.26), (160.0, 0.35), (200.0, 0.43), (140.0, 0.38), (80.0, 0.27)] {
+    on_back(1, step.0, step.1, 0)
     back_step(t)
   }
-  assert_eq(t.rect_of("title 2").unwrap().0, 120.0)
-  // the finger lifted, moving 20 points a step: the system says back a step after its last
-  on_back(2, 0.0, 1.0, 0)
-  back_step(t)
-  // gone on from where it lifted, at least as far as the finger would have taken it by now (two steps), and on
-  let first = t.rect_of("title 2").unwrap().0
-  assert_true(first >= 160.0)
-  back_step(t)
-  assert_true(t.rect_of("title 2").unwrap().0 > first + 10.0)
+  assert_eq(t.rect_of("title 2").unwrap().0, 80.0)
+  // called off: the system takes its progress to 0 on its own, the finger's place kept, before it says so
+  let mut was = 80.0
+  for progress in [0.2, 0.14, 0.09, 0.05, 0.02, 0.0] {
+    on_back(1, 80.0, progress, 0)
+    back_step(t)
+    let x = t.rect_of("title 2").unwrap().0
+    assert_true(x <= was, msg="\{x} \{was}")
+    was = x
+  }
+  // back with it: where its progress is, there when it is
+  assert_true(was < 1.0, msg="\{was}")
+  on_back(3, 0.0, 0.0, 0)
   t.run_for(nav.rest() - t.time())
-  assert_eq(nav.depth(), 1)
-  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
-}
-
-///|
-test "on Android a page the system's back lets go after the finger held still sets out from rest, from where it was" {
-  let nav = Nav::new(1)
-  let t = Tester::new(back_view(nav), platform=2)
-  nav.push(2)
-  t.run_for(nav_push_ms)
-  on_back(0, 0.0, 0.0, 0)
-  back_step(t)
-  for x in [40.0, 80.0, 120.0] {
-    on_back(1, x, 0.0, 0)
-    back_step(t)
-  }
-  // held still a while (no step said), then lifted
-  for _ in 0..<10 {
-    back_step(t)
-  }
-  on_back(2, 0.0, 1.0, 0)
-  back_step(t)
-  let first = t.rect_of("title 2").unwrap().0
-  // (a moving finger's page is past 160 by then)
-  assert_true(first > 120.0 && first < 140.0)
-  t.run_for(nav.rest() - t.time())
-  assert_eq(nav.depth(), 1)
+  assert_eq(nav.depth(), 2)
+  assert_eq(t.rect_of("title 2").unwrap().0, 0.0)
 }
 
 ///|

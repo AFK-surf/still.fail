@@ -40,6 +40,7 @@ let rows : Rows = {
 
 ///|
 fn chat_rows_reset() -> Unit {
+  rows_left.clear()
   rows.renaming = ""
   rows.rename_for = ""
   rows.rename_seen = false
@@ -200,13 +201,34 @@ pub fn chat_row(
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
   // (`apart`: the room its list keeps under it, outside the slot a swipe moves it in)
+  // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
+  // and a while after, then fades, the row alone built for its frames (the user, 2026-10-29: 「别那么快消失，留一会儿」)
+  let left = if !finger {
+    false
+  } else if on {
+    rows_left[key] = true
+    false
+  } else {
+    rows_left.contains(key)
+  }
+  let lit = on || (left && !@kit.after(c, "row-left/" + key, left, left_lit_ms, later=true))
+  let lit = @motion.animate(
+    c,
+    "row-lit/" + key,
+    if lit { 1.0 } else { 0.0 },
+    spec=if lit { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
+  )
+  // (faded: forgotten)
+  if left && lit == 0.0 {
+    rows_left.remove(key)
+  }
   let draw = fn(tx : Double, apart : Bool) -> Int {
     let ground = if finger {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
-      } else if on {
-        t.p.selected
+      } else if lit > 0.0 {
+        @sf.alpha(t.p.selected, lit)
       } else if lifted >= 0.0 {
         // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
         let p = lifted / lift_ms
@@ -436,6 +458,19 @@ fn row_lifted(ink : Double) -> @ui.Style {
     shadow=Cast(@sf.held_raised.sigma * ink, @sf.held_raised.dy * ink, @sf.held_raised.color),
   )
 }
+
+///|
+/// A finger's row whose chat was gone back from: how long its ground stays (the page's slide off and as long again),
+/// and how long it then takes to fade.
+pub let left_lit_ms : Double = @ui.nav_push_ms * 2.0
+
+///|
+pub let left_fade_ms : Double = 400.0
+
+///|
+/// Each finger's row whose chat is in view or was gone back from, till its ground has faded.
+// kept across runs: cleared by chat_rows_reset, each forgotten once its ground has faded
+let rows_left : Map[String, Bool] = Map([])
 
 ///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).
