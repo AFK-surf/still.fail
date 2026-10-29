@@ -83,6 +83,9 @@ struct Node {
   /// how it takes the focus where it does (Ctx::focusable): what Tab goes among is the nodes that do, in their order
   /// (Ctx::focusables_found)
   mut focus : Focusable?
+  /// how its corner is worked out once laid out, where it is (corners.mbt): corner_inner (`Inner`), corner_inner_or
+  /// (`InnerOr`), corner_around (`Around`); 0 as said
+  mut corner_by : Int
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -337,6 +340,7 @@ fn Node::new() -> Node {
     points: false,
     marks: 0,
     focus: None,
+    corner_by: 0,
     parent: -1,
     first: -1,
     last: -1,
@@ -495,6 +499,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.points = false
   self.marks = 0
   self.focus = None
+  self.corner_by = 0
   self.first = -1
   self.last = -1
   self.next = -1

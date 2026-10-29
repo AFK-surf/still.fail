@@ -564,10 +564,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes_known()
   // (the rows kept as their nodes out of the frame's, for this build to make its own: kept_nodes.mbt)
   c.rows_detach()
-  c.inners.clear()
-  c.inners_or.clear()
   c.moves_build_start()
-  c.arounds.clear()
   c.corner_ladder = c.theme.corner_ladder
   c.corner_fit = c.theme.corner_fit
   c.lit_asked.clear()
