@@ -369,6 +369,47 @@ test "a list's row reading a signal is built as it changes, the others drawn aga
 }
 
 ///|
+/// 40 rows of words under a bar of `more` marks, as a page's list under what floats over it (still.fail's bar, a
+/// mark more or less in it as it moves).
+fn marked_rows(more : @signals.Signal[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.box(dir=Row, h=Px(20.0), gap=4.0, fn() {
+        for _ in 0..<more.get() {
+          c.box(w=Px(10.0), h=Px(10.0), bg=0x3366CCFFL, fn() {  }) |> ignore
+        }
+      })
+      |> ignore
+      c.list("rows", 40, 50.0, fn(i) {
+        c.box(h=Px(50.0), dir=Row, padx=10.0, gap=8.0, align=ACenter, fn() {
+          c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
+          c.text("\{i * 7}", size=10.0) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a list's rows built anew after a node more before them: laid out as before, not each of them again" {
+  let more = @signals.signal(1)
+  let t = Tester::new(marked_rows(more), w=320.0, h=420.0, platform=2)
+  t.draw()
+  t.frame()
+  t.frame()
+  // a mark more in the bar: the frame built anew for it (what it read changed), its rows with it
+  more.set(2)
+  let placed = commit_counts[0]
+  t.frame()
+  // laid out anew: the mark, the bar and what holds it; no row (eight of them show, four nodes each)
+  assert_true(commit_counts[0] - placed < 8, msg="laid anew: \{commit_counts[0] - placed}")
+  assert_true(t.find("row 3") is Some(_))
+}
+
+///|
 /// How far apart the moments are that rows left still are looked at (no step of their clock's falls on one).
 let rows_still_ms : Double = 70.0
 

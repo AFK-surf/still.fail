@@ -212,29 +212,63 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     if !rn.in_pool {
       continue
     }
-    // (built anew, none kept: its nodes left where they are, for its build to make again in the same nodes, as laid
-    // out before where it is the same; but a row that shows only what it read, unless none is kept at all)
+    // (built anew, none kept: a row's nodes taken out of the frame's all the same, for its build to make again in
+    // them where its list lays it (Ctx::row_laid), as laid out before where it is the same, whatever was built before
+    // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
+    // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
+    // But a row that shows only what it read, unless none is kept at all)
     if nodes_run.whole || (nodes_run.fresh && !rn.reads_all) {
+      if rn.item >= 0 {
+        self.row_nodes_out(rn)
+      }
       rn.in_pool = false
       rn.n = 0
       rn.ok = false
       continue
     }
-    for j in 0..<rn.n {
-      let i = rn.base + j
-      let o = self.nodes[i]
-      if j < rn.store.length() {
-        self.nodes[i] = rn.store[j]
-        rn.store[j] = o
-      } else {
-        self.nodes[i] = match spare_nodes.pop() {
-          Some(s) => s
-          None => Node::new()
-        }
-        rn.store.push(o)
-      }
-    }
+    self.row_nodes_out(rn)
     rn.in_pool = false
+  }
+}
+
+///|
+/// Row or part `rn`'s nodes out of the frame's, into its own (`store`), their places taken by those it held, or by
+/// spares.
+fn Ctx::row_nodes_out(self : Ctx, rn : RowNodes) -> Unit {
+  for j in 0..<rn.n {
+    let i = rn.base + j
+    let o = self.nodes[i]
+    if j < rn.store.length() {
+      self.nodes[i] = rn.store[j]
+      rn.store[j] = o
+    } else {
+      self.nodes[i] = match spare_nodes.pop() {
+        Some(s) => s
+        None => Node::new()
+      }
+      rn.store.push(o)
+    }
+  }
+}
+
+///|
+/// Row `rn`'s own nodes (`store`: those it was last built in) put in the frame's where the next are made, for its
+/// build to make again; those there its own instead.
+fn Ctx::row_nodes_lent(self : Ctx, rn : RowNodes) -> Unit {
+  let c0 = self.count
+  let n = rn.store.length()
+  while self.nodes.length() < c0 + n {
+    self.nodes.push(
+      match spare_nodes.pop() {
+        Some(s) => s
+        None => Node::new()
+      },
+    )
+  }
+  for j in 0..<n {
+    let o = self.nodes[c0 + j]
+    self.nodes[c0 + j] = rn.store[j]
+    rn.store[j] = o
   }
 }
 
@@ -475,7 +509,9 @@ fn Ctx::row_laid(
     // build read it: followed by its watch, not by what lays out its list)
     return @signals.untracked(fn() { self.row_splice(li, rn, ix, y) })
   }
-  // built: what it says of the frame from where each list stands
+  // built: in the nodes it was built in before, where its build makes them (what lays them out keeps what it worked
+  // out of them where they are the same); what it says of the frame from where each list stands
+  self.row_nodes_lent(rn)
   let b = self.nodes_begin(rn)
   nodes_run.building = Some(rn)
   let (r, h) = rn.watch.read(fn() {

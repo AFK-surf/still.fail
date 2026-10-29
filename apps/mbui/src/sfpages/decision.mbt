@@ -363,12 +363,7 @@ pub fn decision_options(
     None
   }
   // as wide as what it says, as wide as where it is at most
-  let at = c.id("options-room/" + m.ts)
-  let room = match c.laid_size(at) {
-    Some((w, _)) => w
-    None => 0.0
-  }
-  c.box(style=options_room, id=at, fn() {
+  c.box(style=options_room, fn() {
     match
       @sf.options_card(
         c,
@@ -378,7 +373,6 @@ pub fn decision_options(
         if resolved { None } else { busy },
         chosen~,
         wide=true,
-        room~,
       ) {
       Some(i) if !resolved => {
         let label = options[i].label
