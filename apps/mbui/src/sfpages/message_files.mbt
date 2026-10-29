@@ -317,7 +317,7 @@ fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit 
   }
   c.layer(fn() {
     c.box(style=coming_room, fn() {
-      let pill = c.box(style=coming_pill, fn() {
+      let pill = c.box(style=if coming is None { coming_alone } else { coming_pill }, fn() {
         match coming {
           Some((n, Some(total))) => {
             let part = dmin(1.0, n / total)
@@ -362,6 +362,13 @@ let coming_room : @ui.Style = @ui.css("w=Full h=Full p=S2 align=AEnd justify=JEn
 ///|
 // kept across runs: a value (no field of it changes)
 let coming_pill : @ui.Style = @ui.style(row=true, gap=S1, pl=S1, pr=S2, py=S0_5, radius=Full, bg=@sf.video_shade, align=ACenter)
+
+///|
+/// The pill round the spinner alone (nothing heard yet): as far from it on every side as the spinner is from the pill's
+/// start with words after it, a circle the spinner in its middle; coming_pill's room for words after it, left empty,
+/// set the spinner at one end of a pill that looked like a switch.
+// kept across runs: a value (no field of it changes)
+let coming_alone : @ui.Style = @ui.style(p=S1, radius=Full, bg=@sf.video_shade, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

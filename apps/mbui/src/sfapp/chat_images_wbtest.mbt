@@ -192,3 +192,21 @@ test "a chat's picture slow to come whose size is not known: the bytes here so f
   assert_true(t.find(@sf.file_size(300000.0)) is Some(_))
   assert_true(t.find("%") is None)
 }
+
+///|
+test "a chat's picture slow to come with nothing heard of it yet: the spinner alone in its middle, a round pill" {
+  let images = @sfbase.ChatImages::new()
+  let t = image_tester_asking(images, fn(_, _) {  })
+  t.draw()
+  t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
+  let shade = match @sf.video_shade {
+    Data(v) => v
+    _ => abort("video_shade is a colour")
+  }
+  let pills = t.drawn_rect_corners().filter(fn(r) { r.4 == shade })
+  assert_eq(pills.length(), 1)
+  let (_, _, w, h, _, _) = pills[0]
+  // (as much room before the spinner as after it and over and under it: 24 by 16, the room for words after it empty,
+  // looked like a switch)
+  assert_eq(w, h)
+}
