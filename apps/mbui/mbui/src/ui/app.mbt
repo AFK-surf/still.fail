@@ -416,6 +416,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
   c.next_hit_ends.clear()
+  c.next_hit_marks.clear()
   c.next_points.clear()
   c.next_passes.clear()
   c.passing = 0
@@ -476,6 +477,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   let he = c.hit_ends
   c.hit_ends = c.next_hit_ends
   c.next_hit_ends = he
+  let hm = c.hit_marks
+  c.hit_marks = c.next_hit_marks
+  c.next_hit_marks = hm
   let ps = c.points
   c.points = c.next_points
   c.next_points = ps
@@ -579,6 +583,8 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   parts_build_start()
   drawing_begin()
   desk_build_start()
+  c.built_ids.clear()
+  c.marks_ahead.clear()
   // (where the build says streams, native views and pictures at a rect of their own are drawn, by node: kept till the
   // next build, a frame painted again alone drawing them where its build said: frame_watch.mbt)
   stream_nodes.clear()

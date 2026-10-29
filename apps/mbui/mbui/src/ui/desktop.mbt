@@ -189,26 +189,8 @@ priv struct Desk {
   /// keys since the last frame: code, modifiers, whether a field took it
   mutable_keys : Array[(Int, Int, Bool)]
   keys : Array[(Int, Int, Bool)]
-  /// the pointer's shape by target, as this frame's build says (in the order said, the last said of a target its
-  /// own), and as the last one's said
-  next_cursors : Array[(Int, Int)]
-  cursors : Map[Int, Int]
-  /// the targets that take presses (their click read, Ctx::clicked; or said, Ctx::takes_presses), as this frame's
-  /// build says (in the order said), and as the last one's said
-  next_takers : Array[Int]
-  takers : Set[Int]
   /// the shape the host shows
   mut shown : Int
-  /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
-  next_drags : Array[Int]
-  mut drags : Array[Int]
-  /// targets a press on keeps what is picked with the pointer (Ctx::keeps_selection), this frame's and the last one's
-  next_keeps : Array[Int]
-  mut keeps : Array[Int]
-  /// what a finger held on is what lies under it's (Ctx::holds_through), as this frame's build says, and as the last
-  /// one's said
-  next_holds : Array[Int]
-  mut holds : Array[Int]
   /// ⌘V (Ctrl+V) with files or a picture on the clipboard, the host's app key: the read under way and the field it is
   /// for; the files read (the picture as one) for a field that takes files (Ctx::editor `files`), by its id, until the
   /// app takes them
@@ -293,17 +275,7 @@ let desk : Desk = {
   next_askers: [],
   mutable_keys: [],
   keys: [],
-  next_cursors: [],
-  cursors: {},
-  next_takers: [],
-  takers: Set::new(),
   shown: 0,
-  next_drags: [],
-  drags: [],
-  next_keeps: [],
-  keeps: [],
-  next_holds: [],
-  holds: [],
   pasting: None,
   pasted: {},
   next_mouse_drags: [],
@@ -322,17 +294,7 @@ fn desk_reset() -> Unit {
   desk.next_askers.clear()
   desk.mutable_keys.clear()
   desk.keys.clear()
-  desk.next_cursors.clear()
-  desk.cursors.clear()
-  desk.next_takers.clear()
-  desk.takers.clear()
   desk.shown = 0
-  desk.next_drags.clear()
-  desk.drags.clear()
-  desk.next_keeps.clear()
-  desk.next_holds.clear()
-  desk.keeps.clear()
-  desk.holds.clear()
   desk.pasting = None
   desk.pasted.clear()
   desk.next_mouse_drags.clear()
@@ -370,11 +332,6 @@ fn desk_frame_start() -> Unit {
 fn desk_build_start() -> Unit {
   // (what asks for a menu, as the frame's last build said it: Ctx::menu_asked)
   desk.next_askers.clear()
-  desk.next_cursors.clear()
-  desk.next_takers.clear()
-  desk.next_drags.clear()
-  desk.next_keeps.clear()
-  desk.next_holds.clear()
   desk.next_mouse_drags.clear()
   desk.next_sels.clear()
   desk.selecting = false
@@ -384,17 +341,6 @@ fn desk_build_start() -> Unit {
 /// As a frame ends (its targets in place): the shapes and drag areas it said are the ones in force, the pointer's
 /// target found again where it rests (what moved under it), its shape shown.
 fn Ctx::desk_frame_end(self : Ctx) -> Unit {
-  desk.cursors.clear()
-  for c in desk.next_cursors {
-    desk.cursors[c.0] = c.1
-  }
-  desk.takers.clear()
-  for id in desk.next_takers {
-    desk.takers.add(id)
-  }
-  desk.drags = desk.next_drags.copy()
-  desk.keeps = desk.next_keeps.copy()
-  desk.holds = desk.next_holds.copy()
   desk.mouse_drags = match desk.next_mouse_drags.last() {
     Some(on) => on
     None => true
@@ -442,13 +388,13 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
   } else {
     target
   }
-  let said = desk.cursors.get(target)
+  let said = marked_cursor(hit_marks(target))
   let kind = match said {
     Some(k) if k != Cursor::Arrow.code() => k
     _ =>
       if target != 0 && self.editors.contains(target) {
         Cursor::IBeam.code()
-      } else if said is None && target != 0 && desk.takers.contains(target) {
+      } else if said is None && (hit_marks(target) & mark_takes) != 0 {
         Cursor::Hand.code()
       } else if self.sel_at(self.px, self.py) is Some(_) {
         // words that are picked with the pointer
@@ -464,16 +410,100 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 }
 
 ///|
+/// A node's marks (Node's `marks`): it takes presses (Ctx::takes_presses, and what reads its click), a press on it drags
+/// the window (Ctx::window_drag), keeps what is picked (Ctx::keeps_selection), is what lies under it's when held
+/// (Ctx::holds_through); above them, the pointer's shape over it and one (Ctx::cursor), 0 where none is said.
+let mark_takes : Int = 1
+
+///|
+let mark_drags : Int = 2
+
+///|
+let mark_keeps : Int = 4
+
+///|
+let mark_holds : Int = 8
+
+///|
+let mark_cursor_at : Int = 4
+
+///|
+/// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
+/// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
+/// (Ctx::id_built). The shape said last is the one.
+fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
+  if id == 0 {
+    return
+  }
+  match self.built_ids.get(id) {
+    Some(i) if i < self.count && self.nodes[i].id == id => {
+      let n = self.nodes[i]
+      n.marks = with_marks(n.marks, m, cursor)
+    }
+    _ => self.marks_ahead[id] = with_marks(self.marks_ahead.get(id).unwrap_or(0), m, cursor)
+  }
+}
+
+///|
+fn with_marks(old : Int, m : Int, cursor : Int) -> Int {
+  if cursor >= 0 {
+    (old & ((1 << mark_cursor_at) - 1)) | m | ((cursor + 1) << mark_cursor_at)
+  } else {
+    old | m
+  }
+}
+
+///|
+/// Node `i` made with its id by this build: what was said of the id before it is marked on it (Ctx::mark_id).
+fn Ctx::id_built(self : Ctx, i : Int) -> Unit {
+  let n = self.nodes[i]
+  self.built_ids[n.id] = i
+  match self.marks_ahead.get(n.id) {
+    Some(m) => {
+      self.marks_ahead.remove(n.id)
+      n.marks = with_marks(n.marks, m & ((1 << mark_cursor_at) - 1), (m >> mark_cursor_at) - 1)
+    }
+    None => ()
+  }
+}
+
+///|
+/// The pointer's shape marked (Ctx::cursor), if one is.
+fn marked_cursor(marks : Int) -> Int? {
+  let c = marks >> mark_cursor_at
+  if c > 0 {
+    Some(c - 1)
+  } else {
+    None
+  }
+}
+
+///|
+/// What the last frame's target `id` was marked with as it was built (its last drawn).
+fn hit_marks(id : Int) -> Int {
+  if id == 0 {
+    return 0
+  }
+  let c = g()
+  let mut k = c.hit_ids.length() - 1
+  while k >= 0 && c.hit_ids[k] != id {
+    k = k - 1
+  }
+  if k >= 0 && k < c.hit_marks.length() {
+    c.hit_marks[k]
+  } else {
+    0
+  }
+}
+
+///|
 /// The pointer is `cursor` over `id` (a target: a box with an id), said each frame it is drawn, where what it is does
 /// not say it (Ctx::show_cursor): a resizing edge's, the I-beam over what a press on gives a field the focus (a
 /// composer's capsule round its field). `Arrow`: what takes presses there is a ground, not a control (a stage a click
 /// shows the bars on, the room round a list's rows a click there chooses none in): no hand over it, words picked with
 /// the pointer in it the I-beam still. A field shows the I-beam, what takes presses the hand, without being told.
 pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
-  ignore(self)
-  if id != 0 {
-    desk.next_cursors.push((id, cursor.code()))
-  }
+  self.mark_id(id, 0, cursor=cursor.code())
 }
 
 ///|
@@ -481,10 +511,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 /// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
 /// is pressed, Ctx::pressed alone) says it here.
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
-  ignore(self)
-  if id != 0 {
-    desk.next_takers.push(id)
-  }
+  self.mark_id(id, mark_takes)
 }
 
 ///|
@@ -549,10 +576,7 @@ pub fn Ctx::any_right_click(self : Ctx) -> Bool {
 /// A press on `id` drags the window (and a double click on it zooms it, as the system's title bar does): the app's
 /// own top row, in a window with none of the system's (@hostapi.window_setup `inset`). Said each frame it is drawn.
 pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
-  ignore(self)
-  if id != 0 {
-    desk.next_drags.push(id)
-  }
+  self.mark_id(id, mark_drags)
 }
 
 ///|
@@ -683,7 +707,7 @@ fn desk_key(code : Int, mods : Int, taken : Bool) -> Unit {
 ///|
 /// Whether a press at the target `id` drags the window (and so is the host's from here).
 fn desk_drags(id : Int) -> Bool {
-  id != 0 && desk.drags.contains(id)
+  (hit_marks(id) & mark_drags) != 0
 }
 
 ///|
@@ -1176,8 +1200,7 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
 /// whose press is not the words' with mousedown's preventDefault: a quote of what is picked). Said each frame it is
 /// drawn.
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
-  ignore(self)
-  desk.next_keeps.push(id)
+  self.mark_id(id, mark_keeps)
 }
 
 ///|
@@ -1185,14 +1208,13 @@ pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
 /// holds the target under it counts the press as within it (Ctx::press_within). A cover over what is shown and not in
 /// use (a pane beside the one in use), whose words are still held to pick them. Said each frame it is drawn.
 pub fn Ctx::holds_through(self : Ctx, id : Int) -> Unit {
-  ignore(self)
-  desk.next_holds.push(id)
+  self.mark_id(id, mark_holds)
 }
 
 ///|
 /// Whether a press on `target` keeps what is picked (Ctx::keeps_selection).
 fn keeps_selection_on(target : Int) -> Bool {
-  desk.keeps.contains(target)
+  (hit_marks(target) & mark_keeps) != 0
 }
 
 ///|

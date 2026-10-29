@@ -296,6 +296,14 @@ pub struct Ctx {
   // none), for what holds the one under the pointer to be pointed at too (Ctx::hovered)
   mut hit_ends : Array[Int]
   mut next_hit_ends : Array[Int]
+  // what each hit target's node was marked with as it was built (Node's `marks`): what the pointer's shape over it is
+  // and what a press on it does besides (hit_marks)
+  mut hit_marks : Array[Int]
+  mut next_hit_marks : Array[Int]
+  // the nodes this build made with each id, the last (Ctx::mark_id), and what was said of an id before its node was
+  // made, to be marked on it as it is
+  built_ids : Map[Int, Int]
+  marks_ahead : Map[Int, Int]
   // the hit targets of the last frame (and of this one, collected) that are pointed at and never pressed (Ctx::box's
   // `points`): a press, or a finger reaching round it, goes past them to what holds them
   mut points : Map[Int, Bool]
@@ -629,6 +637,10 @@ fn Ctx::new() -> Ctx {
     next_hit_clips: [],
     hit_ends: [],
     next_hit_ends: [],
+    hit_marks: [],
+    next_hit_marks: [],
+    built_ids: {},
+    marks_ahead: {},
     points: {},
     passes: {},
     next_passes: {},
@@ -1309,6 +1321,7 @@ pub fn Ctx::box(
   n.notch_f = notch_fillet
   if id != 0 {
     n.id = id
+    self.id_built(i)
     // (`taps` false: an id only to be measured or moved by (laid_size, a look): what is pressed in it is what holds
     // it, not it, which would take every press on its room that nothing in it takes)
     n.hit = taps
@@ -1818,7 +1831,7 @@ fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
   self.holders(k, self.press_on)
   self.press_on.push(target)
   // a cover a finger is held through (Ctx::holds_through): what lies under it, and what holds that, too
-  if k >= 0 && desk.holds.contains(target) {
+  if k >= 0 && (hit_marks(target) & mark_holds) != 0 {
     let mut j = k - 1
     while j >= 0 {
       let r = j * 4
@@ -2075,7 +2088,7 @@ fn hit_at(
 /// Whether target `id` is pressed only where it is drawn, no room grown round it (press_reach, rooms.mbt): a column's
 /// edge, its pointer's shape a resize (the user, 2026-10-28: 左右各 6px, 同 web).
 fn as_drawn(id : Int) -> Bool {
-  match desk.cursors.get(id) {
+  match marked_cursor(hit_marks(id)) {
     Some(k) => k == Cursor::ResizeX.code() || k == Cursor::ResizeY.code()
     None => false
   }
@@ -2264,11 +2277,13 @@ fn Ctx::push_hit(
   y0 : Double,
   x1 : Double,
   y1 : Double,
+  marks? : Int = 0,
 ) -> Bool {
   if x0 > x1 || y0 > y1 {
     return false
   }
   self.next_hit_ids.push(id)
+  self.next_hit_marks.push(marks)
   if self.passing > 0 {
     self.next_passes[id] = true
   }

@@ -1,9 +1,10 @@
-// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, the
-// pointer's shape over a target, what takes presses, what drags the window, what keeps what is picked, what asks for a
-// menu, whether the mouse drags lists, what is told outside once the builds are over. Its paint: where presses go (its
-// targets), what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the scroll
-// bars, a Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`),
-// added to in the order said.
+// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, what asks
+// for a menu, whether the mouse drags lists, what is told outside once the builds are over. Its paint: where presses
+// go (its targets), what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the
+// scroll bars, a Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or
+// `paint_lists`), added to in the order said. What a target is said to be as it is built (the pointer's shape over
+// it, what a press on it does besides) is no list: its node holds it (Node's `marks`), and its targets carry it
+// (hit_marks).
 //
 // A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its build and its paint
 // added, from where the list stood as they began, and says it again, moved to where it is drawn now, each frame it is
@@ -144,17 +145,11 @@ let paint_lists : Array[&SaidList] = [
 ]
 
 ///|
-/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, the pointer's shape,
-/// what takes presses, what drags the window, what keeps what is picked, what asks for a menu, whether the mouse drags
-/// lists, what is told once the builds are over.
+/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, what asks for a menu,
+/// whether the mouse drags lists, what is told once the builds are over.
 // kept across runs: never written
 let build_lists : Array[&SaidList] = [
   FocusSaid::{  },
-  CursorsSaid::{  },
-  TakersSaid::{  },
-  DragsSaid::{  },
-  KeepsSaid::{  },
-  HoldsSaid::{  },
   AskersSaid::{  },
   MouseDragsSaid::{  },
   TellsSaid::{  },
@@ -348,50 +343,7 @@ impl SaidAgain for FocusTaken with said_show(self, sb) {
 }
 
 ///|
-/// The pointer's shape over a target (Ctx::cursor): its id, the shape's code.
-priv struct CursorsSaid {}
-
-///|
-priv struct PairsTaken {
-  name : String
-  all : Array[(Int, Int)]
-  to : Array[(Int, Int)]
-}
-
-///|
-impl SaidList for CursorsSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_cursors.length()
-}
-
-///|
-impl SaidList for CursorsSaid with said_take(_, c, from) {
-  ignore(c)
-  PairsTaken::{ name: "cursor", all: desk.next_cursors[from:].to_owned(), to: desk.next_cursors }
-}
-
-///|
-impl SaidList for CursorsSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_cursors.truncate(len)
-}
-
-///|
-impl SaidAgain for PairsTaken with said_again(self, c, _) {
-  ignore(c)
-  self.to.append(self.all)
-}
-
-///|
-impl SaidAgain for PairsTaken with said_show(self, sb) {
-  for p in self.all {
-    sb.write_string("\{self.name} \{said_id(p.0)} \{p.1}\n")
-  }
-}
-
-///|
-/// Ids said by what is built (each of the lists of them: what takes presses, what drags the window, what keeps what is
-/// picked, what asks for a menu).
+/// Ids said by what is built (what asks for a menu).
 priv struct IdsTaken {
   name : String
   all : Array[Int]
@@ -409,94 +361,6 @@ impl SaidAgain for IdsTaken with said_show(self, sb) {
   for id in self.all {
     sb.write_string("\{self.name} \{said_id(id)}\n")
   }
-}
-
-///|
-/// What takes presses (Ctx::takes_presses, and what reads its click).
-priv struct TakersSaid {}
-
-///|
-impl SaidList for TakersSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_takers.length()
-}
-
-///|
-impl SaidList for TakersSaid with said_take(_, c, from) {
-  ignore(c)
-  IdsTaken::{ name: "takes", all: desk.next_takers[from:].to_owned(), to: desk.next_takers }
-}
-
-///|
-impl SaidList for TakersSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_takers.truncate(len)
-}
-
-///|
-/// What drags the window (Ctx::window_drag).
-priv struct DragsSaid {}
-
-///|
-impl SaidList for DragsSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_drags.length()
-}
-
-///|
-impl SaidList for DragsSaid with said_take(_, c, from) {
-  ignore(c)
-  IdsTaken::{ name: "drags", all: desk.next_drags[from:].to_owned(), to: desk.next_drags }
-}
-
-///|
-impl SaidList for DragsSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_drags.truncate(len)
-}
-
-///|
-/// What keeps what is picked with the pointer (Ctx::keeps_selection).
-priv struct KeepsSaid {}
-
-///|
-impl SaidList for KeepsSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_keeps.length()
-}
-
-///|
-impl SaidList for KeepsSaid with said_take(_, c, from) {
-  ignore(c)
-  IdsTaken::{ name: "keeps", all: desk.next_keeps[from:].to_owned(), to: desk.next_keeps }
-}
-
-///|
-impl SaidList for KeepsSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_keeps.truncate(len)
-}
-
-///|
-/// What a finger held on is what lies under it's (Ctx::holds_through).
-priv struct HoldsSaid {}
-
-///|
-impl SaidList for HoldsSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_holds.length()
-}
-
-///|
-impl SaidList for HoldsSaid with said_take(_, c, from) {
-  ignore(c)
-  IdsTaken::{ name: "holds", all: desk.next_holds[from:].to_owned(), to: desk.next_holds }
-}
-
-///|
-impl SaidList for HoldsSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_holds.truncate(len)
 }
 
 ///|
@@ -608,6 +472,8 @@ priv struct HitsSaid {}
 ///|
 priv struct HitsTaken {
   ids : Array[Int]
+  /// each one's marks (Node's `marks`)
+  marks : Array[Int]
   /// each one's end, from the first taken
   ends : Array[Int]
   rects : Array[Double]
@@ -620,6 +486,7 @@ priv struct HitsTaken {
 /// The frame's targets cut back to the first `len`, with what of them is only pointed at.
 fn Ctx::hits_cut(self : Ctx, len : Int) -> Unit {
   self.next_hit_ids.truncate(len)
+  self.next_hit_marks.truncate(len)
   self.next_hit_ends.truncate(len)
   self.next_hit_rects.truncate(len * 4)
   self.next_hit_clips.truncate(len * clip_n)
@@ -644,9 +511,10 @@ impl SaidList for HitsSaid with said_len(_, c) {
 
 ///|
 impl SaidList for HitsSaid with said_take(_, c, from) {
-  let t : HitsTaken = { ids: [], ends: [], rects: [], clips: [], points: [] }
+  let t : HitsTaken = { ids: [], marks: [], ends: [], rects: [], clips: [], points: [] }
   for h in from..<c.next_hit_ids.length() {
     t.ids.push(c.next_hit_ids[h])
+    t.marks.push(c.next_hit_marks[h])
     t.ends.push(c.next_hit_ends[h] - from)
   }
   for v in (from * 4)..<c.next_hit_rects.length() {
@@ -693,6 +561,7 @@ impl SaidAgain for HitsTaken with said_again(self, c, m) {
     let v = j * 4
     let (x0, y0, x1, y1) = m.rect(rects[v], rects[v + 1], rects[v + 2], rects[v + 3])
     c.next_hit_ids.push(self.ids[j])
+    c.next_hit_marks.push(self.marks[j])
     c.next_hit_ends.push(h0 + before[self.ends[j]])
     c.next_hit_rects.push(x0)
     c.next_hit_rects.push(y0)
@@ -921,6 +790,9 @@ impl SaidAgain for RunsTaken with said_again(self, c, m) {
 impl SaidAgain for HitsTaken with said_show(self, sb) {
   for j in 0..<self.ids.length() {
     sb.write_string("hit \{said_id(self.ids[j])} \{self.ends[j]}")
+    if self.marks[j] != 0 {
+      sb.write_string(" marks \{self.marks[j]}")
+    }
     for v in 0..<4 {
       sb.write_string(" \{said_num(self.rects[j * 4 + v])}")
     }

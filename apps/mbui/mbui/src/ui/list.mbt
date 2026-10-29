@@ -558,6 +558,7 @@ pub fn Ctx::list(
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
   n.id = id
+  self.id_built(i)
   n.w = w
   n.h = h
   n.clip = true

@@ -76,6 +76,10 @@ struct Node {
   mut hit : Bool
   // (with `hit` false: pointed at, never pressed: Ctx::box's `points`)
   mut points : Bool
+  /// what its build said of it as a target, held by it (docs/retained.md, the way there's 1): the pointer's shape over it
+  /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
+  /// holds_through); 0 none said
+  mut marks : Int
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -328,6 +332,7 @@ fn Node::new() -> Node {
     id: 0,
     hit: false,
     points: false,
+    marks: 0,
     parent: -1,
     first: -1,
     last: -1,
@@ -484,6 +489,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.id = 0
   self.hit = false
   self.points = false
+  self.marks = 0
   self.first = -1
   self.last = -1
   self.next = -1
