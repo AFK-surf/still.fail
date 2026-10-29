@@ -1471,7 +1471,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
 /// A table's frame, its columns `widths` wide (`total` together), its rows (the head's first) in it: a card (its ground
 /// and corner, as the chat's other cards: no line round it, its words as far in as a list card's), the head told by
 /// its words alone (muted, smaller, medium: no ground of its own; its height measured as `head_at`), rows ruled
-/// between them by the theme's line, across it.
+/// between them as faintly as is seen, across it.
 fn Md::table_frame(
   self : Md,
   rows : Array[Array[Array[MdInline]]],
@@ -1482,6 +1482,7 @@ fn Md::table_frame(
   let c = self.c
   let w = web()
   let cols = widths.length()
+  let rule = @ui.faintest_mark(theme().p.text, theme().p.card)
   c.box(
     w=Px(total + 2.0 * table_in_x),
     // (a card of its own on what holds it, as round as the chat's other cards: the ladder's card; not a block's, which
@@ -1522,10 +1523,10 @@ fn Md::table_frame(
         if head {
           @motion.measure(c, row_box, head_at)
         }
-        // a rule under every row but the last, across the card from edge to edge: the theme's line, the faintest a
-        // line may be and still be seen (docs/ui-panels.md 对比度)
+        // a rule under every row but the last, across the card from edge to edge: the words' ink on the card no more
+        // than seen (docs/ui-panels.md 对比度): the rows' words part them, the rule only marks where
         if r < rows.length() - 1 {
-          c.box(w=Px(total + 2.0 * table_in_x), h=Px(1.0), mx=-table_in_x, bg=theme().p.line, fn() {  })
+          c.box(w=Px(total + 2.0 * table_in_x), h=Px(1.0), mx=-table_in_x, bg=rule, fn() {  })
           |> ignore
         }
       }
