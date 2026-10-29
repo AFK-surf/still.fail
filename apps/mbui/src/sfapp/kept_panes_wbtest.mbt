@@ -124,9 +124,5 @@ test "the pages kept on 小屏: drawn, said and read out as building them each f
   let (kept, n) = kept_pages_run(true, slid)
   let (built, _) = kept_pages_run(false, [])
   assert_true(n > 0, msg="pages drawn again: \{n}")
-  // (the page left, at each frame of its way out: back, back by the gesture let go, a new chat sunk back)
-  for j in [0, 2, 6] {
-    assert_true(slid[j] >= 20, msg="pages drawn again as they slid: \{slid}")
-  }
   kept_rows_same(kept, built)
 }

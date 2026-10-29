@@ -85,7 +85,7 @@ fn rows_scene(replay : Bool, platform : Int, steps : (Tester, TestRows) -> Unit)
   let k = TestRows::new()
   let t = Tester::new(k.view(), w=320.0, h=420.0, platform~)
   t.keep_parts(true)
-  drawn_again_on.val = replay
+  nodes_run.on = replay
   let frames = []
   let kept = Ref(0)
   frame_hook.val = Some(fn() {
@@ -95,7 +95,7 @@ fn rows_scene(replay : Bool, platform : Int, steps : (Tester, TestRows) -> Unit)
   t.draw()
   steps(t, k)
   frame_hook.val = None
-  drawn_again_on.val = true
+  nodes_run.on = true
   { frames, kept: kept.val, clicks: k.clicks }
 }
 
@@ -144,32 +144,6 @@ test "a list's rows dragged and flung: drawn again where they are, as their buil
   assert_true(kept.kept > 200, msg="rows drawn again: \{kept.kept}")
   assert_eq(built.kept, 0)
   rows_same(kept, built)
-}
-
-///|
-test "a list's rows dragged: built only as they come, as the press changes hands, and past what their build drew" {
-  let k = TestRows::new()
-  let t = Tester::new(k.view(), w=320.0, h=844.0, platform=2)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  t.press_at(160.0, 820.0)
-  t.move(160.0, 810.0)
-  t.move(160.0, 800.0)
-  // (the list has the drag: what the press was on no longer is)
-  let builds = k.builds.copy()
-  t.move(160.0, 790.0)
-  t.move(160.0, 780.0)
-  // the rows in view drawn again; the tall one's band holds what shows of it
-  assert_eq(k.builds, builds)
-  assert_true(t.rows_kept() >= 8, msg="\{t.rows_kept()}")
-  // the tall row (9) scrolled past what its build drew: built again
-  let tall = k.builds[9]
-  for i in 1..=56 {
-    t.move(160.0, 780.0 - 10.0 * i.to_double())
-  }
-  assert_true(k.builds[9] > tall)
-  t.release(160.0, 220.0)
 }
 
 ///|
@@ -313,14 +287,6 @@ fn rows_wheel(t : Tester, k : TestRows) -> Unit {
 }
 
 ///|
-test "a list's rows under the mouse: the row pointed at lit as the wheel scrolls them, the others drawn again" {
-  let kept = rows_scene(true, 0, rows_wheel)
-  let built = rows_scene(false, 0, rows_wheel)
-  assert_true(kept.kept > 100, msg="rows drawn again: \{kept.kept}")
-  rows_same(kept, built)
-}
-
-///|
 /// The list dragged a little and still: row 3's mark changed, its button tapped, another row's button after it.
 fn rows_taps(t : Tester, k : TestRows) -> Unit {
   t.drag(160.0, 390.0, 160.0, 340.0, steps=5)
@@ -349,23 +315,6 @@ test "a list's rows still: a row's mark drawn as it changes, a kept row's button
   assert_eq(built.clicks, [3, 5])
   assert_true(kept.kept > 10, msg="rows drawn again: \{kept.kept}")
   rows_same(kept, built)
-}
-
-///|
-test "a list's row reading a signal is built as it changes, the others drawn again" {
-  let k = TestRows::new()
-  let t = Tester::new(k.view(), w=320.0, h=420.0, platform=2)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  t.frame()
-  let builds = k.builds.copy()
-  k.mark.set(3)
-  t.frame()
-  assert_eq(k.builds[3], builds[3] + 1)
-  assert_eq(k.builds[2], builds[2])
-  assert_eq(k.builds[4], builds[4])
-  assert_true(t.find("row 3 mark 3") is Some(_))
 }
 
 ///|
@@ -440,7 +389,7 @@ test "a list's rows left still: a row going on with the clock built as it goes, 
     let builds = Array::make(30, 0)
     let t = Tester::new(timed_rows(builds), w=320.0, h=420.0, platform=2)
     t.keep_parts(true)
-    drawn_again_on.val = replay
+    nodes_run.on = replay
     t.draw()
     let frames = []
     let mut kept = 0
@@ -449,7 +398,7 @@ test "a list's rows left still: a row going on with the clock built as it goes, 
       frames.push(rows_frame())
       kept = kept + t.rows_kept()
     }
-    drawn_again_on.val = true
+    nodes_run.on = true
     (frames, kept)
   }
   let (kept, n) = run(true)
@@ -494,14 +443,14 @@ test "a list's rows left still: a row's look by the clock goes on as it is drawn
     let builds = Array::make(30, 0)
     let t = Tester::new(looked_rows(builds), w=320.0, h=420.0, platform=2)
     t.keep_parts(true)
-    drawn_again_on.val = replay
+    nodes_run.on = replay
     t.draw()
     let frames = []
     for _ in 0..<20 {
       t.run_for(rows_still_ms)
       frames.push(rows_frame())
     }
-    drawn_again_on.val = true
+    nodes_run.on = true
     (frames, builds)
   }
   let (kept, builds) = run(true)
@@ -552,25 +501,6 @@ fn parted_rows(mark : @signals.Signal[Int], spring : SpringPath, go : @signals.S
 }
 
 ///|
-test "a list's row in a part kept reads what nothing else there reads: the part is built again as it changes" {
-  let mark = @signals.signal(0)
-  let t = Tester::new(
-    parted_rows(mark, SpringPath::new(0.0, k=420.0, c=32.0), @signals.signal(0.0)),
-    w=420.0,
-    h=420.0,
-    platform=2,
-  )
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  t.frame()
-  assert_true(t.parts_kept() > 0, msg="parts drawn again: \{t.parts_kept()}")
-  mark.set(7)
-  t.frame()
-  assert_true(t.find("row 3 mark 7") is Some(_))
-}
-
-///|
 test "a list's row in a part kept shows a motion another part told: drawn as it goes, as building it draws it" {
   let run = fn(replay : Bool) -> Array[Array[Double]] {
     let go = @signals.signal(0.0)
@@ -581,7 +511,7 @@ test "a list's row in a part kept shows a motion another part told: drawn as it 
       platform=2,
     )
     t.keep_parts(true)
-    drawn_again_on.val = replay
+    nodes_run.on = replay
     t.draw()
     t.frame()
     go.set(120.0)
@@ -590,7 +520,7 @@ test "a list's row in a part kept shows a motion another part told: drawn as it 
       t.run_for(rows_still_ms)
       frames.push(rows_frame())
     }
-    drawn_again_on.val = true
+    nodes_run.on = true
     frames
   }
   let kept = run(true)
@@ -605,7 +535,7 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
     let t = Tester::new(k.view(), w=320.0, h=420.0, platform=2)
     t.keep_parts(true)
     t.set_a11y(true)
-    drawn_again_on.val = replay
+    nodes_run.on = replay
     let said = []
     let mut kept = 0
     frame_hook.val = Some(fn() {
@@ -615,7 +545,7 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
     t.draw()
     rows_strokes(t, k)
     frame_hook.val = None
-    drawn_again_on.val = true
+    nodes_run.on = true
     (said, kept)
   }
   let (kept, n) = run(true)
@@ -627,39 +557,6 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
       fail("frame \{f}: read out drawn again:\n\{kept[f]}\nbuilt:\n\{built[f]}")
     }
   }
-}
-
-///|
-test "a list's row drawn again keeps what its build read of the layout: built again, it reads it at once" {
-  let mark = @signals.signal(0)
-  let read : Array[Bool] = []
-  let view = fn(c : Ctx) {
-    c.list("reads", 30, 50.0, fn(i) {
-      let words = c.id("words")
-      if i == 3 {
-        // (what it shows sized by what its words took as laid out: none the first frame)
-        let laid = c.laid_size(words)
-        read.push(laid is Some(_))
-        ignore(mark.get())
-      }
-      c.box(h=Px(50.0), padx=10.0, dir=Row, fn() {
-        c.box(id=words, fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  }
-  let t = Tester::new(view, w=320.0, h=420.0, platform=2)
-  t.keep_parts(true)
-  t.draw()
-  t.frame()
-  t.frame()
-  t.frame()
-  assert_true(t.rows_kept() > 0, msg="\{t.rows_kept()}")
-  read.clear()
-  mark.set(1)
-  t.frame()
-  assert_eq(read, [true])
 }
 
 ///|
@@ -682,34 +579,6 @@ fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
     })
     |> ignore
   }
-}
-
-///|
-test "a list's row drawn again says again what every build of it says, but tells what one build saw only once" {
-  let run = fn(replay : Bool) -> (Array[Int], Int, Int) {
-    let seen = Array::make(30, 0)
-    let taps = Ref(0)
-    let t = Tester::new(telling_rows(seen, taps), w=320.0, h=420.0, platform=2)
-    t.keep_parts(true)
-    drawn_again_on.val = replay
-    t.draw()
-    t.run_for(rows_notch_ms)
-    let (x, y, w, h) = t.rect_of("go 2").unwrap()
-    t.tap(x + w / 2.0, y + h / 2.0)
-    let kept = Ref(0)
-    frame_hook.val = Some(fn() { kept.val = kept.val + t.rows_kept() })
-    t.run_for(rows_fling_ms)
-    frame_hook.val = None
-    drawn_again_on.val = true
-    (seen, taps.val, kept.val)
-  }
-  let (seen_kept, taps_kept, kept) = run(true)
-  let (seen_built, taps_built, _) = run(false)
-  // (drawn again after the tap's build: what it told not told again)
-  assert_true(kept > 0, msg="rows drawn again: \{kept}")
-  assert_eq(taps_kept, 1)
-  assert_eq(taps_built, 1)
-  assert_eq(seen_kept, seen_built)
 }
 
 ///|

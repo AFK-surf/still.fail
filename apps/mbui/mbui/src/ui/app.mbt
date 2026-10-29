@@ -1394,12 +1394,6 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
       // (where it stands its signal's: what lays it out lays it out again, nothing taken by what is built; where parts
       // are kept as drawn, kept_part.mbt, an event from outside for the part or the row it turns in)
       st.hand_moved()
-      if parts_on.val {
-        inputs_taken.val = true
-        if part_under(x, y) || row_scroller_under(x, y) {
-          outside_came()
-        }
-      }
       h_request_frame()
     }
     None => wheel_taken()

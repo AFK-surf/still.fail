@@ -539,10 +539,6 @@ pub fn Ctx::list(
   if back && st.rest_at(self.clock, self.frame_no) > self.clock {
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
-  // (where parts are kept as drawn, kept_part.mbt: stepped as it is built, as what builds it reads it)
-  if parts_on.val {
-    self.list_step(st)
-  }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
   // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same
   if self.list_grew(id, count) && st.stick_end && st.at_end {
@@ -688,14 +684,8 @@ fn Ctx::place_list(
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
-    // (kept as its nodes where nothing it shows changed: kept_nodes.mbt; as its last build drew it where parts are
-    // kept so: kept_rows.mbt)
-    let (r, h) = if self.rows_on() {
-      let r = self.row_of(li, st, k, iw)
-      (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
-    } else {
-      self.row_laid(li, st, k, ix, y, iw)
-    }
+    // (kept as its nodes where nothing it shows changed: kept_nodes.mbt)
+    let (r, h) = self.row_laid(li, st, k, ix, y, iw)
     // as tall as what changed its height has it now (list_size.mbt), what it holds cut there
     let shown = st.row_sized(k, h, self.clock, self.frame_no)
     // (as tall as it is laid out once there: a row kept as its nodes keeps what it was last cut to otherwise)
@@ -935,20 +925,6 @@ fn Ctx::place_list(
   }
   // set on the device's pixels (where the list stands said above, as they are laid)
   self.rows_on_pixels(order)
-  // the rows kept, built after all where they show what their last build did not draw (kept_rows.mbt)
-  if self.rows_placed(li, st, order, ix, iy, iw, ih) {
-    let mut prev = -1
-    for r in order {
-      if prev >= 0 {
-        self.nodes[prev].next = r
-      } else {
-        n.first = r
-      }
-      self.nodes[r].next = -1
-      prev = r
-    }
-    n.last = prev
-  }
   self.stick_in(li, order, iy)
   // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
   st.moving_said.set(st.held || st.moving() || st.glide)
@@ -961,7 +937,7 @@ fn Ctx::place_list(
 /// instance owners, a test lighting everything). Not with the parts kept as drawn (Ctx::rows_on): on a host with them,
 /// they went off with them (#2325), and a list scrolled had its words crawl again.
 fn Ctx::rows_on_grid(self : Ctx) -> Bool {
-  (fake.val is None || parts_on.val || rows_grid_test.val) && !inst_owners.on && !self.lit_every
+  (fake.val is None || rows_grid_test.val) && !inst_owners.on && !self.lit_every
 }
 
 ///|

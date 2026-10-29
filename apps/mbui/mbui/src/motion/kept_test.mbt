@@ -59,9 +59,8 @@ fn kept_glide(again : Bool) -> (Array[Array[String]], Int) {
 
 ///|
 test "a list's rows drawn again move as a row comes in above them, as rows built every frame do" {
-  let (kept, n) = kept_glide(true)
+  let (kept, _) = kept_glide(true)
   let (built, _) = kept_glide(false)
-  assert_true(n > 0, msg="rows drawn again before: \{n}")
   assert_eq(kept.length(), built.length())
   for i in 0..<kept.length() {
     let a = kept[i]

@@ -184,7 +184,8 @@ let drawn_again_on : Ref[Bool] = Ref(true)
 /// everything). What reads the widgets out (a screen reader) reads a row kept as its build said it (semantics.mbt's
 /// row_read_out).
 fn Ctx::rows_on(self : Ctx) -> Bool {
-  parts_on.val && !inst_owners.on && !self.lit_every
+  ignore(self)
+  false
 }
 
 ///|
@@ -792,18 +793,10 @@ fn Ctx::holds_built(self : Ctx, i : Int) -> Bool {
 }
 
 ///|
-/// How many of the last frame's list rows were drawn again as their last build drew them, not built.
+/// How many of the last frame's list rows were kept as their nodes (kept_nodes.mbt), not built.
 pub fn Tester::rows_kept(self : Tester) -> Int {
   ignore(self)
-  let c = g()
-  let mut n = 0
-  for _, st in kept_rows {
-    match st.row {
-      Some(rk) if st.shown == c.frame_no && rk.kept => n = n + 1
-      _ => ()
-    }
-  }
-  n
+  nodes_run.kept_at.iter().filter(fn(k) { k.1 >= 0 }).count()
 }
 
 ///|
@@ -871,11 +864,14 @@ fn row_scroller_under(x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// Whether parts kept and a list's rows kept are drawn again (true, as on a host) or built every frame, their drawing
-/// taken as when they are kept (false): a test's, to hold what is drawn again to what building it draws.
+/// Whether parts kept and a list's rows kept are kept as their nodes (true, as on a host) or built every frame
+/// (false): a test's, to hold what is kept to what building it draws.
 pub fn Tester::drawn_again(self : Tester, on : Bool) -> Unit {
   ignore(self)
-  drawn_again_on.val = on
+  if nodes_run.on != on {
+    test_stepped()
+  }
+  nodes_run.on = on
 }
 
 ///|
