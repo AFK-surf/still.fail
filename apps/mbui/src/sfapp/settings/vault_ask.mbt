@@ -273,7 +273,7 @@ pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
 /// (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
-pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) -> Unit {
+pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true) -> Unit {
   let save = ask.save_kind != ""
   let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
   let words = match status {
@@ -288,7 +288,18 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) 
     _ => tr("android-settings.vault.ask.expired")
   }
   c.box(style=ask_ended, fn() {
-    c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+    // (the dot in the middle of the words' first line, not of all of them: on two lines it stays by the first; and
+    // under the message's picture, as wide as it, the words where its name is: inline past the picture at the head's
+    // start, else the picture out in the margin and the words at the row's start)
+    let place = if inline {
+      @ui.style(w=Fixed(ask_pic_w), mr=@sf.room_of(@sf.message_head_in.px() - ask_pic_w))
+    } else {
+      @ui.style(w=Fixed(ask_pic_w), ml=@sf.message_avatar_out, mr=@sf.room_of(@sf.message_avatar_reach - ask_pic_w))
+    }
+    c.box(style=ask_dot_line.then(place), fn() {
+      c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+    })
+    |> ignore
     c.text(words, style=ask_ended_words) |> ignore
   })
   |> ignore
@@ -547,9 +558,18 @@ let ask_over : @ui.Style = @ui.css("row mb=S2")
 /// Between the foot's lines, where its buttons go on to a second (8).
 let ask_foot_lines : Double = 8.0
 ///|
-/// How it ended: a dot and its words, 8 apart.
+/// How it ended: a dot and its words, from the top (the dot by their first line: ask_dot_line).
 // kept across runs: a value (no field of it changes)
-let ask_ended : @ui.Style = @ui.css("row gap=S2 align=ACenter pt=S0_5")
+let ask_ended : @ui.Style = @ui.css("row align=AStart pt=S0_5")
+
+///|
+/// Where the dot stands: as high as a line of the words (ask_ended_words' 20), the dot in its middle.
+// kept across runs: a value (no field of it changes)
+let ask_dot_line : @ui.Style = @ui.css("row h=Fixed(20) align=ACenter justify=JCenter")
+
+///|
+/// A message's picture's width (sfpages message.mbt: its 18 round), the dot's room under it.
+let ask_pic_w : Double = 18.0
 
 ///|
 // kept across runs: a value (no field of it changes)
