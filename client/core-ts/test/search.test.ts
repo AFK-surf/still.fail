@@ -162,3 +162,29 @@ test("what_a_search_finds_says_where_it_opens_as_every_client_has_a_page_for_it"
   // A file with no path opens nowhere.
   assert.equal(openOf({ ...at, kind: "file", chat: "a" }), null);
 });
+
+test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_only_for_them", async () => {
+  const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)] };
+  for (const q of ["u", "up", "upd"]) replies[`GET /search?q=${q}&limit=6`] = { building: false, groups: [] };
+  const { host, core, push } = await started(replies);
+  const ui = core.connect();
+  // Typed: each words shown in place of the last (the ones let go are kept a while, not shown).
+  let id = 0;
+  for (const q of ["u", "up", "upd"]) {
+    if (id > 0) core.receive(ui, { kind: "unsubscribe", id, unsubscribe: true });
+    subscribe(core, ui, ++id, { topic: "search", scope: "ws", query: q });
+    await host.settle();
+    await host.time.pass(50);
+  }
+  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  const asked = (from: number) => host.requests.slice(from).map((r: J) => r.url as string).filter((u) => u.includes("/search?")).map((u) => u.split("q=")[1]);
+  assert.deepEqual(asked(0), ["upd&limit=6"]);
+  const before = host.requests.length;
+  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  await host.settle();
+  await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
+  await host.settle();
+  assert.deepEqual(asked(before), ["upd&limit=6"]);
+  core.close();
+});

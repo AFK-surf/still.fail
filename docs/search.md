@@ -37,10 +37,13 @@ Later: the cloud's own (feedback), Slack channels' history.
 - How much of the machine a search costs (2026-10-29: a client asked the searches it showed again with each change of
   the station's chats, `mdfind` started more than once a second, Spotlight's `mds_stores` at 790% CPU and 73 hours of
   CPU in 5 days; on a Mac's home a word that common files say, `check`, is in 104k of them, and `*u*` in 198k names,
-  17 s): the same words for the same asker are answered as found for 5 s (`KEPT_MS`: several devices asking the same at once, as they connect again, are one search; past 20 searches a minute,
-  what was found up to 10 min before); the machine is searched one search at a time, the others waiting, and one typed
-  on (its words grown or shortened from the last of the same asker's) takes the place of the one before, which stops
-  (its `mdfind` killed, its walk left); a word shorter than 3 is looked for at the start of names alone, never in what
+  17 s): the same words, as the same members may see them, are answered as found for 5 s (`KEPT_MS`: several devices
+  asking the same at once, as they connect again, are one search); the machine is searched two searches at a time
+  (`AT_ONCE`), the others waiting, and one that waited 2 s (`TURN_MS`) finds no files (the rest of what the search
+  finds is not held up for them); a person's search typed on (from the same device, its words grown or shortened)
+  takes the place of the one before, which stops (its `mdfind` killed, its walk left, still.fail Helper's not waited
+  for); an agent's or another station's search is never stopped so; a word shorter than 3 is looked for at the start
+  of names alone, never in what
   files say; what files say is asked for 100 paths at most. The app let go of no search it read (each words typed stayed shown for the run: mbui's
   `sfpages/switcher.mbt` now leaves the one read last as the words change and the search closes). A client asks the searches it shows again at most every
   2 s as the station's chats, sessions and jobs change (core `SEARCH_STALE_MS`), not with each.

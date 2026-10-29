@@ -29,10 +29,10 @@ export const SHORT = 3;
 /// devices (as they connect again), or again and again by a client from before it let go of what it no longer shows,
 /// are one search of the machine; a file made since is found a few seconds later.
 export const KEPT_MS = 5_000;
-/// Past this many searches of the machine a minute, one asked again is answered with what it found last (up to
-/// STALE_MS old) rather than searched again; one not asked lately is searched all the same.
-export const PER_MINUTE = 20;
-export const STALE_MS = 10 * 60_000;
+/// At most this many searches of the machine at once; one that waited this long for its turn finds no files (the
+/// rest of what the search finds is not held up for them).
+export const AT_ONCE = 2;
+export const TURN_MS = 2_000;
 
 /// Where a Mac keeps what is the person's own (mail, messages, calendars, contacts, notes, photos), under the home.
 export const PERSONAL = [
@@ -178,11 +178,11 @@ export class FileSearch {
   readonly #home: string;
   /// What searches found lately, by what they asked (KEPT_MS): the same asked again meanwhile is answered from it.
   readonly #found = new Map<string, { at: number; files: Promise<Group | null> }>();
-  /// The search going now, and those waiting for it; one being typed (its words grown or shortened from the last of the
-  /// same asker's) takes the place of the one before, which stops. `who`: the asker, `typed`: its words as one string.
-  #going: { who: string; typed: string; stop: AbortController } | null = null;
-  #waiting: { who: string; typed: string; go: () => void; drop: () => void }[] = [];
-  #went: number[] = [];
+  /// The searches going now and those waiting for their turn. `typist`: the device a person types on (Asker.typist),
+  /// `typed`: its words; a search typed on (later words of the same typist's, grown or shortened) takes the place of
+  /// the one before, which stops. An agent's and another station's have no typist: each goes, none stops another.
+  #going: { typist?: string; typed: string; stop: AbortController }[] = [];
+  #waiting: { typist?: string; typed: string; go: () => void; drop: () => void }[] = [];
 
   constructor(deps: FileSearchDeps) {
     this.#deps = deps;
@@ -190,21 +190,21 @@ export class FileSearch {
   }
 
   /// The files the words find for `asker`: those whose name has the first word first, then the most recently changed.
-  /// The same search within KEPT_MS is answered as it was; the machine is searched one search at a time, an asker's
-  /// newer search in place of its older one, at most PER_MINUTE a minute (past it, what was found last).
+  /// The same search within KEPT_MS is answered as it was; the machine is searched AT_ONCE searches at a time (one that
+  /// waited TURN_MS finds none), a person's search typed on in place of the one before it.
   async query(words: string[], asker: Asker, limit: number): Promise<Group | null> {
     if (words.length === 0) return null;
     const now = this.#deps.now ?? (() => wall.now());
     const writer = asker.scopes.includes("write");
-    const who = JSON.stringify([asker.workspace, asker.home, writer]);
-    const key = JSON.stringify([words, who, limit, this.#deps.personal(), this.#deps.roots(asker.home ? null : asker.workspace)]);
-    for (const [k, f] of this.#found) if (now() - f.at > STALE_MS) this.#found.delete(k);
+    const key = JSON.stringify([words, asker.workspace, asker.home, writer, limit, this.#deps.personal(), this.#deps.roots(asker.home ? null : asker.workspace)]);
+    for (const [k, f] of this.#found) if (now() - f.at > KEPT_MS) this.#found.delete(k);
     const kept = this.#found.get(key);
-    this.#went = this.#went.filter((at) => now() - at < 60_000);
-    if (kept && (now() - kept.at <= KEPT_MS || this.#went.length >= PER_MINUTE)) return kept.files;
-    const files = this.#turn(who, words.join(" ")).then((stop) =>
-      stop === null ? null : this.#search(words, asker, limit, stop.signal).then((found) => (stop.signal.aborted ? null : found)).finally(() => this.#next(stop)),
-    );
+    if (kept) return kept.files;
+    const files = this.#turn(asker.typist, words.join(" "))
+      .then((stop) =>
+        stop === null ? null : this.#search(words, asker, limit, stop.signal).then((found) => (stop.signal.aborted ? null : found)).finally(() => this.#next(stop)),
+      )
+      .catch(() => null);
     this.#found.set(key, { at: now(), files });
     // One stopped or passed over is not kept.
     void files.then((f) => {
@@ -213,28 +213,33 @@ export class FileSearch {
     return files;
   }
 
-  /// This asker's turn to search: its controller once it may go, null when a newer one of theirs took its place.
-  #turn(who: string, typed: string): Promise<AbortController | null> {
-    // The same words typed on: one starts as the other does (an agent's searches of other words each go).
-    const before = (w: { who: string; typed: string }) => w.who === who && (typed.startsWith(w.typed) || w.typed.startsWith(typed));
-    if (this.#going !== null && before(this.#going)) this.#going.stop.abort();
+  /// A search's turn: its controller once it may go, null when a later one typed on took its place or it waited
+  /// TURN_MS.
+  #turn(typist: string | undefined, typed: string): Promise<AbortController | null> {
+    const before = (w: { typist?: string; typed: string }) => typist !== undefined && w.typist === typist && (typed.startsWith(w.typed) || w.typed.startsWith(typed));
+    for (const g of this.#going.filter(before)) g.stop.abort();
+    for (const w of this.#waiting.filter(before)) w.drop();
+    this.#waiting = this.#waiting.filter((w) => !before(w));
     return new Promise((resolve) => {
       const go = () => {
         const stop = new AbortController();
-        this.#going = { who, typed, stop };
-        this.#went.push((this.#deps.now ?? (() => wall.now()))());
+        this.#going.push({ ...(typist !== undefined ? { typist } : {}), typed, stop });
         resolve(stop);
       };
-      for (const w of this.#waiting.filter(before)) w.drop();
-      this.#waiting = this.#waiting.filter((w) => !before(w));
-      if (this.#going === null) go();
-      else this.#waiting.push({ who, typed, go, drop: () => resolve(null) });
+      if (this.#going.length < AT_ONCE) return go();
+      const waiting = { ...(typist !== undefined ? { typist } : {}), typed, go: () => (stopWait(), go()), drop: () => (stopWait(), resolve(null)) };
+      const stopWait = wall.after(TURN_MS, () => {
+        this.#waiting = this.#waiting.filter((w) => w !== waiting);
+        resolve(null);
+      });
+      this.#waiting.push(waiting);
     });
   }
 
   #next(stop: AbortController) {
-    if (this.#going?.stop !== stop) return;
-    this.#going = null;
+    const at = this.#going.findIndex((g) => g.stop === stop);
+    if (at < 0) return;
+    this.#going.splice(at, 1);
     this.#waiting.shift()?.go();
   }
 
@@ -261,7 +266,9 @@ export class FileSearch {
       asks = writer
         ? [spotlight(spotlightQuery(words, false), [home], MOST, signal), ...(said !== null ? [spotlight(said, [home], MOST_SAID, signal)] : []), spotlight(spotlightQuery(words, false), APPS, 50, signal)]
         : open(pinned).length > 0 ? [spotlight(said ?? spotlightQuery(words, false), open(pinned), MOST, signal)] : [];
-      for (const top of viaHelper) asks.push(helper!.search(top, said ?? spotlightQuery(words, false), MOST_SAID, protect).catch(() => []));
+      // (still.fail Helper's search is not stopped: a search stopped does not wait for it)
+      const stopped = new Promise<string[]>((resolve) => signal.addEventListener("abort", () => resolve([]), { once: true }));
+      for (const top of viaHelper) asks.push(Promise.race([helper!.search(top, said ?? spotlightQuery(words, false), MOST_SAID, protect).catch(() => []), stopped]));
     } else {
       const walked = await walk(writer ? [home] : pinned, words, { skip: protect, most: MOST, ms: WALK_MS, now: this.#deps.now ?? (() => wall.now()), signal });
       left = walked.left;
