@@ -221,7 +221,7 @@ fn leaf_size(
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
     let s = g().editor_display(n)
-    let tl = layout_text(s, n.font_size, n.weight, max_w, true, line=n.line_h, trim=n.line_trim)
+    let tl = layout_text(s, n.font_size, n.weight, max_w, n.wrap, line=n.line_h, trim=n.line_trim)
     (if wm == Undefined { tl.w } else { w }, tl.h)
   } else if n.kind == kind_image {
     image_leaf_size(n, w, wm, h, hm)
@@ -1065,7 +1065,7 @@ fn Ctx::moved_shift(self : Ctx, i : Int, dx : Double, dy : Double) -> Unit {
       Some(st) => {
         // The node may have been restored from a kept layout, while its Field still holds the last placement.
         // Place the words from the node, rather than accumulating that placement's shift again.
-        st.ox = n.x + n.pad_l
+        st.ox = n.x + n.pad_l - st.scroll_x
         st.oy = n.y + n.pad_t - st.scroll
       }
       None => ()
@@ -1091,7 +1091,7 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
   if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        st.ox = n.x + n.pad_l
+        st.ox = n.x + n.pad_l - st.scroll_x
         st.oy = n.y + n.pad_t - st.scroll
       }
       None => ()
@@ -1159,11 +1159,22 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
+        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, n.wrap, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
         st.tl = Some(tl)
         // taller than the field: scrolled so that the caret's line shows; a field of more lines, where it was scrolled
         // to (the wheel, a finger, its bar: Ctx::editor) until the caret or the words change
-        let (_, cl) = st.place_of(tl, st.caret + st.marked.length())
+        let (cx, cl) = st.place_of(tl, st.caret + st.marked.length())
+        if n.wrap {
+          st.scroll_x = 0.0
+        } else {
+          let room = dmax(0.0, iw - caret_w)
+          if cx < st.scroll_x {
+            st.scroll_x = cx
+          } else if cx > st.scroll_x + room {
+            st.scroll_x = cx - room
+          }
+          st.scroll_x = dmax(0.0, dmin(st.scroll_x, dmax(0.0, tl.w - room)))
+        }
         let top = cl.to_double() * tl.line_h
         let most = dmax(0.0, tl.h - ih)
         let sw = sideways.get(n.id)
@@ -1193,7 +1204,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
           }
           None => ()
         }
-        st.ox = ix
+        st.ox = ix - st.scroll_x
         st.oy = iy - st.scroll
       }
       None => ()

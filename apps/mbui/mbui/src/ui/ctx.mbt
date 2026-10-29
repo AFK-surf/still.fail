@@ -180,6 +180,8 @@ struct EditorState {
   /// to a height is, sideways.mbt; the caret's line brought into view as the caret or the words change), and the caret, the
   /// anchor and how long the words were when it was last brought there
   mut scroll : Double
+  /// A one-line field keeps its caret visible by moving its words sideways.
+  mut scroll_x : Double
   mut followed : (Int, Int, Int)
   /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
   mut pasted : String?
