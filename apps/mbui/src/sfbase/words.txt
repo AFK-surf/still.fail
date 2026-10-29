@@ -760,9 +760,11 @@ web-main.attention.untitled
 web-main.attention.waitOne
 web-main.chat.afresh
 web-main.chat.afreshBusy
+web-main.chat.agentCard.background
 web-main.chat.agentCard.cache
 web-main.chat.agentCard.context
 web-main.chat.agentCard.cost
+web-main.chat.agentCard.plan
 web-main.chat.archive
 web-main.chat.archiveFailed
 web-main.chat.archiveNamed

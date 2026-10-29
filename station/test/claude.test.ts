@@ -106,6 +106,28 @@ test("what a process runs in the background, as its task frames tell it", () => 
   assert.deepEqual(ids(), ["command:b2:build"]);
 });
 
+test("what it has going in the background is said again as it changes, each with when it was seen starting", () => {
+  const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
+  const told: unknown[] = [];
+  let now = 1_000;
+  const feed = (frame: object) => onFrame(frame, turn, (e) => void (e.type === "live" && e.event.kind === "tasks" && told.push(e.event.tasks)), () => {}, () => now);
+  feed({ type: "system", subtype: "init" });
+  feed({ type: "system", subtype: "task_started", task_id: "a1", task_type: "local_agent", description: "gaps", is_backgrounded: true });
+  now = 5_000;
+  // One the turn waits on is not in the background: nothing said of it, until it is moved there.
+  feed({ type: "system", subtype: "task_started", task_id: "b1", task_type: "local_bash", description: "build", is_backgrounded: false });
+  assert.equal(told.length, 1);
+  now = 9_000;
+  feed({ type: "system", subtype: "task_updated", task_id: "b1", patch: { is_backgrounded: true } });
+  feed({ type: "result", result: "ok" });
+  feed({ type: "system", subtype: "task_notification", task_id: "a1", status: "completed" });
+  assert.deepEqual(told, [
+    [{ id: "a1", kind: "agent", description: "gaps", startedAt: 1_000 }],
+    [{ id: "a1", kind: "agent", description: "gaps", startedAt: 1_000 }, { id: "b1", kind: "command", description: "build", startedAt: 5_000 }],
+    [{ id: "b1", kind: "command", description: "build", startedAt: 5_000 }],
+  ]);
+});
+
 test("a /compact that compacted nothing ends failed, saying why; one that did, completed", () => {
   const ended: unknown[] = [];
   const emit = (e: RuntimeEvent) => e.type === "turnEnded" && ended.push(e.outcome);

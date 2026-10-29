@@ -158,8 +158,8 @@ let hover_bare : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: its mark
-/// and label, a stop for it alone while it works; where it stands and for how long; its latest three lines; the
-/// figures that say most (UsageTiles); its account with what is left of it; the rest in a quiet line; its jobs and
+/// and label, a stop for it alone while it works; where it stands and for how long; its latest three lines; what it
+/// has going in the background and its checklist in a line (agent_work_line); the figures that say most (UsageTiles); its account with what is left of it; the rest in a quiet line; its jobs and
 /// what is wrong. What the core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
 /// What it says leads to where it is seen to: its name and its lines to its execution history (at a line's entry),
 /// its context's figure to what can be done to it, its account (and an account that cannot run) to how it runs, its
@@ -227,6 +227,12 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
     if latest.length() > 0 {
       agent_card_latest(c, latest, history)
     }
+    // what it has going in the background and its checklist, in a line: to its execution history
+    let work = c.id("agent-card/work")
+    if c.clicked(work) {
+      history(None)
+    }
+    agent_work_line(c, card, work, inset=true)
     if card is Some(Object(_)) {
       let compacts = flag(s, "canCompact")
       let entry : ContextEntry? = if compacts || flag(s, "canClear") {

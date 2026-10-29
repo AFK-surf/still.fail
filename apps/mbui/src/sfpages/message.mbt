@@ -319,15 +319,22 @@ pub fn agent_avatar(
   })
   c.bone_whole(b)
   if agent != "" {
-    let r = here_ref(here)
-    hover(c, "agent-hover/" + key, id, tile=true, fn() {
-      match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
-        Some(j) => agent_card(c, src, r, j)
-        None => ()
-      }
-    })
-    |> ignore
+    agent_hover(c, src, here, "agent-hover/" + key, id, agent)
   }
+}
+
+///|
+/// Agent `agent`'s card (AgentHover) over trigger `id` while the pointer rests on it, to a finger as it holds it
+/// (hover): over its picture and over its name beside its messages alike.
+fn agent_hover(c : @ui.Ctx, src : Source, here : MessageHere, key : String, id : Int, agent : String) -> Unit {
+  let r = here_ref(here)
+  hover(c, key, id, tile=true, fn() {
+    match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
+      Some(j) => agent_card(c, src, r, j)
+      None => ()
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -352,7 +359,8 @@ fn place_corner(c : @ui.Ctx, surface : String) -> Unit {
 
 ///|
 /// A name over its message (msgHead msgName): one of the chat's agents' (`agent`) opens its history beside the chat
-/// (chatPage.agent), another chat's agent's (`from`, its link) that chat; in the accent under the pointer then.
+/// (chatPage.agent), with its card over it as over its picture (agent_hover); another chat's agent's (`from`, its
+/// link) that chat; in the accent under the pointer then.
 fn message_name(
   c : @ui.Ctx,
   src : Source,
@@ -379,6 +387,9 @@ fn message_name(
     c.rich([@ui.span(name, underline=goes && c.hovered(id))], style=msg_name) |> ignore
   })
   |> ignore
+  if agent != "" {
+    agent_hover(c, src, here, "agent-name-hover/" + key, id, agent)
+  }
 }
 
 ///|

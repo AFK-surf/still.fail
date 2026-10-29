@@ -3,21 +3,26 @@
 // (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
 // cost and used, its account and what is left of it, its jobs, what is wrong; what its processes use of the machine now
 // (its station's 进程, Resources.tsx).
-import { createContext, memo, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
+import { createContext, memo, useContext, useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from "react";
+import { Popover } from "radix-ui";
 import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
 import type { AgentCardView } from "./core/shapes.ts";
 import { useStation, useWorkspaceId } from "./station.tsx";
 import { useResources } from "./Resources.tsx";
 import { Hover } from "./Peeks.tsx";
-import { AgentMark, Menu, Tip, type MenuItem } from "./ui.tsx";
-import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
+import { AgentMark, ICON, Menu, Tip, type MenuItem } from "./ui.tsx";
+import { ChevronRight, Stop, Wait } from "@stillfail/ui/icons.tsx";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { play } from "@stillfail/ui/motion.ts";
 import { QuotaChip } from "./components.tsx";
 import { t } from "./i18n.ts";
 import { Elapsed, Waited } from "./Chat.tsx";
+import { PlanList } from "./ToolStep.tsx";
+import { DraftKey } from "./draft.ts";
+import { chatPage } from "./chatPage.ts";
 import * as css from "./AgentCard.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 /** The agents of the chat whose messages are drawn (ChatRows). */
 export const ChatAgents = createContext<readonly ChatAgent[]>([]);
@@ -116,6 +121,8 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   const card = useAgentCard(station, s.key).value;
   const api = useApi();
   const act = useAct();
+  // (its work's line leads to its execution history, in the chat it is drawn in)
+  const chat = useContext(DraftKey);
   const working = agent.status === "running" || agent.status === "queued";
   // Its latest lines, three at most (the core's): what it did, then what it does now. Three once it has done as much,
   // so their room stays as it is while they run on (useLinesMotion).
@@ -148,6 +155,7 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           {latest.map((r) => <li key={r.key} data-line={r.key} data-now={r.now ? "" : undefined}>{r.text}</li>)}
         </ol>
       )}
+      {card && <WorkLine card={card} open={chat ? () => chatPage.history(chat, s.key) : undefined} />}
       {card && <UsageTiles card={card} />}
       {(account || quota.length > 0) && (
         <div className={css.account}>
@@ -168,6 +176,124 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           {card?.jobs && <span>{card.jobs}</span>}
           {card?.attention.map((a, i) => <span key={i} data-level={a.level}>{a.text}</span>)}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What it has going in the background past its turns and its checklist, in one line (the core's `workLine`: 后台 4 ·
+ * 清单 2/6：<the item under way>), cut at its end, in its card: it leads to its execution history (`open`). Nothing
+ * when it has neither.
+ */
+export function WorkLine({ card, open }: { card: AgentCardView; open?: (() => void) | undefined }) {
+  if (!card.workLine) return null;
+  if (!open) return <p className={css.workLine}><span className={css.workLineText}>{card.workLine}</span></p>;
+  return (
+    <button type="button" className={`${css.workLine} ${css.workLineButton}`} onClick={open}>
+      <span className={css.workLineText}>{card.workLine}</span>
+    </button>
+  );
+}
+
+/** The mark's forms, the longest first: its words, its counts alone, a mark with how many; past the last, none. */
+const MARK_FORMS = 3;
+
+/**
+ * The mark of an agent's work past its turns, at the end of its history's details' quiet line (8 轮 · 共干了 1 小时 12
+ * 分 · 后台 4 · 2/6: ChatPage.tsx SessionDetails), after its separator; pressable, in the link's ink under the pointer.
+ * It gives way first: it takes only what the line leaves once its own words are whole, in the longest form that fits
+ * (the core's `workMark`: 后台 4 · 2/6; `workMarkShort`: 4 · 2/6; a mark with `workMarkCount`: 4), else none; while
+ * something runs in the background, at work's spokes before it (styles/spokes.ts: a step every 100 ms on the one clock,
+ * none with motion reduced). Pressed,
+ * whichever is shown, all of it in a popover under it (AgentWork). Nothing when it has neither.
+ */
+export function WorkMark({ station, session }: { station: string; session: string }) {
+  const card = useAgentCard(station, session).value;
+  const wrap = useRef<HTMLSpanElement>(null);
+  const [form, setForm] = useState(0);
+  const said = `${card?.workMark}|${card?.workMarkShort}|${card?.workMarkCount}`;
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    const line = el?.parentElement;
+    if (!el || !line) return;
+    const measure = () => {
+      // what the line leaves it: its room, less its own words as wide as they are whole
+      let others = 0;
+      for (const c of Array.from(line.children)) if (c !== el) others += (c as HTMLElement).scrollWidth;
+      const room = line.clientWidth - others;
+      const widths = Array.from(el.querySelectorAll<HTMLElement>("[data-form-measure]")).map((m) => m.offsetWidth);
+      let at = 0;
+      while (at < widths.length && widths[at]! > room) at++;
+      setForm(at);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(line);
+    return () => observer.disconnect();
+  }, [said]);
+  if (!card?.workMark) return null;
+  // (while something runs in the background: at work's spokes before what it says, stepping on the one clock)
+  const running = card.tasks.length > 0;
+  const spokes = <span className={css.workSpokes} data-spokes="" aria-hidden="true" />;
+  const forms = [
+    <>{running && spokes}<span>{card.workMark}</span></>,
+    <>{running && spokes}<span>{card.workMarkShort ?? card.workMark}</span></>,
+    <>{running ? spokes : <Wait {...ICON} size={12} />}<span>{card.workMarkCount ?? card.workMarkShort ?? card.workMark}</span></>,
+  ];
+  const lead = <span className={css.workMarkLead} aria-hidden="true"> · </span>;
+  return (
+    <span ref={wrap} className={css.workMarkWrap}>
+      {/* (each form as it would stand, its separator with it, measured out of sight) */}
+      <span className={css.workMarkMeasure} aria-hidden="true">
+        {forms.map((f, i) => <span key={i} data-form-measure="">{lead}<span className={css.workMark}>{f}</span></span>)}
+      </span>
+      {form < MARK_FORMS && (
+        <>
+          {lead}
+          <Popover.Root>
+            <Popover.Trigger className={css.workMark} aria-label={card.workLine ?? card.workMark}>
+              {forms[form]}
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content className={`${controlsCss.popover} ${controlsCss.panelCard} ${css.workPop}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}>
+                <AgentWork card={card} />
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What it has going in the background past its turns (each by what it is, its kind and for how long it has run), and
+ * its checklist as it wrote it last, drawn as a plan call is in its history: all of them, in the popover of its
+ * history's mark (WorkMark).
+ */
+export function AgentWork({ card }: { card: AgentCardView }) {
+  if (card.tasks.length === 0 && card.plan.length === 0) return null;
+  return (
+    <div className={css.work}>
+      {card.tasks.length > 0 && (
+        <section className={css.workPart}>
+          <h4 className={css.workHead}>{t("web-main.chat.agentCard.background")}<span className={css.workCount}>{card.tasks.length}</span></h4>
+          <ul className={css.tasks}>
+            {card.tasks.map((task) => (
+              <li key={task.id} data-kind={task.kind}>
+                <span className={css.taskKind}>{task.kindText}</span>
+                <span className={css.taskText}>{task.text}</span>
+                <span className={css.elapsed}><Elapsed since={task.since} /></span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {card.plan.length > 0 && (
+        <section className={css.workPart}>
+          <h4 className={css.workHead}>{t("web-main.chat.agentCard.plan")}{card.planText && <span className={css.workCount}>{card.planText}</span>}</h4>
+          <div className={css.workPlan}><PlanList items={card.plan} /></div>
+        </section>
       )}
     </div>
   );

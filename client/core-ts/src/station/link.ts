@@ -74,7 +74,9 @@ export const STREAM_HELD_MS = 25_000;
 export const BRIEF_MAX_MS = 8_000;
 
 /// The steps in flight and the phase of a session at work, as its stream says them.
-export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean };
+/// `tasks` and `plan`: what it has going in the background (each with since when, on this device's clock) and its
+/// checklist, as its station last said them (none from a station from before it says them).
+export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean; tasks?: unknown[]; plan?: unknown[] };
 
 /// Why a station taken for down is not reached, as far as the device can tell: `network`, still.fail cloud is not
 /// reached either (the device's own network, most likely); `station`, the cloud says it is not online; `unreached`, the

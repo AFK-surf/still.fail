@@ -1274,6 +1274,10 @@ export class StationsSync {
         Object.assign(view, { steps: [], phase: null, rate: 0 });
       } else if (kind === "rate") {
         view.rate = u64(get(message, "tokensPerSecond")) ?? 0;
+      } else if (kind === "work") {
+        // Whole each time: how long each task has run, as since when on this device's clock.
+        view.tasks = ((get(message, "tasks") as unknown[] | undefined) ?? []).map((task) => ({ ...(task as object), since: Math.round(now - (typeof get(task, "elapsedMs") === "number" ? (get(task, "elapsedMs") as number) : 0)) }));
+        view.plan = ((get(message, "plan") as unknown[] | undefined) ?? []).slice();
       } else if (kind === "step") {
         const event = get(message, "event");
         if (event !== undefined) applyStep(view, event, now);

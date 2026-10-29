@@ -26,6 +26,10 @@ pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Json) -> Unit
 
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit
 
+pub fn agent_work(@ui.Ctx, @sfbase.Source, Json?) -> Unit
+
+pub fn agent_work_line(@ui.Ctx, Json?, Int32, inset? : Bool) -> Unit
+
 pub fn answer_invitation(@sfbase.Source, Json?, String, Bool, String, () -> Unit) -> Unit
 
 pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
@@ -416,6 +420,8 @@ pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool) -> Bool
 
 pub fn picture_share(@sfbase.Attachment, Double) -> (Double, Double)
 
+pub fn plan_list(@ui.Ctx, Array[Json]) -> Unit
+
 pub fn play_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
 pub fn policy_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
@@ -625,6 +631,8 @@ pub let video_least : Double
 pub let vt_actions : @ui.Style
 
 pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @ui.Side, show? : (() -> Unit)?) -> Unit
+
+pub fn work_mark(@ui.Ctx, @sfbase.Source, String, String, @ui.TextStyle, @ui.TextStyle, lead? : String, smallest? : Bool) -> Unit
 
 pub fn workspace_mark(@ui.Ctx, @sfbase.Workspace, Double, Int64, @ui.TextStyle, still? : Bool) -> Unit
 

@@ -123,7 +123,7 @@ fn wh_summary(c : @ui.Ctx, a : Json?) -> Unit {
 
 ///|
 /// 详情 (SessionDetails): what it has used, as its card says it (the large figures, its context's opening 管理's menu,
-/// and a quiet line; a station older than the card's figures, its history's line), then a line each: what runs it
+/// and a quiet line, the mark of its work past its turns at its end: work_mark; a station older than the card's figures, its history's line), then a line each: what runs it
 /// (ending it while it is kept warm; its account's page), the station it runs on (what runs low on it), its context,
 /// its transcript.
 fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
@@ -155,8 +155,14 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
     } else {
       @sfpages.history_usage_line(src, station, key)
     }
+    // (and after it what it has going in the background and its checklist, a mark that opens them: the first to
+    // give way, the line's own words whole till then)
     if quiet != "" {
-      c.box(style=wh_quiet_box, fn() { c.text(quiet, style=wh_quiet) |> ignore }) |> ignore
+      c.box(style=wh_quiet_line, fn() {
+        c.text(quiet, style=wh_quiet_one, keep=true) |> ignore
+        @sfpages.work_mark(c, src, station, key, wh_quiet_one, wh_quiet_link, lead=" · ")
+      })
+      |> ignore
     }
     // what runs it, and its account's page
     wh_line(
@@ -384,6 +390,21 @@ let wh_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 /// The quiet line 4 nearer what is over it (sessionQuiet: outsetTop(4)).
 // kept across runs: a value (no field of it changes)
 let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))
+
+///|
+/// The quiet line with the mark of its work past its turns after it (work_mark): one line, its words cut short only
+/// once the mark has given way.
+// kept across runs: a value (no field of it changes)
+let wh_quiet_line : @ui.Style = wh_quiet_box.then(@ui.css("row align=ACenter"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let wh_quiet_one : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
+/// What is pressed of the mark, under the pointer: a link's ink.
+// kept across runs: a value (no field of it changes)
+let wh_quiet_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=false)
 
 ///|
 /// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).

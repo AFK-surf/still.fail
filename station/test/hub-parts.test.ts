@@ -305,7 +305,7 @@ test("a session at work is followed by the station itself: told from where it en
   assert.ok(told.some((m) => m.type === "steps"));
   assert.deepEqual(lengths, [["s", 2]]);
   // As a stream that opens finds it.
-  assert.deepEqual(hub.now("s").map((m: any) => [m.type, m.start ?? null]), [["timeline", 2], ["steps", null]]);
+  assert.deepEqual(hub.now("s").map((m: any) => [m.type, m.start ?? null]), [["timeline", 2], ["steps", null], ["work", null]]);
   told.length = 0;
   // Its last entry, written as its turn ends, is told before it is told to be done (no 40 ms wait).
   appendFileSync(path, line("three", "m3"));
@@ -372,7 +372,8 @@ test("where the readers keep a session's history the live view reads none of its
   assert.deepEqual([first.type, first.start, first.entries.length], ["timeline", 1, 2]);
   assert.equal(JSON.parse(first.entries[0]!.text).description, "Step b", "in brief, once");
   assert.equal(got[1]!.type, "steps");
-  assert.deepEqual(asked, ["state", "page 3 2 true"]);
+  // Its checklist read back from the latest page, whole; then what it lacks, in brief.
+  assert.deepEqual(asked, ["state", "page 3 3 false", "page 3 2 true"]);
   // None of it kept here: only where it stands.
   const watching = (hub as any).watched.get("s");
   assert.deepEqual([watching.tail.keeps, watching.tail.length, watching.tail.entries.length], [false, 3, 0]);
@@ -407,7 +408,7 @@ test("what is said while a listener joins is told it after what it lacks", async
   assert.equal(got.length, 0);
   release();
   await settle();
-  assert.deepEqual(got.map((m) => m.type), ["timeline", "steps", "step"]);
+  assert.deepEqual(got.map((m) => m.type), ["timeline", "steps", "work", "step"]);
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["one", "two"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
@@ -933,4 +934,64 @@ test("requests disable reasoning and keep evidence out of the system prompt", ()
   assert.equal(r.max_completion_tokens, 1);
   assert.ok(!r.messages[0].content.includes("untrusted sample"));
   assert.ok(r.messages[1].content.includes("untrusted sample"));
+});
+
+const todos = (id: string, items: [string, string][]) =>
+  `${JSON.stringify({ type: "assistant", timestamp: "2026-10-29T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "TodoWrite", input: { todos: items.map(([content, status]) => ({ content, status, activeForm: content })) } }] } })}\n`;
+
+test("what a session has going in the background and its checklist are told whole as either changes, past its turns, with how long each task has run", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1") + todos("p1", [["Read", "completed"], ["Fix", "in_progress"]]));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const got: LiveMessage[] = [];
+  const work = () => got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work");
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  // As it joins: its checklist as its transcript says it, nothing in the background.
+  assert.deepEqual(work().at(-1), { type: "work", tasks: [], plan: [{ text: "Read", status: "completed" }, { text: "Fix", status: "in_progress" }] });
+  hub.event("s", { kind: "tasks", tasks: [{ id: "a1", kind: "agent", description: "gaps" }] });
+  await time.adjust(65_000);
+  hub.event("s", { kind: "tasks", tasks: [{ id: "a1", kind: "agent", description: "gaps" }, { id: "b1", kind: "command", description: "watch CI", startedAt: 60_000 }] });
+  assert.deepEqual(work().at(-1)!.tasks, [
+    { id: "a1", kind: "agent", description: "gaps", startedAt: 0, elapsedMs: 65_000 },
+    { id: "b1", kind: "command", description: "watch CI", startedAt: 60_000, elapsedMs: 5_000 },
+  ]);
+  // The turn ends: they stay.
+  hub.turnEnded("s");
+  assert.equal(hub.now("s").find((m) => m.type === "work") !== undefined, true);
+  assert.equal((hub.now("s").find((m) => m.type === "work") as any).tasks.length, 2);
+  // Its checklist written again: told.
+  const before = work().length;
+  appendFileSync(path, todos("p2", [["Read", "completed"], ["Fix", "completed"], ["Ship", "in_progress"]]));
+  watched(hub, "s");
+  await time.adjust(40);
+  await settle();
+  assert.equal(work().length, before + 1);
+  assert.deepEqual(work().at(-1)!.plan.map((p) => p.status), ["completed", "completed", "in_progress"]);
+  // Its process ended: nothing in the background.
+  hub.event("s", { kind: "tasks", tasks: [] });
+  assert.deepEqual(work().at(-1)!.tasks, []);
+  // A runtime that says its plan apart (ACP): that one is told.
+  hub.event("s", { kind: "plan", plan: [{ text: "Survey", status: "pending" }] });
+  assert.deepEqual(work().at(-1)!.plan, [{ text: "Survey", status: "pending" }]);
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session's checklist is read back from its transcript where the readers keep it, as after the station started anew", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, todos("p1", [["Old", "pending"]]) + todos("p2", [["Read", "completed"], ["Fix", "in_progress"]]) + line("after", "m3"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  hub.history = historyOf(path);
+  const got: LiveMessage[] = [];
+  // Only the latest entry asked for: the checklist is read back from before it all the same.
+  hub.subscribe("s", 0, 1, (m) => void got.push(m), true);
+  await settle();
+  const last = got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work").at(-1);
+  assert.deepEqual(last?.plan, [{ text: "Read", status: "completed" }, { text: "Fix", status: "in_progress" }]);
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
 });

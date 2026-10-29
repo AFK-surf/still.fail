@@ -2036,6 +2036,54 @@ test("an_agent_at_rest_says_what_it_used_and_what_can_be_done_to_its_context_as_
   core.close();
 });
 
+test("an_agents_card_says_what_it_has_going_in_the_background_and_its_checklist_as_its_station_tells_them", async () => {
+  const s = await ui(base());
+  const { host, core, values, read } = s;
+  core.receive(s.ui, { kind: "subscribe", id: 1, subscribe: { topic: "agentCard", station: ST, key: "k1" } });
+  await read();
+  await read();
+  const card = () => v(values, 1) as J;
+  // A station from before says neither: nothing.
+  assert.deepEqual([card().tasks, card().plan, card().planText, card().workLine], [[], [], undefined, undefined]);
+  const now = host.nowMs();
+  const task = (id: string, kind: string, description: string, elapsedMs: number) => ({ id, kind, description, startedAt: 1, elapsedMs });
+  const plan = [["Read", "completed"], ["Fix", "in_progress"], ["Test", "pending"], ["Docs", "pending"], ["Ship", "pending"]].map(([text, status]) => ({ text, status }));
+  s.push("live", { key: "k1", type: "work", tasks: [task("a1", "agent", "Survey the gaps\nmore", 90_000), task("b1", "command", "", 5_000), task("b2", "command", "watch CI", 1), task("b3", "command", "lint", 1)], plan });
+  await read();
+  await read();
+  const c = card();
+  // Each task by what it is (its description's first line, else its kind), since when on this device's clock.
+  assert.deepEqual(c.tasks.slice(0, 2).map((t: J) => [t.id, t.kind, t.text, t.kindText]), [["a1", "agent", "Survey the gaps", "子代理"], ["b1", "command", "命令", "命令"]]);
+  assert.ok(Math.abs(c.tasks[0].since - (now - 90_000)) < 1000);
+  // Its checklist whole and how much is done; all of it in one line, with the item under way.
+  assert.equal(c.plan.length, 5);
+  assert.equal(c.planText, "已完成 1/5");
+  assert.equal(c.workLine, "后台 4 · 清单 1/5：Fix");
+  assert.deepEqual([c.workMark, c.workMarkShort, c.workMarkCount], ["后台 4 · 1/5", "4 · 1/5", "4"]);
+  // Said again whole: what ended is gone; a turn ending (clear) leaves them be.
+  s.push("live", { key: "k1", type: "work", tasks: [task("b2", "command", "watch CI", 1)], plan: plan.map((p) => ({ ...p, status: "completed" })) });
+  s.push("live", { key: "k1", type: "clear" });
+  await read();
+  await read();
+  assert.deepEqual([card().tasks.map((t: J) => t.id), card().planText, card().workLine], [["b2"], "已完成 5/5", "后台 1 · 清单 5/5"]);
+  assert.equal(card().workMark, "后台 1 · 5/5");
+  // Only a checklist: its part alone; neither: no line.
+  s.push("live", { key: "k1", type: "work", tasks: [], plan });
+  await read();
+  await read();
+  assert.equal(card().workLine, "清单 1/5：Fix");
+  assert.deepEqual([card().workMark, card().workMarkCount], ["清单 1/5", "1/5"]);
+  s.push("live", { key: "k1", type: "work", tasks: [task("b2", "command", "watch CI", 1)], plan: [] });
+  await read();
+  await read();
+  assert.deepEqual([card().workLine, card().workMark], ["后台 1", "后台 1"]);
+  s.push("live", { key: "k1", type: "work", tasks: [], plan: [] });
+  await read();
+  await read();
+  assert.deepEqual([card().workLine, card().workMark], [undefined, undefined]);
+  core.close();
+});
+
 test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async () => {
   const answers: J = base();
   const s = await ui(answers);

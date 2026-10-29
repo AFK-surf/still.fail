@@ -16,6 +16,20 @@ function Lines({ rows }: { rows: [string, string][] }) {
   );
 }
 
+/**
+ * A list of things to do: done ✓ (struck), under way › (bold), the rest ·. A plan call's in the history, and an agent's
+ * checklist in its card and its history's details (AgentCard.tsx AgentWork).
+ */
+export function PlanList({ items }: { items: readonly { text: string; status: string }[] }) {
+  return (
+    <ul className={css.plan}>
+      {items.map((it, i) => (
+        <li key={i} data-status={it.status}><span className={css.planMark} aria-hidden="true">{it.status === "completed" ? "✓" : it.status === "in_progress" ? "›" : "·"}</span>{it.text}</li>
+      ))}
+    </ul>
+  );
+}
+
 /** One part, as it is drawn. */
 function Part({ part }: { part: ToolPart }): ReactNode {
   switch (part.kind) {
@@ -29,14 +43,7 @@ function Part({ part }: { part: ToolPart }): ReactNode {
     case "path": return <div className={css.path}><span>{part.path}</span>{part.extra && <span className={css.pathExtra}>{part.extra}</span>}</div>;
     case "diff": return <Lines rows={part.rows} />;
     case "markdown": return <div className={`${css.prose} ${conversationCss.markdown}`}><Prose>{part.text}</Prose></div>;
-    case "plan":
-      return (
-        <ul className={css.plan}>
-          {part.items.map((it, i) => (
-            <li key={i} data-status={it.status}><span className={css.planMark} aria-hidden="true">{it.status === "completed" ? "✓" : it.status === "in_progress" ? "›" : "·"}</span>{it.text}</li>
-          ))}
-        </ul>
-      );
+    case "plan": return <PlanList items={part.items} />;
     case "fields":
       return (
         <dl className={css.fields}>

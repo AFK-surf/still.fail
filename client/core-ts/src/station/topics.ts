@@ -405,6 +405,8 @@ export class StationTopics implements Owner {
       phase: view?.phase ?? null,
     };
     if (view?.rate !== null && view?.rate !== undefined) value.rate = view.rate;
+    if (view?.tasks) value.tasks = view.tasks;
+    if (view?.plan) value.plan = view.plan;
     if (view) value.activity = this.#sync.activity(value, this.#core.views.stationNames(ofAddress(station)));
     // Offline, what is held is all there is: it is loaded, and says why it ends there.
     if (!this.#sync.reachable(station) || !link || link.state.state !== "online") {

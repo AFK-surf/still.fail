@@ -146,10 +146,66 @@ export function cacheCold(agents: unknown, now: number, auto = false): [J, numbe
   return [{ session: cold.session, text }, next];
 }
 
+/// What it has going in the background past its turns (its live view's `tasks`, as its station says them), each with
+/// what it is in words and since when (on this device's clock): its subagents and its commands.
+export function backgroundOf(live: unknown): J[] {
+  return arr(get(live, "tasks")).flatMap((task) => {
+    const id = get(task, "id");
+    if (typeof id !== "string") return [];
+    const kind = get(task, "kind") === "agent" ? "agent" : "command";
+    const description = get(task, "description");
+    const kindText = t(kind === "agent" ? "core-views.agent.task.agent" : "core-views.agent.task.command");
+    const since = get(task, "since");
+    return [{ id, kind, text: typeof description === "string" && description.trim() !== "" ? firstLine(description) : kindText, kindText, since: typeof since === "number" ? since : 0 }];
+  });
+}
+
+/// Its checklist as it said it last (its live view's `plan`): each item's words and where it stands (completed,
+/// in_progress, else still to do).
+export function planOf(live: unknown): { text: string; status: string }[] {
+  return arr(get(live, "plan")).flatMap((item) => {
+    const text = get(item, "text");
+    const status = get(item, "status");
+    return typeof text === "string" && text !== "" ? [{ text, status: typeof status === "string" ? status : "pending" }] : [];
+  });
+}
+
+/// What its card and its history's details say of its work past its turns and its checklist: the tasks, the items,
+/// how many of them are done (已完成 2/5), and all of it in one line (`workLine`: 后台 4 · 清单 2/6：<the item under way,
+/// else the next>, each part only where it has one), what its card shows; and shorter (`workMark`: 后台 4 · 2/6), its
+/// execution history's mark, which opens all of it. Neither when it has neither.
+export function workOf(live: unknown): J {
+  const tasks = backgroundOf(live);
+  const plan = planOf(live);
+  const out: J = { tasks, plan };
+  const parts: string[] = [];
+  if (tasks.length > 0) parts.push(t("core-views.agent.going.tasks", { n: tasks.length }));
+  if (plan.length > 0) {
+    const done = plan.filter((p) => p.status === "completed").length;
+    out.planText = t("core-views.agent.plan.done", { done, n: plan.length });
+    const now = plan.find((p) => p.status === "in_progress") ?? plan.find((p) => p.status !== "completed");
+    const counted = t("core-views.agent.going.plan", { done, n: plan.length });
+    parts.push(now ? t("core-views.agent.going.planNow", { plan: counted, item: firstLine(now.text) }) : counted);
+  }
+  if (parts.length > 0) out.workLine = parts.join(" · ");
+  // Its history's mark, shorter: 后台 4 · 2/6, 后台 4, 清单 2/6; with less room, 4 · 2/6.
+  if (plan.length > 0 || tasks.length > 0) {
+    const done = plan.filter((p) => p.status === "completed").length;
+    out.workMark = tasks.length === 0 ? t("core-views.agent.going.plan", { done, n: plan.length })
+      : plan.length === 0 ? t("core-views.agent.going.tasks", { n: tasks.length })
+      : `${t("core-views.agent.going.tasks", { n: tasks.length })} · ${done}/${plan.length}`;
+    // (where its row has less room: the counts alone)
+    out.workMarkShort = [...(tasks.length > 0 ? [`${tasks.length}`] : []), ...(plan.length > 0 ? [`${done}/${plan.length}`] : [])].join(" · ");
+    // (with less still: beside an icon, how many tasks, else how much of the checklist is done)
+    out.workMarkCount = tasks.length > 0 ? `${tasks.length}` : `${done}/${plan.length}`;
+  }
+  return out;
+}
+
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live view (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
 export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>): J {
-  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [] };
+  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [], ...workOf(live) };
   const u = usageNow(get(agent, "session"), live);
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {

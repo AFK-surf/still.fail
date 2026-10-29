@@ -211,7 +211,17 @@ export class SessionActor {
   private run: (effect: Effect.Effect<void>) => Promise<void>;
   private scope: Scope.Closeable;
 
-  private agent: { generation: number; session: AgentSession } | null = null;
+  private current: { generation: number; session: AgentSession } | null = null;
+  /// Its runtime session now. What it has going in the background is told as it is taken up (one handed over still
+  /// has its own), and as none once it is let go of (it ends with its process).
+  private get agent() {
+    return this.current;
+  }
+  private set agent(agent: { generation: number; session: AgentSession } | null) {
+    const was = this.current;
+    this.current = agent;
+    if (agent?.session !== was?.session) this.deps.live?.event(this.key, { kind: "tasks", tasks: agent?.session.background?.() ?? [] });
+  }
   /// How it runs was changed and its process has not caught up: before the next turn it takes the new model and effort
   /// in place, or ends so the next one starts as changed.
   private stale = false;
