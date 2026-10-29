@@ -506,6 +506,33 @@ impl Builder {
         self
     }
 
+    /// ember: one relay transport for each relay of the relay transports given so far (`relay_mode`), each one's home its
+    /// relay: the endpoint is reachable on all of them at once, its address naming each, and a connection to it has a
+    /// path through each (multipath), so a relay going away moves the connection's packets to another and nothing on
+    /// it ends. Without it an endpoint is reachable on one relay (its home) alone, and reaching it through another
+    /// took an endpoint of its own, a connection of its own.
+    pub fn home_on_every_relay(mut self) -> Self {
+        let mut each = Vec::new();
+        self.transports.retain(|t| {
+            let TransportConfig::Relay {
+                relay_map,
+                is_user_defined,
+            } = t
+            else {
+                return true;
+            };
+            for relay in relay_map.relays::<Vec<_>>() {
+                each.push(TransportConfig::Relay {
+                    relay_map: RelayMap::from_iter([relay]),
+                    is_user_defined: *is_user_defined,
+                });
+            }
+            false
+        });
+        self.transports.extend(each);
+        self
+    }
+
     /// Removes all relay based transports.
     pub fn clear_relay_transports(mut self) -> Self {
         self.transports
@@ -2524,6 +2551,143 @@ mod tests {
             ConnectionError::ApplicationClosed(ApplicationClose { .. })
         ));
 
+        Ok(())
+    }
+
+    /// ember: home on every relay (`Builder::home_on_every_relay`): a connection between two endpoints on two relays
+    /// has a path through each, and the relay its packets go through going away moves them to the other, the
+    /// connection and its stream going on.
+    #[tokio::test]
+    #[traced_test]
+    async fn endpoint_home_on_every_relay_survives_a_relay_gone() -> Result {
+        let (map_a, url_a, relay_a) = run_relay_server().await?;
+        let (map_b, url_b, relay_b) = run_relay_server().await?;
+        let relays = RelayMap::empty();
+        relays.extend(&map_a);
+        relays.extend(&map_b);
+        let bind = |seed: u64| {
+            let relays = relays.clone();
+            async move {
+                let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+                Endpoint::builder(presets::N0)
+                    .secret_key(SecretKey::from_bytes(&rng.random()))
+                    .alpns(vec![TEST_ALPN.to_vec()])
+                    .ca_tls_config(CaTlsConfig::insecure_skip_verify())
+                    .relay_mode(RelayMode::Custom(relays))
+                    .home_on_every_relay()
+                    // A path given up once nothing came on it for 2 s, kept alive every 500 ms.
+                    .transport_config(
+                        crate::endpoint::QuicTransportConfig::builder()
+                            .default_path_keep_alive_interval(Duration::from_millis(500))
+                            .default_path_max_idle_timeout(Duration::from_secs(2))
+                            .build(),
+                    )
+                    .clear_ip_transports()
+                    .bind()
+                    .await
+            }
+        };
+        let server = bind(1).await?;
+        let client = bind(0).await?;
+        // Its address names both relays once it is home on each.
+        let addr = time::timeout(Duration::from_secs(10), async {
+            loop {
+                let addr = server.addr();
+                let urls: Vec<_> = addr.relay_urls().cloned().collect();
+                if urls.contains(&url_a) && urls.contains(&url_b) {
+                    return addr;
+                }
+                time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .anyerr()?;
+        info!(?addr, "server on both relays");
+
+        let echo = tokio::spawn(async move {
+            let conn = server.accept().await.anyerr()?.await.anyerr()?;
+            let (mut send, mut recv) = conn.accept_bi().await.anyerr()?;
+            let mut buf = [0u8; 8];
+            loop {
+                if recv.read_exact(&mut buf).await.is_err() {
+                    break;
+                }
+                send.write_all(&buf).await.anyerr()?;
+            }
+            server.close().await;
+            Ok::<_, Error>(())
+        });
+
+        let conn = client.connect(addr, TEST_ALPN).await?;
+        let (mut send, mut recv) = conn.open_bi().await.anyerr()?;
+        let mut n = 0u64;
+        let mut round = async |send: &mut crate::endpoint::SendStream,
+                               recv: &mut crate::endpoint::RecvStream|
+               -> Result<Duration> {
+            n += 1;
+            let at = time::Instant::now();
+            send.write_all(&n.to_be_bytes()).await.anyerr()?;
+            let mut buf = [0u8; 8];
+            recv.read_exact(&mut buf).await.anyerr()?;
+            assert_eq!(u64::from_be_bytes(buf), n);
+            Ok(at.elapsed())
+        };
+        round(&mut send, &mut recv).await?;
+        // A path through each relay.
+        time::timeout(Duration::from_secs(10), async {
+            loop {
+                let relayed: Vec<_> = conn
+                    .paths()
+                    .iter()
+                    .filter(|p| p.is_relay())
+                    .map(|p| p.remote_addr().clone())
+                    .collect();
+                info!(?relayed, "client's relay paths");
+                if relayed.len() >= 2 {
+                    return;
+                }
+                time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .anyerr()?;
+        for _ in 0..5 {
+            round(&mut send, &mut recv).await?;
+        }
+        // The relay the packets go through now, gone.
+        let selected = conn
+            .paths()
+            .iter()
+            .find(|p| p.is_selected())
+            .map(|p| p.remote_addr().clone())
+            .expect("a selected path");
+        info!(?selected, "taking its relay away");
+        let gone_a = selected == TransportAddr::Relay(url_a.clone());
+        let (gone, kept) = if gone_a { (relay_a, relay_b) } else { (relay_b, relay_a) };
+        gone.shutdown().await.anyerr()?;
+        let started = time::Instant::now();
+        let mut slowest = Duration::ZERO;
+        for _ in 0..20 {
+            let took = time::timeout(Duration::from_secs(30), round(&mut send, &mut recv))
+                .await
+                .anyerr()??;
+            slowest = slowest.max(took);
+            time::sleep(Duration::from_millis(100)).await;
+        }
+        info!(?slowest, total = ?started.elapsed(), "the stream went on through the other relay");
+        println!("EMBER-RESULT slowest round after the relay went: {slowest:?}");
+        assert!(slowest < Duration::from_secs(5), "{slowest:?}");
+        let now = conn
+            .paths()
+            .iter()
+            .find(|p| p.is_selected())
+            .map(|p| p.remote_addr().clone());
+        assert_ne!(now, Some(selected));
+        send.finish().anyerr()?;
+        drop(kept);
+        conn.close(0u8.into(), b"");
+        client.close().await;
+        let _ = echo.await;
         Ok(())
     }
 

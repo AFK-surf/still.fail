@@ -28,7 +28,7 @@ use std::{
 use iroh_base::{EndpointAddr, EndpointId, RelayUrl, SecretKey, TransportAddr};
 use iroh_relay::{RelayConfig, RelayMap};
 use mapped_addrs::MultipathMappedAddr;
-use n0_error::{AnyError, anyerr, bail, e, stack_error};
+use n0_error::{AnyError, anyerr, e, stack_error};
 use n0_future::{
     MaybeFuture,
     task::{self, AbortOnDropHandle},
@@ -903,11 +903,9 @@ impl EndpointInner {
             .filter(|t| matches!(t, TransportConfig::Relay { .. }))
             .collect();
 
-        // Currently we only support a single relay transport
-        if relay_transport_configs.len() > 1 {
-            bail!(BindError::InvalidTransportConfig);
-        }
-        let relay_map = relay_transport_configs
+        // ember: several relay transports (`Builder::home_on_every_relay`), each with a relay map of its own: the
+        // endpoint's is all of them (net_report probes each). One is the endpoint's own, as upstream has it.
+        let relay_maps: Vec<RelayMap> = relay_transport_configs
             .iter()
             .filter_map(|t| {
                 #[allow(irrefutable_let_patterns)]
@@ -917,8 +915,18 @@ impl EndpointInner {
                     None
                 }
             })
-            .next()
-            .unwrap_or_else(RelayMap::empty);
+            .collect();
+        let relay_map = match relay_maps.as_slice() {
+            [] => RelayMap::empty(),
+            [one] => one.clone(),
+            several => {
+                let all = RelayMap::empty();
+                for map in several {
+                    all.extend(map);
+                }
+                all
+            }
+        };
 
         let ipv6_reported = Arc::new(AtomicBool::new(false));
 
@@ -982,6 +990,7 @@ impl EndpointInner {
                 shutdown_token.child_token(),
                 path_selector,
                 span.clone(),
+                relay_maps.len() > 1,
             )
         };
 

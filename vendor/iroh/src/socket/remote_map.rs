@@ -147,6 +147,8 @@ struct Tasks {
     poll_cleanup_waker: Option<Waker>,
     /// The path selector used by all [`RemoteStateActor`]s spawned by this map.
     path_selector: Arc<dyn PathSelector>,
+    /// ember: whether the endpoint is home on several relays (`Builder::home_on_every_relay`).
+    several_relays: bool,
     /// The tracing span for this endpoint, to be used as parent span for `RemoteStateActor` tasks.
     span: Span,
 }
@@ -160,6 +162,7 @@ impl RemoteMap {
         shutdown_token: CancellationToken,
         path_selector: Arc<dyn PathSelector>,
         span: Span,
+        several_relays: bool,
     ) -> Self {
         Self {
             mapped_addrs: Default::default(),
@@ -172,6 +175,7 @@ impl RemoteMap {
                 tasks: Default::default(),
                 poll_cleanup_waker: None,
                 path_selector,
+                several_relays,
                 span,
             },
         }
@@ -335,6 +339,7 @@ impl Tasks {
             self.metrics.clone(),
             self.address_lookup.clone(),
             self.path_selector.clone(),
+            self.several_relays,
         )
         .start(
             initial_msgs,
@@ -402,6 +407,7 @@ mod tests {
             shutdown_token.clone(),
             Arc::new(BiasedRttPathSelector::default()),
             Span::none(),
+            false,
         );
         let guards = (watchable, shutdown_token.clone().drop_guard());
         (remote_map, shutdown_token, guards)

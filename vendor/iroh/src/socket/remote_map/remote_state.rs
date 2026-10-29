@@ -176,10 +176,17 @@ struct State {
     /// only with QUIC's next retransmit (1 s, then 3 s, after the first). A copy the remote has had already is a
     /// duplicate packet, which it drops.
     unanswered: Option<(Box<TransportsSender>, Vec<OwnedTransmit>)>,
+    /// ember: whether the endpoint is home on several relays (`Builder::home_on_every_relay`).
+    several_relays: bool,
+    /// ember: when the relay paths missing are opened again (`RemoteStateActor::reopen_relay_paths`).
+    relay_reopen_at: Option<Instant>,
 }
 
 /// ember: how many of the last datagrams sent before a path was selected are kept for [`State::unanswered`].
 const UNANSWERED_KEPT: usize = 4;
+
+/// ember: how long after a relay's path is given up it is opened again (`reopen_relay_paths`).
+const RELAY_REOPEN: Duration = Duration::from_secs(2);
 
 impl RemoteStateActor {
     #[allow(clippy::too_many_arguments)]
@@ -191,6 +198,7 @@ impl RemoteStateActor {
         metrics: Arc<SocketMetrics>,
         address_lookup: AddressLookupServices,
         path_selector: Arc<dyn PathSelector>,
+        several_relays: bool,
     ) -> Self {
         Self {
             connections: FxHashMap::default(),
@@ -213,6 +221,8 @@ impl RemoteStateActor {
                 address_lookup_stream: None,
                 path_selector,
                 unanswered: None,
+                several_relays,
+                relay_reopen_at: None,
             },
         }
     }
@@ -275,6 +285,11 @@ impl RemoteStateActor {
                 None => MaybeFuture::None,
             };
             n0_future::pin!(scheduled_hp);
+            let relay_reopen = match self.state.relay_reopen_at {
+                Some(when) => MaybeFuture::Some(time::sleep_until(when)),
+                None => MaybeFuture::None,
+            };
+            n0_future::pin!(relay_reopen);
             if !self.is_idle(&inbox) {
                 idle_timeout
                     .as_mut()
@@ -328,6 +343,10 @@ impl RemoteStateActor {
                 }
                 Some(item) = maybe_next(self.state.address_lookup_stream.as_mut()), if self.state.address_lookup_stream.is_some() => {
                     self.state.handle_address_lookup_item(item).await;
+                }
+                _ = &mut relay_reopen => {
+                    self.state.relay_reopen_at = None;
+                    self.reopen_relay_paths();
                 }
                 _ = check_connections.tick() => {
                     self.check_connections();
@@ -437,10 +456,10 @@ impl RemoteStateActor {
                 .state
                 .register_and_configure_path(conn_id, conn_state, &path);
 
-            if let Some(path_remote) = path_remote
-                && !path_remote.is_relay()
-                && conn.side().is_client()
-            {
+            // ember: a path through every relay the remote is on, the first one a relay's too: an endpoint home on
+            // every relay (`Builder::home_on_every_relay`) is reached through any, and the connection goes on through
+            // another as one goes away. Upstream opened them only beside a first path over IP.
+            if path_remote.is_some() && conn.side().is_client() {
                 // We may have raced this with a relay address.  Try and add any
                 // relay addresses we have back.
                 let relays = self
@@ -637,6 +656,10 @@ impl RemoteStateActor {
 
                 // If the remote closed our selected path, select a new one.
                 self.select_path();
+                // ember: a relay's path, tried again a moment later (`reopen_relay_paths`).
+                if network_path.is_relay() && self.state.several_relays {
+                    self.state.relay_reopen_at = Some(Instant::now() + RELAY_REOPEN);
+                }
             }
             NoqPathEvent::Discarded { id, path_stats, .. } => {
                 trace!(%id, ?path_stats, "path discarded");
@@ -746,6 +769,28 @@ impl RemoteStateActor {
 
             // Record the new selected path in the path watcher.
             conn_state.path_state.record_selected(&selected);
+        }
+    }
+
+    /// ember: a path through each relay the remote is on, on every connection that has none through it (its relay
+    /// gone a while, back now perhaps): tried again after RELAY_REOPEN while one is missing.
+    fn reopen_relay_paths(&mut self) {
+        let relays: Vec<_> = self
+            .state
+            .paths
+            .addrs()
+            .filter(|addr| addr.is_relay())
+            .map(|addr| transports::FourTuple::from_remote(addr.clone()))
+            .collect();
+        for addr in &relays {
+            self.open_path_on_all_conns(addr);
+        }
+        let missing = self.connections.values().any(|c| {
+            c.handle.upgrade().is_some_and(|conn| conn.side().is_client())
+                && relays.iter().any(|r| !c.paths.values().any(|p| p == r))
+        });
+        if missing {
+            self.state.relay_reopen_at = Some(Instant::now() + RELAY_REOPEN);
         }
     }
 
@@ -1047,7 +1092,12 @@ impl State {
             %network_path,
         );
         conn_state.add_open_path(network_path.clone(), path.id(), &self.metrics);
+        // ember: not on several relays: a relay path is given up as any other then (the connection's
+        // `default_path_max_idle_timeout`), its packets going on through another relay meanwhile, and opened again
+        // once its relay is back (`reopen_relay_paths`). Waiting out a relay's reconnection held the connection on a
+        // relay that was gone for 30 s.
         if network_path.is_relay()
+            && !self.several_relays
             && let Err(e) = path.set_max_idle_timeout(Some(RELAY_PATH_MAX_IDLE_TIMEOUT))
         {
             debug!(?e, "failed to set relay path idle timeout");

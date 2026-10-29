@@ -1019,6 +1019,14 @@ impl RelayActor {
         // ActiveRelayActor.  We can not process further datagrams during this time.
         let mut datagram_send_fut = std::pin::pin!(MaybeFuture::None);
 
+        // ember: home on its one relay at once, not after net_report's first report.
+        if let Some(url) = self.only_relay() {
+            self.config
+                .my_relay
+                .set(url.clone(), RelayConnectionState::Connecting);
+            self.set_home_relay(url).await;
+        }
+
         loop {
             tokio::select! {
                 biased;
@@ -1121,15 +1129,23 @@ impl RelayActor {
         }
     }
 
+    /// ember: the relay a transport of a single relay is home on, whatever net_report finds best of all of them
+    /// (`Builder::home_on_every_relay`: each relay's transport is home on its own).
+    fn only_relay(&self) -> Option<RelayUrl> {
+        let mut urls = self.config.relay_map.urls::<Vec<RelayUrl>>();
+        if urls.len() == 1 { urls.pop() } else { None }
+    }
+
     async fn on_network_change(&mut self, report: Report) {
         let prev = self.config.my_relay.get();
         let prev_url = prev.as_ref().map(RelayStatus::url);
-        if report.preferred_relay.as_ref() == prev_url {
+        let preferred = self.only_relay().or(report.preferred_relay);
+        if preferred.as_ref() == prev_url {
             // No change.
             return;
         }
 
-        if let Some(relay_url) = report.preferred_relay {
+        if let Some(relay_url) = preferred {
             self.config.metrics.relay_home_change.inc();
 
             // On change, notify all currently connected relay servers and
