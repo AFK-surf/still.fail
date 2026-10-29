@@ -297,6 +297,19 @@ fn rich_same(a : Rich?, b : Rich?) -> Bool {
 }
 
 ///|
+/// A side's inset as flex_tree sets it: a layer's from its parent's top left (`layer`); one put where it is said, from
+/// the edges said, on whole pixels too where they are; NaN where none.
+fn Ctx::inset_of(self : Ctx, v : Double, layer : Double, over : Bool, at : Bool, whole : Bool) -> Double {
+  if over {
+    layer
+  } else if at && !v.is_nan() {
+    self.on_px(v, whole)
+  } else {
+    0.0 / 0.0
+  }
+}
+
+///|
 /// The flex node for node `i` (laid out in direction `pdir`: 0 none, 1
 /// row, 2 column) and its subtree,
 /// styled from the builder's sizes: Fill along the parent's direction
@@ -323,7 +336,6 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let s = f.style
   // (each length said in points on whole device pixels where the host sets things on them: whole_px_layout)
   let whole = self.whole_px
-  let len = fn(v : Double) { self.on_px(v, whole) }
   let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
   // A slot may have held another kind of leaf: an image also writes lk_text, but does not replace the text's
   // layout. Its words matching those of the next text must not keep the layout of the text before that image.
@@ -346,50 +358,50 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.direction = dir
     ch = true
   }
-  let pad_l = len(n.pad_l)
+  let pad_l = self.on_px(n.pad_l, whole)
   if pt_differs(s.padding_left_kind(), s.padding_left_value(), pad_l) {
     s.set_padding_left(Pt(pad_l))
     ch = true
   }
-  let pad_t = len(n.pad_t)
+  let pad_t = self.on_px(n.pad_t, whole)
   if pt_differs(s.padding_top_kind(), s.padding_top_value(), pad_t) {
     s.set_padding_top(Pt(pad_t))
     ch = true
   }
-  let pad_r = len(n.pad_r)
+  let pad_r = self.on_px(n.pad_r, whole)
   if pt_differs(s.padding_right_kind(), s.padding_right_value(), pad_r) {
     s.set_padding_right(Pt(pad_r))
     ch = true
   }
-  let pad_b = len(n.pad_b)
+  let pad_b = self.on_px(n.pad_b, whole)
   if pt_differs(s.padding_bottom_kind(), s.padding_bottom_value(), pad_b) {
     s.set_padding_bottom(Pt(pad_b))
     ch = true
   }
   // margins (CSS's: below 0 too)
-  let mar_l = len(n.mar_l)
+  let mar_l = self.on_px(n.mar_l, whole)
   if pt_differs(s.margin_left_kind(), s.margin_left_value(), mar_l) {
     s.set_margin_left(Pt(mar_l))
     ch = true
   }
-  let mar_t = len(n.mar_t)
+  let mar_t = self.on_px(n.mar_t, whole)
   if pt_differs(s.margin_top_kind(), s.margin_top_value(), mar_t) {
     s.set_margin_top(Pt(mar_t))
     ch = true
   }
-  let mar_r = len(n.mar_r)
+  let mar_r = self.on_px(n.mar_r, whole)
   if pt_differs(s.margin_right_kind(), s.margin_right_value(), mar_r) {
     s.set_margin_right(Pt(mar_r))
     ch = true
   }
-  let mar_b = len(n.mar_b)
+  let mar_b = self.on_px(n.mar_b, whole)
   if pt_differs(s.margin_bottom_kind(), s.margin_bottom_value(), mar_b) {
     s.set_margin_bottom(Pt(mar_b))
     ch = true
   }
-  let gap = len(n.gap)
+  let gap = self.on_px(n.gap, whole)
   // (a row in lines: `line_gap` between its lines where said)
-  let lines = if n.flow && n.line_gap >= 0.0 { len(n.line_gap) } else { gap }
+  let lines = if n.flow && n.line_gap >= 0.0 { self.on_px(n.line_gap, whole) } else { gap }
   if pt_differs(s.gap_col_kind(), s.gap_col_value(), gap) || pt_differs(s.gap_row_kind(), s.gap_row_value(), lines) {
     s.set_gap_row(Pt(lines))
     s.set_gap_col(Pt(gap))
@@ -427,19 +439,19 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   // 0 and 1e9: none (Auto)
   let has_min_h = n.min_h > 0.0
-  let min_h = len(n.min_h)
+  let min_h = self.on_px(n.min_h, whole)
   if opt_differs(s.min_height_kind(), s.min_height_value(), has_min_h, min_h) {
     s.set_min_height(if has_min_h { Pt(min_h) } else { Auto })
     ch = true
   }
   let has_max_h = n.max_h < 1.0e9
-  let max_h = len(n.max_h)
+  let max_h = self.on_px(n.max_h, whole)
   if opt_differs(s.max_height_kind(), s.max_height_value(), has_max_h, max_h) {
     s.set_max_height(if has_max_h { Pt(max_h) } else { Auto })
     ch = true
   }
   let has_max_w = n.max_w < 1.0e9
-  let max_w = len(n.max_w)
+  let max_w = self.on_px(n.max_w, whole)
   // (words on one line in a column, and what is said to be cut short there: never wider than the column, cut with an
   // ellipsis where it is narrower, whatever the column's alignment; as CSS's block with its overflow hidden. A max said
   // as well is that where the column has the room and the column's where it has less, CSS's min(100%, 560px): a card
@@ -587,7 +599,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   } else {
-    let w = len(wpx)
+    let w = self.on_px(wpx, whole)
     if opt_differs(s.width_kind(), s.width_value(), has_w, w) {
       s.set_width(if has_w { Pt(w) } else { Auto })
       ch = true
@@ -604,7 +616,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   } else {
-    let h = len(hpx)
+    let h = self.on_px(hpx, whole)
     if opt_differs(s.height_kind(), s.height_value(), has_h, h) {
       s.set_height(if has_h { Pt(h) } else { Auto })
       ch = true
@@ -616,31 +628,22 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   // a layer from its parent's top left; one put where it is said, from the edges said (len: on whole pixels too)
-  let inset = fn(v : Double, layer : Double) -> Double {
-    if over {
-      layer
-    } else if at && !v.is_nan() {
-      len(v)
-    } else {
-      0.0 / 0.0
-    }
-  }
-  let in_l = inset(n.at_l, 0.0)
+  let in_l = self.inset_of(n.at_l, 0.0, over, at, whole)
   if opt_differs(s.inset_left_kind(), s.inset_left_value(), !in_l.is_nan(), in_l) {
     s.set_inset_left(if in_l.is_nan() { Auto } else { Pt(in_l) })
     ch = true
   }
-  let in_t = inset(n.at_t, 0.0)
+  let in_t = self.inset_of(n.at_t, 0.0, over, at, whole)
   if opt_differs(s.inset_top_kind(), s.inset_top_value(), !in_t.is_nan(), in_t) {
     s.set_inset_top(if in_t.is_nan() { Auto } else { Pt(in_t) })
     ch = true
   }
-  let in_r = inset(n.at_r, 0.0 / 0.0)
+  let in_r = self.inset_of(n.at_r, 0.0 / 0.0, over, at, whole)
   if opt_differs(s.inset_right_kind(), s.inset_right_value(), !in_r.is_nan(), in_r) {
     s.set_inset_right(if in_r.is_nan() { Auto } else { Pt(in_r) })
     ch = true
   }
-  let in_b = inset(n.at_b, 0.0 / 0.0)
+  let in_b = self.inset_of(n.at_b, 0.0 / 0.0, over, at, whole)
   if opt_differs(s.inset_bottom_kind(), s.inset_bottom_value(), !in_b.is_nan(), in_b) {
     s.set_inset_bottom(if in_b.is_nan() { Auto } else { Pt(in_b) })
     ch = true
@@ -814,7 +817,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // `sideways`) takes what it is given, what it holds squeezed in it where that is too little (Tester::squeeze_faults)
   let mut least = match n.w {
     // (giving way down to a least said below it: that)
-    Px(p) => if n.min_w > 0.0 && n.min_w < p { 0.0 } else { len(p) }
+    Px(p) => if n.min_w > 0.0 && n.min_w < p { 0.0 } else { self.on_px(p, whole) }
     Pct(_) | Cut => 0.0
     // (one said to keep what it holds: never less than that needs, the rest of its row squeezed first)
     Fill(_) if !(n.keep && k == kind_box) => 0.0
@@ -841,13 +844,13 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         0.0
       }
   }
-  let said_min = len(n.min_w)
+  let said_min = self.on_px(n.min_w, whole)
   // (a least that gives way to the parent's room is not what it needs: how much room that is, the layout knows)
   if n.min_w > 0.0 && !n.min_w_within {
     least = dmax(least, said_min)
   }
   if n.max_w < 1.0e9 {
-    least = dmin(least, len(n.max_w))
+    least = dmin(least, self.on_px(n.max_w, whole))
   }
   n.least = least
   // what its row's fit (Ctx::box drop) keeps of it before a part of the row leaves: words cut short four of their size
@@ -870,7 +873,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     fit_least = dmax(fit_least, said_min)
   }
   if n.max_w < 1.0e9 {
-    fit_least = dmin(fit_least, len(n.max_w))
+    fit_least = dmin(fit_least, self.on_px(n.max_w, whole))
   }
   fit_least = dmax(fit_least, least)
   n.fit_least = fit_least
