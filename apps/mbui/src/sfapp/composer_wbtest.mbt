@@ -549,7 +549,7 @@ test "the list keeps clear the room the composer takes in the very frame it grow
 }
 
 ///|
-test "at its end, rows that come: the core told the end is not in view while the list glides to them, then that it is" {
+test "at its end, a row that comes at it: the core told the end is not in view while the list glides to it, then that it is" {
   reset()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
@@ -580,10 +580,24 @@ test "at its end, rows that come: the core told the end is not in view while the
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_eq(ends, [true])
+  // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
+  said_by_ana(171, "我也来看看")
+  clock.val = clock.val + fix_said_ms
+  t.draw()
+  assert_true(t.find("我也来看看") is Some(_))
+  let rest = t.rest_of("a list")
+  if rest > t.time() && rest < @double.infinity {
+    t.run_for(rest - t.time())
+  }
+  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes and the list
+  // glides to it, end:true once it is there; at its end as it rests
+  assert_true(ends.contains(false))
+  assert_eq(ends[ends.length() - 1], true)
+  // words sent, then the agent's answer (in over the agent's line, what is at the end: the list at its end at once, the
+  // rows over it going up for it): at its end again as it rests
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
-  // its row, then the agent's answer: each comes at the end, the list gliding to it (list_to_end, the frame it comes)
   clock.val = clock.val + fix_deliver_ms
   t.draw()
   // (the station answers fix_answer_ms later: that time passes on the page too)
@@ -596,9 +610,6 @@ test "at its end, rows that come: the core told the end is not in view while the
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
-  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as they come and the list
-  // glides to them, end:true once it is there; at its end as it rests
-  assert_true(ends.contains(false))
   assert_eq(ends[ends.length() - 1], true)
   let mut k = 1
   while k < told.length() {

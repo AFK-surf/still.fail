@@ -2710,6 +2710,8 @@ pub(all) struct Reading {
   came : Map[String, (Int32, String)]
   mut came_n : Int32
   makes_way : Map[String, String]
+  mut over : String
+  mut over_frame : Int32
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
   mut list_read : @ui.ListReader?

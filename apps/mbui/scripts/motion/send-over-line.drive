@@ -1,0 +1,14 @@
+# Words sent in the made-up chat while its agent is at work: the second words fly up past its activity's line.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 400
+type 看一下列表的高度
+wait 400
+tap icon:arrow-up
+wait 1100
+type 顺便看看深色模式下面的图标是不是也要一起换掉，还有按钮和输入框的颜色也一起对一下
+wait 300
+tap icon:arrow-up
+wait 2500

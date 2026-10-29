@@ -61,10 +61,13 @@ test "29-glass" {
     if turns > f.t.time() && turns < @double.infinity {
       f.run_to(turns)
     }
-    // (the list come to its end after them)
-    let glide = f.t.rest_of("a list gliding")
-    if glide > f.t.time() && glide < @double.infinity {
-      f.run_to(glide)
+    // (the list come to its end after them: gliding to what came at it, the rows over what came in over its end going
+    // up for it)
+    for moves in ["a list gliding", "Anim \"layout "] {
+      let rest = f.t.rest_of(moves)
+      if rest > f.t.time() && rest < @double.infinity {
+        f.run_to(rest)
+      }
     }
     // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
     // room under the list, the words' lines)

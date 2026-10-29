@@ -1,6 +1,7 @@
-// What makes way in a chat's list (an agent's line, what was sent not in the chat yet) glides down when a row comes in
-// over it, for that cause (sfpages chat_list makes_way, row_keys's came): not for the page before coming in above, not
-// for words sent flying in, not for a message out of its own avatar.
+// What makes way in a chat's list (an agent's line, what was sent not in the chat yet) moves where it shows only for a
+// row that came in over it, that cause (sfpages chat_list makes_way, row_keys's came): not for the page before coming
+// in above, not for words sent flying in, not for a message out of its own avatar. Followed at its end, what is at the
+// end stays where it shows and the rows over the one that came go up for it (row_keys's over), never down and back.
 
 ///|
 /// Someone says `words` in the fixture's chat a moment from now (said while it shows: new to the list).
@@ -17,7 +18,7 @@ fn said_by_ana(seq : Int, words : String) -> Unit {
 let fix_said_ms : Double = 1.0
 
 ///|
-test "an agent's line pushed down by a message said over it glides there, drawn from where it was" {
+test "followed at its end, a message said over the agent's line: the line stays where it shows, nothing goes down and back" {
   let t = linger_core()
   let working = tr("android-chat.chat.working")
   // its line in at the chat's end, the list there
@@ -29,17 +30,22 @@ test "an agent's line pushed down by a message said over it glides there, drawn 
     t.run_for(rest - t.time())
   }
   let (_, y0) = t.drawn_of(working).unwrap()
-  // someone says something: it comes in over the line, which is pushed down by it
+  // someone says something: it comes in over the line
   let words = "我也看看这个"
-  said_by_ana(160, words)
+  said_by_ana(170, words)
   let mut n = 0
   while t.drawn_of(words) is None && n < 120 {
     t.frame()
     n += 1
   }
-  guard t.drawn_of(words) is Some((_, wy)) else { fail("「\{words}」 never came in") }
-  let (_, y1) = t.drawn_of(working).unwrap()
-  // the frame it comes: the line still drawn where it was (laid out under the message, on its way there), not put
-  // there at once
-  assert_true((y1 - y0).abs() < 4.0 && y1 < wy + 20.0, msg="the line at \{y1}, from \{y0}; the message at \{wy}")
+  guard t.drawn_of(words) is Some(_) else { fail("「\{words}」 never came in") }
+  // every frame from then on: the line where it showed
+  let end = t.time() + 800.0
+  while t.time() < end {
+    let (_, y) = t.drawn_of(working).unwrap()
+    assert_true((y - y0).abs() < 1.0, msg="at \{t.time()} the line at \{y}, from \{y0}")
+    t.frame()
+  }
+  guard t.drawn_of(words) is Some((_, wy)) else { fail("「\{words}」 gone") }
+  assert_true(wy < y0, msg="the message at \{wy}, the line at \{y0}")
 }

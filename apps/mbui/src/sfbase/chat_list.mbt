@@ -113,6 +113,10 @@ pub(all) struct Reading {
   /// what a row that makes way (an agent's line, what was sent not in the chat yet) last saw come in over it, as last
   /// built ("" nothing): its cause to glide down (sfpages chat_list)
   makes_way : Map[String, String]
+  /// the newest row that came in over rows at its end while it was followed (what is at the end stays where it shows,
+  /// the rows over it go up for it: sfpages chat_list), and the frame it came in ("" and -10: none yet)
+  mut over : String
+  mut over_frame : Int
   /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
@@ -227,6 +231,8 @@ pub fn reading_of(key : String) -> Reading {
         came: {},
         came_n: 0,
         makes_way: {},
+        over: "",
+        over_frame: -10,
         admitted: {},
         rises: {},
         list_read: None,
@@ -1027,6 +1033,9 @@ pub fn row_keys(
     }
   }
   if rd.drawn && following {
+    // (what came now, and the last row that was there before it: the end it comes in over, if under it)
+    let mut came_last = -1
+    let mut was_last = -1
     for i, e in list {
       let caught = match e {
         Said(m) => !m.said
@@ -1051,6 +1060,7 @@ pub fn row_keys(
           Some(a) => {
             rd.came_n += 1
             rd.came[keys[i]] = (rd.came_n, a)
+            came_last = i
           }
           None => ()
         }
@@ -1058,7 +1068,13 @@ pub fn row_keys(
         if rd.floor > 0.0 {
           rd.floor_takers[keys[i]] = 0.0
         }
+      } else if !(e is (Top | Foot)) {
+        was_last = i
       }
+    }
+    if came_last >= 0 && was_last > came_last {
+      rd.over = keys[came_last]
+      rd.over_frame = c.frame_number()
     }
   }
   // what each row that makes way saw come in over it last: the newest of the rows over it that came, by whose avatar
@@ -1386,7 +1402,8 @@ pub fn list_frame(
   }
   // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
   // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
-  let glides = rd.came_frame == c.frame_number()
+  // (not what came in over rows at its end: there at once, the rows over it going up for it, sfpages chat_list)
+  let glides = rd.came_frame == c.frame_number() && rd.over_frame != c.frame_number()
   // (the same keys as the last frame's, the same names: the motion goes over none of them)
   if !physical_equal(rd.motion_of, keys) || rd.motion_list != key {
     rd.motion_of = keys
