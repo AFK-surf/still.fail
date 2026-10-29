@@ -1,14 +1,18 @@
 // Files between sessions on different stations of the workspace: an agent reading a chat there (chat_read) gets its
 // attachments here, and one writing to a session there (session_send) takes its files along. Both go over the station
-// transport in chunks, as task files do (jobs/remote.ts), with no more trust than the chats' pages need: a chat's
-// attachments are what any member of the workspace sees on its page.
+// transport, each whole after one request or answer (to and from a station from before, in chunks), as task files do
+// (jobs/remote.ts), with no more trust than the chats' pages need: a chat's attachments are what any member of the
+// workspace sees on its page.
 import { randomUUID } from "node:crypto";
 import { closeSync, constants, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { open, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { anyBaseName, clean, samePath } from "../ops/paths.ts";
 import { iso } from "../read/transcript.ts";
 import type { Attachment } from "../store/store.ts";
 import { CHUNK, hash } from "../jobs/remote.ts";
+import { NoBytes, bytesOf, withBytes } from "../mesh/bus.ts";
+import { fileBytes, writeBytes } from "../mesh/files.ts";
 import { withLock, workspaceFile } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import type { Hub } from "./hub.ts";
@@ -51,9 +55,9 @@ function attachment(name: string, path: string, size: number): Attachment {
 
 // ── a chat's attachments, read from another station ──────────────────────────────────────────────────────────────
 
-/// What another station's session reads of a chat's attachment here (`fetchAttachments` there): a chunk of a file in
-/// the uploads of one of its sessions, the files its page shows (GET /sessions/:key/files), maybe packed with its
-/// archived workspace. `ws`: the workspace it was asked in, whose chats it reads (null: any, as xshare/index.ts checked).
+/// What another station's session reads of a chat's attachment here (`fetchAttachments` there): a file in the uploads of one of its sessions, the files its page shows (GET /sessions/:key/files), maybe packed with its
+/// archived workspace, all of it from `offset` after the answer (`whole`; a station from before asks for a chunk at a
+/// time). `ws`: the workspace it was asked in, whose chats it reads (null: any, as xshare/index.ts checked).
 export async function fileForPeer(hub: Hub, request: Json, ws: string | null = null): Promise<Json> {
   const chat = typeof request?.chat === "string" ? request.chat : "";
   const given = typeof request?.path === "string" ? request.path : "";
@@ -71,6 +75,7 @@ export async function fileForPeer(hub: Hub, request: Json, ws: string | null = n
       const stat = fstatSync(fd);
       if (!stat.isFile()) throw new Error(`${given} is not a file of that chat`);
       if (offset > stat.size) throw new Error("offset past end");
+      if (request?.whole === true) return withBytes({ size: stat.size }, fileBytes(path, offset, stat.size));
       const buffer = Buffer.alloc(CHUNK);
       const n = readSync(fd, buffer, 0, CHUNK, offset);
       return { data: buffer.subarray(0, n).toString("base64"), size: stat.size, eof: offset + n >= stat.size };
@@ -96,6 +101,7 @@ export async function fileForPeer(hub: Hub, request: Json, ws: string | null = n
   try {
     const size = fstatSync(fd).size;
     if (offset > size) throw new Error("offset past end");
+    if (request?.whole === true) return withBytes({ size }, fileBytes(kept, offset, size));
     const buffer = Buffer.alloc(CHUNK);
     const n = readSync(fd, buffer, 0, CHUNK, offset);
     return { data: buffer.subarray(0, n).toString("base64"), size, eof: offset + n >= size };
@@ -158,28 +164,34 @@ export async function fetchAttachments(hub: Hub, key: string, call: Call, statio
 /// Why a file did not come: a station from before files are read takes the request for a task.
 const why = (error: unknown) => (error instanceof Refused && fromBefore((error as Error).message) ? "that station is not updated yet to give files" : (error as Error).message);
 
-/// One file of a chat there into `local`, which appears only once all of it came.
+/// One file of a chat there into `local`, which appears only once all of it came: whole after one answer (a station from
+/// before answers a chunk, and is asked for each).
 async function download(call: Call, station: string, chat: string, path: string, local: string): Promise<void> {
   mkdirSync(dirname(local), { recursive: true });
   const part = `${local}.part-${randomUUID().slice(0, 8)}`;
-  const fd = openSync(part, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o644);
+  const file = await open(part, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o644);
   try {
     let offset = 0;
     for (;;) {
-      const got = await call(station, { method: FILE, chat, path, offset });
+      const got = await call(station, { method: FILE, chat, path, offset, whole: true });
+      const bytes = bytesOf(got);
+      if (bytes !== null) {
+        const size = typeof got?.size === "number" ? got.size : 0;
+        offset += await writeBytes(file, bytes, offset, size);
+        if (offset !== size) throw new Error("the file stopped coming");
+        break;
+      }
       const data = Buffer.from(typeof got?.data === "string" ? got.data : "", "base64");
-      for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at, offset + at);
+      for (let at = 0; at < data.length; ) at += (await file.write(data, at, data.length - at, offset + at)).bytesWritten;
       offset += data.length;
       if (got?.eof === true) break;
       if (data.length === 0) throw new Error("the file stopped coming");
     }
-    closeSync(fd);
-    renameSync(part, local);
+    await file.close();
+    await rename(part, local);
   } catch (error) {
-    try {
-      closeSync(fd);
-    } catch {}
-    rmSync(part, { force: true });
+    await file.close().catch(() => {});
+    await rm(part, { force: true });
     throw error;
   }
 }
@@ -205,12 +217,24 @@ export function sendable(hub: Hub, key: string, given: string[]): { path: string
   });
 }
 
-/// Sends `files` ahead of a message from session `key` to session `to` on station `station`: what the message names
-/// them by.
+/// Sends `files` ahead of a message from session `key` to session `to` on station `station`, each whole after one
+/// request (to a station from before, in chunks): what the message names them by.
 export async function sendAlong(call: Call, station: string, key: string, to: string, files: { path: string; name: string }[]): Promise<{ id: string; name: string }[]> {
   const sent: { id: string; name: string }[] = [];
+  let after = true;
   for (const file of files) {
     const id = randomUUID();
+    if (after) {
+      try {
+        const size = statSync(file.path).size;
+        await call(station, withBytes({ method: PUT, session: key, to, id, name: file.name, size }, fileBytes(file.path, 0, size)));
+        sent.push({ id, name: file.name });
+        continue;
+      } catch (error) {
+        if (!(error instanceof NoBytes)) throw error;
+        after = false;
+      }
+    }
     const fd = openSync(file.path, constants.O_RDONLY);
     try {
       const size = fstatSync(fd).size;
@@ -234,12 +258,31 @@ export async function sendAlong(call: Call, station: string, key: string, to: st
 const stagedDir = (hub: Hub) => join(hub.config().dataDir, "remote", "staged");
 const staged = (hub: Hub, peer: string, from: string, id: string) => join(stagedDir(hub), hash([peer, from, id]));
 
-/// A chunk of a file another station's session sends along with a message to a session here (`sendAlong` there), in
-/// workspace `ws` (null: any, as xshare/index.ts checked).
-export function putForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
+/// A file another station's session sends along with a message to a session here (`sendAlong` there), in workspace
+/// `ws` (null: any, as xshare/index.ts checked): whole after the request, or (from a station from before) a chunk of it.
+export async function putForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Promise<Json> {
   const from = typeof request?.session === "string" ? request.session : "";
   const to = typeof request?.to === "string" ? request.to : "";
   const id = typeof request?.id === "string" ? request.id : "";
+  const incoming = bytesOf(request);
+  if (incoming !== null) {
+    const size = typeof request?.size === "number" && Number.isSafeInteger(request.size) && request.size >= 0 ? request.size : null;
+    if (from === "" || id === "" || id.length > 64 || size === null) throw new Error("a file needs session, id and size");
+    if (size > MAX_SENT) throw new Error("too large (over 50 MB)");
+    if (hub.store.getSession(to) === null || !reachable(hub, to, ws, true)) throw new Error(`no session ${to} on this station (it may have been deleted)`);
+    const dir = stagedDir(hub);
+    mkdirSync(dir, { recursive: true });
+    sweep(hub, dir);
+    const path = staged(hub, peer, from, id);
+    const file = await open(`${path}.part`, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o644);
+    try {
+      if ((await writeBytes(file, incoming, 0, size)) !== size) throw new Error("the file did not all come");
+    } finally {
+      await file.close();
+    }
+    await rename(`${path}.part`, path);
+    return { bytes: size };
+  }
   const offset = typeof request?.offset === "number" && Number.isSafeInteger(request.offset) && request.offset >= 0 ? request.offset : null;
   if (from === "" || id === "" || id.length > 64 || offset === null) throw new Error("a file needs session, id and offset");
   if (hub.store.getSession(to) === null || !reachable(hub, to, ws, true)) throw new Error(`no session ${to} on this station (it may have been deleted)`);

@@ -10,7 +10,7 @@ import { Drive, DriveError } from "../src/drive/drive.ts";
 import { covers, sign, verify, type Granted } from "../src/drive/grants.ts";
 import { driveForPeer, peerSource } from "../src/drive/module.ts";
 import { free, type Source, type Transfer, Transfers } from "../src/drive/transfers.ts";
-import { Refused } from "../src/mesh/bus.ts";
+import { Refused, bytesOf, withBytes } from "../src/mesh/bus.ts";
 import { routes as transferRoutes } from "../src/api/routes/transfers.ts";
 import type { Request } from "../src/api/request.ts";
 
@@ -111,12 +111,19 @@ test("a transfer whose station went away fails, and is taken up again where it w
   const b = station("away-dst");
   const big = Buffer.from(Array.from({ length: 700 * 1024 }, (_, i) => i % 251));
   writeFileSync(join(a.root, "big.bin"), big);
-  let parts = 0;
   let away = true;
   const grant = grantOf(a, { names: ["big.bin"] });
   const ask = async (_id: string, request: any) => {
-    if (request.method === "drive.part" && ++parts === 2 && away) throw new Error("station is not reachable");
-    return driveForPeer(a.drive, KEY, request, request.workspace, now());
+    const got = await driveForPeer(a.drive, KEY, request, request.workspace, now());
+    const bytes = bytesOf(got);
+    if (!away || bytes === null) return got;
+    // Its station goes away once the first part came.
+    return withBytes(got, (async function* () {
+      for await (const piece of bytes) {
+        yield piece.subarray(0, 256 * 1024);
+        throw new Error("station is not reachable");
+      }
+    })());
   };
   const transfers = new Transfers({ dir: join(b.data, "drive-transfers"), driveFor: () => b.drive, remote: (t) => peerSource(ask, t), now, changed: () => {} });
   const t = transfers.start(spec({ from: { station: "A", grant, root: a.root, path: "", names: ["big.bin"] }, to: { root: b.root, path: "" } }));

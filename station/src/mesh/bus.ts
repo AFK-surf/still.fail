@@ -1,4 +1,4 @@
-// The station's requests to and from the other stations of its workspace (the station transport, `stillfail/station/1`,
+// The station's requests to and from the other stations of its workspace (the station transport, `stillfail/station/2`,
 // mesh/peer.ts): one bus for every part that asks or answers them. A part says which methods it answers (`on`); a
 // request is answered by the part whose method or prefix (`share.`) it names, a request of a station of another
 // workspace by the one that hears those (`outside`). What is asked before the mesh is up waits for it (MESH_WAIT_MS).
@@ -6,6 +6,25 @@ import type { Json } from "../store/store.ts";
 
 /// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
 export class Refused extends Error {}
+
+/// Bytes that follow a request's or an answer's head on its stream (`stillfail/station/2`, mesh/peer.ts): a file as it
+/// is read, at the pace the other end takes it. A request or an answer carries them under this symbol, so they go
+/// along with it through every part that hands it on, and never into its JSON. A request's are read by the part that
+/// answers it, all of them; an answer's by whoever asked, all of them or until it stops reading (`return`). A request
+/// for a file says `whole: true` to have it all after the answer; a transport that carries no bytes takes that out, and
+/// the file is answered a chunk at a time, as stations from before answer.
+export const BYTES = Symbol("bytes");
+export type Bytes = AsyncIterable<Buffer>;
+
+/// The bytes `json` carries, if any.
+export const bytesOf = (json: Json): Bytes | null => (json !== null && typeof json === "object" && (json[BYTES] as Bytes | undefined)) || null;
+
+/// `json` with `bytes` after it.
+export const withBytes = <T extends object>(json: T, bytes: Bytes): T => Object.assign(json, { [BYTES]: bytes });
+
+/// A request with bytes to a station whose transport carries none (`stillfail/station/1`, before 2026-10-29): not
+/// sent; its caller sends them as it did then, in chunks.
+export class NoBytes extends Error {}
 
 /// A request to another station of the workspace over the station transport: its result, a Refused when that station
 /// answered with an error, any other error when it could not be asked (or the answer did not come). `workspace` is the

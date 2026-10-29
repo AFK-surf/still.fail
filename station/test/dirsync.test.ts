@@ -17,7 +17,7 @@ import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
 import { MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, hash, readJson, writeJson } from "../src/jobs/remote.ts";
 import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
-import { PEER_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
+import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
 import { memoryMesh } from "./memory-mesh.ts";
@@ -78,12 +78,14 @@ const idle: Machine = (() => {
 /// A source station A and a target B of workspace "ws", A's requests to B over the station transport (in memory). `old`:
 /// B answers as a station from before directory sync would. `asked`: the methods A asked B, in order. `queue`: B's jobs
 /// on a clock of their own (`queueClock`) and an idle machine, where a test starts a task beside one running (its queue
-/// waits for room on that clock, not on the machine the test runs on).
-async function pair(options: { queue?: boolean } = {}) {
+/// waits for room on that clock, not on the machine the test runs on). `before`: both speak the transport of before
+/// 2026-10-29 only, files and contents going in chunks of base64.
+async function pair(options: { queue?: boolean; before?: boolean } = {}) {
   const clock = testClock();
   const queueClock = options.queue ? testClock() : undefined;
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const alpns = options.before ? [PEER_ALPN] : [PEER_BYTES_ALPN, PEER_ALPN];
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns, relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   cleanup.push(() => Promise.all([source.close(), target.close()]).then(() => undefined));
   /// What the target's disk has free (`disk.free`; plenty unless a test says otherwise).
@@ -189,7 +191,7 @@ describe("dirsync", { concurrency: true }, () => {
     writeFileSync(join(repo, "src", "b.txt"), "beta\n");
     writeFileSync(join(repo, "run.sh"), "#!/bin/sh\necho run\n");
     chmodSync(join(repo, "run.sh"), 0o755);
-    // Not compressible, more than a request holds: in several.
+    // Not compressible: it goes as it is.
     const big = randomBytes(3 * 1024 * 1024 + 17);
     writeFileSync(join(repo, "big.bin"), big);
     // Checked out with CRLF, LF in the index: its bytes are not what the index names.
@@ -217,7 +219,7 @@ describe("dirsync", { concurrency: true }, () => {
     assert.deepEqual(s1.skipped, [{ path: "outside", why: "symbolic link leading out of the directory" }]);
     assert.equal(s1.sent.files, 9);
     assert.equal(s1.written, 9);
-    assert.ok(s1.sent.requests >= 7, `the big file in pieces, each request within the transport's message: ${s1.sent.requests}`);
+    assert.equal(s1.sent.requests, 1, "all of it after one request");
     const m = p.mirror("app");
     assert.equal(readFileSync(join(m, "src", "a.txt"), "utf8"), "alpha\n");
     assert.equal(readFileSync(join(m, "notes.txt"), "utf8"), "untracked\n");
@@ -338,19 +340,42 @@ describe("dirsync", { concurrency: true }, () => {
     assert.equal(readFileSync(join(p.mirror("busy"), "f"), "utf8"), "2\n");
   });
 
+  test("to a station from before, contents and files go in chunks of base64, each within its transport's message", async () => {
+    const p = await pair({ before: true });
+    const dir = join(p.home, "old");
+    mkdirSync(dir);
+    // Not compressible: in several requests.
+    const big = randomBytes(3 * 1024 * 1024 + 17);
+    writeFileSync(join(dir, "big.bin"), big);
+    const ran = await p.run("k1", dir, "cp big.bin out.bin");
+    assert.ok(ran.sync.sent.requests >= 5, `in pieces: ${ran.sync.sent.requests}`);
+    assert.ok(readFileSync(join(p.mirror("old"), "big.bin")).equals(big));
+    const input = join(p.home, "input.bin");
+    writeFileSync(input, big);
+    await p.use("station_task", { key: "up", action: "prepare", command: "cp input.bin copy.bin" });
+    const before = p.state.asked.length;
+    assert.equal((await p.use("station_file", { key: "up", direction: "upload", local: input, path: "input.bin" })).bytes, big.length);
+    assert.ok(p.state.asked.slice(before).filter((m) => m === "file.put").length >= 12, "256 KiB at a time");
+    const started = await p.use("station_task", { key: "up", action: "start" });
+    await until("it ends", () => p.b.store.getJob(started.job.id)!.state !== "running");
+    await p.use("station_file", { key: "up", direction: "download", path: "copy.bin", local: "copy.bin" });
+    assert.ok(readFileSync(join(p.home, "copy.bin")).equals(big));
+    assert.ok(p.state.asked.filter((m) => m === "file.get").length >= 12, "256 KiB at a time");
+  });
+
   test("a station's syncs send their contents one request at a time, side by side as they go", async () => {
     const p = await pair();
     const dirs = ["one", "two", "three"].map((name) => {
       const dir = join(tempdir(), name);
       mkdirSync(dir);
-      // Random, so nothing packs small: each file is several requests.
+      // Random, so nothing packs small.
       for (let i = 0; i < 3; i++) writeFileSync(join(dir, `f${i}`), randomBytes(900 * 1024));
       return dir;
     });
     for (const [i, dir] of dirs.entries()) await p.use("station_task", { key: `k${i}`, action: "prepare", command: "cat f0 f1 f2 | wc -c", dir });
     const started = await Promise.all(dirs.map((_, i) => p.use("station_task", { key: `k${i}`, action: "start" })));
     for (const s of started) assert.equal(s.sync.sent.files, 3);
-    assert.ok(p.state.asked.filter((m) => m === "sync.put").length >= 9, "each file in pieces");
+    assert.equal(p.state.asked.filter((m) => m === "sync.put").length, 3, "each directory's contents after one request");
     assert.equal(p.state.most, 1, "never two contents' requests under way at once");
     for (const s of started) await until("it ends", () => p.b.store.getJob(s.job.id)!.state !== "running");
     // A file uploaded meanwhile waits its turn the same way.

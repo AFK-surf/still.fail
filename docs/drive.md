@@ -169,8 +169,8 @@ them; a copy does not go where one leads), the station's own data left out as a 
 `replace` (the one there to its machine's trash first), `keep` (a name of its own beside it: `a 2.txt`, a folder
 `b 2`), or `skip`; one not answered is refused (`exists`) rather than overwritten. Each file is put together beside
 where it goes and put there whole, as an upload is (`.stillfail-up-<id>.part`, `upload`), a part at a time (8 MB from its
-own drive; 256 KiB over the transport, one part at a time, as its other bulk requests go). A file that changes while it
-is read (its time moves) is read again from its start. A move lets the originals go (to their machine's trash; where
+own drive; 256 KiB over the transport, taken from the file as it keeps coming after one request: from a station from
+before, one request a part). A file that changes while it is read (its time moves) is read again from its start. A move lets the originals go (to their machine's trash; where
 none takes them, removed) once every file is in place.
 
 **Kept and taken up again.** The station runs its copies one at a time, in the order asked, each kept in its data
@@ -191,7 +191,9 @@ done, failed, cancelled), done, at, total, copied, count, files, current?, error
 told to the asker's own streams (`drive-transfers`, `{transfer}`).
 
 Over the bus (with `{workspace, grant}`): `drive.walk {names?}` → `{items: [{path, dir, size}]}`; `drive.part {path,
-offset}` → `{data (base64), size, mtime}`; `drive.release {names}` → `{}` (a move's grant only). A refusal is the drive's
+offset, whole: true}` → `{size, mtime}` and the file from `offset` after it as it is read, its bytes ending early if
+it changes (the reader asks again); without `whole` (a station from before asks so) → `{data (base64), size, mtime}`,
+256 KiB of it; `drive.release {names}` → `{}` (a move's grant only). A refusal is the drive's
 code and words (`permission: …`).
 
 Not done yet: taking the contents a station already has (the same file elsewhere on it) instead of sending them; a copy

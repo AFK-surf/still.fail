@@ -24,6 +24,8 @@ import { lstat, open, readdir, readlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { zstdCompress, zstdDecompress } from "node:zlib";
+import { NoBytes, withBytes } from "../mesh/bus.ts";
+import { oneBytes } from "../mesh/files.ts";
 import { filePath } from "./remote.ts";
 
 type Json = any;
@@ -39,12 +41,15 @@ export const MAX_FILES = 200_000;
 const MAX_FILE = 1024 * 1024 * 1024;
 /// A file goes in pieces of at most this much.
 const PIECE = 512 * 1024;
-/// A request's packed data at most (base64 of the compressed pieces), and its pieces at most: with the rest of the
-/// request it stays within the transport's message (1 MiB, mesh/peer.ts).
+/// To a station from before bytes went after a request (mesh/peer.ts): a request's packed data at most (base64 of the
+/// compressed pieces), and its pieces at most: with the rest of the request it stays within the transport's message
+/// (1 MiB).
 const BODY = 720 * 1024;
 const PIECES = 2000;
 /// A request's pieces unpacked at most.
 export const RAW = 16 * 1024 * 1024;
+/// A request's packed pieces at most, after it: RAW, and what packing adds to what does not shrink.
+export const PACKED = RAW + 1024 * 1024;
 /// A page of a manifest or a plan, as JSON, at most about this much.
 const PAGE = 512 * 1024;
 
@@ -335,9 +340,13 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
 
 type Piece = { hash: string; size: number; offset: number; data: Buffer };
 
-/// Sends the contents in `need` in packed requests, each within BODY; checks each file is still what was hashed.
+/// Sends the contents in `need` in packed requests, each of RAW at most, its packed pieces after it; to a station from
+/// before, each within BODY, base64 in it. Checks each file is still what was hashed.
 async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[], bulk: Bulk): Promise<Synced["sent"]> {
   const sent = { files: need.length, bytes: 0, packed: 0, requests: 0 };
+  // Whether the station takes the packed pieces after the request: until its transport says it does not (NoBytes, the
+  // first request not sent).
+  let after = true;
   // How much a request's pieces shrink, from the last one (assumed not at all at first).
   let ratio = 1;
   let batch: Piece[] = [];
@@ -346,20 +355,31 @@ async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[], bulk:
     if (pieces.length === 0) return;
     const plain = Buffer.concat(pieces.map((p) => p.data));
     const packed = await pack(plain);
-    const data = packed.toString("base64");
-    if (data.length > BODY && pieces.length > 1) {
-      const half = Math.ceil(pieces.length / 2);
-      await flush(pieces.slice(0, half));
-      await flush(pieces.slice(half));
-      return;
+    const blobs = pieces.map((p) => [p.hash, p.size, p.offset, p.data.length]);
+    if (after) {
+      try {
+        await bulk.run(() => ask("sync.put", withBytes({ id, blobs }, oneBytes(packed))));
+      } catch (error) {
+        if (!(error instanceof NoBytes)) throw error;
+        after = false;
+        return flush(pieces);
+      }
+    } else {
+      const data = packed.toString("base64");
+      if (data.length > BODY && pieces.length > 1) {
+        const half = Math.ceil(pieces.length / 2);
+        await flush(pieces.slice(0, half));
+        await flush(pieces.slice(half));
+        return;
+      }
+      await bulk.run(() => ask("sync.put", { id, blobs, data }));
     }
     ratio = Math.max(0.02, packed.length / Math.max(1, plain.length));
-    await bulk.run(() => ask("sync.put", { id, blobs: pieces.map((p) => [p.hash, p.size, p.offset, p.data.length]), data }));
     sent.requests++;
     sent.packed += packed.length;
   };
   const add = async (piece: Piece) => {
-    const budget = Math.min(RAW, (BODY * 0.7) / ratio);
+    const budget = after ? RAW : Math.min(RAW, (BODY * 0.7) / ratio);
     if (batch.length > 0 && (raw + piece.data.length > budget || batch.length >= PIECES)) {
       const pieces = batch;
       batch = [];

@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
-import { PEER_ALPN, member, peerCall, servePeer } from "../src/mesh/peer.ts";
+import { PEER_ALPN, PEER_BYTES_ALPN, member, peerCall, servePeer } from "../src/mesh/peer.ts";
+import { NoBytes, bytesOf, withBytes } from "../src/mesh/bus.ts";
+import { oneBytes, readBytes, stopBytes } from "../src/mesh/files.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { Cloud, type Joined } from "../src/cloud/state.ts";
 
@@ -21,7 +23,7 @@ const cloudOf = (station: string, peers: string[], joined: Joined[] = []): any =
 
 test("a peer's request is answered by the other station's remote tasks", async () => {
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   const sourceCloud = cloudOf(source.id(), [target.id()]);
   const targetCloud = cloudOf(target.id(), [source.id()]);
@@ -65,7 +67,7 @@ test("a slow request holds up no other on the same connection", async () => {
   // Answered one after another, one slow request (a sync on a loaded station) held up all the caller's others: every
   // chat of a station asking another shares one connection, and each timed out (2026-10-20, ccvm to Studio).
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   let release!: () => void;
   const released = new Promise<void>((resolve) => (release = resolve));
@@ -103,7 +105,7 @@ test("requests asked while no connection is open share the one dialed; one answe
   // Each request dialed its own, and one that timed out dropped the connection for the next to dial another while the
   // old one's requests were still answered: dozens of a station's followed tasks, each round (2026-10-21, ccvm to Studio).
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   let release!: () => void;
   const released = new Promise<void>((resolve) => (release = resolve));
@@ -146,7 +148,7 @@ test("requests asked while no connection is open share the one dialed; one answe
 
 test("a station of another workspace is asked only when chats are shared with it, and heard only for them", async () => {
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target, closed] = await Promise.all([bind(), bind(), bind()]);
   const sourceCloud = cloudOf(source.id(), []);
   sourceCloud.state.workspace = "home";
@@ -188,7 +190,7 @@ test("a station of another workspace is asked only when chats are shared with it
 
 test("a station in two workspaces asks and hears each one's stations in that workspace only", async () => {
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [both, homeMate, joinedMate] = await Promise.all([bind(), bind(), bind()]);
   // `both` is in "ws" with homeMate and in "w2" with joinedMate; each of those is in its own workspace only.
   const bothCloud = cloudOf(both.id(), [homeMate.id()], [{ workspace: "w2", workspace_name: "W2", name: "both", peers: [{ id: joinedMate.id() }], revocations: [] }]);
@@ -239,7 +241,7 @@ test("a connection made before the roster is current is heard as the workspace's
   // connection. That connection was taken for an outsider's for its whole life (2026-10-17: station_task refused as
   // sharing no chat until it idled out).
   const mesh = memoryMesh();
-  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_BYTES_ALPN, PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   const sourceCloud = cloudOf(source.id(), [target.id()]);
   const targetCloud = cloudOf(target.id(), [source.id()]);
@@ -266,5 +268,72 @@ test("a connection made before the roster is current is heard as the workspace's
     assert.deepEqual(await call(target.id(), "ws", { method: "describe" }), { inside: "ws" });
   } finally {
     await Promise.all([source.close(), target.close()]);
+  }
+});
+
+test("a file goes after its request or its answer, as the other end takes it; a station from before is sent none", async () => {
+  // Files went as base64 in chunks of 256 KiB, a round trip each, whatever the link (until 2026-10-29).
+  const mesh = memoryMesh({ window: 64 * 1024 });
+  const bind = (alpns: Buffer[]) => mesh.bind({ secretKey: randomBytes(32), alpns, relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [source, target, old] = await Promise.all([bind([PEER_BYTES_ALPN, PEER_ALPN]), bind([PEER_BYTES_ALPN, PEER_ALPN]), bind([PEER_ALPN])]);
+  const big = randomBytes(5 * 1024 * 1024 + 3);
+  const sent = { pieces: 0, closed: false };
+  const remote: any = {
+    handle: async (_workspace: string, _peer: string, request: any) => {
+      switch (request.method) {
+        case "put":
+          return { equal: (await readBytes(bytesOf(request)!, big.length)).equals(big) };
+        case "get":
+          return withBytes({ size: big.length }, oneBytes(big));
+        case "refuse":
+          throw new Error("not that one");
+        case "endless":
+          return withBytes({}, (async function* () {
+            try {
+              for (;;) {
+                sent.pieces++;
+                yield Buffer.alloc(16 * 1024);
+              }
+            } finally {
+              sent.closed = true;
+            }
+          })());
+      }
+      return { ok: request.method };
+    },
+  };
+  for (const [endpoint, cloud] of [[target, cloudOf(target.id(), [source.id()])], [old, cloudOf(old.id(), [source.id()])]] as const) {
+    void (async () => {
+      for (;;) {
+        const conn = await endpoint.accept();
+        if (!conn) return;
+        void servePeer(conn, cloud, remote).catch(() => {});
+      }
+    })();
+  }
+  const call = peerCall(source, cloudOf(source.id(), [target.id(), old.id()]), (id) => ({ id }));
+  try {
+    assert.deepEqual(await call(target.id(), "ws", withBytes({ method: "put" }, oneBytes(big))), { equal: true });
+    const got = await call(target.id(), "ws", { method: "get" });
+    assert.equal(got.size, big.length);
+    assert.ok((await readBytes(bytesOf(got)!, big.length)).equals(big));
+    // Refused before it read them: the caller is told, and sends no more.
+    const many = async function* () {
+      for (let i = 0; i < 320; i++) yield Buffer.alloc(16 * 1024);
+    };
+    await assert.rejects(call(target.id(), "ws", withBytes({ method: "refuse" }, many())), (e) => e instanceof Refused && /not that one/.test(e.message));
+    // A reader that stops: its sender stops too, and lets go of what it read from.
+    const endless = bytesOf(await call(target.id(), "ws", { method: "endless" }))!;
+    for await (const _ of endless) break;
+    await stopBytes(endless);
+    while (!sent.closed) await new Promise((r) => setTimeout(r, 1));
+    assert.ok(sent.pieces < 64, `it stopped with the flow control's window: ${sent.pieces}`);
+    // The same connection takes requests after all that.
+    assert.deepEqual(await call(target.id(), "ws", { method: "after" }), { ok: "after" });
+    // A station from before: asked as before; bytes are not sent to it, and the caller is told so.
+    assert.deepEqual(await call(old.id(), "ws", { method: "describe" }), { ok: "describe" });
+    await assert.rejects(call(old.id(), "ws", withBytes({ method: "put" }, oneBytes(big))), NoBytes);
+  } finally {
+    await Promise.all([source.close(), target.close(), old.close()]);
   }
 });
