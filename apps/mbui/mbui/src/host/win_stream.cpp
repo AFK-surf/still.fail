@@ -683,7 +683,7 @@ void *mb_stream_srv(int id) {
   return s ? s->srv : NULL;
 }
 
-}  // extern "C"
-
 int32_t mb_host_stream_audio_here(void) { return 0; }
 void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }
+
+}  // extern "C"
