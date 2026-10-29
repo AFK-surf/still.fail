@@ -415,15 +415,19 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
   const threads = store.listThreads(s, viewer.email, null, of).filter((t) => t.sessions.some((m) => all.has(m.session)));
   const stats = store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
-  // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
+  // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and whether
+  // the viewer wrote in one of its Slack threads.
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();
+  const spoke = new Set<string>();
   for (const t of threads) {
+    const viewerIn = t.thread.surface !== STILLFAIL_SURFACE && people(t.people).some((p) => mine(p));
     for (const m of t.sessions) {
       if (t.thread.surface === STILLFAIL_SURFACE) {
         if (listed(t)) chatted.add(m.session);
-      } else if (!origins.has(m.session)) {
-        origins.set(m.session, t);
+      } else {
+        if (!origins.has(m.session)) origins.set(m.session, t);
+        if (viewerIn) spoke.add(m.session);
       }
     }
   }
@@ -464,7 +468,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
       };
       if (lastView.authorPicture !== undefined) last.authorPicture = lastView.authorPicture;
     }
-    const isMineRow = mine(creator_) || people_.some((p) => mine(p)) || starters.some((x) => mine(x));
+    const isMineRow = mine(creator_) || people_.some((p) => mine(p)) || starters.some((x) => mine(x)) || agents.some((a) => spoke.has(a.key));
     const row: Json = {
       // An item is its agent's, from its first moment to its last: the session key is its id, chat or no chat.
       id: key, session: key, thread: t.thread.id,
@@ -531,8 +535,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
       agents: [agent(key)],
       last: null,
       unread: false,
-      // No chat yet: mine only if the viewer started the session; others in its Slack thread do not count.
-      mine: mine(starter),
+      // No chat yet: mine if the viewer started the session or wrote in its Slack thread.
+      mine: mine(starter) || spoke.has(key),
       lastActiveAt: x.lastActiveAt,
       connect: x.connect === INTERNAL_CONNECT ? null : x.connect,
       origin: origin_,
