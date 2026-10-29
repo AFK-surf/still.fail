@@ -276,6 +276,68 @@ fn Rich::run_room(self : Rich, r : Run, size : Double) -> (Double, Double) {
 }
 
 ///|
+/// How deep the teeth of a torn ground `h` high are (torn_outline): three to its height, each as deep as a third of
+/// its pitch.
+fn torn_tooth(h : Double) -> Double {
+  h / 3.0 / 3.0
+}
+
+///|
+/// A ground `w` by `h` from (0, 0), its corners `corner` round, torn at its start (`from`) or its end (`on`): that
+/// edge three teeth `torn_tooth` deep, their tips on the box's edge. One closed outline (x, y, x, y, …), clockwise.
+fn torn_outline(w : Double, h : Double, corner : Double, from : Bool, on : Bool) -> Array[Double] {
+  let out = []
+  let teeth = 3
+  let t = torn_tooth(h)
+  let arc = fn(cx : Double, cy : Double, a0 : Double) {
+    let steps = 6
+    for i in 0..=steps {
+      let a = a0 + @math.PI / 2.0 * i.to_double() / steps.to_double()
+      out.push(cx + corner * @dmath.cos(a))
+      out.push(cy + corner * @dmath.sin(a))
+    }
+  }
+  // the top, left to right, then the end down
+  if from {
+    out.push(0.0)
+    out.push(0.0)
+  } else {
+    arc(corner, corner, @math.PI)
+  }
+  if on {
+    out.push(w)
+    out.push(0.0)
+    for i in 0..<teeth {
+      let y = h * i.to_double() / teeth.to_double()
+      let p = h / teeth.to_double()
+      out.push(w - t)
+      out.push(y + p / 2.0)
+      out.push(w)
+      out.push(y + p)
+    }
+  } else {
+    arc(w - corner, corner, -@math.PI / 2.0)
+    arc(w - corner, h - corner, 0.0)
+  }
+  // the bottom, right to left, then the start up
+  if from {
+    out.push(0.0)
+    out.push(h)
+    for i in 0..<teeth {
+      let y = h - h * i.to_double() / teeth.to_double()
+      let p = h / teeth.to_double()
+      out.push(t)
+      out.push(y - p / 2.0)
+      out.push(0.0)
+      out.push(y - p)
+    }
+  } else {
+    arc(corner, h - corner, @math.PI / 2.0)
+  }
+  out
+}
+
+///|
 fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   let sc = g().scale
   let (_, _, own0) = font_metrics(r.size, r.weight)
@@ -382,6 +444,27 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
       brk[i] = b[starts[i]]
     }
   }
+  // a label (a run on a ground of its own shape) is one thing, as CSS's inline-block is: a line breaks before it
+  // rather than within it, unless it is wider than a whole line; each cluster in one kept whole: where it starts
+  let whole = Array::make(n, -1)
+  if r.wrap {
+    for k, run in r.runs {
+      let c0 = run_c0[k]
+      let c1 = run_c1[k]
+      if run.ground is None || r.run_bg(run) == 0L || c1 - c0 < 2 {
+        continue
+      }
+      let mut w = 0.0
+      for c in c0..<c1 {
+        w = w + adv[c]
+      }
+      if w <= max_w + 0.01 {
+        for c in (c0 + 1)..<c1 {
+          whole[c] = c0
+        }
+      }
+    }
+  }
   let xs = Array::make(n, 0.0)
   let line_of = Array::make(n, 0)
   let line_start = []
@@ -457,6 +540,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     let a = adv[i]
     if r.wrap && x + a > max_w + 0.01 && i > ls && c != 32 {
       let b = if last_break > ls { last_break } else { i }
+      let b = if whole[b] > ls { whole[b] } else { b }
       finish(ls, b)
       ls = b
       i = b
@@ -1059,6 +1143,10 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         let base = top + lay.line_base[l]
         let a = lay.run_a[k]
         let d = lay.run_d[k]
+        // a ground carried on to the next line, or from the last, is torn there: its edge a row of teeth past the
+        // words, so its pieces read as one broken across lines
+        let from = lay.line_of[lay.run_c0[k]] != l
+        let on = lay.line_of[lay.run_c1[k] - 1] != l
         let (bx0, bx1) = if pressed && r.run_bg(run) == 0L {
           (x0 - 2.0, x1 + 2.0)
         } else if c1 == lay.run_c1[k] {
@@ -1074,17 +1162,14 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
             (base - (a - d) / 2.0 - h / 2.0, h, dmin(g.corner * lay.run_size[k], h / 2.0))
           }
         }
-        self.emit_rect(
-          bx0,
-          by,
-          bx1 - bx0,
-          bh,
-          corner,
-          bg,
-          0.0,
-          0L,
-          alpha,
-        )
+        if (from || on) && !(pressed && r.run_bg(run) == 0L) {
+          let tooth = torn_tooth(bh)
+          let gx0 = if from { bx0 - tooth } else { bx0 }
+          let gx1 = if on { bx1 + tooth } else { bx1 }
+          self.emit_shape(gx0, by, [(torn_outline(gx1 - gx0, bh, corner, from, on), true)], true, 0.0, false, bg, alpha)
+        } else {
+          self.emit_rect(bx0, by, bx1 - bx0, bh, corner, bg, 0.0, 0L, alpha)
+        }
       }
       if id != 0 {
         self.push_hit(id, dmax(x0, cx0), dmax(top, cy0), dmin(x1, cx1), dmin(top + lay.line_h[l], cy1)) |> ignore
