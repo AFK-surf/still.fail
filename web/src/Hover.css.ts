@@ -6,7 +6,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
-import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, inner, pillInner } from "@stillfail/ui/styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
@@ -70,6 +70,13 @@ export const fileFoot = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: PANEL_PILL, paddingLeft: TEXT_IN,
   fontSize: vars.textMeta, color: vars.muted,
 });
+/** What copies a web link, on its card (Peeks.tsx LinkCopy): at its facts' line's end, in the card's bottom end corner. */
+export const copy = style({
+  // (out past the card's words to where a 24 circle is concentric with its corner: the card's inner corner, IN, less
+  // its half and the words' inset)
+  flex: "none",
+  marginRight: `calc(${inner} - ${PANEL_PILL / 2 + TEXT_IN}px)`, marginBottom: `calc(${inner} - ${PANEL_PILL / 2 + TEXT_IN}px)`,
+});
 export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto", flex: "none" });
 export const time = style({ flex: "0 0 auto", marginLeft: "auto", whiteSpace: "nowrap" });
 /** A tinted pill: its glyph and the state's name, its colours by `data-state`. */
@@ -89,7 +96,9 @@ export const excerpt = style({
   margin: "0", minWidth: "0", color: vars.text, overflowWrap: "anywhere",
   display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden",
 });
-export const facts = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flexWrap: "wrap", fontSize: vars.textMeta, color: vars.muted });
+/** The facts' line: them (wrapping), and what copies the link at its end, in the card's bottom end corner. */
+export const factsLine = style({ display: "flex", alignItems: "flex-end", gap: "8px", minWidth: "0" });
+export const facts = style({ flex: "1 1 auto", display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flexWrap: "wrap", fontSize: vars.textMeta, color: vars.muted });
 export const person = style({ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: "0", color: vars.text });
 export const avatar = style({ width: "18px", height: "18px", borderRadius: "50%", background: vars.line, flex: "0 0 auto" });
 export const chip = style({ display: "inline-flex", gap: "6px", padding: "1px 7px", borderRadius: "999px", background: vars.hover, whiteSpace: "nowrap" });

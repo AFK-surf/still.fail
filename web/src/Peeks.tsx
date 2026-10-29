@@ -16,7 +16,7 @@ import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Hover.css.ts";
 import { Bones, sampleWords } from "@stillfail/ui/waiting.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
-import { PanelButton } from "./ui.tsx";
+import { PanelButton, PanelIconButton } from "./ui.tsx";
 import { chipPath, pathIn, shownPath } from "./paths.ts";
 
 export { pathIn };
@@ -87,35 +87,24 @@ const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[
 
 /** A web link in a message, and its card: what the core reads of it (the `linkPreview` topic, kept), asked for as the
  *  pointer comes onto the link. */
-export function LinkHover({ href, label, children, side, onShow }: { href: string; label: string; children: ReactElement;
+export function LinkHover({ href, label, children, side }: { href: string; label: string; children: ReactElement;
   /** Beside it, where under it the card would cover a list's next rows (a chat's things'). */
-  side?: "left" | undefined;
-  /** 在对话中查看 under the card, beside the link's copy: where it was said (a chat's things'). */
-  onShow?: (() => void) | undefined }) {
+  side?: "left" | undefined }) {
   const station = useStation();
-  const content = <><LinkCard href={href} label={label} /><LinkActions href={href} onShow={onShow} /></>;
-  return <Hover side={side ?? "bottom"} tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={content}>{children}</Hover>;
+  return <Hover side={side ?? "bottom"} tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
 
-/** What is done with a link at once, under its card (the user, 2026-10-29: 快捷操作放 hover 的卡片上): its address copied, and 在对话中查看 where that is given. */
-function LinkActions({ href, onShow }: { href: string; onShow?: (() => void) | undefined }) {
+/** A web link's address to copy, on its card (the user, 2026-10-29: 快捷操作放 hover 的卡片上; 丑: a row of words of its
+ *  own under it, gone for a mark at the card's end): 已复制 a moment once copied, as a file's path (PathActions). */
+function LinkCopy({ href }: { href: string }) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const copy = () => void navigator.clipboard.writeText(href).then(() => {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
-  // (as a file's card's foot: PathActions)
-  return (
-    <div className={`${css.fileFoot} ${panelEdge}`}>
-      <span className={css.actions}>
-        {onShow && <PanelButton tone="quiet" onClick={onShow}><Chat size={12} />{t("web-main.things.show")}</PanelButton>}
-        <PanelButton tone="quiet" onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.link.copy")}</PanelButton>
-      </span>
-    </div>
-  );
+  return <PanelIconButton className={css.copy} label={copied ? t("common.copied") : t("common.link.copy")} onClick={copy}>{copied ? <Check size={14} /> : <Copy size={14} />}</PanelIconButton>;
 }
-
 
 function LinkCard({ href, label }: { href: string; label: string }) {
   const station = useStation();
@@ -123,8 +112,8 @@ function LinkCard({ href, label }: { href: string; label: string }) {
   // (read first: the card it will be, made up, in its bones)
   if (read.value === undefined && read.error === null && RICH.test(href)) return <Bones>{/\/pull\//.test(href) ? <PullRequestCard preview={SAMPLE_PR} /> : <IssueCard preview={SAMPLE_ISSUE} />}</Bones>;
   const preview = read.value ?? null;
-  if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} />;
-  if (preview?.kind === "github_issue") return <IssueCard preview={preview} />;
+  if (preview?.kind === "github_pull_request") return <PullRequestCard preview={preview} copy={<LinkCopy href={href} />} />;
+  if (preview?.kind === "github_issue") return <IssueCard preview={preview} copy={<LinkCopy href={href} />} />;
   const page = preview?.kind === "page" ? preview : null;
   const github = /^https:\/\/(?:[\w-]+\.)?github\.com\//.test(href);
   const tile = (
@@ -138,13 +127,18 @@ function LinkCard({ href, label }: { href: string; label: string }) {
       </span>
     </div>
   );
+  // (its copy in its foot's end corner, as a file's card's is)
+  const foot = <div className={`${css.fileFoot} ${panelEdge}`}><span className={css.actions}><LinkCopy href={href} /></span></div>;
   // A page's picture (its og:image, a video's frame) over the tile, as the page shows itself when shared.
-  if (!page?.image) return tile;
+  if (!page?.image) return <>{tile}{foot}</>;
   return (
-    <div className={css.tileWithPicture}>
-      <img className={css.picture} src={page.image} alt="" />
-      {tile}
-    </div>
+    <>
+      <div className={css.tileWithPicture}>
+        <img className={css.picture} src={page.image} alt="" />
+        {tile}
+      </div>
+      {foot}
+    </>
   );
 }
 
@@ -166,7 +160,7 @@ function PersonFact({ person }: { person: Person | null }) {
   return <span className={css.person}>{person.avatar ? <img className={css.avatar} src={person.avatar} alt="" /> : <span className={css.avatar} />}{person.login}</span>;
 }
 
-function PullRequestCard({ preview: p }: { preview: Extract<LinkPreview, { kind: "github_pull_request" }> }) {
+function PullRequestCard({ preview: p, copy }: { preview: Extract<LinkPreview, { kind: "github_pull_request" }>; copy?: ReactNode }) {
   const checks = p.checks;
   return (
     <div className={css.rich}>
@@ -176,6 +170,7 @@ function PullRequestCard({ preview: p }: { preview: Extract<LinkPreview, { kind:
         <span className={css.time}>{p.time?.updatedAt?.ago ?? null}</span>
       </div>
       <span className={css.title} title={p.title}>{p.title}</span>
+      <div className={css.factsLine}>
       <div className={css.facts}>
         <PersonFact person={p.author} />
         {(p.additions !== null || p.deletions !== null) && <span className={css.chip}><span className={css.add}>+{p.additions ?? 0}</span><span className={css.del}>−{p.deletions ?? 0}</span></span>}
@@ -186,11 +181,13 @@ function PullRequestCard({ preview: p }: { preview: Extract<LinkPreview, { kind:
           </span>
         )}
       </div>
+      {copy}
+      </div>
     </div>
   );
 }
 
-function IssueCard({ preview: p }: { preview: Extract<LinkPreview, { kind: "github_issue" }> }) {
+function IssueCard({ preview: p, copy }: { preview: Extract<LinkPreview, { kind: "github_issue" }>; copy?: ReactNode }) {
   return (
     <div className={css.rich}>
       <div className={css.meta}>
@@ -199,10 +196,13 @@ function IssueCard({ preview: p }: { preview: Extract<LinkPreview, { kind: "gith
         <span className={css.time}>{p.time?.updatedAt?.ago ?? null}</span>
       </div>
       <span className={css.title} title={p.title}>{p.title}</span>
+      <div className={css.factsLine}>
       <div className={css.facts}>
         <PersonFact person={p.author} />
         {p.labels.map((l) => <span key={l} className={css.chip}>{l}</span>)}
         {p.comments !== null && p.comments > 0 && <span className={css.chip}>{t("web-main.preview.comments", { count: p.comments })}</span>}
+      </div>
+      {copy}
       </div>
     </div>
   );

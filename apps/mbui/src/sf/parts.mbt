@@ -488,6 +488,16 @@ pub fn segmented(
 }
 
 ///|
+/// How wide each of `n` options is for a segmented choice's track to be `room` across (its `item_w`): one that spans
+/// the row it heads, as the field under it does (a chat's things').
+pub fn segmented_item_w(room : Double, n : Int) -> Double {
+  if n <= 0 {
+    return 0.0
+  }
+  (room - 2.0 * segmented_pad - segmented_gap * (n - 1).to_double()) / n.to_double()
+}
+
+///|
 /// Its track: its options in a line, as wide as they are, cut to where it is; where they do not fit side by side, as
 /// wide as where it is.
 // kept across runs: a value (no field of it changes)

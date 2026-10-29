@@ -42,8 +42,8 @@ pub fn link_peek(
 ///|
 /// A web link's card over what draws it (`id`) while the pointer rests on it, as the link's station reads it (a page's
 /// tile, a pull request's or an issue's card), opened at its `side` (under it, else beside a list it would cover: a
-/// chat's things'); nothing for what is no web link. Under the card what is done with the link at once (the user,
-/// 2026-10-29: 快捷操作放 hover 的卡片上): its address copied, and with `show` 在对话中查看.
+/// chat's things'); nothing for what is no web link. On the card its address to copy (the user, 2026-10-29: 快捷操作放
+/// hover 的卡片上; 丑: a row of words of its own under it, gone for a mark at the card's end).
 pub fn web_peek(
   c : @ui.Ctx,
   src : Source,
@@ -52,7 +52,6 @@ pub fn web_peek(
   words : String,
   id : Int,
   side? : @ui.Side = Bottom,
-  show? : (() -> Unit)? = None,
 ) -> Unit {
   if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
@@ -62,40 +61,28 @@ pub fn web_peek(
     ignore((src.topic)("linkPreview", link_params(station, href)))
   }
   hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() {
-    link_card(c, src, station, href, words)
-    link_foot(c, href, show)
+    link_card(c, src, station, href, words, copy=fn() { link_copy(c, href) })
   })
   |> ignore
 }
 
 ///|
-/// A web link's card's foot, as a file's (file_foot): at its end 在对话中查看 where `show` is given, then its address to
-/// copy (已复制 a moment once copied), in the card's bottom end corner.
-fn link_foot(c : @ui.Ctx, href : String, show : (() -> Unit)?) -> Unit {
-  c.box(style=peek_file_foot, fn() {
-    c.box(style=peek_ref, fn() {  }) |> ignore
-    match show {
-      Some(go) =>
-        if @sf.panel_button(c, "link-peek/show/" + href, @sf.t("web-main.things.show"), tone=Quiet) {
-          c.tell("link-peek/show", go)
-        }
-      None => ()
-    }
-    let key = "link-peek/copy/" + href
-    let said = copied_paths.contains(href) &&
-      (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-        copied_paths.remove(href)
-        false
-      } else {
-        true
-      })
-    if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet) {
-      c.copy_text(href)
-      @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-      copied_paths.add(href)
-    }
-  })
-  |> ignore
+/// A web link's address to copy, on its card (link_card `copy`): a mark to press, 已复制 a moment once copied (its
+/// mark a tick then), as a file's path is copied (file_foot).
+fn link_copy(c : @ui.Ctx, href : String) -> Unit {
+  let key = "link-peek/copy/" + href
+  let said = copied_paths.contains(href) &&
+    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
+      copied_paths.remove(href)
+      false
+    } else {
+      true
+    })
+  if @sf.panel_icon_button(c, key, if said { "check" } else { "copy" }, @sf.t(if said { "common.copied" } else { "common.link.copy" })) {
+    c.copy_text(href)
+    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
+    copied_paths.add(href)
+  }
 }
 
 ///|
@@ -129,16 +116,16 @@ fn rich_link(href : String) -> Bool {
 
 ///|
 /// The card (LinkCard): a pull request's or an issue's; else a page's tile (its picture over it where it has one);
-/// bars where a rich one's lines will be while it is read.
-fn link_card(c : @ui.Ctx, src : Source, station : String, href : String, words : String) -> Unit {
+/// bars where a rich one's lines will be while it is read; `copy`, what is pressed to copy it, at its foot's end.
+fn link_card(c : @ui.Ctx, src : Source, station : String, href : String, words : String, copy? : () -> Unit = fn() {  }) -> Unit {
   let read = (src.topic)("linkPreview", link_params(station, href))
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
   }
   match text(v, "kind") {
-    "github_pull_request" => change_card(c, v, true)
-    "github_issue" => change_card(c, v, false)
+    "github_pull_request" => change_card(c, v, true, copy)
+    "github_issue" => change_card(c, v, false, copy)
     _ =>
       if v is None && read.error is None && rich_link(href) {
         // (while it is read: a made-up one's, in its bones)
@@ -148,10 +135,10 @@ fn link_card(c : @ui.Ctx, src : Source, station : String, href : String, words :
             "number": 1,
             "title": Json::string(@sf.sample_words(18)),
             "time": { "updatedAt": { "ago": Json::string(@sf.sample_words(3)) } },
-          }), href.contains("/pull/"))
+          }), href.contains("/pull/"), fn() {  })
         })
       } else {
-        page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None })
+        page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None }, copy)
       }
   }
 }
@@ -182,7 +169,7 @@ fn destination(href : String) -> String {
 /// A page's tile (Hover.css.ts tile): its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
 /// the globe for any other), 10 from its title (two lines at most, 500) over where it goes (its site's name before it,
 /// muted, one line); the page's picture over it, 16:9, where it has one.
-fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?) -> Unit {
+fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : () -> Unit) -> Unit {
   let t = @sf.theme()
   let tile = fn() {
     c.box(style=peek_tile, fn() {
@@ -221,13 +208,19 @@ fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?) -> Unit {
       })
       |> ignore
   }
+  // (its copy in its foot's end corner, as a file's card's is: file_foot)
+  c.box(style=peek_file_foot, fn() {
+    c.box(style=peek_ref, fn() {  }) |> ignore
+    copy()
+  })
+  |> ignore
 }
 
 ///|
 /// A pull request's (`pr`) or an issue's card (PullRequestCard, IssueCard): its state in a tinted pill with GitHub's
 /// glyph for it, where it is (repository #n) and when it last changed, muted; its title, one line, 500; who opened it
 /// and a few facts (a pull request's size and files and how its checks stand; an issue's labels and comments).
-fn change_card(c : @ui.Ctx, v : Json?, pr : Bool) -> Unit {
+fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit) -> Unit {
   let state = text(v, "state")
   c.box(style=peek_rich, fn() {
     c.box(style=peek_change_meta, fn() {
@@ -252,6 +245,8 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool) -> Unit {
     })
     |> ignore
     c.text(text(v, "title"), style=peek_title) |> ignore
+    // its facts, and at their line's end what is pressed to copy it (in the card's bottom end corner, as a file's is)
+    c.box(style=peek_facts_line, fn() {
     c.box(style=peek_facts, flow=true, line_gap=@ui.Space::S2.px(), fn() {
       match field(v, "author") {
         Some(Object(_)) as a =>
@@ -300,6 +295,9 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool) -> Unit {
           fact_chip(c, @sf.t("web-main.preview.comments", args=[("count", count(v, "comments").to_string())]))
         }
       }
+    })
+    |> ignore
+    c.box(style=peek_copy_end, fn() { copy() }) |> ignore
     })
     |> ignore
   })
@@ -963,8 +961,23 @@ let peek_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg
 /// first (who opened it, or a fact's pill) in the card's bottom left corner, concentric with it as its state is in its
 /// top left.
 // kept across runs: a value (no field of it changes)
-let peek_facts : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then(
+let peek_facts : @ui.Style = @ui.css("row gap=S2 align=ACenter").then(@ui.style(w=@sf.grow))
+
+///|
+/// Their line (the card's last): out to the card's bottom start corner for its first pill (peek_capsule_in), what
+/// copies it at its end.
+// kept across runs: a value (no field of it changes)
+let peek_facts_line : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").then(
   @ui.style(mb=@sf.room_of(peek_capsule_in), ml=@sf.room_of(peek_capsule_in)),
+)
+
+///|
+/// What copies it, in the card's bottom end corner as far from both its edges as makes it concentric with it (24
+/// across: peek_button_in), its line's foot out past the pills' (peek_capsule_in).
+// kept across runs: a value (no field of it changes)
+let peek_copy_end : @ui.Style = @ui.style(
+  mr=@sf.room_of(peek_button_in),
+  mb=@sf.room_of(peek_button_in - peek_capsule_in),
 )
 
 ///|
