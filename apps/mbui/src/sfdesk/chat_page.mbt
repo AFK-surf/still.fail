@@ -75,6 +75,24 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {
+          // the bar's ground under it, the page's own colour, whole behind what is in the bar (nothing goes up under its
+          // words and buttons: words over words) and going clear slowly by each pixel from just under them to nothing
+          // far past its foot (as far as the list has gone up under it: nothing covered at the chat's top), what goes up
+          // under it covered bit by bit as it goes (the user, 2026-10-30: 「比如 chat 顶上」「栏的底色往下慢慢变透明，栏和
+          // 下面内容之间看不出一条边，滚上去的内容在栏底下是慢慢被盖住的」「好像不够淡」); only drawn
+          let past = fn(i : @ui.ListInfo?) {
+            match i {
+              Some(i) => dmin(chat_bar_fade_past, dmax(i.above, 0.0)).round()
+              None => 0.0
+            }
+          }
+          let reach = past(c.list_info_as(@sfpages.list_key(r), past))
+          let ground = c.layer(fn() {
+            let g = c.box(style=@ui.style(w=Full, h=Fixed(chat_bar_room() + reach), bg=Bg), fn() {  })
+            c.fade_to(g, g, foot=chat_bar_fade_in + reach)
+          })
+          c.draw_only(ground)
+          c.stratum(ground, Bar)
           let bar = c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) })
           c.stratum(bar, Bar)
           over_flight(c, bar)
@@ -91,6 +109,14 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   // the new chat it became leaving over it, or one left for it fading over it (newchat.mbt)
   new_chat_after(c, src, w, r)
 }
+
+///|
+/// How far over its foot the bar's ground starts going clear (chat_page): under its buttons (32 in its 45).
+let chat_bar_fade_in : Double = 6.0
+
+///|
+/// How far past its foot it goes on, going clear, at most: four lines' worth, slowly.
+pub let chat_bar_fade_past : Double = 96.0
 
 ///|
 /// The pane's ground under a chat.
@@ -959,7 +985,7 @@ let info_label_flow : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=
 ///|
 /// The bar (pageBar): 45 high, its line under it, its title's row and its buttons 16 apart.
 // kept across runs: a value (no field of it changes)
-let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, align=ACenter, bg=Bg)
+let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_size, pb=SPx, align=ACenter)
 
 ///|
 /// What is in it between its rooms at its ends (page_bar_room): its title's row and its buttons 16 apart.

@@ -646,6 +646,14 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     if !bone && (holding[o] || self.drawn_over(k, o, px, py)) {
       continue
     }
+    // (what fades out over all of itself is no mark but a ground going off: a bar's going on under it, scene.mbt 52-59)
+    let over_all = fn(soft : Double, side : Double) { soft > 0.0 && soft >= side - 0.5 }
+    if over_all(a[b + 53], a[b + 3]) ||
+      over_all(a[b + 55], a[b + 3]) ||
+      over_all(a[b + 57], a[b + 2]) ||
+      over_all(a[b + 59], a[b + 2]) {
+      continue
+    }
     // (ratio, what is said): its ground's, its edge's (at the middle of its left side), each that shows and is not cut
     // through to a ground under it
     let mut seen : (Double, String)? = None

@@ -1584,6 +1584,7 @@ pub(all) struct ListInfo {
   at_end : Bool
   below : Double
   height : Double
+  above : Double
   content : Double
   gliding : Bool
   following_row : Bool

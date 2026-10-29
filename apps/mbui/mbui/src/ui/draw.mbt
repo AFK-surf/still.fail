@@ -589,9 +589,9 @@ pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) ->
 
 ///|
 /// What node `i` draws fading out towards the edges of node `of` (what cuts it: the box it scrolls in, the window it
-/// rolls through), each pixel by where it is, over `start`, `top`, `end` and `foot` before each (0: up to it whole).
-/// Not its own ground, which `of`'s is: what it holds, where it goes on past what shows of it (the user, 2026-10-30:
-/// 「现在有很多粗暴裁剪的」).
+/// rolls through), each pixel by where it is, over `start`, `top`, `end` and `foot` before each (0: up to it whole):
+/// what it holds, where it goes on past what shows of it (the user, 2026-10-30: 「现在有很多粗暴裁剪的」). Its own ground
+/// too: `of` itself, a ground fading out to its edge (a bar's going on under it).
 pub fn Ctx::fade_to(
   self : Ctx,
   i : Int,

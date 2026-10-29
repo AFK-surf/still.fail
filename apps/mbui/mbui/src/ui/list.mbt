@@ -1197,6 +1197,8 @@ pub(all) struct ListInfo {
   below : Double
   /// the view's height (what of the rows shows at once)
   height : Double
+  /// how far its rows go on above the view's top (those not laid out at their height as known: measured, or estimated)
+  above : Double
   /// its rows laid end to end: those built at their height, the rest at its estimate (what it would be as tall as,
   /// shown whole)
   content : Double
@@ -1289,6 +1291,7 @@ fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
         at_end: st.at_end,
         below: st.below,
         height: st.vp_h,
+        above: st.above(st.anchor) + st.anchor_off,
         content: st.above(st.heights.length()),
         gliding: st.glide,
         following_row: st.follow_item >= 0,

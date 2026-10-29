@@ -35,6 +35,21 @@ test "wide: existing chat messages are fully visible in the first frame" {
 }
 
 ///|
+test "wide: a chat's bar's ground is the page's colour behind what is in it, going clear by each pixel from under it to a line past its foot: no edge between the bar and what goes up under it (the user, 2026-10-30: 「比如 chat 顶上」「栏的底色往下慢慢变透明」)" {
+  let calls : Array[Made] = []
+  // (a long chat, at its end: far up under the bar)
+  let t = wide_tester(calls, mode="chat-long")
+  t.draw()
+  // (a rect from the window's top, fading to its foot over its last part: whole behind the bar's words, nothing at its
+  // foot, as far past the bar's as it goes at most)
+  let (_, title_y, _, title_h) = t.rect_of("一个很长的对话").unwrap()
+  let grounds = t.drawn_fades().filter(fn(d) { d.0 == 0 && d.1.abs() < 0.5 && d.6 > 0.0 })
+  assert_eq(grounds.length(), 1, msg="\{grounds}")
+  let (_, y, h, _, _, foot, soft) = grounds[0]
+  assert_true((foot - (y + h)).abs() < 0.5 && foot - soft >= title_y + title_h && soft > @sfdesk.chat_bar_fade_past, msg="\{grounds[0]}")
+}
+
+///|
 test "wide: the rail, the chats' list beside it and a page in the rest; below the breakpoint the phone's Home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

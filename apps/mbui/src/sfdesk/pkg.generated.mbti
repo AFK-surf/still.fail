@@ -35,6 +35,8 @@ pub fn bring_page() -> Unit
 
 pub fn browse(@ui.Ctx, @sfbase.Source, String, String, String, @sfbase.DriveAt, Bool, BrowseDoes) -> Browse
 
+pub let chat_bar_fade_past : Double
+
 pub fn chat_drop(@ui.Ctx, @sfbase.Source, String, String, Int32) -> Unit
 
 pub fn chat_find_open(@ui.Ctx, @sfbase.ChatRef) -> Unit
