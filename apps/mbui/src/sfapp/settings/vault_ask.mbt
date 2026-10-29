@@ -754,9 +754,11 @@ let ask_ended_words : @ui.TextStyle = @ui.text_style(size=ask_ended_size, leadin
 
 ///|
 /// Its words' size and line (ask_ended_words), the line the dot beside them stands in the middle of.
+// kept across runs: a value (no field of it changes)
 let ask_ended_size : @ui.TextSize = Meta
 
 ///|
+// kept across runs: a value (no field of it changes)
 let ask_ended_leading : @ui.Leading = L5
 
 ///|
