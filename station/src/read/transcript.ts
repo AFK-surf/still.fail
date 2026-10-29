@@ -14,6 +14,7 @@
 import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
+import { isPlanTool } from "./plan.ts";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
@@ -335,6 +336,8 @@ function toText(v: Json): string {
 
 /// A post: shown whole in the history, where the agent made it (its words are what people read, not a call to cut).
 export const isPosting = (tool: string) => tool === "mcp__stillfail__chat_post" || tool === "mcp__ember__chat_post";
+/// A call kept whole, never cut short: a post (what it said), and a checklist's (read/plan.ts reads the list from it).
+const keptWhole = (tool: string) => isPosting(tool) || isPlanTool(tool);
 
 /// What reading keeps between lines: calls taken out of a script.
 export type ReadState = { inner: Map<string, number> };
@@ -382,7 +385,7 @@ function dshTimeline(r: Json, out: TimelineEntry[]) {
           input = JSON.parse(raw);
           args = pretty(input);
         } catch {}
-        const e: TimelineEntry = { at, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+        const e: TimelineEntry = { at, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
         const id = stringOf(get(block, "id"));
         if (id !== undefined) e.callId = id;
         out.push(withBrief(e, input));
@@ -430,7 +433,7 @@ function grokTimeline(r: Json, out: TimelineEntry[]) {
         if (name === "use_tool" && isStr(get(input, "tool_name"))) [name, input] = [`mcp__${get(input, "tool_name")}`, get(input, "tool_input") ?? {}];
         args = pretty(input);
       } catch {}
-      const e: TimelineEntry = { at: null, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+      const e: TimelineEntry = { at: null, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
       const id = stringOf(get(call, "id"));
       if (id !== undefined) e.callId = id;
       out.push(withBrief(e, input));
@@ -459,7 +462,7 @@ function cursorTimeline(r: Json, out: TimelineEntry[]) {
     if (name === "mcp" && isStr(get(input, "providerIdentifier")) && isStr(get(input, "toolName"))) [name, input] = [`mcp__${get(input, "providerIdentifier")}__${get(input, "toolName")}`, get(input, "args") ?? {}];
     const args = pretty(input);
     const id = stringOf(get(r, "id"));
-    const call: TimelineEntry = { at, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+    const call: TimelineEntry = { at, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
     if (id !== undefined) call.callId = id;
     out.push(withBrief(call, input));
     const result: TimelineEntry = { at, kind: "tool_result", text: clip(cursorResult(get(r, "result"))), ok: get(r, "status") !== "error" };
@@ -542,7 +545,7 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
         const name = stringOf(get(block, "name")) ?? "";
         const id = stringOf(get(block, "id"));
         const input = pretty(get(block, "input") ?? null);
-        out.push(withBrief(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }), get(block, "input")));
+        out.push(withBrief(withFields(entry("tool_call", keptWhole(name) ? input : clip(input)), { tool: name, callId: id }), get(block, "input")));
         break;
       }
       case "tool_result": {
@@ -662,7 +665,7 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     } catch {
       args = raw;
     }
-    out.push(withBrief(call(name, callId, isPosting(name) ? args : clip(args)), input));
+    out.push(withBrief(call(name, callId, keptWhole(name) ? args : clip(args)), input));
     return;
   }
   if (kind === "function_call_output" || kind === "custom_tool_call_output") {

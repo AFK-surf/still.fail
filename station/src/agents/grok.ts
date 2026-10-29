@@ -90,7 +90,7 @@ export const grokRules = (instructions: string) =>
 
 /// A subagent's step as the parent session shows it: its own id, marked a subagent's, under the call that spawned it.
 function underParent(event: LiveEvent, child: string, parent: string | undefined): LiveEvent {
-  if (event.kind === "phase") return event;
+  if (event.kind === "phase" || event.kind === "tasks" || event.kind === "plan") return event;
   const id = `sub:${child}:${event.id}`;
   if (event.kind !== "start") return { ...event, id };
   return { ...event, id, subagent: true, ...(parent !== undefined ? { parent } : {}) };

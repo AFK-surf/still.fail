@@ -114,6 +114,12 @@
     "other": "{n} people stuck after sign-in"
   },
   "core-views.admin.todo.stuck_hint": "Grant access or see where they're stuck",
+  "core-views.agent.plan.done": "{done} of {n} done",
+  "core-views.agent.task.agent": "Subagent",
+  "core-views.agent.task.command": "Command",
+  "core-views.agent.going.plan": "Checklist {done}/{n}",
+  "core-views.agent.going.planNow": "{plan}: {item}",
+  "core-views.agent.going.tasks": "{n} in the background",
   "core-views.agent.cacheCold": "Cache expired; going on rereads {tokens} tokens",
   "core-views.agent.cacheColdAuto": "Cache expired; the next message starts afresh",
   "core-views.agent.cacheColdCost": "Cache expired; going on costs about {cost}",

@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { LiveFromAcp, acpNamed, chars, type AcpLiveState } from "./live.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, type ProcessSnapshot, parseLine } from "./own-process.ts";
 import type { RunnerInfo } from "./runner.ts";
-import { runtimeLabel, stationTool, unreachable, uuid, type FailureReason, type OpenOptions, type RuntimeKind, type TurnOutcome } from "./runtime.ts";
+import { runtimeLabel, stationTool, unreachable, uuid, type FailureReason, type OpenOptions, type PlanItem, type RuntimeKind, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 
@@ -40,6 +40,14 @@ export const rpc = (id: string, method: string, params: Json) => JSON.stringify(
 export const mcpServers = (url: string, token: string) => [{ type: "http", name: "stillfail", url, headers: [{ name: "Authorization", value: `Bearer ${token}` }] }];
 
 /// Whether an update is a step of a turn (what the model says or does), not something said of the session.
+/// An ACP `plan` update's entries as checklist items (null: it says none it can be read by).
+export function planOfAcp(update: Json): PlanItem[] | null {
+  if (!Array.isArray(update?.entries)) return null;
+  return update.entries
+    .filter((e: Json) => typeof e?.content === "string")
+    .map((e: Json): PlanItem => ({ text: e.content, status: typeof e.status === "string" ? e.status : "pending" }));
+}
+
 export const turnStep = (update: Json) => ["agent_message_chunk", "agent_thought_chunk", "tool_call", "tool_call_update"].includes(update?.sessionUpdate);
 
 /// What an error answer says: its message, and its data's.
@@ -253,9 +261,16 @@ export abstract class AcpSession extends OwnProcessSession {
   }
 
   private update(params: Json) {
-    if (this.loading) return;
     const update = this.normalized(params?.update);
     const from = params?.sessionId;
+    // Its checklist, whole each time: told as it is, session/load's saying it again of its past included (so the
+    // latest is known again after the station started anew).
+    if (update?.sessionUpdate === "plan" && (this.sessionId === "" || typeof from !== "string" || from === this.sessionId)) {
+      const plan = planOfAcp(update);
+      if (plan !== null) this.events({ type: "live", event: { kind: "plan", plan } });
+      return;
+    }
+    if (this.loading) return;
     if (this.sessionId !== "" && typeof from === "string" && from !== this.sessionId) return this.other(from, update);
     if (!this.turn.busy && turnStep(update) && !this.unprompted()) return;
     const done = this.track(update);

@@ -28,7 +28,8 @@ import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx
 import * as linkCss from "../StationLink.css.ts";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
-import { AgentCard, UsageTiles } from "../AgentCard.tsx";
+import { AgentCard, UsageTiles, WorkMark } from "../AgentCard.tsx";
+import * as cardCss from "../AgentCard.css.ts";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { ChatPanel, ChatSample, goToNeighbour } from "../Chat.tsx";
@@ -929,7 +930,8 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   return (
     <div className={css.sessionDetails}>
       {tiles && <UsageTiles card={card} context={context} />}
-      {quiet && <p className={css.sessionQuiet}>{quiet}</p>}
+      {/* (its work past its turns at the line's end: the first to give way) */}
+      {quiet && <p className={`${css.sessionQuiet} ${cardCss.workQuiet}`}><span className={cardCss.workQuietText}>{quiet}</span><WorkMark station={station.address} session={session.key} /></p>}
       <div className={css.sessionLine}>
         <span className={css.sessionLineMark}><AgentMark maker={session.maker} runtime={session.runtime} badge={undefined} size={16} /></span>
         <span className={css.sessionLineText}>

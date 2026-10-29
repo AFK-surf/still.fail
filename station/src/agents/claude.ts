@@ -132,7 +132,10 @@ export type Task = BackgroundTask & { background: boolean };
 const ENDED = new Set(["completed", "failed", "killed", "stopped"]);
 
 /// What its tasks as the turn leaves them run in the background.
-export const backgroundOf = (turn: Turn): BackgroundTask[] => Object.values(turn.tasks ?? {}).filter((t) => t.background).map(({ id, kind, description }) => ({ id, kind, description }));
+export const backgroundOf = (turn: Turn): BackgroundTask[] =>
+  Object.values(turn.tasks ?? {})
+    .filter((t) => t.background)
+    .map(({ id, kind, description, startedAt }) => (startedAt === undefined ? { id, kind, description } : { id, kind, description, startedAt }));
 
 /// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
 /// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
@@ -189,8 +192,16 @@ export type ClaudeDriverOptions = {
 
 const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
 
-/// What a frame does to the turn (claude.rs on_frame). `interrupt` is how an auth failure stops the turn.
-export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void) {
+/// What a frame does to the turn (claude.rs on_frame). `interrupt` is how an auth failure stops the turn; `now` when a
+/// task it tells of starts. What it has going in the background, said again (a `tasks` live event) as it changes.
+export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number = wall.now) {
+  const before = JSON.stringify(backgroundOf(turn));
+  frameDoes(frame, turn, emit, interrupt, now);
+  const tasks = backgroundOf(turn);
+  if (JSON.stringify(tasks) !== before) emit({ type: "live", event: { kind: "tasks", tasks } });
+}
+
+function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number) {
   const kind = typeof frame?.type === "string" ? frame.type : "";
   const subtype = typeof frame?.subtype === "string" ? frame.subtype : "";
   // A control request it refused (a model it cannot switch to, say): the turns go on as they were.
@@ -212,7 +223,7 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
     }
   } else if (kind === "system" && subtype === "task_started" && typeof frame.task_id === "string" && frame.owned_by_subagent !== true) {
     const description = typeof frame.description === "string" ? frame.description : "";
-    turn.tasks = { ...turn.tasks, [frame.task_id]: { id: frame.task_id, kind: frame.task_type === "local_agent" ? "agent" : "command", description, background: frame.is_backgrounded === true } };
+    turn.tasks = { ...turn.tasks, [frame.task_id]: { id: frame.task_id, kind: frame.task_type === "local_agent" ? "agent" : "command", description, background: frame.is_backgrounded === true, startedAt: now() } };
   } else if (kind === "system" && (subtype === "task_notification" || subtype === "task_updated") && typeof frame.task_id === "string" && turn.tasks?.[frame.task_id]) {
     const status = subtype === "task_notification" ? frame.status : frame.patch?.status;
     const { [frame.task_id]: task, ...rest } = turn.tasks;

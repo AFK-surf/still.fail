@@ -54,7 +54,7 @@ export const planMark = style({ display: "inline-block", width: "16px", color: v
 globalStyle(`${plan} li[data-status="completed"]`, { color: vars.muted, textDecoration: "line-through", textDecorationColor: vars.subtle });
 globalStyle(`${plan} li[data-status="completed"] ${planMark}`, { color: vars.green, textDecoration: "none" });
 globalStyle(`${plan} li[data-status="in_progress"]`, { fontWeight: "600" });
-globalStyle(`${plan} li[data-status="in_progress"] ${planMark}`, { color: vars.accent });
+globalStyle(`${plan} li[data-status="in_progress"] ${planMark}`, { color: vars.accentText });
 
 export const fields = style({ display: "grid", gap: "4px", margin: "0", padding: "0 2px", fontSize: vars.textMeta });
 export const field = style({ display: "grid", gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)", gap: "12px", alignItems: "baseline" });

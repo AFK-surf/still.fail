@@ -135,6 +135,26 @@ export interface AgentCardNote {
 	level: Level;
 }
 
+/** An item of an agent's checklist, drawn as a plan's in its execution history (✓ › ·). */
+export interface AgentCardStep {
+	text: string;
+	/** completed | in_progress | anything else: still to do. */
+	status: string;
+}
+
+/** A subagent or a command an agent has going in the background past its turns. */
+export interface AgentCardTask {
+	id: string;
+	/** agent | command */
+	kind: string;
+	/** What it is: its description's first line, else its kind's word. */
+	text: string;
+	/** 子代理 | 命令 */
+	kindText: string;
+	/** Since when it has run, on this device's clock. */
+	since: number;
+}
+
 /**
  * A chat's agent in brief, for its card (the `agentCard` view, views/brief.ts): each part only when it
  * has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
@@ -156,6 +176,20 @@ export interface AgentCardView {
 	latest: AgentCardLine[];
 	/** What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'. */
 	attention: AgentCardNote[];
+	/** What it has going in the background past its turns (its subagents and commands), as its station says them; none from a station from before. */
+	tasks: AgentCardTask[];
+	/** Its checklist as it wrote it last (Claude Code's todos or tasks, Codex's plan, an ACP plan), in order. */
+	plan: AgentCardStep[];
+	/** How much of its checklist is done: 已完成 2/5. Absent without one. */
+	planText?: string;
+	/** Both in one line, each part only where it has one: 后台 4 · 清单 2/6：<the item under way>. Absent with neither. */
+	workLine?: string;
+	/** Both shorter, its execution history's mark: 后台 4 · 2/6 (后台 4; 清单 2/6). Absent with neither. */
+	workMark?: string;
+	/** The mark where its row has less room: the counts alone (4 · 2/6). */
+	workMarkShort?: string;
+	/** The mark with less room still, beside an icon: how many tasks (4), else the checklist's done/all (2/6). */
+	workMarkCount?: string;
 }
 
 export interface AgentEnvPart {

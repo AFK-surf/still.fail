@@ -248,7 +248,7 @@ export interface Runs { choices: ModelOption[]; profile: Profile }
  * few hundred thousand tokens each. */
 export function agentCardView(chat: DemoChat): AgentCardView {
   const turns = chat.messages.filter((m) => m.authorKind === "person").length;
-  if (turns === 0) return { latest: [], attention: [] };
+  if (turns === 0) return { latest: [], attention: [], tasks: [], plan: [] };
   const context = turns * 19;
   return {
     work: `${turns} 轮 · 共干了 ${turns * 7} 分钟`, cost: `$${(turns * 0.62).toFixed(2)}`, tokens: `输入 ${turns * 420}K · 输出 ${turns * 11}K`,
@@ -258,7 +258,7 @@ export function agentCardView(chat: DemoChat): AgentCardView {
       ...chat.messages.filter((m) => m.authorKind === "agent").map((m) => ({ key: `${m.seq}`, text: m.text.split("\n")[0]!.replace(/`/g, "") })),
       ...(chat.running ? [{ key: "now", text: chat.running.activity, now: true }] : []),
     ].slice(-3),
-    attention: [],
+    attention: [], tasks: [], plan: [],
   };
 }
 

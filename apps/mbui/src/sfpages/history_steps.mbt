@@ -1099,6 +1099,30 @@ fn tool_body(c : @ui.Ctx, src : Source, rk : String, step : Json?) -> Unit {
 }
 
 ///|
+/// A list of things to do (ToolStep.tsx PlanList), each `{text, status}`: done ✓ struck and muted, under way › in 600,
+/// the rest ·. A plan call's in the history, and an agent's checklist in its card and its history's details
+/// (agent_work).
+pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
+  c.box(style=tool_plan, fn() {
+    for it in list {
+      let iv = Some(it)
+      let status = text(iv, "status")
+      let (mark, mark_ink, words) = match status {
+        "completed" => ("✓", @sf.theme().p.green, tool_plan_done)
+        "in_progress" => ("›", @sf.theme().p.accent, tool_plan_now)
+        _ => ("·", @sf.theme().p.subtle, tool_plan_words)
+      }
+      c.box(style=tool_plan_row, fn() {
+        c.box(style=tool_plan_mark, fn() { c.rich([@ui.span(mark, color=mark_ink)], style=tool_plan_words) |> ignore }) |> ignore
+        c.rich([@ui.span(text(iv, "text"), strike=status == "completed")], style=words) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
 /// One part of a call or of what came back (ToolStep.tsx Part, ToolStep.css.ts).
 fn tool_part(c : @ui.Ctx, key : String, part : Json?) -> Unit {
   match text(part, "kind") {
@@ -1163,24 +1187,7 @@ fn tool_part(c : @ui.Ctx, key : String, part : Json?) -> Unit {
       |> ignore
     "markdown" =>
       c.box(style=tool_box, fn() { md_view(c, key + "/md", text(part, "text"), field(part, "md"), small=true) }) |> ignore
-    "plan" =>
-      c.box(style=tool_plan, fn() {
-        for it in items(part, "items") {
-          let iv = Some(it)
-          let status = text(iv, "status")
-          let (mark, mark_ink, words) = match status {
-            "completed" => ("✓", @sf.theme().p.green, tool_plan_done)
-            "in_progress" => ("›", @sf.theme().p.accent, tool_plan_now)
-            _ => ("·", @sf.theme().p.subtle, tool_plan_words)
-          }
-          c.box(style=tool_plan_row, fn() {
-            c.box(style=tool_plan_mark, fn() { c.rich([@ui.span(mark, color=mark_ink)], style=tool_plan_words) |> ignore }) |> ignore
-            c.rich([@ui.span(text(iv, "text"), strike=status == "completed")], style=words) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+    "plan" => plan_list(c, items(part, "items"))
     "fields" =>
       c.box(style=tool_fields, fn() {
         for r in items(part, "rows") {

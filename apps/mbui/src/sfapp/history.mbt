@@ -226,11 +226,20 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
   let usage = @sfpages.history_usage(src, r.station, key)
   let host = (src.topic)("host", { "station": Json::string(r.station) }).value
-  let detail = fn(label : String, value : String) {
+  let detail = fn(label : String, value : String, marked : Bool) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
       c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
       |> ignore
-      c.box(w=Fill(1.0), fn() { c.text(value, size=t.t.ui, color=t.p.text) |> ignore }) |> ignore
+      if marked {
+        c.box(style=details_turns, fn() {
+          c.text(value, style=details_turns_words, keep=true) |> ignore
+          // (in the list's row, said at its least: a mark with how many)
+          @sfpages.work_mark(c, src, r.station, key, details_turns_mark, details_turns_link, lead=" · ", smallest=true)
+        })
+        |> ignore
+      } else {
+        c.box(w=Fill(1.0), fn() { c.text(value, size=t.t.ui, color=t.p.text) |> ignore }) |> ignore
+      }
     })
     |> ignore
   }
@@ -245,14 +254,16 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
         app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
       }
       c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {
-        detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"))
+        detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"), false)
         match text(s, "processText") {
           "" => ()
-          p => detail(tr("android-chat.history.detail.process"), p)
+          p => detail(tr("android-chat.history.detail.process"), p, false)
         }
         match text(card, "work") {
           "" => ()
-          w => detail(tr("android-chat.agent.turns"), w)
+          // (and after it what it has going in the background and its checklist, a mark that opens them from the
+          // foot: the first to give way)
+          w => detail(tr("android-chat.agent.turns"), w, true)
         }
       })
       |> ignore
@@ -260,16 +271,16 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
         group_label(c, tr("android-chat.agent.usage"))
         c.box(w=Fill(1.0), pt=6.0, pb=10.0, gap=8.0, fn() {
           for u in usage {
-            detail(text(Some(u), "label"), text(Some(u), "value"))
+            detail(text(Some(u), "label"), text(Some(u), "value"), false)
           }
         })
         |> ignore
       }
       group_label(c, "Station")
       c.box(w=Fill(1.0), pt=6.0, pb=10.0, gap=8.0, fn() {
-        detail(tr("android-chat.history.detail.name"), station_name_of(src, r))
+        detail(tr("android-chat.history.detail.name"), station_name_of(src, r), false)
         match host {
-          Some(Object(_)) => detail(tr("android-chat.history.detail.machine"), text(host, "identity"))
+          Some(Object(_)) => detail(tr("android-chat.history.detail.machine"), text(host, "identity"), false)
           _ => ()
         }
       })
@@ -409,3 +420,22 @@ let run_words : @ui.Style = @ui.css("w=Full")
 /// How it runs: its model, how hard it thinks and its account, on a line.
 // kept across runs: a value (no field of it changes)
 let run_line : @ui.Style = @ui.css("row w=Full align=ACenter")
+
+///|
+/// Its turns' value with the mark of its work past its turns after it (work_mark): one line, its words cut short only
+/// once the mark has given way.
+// kept across runs: a value (no field of it changes)
+let details_turns : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let details_turns_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let details_turns_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=false)
+
+///|
+/// The mark after them: quieter than them (12, muted), a link's ink under the finger.
+// kept across runs: a value (no field of it changes)
+let details_turns_mark : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)

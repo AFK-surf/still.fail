@@ -7,8 +7,9 @@
 // system's change events (fs.watch), not looked at every 250 ms.
 import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";
-import type { LiveEvent } from "../agents/runtime.ts";
+import type { BackgroundTask, LiveEvent, PlanItem } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
+import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
 import { ChainTail, type TailState } from "../read/tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
 import { type SessionUsage, noUsage } from "../read/usage.ts";
@@ -27,6 +28,9 @@ export type LiveMessage =
   | { type: "timeline"; start: number; entries: TimelineEntry[]; usage: SessionUsage }
   /// How fast the model is writing now (≈ tokens a second, from bytes), at most once a second; 0 once it stops.
   | { type: "rate"; tokensPerSecond: number }
+  /// What it has going on past its turns and its checklist, whole each time (told as a stream opens and as either
+  /// changes; a client from before reads no such message): each task with how long it has run.
+  | { type: "work"; tasks: (BackgroundTask & { elapsedMs: number })[]; plan: PlanItem[] }
   | { type: "clear" };
 
 export type Listener = (message: LiveMessage) => void;
@@ -48,6 +52,10 @@ const RATE_FIRST_MS = 500;
 /// How long a session is still followed once its turn is over (`running`): a person who answers within it is answered
 /// without its transcript read again from the start.
 export const HELD_AFTER_MS = 2 * 60_000;
+/// How far back a transcript is read for its checklist as it is first watched (pages of entries, the latest first): up
+/// to where a call says the list whole.
+const PLAN_PAGES = 4;
+const PLAN_PAGE = 1000;
 
 const takeChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
 /**
@@ -98,6 +106,13 @@ export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
   private phase = new Map<string, [Phase, number]>();
   private rates = new Map<string, Rate>();
+  /// What each session has going in the background (its runtime says it whole as it changes), and its checklist: as
+  /// its transcript says it (read on from where it was read back to as it was first watched; what is gained meanwhile
+  /// held, `planBack`), or as its runtime says it apart (an ACP runtime's, which wins). Kept past its turns.
+  private tasks = new Map<string, BackgroundTask[]>();
+  private plans = new Map<string, PlanState>();
+  private planBack = new Map<string, TimelineEntry[]>();
+  private saidPlans = new Map<string, PlanItem[]>();
   private listeners = new Map<string, Sub[]>();
   private watched = new Map<string, Watched>();
   /// Its time and its waits (a read put off to gather a burst of writes).
@@ -167,6 +182,61 @@ export class LiveHub {
     } catch {}
   }
 
+  /// What it has going in the background and its checklist, as they are now.
+  private workNow(key: string): LiveMessage {
+    const now = this.time.now();
+    const tasks = (this.tasks.get(key) ?? []).map((t) => ({ ...t, elapsedMs: Math.max(0, now - (t.startedAt ?? now)) }));
+    const said = this.saidPlans.get(key);
+    const read = this.plans.get(key);
+    return { type: "work", tasks, plan: said ?? (read ? planItems(read) : []) };
+  }
+
+  /// A transcript's entries read for its checklist: told when it changed (held while it is read back).
+  private readForPlan(key: string, entries: TimelineEntry[]) {
+    const back = this.planBack.get(key);
+    if (back !== undefined) {
+      back.push(...entries);
+      return;
+    }
+    let state = this.plans.get(key);
+    if (!state) this.plans.set(key, (state = noPlan()));
+    if (readPlan(state, entries) && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
+  }
+
+  /// Its checklist read back from its transcript's entries before `end`, as it begins to be watched: the latest pages
+  /// back to where a call says it whole (or PLAN_PAGES of them), then what was gained meanwhile.
+  private readPlanBack(key: string, end: number) {
+    if (this.history === null) return;
+    const history = this.history;
+    this.planBack.set(key, []);
+    void (async () => {
+      const pages: TimelineEntry[][] = [];
+      for (let upto = end, n = 0; upto > 0 && n < PLAN_PAGES; n++) {
+        const page = await history.page(key, upto, Math.min(PLAN_PAGE, upto), false);
+        const got = page.entries.slice(0, Math.max(0, upto - page.start));
+        if (got.length === 0) break;
+        pages.unshift(got);
+        upto = page.start;
+        if (got.some(saysWhole)) break;
+      }
+      return pages.flat();
+    })().then(
+      (past) => this.planRead(key, past),
+      () => this.planRead(key, []),
+    );
+  }
+
+  private planRead(key: string, past: TimelineEntry[]) {
+    const meanwhile = this.planBack.get(key) ?? [];
+    this.planBack.delete(key);
+    const state = noPlan();
+    readPlan(state, past);
+    readPlan(state, meanwhile);
+    const before = JSON.stringify(planItems(this.plans.get(key) ?? noPlan()));
+    this.plans.set(key, state);
+    if (JSON.stringify(planItems(state)) !== before && !this.saidPlans.has(key)) this.emit(key, this.workNow(key));
+  }
+
   /// The steps in flight, and the phase.
   private stepsNow(key: string): LiveMessage {
     const phase = this.phase.get(key);
@@ -176,6 +246,20 @@ export class LiveHub {
   /// A runtime's live event for a session.
   event(key: string, event: LiveEvent) {
     switch (event.kind) {
+      case "tasks": {
+        // When each was seen starting: as its runtime says, else as it was first told here.
+        const was = new Map((this.tasks.get(key) ?? []).map((t) => [t.id, t.startedAt]));
+        const tasks = event.tasks.map((t) => ({ ...t, startedAt: t.startedAt ?? was.get(t.id) ?? this.time.now() }));
+        if (tasks.length === 0 && !this.tasks.has(key)) return;
+        if (tasks.length === 0) this.tasks.delete(key);
+        else this.tasks.set(key, tasks);
+        this.emit(key, this.workNow(key));
+        break;
+      }
+      case "plan":
+        this.saidPlans.set(key, event.plan);
+        this.emit(key, this.workNow(key));
+        break;
       case "phase":
         this.phase.set(key, [event.phase, this.time.now()]);
         this.emit(key, { type: "step", event });
@@ -269,7 +353,7 @@ export class LiveHub {
     const out: LiveMessage[] = [];
     const tail = this.watched.get(key)?.tail ?? null;
     if (tail !== null) out.push({ type: "timeline", start: tail.length, entries: [], usage: this.usageOf(key) });
-    out.push(this.stepsNow(key));
+    out.push(this.stepsNow(key), this.workNow(key));
     return out;
   }
 
@@ -288,6 +372,7 @@ export class LiveHub {
     if (entries.length === 0) return;
     this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key) });
     this.count?.ask(key);
+    this.readForPlan(key, entries);
   }
 
   /// A watched transcript's length, kept where its summary reads it, as it changes.
@@ -327,16 +412,16 @@ export class LiveHub {
     };
     if (!listening()) return;
     const tail = this.watched.get(key)?.tail ?? null;
-    if (tail === null) return joined([this.stepsNow(key)], false);
+    if (tail === null) return joined([this.stepsNow(key), this.workNow(key)], false);
     // A watcher that has more than the transcript (it was written anew) is told where it ends.
     const len = tail.length;
     const start = Math.max(Math.min(from, len), last === null ? 0 : Math.max(0, len - last));
     const usage = this.usageOf(key);
-    if (start >= len || tail.keeps) return joined([{ type: "timeline", start, entries: tail.keeps ? tail.entries.slice(start) : [], usage }, this.stepsNow(key)], false);
+    if (start >= len || tail.keeps) return joined([{ type: "timeline", start, entries: tail.keeps ? tail.entries.slice(start) : [], usage }, this.stepsNow(key), this.workNow(key)], false);
     void this.past(key, start, len, sub.brief).then(
-      (entries) => joined([{ type: "timeline", start, entries, usage }, this.stepsNow(key)], true),
+      (entries) => joined([{ type: "timeline", start, entries, usage }, this.stepsNow(key), this.workNow(key)], true),
       // Not read: told where it ends; it reads what it lacks as it would anything.
-      () => joined([{ type: "timeline", start: len, entries: [], usage }, this.stepsNow(key)], false),
+      () => joined([{ type: "timeline", start: len, entries: [], usage }, this.stepsNow(key), this.workNow(key)], false),
     );
   }
 
@@ -432,6 +517,10 @@ export class LiveHub {
 
   /// A deleted session: nothing of it is watched or kept any more.
   forget(key: string) {
+    this.tasks.delete(key);
+    this.plans.delete(key);
+    this.planBack.delete(key);
+    this.saidPlans.delete(key);
     this.steps.delete(key);
     this.phase.delete(key);
     this.rates.delete(key);
@@ -501,6 +590,11 @@ export class LiveHub {
       watched.tail = tail;
       watched.ready = null;
       this.noteLength(key, tail);
+      // Its checklist read again from what is written of it: kept here, from it; else read back where it is read.
+      if (tail.keeps) {
+        this.plans.set(key, noPlan());
+        this.readForPlan(key, tail.entries);
+      } else this.readPlanBack(key, tail.length);
       arm();
     };
     if (this.history === null) {

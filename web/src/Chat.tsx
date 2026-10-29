@@ -1095,7 +1095,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{who}</button>
+        ? <AgentHover agent={agent}><button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{who}</button></AgentHover>
         // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
@@ -1138,7 +1138,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack="">{s.by.picture ? <img className={css.msgAvatarSlackPicture} src={s.by.picture} alt="" width={18} height={18} referrerPolicy="no-referrer" /> : <Avatar id={s.by.name} name={s.by.name} size={18} />}<span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
         : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
+        ? <AgentHover agent={agent}><button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button></AgentHover>
         : <span className={css.msgName}>{s.by.name}</span>}
       route={
         <span className={css.msgRoute}>

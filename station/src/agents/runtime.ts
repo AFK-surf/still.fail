@@ -22,7 +22,12 @@ export type LiveEvent =
   | { kind: "start"; id: string; step: "text" | "thinking" | "tool"; tool?: string; input?: string; subagent?: boolean; parent?: string }
   | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
   | { kind: "end"; id: string }
-  | { kind: "phase"; phase: "starting" | "requesting" | "responding" | "working" };
+  | { kind: "phase"; phase: "starting" | "requesting" | "responding" | "working" }
+  /// What it has going in the background now, all of it (said again whenever it changes; none once its process ends).
+  | { kind: "tasks"; tasks: BackgroundTask[] }
+  /// Its checklist as it said it last, whole (an ACP runtime's `plan` update): a runtime that writes it with a tool
+  /// call says it in its transcript instead (read/plan.ts).
+  | { kind: "plan"; plan: PlanItem[] };
 
 /// What a session's runtime says, in order.
 export type RuntimeEvent =
@@ -97,8 +102,13 @@ export interface AgentSession {
   background?(): BackgroundTask[];
 }
 
-/// A background task of a runtime process: a subagent (resumed by its id) or a command.
-export type BackgroundTask = { id: string; kind: "agent" | "command"; description: string };
+/// A background task of a runtime process: a subagent (resumed by its id) or a command; `startedAt` (ms) when it was
+/// seen starting, where the runtime says (one from before it was kept says none).
+export type BackgroundTask = { id: string; kind: "agent" | "command"; description: string; startedAt?: number };
+
+/// An item of an agent's checklist (Claude Code's todos and tasks, Codex's plan, an ACP plan's entries): what, and
+/// where it stands (completed, in_progress, or anything else: still to do).
+export type PlanItem = { text: string; status: string };
 
 /// The station's tools by their server's name (before the rename: ember).
 export const TOOL_SERVERS = ["stillfail", "ember"];
