@@ -20,10 +20,12 @@ const ORIGIN = "https://stillfail.test";
 /// What a station other than `ws/st` answers, by `<address> <METHOD> <path>`: a body (200), or `[status, body]`.
 type Table = Record<string, unknown>;
 
-/// `ws/st` as the fixture has it; every other station answers from `table`, what it was asked kept.
+/// `ws/st` as the fixture has it; every other station answers from `table`, what it was asked kept, and one of `up`
+/// what the table does not say as the fixture's station does (it is reached); the rest are not reached.
 class Wire implements StationWire {
   readonly asked: { station: string; method: string; path: string; body: J }[] = [];
   readonly table: Table = {};
+  readonly up = new Set<string>();
   readonly #host: HostWire;
   constructor(host: FakeHost) {
     this.#host = new HostWire(host);
@@ -34,7 +36,7 @@ class Wire implements StationWire {
     const path = head.path.replace("/admin/api", "");
     this.asked.push({ station: at, method: head.method, path, body: body.length > 0 ? JSON.parse(new TextDecoder().decode(body)) : null });
     const key = `${at} ${head.method} ${path}`;
-    if (!(key in this.table)) return Effect.fail(CoreError.host("连不上"));
+    if (!(key in this.table)) return this.up.has(at) ? this.#host.request(station, head, body) : Effect.fail(CoreError.host("连不上"));
     const said = this.table[key];
     const [code, answer] = Array.isArray(said) ? (said as [number, unknown]) : [200, said];
     const bytes = new TextEncoder().encode(JSON.stringify(answer));
@@ -45,13 +47,18 @@ class Wire implements StationWire {
 }
 
 /// The viewer: an admin of W (`ws`, the fixture's `st`, and x1, which W joined: its home is 甲), the owner of 甲 (`wa`:
-/// a1 up, a2 joined from elsewhere, st which 甲 joined, x1), a member of 丙 (`wc`, c1) and an admin of 乙 (`wb`, b1
-/// down). What still.fail cloud was asked to make (enrollments) is kept.
+/// a1 up, a2 joined from elsewhere and up, st which 甲 joined, x1), a member of 丙 (`wc`, c1) and an admin of 乙 (`wb`,
+/// b1 down). Up or down as their links find them: still.fail cloud lists no `online`. What still.fail cloud was asked
+/// to make (enrollments) is kept.
 /// `wbLocked`: 乙 in security mode (W is not).
 async function setUp(o: { stJoined?: boolean; wbLocked?: boolean; answers?: ReturnType<typeof base> } = {}) {
   let wire: Wire | null = null;
   const made: { path: string; body: J }[] = [];
-  const s = await started(o.answers ?? base(), 0, (host) => (wire = new Wire(host)), ({ host }) => {
+  const s = await started(o.answers ?? base(), 0, (host) => {
+    wire = new Wire(host);
+    for (const up of ["wa/a1", "wa/a2"]) wire.up.add(up);
+    return wire;
+  }, ({ host }) => {
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
       const path = req.url.replace(ORIGIN, "");
@@ -66,14 +73,14 @@ async function setUp(o: { stJoined?: boolean; wbLocked?: boolean; answers?: Retu
       if (path === "/v1/workspaces/ws") return ws("ws", [{ id: "st", name: "studio", online: true, last_seen: null, ...(o.stJoined ? { joined: true } : {}) }, { id: "x1", name: "X1", online: true, last_seen: null, joined: true }]);
       if (path === "/v1/workspaces/wa") {
         return ws("wa", [
-          { id: "a1", name: "A1", online: true, last_seen: null },
-          { id: "a2", name: "A2", online: true, last_seen: null, joined: true },
+          { id: "a1", name: "A1", last_seen: null },
+          { id: "a2", name: "A2", last_seen: null, joined: true },
           { id: "st", name: "studio", online: true, last_seen: null, ...(o.stJoined ? {} : { joined: true }) },
           { id: "x1", name: "X1", online: true, last_seen: null },
         ]);
       }
       if (path === "/v1/workspaces/wc") return ws("wc", [{ id: "c1", name: "C1", online: true, last_seen: null }]);
-      if (path === "/v1/workspaces/wb") return Effect.succeed(jsonResponse(200, { id: "wb", stations: [{ id: "b1", name: "B1", online: false, last_seen: null }], ...(o.wbLocked ? { locked: true } : {}) }));
+      if (path === "/v1/workspaces/wb") return Effect.succeed(jsonResponse(200, { id: "wb", stations: [{ id: "b1", name: "B1", last_seen: null }], ...(o.wbLocked ? { locked: true } : {}) }));
       if (req.method === "POST" && path === "/v1/workspaces/ws/enrollments") {
         made.push({ path, body: JSON.parse(new TextDecoder().decode(req.body!)) });
         return Effect.succeed(jsonResponse(200, { token: "tok-1", expires_at: 1, install: "", command: "" }));
@@ -117,6 +124,23 @@ test("the stations to add are those of a workspace the viewer manages (their hom
   // In W's list, the one W joined says so, and where it is from.
   const listed = (v(values, 2) as J[]).map((s) => [s.id, s.joined, s.home ?? null]);
   assert.deepEqual(listed, [["st", false, null], ["x1", true, "甲"]]);
+  core.close();
+});
+
+test("a station to add that comes up is said to be online, as its link finds it", async () => {
+  const { host, core, wire } = await setUp();
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "joinable", workspace: "ws" });
+  await host.settle();
+  apply(host, values);
+  const b1 = () => (v(values, 1) as J).items.find((s: J) => s.id === "b1").line;
+  assert.equal(b1(), "乙 · 离线");
+  wire.up.add("wb/b1");
+  core.inner.stations.cameOnline("wb/b1");
+  await host.settle();
+  apply(host, values);
+  assert.equal(b1(), "乙 · 在线");
   core.close();
 });
 
