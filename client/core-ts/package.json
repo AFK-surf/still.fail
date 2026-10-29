@@ -18,7 +18,7 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "@scure/bip39": "2.4.0",
-    "effect": "4.0.0",
+    "effect": "4.1.0",
     "fzstd": "0.1.1",
     "markdown-it": "14.1.0",
     "ws": "8.22.0"

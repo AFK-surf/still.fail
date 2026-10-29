@@ -374,6 +374,7 @@ export class Links {
             }
             yield* core.host.storageDelete(`${LINK_KEY}/${address}`);
           }),
+          { log: "Unhandled", message: "former link state moved" },
         ),
         link.scoped,
       );
@@ -391,6 +392,7 @@ export class Links {
           link.memory.set("host", was);
           told.changed(address, "host");
         }),
+        { log: "Unhandled", message: "former host figures moved" },
       ),
       link.scoped,
     );

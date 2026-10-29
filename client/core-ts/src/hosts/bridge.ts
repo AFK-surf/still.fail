@@ -198,7 +198,7 @@ export class BridgeHost implements Host {
     const bridge = this.#bridge;
     return Effect.gen(function* () {
       const opened = yield* Effect.acquireRelease(bridge.call("stream.open", { url: request.url, method: request.method, headers: request.headers }, request.body ?? null), (a) =>
-        Effect.ignore(bridge.call("stream.close", { id: (a.json as J).id })),
+        Effect.ignore(bridge.call("stream.close", { id: (a.json as J).id }), { log: "Unhandled", message: "stream closed" }),
       );
       const head = opened.json as J;
       return { status: head.status, headers: head.headers, body: pullBytes(bridge, "stream.read", head.id) };
@@ -209,7 +209,7 @@ export class BridgeHost implements Host {
   unzstd(): Effect.Effect<Unzstd, HostError, Scope.Scope> {
     const bridge = this.#bridge;
     return Effect.map(
-      Effect.acquireRelease(bridge.call("zstd.open", {}), (a) => Effect.ignore(bridge.call("zstd.close", { id: (a.json as J).id }))),
+      Effect.acquireRelease(bridge.call("zstd.open", {}), (a) => Effect.ignore(bridge.call("zstd.close", { id: (a.json as J).id }), { log: "Unhandled", message: "zstd closed" })),
       (a): Unzstd => {
         const id = (a.json as J).id as number;
         return { push: (piece) => Effect.map(bridge.call("zstd.push", { id }, piece), (r) => ({ bytes: r.bytes ?? new Uint8Array(0), whole: (r.json as J)?.whole === true })) };
@@ -220,10 +220,10 @@ export class BridgeHost implements Host {
   websocket(url: string, protocols: string[]): Effect.Effect<Pull<string>, HostError, Scope.Scope> {
     const bridge = this.#bridge;
     return Effect.gen(function* () {
-      const opened = yield* Effect.acquireRelease(bridge.call("ws.open", { url, protocols }), (a) => Effect.ignore(bridge.call("ws.close", { id: (a.json as J).id })));
+      const opened = yield* Effect.acquireRelease(bridge.call("ws.open", { url, protocols }), (a) => Effect.ignore(bridge.call("ws.close", { id: (a.json as J).id }), { log: "Unhandled", message: "socket closed" }));
       const id = (opened.json as J).id as number;
       // The host's ping (host.rs SOCKET_PING_MS).
-      yield* Effect.forkScoped(Effect.forever(laterSleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }))))));
+      yield* Effect.forkScoped(Effect.forever(laterSleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }), { log: "Unhandled", message: "socket pinged" })))));
       return { take: Effect.map(bridge.call("ws.next", { id }), (a) => ((a.json as J)?.end === true ? null : String((a.json as J).text))) };
     });
   }
@@ -235,7 +235,7 @@ export class BridgeHost implements Host {
   tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
     const bridge = this.#bridge;
     return Effect.gen(function* () {
-      const opened = yield* Effect.acquireRelease(bridge.call("tcp.open", { port }), (a) => Effect.ignore(bridge.call("tcp.close", { id: (a.json as J).id })));
+      const opened = yield* Effect.acquireRelease(bridge.call("tcp.open", { port }), (a) => Effect.ignore(bridge.call("tcp.close", { id: (a.json as J).id }), { log: "Unhandled", message: "tcp closed" }));
       const id = (opened.json as J).id as number;
       return {
         read: pullBytes(bridge, "tcp.read", id),
@@ -251,7 +251,7 @@ export class BridgeHost implements Host {
     const bridge = this.#bridge;
     return Effect.gen(function* () {
       if (host !== "127.0.0.1" && host !== "::1") return yield* Effect.fail(new HostError(`not a loopback address: ${host}`));
-      const opened = yield* Effect.acquireRelease(bridge.call("listen.open", { port, host }), (a) => Effect.ignore(bridge.call("listen.close", { id: (a.json as J).id })));
+      const opened = yield* Effect.acquireRelease(bridge.call("listen.open", { port, host }), (a) => Effect.ignore(bridge.call("listen.close", { id: (a.json as J).id }), { log: "Unhandled", message: "listener closed" }));
       const id = (opened.json as J).id as number;
       const request = (a: { json: unknown; bytes: Uint8Array | null }): LoopbackRequest | null => {
         const r = a.json as J;
@@ -429,9 +429,9 @@ export function bridgeIroh(bridge: Bridge): Iroh {
         () => null,
       ),
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
-    networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id })),
+    networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id }), { log: "Unhandled", message: "network change told" }),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
-    close: () => Effect.ignore(bridge.call("iroh.close", { id })),
+    close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });
   return {
     bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),

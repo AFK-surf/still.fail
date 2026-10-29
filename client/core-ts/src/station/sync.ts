@@ -821,7 +821,7 @@ export class StationsSync {
           yield* Effect.sleep(WATCH_AGAIN_MS);
           continue;
         }
-        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)));
+        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" });
       }
     });
   }
@@ -1450,7 +1450,7 @@ export class StationsSync {
         reads.splice(0, reads.length, ...reads.filter(([what]) => what !== "overview"));
       }
       yield* Effect.all(
-        reads.map(([what, work]) => Effect.ignore(this.ask(address, what, work))),
+        reads.map(([what, work]) => Effect.ignore(this.ask(address, what, work), { log: "Unhandled", message: "station read" })),
         { concurrency: "unbounded", discard: true },
       );
     });

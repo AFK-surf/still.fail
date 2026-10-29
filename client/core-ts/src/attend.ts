@@ -145,7 +145,7 @@ export class Attend {
     this.#settings = s;
     if (!s.on) this.#show = [];
     else this.#show = this.#show.filter(([n]) => this.heard(of(n)));
-    return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
+    return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)), { log: "Unhandled", message: "attention kept" });
   }
 
   /// The app found what the system allows; whether that changed.

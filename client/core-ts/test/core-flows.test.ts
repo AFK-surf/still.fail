@@ -291,6 +291,22 @@ test("calls_are_traces_and_nothing_goes_out_when_tracing_is_off", async () => {
   core.close();
 });
 
+test("a_failure_let_go_of_is_a_failed_span_of_its_own", async () => {
+  const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
+  await host.time.pass(EXPORT_MS + 100);
+  const before = exports(host).length;
+  // Forked and let go of, as a kept file written in the background is: nothing waits on it.
+  core.inner.runner.fork(Effect.ignore(Effect.fail(CoreError.host("disk full")), { log: "Unhandled", message: "speeds kept" }));
+  core.inner.runner.fork(Effect.ignore(Effect.fail(CoreError.host("not told"))));
+  await host.settle();
+  await host.time.pass(EXPORT_MS + 100);
+  const spans = exports(host).slice(before).flatMap(spansOf).filter((s) => s.name === "ignored");
+  assert.equal(spans.length, 1, JSON.stringify(spans));
+  const attrs = Object.fromEntries(spans[0].attributes.map((a: J) => [a.key, Object.values(a.value)[0]]));
+  assert.deepEqual([attrs["stillfail.ignored"], attrs["error.type"], spans[0].status.code], ["speeds kept", "host", 2]);
+  core.close();
+});
+
 test("a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_page_goes", async () => {
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } });
   // The service's answer: open, its body coming as it is sent here.

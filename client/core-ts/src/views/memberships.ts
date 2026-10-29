@@ -211,7 +211,7 @@ function join(inner: Inner, c: Of, ctx: J): Effect.Effect<unknown, CoreError> {
     const lock = str(get(made, "lock"));
     const answer = yield* Effect.mapError(inner.stations.requests.call(addr, "POST", "/workspaces/join", lock === null ? { token } : { token, lock }, { ctx }), joinError);
     // Then taken into that lock, where this device may sign it in; else that workspace's owner confirms it by its code.
-    if (lock !== null) yield* Effect.ignore(takeInJoined(inner, sub, c.workspace, addr.station));
+    if (lock !== null) yield* Effect.ignore(takeInJoined(inner, sub, c.workspace, addr.station), { log: "Unhandled", message: "joined taken in" });
     inner.data.put(RECORD, c.station, { workspaces: arr(get(answer, "workspaces")), canJoin: get(answer, "canJoin") === true });
     invalidate(inner, c.station);
     // Listed in the workspace it joined.

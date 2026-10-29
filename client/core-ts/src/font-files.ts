@@ -186,7 +186,7 @@ export class FontFiles implements Owner {
       if (kept !== null) return new Beside({}, kept);
       const r = yield* Effect.mapError(this.#host.fetch({ method: "GET", url: face.preview, headers: [], body: null }), (e) => new CoreError("fonts", e.message));
       if (r.status !== 200) return yield* Effect.fail(new CoreError("fonts", t("android-misc.updates.httpStatus", { status: r.status })));
-      yield* Effect.ignore(this.#host.storageSet(key, r.body));
+      yield* Effect.ignore(this.#host.storageSet(key, r.body), { log: "Unhandled", message: "font kept" });
       return new Beside({}, r.body);
     });
   }

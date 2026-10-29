@@ -182,7 +182,7 @@ function importDevice(host: Host, data: Data): Effect.Effect<void> {
     for (const [k, v] of yield* read(host, "changelog")) if (data.device.get("changelog", k) === undefined) data.device.put("changelog", k, v);
     for (const [k, v] of yield* read(host, "choice")) if (!k.startsWith("ws:") && data.device.get("choice", k) === undefined) data.device.put("choice", k, v);
     for (const [k, v] of yield* read(host, "chat_ref")) if (!k.startsWith("links:") && data.device.get("chat_ref", k) === undefined) data.device.put("chat_ref", k, v);
-    yield* Effect.ignore(host.storageSet(DEVICE_DONE, new TextEncoder().encode("1")));
+    yield* Effect.ignore(host.storageSet(DEVICE_DONE, new TextEncoder().encode("1")), { log: "Unhandled", message: "import mark kept" });
   });
 }
 

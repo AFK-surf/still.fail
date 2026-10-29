@@ -496,6 +496,7 @@ export class StationTopics implements Owner {
           }
           yield* host.storageDelete(storage);
         }),
+        { log: "Unhandled", message: "former place moved" },
       ),
     );
   }
@@ -541,7 +542,7 @@ export class StationTopics implements Owner {
           // Not all on the device yet: brought. What is held of it opens it now, what is not joining it as it comes: from
           // where it opens, or, that not held (what came since it was read, the app away meanwhile), from what is held
           // just before it, with what runs unbroken before that. Only with nothing of it held up to there does it wait.
-          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false }))));
+          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false })), { log: "Unhandled", message: "range read" }));
           const held = data.logRange("entry", station, String(id), from, to);
           first = at;
           while (first >= from && !held.has(first)) first--;
@@ -602,7 +603,7 @@ export class StationTopics implements Owner {
     const tk = topicKey(topic);
     if (held.size < latest && (this.#wholes.get(tk) ?? 0) < latest) {
       this.#wholes.set(tk, latest);
-      this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/1`, this.#sync.channels.range(entriesOf(station, id), 1, latest, { quiet: false }))));
+      this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/1`, this.#sync.channels.range(entriesOf(station, id), 1, latest, { quiet: false })), { log: "Unhandled", message: "range read" }));
     }
     const entries = [...held.keys()].sort((a, b) => a - b).map((n) => held.get(n));
     return { ok: { entries, whole: held.size >= latest, thread: this.summary(station, id) } };

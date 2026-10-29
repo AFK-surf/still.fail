@@ -331,7 +331,7 @@ class Lend {
   /// 2026-10-17), and one opened in between was turned down as 已停止共享.
   #tunnel(stream: IrohStream): Effect.Effect<void, never, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
-      const refuse = (why: string) => Effect.ignore(Effect.andThen(stream.write(utf8(`${JSON.stringify({ error: why })}\n`)), stream.finish()));
+      const refuse = (why: string) => Effect.ignore(Effect.andThen(stream.write(utf8(`${JSON.stringify({ error: why })}\n`)), stream.finish()), { log: "Unhandled", message: "debugging refused" });
       const carry = { bytes: new Uint8Array() };
       const line = yield* Effect.orElseSucceed(readLine(stream, carry), () => null);
       if (line === null) return;
@@ -361,10 +361,10 @@ class Lend {
           const w = yield* Effect.result(stream.write(chunk));
           if (w._tag === "Failure") break;
         }
-        yield* Effect.ignore(stream.finish());
+        yield* Effect.ignore(stream.finish(), { log: "Unhandled", message: "debugging stream finished" });
       });
       const down = Effect.gen(function* () {
-        if (carry.bytes.length > 0) yield* Effect.ignore(conn.write(carry.bytes));
+        if (carry.bytes.length > 0) yield* Effect.ignore(conn.write(carry.bytes), { log: "Unhandled", message: "debugging bytes passed on" });
         for (;;) {
           const chunk = yield* Effect.orElseSucceed(stream.read(), () => null);
           if (chunk === null) break;
@@ -461,7 +461,7 @@ export class Adb {
         this.#env.store.invalidate({ topic: "adbShare" });
         const at = Math.floor(this.#env.host.nowMs());
         return Effect.as(
-          Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at })), { concurrency: "unbounded", discard: true }),
+          Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at }), { log: "Unhandled", message: "debugging lasts told" }), { concurrency: "unbounded", discard: true }),
           null,
         );
       }
@@ -508,7 +508,7 @@ export class Adb {
     const wanted = this.#ports === null || !this.#env.lends() ? [] : this.wanted();
     for (const [station, lend] of this.#lends)
       if (!wanted.includes(station)) {
-        this.#env.runner.fork(Effect.ignore(lend.run({ kind: "stop" })));
+        this.#env.runner.fork(Effect.ignore(lend.run({ kind: "stop" }), { log: "Unhandled", message: "debugging lend stopped" }));
         this.#lends.delete(station);
       }
     for (const station of wanted) {
@@ -518,7 +518,7 @@ export class Adb {
         this.#lends.set(station, lend);
       }
       // (lent for as long as a grant is: the grants end it, not its own clock)
-      this.#env.runner.fork(Effect.ignore(lend.run({ kind: "share", offer: { ...this.#ports!, station, minutes: 30 * 24 * 60 } })));
+      this.#env.runner.fork(Effect.ignore(lend.run({ kind: "share", offer: { ...this.#ports!, station, minutes: 30 * 24 * 60 } }), { log: "Unhandled", message: "debugging lend shared" }));
     }
     this.#env.store.invalidate({ topic: "adbShare" });
   }

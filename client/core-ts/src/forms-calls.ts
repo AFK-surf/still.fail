@@ -46,11 +46,11 @@ export class Forms implements Owner {
         // to expire there).
         cancel: (station, id) => {
           const op = ops.request("feishu.cancelRegistration", { station, id });
-          if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null)));
+          if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null), { log: "Unhandled", message: "form op performed" }));
         },
         // Its bot made: the connect is added, as `create` would.
         ready: (topic) => {
-          if (this.connects.ready(topic)) inner.runner.fork(Effect.ignore(Effect.suspend(() => this.operate(topic, this.connects.ownerOf(topic), "create", null))));
+          if (this.connects.ready(topic)) inner.runner.fork(Effect.ignore(Effect.suspend(() => this.operate(topic, this.connects.ownerOf(topic), "create", null)), { log: "Unhandled", message: "connect created" }));
         },
       },
     );

@@ -799,7 +799,7 @@ export class Mesh {
     this.#daysChanged = false;
     const today = this.#localDay();
     for (const [id, d] of Object.entries(this.#days)) if (d.day !== today) delete this.#days[id];
-    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(NET_DAY_KEY, toJsonBytes(this.#days))));
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(NET_DAY_KEY, toJsonBytes(this.#days)), { log: "Unhandled", message: "net days kept" }));
   }
 
   /// How fast replies from a station came through a relay lately (bytes a second); null if none long enough did.
@@ -826,7 +826,7 @@ export class Mesh {
       for (const [r, s] of Object.entries(relays)) if (now - s.at >= SPEED_KEPT_MS) delete relays[r];
       if (Object.keys(relays).length === 0) delete this.#speeds[id];
     }
-    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds)), { log: "Unhandled", message: "speeds kept" }));
     const via = this.current(addr)?.via() ?? null;
     if (slower && via !== null && relayKey(via) === key) this.#choose(addr, "slow");
   }
@@ -835,7 +835,7 @@ export class Mesh {
   #forgetSpeeds(): void {
     if (Object.keys(this.#speeds).length === 0) return;
     for (const id of Object.keys(this.#speeds)) delete this.#speeds[id];
-    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds)), { log: "Unhandled", message: "speeds kept" }));
   }
 
   /// A reply's body, timed as it is read: once it has brought SPEED_MIN_BYTES, and again as it ends, how fast its way
@@ -1302,7 +1302,7 @@ export class Mesh {
       for (const kind of AT_ADDRESSES) if (!same(kind)) this.#tried.delete(atKey(kind, addr));
       if (said.lan.length > 0 || said.tailnet.length > 0) this.#said[addr] = said;
       else delete this.#said[addr];
-      this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SAID_KEY, toJsonBytes(this.#said))));
+      this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SAID_KEY, toJsonBytes(this.#said)), { log: "Unhandled", message: "said kept" }));
     }
     // On the main endpoint the addresses are iroh's to try on the connection open (paths of it), not dialled apart.
     if (this.#mainOn(addr)) {
@@ -1328,7 +1328,7 @@ export class Mesh {
       if (!again) return;
     }
     const dial = this.#dialAt(addr, kind, credentials, false);
-    if (dial !== null) this.#env.runner.fork(Effect.ignore(Effect.map(dial, (link) => this.#adopt(addr, link))));
+    if (dial !== null) this.#env.runner.fork(Effect.ignore(Effect.map(dial, (link) => this.#adopt(addr, link)), { log: "Unhandled", message: "link dialled" }));
   }
 
   /// A dial of the station at its addresses of `kind`, on that kind's endpoint (`pinned` LAN or TAILNET): null when it
@@ -1522,7 +1522,7 @@ export class Mesh {
         // its paths, so this is the station, not the way): let go, and the station dialled anew.
         const credentials = cur.credentials;
         this.dropLink(addr);
-        this.#env.runner.fork(Effect.ignore(this.link(addr, credentials)));
+        this.#env.runner.fork(Effect.ignore(this.link(addr, credentials), { log: "Unhandled", message: "link opened" }));
       }
       return;
     }

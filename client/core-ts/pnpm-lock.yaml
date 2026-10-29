@@ -30,8 +30,8 @@ importers:
         specifier: 2.4.0
         version: 2.4.0
       effect:
-        specifier: 4.0.0
-        version: 4.0.0
+        specifier: 4.1.0
+        version: 4.1.0
       fzstd:
         specifier: 0.1.1
         version: 0.1.1
@@ -460,8 +460,8 @@ packages:
       supports-color:
         optional: true
 
-  effect@4.0.0:
-    resolution: {integrity: sha512-ooc1TG5t+FfzgYnFz2ff6BBKyZ7EwBRVXC7c4RhQUAD6/TZ2gTXXMeb4WX7a19ozQo4J73/QW+S00YAIresoMQ==}
+  effect@4.1.0:
+    resolution: {integrity: sha512-lGx2MJJyrXA8RZb2UpQ/0Nkb5Utaimby7oD92+18noBxLPE85IFOvptdzau8dvcxAOwfwHo9iqapbKeFzqQM/Q==}
 
   electron-to-chromium@1.5.444:
     resolution: {integrity: sha512-5ss/uJfoDYDHT0lfJzT6FbcskIzROIOPf0BbbFkGcvDzoJU7i//9GDrwwIHQVmIsrAGiF3ihpADBRIsrEFt1rQ==}
@@ -934,7 +934,7 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  effect@4.0.0: {}
+  effect@4.1.0: {}
 
   electron-to-chromium@1.5.444: {}
 

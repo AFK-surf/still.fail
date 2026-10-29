@@ -177,6 +177,13 @@ export class Core {
       brand.setTestChannel(inner.host.testChannel());
       fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
+      // A failure let go of is a span of its own: Axiom has it though nothing waited on it.
+      inner.runner.onIgnored = (what, error) => {
+        const span = inner.tracer.root("ignored", Kind.Internal);
+        span.set("stillfail.ignored", what);
+        failedIn(span, asCoreError(error));
+        span.end();
+      };
       inner.waited = new Waited(() => inner.host.nowMs());
       inner.status = new Status(inner.host, inner.runner, inner.waited);
       inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });

@@ -838,7 +838,7 @@ export class Composers {
     const kept = this.#sources.get(f.id);
     if (f.waits) {
       if (kept) this.#upload("", station, { ...kept, kept: true });
-      else this.#inner.runner.fork(Effect.ignore(this.#fromKept(station, f)));
+      else this.#inner.runner.fork(Effect.ignore(this.#fromKept(station, f), { log: "Unhandled", message: "draft file read back" }));
       return going(f);
     }
     const upload = this.#uploads.get(f.id);
