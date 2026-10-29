@@ -174,13 +174,13 @@ export const detailRow = style({
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /**
- * Last in the chat's info: its sharing with other workspaces, then its public links, rows to press (ui.tsx PanelRow) as a
+ * Last in the chat's info: relaying it, its sharing with other workspaces, then its public links, rows to press (ui.tsx PanelRow) as a
  * menu's, at the panel's padding (6). Their icons stand under the details' words, which are in by a row's padding
  * (align.ts panelText): the 14 icon in the middle of its 20, 3 back.
  */
-export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
-/** What is done with the chat, in its info (its files, its agents' letters, relaying it, it in Slack): rows with their icons, as a panel's are. */
-export const infoTools = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
+export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "16px" });
+/** What is in the chat, in its info (its pull requests, its files, its agents' letters, it in Slack): rows with their icons, as a panel's are; 16 under what is over them, the groups apart without a line. */
+export const infoTools = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "16px" });
 /** What holds a pull request's row in it (its card's and its menu's trigger): the row across it, as the others are. */
 export const infoPull = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)" });
 globalStyle(`${infoRows} ${panelRow}`, { padding: `0 6px 0 ${TEXT_IN - 3}px` });

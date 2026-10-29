@@ -416,48 +416,6 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       Some(th) => @sfpages.things_now(src, r.station, th)
       None => (0, [])
     }
-    if pulls.length() > 0 {
-      info_list(c, fn() {
-        for i, p in pulls {
-          if i == info_pulls_most {
-            break
-          }
-          let pv = Some(p)
-          // held or right clicked, its menu (在对话中查看, its link copied); pointed at, its card (sfpages things.mbt)
-          let pid = c.id("info/pull/" + text(pv, "key"))
-          @sfpages.thing_menu(c, pid, number(pv, "seq"), text(pv, "url"), fn(seq) {
-            close()
-            go_to(r, seq)
-          })
-          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left)
-          if info_row(c, "info/pull/" + text(pv, "key"), fn() {
-              @sfpages.pull_mark(c, pv, 16.0)
-              c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
-              c.text("#" + count(pv, "number").to_string(), style=letters_meta) |> ignore
-            }) {
-            close()
-            @sfbase.open_link_in(src, text(pv, "url"))
-          }
-        }
-        match opt_number(thread, "id") {
-          Some(th) if pulls.length() > info_pulls_most =>
-            if info_row(c, "info/pulls", fn() {
-                @sf.icon(c, "list", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() {
-                  c.text(fill("web-main.things.pullsAll", [("n", pulls.length().to_string())]), style=info_words) |> ignore
-                })
-                |> ignore
-                chevron(c)
-              }) {
-              close()
-              @sfpages.things_choose(r, "pulls")
-              open_things(src, r, th)
-            }
-          _ => ()
-        }
-      })
-      c.box(style=info_lists_gap, fn() {  }) |> ignore
-    }
     if agents.length() > 0 {
       info_list(c, fn() {
         for a in agents {
@@ -500,9 +458,48 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       })
       c.box(h=Px(10.0), fn() {  }) |> ignore
     }
+    // then what is in it, one card (the user, 2026-10-30: who works in it before what it made, what it holds apart
+    // from what is done with it): its pull requests, what else was said, what its agents and other chats' wrote
     let letters = number(chat, "letters")
-    if open || link != "" || letters > 0.0 || said > 0 || slack != "" || xshare is Some(_) {
+    if pulls.length() > 0 || said > 0 || letters > 0.0 {
       info_list(c, fn() {
+        for i, p in pulls {
+          if i == info_pulls_most {
+            break
+          }
+          let pv = Some(p)
+          // held or right clicked, its menu (在对话中查看, its link copied); pointed at, its card (sfpages things.mbt)
+          let pid = c.id("info/pull/" + text(pv, "key"))
+          @sfpages.thing_menu(c, pid, number(pv, "seq"), text(pv, "url"), fn(seq) {
+            close()
+            go_to(r, seq)
+          })
+          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left)
+          if info_row(c, "info/pull/" + text(pv, "key"), fn() {
+              @sfpages.pull_mark(c, pv, 16.0)
+              c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
+              c.text("#" + count(pv, "number").to_string(), style=letters_meta) |> ignore
+            }) {
+            close()
+            @sfbase.open_link_in(src, text(pv, "url"))
+          }
+        }
+        match opt_number(thread, "id") {
+          Some(th) if pulls.length() > info_pulls_most =>
+            if info_row(c, "info/pulls", fn() {
+                @sf.icon(c, "list", size=16.0, color=t.p.text) |> ignore
+                c.box(style=@sf.full_width, fn() {
+                  c.text(fill("web-main.things.pullsAll", [("n", pulls.length().to_string())]), style=info_words) |> ignore
+                })
+                |> ignore
+                chevron(c)
+              }) {
+              close()
+              @sfpages.things_choose(r, "pulls")
+              open_things(src, r, th)
+            }
+          _ => ()
+        }
         // what was said in it besides words: a sheet of their own (sfpages things.mbt)
         match opt_number(thread, "id") {
           Some(th) if said > 0 =>
@@ -529,10 +526,15 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
                 chevron(c)
               }) {
               close()
-                open_letters(src, r, th)
+              open_letters(src, r, th)
             }
           _ => ()
         }
+      })
+      c.box(style=info_lists_gap, fn() {  }) |> ignore
+    }
+    if open || link != "" || slack != "" || xshare is Some(_) {
+      info_list(c, fn() {
         // a station from before pins says nothing of them: its chats are not pinned from here
         match pinned {
           Some(p) if open => {

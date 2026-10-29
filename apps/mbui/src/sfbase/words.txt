@@ -1293,7 +1293,6 @@ web-pages.chat.info
 web-pages.chat.info.created
 web-pages.chat.info.from
 web-pages.chat.info.lastMessage
-web-pages.chat.info.native
 web-pages.chat.info.people
 web-pages.chat.info.started
 web-pages.chat.info.unknown

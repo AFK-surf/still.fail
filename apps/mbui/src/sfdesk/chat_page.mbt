@@ -663,9 +663,11 @@ let chat_info_w : Double = 320.0
 let jobs_pop_w : Double = 360.0
 
 ///|
-/// What the chat's info says (ChatInfoBody): where it came from, who started it, who takes part, when it was made and
-/// last written in; its agents (AgentLine); then what is done with it: the stations' files beside it, what its agents
-/// and other chats' wrote each other, relaying it, it in Slack or Feishu; sharing it, publishing it.
+/// What the chat's info says (ChatInfoBody), in three groups apart: what it is (where it came from if not here, who
+/// started it, who else takes part, when it was made and last written in) and who works in it (its agents,
+/// AgentLine); what is in it (its pull requests, what else was said, the stations' files beside it, what its agents
+/// and other chats' wrote each other, it in Slack or Feishu); what is done with it (relaying it, sharing it, a picture
+/// of it).
 fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let thread = field(chat, "thread")
   // (a chat of a Slack or Feishu thread alone has none here: where it is, its agents and the way there, no more)
@@ -685,10 +687,11 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   // line, centred in it)
   let over = @sf.menu_row_over - (info_fact_h - @sf.theme().t.ui_line) / 2.0
   c.box(style=info_facts.then(@ui.style(pt=@sf.room_of(over))), fn() {
-    fact(@sf.t("web-pages.chat.info.from"), fn() {
-      match text(chat, "place") {
-        "" => c.text(@sf.t("web-pages.chat.info.native", args=[("name", "still.fail")]), style=info_words) |> ignore
-        place => {
+    // (where it came from only when that is not here: a still.fail chat's says nothing)
+    match text(chat, "place") {
+      "" => ()
+      place =>
+        fact(@sf.t("web-pages.chat.info.from"), fn() {
           let feishu = text(thread, "surface").has_prefix("feishu:") || text(chat, "feishuUrl") != ""
           c.box(style=info_inline, fn() {
             if feishu {
@@ -700,9 +703,8 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
             c.text(through + " · " + place, style=info_words) |> ignore
           })
           |> ignore
-        }
-      }
-    })
+        })
+    }
     guard th is Some(_) else { return }
     let creator = match text(field(field(thread, "creator"), "shown"), "display") {
       "" => text(field(thread, "creator"), "name")
@@ -723,31 +725,37 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         |> ignore
       }
     })
-    fact(@sf.t("web-pages.chat.info.people"), fn() {
-      // (beside the system's tabs, no pointer to rest on them for their names: each its face and its name, the people
-      // out of the chat's bar there, rail_native.mbt; the user 2026-10-27)
-      if @sf.native_on() && v.people.length() > 0 {
-        c.box(style=info_people_list, fn() {
-          for i, p in v.people {
-            c.box(style=info_inline, fn() {
-              people_stack(c, src, "info-person/\{i}", [p], 1)
-              c.text(p.display, style=info_words) |> ignore
-            })
-            |> ignore
+    // (who takes part only when that is more than who started it)
+    let creator_id = text(field(thread, "creator"), "id")
+    let only_starter = v.people.length() == 0 ||
+      (v.people.length() == 1 && creator_id != "" && v.people[0].id == creator_id)
+    if !only_starter {
+      fact(@sf.t("web-pages.chat.info.people"), fn() {
+        // (beside the system's tabs, no pointer to rest on them for their names: each its face and its name, the people
+        // out of the chat's bar there, rail_native.mbt; the user 2026-10-27)
+        if @sf.native_on() && v.people.length() > 0 {
+          c.box(style=info_people_list, fn() {
+            for i, p in v.people {
+              c.box(style=info_inline, fn() {
+                people_stack(c, src, "info-person/\{i}", [p], 1)
+                c.text(p.display, style=info_words) |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+          return
+        }
+        c.box(style=info_inline, fn() {
+          if v.people.length() > 0 {
+            people_stack(c, src, "info-people", v.people, 8)
           }
+          c.text(@sf.t("web-pages.workspace.people", args=[("n", v.people.length().to_string())]), style=info_words)
+          |> ignore
         })
         |> ignore
-        return
-      }
-      c.box(style=info_inline, fn() {
-        if v.people.length() > 0 {
-          people_stack(c, src, "info-people", v.people, 8)
-        }
-        c.text(@sf.t("web-pages.workspace.people", args=[("n", v.people.length().to_string())]), style=info_words)
-        |> ignore
       })
-      |> ignore
-    })
+    }
     fact(@sf.t("web-pages.chat.info.created"), fn() {
       info_time(c, "info-created", field(field(thread, "time"), "createdAt"))
     })
@@ -757,34 +765,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     }
   })
   |> ignore
-  // the pull requests linked in it, the latest 3 (the user, 2026-10-29: most chats have one or two, seen at a look),
-  // 全部 N 个 to the rest beside the chat; pressed, one opens in the browser
-  let (said, pulls) = match th {
-    Some(id) => @sfpages.things_now(src, r.station, id)
-    None => (0, [])
-  }
-  if pulls.length() > 0 {
-    c.box(style=info_tools(false), fn() {
-      for i, p in pulls {
-        if i == info_pulls_most {
-          break
-        }
-        let pv = Some(p)
-        if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
-          chat_own.info_open = false
-          let url = text(pv, "url")
-          c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
-        }
-      }
-      if pulls.length() > info_pulls_most &&
-        info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
-        chat_own.info_open = false
-        @sfpages.things_choose(r, "pulls")
-        side_change(src, r, "open", Some("things"))
-      }
-    })
-    |> ignore
-  }
+  // who works in it, under who and when (the user, 2026-10-30: 信息和排布不是很合理): its agents
   let agents = items(chat, "agents")
   if agents.length() > 0 {
     c.box(style=info_agents, fn() {
@@ -818,6 +799,14 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     })
     |> ignore
   }
+  // what is in it: the pull requests linked in it, the latest 3 (the user, 2026-10-29: most chats have one or two,
+  // seen at a look), 全部 N 个 to the rest beside the chat, pressed, one opens in the browser; what else was said in it
+  // besides words, the stations' files beside it, what its agents and other chats' wrote each other, it in Slack or
+  // Feishu
+  let (said, pulls) = match th {
+    Some(id) => @sfpages.things_now(src, r.station, id)
+    None => (0, [])
+  }
   // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive)
   let files = dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive })
   let relayable = th is Some(_) && !v.archived && !v.offline && v.agents.length() > 0
@@ -828,10 +817,28 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     Some(Object(_)) as p if flag(p, "may") || items(p, "links").length() > 0 => p
     _ => None
   }
-  let shares = th is Some(_) && (share is Some(Object(_)) || publish is Some(_))
-  if said > 0 || files || v.letters > 0 || relayable || slack != "" || feishu != "" {
-    c.box(style=info_tools(!shares), fn() {
-      // what was said in it besides words, beside the chat (sfpages things.mbt)
+  // then what is done with it, last: relaying it, sharing it, a picture of it
+  let outward = th is Some(_) && (relayable || share is Some(Object(_)) || publish is Some(_))
+  if pulls.length() > 0 || said > 0 || files || v.letters > 0 || slack != "" || feishu != "" {
+    c.box(style=info_tools(!outward), fn() {
+      for i, p in pulls {
+        if i == info_pulls_most {
+          break
+        }
+        let pv = Some(p)
+        if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
+          chat_own.info_open = false
+          let url = text(pv, "url")
+          c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
+        }
+      }
+      if pulls.length() > info_pulls_most &&
+        info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
+        chat_own.info_open = false
+        @sfpages.things_choose(r, "pulls")
+        side_change(src, r, "open", Some("things"))
+      }
+      // (sfpages things.mbt)
       if said > 0 && info_row(c, "info-pop/things", "photo", @sf.t("web-main.things.title"), said.to_string()) {
         chat_own.info_open = false
         side_change(src, r, "open", Some("things"))
@@ -852,10 +859,6 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         letters_to_list(r)
         side_toggle(src, r, "letters")
       }
-      if th is Some(id) && relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
-        chat_own.info_open = false
-        @sfpages.open_relay(src, r, id, from=Unanchored)
-      }
       if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
         chat_own.info_open = false
         @sfbase.open_slack(text(chat, "slackApp"), slack) |> ignore
@@ -868,15 +871,22 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     |> ignore
   }
   guard th is Some(id) else { return }
-  if shares {
+  if outward {
     c.box(style=info_tools(true), fn() {
+      if relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
+        chat_own.info_open = false
+        @sfpages.open_relay(src, r, id, from=Unanchored)
+      }
       if share is Some(Object(_)) &&
         info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
         flag(share, "may") {
         chat_own.info_open = false
         @sfpages.open_xshare(src, r, Some(id), from=Unanchored)
       }
-      if publish is Some(_) && info_row(c, "info-pop/publish", "photo", @sf.t("web-pages.chat.shareImage"), "") && flag(publish, "may") {
+      // (a picture going out: not the photo of 图片、文件和链接 above it)
+      if publish is Some(_) &&
+        info_row(c, "info-pop/publish", "image-upload", @sf.t("web-pages.chat.shareImage"), "") &&
+        flag(publish, "may") {
         chat_own.info_open = false
         @sfpages.open_publish(src, r, id)
       }
@@ -1299,11 +1309,11 @@ let info_mark_side : Double = 14.0
 let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
 
 ///|
-/// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row a small panel's (@sf.pick_high:
-/// in its foot corners concentric with them, as a menu's item is), its icon's 14 column and words 10 apart, 10 in,
-/// round with the panel, the pointer's ground on it.
+/// A group of its rows (infoTools, PanelRow): 16 under what is over it, as far as sets the groups apart without a
+/// line, its rows 2 apart; a row a small panel's (@sf.pick_high: in its foot corners concentric with them, as a menu's
+/// item is), its icon's 14 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
-let info_tools_base : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
+let info_tools_base : @ui.Style = @ui.css("w=Full pt=S4 gap=S0_5")
 
 ///|
 /// (`last` in the panel: its last row, a capsule with keyboard and mouse, in the panel's foot corners as far in as
