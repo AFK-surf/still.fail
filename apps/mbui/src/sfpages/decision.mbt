@@ -91,17 +91,22 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       start_at?,
       fn() {
         c.box(style=decision_box, fn() {
-          // (who decides; answered while it shows, how it went in that line's place, the one fading out, then the
-          // other in: chat_rows.mbt said_in_place)
+          // (who decides; answered while it shows, it fades out where it is, its room kept: the one picked is
+          // marked among the options, an answer in words is the viewer's row under them, nothing to say again (the
+          // user, 2026-10-29: 有个勾不就行了吗); let go, 已忽略 in its place, the one fading out, then the other in:
+          // chat_rows.mbt said_in_place)
           match m.card {
             Some({ assignee_text: Some(a), .. }) => {
               let went = match m.decision {
-                Some({ text: Some(w), .. }) if resolved => Some(w)
+                Some({ dismissed: true, text: Some(w), .. }) => Some(w)
                 _ => None
               }
-              let (was, now) = said_in_place(c, "who/" + key, went is Some(_))
+              let (was, now) = said_in_place(c, "who/" + key, resolved)
               let i = c.text(if was is Some(_) { a } else { went.unwrap_or(a) }, style=settled_line)
-              c.look(i, was.unwrap_or(now))
+              c.look(i, match was {
+                Some(l) => l
+                None => if went is Some(_) { now } else { @ui.look(alpha=0.0) }
+              })
             }
             _ => ()
           }

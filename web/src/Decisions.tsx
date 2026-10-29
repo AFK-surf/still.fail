@@ -174,8 +174,9 @@ export function MessageDecision({ message: m, thread, children }: { message: Cha
   return (
     <div ref={box} className={css.decision}>
       {shown ? <>
-        {/* Who decides; settled while it shows, how it went in that line's place. */}
-        {m.card?.assigneeText && <SaidInPlace className={css.settledLine} text={!open && d?.text ? d.text : m.card.assigneeText} />}
+        {/* Who decides; settled while it shows, it fades out where it is (the one picked is marked among the options,
+            an answer in words is the viewer's message under them); let go, 已忽略 in its place. */}
+        {m.card?.assigneeText && <SaidInPlace className={css.settledLine} text={d?.dismissed && d.text ? d.text : m.card.assigneeText} gone={!open && !d?.dismissed} />}
         {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&

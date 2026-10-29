@@ -113,10 +113,21 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
 
 /**
  * A line saying something else once what it is about is answered while it shows (`text`), in the same room: what it
- * said fades out (LEAVE), then what it says now fades in (ENTER); nothing moves.
+ * said fades out (LEAVE), then what it says now fades in (ENTER); nothing moves. `gone`: it has nothing more to say,
+ * faded out (LEAVE) where it is, its room kept.
  */
-export function SaidInPlace({ text, className }: { text: string; className: string }) {
+export function SaidInPlace({ text, className, gone = false }: { text: string; className: string; gone?: boolean }) {
   const el = useRef<HTMLParagraphElement>(null);
+  const shownOnce = useRef(false);
+  useLayoutEffect(() => {
+    const first = !shownOnce.current;
+    shownOnce.current = true;
+    if (!el.current) return;
+    if (!gone) return void el.current.style.removeProperty("opacity");
+    if (first || !moving()) return void (el.current.style.opacity = "0");
+    const out = play(el.current, [{ opacity: 1 }, { opacity: 0 }], { ...LEAVE, fill: "forwards" });
+    return () => out.cancel();
+  }, [gone]);
   const [said, setSaid] = useState(text);
   const changing = useRef(false);
   useLayoutEffect(() => {
