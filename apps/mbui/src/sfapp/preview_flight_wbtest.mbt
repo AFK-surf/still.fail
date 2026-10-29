@@ -30,6 +30,7 @@ fn photo_sent(
   bar? : Bool = false,
   cut? : Double = 0.0,
   listed? : Bool = false,
+  head? : Bool = false,
 ) -> @ui.Tester {
   reset()
   let a = flight_photo()
@@ -56,7 +57,12 @@ fn photo_sent(
         chat_file(c, src, a, list=if listed { "test-list" } else { "" })
       })
       if listed {
-        note_list(c, list, "test-list", 0.0, if bar { flight_bar_h } else { 0.0 })
+        note_list(c, list, "test-list", if head { flight_bar_h } else { 0.0 }, if bar { flight_bar_h } else { 0.0 })
+      }
+      // (a chat's bar over its top, as a chat's page has it)
+      if head {
+        let top = c.layer(fn() { c.box(style=flight_bar, fn() {  }) |> ignore })
+        over_flight(c, top)
       }
       // (a composer over the chat's foot, as a chat's page has it)
       if bar {
@@ -235,8 +241,9 @@ test "a picture under the composer goes out from under it at its own size first,
   let v = viewer.val.unwrap()
   // one move, on one curve: out from under the composer first (its own size, the composer whole over the list
   // meanwhile), then grown, nothing still between; the going out is the curve's first `lift` of its way
-  let lift = fly_lift_ms / (fly_lift_ms + fly_open_ms)
-  let open_ms = fly_open_ms / (1.0 - lift)
+  let lift = v.fly_lift
+  assert_true(lift > 0.0)
+  let open_ms = fly_open_ms + fly_lift_ms
   let out = way_at(lift)
   let start = t.time()
   // (a hair each side of where the going out ends)
@@ -256,7 +263,8 @@ test "a picture under the composer goes out from under it at its own size first,
   // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
   let back = t.time()
-  let close_ms = fly_close_ms / (1.0 - lift)
+  let lift = v.fly_lift
+  let close_ms = fly_close_ms + fly_lift_ms
   t.run_for(way_at(1.0 - lift) * close_ms - near)
   assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
   assert_true(!composer_over_picture(t))
@@ -278,12 +286,12 @@ test "a picture going back in under the composer keeps its corners round: what i
   let foot = 844.0 - flight_bar_h
   let at = t.locate("img:sent-key")
   t.tap(at[0].0, (th.y + foot) / 2.0)
-  t.run_for(fly_open_ms / (1.0 - fly_lift_ms / (fly_lift_ms + fly_open_ms)))
+  t.run_for(fly_open_ms + fly_lift_ms)
   // back, halfway in under the composer: its box moved half the way, its corners round as the thumbnail's
   t.back()
-  let lift = fly_lift_ms / (fly_lift_ms + fly_open_ms)
-  t.run_for(way_at(1.0 - lift / 2.0) * fly_close_ms / (1.0 - lift))
   let v = pv_leaving.val.unwrap()
+  let lift = v.fly_lift
+  t.run_for(way_at(1.0 - lift / 2.0) * (fly_close_ms + fly_lift_ms))
   assert_eq(v.flying(), 0.0)
   assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
   let clips = t.drawn_image_clips()
@@ -377,4 +385,113 @@ test "a video taken down and let go goes from where the finger left it: its pict
     .drawn_rects()
     .filter(fn(r) { r.4 == 0x000000FFL && (r.0 - x).abs() < 0.5 && (r.2 - w).abs() < 0.5 && (r.3 - h).abs() < 0.5 })
   assert_true(black.iter().any(fn(r) { (r.1 - down).abs() < 0.5 }), msg="\{t.drawn_rects()}")
+}
+
+///|
+test "a picture under the chat's bar goes out from under it at its own size first, then grows; back the same way" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(40.0), held, head=true, listed=true)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let th = thumb_of(t.ctx(), id).unwrap()
+  assert_true(th.y < flight_bar_h - 20.0 && th.y + th.h > flight_bar_h + 20.0, msg="\{th.y} \{th.h}")
+  t.tap(th.x + th.w / 2.0, (flight_bar_h + th.y + th.h) / 2.0)
+  let v = viewer.val.unwrap()
+  let lift = v.fly_lift
+  let open_ms = fly_open_ms + fly_lift_ms
+  let start = t.time()
+  let near = fly_lift_ms / 50.0
+  // halfway out from under the bar: at its own size, the bar over it, its corners round
+  t.run_for(way_at(lift / 2.0) * open_ms)
+  assert_eq(v.flying(), 0.0)
+  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_true(head_over_picture(t))
+  let clips = t.drawn_image_clips()
+  let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
+  assert_true(flying.length() > 0)
+  for p in flying {
+    let (i, ((_, top, _, foot), (r0, r1, r2, r3))) = p
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+    // its box whole, moved down
+    assert_true(top <= i[1] + 0.5 && foot >= i[1] + i[3] - 0.5 && i[1] > th.y + 0.5, msg="\{p}")
+  }
+  // out: clear of the bar, at its own size
+  t.run_for(start + way_at(lift) * open_ms - near - t.time())
+  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
+  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted() < 1.0, msg="\{t.drawn_images()}")
+  t.run_for(near * 2.0)
+  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(!head_over_picture(t))
+  t.run_for(start + open_ms - t.time())
+  let to = v.zoom.rect().unwrap()
+  assert_true(drawn_at(t, to))
+  // back: shrunk, then in under the bar, its corners round halfway in
+  t.back()
+  let back = t.time()
+  let v = pv_leaving.val.unwrap()
+  let lift = v.fly_lift
+  let close_ms = fly_close_ms + fly_lift_ms
+  t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
+  assert_eq(v.flying(), 0.0)
+  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_true(head_over_picture(t))
+  let clips = t.drawn_image_clips()
+  let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
+  assert_true(flying.length() > 0)
+  for p in flying {
+    let (_, (_, (r0, r1, r2, r3))) = p
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+  }
+  t.run_for(back + close_ms - t.time())
+  assert_true(pv_leaving.val is None)
+  assert_true(drawn_at(t, (th.x, th.y, th.w, th.h)))
+}
+
+///|
+/// Whether the bar over the chat's top is drawn after the picture in flight (over it).
+fn head_over_picture(t : @ui.Tester) -> Bool {
+  let order = t.drawn_order()
+  let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 })
+  let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2.abs() < 0.5 })
+  match (picture, bar) {
+    (Some(p), Some(b)) => b > p
+    _ => false
+  }
+}
+
+///|
+test "a picture mostly under the chat's bar goes out from under it as quick as it then grows: no leap where they meet" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(0.0), held, head=true, listed=true)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let th = thumb_of(t.ctx(), id).unwrap()
+  assert_true(@sfbase.lift_of(th) > th.h / 3.0, msg="\{th.y} \{th.h}")
+  t.tap(th.x + th.w / 2.0, (flight_bar_h + th.y + th.h) / 2.0)
+  let v = viewer.val.unwrap()
+  let start = t.time()
+  let open_ms = fly_open_ms + fly_lift_ms
+  // the picture's edges a step before where the going out ends and a step after: as quick each side
+  let step = fly_lift_ms / 10.0
+  let joint = start + way_at(v.fly_lift) * open_ms
+  let edges = fn() raise {
+    let i = t.drawn_images().filter(fn(i) { i[8] > 0.5 && i[2] > 0.0 })
+    assert_eq(i.length(), 1)
+    let i = i[0]
+    [i[0], i[1], i[0] + i[2], i[1] + i[3]]
+  }
+  let speed = fn(at : Double) raise {
+    t.run_for(at - t.time())
+    let a = edges()
+    t.run_for(step)
+    let b = edges()
+    let mut m = 0.0
+    for k in 0..<4 {
+      m = dmax(m, (b[k] - a[k]).abs())
+    }
+    m / step
+  }
+  let out = speed(joint - step * 2.0)
+  assert_true(v.flying() == 0.0)
+  let grow = speed(joint + step)
+  assert_true(v.flying() > 0.0)
+  assert_true(out < grow * 1.25 && grow < out * 1.25, msg="going out \{out}, growing \{grow}")
 }
