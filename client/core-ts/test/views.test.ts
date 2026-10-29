@@ -2038,6 +2038,25 @@ test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_r
   assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["需要你处理：Stripe 的测试 key", "need", "Stripe 的测试 key"]);
 });
 
+test("a_slack_threads_page_says_at_the_end_of_its_messages_where_it_stands_as_its_agents_row_does", async () => {
+  // Its agent has no chat here: the list has it by its session alone (its row's thread null), the page by its thread.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const done = { kind: "input", declared: "all_done", ending: "all_done", need: "问题已答完", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ds", lastTurn: done })]);
+  t.set(threads("ws/a"), [{ ...slackThread(7), sessions: [member(7, "k", "ds")], last: 3 }]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [entry(1, "讲讲"), { ...entry(2, "讲完了"), authorKind: "agent", author: "k" }, entry(3, "我试试")], thread: null });
+  const alone = row("k", now);
+  alone.agents[0].lastTurn = done;
+  t.set(rows("ws/a"), [alone]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.equal(alone.thread, null);
+  assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["已完成：问题已答完", "done", "问题已答完"]);
+});
+
 test("a_chats_page_says_what_its_agent_waits_on_once_in_its_activity_not_again_at_the_end", async () => {
   const t = setup();
   const u = ui();

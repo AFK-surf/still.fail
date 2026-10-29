@@ -1832,7 +1832,15 @@ export class Views implements Owner {
     if (thread.creator !== undefined) thread.creator = present.person(thread.creator, viewer, members_);
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const { place, slackUrl, slackApp, feishuUrl } = this.#whereIn(station, agents, strOf(thread, "surface"), strOf(thread, "channel"), strOf(thread, "channelName"), strOf(thread, "threadTs"));
-    const found = this.#row(station, { thread: id });
+    // (a Slack thread's agents with no chat of their own here are listed by their session alone, its row's thread null)
+    let found = this.#row(station, { thread: id });
+    for (const key of found === null ? members(thread) : []) {
+      const alone = this.#row(station, { session: key });
+      if (alone !== null && alone !== undefined && alone.thread === null) {
+        found = alone;
+        break;
+      }
+    }
     // what is asked here, let go from here (忽略): said let go at once, as its station will say it (back if refused)
     const asking = found !== undefined && found !== null ? decisions.asked(found) : null;
     const lettingGo = found !== undefined && found !== null && asking !== null && this.local.lettingGo(station, id, u64(asking.seq) ?? -1);

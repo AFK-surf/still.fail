@@ -80,6 +80,10 @@ export interface ChatSurface {
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.
   /// `messageTs`: the message that started the work; `page`: the session's page in still.fail, where there is one.
   working?(thread: ThreadRef, messageTs: string | null, status: string, page?: string | null): void;
+  /// Says in the thread where it stands as the agent's turn ended (`kind` done or need, with the turn's words), under
+  /// its last message, as still.fail's chat says it at its end; null takes back what was said (the turn ended
+  /// otherwise). It goes by itself as the agent works again. Best effort, never waited on.
+  standsAt?(thread: ThreadRef, stands: { kind: "done" | "need"; words: string | null } | null): void;
   /// Calls the platform's API as the bot (Slack's Web API): what the agent reaches through slack_api.
   api?(method: string, params: Record<string, Json>): Promise<Json>;
   /// A person's email, where the platform shares it.
