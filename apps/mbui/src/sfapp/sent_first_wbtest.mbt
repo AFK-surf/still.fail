@@ -117,6 +117,15 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
 }
 
 ///|
+/// Not seen: not there, or drawn at no opacity (an answer laid out where it comes in, its avatar on its way to it).
+fn not_seen(t : @ui.Tester, words : String) -> Bool {
+  match t.look_of(words) {
+    Some((_, _, alpha)) => alpha == 0.0
+    None => true
+  }
+}
+
+///|
 test "words sent while an answer comes out of its avatar fly at once; the answer comes in once they have landed" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
@@ -136,10 +145,11 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
     }
     None => fail("nothing flies")
   }
-  // the avatar there before the words have landed: the answer waits for them, the list not moved under them; the
-  // avatar where the answer will come in, over the words sent (not yet the chat's: under the messages)
+  // the avatar there before the words have landed: the answer waits for them (in the list where it comes in since the
+  // avatar set out for it, not drawn), the words' row not moved under them; the avatar where the answer comes in, over
+  // the words sent (not yet the chat's: under the messages)
   t.run_for(sent_at + Pose::Float.ms() - 200.0 + 60.0 - t.time())
-  assert_true(t.find("收到：「看一下列表」") is None)
+  assert_true(not_seen(t, "收到：「看一下列表」"))
   let em = emits_of("ws1/st1\u{1}s-c1")
   let agents = match em.current {
     Some(turn) => {
@@ -157,7 +167,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   }
   // the answer comes in as they land, over them: they are pushed down from where they were, not moved at once
   t.run_for(landing - 20.0 - t.time())
-  assert_true(t.find("收到：「看一下列表」") is None)
+  assert_true(not_seen(t, "收到：「看一下列表」"))
   let was = t.drawn_of("再看一下按钮")
   t.run_for(landing - t.time())
   assert_true(send_flight.get() is None)

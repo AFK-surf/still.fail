@@ -367,6 +367,7 @@ pub fn emit_clock(@ui.Ctx, Turn) -> Double
 
 pub let emit_drop_ms : Double
 
+pub fn emit_awaited(Emits, Double) -> Bool
 pub fn emit_emitting(Emits, Double) -> Bool
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?

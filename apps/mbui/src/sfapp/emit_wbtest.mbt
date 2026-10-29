@@ -82,6 +82,30 @@ test "an agent's picture in its line is where its answer's is, at the row's star
 }
 
 ///|
+test "the flying avatar goes where its answer comes in: where it was aimed on its way is where it lands, no jump as the answer comes out" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  // every frame of its way: where it was aimed last on it, then where it lets the answer out
+  let mut aimed : (Double, Double)? = None
+  let mut landed : (Double, Double)? = None
+  let end = t.time() + emit_all_ms()
+  while t.time() < end && landed is None {
+    t.frame()
+    match em.current {
+      Some(turn) if turn.pose == Float => aimed = em.aimed
+      Some(turn) if turn.pose == Spit => landed = em.landed
+      _ => ()
+    }
+  }
+  guard (aimed, landed) is (Some(a), Some(l)) else { fail("aimed \{aimed}, landed \{landed}") }
+  assert_true((a.0 - l.0).abs() < 0.5 && (a.1 - l.1).abs() < 0.5, msg="aimed at \{a}, landed at \{l}")
+  emit_restore()
+}
+
+///|
 test "with the reader scrolled up (not watched), an answer just appears" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)

@@ -171,7 +171,9 @@ pub fn emit_goes(e : Emits, seq : Double) -> Bool {
 }
 
 ///|
-/// Waiting its turn (or its avatar still on its way to it): not in the list yet.
+/// Waiting its turn: not in the list yet. From when its avatar sets out for it (Float) it is, not drawn till it comes
+/// out (emit_awaited): laid out where it comes in, the rows round it making room for it as the avatar goes there, and
+/// the avatar going where it is, not where it is guessed to come (the user, 2026-10-29: 「你头像跳完瞬移就不是突变？」).
 pub fn emit_held(e : Emits, seq : Double) -> Bool {
   e.read()
   let k = seq_s(seq)
@@ -179,8 +181,18 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
     return false
   }
   match e.current {
-    Some(t) if t.seq == seq && (t.pose == Spit || t.pose == Return) => false
+    Some(t) if t.seq == seq && t.pose != Fold => false
     _ => true
+  }
+}
+
+///|
+/// In the list where it comes in, its avatar on its way to it (Float): not drawn yet.
+pub fn emit_awaited(e : Emits, seq : Double) -> Bool {
+  e.read()
+  match e.current {
+    Some(t) => t.seq == seq && t.pose == Float
+    None => false
   }
 }
 
@@ -537,6 +549,10 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
 /// opacity in by 35% of the time.
 pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) -> Unit {
   e.read()
+  if emit_awaited(e, seq) {
+    c.look(i, @ui.look(alpha=0.0))
+    return
+  }
   if !emit_emitting(e, seq) {
     return
   }

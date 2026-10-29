@@ -82,6 +82,7 @@ using @sfbase {
   each_second,
   elapsed,
   emit_emitting,
+  emit_awaited,
   emit_flight,
   emit_folded,
   emit_goes,
