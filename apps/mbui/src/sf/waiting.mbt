@@ -181,51 +181,67 @@ pub fn spinner(
 }
 
 ///|
-/// A station gone for its update (a chat's row, the line over its composer): two arrows chasing each other round a
-/// ring, each three eighths of it with its head at its end, turning the way they point, once in
-/// `updating_turn_ms`, drawn in an icon's place (`size`, the box the icons beside it are drawn in, in `color`, a line as
-/// wide as theirs; the ring where check-circle draws its circle, 3.5 to 20.5 of their 24 grid). The two the same half
-/// a turn apart, so what it draws is as wide each side of its middle and turns about it (Ctx::cycle_look turns a look
-/// about the middle of what it drew: one arrow alone, its head out to one side, wobbled as it turned). Turned by the
-/// clock as each frame is drawn, smoothly, at the frame rate: an update is over in a little while, no mark that stays
-/// for hours.
+/// A station gone for its update (a chat's row, the line over its composer): upgrading, said as it goes on: in a ring
+/// (where check-circle draws its circle, 3.5 to 20.5 of the icons' 24 grid) an arrow up, standing a while, then off up
+/// through its top as the next comes up from its bottom to stand where it stood, eased in and out, once every
+/// `updating_rise_ms`; seen in a round window inside the ring. Drawn in an icon's place (`size`, the box the icons
+/// beside it are drawn in, in `color`, a line as wide as theirs). Not a turning ring: that is any wait's (2026-10-29 the
+/// user: 这只是个 loading); what goes up is what a newer version is. One arrow in the window at a time, the next a
+/// window and an arrow under it: two in it at once drew a sign of their own as they passed. Moved by the clock as each
+/// frame is drawn (Ctx::cycle_look), smoothly, at the frame rate: an update is over in a little while, no mark that
+/// stays for hours.
 pub fn updating_mark(c : @ui.Ctx, size : Double, color : Int64) -> Int {
   let pi = 3.141592653589793
   let k = size / 24.0
   let stroke = 1.75 * k
   let mid = size / 2.0
-  let r = 8.5 * k
-  let back = 3.0 * k
-  let side = 2.5 * k
-  let sweep = 0.75 * pi
-  let lines = []
-  for from in [-0.5 * pi, 0.5 * pi] {
-    // its arc, then its head at the end: two strokes `back` behind it along the ring, either side of it
-    let end = from + sweep
-    let (ex, ey) = (mid + r * @dmath.cos(end), mid + r * @dmath.sin(end))
-    let (tx, ty) = (-@dmath.sin(end), @dmath.cos(end))
-    let (nx, ny) = (@dmath.cos(end), @dmath.sin(end))
-    lines.push(@ui.line(@ui.arc(mid, mid, r, from~, sweep~), width=stroke, color~))
-    lines.push(
-      @ui.line(
-        [
-          (ex - back * tx + side * nx, ey - back * ty + side * ny),
-          (ex, ey),
-          (ex - back * tx - side * nx, ey - back * ty - side * ny),
-        ],
-        width=stroke,
-        color~,
-      ),
-    )
+  // the window the arrows go through: round, inside the ring's line with room to spare
+  let window = 13.0 * k
+  let wmid = window / 2.0
+  // one arrow: its head 3 either side of it and 3 down, its shaft 8 long, standing in the window's middle; the next
+  // under it, out of sight until the first is going
+  let length = 8.0 * k
+  let pitch = window + length
+  let arrow = fn(top : Double) -> Array[@ui.Line] {
+    [
+      @ui.line([(wmid, top), (wmid, top + length)], width=stroke, color~),
+      @ui.line([(wmid - 3.0 * k, top + 3.0 * k), (wmid, top), (wmid + 3.0 * k, top + 3.0 * k)], width=stroke, color~),
+    ]
   }
-  let node = c.lines(lines, w=Px(size), h=Px(size))
-  c.cycle_look(node, updating_turn_ms, fn(f) { @ui.look(rot=f * 2.0 * pi) })
-  node
+  let top = wmid - length / 2.0
+  c.box(style=@ui.style(w=Fixed(size), h=Fixed(size), align=ACenter, justify=JCenter), fn() {
+    c.lines([@ui.line(@ui.arc(mid, mid, 8.5 * k, from=0.0, sweep=2.0 * pi), width=stroke, color~)], w=Px(size), h=Px(size))
+    |> ignore
+    c.layer(fn() {
+      c.box(style=update_ring_at, fn() {
+        c.box(style=@ui.style(w=Fixed(window), h=Fixed(window), radius=Full, clip=true), fn() {
+          let lines = arrow(top)
+          lines.push_iter(arrow(top + pitch).iter())
+          let node = c.lines(lines, w=Px(window), h=Px(window + pitch))
+          // standing the first `updating_stand` of the cycle, then going up a pitch, eased in and out
+          c.cycle_look(node, updating_rise_ms, fn(f) {
+            let g = if f <= updating_stand { 0.0 } else { (f - updating_stand) / (1.0 - updating_stand) }
+            let h = 2.0 - 2.0 * g
+            let eased = if g < 0.5 { 4.0 * g * g * g } else { 1.0 - h * h * h / 2.0 }
+            @ui.look(dy=-eased * pitch)
+          })
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
 }
 
 ///|
-/// How long the update's mark takes to turn once (updating_mark).
-pub let updating_turn_ms : Double = 1200.0
+/// How long the update's mark takes from one arrow standing to the next (updating_mark), and how much of it the arrow
+/// stands still.
+pub let updating_rise_ms : Double = 1400.0
+
+///|
+/// (how much of updating_rise_ms an arrow stands)
+let updating_stand : Double = 0.4
 
 ///|
 /// The spinner, or how far what it waits on has come once that is known (docs/ui-panels.md 等待: a transfer in a
