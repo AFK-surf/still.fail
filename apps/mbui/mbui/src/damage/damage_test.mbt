@@ -1,9 +1,9 @@
 ///|
 /// Instances as scene.mbt paints them: each a rect of `kind`, opaque white, clipped to all of a 400 × 300 window.
 fn frame(rects : Array[(Double, Double, Double, Double, Int)]) -> FixedArray[Double] {
-  let a = FixedArray::make(rects.length() * 52, 0.0)
+  let a = FixedArray::make(rects.length() * 56, 0.0)
   for k, r in rects {
-    let o = k * 52
+    let o = k * 56
     let (x, y, w, h, kind) = r
     a[o] = x
     a[o + 1] = y
@@ -32,13 +32,13 @@ fn copy(a : FixedArray[Double]) -> FixedArray[Double] {
 /// A damage that has seen `a`.
 fn seen(a : FixedArray[Double]) -> @damage.Damage {
   let d = @damage.Damage::new()
-  ignore(d.next(a, a.length() / 52, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0))
+  ignore(d.next(a, a.length() / 56, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0))
   d
 }
 
 ///|
 fn next(d : @damage.Damage, a : FixedArray[Double]) -> Array[(Double, Double, Double, Double)] {
-  d.next(a, a.length() / 52, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0)
+  d.next(a, a.length() / 56, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0)
 }
 
 ///|
@@ -56,7 +56,7 @@ test "an instance that changed: where it is, its edge's reach round it" {
   let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (100.0, 50.0, 20.0, 10.0, 0)])
   let d = seen(a)
   let b = copy(a)
-  b[52 + 8] = 0.5
+  b[56 + 8] = 0.5
   inspect(next(d, b), content="[(98, 48, 24, 14)]")
 }
 
@@ -65,7 +65,7 @@ test "moved: where it was and where it is" {
   let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (100.0, 50.0, 20.0, 10.0, 0)])
   let d = seen(a)
   let b = copy(a)
-  b[52] = 130.0
+  b[56] = 130.0
   inspect(next(d, b), content="[(98, 48, 54, 14)]")
 }
 
@@ -168,11 +168,11 @@ test "a band whose pieces changed, the band the same" {
   let d = seen(a)
   // a piece of the first piece instance: no band of it drawn
   let b = copy(a)
-  b[52 + 0] = 0.25
+  b[56 + 0] = 0.25
   inspect(next(d, b), content="[]")
   // the band's
   let c = copy(b)
-  c[104 + 8] = 0.25
+  c[112 + 8] = 0.25
   inspect(next(d, c), content="[(48, 48, 34, 12)]")
 }
 
@@ -193,20 +193,20 @@ test "a stream's picture: drawn again each frame" {
 test "glass: the part reaching what its capture copies takes all of that in" {
   // frosted glass (5) over a ground, blur 4, its capture -1; a dot that changed under its margin, outside the glass
   let a = frame([(0.0, 0.0, 400.0, 300.0, 0), (200.0, 10.0, 4.0, 4.0, 0), (100.0, 20.0, 80.0, 20.0, 5)])
-  a[104 + 7] = 4.0
-  a[104 + 20] = -1.0
+  a[112 + 7] = 4.0
+  a[112 + 20] = -1.0
   let d = seen(a)
   let b = copy(a)
-  b[52] = 190.0
+  b[56] = 190.0
   // (the glass's rect, 3 sigma, 2, and the edge's 2 round it: 84 … 196, 4 … 56; the dot's 188 … 206)
   inspect(next(d, b), content="[(84, 4, 122, 52)]")
   // far from it: only the dot
   let c = frame([(0.0, 0.0, 400.0, 300.0, 0), (300.0, 200.0, 4.0, 4.0, 0), (100.0, 20.0, 80.0, 20.0, 5)])
-  c[104 + 7] = 4.0
-  c[104 + 20] = -1.0
+  c[112 + 7] = 4.0
+  c[112 + 20] = -1.0
   let d = seen(c)
   let e = copy(c)
-  e[52 + 8] = 0.0
+  e[56 + 8] = 0.0
   inspect(next(d, e), content="[(298, 198, 8, 8)]")
 }
 
@@ -224,7 +224,7 @@ test "parts far apart: each its own, up to four; near: one" {
   let d = seen(a)
   let b = copy(a)
   for k in 1..<7 {
-    b[k * 52 + 8] = 0.0
+    b[k * 56 + 8] = 0.0
   }
   // (the dot at 20 near the one at 10: one part; five left, the pair whose rect grows least merged)
   inspect(
@@ -245,7 +245,7 @@ test "another number of instances, two changes far apart: each its own, what is 
   let more = rows.copy()
   more.push((300.0, 280.0, 2.0, 12.0, 0))
   let b = frame(more)
-  b[52 + 8] = 0.0
+  b[56 + 8] = 0.0
   inspect(next(d, b), content="[(8, 8, 8, 8), (298, 278, 6, 16)]")
 }
 

@@ -1600,10 +1600,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       // it is laid out with its move, so that what it has more comes out as it gets there, not drawn over what stands
       // by it that it moves away from or towards (the composer's field over its send, 2026-10-29: 「输入框变高的时候
       // 会盖住发送按钮」). Shrunk, or resized by nothing it moves for, it shows whole (a growth on its way going on, as far
-      // off its new height as it was off its old). Cut at its edge, not faded to it: its foot stands still as its words
-      // go up past it, so a fade there dimmed the line that was last as the new one came and lit it again, and the new
-      // one lit at once as the move ended (2026-10-30: 「换行的时候最后两行会闪烁」); a list's rows, coming out from
-      // under another, fade (makes_room).
+      // off its new height as it was off its old). What comes out fades to the cut, each pixel by where it is (half a
+      // line out shows its half, fading: 2026-10-30 「带渐隐，但不是整行渐隐」), over no more than it has gone (none as it
+      // sets off: what showed is not faded then, the line that was last neither dimmed nor lit again, 「换行的时候最后两行
+      // 会闪烁」) and no more than it has to go (none as it ends: nothing lit at once).
       r.shown_h = nh
       if e.flip && li < 0 {
         let shown = r.was_hh + (r.was_h - r.was_hh) * r.was_hp
@@ -1623,7 +1623,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         if p < 1.0 {
           let h = r.hh + (nh - r.hh) * p
           r.shown_h = dmax(h, 0.0)
-          c.cut_to_top(e.node, dmax(h, 0.0))
+          c.cut_to_top(e.node, dmax(h, 0.0), soft=dmax(dmin(room_soft, dmin(h - r.hh, nh - h)), 0.0))
         }
       }
       // coming in: a row new to its list, or (entering) a node not there the frame before

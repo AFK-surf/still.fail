@@ -83,9 +83,11 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
    draws while something moves (mbui's words_over.mbt); what is over others now is each test file's known number
    (`words_over_known`), which only falls. What grows for its cause while it moves (`@motion.layout` outside a list:
    the composer's field a line taller) shows only as tall as it showed, going to its new height with its move, so what
-   it has more comes out as it gets there, not over what stands by it (its ＋ and send, 2026-10-29), cut at its edge and
-   never faded (a fade there dimmed and lit again its last two lines, 2026-10-30); a list's rows make room for each
-   other instead (`makes_room`).
+   it has more comes out as it gets there, not over what stands by it (its ＋ and send, 2026-10-29), fading to its edge
+   by each pixel (half a line out shows its half), over no more than it has gone and no more than it has to go: what
+   showed is never faded, nothing lights at once as it ends (2026-10-30: a fade by the line dimmed and lit again its
+   last two lines); a list's rows make room for each other instead (`makes_room`). A soft cut fades by each pixel
+   everywhere (scene.mbt 52-55), never a whole line by its foot.
 
 ## Curves
 

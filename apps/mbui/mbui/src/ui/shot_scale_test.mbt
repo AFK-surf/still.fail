@@ -66,7 +66,7 @@ impl @hostapi.Host for ZoomHost with drawn_pixels_of(self, inst, count, _, _, _,
 
 ///|
 /// The numbers of an instance (scene.mbt).
-let zoom_inst = 52
+let zoom_inst = 56
 
 ///|
 /// The glyphs instances `inst` draw (`count` of them): the size each was made in (by its key, where `host` put it),

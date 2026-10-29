@@ -31,7 +31,9 @@ fn init {
     ("src/sfreplay/flows/share_files_test.mbt", 5),
     ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
-    ("src/sfreplay/flows/sheets_sinking_test.mbt", 1),
+    // (one more since what comes out from under a cut fades by each pixel, not by its line (2026-10-30): the failure
+    // notice's 「·」 and 「上报」 meet as it comes in, faint in the fade, wholly faded before)
+    ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
     ("src/sfreplay/flows/station_file_sent_test.mbt", 3),
     ("src/sfreplay/flows/station_files_test.mbt", 1),
     ("src/sfreplay/flows/viewer_test.mbt", 6),
