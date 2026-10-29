@@ -23,6 +23,7 @@ import { platform } from "../platform/index.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Connection, Stream } from "../mesh/native.ts";
 import { Reader, writeLine } from "../mesh/serve.ts";
+import type { GrantServers } from "./servers.ts";
 
 type Json = any;
 
@@ -57,6 +58,11 @@ export type SharesOptions = {
   /// How long adb is given, on the machine's time: to answer (`quick`), to connect or pair (`long`). Null: as long as
   /// it takes (a test's fake adb, which always answers, so what it says never turns on how fast the machine is).
   limits?: { quick: number | null; long: number | null };
+  /// The grants live now of a phone's owner (by email) on this station (adb/grants.ts), and their adb servers: a phone
+  /// with any is connected in those servers alone, and its port takes their connections alone. One with none (an app
+  /// from before grants, lending with its switch) is connected in the station's own server, as before.
+  granted?: (email: string) => string[];
+  servers?: GrantServers;
 };
 
 let nextOffer = 1;
@@ -191,6 +197,15 @@ export class Shares {
   get isStopping() {
     return this.stopping;
   }
+
+  /// `email`'s grants changed: their phones connected anew in the servers they are to be in now.
+  regrant(email: string) {
+    for (const share of this.byKey.values()) {
+      if (share.owner.email.toLowerCase() !== email.toLowerCase() || share.streams === 0) continue;
+      share.failures = 0;
+      void connect(this, share).catch(() => {});
+    }
+  }
 }
 
 /// Which phone of whose an offer or ask is about: the phone's device key as it says (`phone`; its link may be on one
@@ -267,7 +282,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
       share.lang = asked;
       share.offer = number;
     } else {
-      listen(share);
+      listen(shares, share);
       shares.byKey.set(device, share);
       log.info("adb", "phone offered for adb", { email: viewer.email, port: share.port });
     }
@@ -327,15 +342,30 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     share.server.close();
     log.info("adb", "phone no longer offered for adb", { email: viewer.email, port: share.port, ended });
     const adb = shares.adb();
-    if (adb) await run(adb, ["disconnect", share.serial()], shares.limits.quick).catch(() => {});
+    if (adb) for (const server of (await serversOf(shares, share)) ?? [[]]) await run(adb, [...server, "disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
   await stream.finish().catch(() => {});
 }
 
 /// Each TCP connection to the phone's port, a tunnel on its offer's connection.
-function listen(share: Share) {
+function listen(shares: Shares, share: Share) {
   share.server.on("connection", (socket) => {
     const conn = share.conn;
+    const ids = shares.options.granted?.(share.owner.email) ?? [];
+    if (ids.length > 0 && shares.options.servers) {
+      // Granted to chats: only their adb servers are let in (another chat's agent, knowing the port, is not).
+      void shares.options.servers.allowed(socket, ids).then((ok) => {
+        if (!ok) {
+          log.info("adb", "a connection to a granted phone's port from no grant's adb server turned away", { port: share.port });
+          return void socket.destroy();
+        }
+        tunnel(conn, "connect", socket).catch((error) => {
+          log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
+          share.refuse((error as Error).message);
+        });
+      });
+      return;
+    }
     tunnel(conn, "connect", socket).catch((error) => {
       log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
       share.refuse((error as Error).message);
@@ -480,8 +510,38 @@ function again(shares: Shares, share: Share) {
     .catch(() => {});
 }
 
-/// `adb connect` to the phone (unless adb holds it already), and how adb holds it then.
+/// The adb servers the phone is connected in: its grants' (`-P <port>` each), else the station's own (nothing given);
+/// null when a grant's would not start.
+export async function serversOf(shares: Shares, share: Share): Promise<string[][] | null> {
+  const ids = shares.options.granted?.(share.owner.email) ?? [];
+  if (ids.length === 0 || !shares.options.servers) return [[]];
+  const out: string[][] = [];
+  for (const id of ids) {
+    const s = await shares.options.servers.ensure(id);
+    if (s !== null) out.push(["-P", String(s.port)]);
+  }
+  return out.length > 0 ? out : null;
+}
+
+/// `adb connect` to the phone in each server it is to be in (and out of the station's own once granted to chats), and
+/// how adb holds it then, as the first has it.
 async function connectOnce(shares: Shares, share: Share) {
+  const adb = shares.adb();
+  const servers = await serversOf(shares, share);
+  if (adb !== null && servers !== null && servers[0]!.length > 0) await run(adb, ["disconnect", share.serial()], shares.limits.quick).catch(() => {});
+  if (servers === null) return share.set("failed", "a grant's adb server did not start");
+  let first: AdbState | null = null;
+  for (const server of servers) {
+    await connectIn(shares, share, server);
+    first ??= share.state;
+  }
+  if (first !== null && first.adb !== share.state.adb) share.set(first.adb, first.message);
+}
+
+/// `adb connect` to the phone in one adb server (`server`: its `-P <port>`, or none for the station's own), unless it
+/// holds it already, and how it holds it then.
+async function connectIn(shares: Shares, share: Share, server: string[]) {
+  const run = (bin: string, args: string[], timeout: number | null) => runAdb(bin, [...server, ...args], timeout);
   const speaks = share.lang;
   const adb = shares.adb();
   if (adb === null) return share.set("missing", tr(speaks, "station.adb.install"));
@@ -570,7 +630,8 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
   if (!pkg) throw new Error(tr(lang, "station.adb.noPackage"));
   const adb = shares.adb();
   if (adb === null) throw new Error(tr(lang, "station.adb.noAdb"));
-  const said = await run(adb, ["-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
+  const server = ((await serversOf(shares, share)) ?? [[]])[0]!;
+  const said = await run(adb, [...server, "-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
   // Quiet is granted. MIUI and ColorOS refuse the shell's grant (a SecurityException, a page of stack) until a switch in
   // Developer options is on: said as which one; anything else, by its first line.
   if (/GRANT_RUNTIME_PERMISSIONS/.test(said)) throw new Error(tr(lang, "station.adb.grantRefused"));
@@ -628,6 +689,8 @@ export function run(adb: string, args: string[], timeout: number | null): Promis
     });
   });
 }
+
+const runAdb = (adb: string, args: string[], timeout: number | null) => run(adb, args, timeout);
 
 /// A word the phone says of itself, short and on one line.
 export function text(value: unknown, max: number): string {

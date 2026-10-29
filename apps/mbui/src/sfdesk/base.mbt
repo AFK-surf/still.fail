@@ -95,6 +95,7 @@ using @sfbase {
   type Message,
   type Card,
   type VaultAsk,
+  type PhoneAsk,
   type Elsewhere,
   type Quote,
   type Install,

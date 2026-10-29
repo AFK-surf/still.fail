@@ -57,6 +57,7 @@ using @sfbase {
   type Stamp,
   type Turns,
   type VaultAsk,
+  type PhoneAsk,
   absolute_times,
   act,
   act_rooms,

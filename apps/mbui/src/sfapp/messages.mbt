@@ -153,7 +153,7 @@ fn decision_under(
     return
   }
   // a vault request that says what it is: answered on its own card, in place of the words (vault_approval.mbt)
-  if m.card is Some({ ask: Some(_), .. }) {
+  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {

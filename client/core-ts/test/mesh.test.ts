@@ -950,6 +950,47 @@ function echoTcp(_port: number) {
   });
 }
 
+/// A chat's grant of this person's phone (docs/adb-share.md): heard from its station, the phone lends itself there with the
+/// ports its app found (`adb.ports`); the grant ended, it is let go. No switch: the grants decide.
+sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  const seen: { offer?: J; stopped?: boolean } = {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    seen.offer = JSON.parse((await Station.readLine(offer, { bytes: Buffer.alloc(0) }))!);
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+    await offer.stopped();
+    seen.stopped = true;
+  })().catch(() => {});
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const station = `ws/${endpoint.id()}`;
+  await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
+  // Asked, not yet granted: nothing lent.
+  const exp = Math.floor(s.time.now() / 1000) + 3600;
+  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "pending", at: 1 });
+  assert.deepEqual(adb.wanted(), []);
+  assert.equal(adb.grants().length, 1);
+  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  assert.deepEqual(adb.wanted(), [station]);
+  await s.until(() => seen.offer !== undefined && adb.value().lends?.[0]?.adb === "connected");
+  assert.equal(seen.offer.adb.connect, 5555);
+  assert.deepEqual(adb.value().lends.map((l: J) => l.station), [station]);
+  // Ended (taken back, its chat archived): let go.
+  adb.heard(station, { id: "p1", status: "ended" });
+  await s.until(() => seen.stopped === true);
+  assert.deepEqual([adb.wanted(), adb.value().lends], [[], []]);
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
 sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s) => {
   // A station that takes a credential, then an offer: answers it, opens a tunnel and says "hello" through it.
   const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });

@@ -67,7 +67,8 @@ function readLine(stream: IrohStream, carry: { bytes: Uint8Array }): Effect.Effe
   });
 }
 
-export class Adb {
+/// This phone lent to one station: its offer, the stream saying it, the tunnels the station opens.
+class Lend {
   readonly #env: AdbEnv;
   #offer: Offer | null = null;
   #until = 0;
@@ -109,6 +110,8 @@ export class Adb {
       }
       case "grant":
         return this.#ask({ op: "grant" });
+      default:
+        return Effect.fail(CoreError.invalid("adb: not a call of one lending"));
     }
   }
 
@@ -383,10 +386,15 @@ export class Adb {
 
   /// An ask about the offer (`pair`, `grant`) on the station's link now.
   #ask(ask: J): Effect.Effect<unknown, CoreError> {
+    const offer = this.#offer;
+    if (offer === null) return Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing")));
+    return this.askAt(offer.station, ask);
+  }
+
+  /// An ask of station `station` on its link now: what it answered (JSON), or its words as the error.
+  askAt(station: string, ask: J): Effect.Effect<unknown, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const offer = this.#offer;
-      if (offer === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing")));
-      const [mesh, link] = yield* this.#link(offer.station);
+      const [mesh, link] = yield* this.#link(station);
       const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() });
       const parts: Uint8Array[] = [];
       for (;;) {
@@ -394,9 +402,143 @@ export class Adb {
         if (chunk === null) break;
         parts.push(chunk);
       }
-      const said = message(fromUtf8(new Uint8Array(parts.flatMap((p) => [...p])))) ?? "";
-      if (reply.status === 200) return { message: said };
+      const body = fromUtf8(new Uint8Array(parts.flatMap((p) => [...p])));
+      const said = message(body) ?? "";
+      if (reply.status === 200) return { message: said, ...((parseJson(utf8(body)) as J) ?? {}) };
       return yield* Effect.fail(CoreError.invalid(said === "" ? t("core-misc.adb.failed", { status: reply.status }) : said));
     });
+  }
+}
+
+/// This phone's adb (docs/adb-share.md): lent to each station a chat's grant of it is live on (`wanted`), with the ports
+/// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
+/// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
+export class Adb {
+  readonly #env: AdbEnv;
+  readonly #legacy: Lend;
+  readonly #lends = new Map<string, Lend>();
+  #ports: Omit<Offer, "station" | "minutes"> | null = null;
+  /// This person's chats' grants of their phone (and requests waiting), by station address and id.
+  readonly #grants = new Map<string, Map<string, J>>();
+  /// Their 默认最长授权 as last set here or said by a station.
+  #lasts: "hour" | "chat" = "chat";
+
+  constructor(env: AdbEnv) {
+    this.#env = env;
+    this.#legacy = new Lend(env);
+  }
+
+  run(call: AdbCall): Effect.Effect<unknown, CoreError> {
+    switch (call.kind) {
+      case "share":
+      case "stop":
+        return this.#legacy.run(call);
+      case "ports":
+        if (!this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
+        return Effect.sync(() => {
+          this.#ports = call.ports;
+          this.#sync();
+          return null;
+        });
+      case "pair":
+      case "grant": {
+        const lend = this.#legacy.value().sharing ? this.#legacy : (call.station !== undefined ? this.#lends.get(call.station) : [...this.#lends.values()][0]);
+        return lend === undefined ? Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing"))) : lend.run(call);
+      }
+      case "decide":
+        return Effect.map(this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope }), (r) => {
+          this.heard(call.station, (r as J)?.request);
+          return null;
+        });
+      case "revoke":
+        return Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request: call.request }), (r) => {
+          this.heard(call.station, (r as J)?.request);
+          return null;
+        });
+      case "lasts": {
+        // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
+        this.#lasts = call.lasts;
+        this.#env.store.invalidate({ topic: "adbShare" });
+        const at = Math.floor(this.#env.host.nowMs());
+        return Effect.as(
+          Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at })), { concurrency: "unbounded", discard: true }),
+          null,
+        );
+      }
+    }
+  }
+
+  /// A station said how a grant or request of this person's stands (its `adb-grant` event, or a decision's answer).
+  heard(station: string, d: J): void {
+    if (typeof d?.id !== "string") return;
+    const at = this.#grants.get(station) ?? new Map<string, J>();
+    if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
+    else at.delete(d.id);
+    this.#grants.set(station, at);
+    this.#sync();
+  }
+
+  /// A station's grants read whole, as it is reached (one from before grants answers with none).
+  readGrants(station: string): Effect.Effect<void, CoreError> {
+    return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
+      const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
+      if (list === null) return;
+      if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
+      this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+      this.#sync();
+    });
+  }
+
+  /// The grants live now and the requests waiting, every station's: `{station, id, chat, reason, status, scope, exp}`.
+  grants(): J[] {
+    const now = this.#env.host.nowMs() / 1000;
+    const out: J[] = [];
+    for (const [station, at] of this.#grants)
+      for (const g of at.values()) if (g.status === "pending" || (g.status === "granted" && (g.exp ?? 0) > now)) out.push({ ...g, station });
+    return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  }
+
+  /// The stations a grant lends this phone to now.
+  wanted(): string[] {
+    return [...new Set(this.grants().filter((g) => g.status === "granted").map((g) => g.station as string))];
+  }
+
+  /// Each wanted station lent to (with the ports the app found), each no longer wanted let go.
+  #sync(): void {
+    const wanted = this.#ports === null || !this.#env.lends() ? [] : this.wanted();
+    for (const [station, lend] of this.#lends)
+      if (!wanted.includes(station)) {
+        this.#env.runner.fork(Effect.ignore(lend.run({ kind: "stop" })));
+        this.#lends.delete(station);
+      }
+    for (const station of wanted) {
+      let lend = this.#lends.get(station);
+      if (lend === undefined) {
+        lend = new Lend(this.#env);
+        this.#lends.set(station, lend);
+      }
+      // (lent for as long as a grant is: the grants end it, not its own clock)
+      this.#env.runner.fork(Effect.ignore(lend.run({ kind: "share", offer: { ...this.#ports!, station, minutes: 30 * 24 * 60 } })));
+    }
+    this.#env.store.invalidate({ topic: "adbShare" });
+  }
+
+  /// The `adbShare` topic: the lending as the app's switch made it, or the first a grant made, and every grant.
+  value(): J {
+    const first = this.#legacy.value().sharing ? this.#legacy : ([...this.#lends.values()][0] ?? this.#legacy);
+    const lends = [...this.#lends.entries()].map(([station, l]) => {
+      const v = l.value();
+      return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };
+    });
+    return { ...first.value(), grants: this.grants(), wanted: this.wanted(), lends, lasts: this.#lasts };
+  }
+
+  card(station: string): J {
+    return (this.#lends.get(station) ?? this.#legacy).card(station);
+  }
+
+  deviceTold(): void {
+    this.#legacy.deviceTold();
+    this.#sync();
   }
 }

@@ -132,10 +132,10 @@ fn adb_ask(name : String, params : Json) -> Unit {
 
 ///|
 /// The notifications' words, the app's own (AdbShare.java fills `{name}`, `{n}`, `{error}`).
-fn adb_texts() -> Json {
+pub fn adb_texts() -> Json {
   let m : Map[String, Json] = {}
   for k in [
-      "title", "notify.title", "stop", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
+      "title", "notify.title", "notify.chats", "stop", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
       "shareFailed",
     ] {
@@ -304,6 +304,10 @@ fn adb_port(view : Json?, key : String, none : String) -> (String, Bool) {
 /// lending itself is the core's and the host's (AdbShare.java); this page shows and asks (`adb.stop`, `adb.pair`,
 /// `adb.grant`; the host's adb.start, adb.switch, adb.open).
 fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
+  if address == "" {
+    adb_settings(c, core, here)
+    return
+  }
   let t = @sf.theme()
   let name = match station_of(core, here, address) {
     Some(s) => text(Some(s), "name")
@@ -420,61 +424,72 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
         }
         None => ()
       }
-      // what the phone has for it, and the ports the app found
-      blocks.push(fn() { section_header(c, tr("android-misc.adb.phone"), start=S6) })
-      blocks.push(fn() {
-        list_card(c, fn() {
-          let need = fn(title : String, ok : Bool, value : String) {
-            list_row(c, fn() {
-              row_title(c, title)
-              c.text(value, style=if ok { @sf.value } else { adb_lacks }) |> ignore
-            })
-            |> ignore
-          }
-          let developer = flag(phone, "developer")
-          need(tr("android-misc.adb.developer"), developer, tr(if developer { "android-misc.adb.on" } else { "android-misc.adb.offValue" }))
-          let wifi = flag(phone, "wifi")
-          need(tr("android-misc.adb.wifi"), wifi, tr(if wifi { "android-misc.adb.wifi.on" } else { "android-misc.adb.wifi.off" }))
-          let wireless = flag(phone, "wireless")
-          need(tr("android-misc.adb.wireless"), wireless, tr(if wireless { "android-misc.adb.on" } else { "android-misc.adb.offValue" }))
-          if there {
-            let (connect, found) = adb_port(view, "connectPort", tr("android-misc.adb.port.none"))
-            need(tr("android-misc.adb.port.connect"), found, connect)
-            let (pair, _) = adb_port(view, "pairPort", tr("android-misc.adb.port.closed"))
-            need(tr("android-misc.adb.port.pair"), true, pair)
-          }
-          // the code read off the pairing dialog by itself, where the person turns that on (AdbCodeReader)
-          if there && text(view, "adb") == "unpaired" {
-            let reads = flag(phone, "reads")
-            if list_row(c, key=if reads { "" } else { "adb-reader" }, fn() {
-                row_title(c, tr("android-misc.adb.reader.title"))
-                c.text(tr(if reads { "android-misc.adb.on" } else { "android-misc.adb.reader.turnOn" }), style=if reads { @sf.value } else { adb_go })
-                |> ignore
-              }) {
-              adb_ask("adb.open", obj([("what", str("reader"))]))
+      // what the phone lacks for it, and what can be turned on for it: what is on and has nothing to tap is not said
+      let lacks : Array[(String, String)] = []
+      if !flag(phone, "developer") {
+        lacks.push((tr("android-misc.adb.developer"), tr("android-misc.adb.offValue")))
+      }
+      if !flag(phone, "wifi") {
+        lacks.push((tr("android-misc.adb.wifi"), tr("android-misc.adb.wifi.off")))
+      }
+      if !flag(phone, "wireless") {
+        lacks.push((tr("android-misc.adb.wireless"), tr("android-misc.adb.offValue")))
+      }
+      if there {
+        // (a port only where adbd is not found at it: the pairing one is the next step's while it is wanted)
+        let (connect, found) = adb_port(view, "connectPort", tr("android-misc.adb.port.none"))
+        if !found {
+          lacks.push((tr("android-misc.adb.port.connect"), connect))
+        }
+        let (pair, open) = adb_port(view, "pairPort", tr("android-misc.adb.port.closed"))
+        if !open {
+          lacks.push((tr("android-misc.adb.port.pair"), pair))
+        }
+      }
+      // the code read off the pairing dialog by itself, where the person turns that on (AdbCodeReader)
+      let reader = there && text(view, "adb") == "unpaired" && !flag(phone, "reads")
+      // from then on: the app turns Wireless debugging on itself, once the station's adb grants it
+      let grant = there && text(view, "adb") == "connected" && !flag(phone, "canSwitch")
+      if !lacks.is_empty() || reader || grant {
+        blocks.push(fn() { section_header(c, tr("android-misc.adb.phone"), start=S6) })
+        blocks.push(fn() {
+          list_card(c, fn() {
+            for lack in lacks {
+              list_row(c, fn() {
+                row_title(c, lack.0)
+                c.text(lack.1, style=adb_lacks) |> ignore
+              })
+              |> ignore
             }
-          }
-          // from then on: the app turns Wireless debugging on itself, once the station's adb grants it
-          if there && text(view, "adb") == "connected" && !flag(phone, "canSwitch") {
-            let busy = is_doing(core, ["adb.grant"], [])
-            if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
-                // (its switch across the row's middle: a round control out of the row's corners)
-                row_lines(c, tr("android-misc.adb.grant.title"), "", wrap_title=true)
-                doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
-                switch(c, "adb-grant", false)
-              }) {
-              act(
-                core,
-                tr("android-misc.adb.grantWhat"),
-                "adb.grant",
-                obj([]),
-                done=tr("android-misc.adb.granted"),
-                then=fn(_) { adb_host.phone = None },
-              )
+            if reader {
+              if list_row(c, key="adb-reader", fn() {
+                  row_title(c, tr("android-misc.adb.reader.title"))
+                  c.text(tr("android-misc.adb.reader.turnOn"), style=adb_go) |> ignore
+                }) {
+                adb_ask("adb.open", obj([("what", str("reader"))]))
+              }
             }
-          }
+            if grant {
+              let busy = is_doing(core, ["adb.grant"], [])
+              if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
+                  // (its switch across the row's middle: a round control out of the row's corners)
+                  row_lines(c, tr("android-misc.adb.grant.title"), "", wrap_title=true)
+                  doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
+                  switch(c, "adb-grant", false)
+                }) {
+                act(
+                  core,
+                  tr("android-misc.adb.grantWhat"),
+                  "adb.grant",
+                  obj([]),
+                  done=tr("android-misc.adb.granted"),
+                  then=fn(_) { adb_host.phone = None },
+                )
+              }
+            }
+          })
         })
-      })
+      }
     }
     blocks.push(fn() { gap(c, 30.0) })
     scroll_page(c, "adb/" + address, blocks)
@@ -523,4 +538,143 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
     Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
     _ => None
   }
+}
+
+///|
+/// Settings' 共享调试 (docs/adb-share.md, 2026-10-29: as the vault's page): no switch, a chat's agent asks for the phone
+/// and its person grants it on the card in the chat. Here: the chats it is granted to now, each taken back with 收回;
+/// the requests waiting; and what the phone lacks for it (本机设置), with the switch it can turn on.
+fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let t = @sf.theme()
+  let view = (core.topic)("adbShare", Map([])).value
+  let phone = adb_phone(c)
+  let grants = match field(view, "grants") {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let live = grants.filter(fn(g) { text(Some(g), "status") == "granted" })
+  let waiting = grants.filter(fn(g) { text(Some(g), "status") == "pending" })
+  // a station by its name, as the workspace's stations have it
+  let named = fn(address : String) {
+    match station_of(core, here, address) {
+      Some(st) => text(Some(st), "name")
+      None => station_name(address)
+    }
+  }
+  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"))
+    let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
+    blocks.push(fn() {
+      list_card(c, fn() {
+        list_row(c, fn() {
+          c.text(tr("android-misc.adb.chats.about"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+        })
+        |> ignore
+      })
+    })
+    // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices)
+    blocks.push(fn() {
+      list_card(c, fn() {
+        let lasts = if text(view, "lasts") == "hour" { "hour" } else { "chat" }
+        if @sf.link_row(c, "adb-lasts", tr("android-misc.adb.lasts"), note=tr("android-settings.vault.lasts." + lasts), tail=fn() {
+            doing_mark(c, is_doing(core, ["adb.setLasts"], []), failed_of(core, ["adb.setLasts"], []))
+          }) {
+          @sf.pick(
+            tr("android-misc.adb.lasts"),
+            ["hour", "chat"].map(fn(l) { @sf.choice(l, tr("android-settings.vault.lasts." + l), note=tr("android-settings.vault.lasts." + l + "Detail")) }),
+            lasts,
+            fn(picked) {
+              if picked != lasts {
+                act(core, tr("android-misc.adb.lasts"), "adb.setLasts", obj([("lasts", str(picked))]))
+              }
+            },
+            from=Of(c.id("adb-lasts")),
+          )
+        }
+      })
+    })
+    // the chats it is lent to now, each taken back here
+    blocks.push(fn() { section_header(c, tr("android-misc.adb.chats.live"), start=S6) })
+    blocks.push(fn() {
+      list_card(c, fn() {
+        if live.is_empty() {
+          list_row(c, fn() {
+            c.text(tr("android-misc.adb.chats.none"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+          })
+          |> ignore
+        }
+        for g in live {
+          let g = Some(g)
+          let station = text(g, "station")
+          let request = text(g, "id")
+          let scope = if text(g, "scope") == "hour" { "hour" } else { "chat" }
+          let busy = is_doing(core, ["adb.revoke"], [("request", request)])
+          if list_row(c, key=if busy { "" } else { "adb-revoke/" + request }, fn() {
+              row_lines(c, text(g, "reason"), named(station) + " · " + tr("android-settings.vault.scope." + scope), wrap_title=true, end=fn() {
+                if busy {
+                  doing_mark(c, true, None)
+                } else {
+                  c.text(tr("android-misc.adb.chats.revoke"), style=adb_go) |> ignore
+                }
+              })
+            }) {
+            act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
+          }
+        }
+      })
+    })
+    if !waiting.is_empty() {
+      blocks.push(fn() { section_header(c, tr("android-misc.adb.chats.waiting"), start=S6) })
+      blocks.push(fn() {
+        list_card(c, fn() {
+          for g in waiting {
+            let g = Some(g)
+            list_row(c, fn() { row_lines(c, text(g, "reason"), named(text(g, "station")), wrap_title=true) }) |> ignore
+          }
+        })
+      })
+    }
+    // what the phone lacks for it (本机设置)
+    match phone {
+      Some(_) if flag(phone, "supported") => {
+        let lacks : Array[(String, String)] = []
+        if !flag(phone, "developer") {
+          lacks.push((tr("android-misc.adb.developer"), tr("android-misc.adb.offValue")))
+        }
+        if !flag(phone, "wifi") {
+          lacks.push((tr("android-misc.adb.wifi"), tr("android-misc.adb.wifi.off")))
+        }
+        if !flag(phone, "wireless") {
+          lacks.push((tr("android-misc.adb.wireless"), tr("android-misc.adb.offValue")))
+        }
+        if !lacks.is_empty() {
+          blocks.push(fn() { section_header(c, tr("android-misc.adb.phone"), start=S6) })
+          blocks.push(fn() {
+            list_card(c, fn() {
+              for lack in lacks {
+                list_row(c, fn() {
+                  row_title(c, lack.0)
+                  c.text(lack.1, style=adb_lacks) |> ignore
+                })
+                |> ignore
+              }
+            })
+          })
+        }
+      }
+      Some(_) =>
+        blocks.push(fn() {
+          list_card(c, fn() {
+            list_row(c, fn() {
+              c.text(tr("android-misc.adb.unsupported"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+            })
+            |> ignore
+          })
+        })
+      None => ()
+    }
+    blocks.push(fn() { gap(c, 30.0) })
+    scroll_page(c, "adb/", blocks)
+  })
+  |> ignore
 }

@@ -415,6 +415,21 @@ export const windows: Platform = {
   // A leader gone leaves nothing to know its tree by.
   groupOutlivesLeader: false,
   groupMemory,
+  async tcpPortPids(port) {
+    // netstat: each connection's local and remote address and its process; the one whose local port is `port`.
+    try {
+      const { stdout } = await run("netstat", ["-ano", "-p", "TCP"], { windowsHide: true, maxBuffer: 8 << 20 });
+      const pids = new Set<number>();
+      for (const line of stdout.split(/\r?\n/)) {
+        const f = line.trim().split(/\s+/);
+        if (f.length >= 5 && f[0] === "TCP" && f[1]!.endsWith(`:${port}`) && f[3] === "ESTABLISHED") pids.add(Number(f[4]));
+      }
+      pids.delete(process.pid);
+      return [...pids].filter((p) => Number.isInteger(p));
+    } catch {
+      return [];
+    }
+  },
 
   paths: {
     separator: /[\\/]/,

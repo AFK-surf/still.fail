@@ -49,6 +49,36 @@ export interface AdbCard {
 	lendable: boolean;
 }
 
+/** A chat's grant of this person's phone, or its request waiting (the `adbShare` topic's `grants`). */
+export interface AdbGrant {
+	/** Its station's address. */
+	station: string;
+	/** The request's id (`adb.decide`, `adb.revoke`). */
+	id: string;
+	session: string;
+	/** Its chat's address on the station. */
+	chat: string;
+	/** Why the agent asked (its words). */
+	reason: string;
+	/** `pending` (waiting for the person) or `granted`. */
+	status: string;
+	/** Granted: `hour` or `chat`. */
+	scope?: string;
+	/** Granted: when it ends at the latest (unix seconds). */
+	exp?: number;
+	at: number;
+}
+
+/** This phone lent to one station for its chats' grants (the `adbShare` topic's `lends`): as `phase`, `adb`, `serial` and `message` are for the switch's. */
+export interface AdbLend {
+	station: string;
+	phase: string;
+	adb?: string;
+	serial?: string;
+	message?: string;
+	tunnels: number;
+}
+
 /**
  * This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).
  * `phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;
@@ -69,6 +99,14 @@ export interface AdbShareView {
 	pairPort?: number;
 	/** `connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew. */
 	refusedPort?: number;
+	/** This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md). */
+	grants?: AdbGrant[];
+	/** The stations a live grant lends this phone to now. */
+	wanted?: string[];
+	/** This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`). */
+	lasts?: string;
+	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */
+	lends?: AdbLend[];
 }
 
 export interface AgentCardLine {
@@ -1614,6 +1652,21 @@ export interface DecisionOption {
 	closes?: boolean;
 }
 
+/** An agent's request to debug its person's phone, as its card in the chat says it. */
+export interface PhoneAsk {
+	/** Its id (`adb.decide`, `adb.revoke`). */
+	request: string;
+	reason: string;
+	/** Decided: granted | denied | ended. Absent while it waits. */
+	status?: string;
+	/** Granted: hour | chat. */
+	scope?: string;
+	/** Ended or refused by itself: why (已收回, 对话已归档, 授权已到期). */
+	why?: string;
+	/** The longest it may be granted for, as its owner allows: `hour` or `chat`. */
+	lasts?: string;
+}
+
 /**
  * What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their
  * vault (`vault.approve`, turning it on first where it is not).
@@ -1678,6 +1731,8 @@ export interface MessageCard {
 	 * a web page says to approve it in the app.
 	 */
 	vault?: string;
+	/** An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station). */
+	phoneAsk?: PhoneAsk;
 	/**
 	 * With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card
 	 * from before it did (the words say it).

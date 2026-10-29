@@ -1231,6 +1231,8 @@ pub using @sfbase {type PageMarks}
 
 pub using @sfbase {type Person}
 
+pub using @sfbase {type PhoneAsk}
+
 pub using @sfbase {type Place}
 
 pub using @sfbase {type Placed}

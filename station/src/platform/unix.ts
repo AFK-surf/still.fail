@@ -319,6 +319,55 @@ export const unix: Platform = {
   },
   startTimeOf,
   groupOutlivesLeader: true,
+  async tcpPortPids(port) {
+    try {
+      if (MACOS) {
+        // lsof -i names the sockets either end of which is on the port: the listener's own end is this process's.
+        const { stdout } = await run("lsof", ["-nP", "-a", `-iTCP@127.0.0.1:${port}`, "-sTCP:ESTABLISHED", "-Fp"], { maxBuffer: 1 << 20 });
+        return [...new Set(stdout.split("\n").filter((l) => l.startsWith("p")).map((l) => Number(l.slice(1))))].filter((p) => p !== process.pid);
+      }
+      // Linux: the socket's inode from /proc/net/tcp (local address 0100007F:<port hex>), then whose fd it is.
+      const hex = port.toString(16).toUpperCase().padStart(4, "0");
+      const inodes = new Set<string>();
+      for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+        let text = "";
+        try {
+          text = readFileSync(file, "utf8");
+        } catch {
+          continue;
+        }
+        for (const line of text.split("\n").slice(1)) {
+          const f = line.trim().split(/\s+/);
+          if (f.length > 9 && f[1]!.endsWith(`:${hex}`) && f[3] === "01") inodes.add(f[9]!);
+        }
+      }
+      if (inodes.size === 0) return [];
+      const pids: number[] = [];
+      for (const name of await readdir("/proc")) {
+        const pid = Number(name);
+        if (!Number.isInteger(pid) || pid === process.pid) continue;
+        let fds: string[] = [];
+        try {
+          fds = await readdir(`/proc/${pid}/fd`);
+        } catch {
+          continue;
+        }
+        for (const fd of fds) {
+          try {
+            const link = readlinkSync(`/proc/${pid}/fd/${fd}`);
+            const m = /^socket:\[(\d+)\]$/.exec(link);
+            if (m && inodes.has(m[1]!)) {
+              pids.push(pid);
+              break;
+            }
+          } catch {}
+        }
+      }
+      return pids;
+    } catch {
+      return [];
+    }
+  },
   async groupMemory(pgids) {
     const rss = new Map<number, number>();
     try {

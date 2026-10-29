@@ -1800,6 +1800,7 @@ pub(all) struct Card {
   station : String
   vault : String
   ask : VaultAsk?
+  phone : PhoneAsk?
 }
 
 pub(all) struct ChatCcTo {
@@ -2584,6 +2585,15 @@ pub(all) struct Person {
   display : String
   picture : String
   mine : Bool
+}
+
+pub(all) struct PhoneAsk {
+  request : String
+  reason : String
+  status : String
+  scope : String
+  why : String
+  lasts : String
 }
 
 pub(all) struct Place {
