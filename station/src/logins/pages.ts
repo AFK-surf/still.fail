@@ -12,7 +12,6 @@ export type PagesBrowser = {
   available(): boolean;
   openTab(url: string): Promise<string>;
   hasTab(targetId: string): boolean;
-  front(targetId: string): Promise<void>;
   closeTab(targetId: string): Promise<void>;
 };
 
@@ -56,13 +55,11 @@ export class LoginPages {
     return id !== undefined && this.#browser.hasTab(id) ? tabScreen(id) : null;
   }
 
-  /// The tab for `key`: the one open, brought to the front, else a new one at `url`. Its screen.
+  /// The tab for `key`: the one open (in a window of its own, so seen as it is: browser.ts openTab), else a new one at
+  /// `url`. Its screen.
   async open(key: string, url: string): Promise<string> {
     const had = this.#tabs.get(key);
-    if (had !== undefined && this.#browser.hasTab(had)) {
-      await this.#browser.front(had).catch(() => {});
-      return tabScreen(had);
-    }
+    if (had !== undefined && this.#browser.hasTab(had)) return tabScreen(had);
     const pending = this.#opening.get(key);
     if (pending) return pending;
     const opening = (async () => {

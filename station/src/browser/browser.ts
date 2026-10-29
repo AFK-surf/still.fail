@@ -9,6 +9,7 @@ import type { Screens } from "../screens/source.ts";
 import type { Cdp } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
+import { BEHIND } from "./proxy.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
 /// Unused this long (no agent asking for it, no tab coming, going or navigated, no one watching), it is closed.
@@ -112,12 +113,12 @@ export class StationBrowser {
     return this.#installed.is;
   }
 
-  /// A tab of the station's own (no session's) at `url`, the browser started if it is not running: its target id, once
-  /// it is among the screens.
+  /// A tab of the station's own (no session's) at `url`, in a window of its own opened behind the others (as a
+  /// session's: proxy.ts), the browser started if it is not running: its target id, once it is among the screens.
   async openTab(url: string): Promise<string> {
     this.used();
     const up = await this.#ensure();
-    const { targetId } = await up.cdp.send("Target.createTarget", { url });
+    const { targetId } = await up.cdp.send("Target.createTarget", { url, ...BEHIND });
     if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
     await up.tabs.arrived(targetId);
     return targetId;
@@ -126,12 +127,6 @@ export class StationBrowser {
   /// Whether tab `targetId` is there.
   hasTab(targetId: string): boolean {
     return this.#up?.tabs.has(targetId) ?? false;
-  }
-
-  /// Brings tab `targetId` to the front of its window.
-  async front(targetId: string): Promise<void> {
-    this.used();
-    await this.#up?.cdp.send("Target.activateTarget", { targetId });
   }
 
   /// Closes tab `targetId`, if it is there.

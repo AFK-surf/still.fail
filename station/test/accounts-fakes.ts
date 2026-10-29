@@ -189,11 +189,10 @@ export async function until<T>(f: () => T | undefined | null | false, _what: str
 export const idToken = (claims: unknown) => `x.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.y`;
 
 /// The station's browser as the logins see it (logins/pages.ts): its tabs in memory (`T1`, `T2`…, each at the page it
-/// opened), each page visited by `visit` as Chrome would load it, the tabs brought forward said; `gone` closes one as a
+/// opened), each page visited by `visit` as Chrome would load it; `gone` closes one as a
 /// person would.
 export function fakeBrowser(visit: (url: string) => void = () => {}, available = true) {
   const tabs = new Map<string, string>();
-  const fronted: string[] = [];
   let next = 0;
   let changed = () => {};
   const browser: PagesBrowser = {
@@ -206,9 +205,6 @@ export function fakeBrowser(visit: (url: string) => void = () => {}, available =
       return id;
     },
     hasTab: (id) => tabs.has(id),
-    async front(id) {
-      fronted.push(id);
-    },
     async closeTab(id) {
       if (tabs.delete(id)) changed();
     },
@@ -220,7 +216,6 @@ export function fakeBrowser(visit: (url: string) => void = () => {}, available =
   return {
     pages,
     tabs,
-    fronted,
     gone: (id: string) => {
       tabs.delete(id);
       changed();
