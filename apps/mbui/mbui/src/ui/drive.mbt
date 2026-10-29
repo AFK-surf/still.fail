@@ -39,6 +39,8 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   ime H                       under a Tester (a film's run), the soft keyboard H points over the window's foot, as a
+//                               host says it while it moves (Tester::set_ime_inset); a real host's is its own
 //   system JSON                 under a Tester (a film's run), the system says JSON on its channel as a host says it
 //                               (@hostapi.system_channel: a size class, the hinge and its fold, the bars), taken at
 //                               the next frame; a real host's system says its own, and the run fails
@@ -1219,6 +1221,20 @@ fn drive_steps(c : Ctx) -> Unit {
           Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
           None => {
             drive_fail(c, d, "system: only a Tester's system says what a script tells it")
+            return
+          }
+        }
+        acted()
+        return
+      }
+      "ime" => {
+        match fake.val {
+          Some(f) => {
+            f.dev.ime_inset = number(arg)
+            f.wants = true
+          }
+          None => {
+            drive_fail(c, d, "ime: only a Tester's keyboard moves as a script tells it")
             return
           }
         }
