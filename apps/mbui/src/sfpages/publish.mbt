@@ -177,8 +177,8 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
     list: None,
     core: None,
   }
-  // (the column's width: the window's on a phone)
-  let column = dmin(c.width, publish_page_w)
+  // (the picture's width: the window's on a phone, less the column its boxes to tick stand in before it on the page)
+  let column = dmin(c.width - publish_tick_room(), publish_page_w)
   let o = c.overlay("publish", modal=true, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
     let page = c.box(style=publish_fill, fn() {
       match publishing.read.get() {
@@ -193,7 +193,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
               // (under what is over it at the top, over the band at the foot)
               let top = @sf.room_of(@sf.viewer_act_head(c))
               let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
-              c.box(style=publish_column.then(@ui.style(pt=top, pb=foot)), fn() {
+              c.box(style=@ui.style(w=Full, max_w=Fixed(publish_page_w + publish_tick_room()), pt=top, pb=foot), fn() {
                 publish_picture(c, src, here, p, column, false)
               })
               |> ignore
@@ -251,6 +251,12 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
 fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w : Double, taking : Bool) -> Unit {
   let narrow = w <= chat_narrow_w
   let here = { ..here, inline: narrow }
+  // (on the page, before its words a column for its messages' boxes to tick; the picture taken has none)
+  let ticks = if taking { 0.0 } else { publish_tick_room() }
+  let paper = if narrow { publish_paper_narrow } else { publish_paper }
+  // (its edge's room, and how far in its words are: past the pictures out in the margin)
+  let paper_edge = if narrow { row_side_narrow } else { publish_paper_in }
+  let paper_in = if narrow { paper_edge } else { paper_edge + @sf.message_avatar_reach }
   // (how much was hidden in each, by its seq: the preview's `messages`, by their n)
   let hidden : Map[Double, String] = {}
   for m in items(p, "messages") {
@@ -259,7 +265,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
       h => hidden[number(Some(m), "n")] = h
     }
   }
-  c.box(style=if narrow { publish_paper_narrow } else { publish_paper }, fn() {
+  c.box(style=paper.then(@ui.style(pl=@sf.room_of(paper_in + ticks))), fn() {
     match text(p, "title") {
       "" => ()
       title => c.text(title, style=publish_title) |> ignore
@@ -277,12 +283,18 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           picturing.val = Some((m.seq, taking))
           message_row(c, src, here, m)
           picturing.val = None
-          // on the page its box to tick, at the top of its other side: the end of its head's line, the start of the
-          // viewer's own (theirs at the end)
+          // on the page its box to tick, in the column before the words (before the pictures out in the margin), on
+          // the middle of its first line: its head's, or the first of the viewer's own bubble
           if !taking {
             c.layer(fn() {
-              c.box(style=if m.mine { publish_message_tick_mine } else { publish_message_tick }, fn() {
-                let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message")).value
+              let side = @sf.theme().rows.check
+              let style = @ui.style(
+                ml=@sf.room_of(-(paper_in - paper_edge + ticks)),
+                pt=@sf.room_of((first_line_h(c, m) - side) / 2.0),
+              )
+              c.box(style=publish_message_tick.then(style), fn() {
+                let look = @kit.checkbox_look_of(size=side, radius=@sf.theme().rows.check_corner)
+                let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message"), look~).value
                 if (now == On) != on {
                   if now == On {
                     publishing.off.remove(k)
@@ -388,7 +400,8 @@ fn publish_file(
     // (over the file, taking its presses: what the chat would open it by does not here)
     c.layer(fn() {
       c.box(style=publish_tick, id~, fn() {
-        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=a.name).value
+        let look = @kit.checkbox_look_of(size=@sf.theme().rows.check, radius=@sf.theme().rows.check_corner)
+        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=a.name, look~).value
         if (now == On) != on {
           ticked = true
           toggle(now == On)
@@ -438,10 +451,6 @@ let publish_problem : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger)
 /// the foot of a small screen).
 // kept across runs: a value (no field of it changes)
 let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 
 ///|
 /// The picture (page): 32 round what it holds, 32 down from its top and up from its foot, its parts 16 apart, on the
@@ -519,14 +528,33 @@ let publish_list_narrow : @ui.Style = @ui.style(w=Full, gap=@sf.room_of(list_gap
 let publish_said : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
-/// A message's box to tick: over it, at the top of the side its words leave (its head's end; the viewer's own, its
-/// start).
+/// A message's box to tick (on the page): in a column of its own before the picture's words, the paper's edge's room
+/// before it and 12 after it (doc/ui-panels.md: what goes before a row is a column of its own, the words start after
+/// it), not over the message; on the middle of the message's first line (first_line_h).
 // kept across runs: a value (no field of it changes)
-let publish_message_tick : @ui.Style = @ui.css("w=Full align=AEnd")
+let publish_message_tick : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let publish_message_tick_mine : @ui.Style = @ui.css("w=Full align=AStart")
+/// The column the boxes to tick stand in on the page: a box (the theme's rows' check) and 12 after it.
+fn publish_tick_room() -> Double {
+  @sf.theme().rows.check + publish_tick_gap
+}
+
+///|
+let publish_tick_gap : Double = 12.0
+
+///|
+/// How high message `m`'s first line is, from its top: its head's line (its name, its time; S6), or for the viewer's
+/// own that begins with its words, its bubble's first line (the bubble's 8 over a line of the theme's words); one that
+/// begins with what it quotes or a file, the head's line as well.
+fn first_line_h(c : @ui.Ctx, m : @sfbase.Message) -> Double {
+  if m.mine && m.text != "" && m.quotes.length() == 0 && beside_quotes(m.quotes, m.attachments).length() == 0 {
+    let line = c.style_size(@sf.theme().t.words).1
+    bubble_in_y * 2.0 + line
+  } else {
+    head_line_h
+  }
+}
 
 ///|
 /// An attachment to tick (file), its box at its end (tick).

@@ -9,7 +9,7 @@ fn init {
     ("src/sfapp/duo_wbtest.mbt", 7),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
     ("src/sfapp/preview_wbtest.mbt", 13),
-    ("src/sfapp/publish_wbtest.mbt", 2),
+    ("src/sfapp/publish_wbtest.mbt", 3),
     ("src/sfapp/screens_wbtest.mbt", 43),
     ("src/sfapp/stations_now_wbtest.mbt", 3),
     ("src/sfapp/tape.mbt", 1),
