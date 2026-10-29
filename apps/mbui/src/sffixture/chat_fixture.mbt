@@ -656,7 +656,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
       })
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
-      Some({ "loaded": true, "activity": { "now": { "key": "call:1", "text": working_step } } })
+      Some({ "loaded": true, "activity": { "now": { "key": fix_working_now.val.0, "text": fix_working_now.val.1 } } })
     _ => fixture_drive_topic(f, name, params)
   }
 }
@@ -1653,6 +1653,11 @@ pub let need_state : (String, String, String) = ("要你帮忙：在手机上试
 ///|
 /// What the agent of the first row's chat does now, as long as an agent's step may say it (its call's description).
 pub let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
+
+///|
+/// What that agent does now, by its call: that step until a test moves it on to another (fix_later, as its station
+/// would say the next).
+pub let fix_working_now : Ref[(String, String)] = Ref(("call:1", working_step))
 
 ///|
 /// The first row's chat with its agent at work on that step, three minutes in: there as the chat opens.
