@@ -61,6 +61,12 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
   to: { gone?: () => void } = {}) {
   const { gone } = to;
   const from = useRef<number | null>(null);
+  // (how tall it stood while open, as last laid out: what settles it may change in the same render, its options
+  // marked settled, before this sees it)
+  const stood = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (open && drawnOpen && box.current) stood.current = box.current.getBoundingClientRect().height;
+  });
   useLayoutEffect(() => {
     if (open) {
       if (!drawnOpen) setDrawnOpen(true);
@@ -68,7 +74,7 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     }
     if (!drawnOpen) return;
     const el = box.current;
-    from.current = el && el.childElementCount > 0 && inSight(el) ? el.getBoundingClientRect().height : null;
+    from.current = el && el.childElementCount > 0 && inSight(el) ? stood.current ?? el.getBoundingClientRect().height : null;
     setDrawnOpen(false);
     gone?.();
   }, [box, open, drawnOpen, setDrawnOpen, gone]);
