@@ -1109,6 +1109,7 @@ web-main.relay.noMatch
 web-main.relay.noPlaces
 web-main.relay.note
 web-main.relay.notePlaceholder
+web-main.relay.people
 web-main.relay.places
 web-main.relay.reading
 web-main.relay.recent

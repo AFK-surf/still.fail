@@ -3,15 +3,18 @@
 // picked above), those relayed to before first, found by typing;
 // one picked, with a note if wanted, 接力 has the station start the conversation there and the chat's agent go on in it too. A Slack
 // message's link typed (pasted) into the search offers that message's thread instead. An `@` typed in the note offers
-// the people of the place picked, to mention there. The phone's sheet
+// the people of the place picked, to mention there, in a popover at the note as the composer's `@` menu is
+// (ChatRefMenu): ↑ / ↓ choose, Enter or Tab put the one chosen in, Escape closes it for that `@`. The phone's sheet
 // (mobile/Chat.tsx RelaySheet) picks the same way (useRelay).
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { mentionView, relayView, type RelayPerson, type RelayRow } from "../../client/core-ts/src/relay-pick.ts";
 import { stationApi, useStationCall, type RelayConnect } from "./api.ts";
+import { Popover } from "radix-ui";
 import { Button, ConnectAvatar, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Relay.css.ts";
+import * as refCss from "./ChatRef.css.ts";
 import { t } from "./i18n.ts";
 
 type Asked = { station: string; thread: number };
@@ -75,8 +78,25 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     api.relayPeople(thread, JSON.parse(toKey)).then((r) => { if (!gone) setPeople({ of: toKey, people: r.people }); }, () => {});
     return () => { gone = true; };
   }, [typing, toKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mentions = mentionView(people?.of === toKey ? people.people : [], note).rows;
-  const mention = (p: { note: string }) => { setNote(p.note); noteField.current?.focus(); };
+  // The one chosen among them, and the `@` whose menu was closed (Escape, a press away; -1 none).
+  const [active, setActive] = useState(0);
+  const [closed, setClosed] = useState(-1);
+  const offered = mentionView(people?.of === toKey ? people.people : [], note);
+  const mentions = offered.at === closed ? [] : offered.rows;
+  const chosenOne = Math.min(active, Math.max(mentions.length - 1, 0));
+  useEffect(() => setActive(0), [offered.query]);
+  const mention = (p: { note: string }) => { setNote(p.note); setActive(0); noteField.current?.focus(); };
+  const keys = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (mentions.length === 0 || e.nativeEvent.isComposing) return;
+    const n = mentions.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((chosenOne + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+    } else if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+      e.preventDefault();
+      mention(mentions[chosenOne]!);
+    }
+  };
   const go = () => {
     if (to === null) return;
     setBusy(true);
@@ -142,25 +162,34 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
       {picked === null && <input className={controlsCss.input} type="search" autoFocus={focus} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("web-main.relay.searchOrLink")} aria-label={t("web-main.relay.search")} />}
       {list}
       {(picked !== null || link !== null) && (
-        <div className={css.noteField}>
+        <Popover.Root open={mentions.length > 0} onOpenChange={(open) => { if (!open) setClosed(offered.at); }}>
           <label className={css.noteField}>
             <span className={css.noteLabel}>{t("web-main.relay.note")}</span>
-            <input ref={noteField} className={controlsCss.input} value={note} maxLength={2000} autoFocus={focus} onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && mentions[0] !== undefined) { e.preventDefault(); mention(mentions[0]); } }}
-              placeholder={t("web-main.relay.notePlaceholder")} />
+            <Popover.Anchor asChild>
+              <input ref={noteField} className={controlsCss.input} value={note} maxLength={2000} autoFocus={focus} onChange={(e) => setNote(e.target.value)} onKeyDown={keys}
+                role="combobox" aria-expanded={mentions.length > 0} aria-autocomplete="list" placeholder={t("web-main.relay.notePlaceholder")} />
+            </Popover.Anchor>
           </label>
-          {mentions.length > 0 && (
-            <div className={css.list} role="listbox" aria-label={t("web-main.relay.people")}>
-              {mentions.map((p) => (
-                <button key={p.id} type="button" role="option" aria-selected={false} className={css.place} onClick={() => mention(p)}>
-                  <Picture person={p} />
-                  <span className={css.placeName}>{p.name}</span>
-                  {p.aka !== undefined && <span className={css.placeNote}>{p.aka}</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          <Popover.Portal>
+            {/* (the note keeps the keys: nothing in it takes the focus; a press on the note is no press away) */}
+            <Popover.Content className={`${controlsCss.popover} ${css.mentions}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}
+              onOpenAutoFocus={(e) => e.preventDefault()} onCloseAutoFocus={(e) => e.preventDefault()}
+              onInteractOutside={(e) => { if (e.target === noteField.current) e.preventDefault(); }}
+              onMouseDown={(e) => e.preventDefault()}>
+              <div role="listbox" aria-label={t("web-main.relay.people")}>
+                <div className={refCss.refHead}>{t("web-main.relay.people")}{offered.query ? <span className={refCss.refQuery}>{offered.query}</span> : null}</div>
+                {mentions.map((p, i) => (
+                  <button key={p.id} type="button" role="option" aria-selected={i === chosenOne} data-active={i === chosenOne || undefined} className={refCss.refItem}
+                    onMouseMove={() => { if (i !== chosenOne) setActive(i); }} onClick={() => mention(p)}>
+                    <Picture person={p} />
+                    <span className={css.placeName}>{p.name}</span>
+                    <span className={css.mentionAka}>{p.aka ?? ""}</span>
+                  </button>
+                ))}
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       )}
     </div>
   );

@@ -57,9 +57,13 @@ export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
 export const via = style({ display: "flex", alignItems: "center", flexWrap: "wrap", margin: "0", padding: "2px 10px 0 34px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
 /** The bot: its picture before its name. */
 export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text });
-/** A person the note can mention: their picture (their initial till it is here), a place's mark's size. */
+/** A person the note can mention: their picture (their initial till it is here), in the row's 16 for a mark. */
 export const person = style({
-  flex: "none", display: "inline-grid", placeItems: "center", width: "18px", height: "18px", borderRadius: "999px",
+  flex: "none", display: "inline-grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "999px",
   overflow: "hidden", background: vars.hover, color: vars.muted, fontSize: vars.textCaption,
 });
 export const personImage = style({ width: "100%", height: "100%", objectFit: "cover" });
+/** The people the note can mention: a popover under it, as wide as it (the composer's `@` menu's rows: ChatRef.css.ts). */
+export const mentions = style({ width: "var(--radix-popover-trigger-width)", maxHeight: "320px", overflowY: "auto" });
+/** Their full name at a row's end, where it says more than their name. */
+export const mentionAka = style({ fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });

@@ -26,7 +26,8 @@ pub(all) struct FieldState {
 /// where it has less room: Ctx::editor's), `w` wide; `field`: what it
 /// holds, the view's own to read and write (mbui's Field), else the editor's. `secret`: drawn as dots; `enter_sends`:
 /// Enter is handed on (else a new line is not taken either: one line); `size` and `line` the words' size and line
-/// (0: the theme's); `look` draws its frame round the editor (`editor`, built where the look says), by default the pill.
+/// (0: the theme's); `look` draws its frame round the editor (`editor`, built where the look says), by default the pill;
+/// `leaves`: the keys it leaves to what it offers as it is typed in (Ctx::editor's: ↑ / ↓, Enter, Tab of a menu at it).
 pub fn text_field(
   c : @ui.Ctx,
   key : String,
@@ -39,6 +40,7 @@ pub fn text_field(
   size? : Double = 0.0,
   line? : Double = 0.0,
   look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit = pill_look,
+  leaves? : Array[Int] = [],
   field? : @ui.Field,
 ) -> Field {
   let mut out = { text: "", submitted: false }
@@ -56,6 +58,7 @@ pub fn text_field(
     size~,
     line~,
     look~,
+    leaves~,
     field?,
   )
   out
@@ -79,6 +82,7 @@ fn pill_field(
   size? : Double = 0.0,
   line? : Double = 0.0,
   look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit = pill_look,
+  leaves? : Array[Int] = [],
   field? : @ui.Field,
 ) -> Unit {
   let t = c.theme()
@@ -100,6 +104,7 @@ fn pill_field(
         color=t.fg,
         placeholder_color=t.subtle,
         caret_color=t.accent,
+        leaves~,
         field?,
       ),
     )

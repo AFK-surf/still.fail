@@ -26,6 +26,16 @@ const CONNECTS: RelayConnect[] = [
   { id: "lk", kind: "lark", name: "Codex", team: "Cue Global", places: [], error: "missing_scope: im:chat:readonly" },
 ];
 
+/** The people of a channel, for the note's `@`: one whose full name says more than their name. */
+const PEOPLE = [
+  { id: "U1", name: "CatsJuice", aka: "Zhijian Xu" },
+  { id: "U2", name: "darksky" },
+  { id: "U3", name: "Haowen Sun" },
+  { id: "U4", name: "Jimmfly", aka: "JINFEI YANG" },
+  { id: "U5", name: "Peng Xiao" },
+  { id: "U6", name: "zanwei.guo" },
+];
+
 /** One Slack workspace with two bots, the chat's own (Codex) preferred. */
 export const TWO_BOTS: RelayConnect[] = [
   { id: "cl", kind: "slack", name: "claude", team: "AFK AI", botImage: BOT_IMAGE, places: CONNECTS[0]!.places },
@@ -37,6 +47,7 @@ export function relayDemo(connects: RelayConnect[] = CONNECTS): DemoExtension {
   return {
     call: (name) => {
       if (name === "chat.relayPlaces") return { connects };
+      if (name === "chat.relayPeople") return { people: PEOPLE };
       if (name === "chat.relay") return { thread: 99, to: "C1/1700.000100", place: "#cue-dev", link: null };
       return undefined;
     },

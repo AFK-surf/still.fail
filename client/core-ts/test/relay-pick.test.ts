@@ -93,5 +93,5 @@ test("a_client_asks_the_core_whom_the_note_can_mention", async () => {
   const ui = core.connect();
   call(core, ui, 1, "chat.relayMentions", { people, note: "hi @a" });
   await host.settle();
-  assert.deepEqual((answers(host.takeEmitted(), 1) as J).ok, { query: "a", rows: [{ id: "U1", name: "ann", note: "hi @ann " }] });
+  assert.deepEqual((answers(host.takeEmitted(), 1) as J).ok, { query: "a", at: 3, rows: [{ id: "U1", name: "ann", note: "hi @ann " }] });
 });

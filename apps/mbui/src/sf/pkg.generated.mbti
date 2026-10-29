@@ -724,7 +724,7 @@ pub fn inner_corner(Double, Double) -> Double
 
 pub fn inner_or(Surface?, Double) -> Double
 
-pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, field? : @ui.Field) -> @kit.Field
+pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field) -> @kit.Field
 
 pub fn input_height() -> Double
 

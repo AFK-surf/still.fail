@@ -8,7 +8,8 @@
 /// The picker open (`thread` -1: none), its places as read (0 being read, 1 read, 2 not: `error` says why), the bot
 /// picked ("" the chat's own), all the places asked for, the place picked (a row of the view), what the core showed
 /// for what was asked last (kept while the next is on its way) and what that was; the people of where it goes (read for
-/// `people_of`, the place as `relay_target` says it, "" none yet) and whom the note can mention (as `relay_view`).
+/// `people_of`, the place as `relay_target` says it, "" none yet) and whom the note can mention (as `relay_view`): the
+/// one chosen among them (for the `@` and words it was chosen for) and the `@` whose menu was closed (-1 none).
 pub(all) struct Relaying {
   station : @signals.Signal[String]
   thread : @signals.Signal[Double]
@@ -25,6 +26,9 @@ pub(all) struct Relaying {
   people_of : @signals.Signal[String]
   mentions : @signals.Signal[Json?]
   mentions_asked : @signals.Signal[String]
+  mention_active : @signals.Signal[Int]
+  mention_for : @signals.Signal[String]
+  mention_closed : @signals.Signal[Int]
   /// what is typed to find a place (or a Slack message's link), and the note said with the chat where it goes
   query : @ui.Field
   note : @ui.Field
@@ -47,6 +51,9 @@ pub let relaying : Relaying = {
   people_of: @signals.signal("", same=fn(a, b) { a == b }),
   mentions: @signals.signal(None),
   mentions_asked: @signals.signal("", same=fn(a, b) { a == b }),
+  mention_active: @signals.signal(0, same=fn(a, b) { a == b }),
+  mention_for: @signals.signal("", same=fn(a, b) { a == b }),
+  mention_closed: @signals.signal(-1, same=fn(a, b) { a == b }),
   query: @ui.Field::new(),
   note: @ui.Field::new(),
 }
@@ -69,6 +76,9 @@ pub fn relay_reset() -> Unit {
   relaying.people_of.set("")
   relaying.mentions.set(None)
   relaying.mentions_asked.set("")
+  relaying.mention_active.set(0)
+  relaying.mention_for.set("")
+  relaying.mention_closed.set(-1)
   relaying.query.set("")
   relaying.note.set("")
 }
@@ -164,13 +174,50 @@ fn relay_target(view : Json?) -> Map[String, Json]? {
 
 ///|
 /// Whom the note can mention now (relay-pick.ts MentionView `rows`: each person, with the note as it is once they are
-/// picked), none till an `@` is typed in it: the people of where it goes read then (once for each place), the core asked
-/// once the frame is built when they or the note changed (as `relay_view`).
+/// picked), none till an `@` is typed in it, nor for an `@` whose menu was closed: the people of where it goes read then
+/// (once for each place), the core asked once the frame is built when they or the note changed (as `relay_view`).
 pub fn relay_mentions(c : @ui.Ctx, src : Source, view : Json?) -> Array[Json] {
+  let shown = relay_mentions_asked(c, src, view)
+  let at = if shown is Some(_) { number(shown, "at").to_int() } else { -1 }
+  if at < 0 || at == relaying.mention_closed.get() {
+    return []
+  }
+  // (another `@`, or other words after it: the first chosen again)
+  let typed = at.to_string() + "\u{1}" + text(shown, "query")
+  if relaying.mention_for.get() != typed {
+    relaying.mention_for.set(typed)
+    relaying.mention_active.set(0)
+  }
+  items(shown, "rows")
+}
+
+///|
+/// The one chosen among the `n` offered (as the composer's refs_active): moved `by` (round), or put `to` one.
+pub fn relay_mention_active(n : Int, by? : Int = 0, to? : Int) -> Int {
+  match to {
+    Some(i) => relaying.mention_active.set(i)
+    None => ()
+  }
+  if n <= 0 {
+    return 0
+  }
+  relaying.mention_active.set(((relaying.mention_active.get() + by) % n + n) % n)
+  relaying.mention_active.get()
+}
+
+///|
+/// The menu closed for the `@` it is at (Escape, a press away): not opened again till another.
+pub fn relay_mentions_close() -> Unit {
+  relaying.mention_closed.set(number(relaying.mentions.get(), "at").to_int())
+}
+
+///|
+/// The core's MentionView for the note as it is (None till an `@` is typed and it has answered).
+fn relay_mentions_asked(c : @ui.Ctx, src : Source, view : Json?) -> Json? {
   let note = relaying.note.text()
   let target = match relay_target(view) {
     Some(p) if note.contains("@") => p
-    _ => return []
+    _ => return None
   }
   let thread = relaying.thread.get()
   let of = Json::object(target).stringify()
@@ -187,7 +234,7 @@ pub fn relay_mentions(c : @ui.Ctx, src : Source, view : Json?) -> Array[Json] {
         })
       }
     })
-    return []
+    return None
   }
   let params = Json::object({ "people": Json::array(relaying.people.get()), "note": Json::string(note) })
   let asked = params.stringify()
@@ -204,7 +251,7 @@ pub fn relay_mentions(c : @ui.Ctx, src : Source, view : Json?) -> Array[Json] {
       }
     })
   }
-  items(relaying.mentions.get(), "rows")
+  relaying.mentions.get()
 }
 
 ///|

@@ -50,11 +50,11 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
 }
 
 ///|
-test "wide: an @ typed in the relay's note offers the people there (chat.relayPeople, chat.relayMentions); one picked has their name written" {
+test "wide: an @ typed in the relay's note offers the people there in a popover (chat.relayPeople, chat.relayMentions); ↓ and Enter, or a press, put the one chosen in; Escape closes it for that @, the dialog staying" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("home")
-  let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }]
+  let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }, { "id": "U2", "name": "peter" }]
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
@@ -64,12 +64,16 @@ test "wide: an @ typed in the relay's note offers the people there (chat.relayPe
         // (whom it finds, the core's: relay-pick.ts mentionView, tested there)
         "chat.relayMentions" => {
           let note = text(Some(params), "note")
-          let rows : Array[Json] = if note.has_suffix("@p") {
-            [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }]
+          let (at, rows) : (Int, Array[Json]) = if note.has_suffix("@p") {
+            let before = note.view(end_offset=note.length() - 2).to_string()
+            (note.length() - 2, [
+              { "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": before + "@pengxiao " },
+              { "id": "U2", "name": "peter", "note": before + "@peter " },
+            ])
           } else {
-            []
+            (-1, [])
           }
-          done(Ok({ "rows": Json::array(rows) }))
+          done(Ok({ "query": if at < 0 { Json::null() } else { Json::string("p") }, "at": Json::number(at.to_double()), "rows": Json::array(rows) }))
         }
         _ => (base.call)(name, params, done)
       }
@@ -96,15 +100,41 @@ test "wide: an @ typed in the relay's note offers the people there (chat.relayPe
   assert_eq(text(Some(asked[0].params), "connect"), "slack-1")
   assert_eq(text(Some(asked[0].params), "channel"), "C1")
   t.frame()
-  assert_true(t.find("Peng Xiao") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("可以 @ 的人") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("Peng Xiao") is Some(_))
+  // under the note, the field keeping the keys
+  let (_, note_y, _, note_h) = t.rect_of("看下 @p").unwrap()
+  let (_, menu_y, _, _) = t.rect_of("pengxiao").unwrap()
+  assert_true(menu_y > note_y + note_h)
+  assert_true(t.ctx().editor_focused("relay/note"))
+  // ↓ chooses the next, Enter puts it in (not relaying)
+  t.key(@ui.key_code_down)
+  t.enter()
+  t.frame()
+  assert_eq(relaying.note.text(), "看下 @peter ")
+  assert_eq(named(calls, "chat.relay").length(), 0)
+  t.frame()
+  assert_true(t.find("可以 @ 的人") is None, msg="still offered once picked")
+  // another @: Escape closes the menu for it, and the dialog stays
+  t.type_text("@p")
+  t.frame()
+  t.frame()
+  assert_true(t.find("可以 @ 的人") is Some(_))
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("可以 @ 的人") is None)
+  assert_true(t.find("开头附一句（可选）") is Some(_), msg="the dialog went with the menu")
+  assert_eq(relaying.note.text(), "看下 @peter @p")
+  // a third: a press puts one in
+  t.type_text(" @p")
+  t.frame()
+  t.frame()
   t.tap_text("pengxiao")
   t.frame()
-  assert_eq(relaying.note.text(), "看下 @pengxiao ")
-  t.frame()
-  assert_true(t.find("Peng Xiao") is None, msg="still offered once picked")
+  assert_eq(relaying.note.text(), "看下 @peter @p @pengxiao ")
   assert_eq(named(calls, "chat.relayPeople").length(), 1, msg="read once for the place")
   t.tap_text("接力到 #dev")
   t.frame()
   let relayed = named(calls, "chat.relay")
-  assert_eq(text(Some(relayed[0].params), "note"), "看下 @pengxiao ")
+  assert_eq(text(Some(relayed[0].params), "note"), "看下 @peter @p @pengxiao ")
 }

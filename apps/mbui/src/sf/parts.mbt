@@ -2306,8 +2306,8 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
 /// `small`: 34 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
-/// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's). What is in it now, and
-/// whether Enter was pressed in it.
+/// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's); `leaves`: the keys it
+/// leaves to a menu it offers as it is typed in (text_field's). What is in it now, and whether Enter was pressed in it.
 pub fn input(
   c : @ui.Ctx,
   key : String,
@@ -2317,11 +2317,12 @@ pub fn input(
   disabled? : Bool = false,
   small? : Bool = false,
   solid? : Bool = false,
+  leaves? : Array[Int] = [],
   field? : @ui.Field,
 ) -> @kit.Field {
   // (its words the body's, as tall as the theme's controls: the web's with keyboard and mouse, a finger's with touch)
   let t = theme()
-  @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
+  @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, leaves~, field?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
     let look = match (small, hot) {
       (false, false) => input_box.then(control_height()).then(field_corner())
