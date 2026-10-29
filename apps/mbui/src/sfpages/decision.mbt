@@ -206,7 +206,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     })
     |> ignore
   }
-  let ended = fn() { @settings.vault_outcome(c, asked, ask.status, ask.scope) }
+  let ended = fn() { @settings.vault_outcome(c, asked, ask.status, ask.scope, inline=here.inline) }
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
