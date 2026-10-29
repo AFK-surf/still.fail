@@ -12,7 +12,7 @@
 | 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程的审计令牌 → 它的代码签名（macOS 的 Team ID 和签名标识）和可执行文件路径 |
 | 怎么批准 | still.fail 直接弹出授权窗口：申请方是谁、要哪几类数据（可逐项去掉）；点允许后再出一次摘要，用 Touch ID 或系统密码二次确认 |
 | 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上、由同一个签名的程序拿来用才有效 |
-| 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）。不含消息内容 |
+| 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，窗口里单独一项，写明对方能读到对话内容） |
 | 怎么收回 | still.fail 的「数据外流」页列出每份授权、申请方、最近读了什么；取消后立即失效 |
 
 ## 第一个用的：Comma
@@ -69,6 +69,10 @@ station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权
   一次最多 31 天。
 - `GET /v1/chats?since`（`chats`）：在 `since` 之后有动静的 chat：`thread`、标题、状态（`all_done` / `need_human` /
   `waiting` / 进行中）、创建人、创建时间、最后活动时间、runtime 和模型。用 `thread` 和用量对上。
+- `GET /v1/messages?thread&after&limit`（`messages`）：一个 chat 在第 `after` 条之后的消息，按顺序，一次最多 `limit` 条（默认 100，
+  最多 500）：每条的 `n`、`kind`（`message`，或 `edit`：对第 `target` 条的改写）、`authorKind`（`person` / `agent`）、`author`、
+  `text`、`at`；`last` 是这个 chat 最新的一条，`more` 说后面还有。`thread` 不是 home workspace 的 chat：`404`。
+  消息不加工：chat 是干什么的（标签、摘要），由使用者自己从消息里算，still.fail 不为此多花 token。
 - 授权取消或换过：`401 { error: "revoked" }`。
 
 授权覆盖这台 station 上 home workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。

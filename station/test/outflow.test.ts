@@ -11,7 +11,7 @@ import { type Ask, OutflowServer, words } from "../src/outflow/server.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import * as read from "../src/read/store.ts";
-import { outflowChats, outflowUsage } from "../src/read/outflow.ts";
+import { outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
 
 const dirs: string[] = [];
 after(() => {
@@ -44,6 +44,8 @@ async function rig(options: { ask?: boolean } = {}): Promise<Rig> {
     ask: options.ask === false ? null : async (q) => (asked.push(q), answer.next),
     reads: async (op, args) => {
       reads.push([op, args]);
+      const a = args as { thread?: number };
+      if (op === "outflowMessages") return a.thread === 404 ? "null" : JSON.stringify({ thread: a.thread, messages: [{ n: 1 }, { n: 2 }, { n: 3 }], last: 3, more: false });
       return JSON.stringify(op === "outflowUsage" ? { rows: [{ day: "2026-10-28" }, { day: "2026-10-27" }] } : { chats: [{ thread: 1 }] });
     },
   });
@@ -120,7 +122,7 @@ test("refused, busy, unsupported, and asking again replaces the program's grant"
   assert.deepEqual(await ask(r), { status: 403, body: { error: "refused" } });
   r.answer.next = "busy";
   assert.equal((await ask(r)).status, 409);
-  assert.equal((await ask(r, ["messages"])).status, 400, "only the kinds there are");
+  assert.equal((await ask(r, ["files"])).status, 400, "only the kinds there are");
   assert.equal((await ask(r, [])).status, 400);
   r.caller.now = null;
   r.answer.next = ["usage"];
@@ -203,4 +205,45 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   // Only those with something new since.
   const later = home.createdAt + 365 * 86_400_000;
   assert.deepEqual(outflowChats(r, later) as any, { since: later, chats: [] });
+});
+
+test("messages: a chat's, a page at a time, to a program granted them", async () => {
+  const r = await rig();
+  r.answer.next = ["messages"];
+  const { body } = await ask(r, ["messages"]);
+  assert.deepEqual(r.asked[0]!.scopes.map((x) => x.id), ["messages"]);
+  assert.match(r.asked[0]!.scopes[0]!.why, /conversations/, "the window says it gives the conversations away");
+  const page = await call(r, "GET", "/v1/messages?thread=7&after=2&limit=1000", undefined, body.token);
+  assert.equal(page.status, 200);
+  assert.deepEqual(r.reads.at(-1), ["outflowMessages", { thread: 7, after: 2, limit: 500 }], "a page is at most 500");
+  assert.deepEqual(r.grants.list()[0]!.reads.map((x) => [x.scope, x.rows]), [["messages", 3]]);
+  assert.equal((await call(r, "GET", "/v1/messages", undefined, body.token)).status, 400, "a chat named");
+  assert.equal((await call(r, "GET", "/v1/messages?thread=404", undefined, body.token)).status, 404);
+  assert.equal((await call(r, "GET", "/v1/chats", undefined, body.token)).status, 403, "only what was granted");
+});
+
+test("v1 messages: the home workspace's chat's entries after one, oldest first; another workspace's is none", () => {
+  const dir = tempdir();
+  const store = Store.open(join(dir, "stillfail.db"), null);
+  after(() => store.close());
+  const session = (key: string, ws: string | null) =>
+    store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1, ws } as never);
+  session("a", null);
+  session("b", "other-ws");
+  const home = store.openThreadOf("ember", "EMBER", "200.1", "Fix the build", "ann@x", "a");
+  const away = store.openThreadOf("ember", "EMBER", "200.2", "Theirs", "bob@x", "b");
+  store.joinThread(home.id, "a", "ember");
+  store.joinThread(away.id, "b", "ember");
+  store.insertMessage(newMessage(home.id, "200.3", "person", "ann@x", "the build fails on main"));
+  store.insertMessage(newMessage(home.id, "200.4", "agent", "a", "fixed in #12"));
+  store.insertMessage(newMessage(home.id, "200.5", "person", "ann@x", "thanks"));
+  store.insertMessage(newMessage(away.id, "200.6", "person", "bob@x", "private"));
+  const r = read.openStore(dir);
+  const all = outflowMessages(r, home.id, 0, 100) as any;
+  assert.deepEqual(all.messages.map((m: any) => [m.authorKind, m.author, m.text]), [["person", "ann@x", "the build fails on main"], ["agent", "a", "fixed in #12"], ["person", "ann@x", "thanks"]]);
+  assert.equal(all.more, false);
+  const page = outflowMessages(r, home.id, all.messages[0].n, 1) as any;
+  assert.deepEqual([page.messages.map((m: any) => m.text), page.more, page.last], [["fixed in #12"], true, all.messages[2].n]);
+  assert.equal(outflowMessages(r, away.id, 0, 100), null, "another workspace's chat");
+  assert.equal(outflowMessages(r, 99_999, 0, 100), null);
 });

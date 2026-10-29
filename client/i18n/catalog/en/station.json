@@ -542,5 +542,7 @@
   "station.outflow.window.signer": "Signed by",
   "station.card.asking": "✍️ Your answer needed",
   "station.slack.replyHint": "Reply in this thread to answer",
-  "station.feishu.replyHint": "Reply in the chat to answer"
+  "station.feishu.replyHint": "Reply in the chat to answer",
+  "station.outflow.scope.messages": "Messages in chats",
+  "station.outflow.scope.messagesWhy": "What people and agents said in each chat, word for word. With this, the program reads your conversations."
 }

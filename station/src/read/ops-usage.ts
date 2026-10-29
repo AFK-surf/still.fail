@@ -5,7 +5,7 @@ import { hostInfo } from "./host.ts";
 import { machineSession, machineSessions } from "./machine.ts";
 import { memory } from "./memory.ts";
 import { resourceChats, usage } from "./usage.ts";
-import { outflowChats, outflowUsage } from "./outflow.ts";
+import { outflowChats, outflowMessages, outflowUsage } from "./outflow.ts";
 
 export const usageOps: Record<string, ReadOp> = {
   // `reading`: the counter's readingAll (absent: true).
@@ -14,6 +14,7 @@ export const usageOps: Record<string, ReadOp> = {
   // What a program granted data outflow reads (docs/data-outflow.md), in its version's shape.
   outflowUsage: (store, a) => outflowUsage(store, a.lang, a.from, a.to, a.tz),
   outflowChats: (store, a) => outflowChats(store, a.since),
+  outflowMessages: (store, a) => outflowMessages(store, a.thread, a.after, a.limit),
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
   memory: (store) => memory(store.dataDir),
