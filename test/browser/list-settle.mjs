@@ -305,7 +305,7 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     if (jumped.length) (process.env.JUMPS ? failures : notes).push(`${where}: jumped\n    ${jumped.slice(0, 6).join('\n    ')}`);
     // (One taller than the pane is read from its top: not followed to the end.)
     if (end > 1 && name !== 'long') failures.push(`${where}: left ${Math.round(end)}px short of the list's end`);
-    console.log(found.length || (process.env.JUMPS && jumped.length) || early.length ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
+    console.log(found.length || (process.env.JUMPS && jumped.length) ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
     await context.close();
   };
   await Promise.all(Array.from({ length: Number(process.env.PAGES) || 2 }, async () => {
