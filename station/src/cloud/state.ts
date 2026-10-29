@@ -123,6 +123,8 @@ export class Cloud {
   state: CloudState | null;
   /// Whether `peers` is the cloud's roster as of the current presence socket (fail closed until a `state` frame says so).
   peersCurrent = false;
+  /// How many rosters the control plane said (presence.ts: one said since its socket ended keeps it current).
+  rostersSaid = 0;
   /// Runs a device tool request that came over the presence socket (mesh/tools.ts `presenceTools`), while the mesh
   /// is up; null before it.
   toolCalls: ((request: unknown) => Promise<unknown>) | null = null;

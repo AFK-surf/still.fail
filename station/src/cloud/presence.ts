@@ -22,6 +22,11 @@ const PING_MS = 30_000;
 const CLOSE_REMOVED = 4004;
 const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
+/// How long the roster the cloud said last stays current once its socket ended. A socket the cloud closes is back
+/// within seconds (ccvm's about every 20 minutes, 2026-10-29), and every request between the workspace's stations in
+/// those seconds was refused as `roster is not current`: a share not told, a task not started. Past this, or when the
+/// station is removed, calls fail closed until a fresh roster comes.
+export const ROSTER_GRACE_MS = 60_000;
 
 /// REMOVED_RETRY, or STILLFAIL_REMOVED_RETRY_SECS (tests against a dev cloud).
 function removedRetry(): number {
@@ -64,11 +69,10 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
       yield* Effect.raceFirst(Effect.sleep(retry), cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead));
     }
     const started = yield* Clock.currentTimeMillis;
-    s.peersCurrent = false;
     const plane = spec();
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
     const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
-    s.peersCurrent = false;
+    lapse(s);
     const why = ended._tag === "Success" ? ended.success : ended.failure.message;
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
@@ -79,6 +83,19 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     backoff = Math.min(backoff * 2, 60_000);
   }
 });
+
+/// The roster said last, no longer current once ROSTER_GRACE_MS passed with no fresh one (at once when the station
+/// was removed).
+export function lapse(s: CloudState, after: (ms: number, f: () => void) => unknown = wall.after) {
+  if (s.removed()) {
+    s.peersCurrent = false;
+    return;
+  }
+  const said = s.rostersSaid;
+  after(ROSTER_GRACE_MS, () => {
+    if (s.rostersSaid === said) s.peersCurrent = false;
+  });
+}
 
 /// One socket, signed at connect like enrollment: succeeds with why it ended when the cloud closes it, fails when it
 /// can't be had or breaks; closed when interrupted.
@@ -229,6 +246,7 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
+    s.rostersSaid = (s.rostersSaid ?? 0) + 1;
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
         if (locked && (k === "origin" || (k === "workspace" && !took))) continue;
