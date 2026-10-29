@@ -498,16 +498,13 @@ pub fn segmented_height() -> Double {
 let segmented_corner : Double = 15.0
 
 ///|
-/// A line to type in, its frame (Controls.kt Field) as a look for mbui's field (@kit.text_field): 12 round, the card's
-/// ground, a line round it, its words 12 by 10 in.
+/// A line to type in as a look for mbui's field (@kit.text_field) where its words are set apart (a sheet's, a dialog's):
+/// a one-line field's, `input`'s (a capsule as tall as the theme's controls), one frame for every line to type in (the
+/// user, 2026-10-29: fields 37, 41 and 44 high, 12, 18 and 22 round, side by side).
 pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit {
-  c.box(id=s.id, style=field_frame, editor) |> ignore
+  let look = if s.hovered || s.focused { input_box_hot } else { input_box }
+  c.box(id=s.id, style=look.then(control_height()).then(field_corner()), editor) |> ignore
 }
-
-///|
-/// Controls.kt Field's frame: as wide as where it is, 12 by 10 in, 12 round, the card's ground, a line round it.
-// kept across runs: a value (no field of it changes)
-let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
 // ---------------------------------------------------------------------------
 // Small panels (docs/ui-panels.md)

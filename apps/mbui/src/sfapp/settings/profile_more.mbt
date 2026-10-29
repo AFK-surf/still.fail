@@ -82,7 +82,8 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -
     fn() {
       match inset {
         Some(inset) =>
-          c.box(w=Fill(1.0), pl=inset + 12.0, pr=inset + 12.0, pt=8.0, pb=4.0, fn() {
+          // (its title as far in as the groups' titles under it: pick_group's, 6 in from their cards)
+          c.box(w=Fill(1.0), pl=inset + 6.0, pr=inset + 6.0, pt=8.0, pb=4.0, fn() {
             c.text(title, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
           })
           |> ignore
