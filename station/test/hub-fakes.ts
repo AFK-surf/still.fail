@@ -199,6 +199,8 @@ export class FakeDriver implements AgentDriver {
   private n = 1;
   /// Times every process it started was ended.
   shutdowns = 0;
+  /// What the runner of a station that crashed keeps, taken up with no snapshot (as the driver finds it on its own).
+  left: { id: string; busy: boolean } | null = null;
 
   constructor(kind: "claude" | "codex") {
     this.kind = kind;
@@ -223,7 +225,7 @@ export class FakeDriver implements AgentDriver {
     return session;
   }
   async adopt(options: OpenOptions, snapshot: unknown, events: (event: RuntimeEvent) => void) {
-    const handed = snapshot as { id: string; busy: boolean; mcpUrl?: string } | null;
+    const handed = (snapshot as { id: string; busy: boolean; mcpUrl?: string } | null) ?? this.left;
     if (!handed) throw new Error("no runner");
     const session = new FakeSession(handed.id, options, events, handed.busy);
     if (handed.mcpUrl !== undefined) session.toolsUrl = handed.mcpUrl;
@@ -334,7 +336,7 @@ export class Rig {
   workspaces: string[] | undefined;
 
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
-  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string }) {
+  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string; runners?: string[] }) {
     return new Hub({
       config: () => this.config,
       store: this.store,
@@ -344,7 +346,7 @@ export class Rig {
       internal: o.internal === false ? null : new InternalChat(),
       link: o.link ? (key) => `https://ember.test/o/${this.hub?.wsOf(key) ?? this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
       workspaces: this.workspaces ? () => this.workspaces! : undefined,
-      runners: () => [],
+      runners: () => o.runners ?? [],
       cold: o.cold,
       clock: this.clock,
       machineRoots: () => this.roots ?? { claude: join(this.dir, "no-machine/claude"), codex: join(this.dir, "no-machine/codex") },

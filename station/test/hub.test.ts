@@ -1,6 +1,7 @@
 // The hub (src/sessions/hub.ts): routing, sessions, turns, nudges, waits, stops, sign-in retries, hold and release,
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
+import { runnerId } from "../src/agents/process.ts";
 import { CONNECTION_LOST, keyPart, placeIn, sandboxConfig, sandboxName } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -752,6 +753,32 @@ test("handed over to the next station, a running turn goes on and what came mean
   await settle();
   assert.equal(taken.prompts.length, 1, JSON.stringify(taken.prompts));
   assert.ok((taken.prompts as string[])[0]!.includes(NUDGE));
+  await hub.shutdown();
+  await first.close();
+});
+
+test("a state said while a turn runs outlives a station killed before it handed over: the turn ends in it", async () => {
+  const first = new Rig();
+  const m = message();
+  await first.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const old = first.claude.last();
+  await first.call(key, "chat_state", { kind: "all_done", done: "answered" });
+  // Killed there (no handover file); its runner keeps the process, still in its turn, and the next station finds it.
+  const claude = new FakeDriver("claude");
+  claude.left = { id: old.sessionId, busy: true };
+  const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false, runners: [runnerId("claude", key)] });
+  await hub.takeUp();
+  hub.recover();
+  await settle();
+  const taken = claude.last();
+  assert.equal(taken.sessionId, old.sessionId);
+  taken.complete();
+  await settle();
+  const last = first.store.lastTurn(key)!;
+  assert.deepEqual([last.outcome, last.declared], ["completed", "final"], "ended done, not without a state");
+  assert.deepEqual(taken.prompts, [], "not nudged");
   await hub.shutdown();
   await first.close();
 });
