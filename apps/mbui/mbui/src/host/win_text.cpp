@@ -87,8 +87,11 @@ static void init(void) {
   // cluster of its letters (GetClusterMetrics), drawn whole
   // plain coverage without hinting or contrast boost, like Core Text with
   // smoothing off
+  // (a trial: MBUI_TEXT_GAMMA, MBUI_TEXT_CONTRAST, the grayscale enhanced contrast, as one run is asked)
+  const char *eg = getenv("MBUI_TEXT_GAMMA"), *ec = getenv("MBUI_TEXT_CONTRAST");
+  float gamma = eg ? (float)atof(eg) : 1.0f, contrast = ec ? (float)atof(ec) : 0.0f;
   IDWriteRenderingParams2 *p2 = NULL;
-  dw->CreateCustomRenderingParams(1.0f, 0.0f, 0.0f, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
+  dw->CreateCustomRenderingParams(gamma, 0.0f, contrast, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
                                   DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
                                   DWRITE_GRID_FIT_MODE_DISABLED, &p2);
   params = p2;
