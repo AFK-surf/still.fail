@@ -463,7 +463,8 @@ export class Adb {
       case "stop":
         return this.#legacy.run(call);
       case "ports":
-        if (!this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
+        // (taken whatever the app said it is so far: what lends waits for it to say it is a phone, `#sync`, `deviceTold`;
+        // refused, a service started for kept grants before the app said so stopped and was not started again)
         return Effect.sync(() => {
           this.#ports = call.ports;
           this.#sync();

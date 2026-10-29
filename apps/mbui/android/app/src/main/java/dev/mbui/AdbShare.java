@@ -334,8 +334,26 @@ final class AdbShare {
     static final String GRANTS_UNTIL = "grantsUntil";
     private static final String GRANT_TEXTS = "grantTexts";
 
-    /** Whether the service was started for chats' grants and not yet seen to end. */
-    private static boolean granting;
+    /** Whether the service was started for chats' grants and not yet seen to end (it ended: AdbShareService). */
+    static boolean granting;
+    /** Whether the core last said a grant wants the phone lent (`adbShare` `wanted`). */
+    private static boolean grantsWant;
+
+    /**
+     * The service for the grants ended while they still want the phone lent (its offer refused, say): started again,
+     * not left ended until the core next says something of them, or the process goes.
+     */
+    static void grantsEnded(Context c) {
+        granting = false;
+        if (!grantsWant) return;
+        granting = true;
+        try {
+            c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START).putExtra(STATION, GRANTS).putExtra(NAME, ""));
+        } catch (Exception e) {
+            Host.log("adb share: not lent again for the grants: " + e);
+            granting = false;
+        }
+    }
 
     /**
      * The service started while a chat's grant wants the phone lent (`adbShare` `wanted`), once the core runs (asked
@@ -348,6 +366,7 @@ final class AdbShare {
             if (!((JSONObject) value).optBoolean("known", true)) return;
             org.json.JSONArray wanted = ((JSONObject) value).optJSONArray("wanted");
             boolean want = wanted != null && wanted.length() > 0;
+            grantsWant = want;
             if (want && !granting) {
                 granting = true;
                 try {

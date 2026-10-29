@@ -2114,6 +2114,23 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   core.close();
 });
 
+test("a_phone_s_ports_are_taken_before_its_app_says_it_is_a_phone_and_lent_once_it_does", async () => {
+  // (a process the phone started for a grant: its service gives the ports before the app has said what it is)
+  const { host, core } = await started();
+  const exp = Math.floor(host.nowMs() / 1000) + 3600;
+  core.inner.adb.heard("ws1/st1", { id: "g1", session: "ember:c1", chat: "c1", reason: "调试", status: "granted", scope: "chat", exp, at: 1 });
+  const ui = core.connect();
+  const ported = await ask(host, core, ui, 1, "adb.ports", { connect: 41234, device: "Pixel" });
+  assert.equal(ported, null);
+  subscribe(core, ui, 2, { topic: "adbShare" });
+  await ask(host, core, ui, 3, "client.device", { app: "android", build: "1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 2).lends.map((l: J) => l.station), ["ws1/st1"]);
+  core.close();
+});
+
 test("a_phone_s_grants_kept_on_the_device_lend_it_from_a_core_started_anew", async () => {
   // (lent for a chat's grant; the app's process gone and back, the phone started again: no station reached yet)
   const { host, core } = await started();
