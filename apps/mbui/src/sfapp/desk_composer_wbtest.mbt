@@ -69,6 +69,7 @@ fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
     placeholder: "发消息",
     toolbar: None,
     note: [],
+    tail: None,
     roomy: false,
     locked: false,
     offline: false,
@@ -797,6 +798,44 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
 }
 
 ///|
+test "desk composer: where 抄送 copies to is said just before send in either shape, staying where it is as the composer opens and shuts, 抄送 beside it once opened (chat.cc)" {
+  reset()
+  let src = fixture("chat-cc")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing=Mouse)
+  t.run_for(@ui.nav_push_ms)
+  let (send_x, _) = t.locate("icon:arrow-up")[0]
+  let xs : Array[Double] = []
+  let watch = fn(ms : Double) raise {
+    let until = t.time() + ms
+    while t.time() < until {
+      match t.drawn_of("#still-fail") {
+        Some((x, _)) => xs.push(x)
+        None => fail("where it copies to not drawn at \{t.time()}")
+      }
+      t.frame()
+    }
+  }
+  // opened: where it copies to just before send, 抄送 just before that, not at the row's start
+  let (cc_x, _) = t.locate("=抄送")[0]
+  assert_true(cc_x > send_x - 200.0, msg="抄送 at \{cc_x}, send at \{send_x}")
+  watch(@sfpages.morph_ms)
+  // let go of (one line): the place said just before send, where it was; nothing to press
+  t.ctx().blur()
+  // (its shape changing once it is let go of, and as long again after)
+  watch(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
+  assert_true(t.locate("=抄送") is [], msg="抄送 only once opened")
+  // opened again
+  let (px, py) = t.locate("icon:plus")[0]
+  t.tap(px + 200.0, py)
+  watch(2.0 * @sfpages.morph_ms)
+  // (going with send, which stands a pixel further in on one line)
+  let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 1.5 })
+  assert_true(moved.is_empty(), msg="went across: \{xs}")
+}
+
+///|
 test "desk composer: 抄送's menu has each thread's platform mark before its place, its check only at its end (chat.cc)" {
   reset()
   let src = fixture("chat")
@@ -836,8 +875,8 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
     })
   }
   for place in ["产品讨论", "#still-fail"] {
-    // (the last: a ticked one's place is said beside 抄送 too)
-    let w = bs.rev_iter().find_first(fn(b) { b.text == place }).unwrap()
+    // (the menu's, made by 抄送 before what is said by send: a ticked one's place is said there too)
+    let w = bs.iter().find_first(fn(b) { b.text == place }).unwrap()
     let row = bs.filter(fn(b) { b.parent == w.parent })
     let before = row.filter(fn(b) { b.index < w.index })
     let after = row.filter(fn(b) { b.index > w.index })

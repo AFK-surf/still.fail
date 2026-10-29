@@ -10,17 +10,21 @@
 ///|
 /// What the composer writes to and how it shows (ComposerProps): its station (where its files go up), its draft's key,
 /// its chat's session (typing warms its agent; the `@` menu leaves it out; "" none), what its field says while empty,
-/// the page's choices in its row (a new chat's), laid out roomy (its text over its row even for one line), locked (it
-/// takes words, nothing goes), its station offline (no file taken in).
+/// the page's choices in its row (a new chat's), what it says before send and the control for it beside that (a chat's
+/// 抄送), laid out roomy (its text over its row even for one line), locked (it takes words, nothing goes), its station
+/// offline (no file taken in).
 pub(all) struct ComposerSpec {
   station : String
   draft : String
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
-  /// what it says before send on one line, nothing written (where a chat's messages are copied: each thread's mark,
-  /// "slack" or "feishu", and its place): nothing to press; empty nothing
+  /// what it says just before send (where a chat's messages are copied: each thread's mark, "slack" or "feishu", and
+  /// its place), nothing to press: on one line and in its row once opened alike, in one place, going with send as it
+  /// changes shape; empty nothing
   note : Array[(String, String)]
+  /// what changes that, in its row once opened, just before what it says (a chat's 抄送); not on one line
+  tail : (() -> Unit)?
   roomy : Bool
   locked : Bool
   offline : Bool
@@ -265,6 +269,7 @@ pub fn composer(
   let mut words = -1
   let mut send_i = -1
   let mut chosen = -1
+  let mut said = -1
   let box = c.box(
     style=if sent_box > 0.0 {
       composer_box_open().then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
@@ -291,16 +296,25 @@ pub fn composer(
             }
             (None, None) => c.box(style=tools_gap, fn() {  }) |> ignore
           }
-          send_i = send_button(c, ready, w.starting, submit)
+          c.box(style=tail_row, fn() {
+            match spec.tail {
+              Some(f) => c.box(style=tail_box, f) |> ignore
+              None => ()
+            }
+            said = composer_note(c, spec.note)
+            send_i = send_button(c, ready, w.starting, submit)
+          })
+          |> ignore
         })
         |> ignore
       } else {
         plus = attach(c, src, spec, w, no_files)
         words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
-        if spec.note.length() > 0 {
-          c.box(style=cc_note_box, fn() { cc_places(c, spec.note) }) |> ignore
-        }
-        send_i = send_button(c, ready, w.starting, submit)
+        c.box(style=tail_row, fn() {
+          said = composer_note(c, spec.note)
+          send_i = send_button(c, ready, w.starting, submit)
+        })
+        |> ignore
       }
     },
   )
@@ -330,7 +344,7 @@ pub fn composer(
   }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
   composing.shaped = Some((c.build_number(), holds, shape))
-  for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices")] {
+  for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
     if part.0 >= 0 {
       @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
     }
@@ -1309,6 +1323,26 @@ let choices : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
 let tools_gap : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
+/// What stands before send and send (the spec's `tail` and `note`), as far apart in either shape: as the composer
+/// changes shape what it says goes with send, never closer to it or further.
+// kept across runs: a value (no field of it changes)
+let tail_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tail_box : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// What the composer says before send (the spec's `note`), its node; -1 when it says nothing.
+fn composer_note(c : @ui.Ctx, note : Array[(String, String)]) -> Int {
+  if note.is_empty() {
+    -1
+  } else {
+    c.box(style=cc_note_box, fn() { cc_places(c, note) })
+  }
+}
+
+///|
 /// ＋ pointed at: the hover's ground (round as the theme's round controls are: @sf.round_face).
 // kept across runs: a value (no field of it changes)
 let round_hot : @ui.Style = @ui.css("bg=Hover")
@@ -1706,13 +1740,14 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     } else {
       "web-main.composer.placeholder"
     }),
-    toolbar: match v {
-      Some({ cc, thread: Some(thread), .. }) if cc.length() > 0 => Some(fn() { cc_chooser(c, src, r, thread, cc) })
-      _ => None
-    },
+    toolbar: None,
     note: match v {
       Some(v) => v.cc.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
       None => []
+    },
+    tail: match v {
+      Some({ cc, thread: Some(thread), .. }) if cc.length() > 0 => Some(fn() { cc_chooser(c, src, r, thread, cc) })
+      _ => None
     },
     roomy: false,
     locked: match v {
@@ -1755,10 +1790,12 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
 
 ///|
 /// In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (Chat.tsx
-/// CcChooser, `chat.cc`), each thread's bot saying there who wrote it on still.fail. In the row under the words once the
-/// composer is opened to write (on one line it only says where: `note`): 抄送, and each thread ticked (its mark and
-/// place), a chooser's look (@sf.chooser), opening a menu of the threads to tick (each its mark and place), each ticked
-/// one's check at its end: several stay open to tick in turn, one closes once ticked. None until ticked.
+/// CcChooser, `chat.cc`), each thread's bot saying there who wrote it on still.fail. Each thread ticked (its mark and
+/// place) is said just before send, on one line and once opened alike (the composer's `note`: where it is copied stays
+/// where it is as the composer opens and shuts; said at the row's start once opened, it jumped across, 2026-10-29
+/// 「乱飞」). Once the composer is opened to write, 抄送 just before that (its `tail`), a chooser's look (@sf.chooser),
+/// opening a menu of the threads to tick (each its mark and place, lined up with its end), each ticked one's check at
+/// its end: several stay open to tick in turn, one closes once ticked.
 fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Array[@sfbase.ChatCcTo]) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/cc")
@@ -1768,7 +1805,6 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
   let label = @sf.t("web-main.composer.ccLabel")
   let b = c.box(style=cc_trigger, selected=open, id~, fn() {
     c.text(label, style=if lit { cc_words_lit } else { cc_words }) |> ignore
-    cc_places(c, on)
     @sf.icon(c, "chevron-down", size=12.0, color=if lit { p.text } else { p.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label=([label] + on.map(fn(o) { o.1 })).join(" "), expanded=open)
@@ -1785,7 +1821,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
       @sf.icon(c, "check", size=14.0, color=p.text) |> ignore
     }
   }
-  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, marks~, check_end=true, row_end~)
+  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, along=End, marks~, check_end=true, row_end~)
   composing.cc_open = m.open
   match m.chosen {
     Some(v) =>
@@ -1847,6 +1883,7 @@ fn cc_mark(c : @ui.Ctx, via : String) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
+
 
 ///|
 /// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, CacheColdNotice, offlineNotice), each a

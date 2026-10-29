@@ -1,0 +1,10 @@
+# A chat linked to Slack and Feishu on a computer (MBUI_FIXTURE=chat-cc MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0): its
+# composer let go of (a press on a message: a capsule, what is copied said in it), pressed again (a box, 抄送 in its row).
+timeout 20000
+until 发消息
+wait 600
+tap 截图也换了
+wait 1000
+tap 按空格输入
+wait 1000
+exit

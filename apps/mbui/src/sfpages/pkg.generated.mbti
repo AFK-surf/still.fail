@@ -632,6 +632,7 @@ pub(all) struct ComposerSpec {
   placeholder : String
   toolbar : (() -> Unit)?
   note : Array[(String, String)]
+  tail : (() -> Unit)?
   roomy : Bool
   locked : Bool
   offline : Bool
