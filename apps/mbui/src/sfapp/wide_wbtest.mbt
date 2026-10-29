@@ -729,7 +729,7 @@ test "wide: a line more or less in the composer, the chat's last row goes with i
 }
 
 ///|
-test "wide: a new chat becomes its chat as the web's: its scene up and away, the composer down to the chat's foot, the words up into their bubble" {
+test "wide: a new chat becomes its chat as the web's: its scene fading where it is, the composer down to the chat's foot, the words up into their bubble" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.frame()
@@ -755,13 +755,13 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   let typed = seen_once(t, words)
   assert_true(typed.1 > by && typed.1 < by + bh)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // half way: the scene gone up as it fades
+  // half way: the scene where it was as it fades
   t.run_for(new_leave_ms / 2.0)
-  let up = match heading() {
+  let half = match heading() {
     Some(y) => y
     None => fail("the scene gone at once")
   }
-  assert_true(up < title - 8.0, msg="the scene goes up: \{title} → \{up}")
+  assert_true((half - title).abs() < 0.5, msg="the scene stays: \{title} → \{half}")
   // the scene gone at 140 ms
   t.run_for(new_leave_ms / 2.0 + 1.0)
   assert_true(heading() is None)
