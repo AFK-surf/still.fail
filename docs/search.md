@@ -44,8 +44,7 @@ Later: the cloud's own (feedback), Slack channels' history.
   takes the place of the one before, which stops (its `mdfind` killed, its walk left, still.fail Helper's not waited
   for); an agent's or another station's search is never stopped so; a word shorter than 3 is looked for at the start
   of names alone, never in what
-  files say; what files say is asked for 100 paths at most. The app let go of no search it read (each words typed stayed shown for the run: mbui's
-  `sfpages/switcher.mbt` now leaves the one read last as the words change and the search closes). A client asks the searches it shows again at most every
+  files say; what files say is asked for 100 paths at most. A client asks the searches it shows again at most every
   2 s as the station's chats, sessions and jobs change (core `SEARCH_STALE_MS`), not with each.
 - Never the station's own (ops/own.ts). The person's own mail, messages, calendars, contacts, notes and photos only
   where the station's owners and admins say so: `PUT /search/settings {personal}` (config.json `search.personal`,
