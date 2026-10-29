@@ -303,6 +303,12 @@ jobs:
         run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      # (its icon, drawn by scripts/mac-icon.swift run with swift and compiled by actool, made once for that script, as
+      # the build does, not again on each fresh runner)
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/out/mac/AppIcon-*
+          key: mbui-mac-icon-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
       # (shell-apple darwin-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
       # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
       # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
@@ -409,6 +415,12 @@ jobs:
         run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      # (its icon, drawn by scripts/mac-icon.swift run with swift and compiled by actool, made once for that script, as
+      # the build does, not again on each fresh runner)
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/out/ios-assets-*
+          key: mbui-ios-icon-${{ hashFiles('apps/mbui/scripts/mac-icon.swift', 'apps/mbui/scripts/ios.sh') }}
       # (shell-apple ios-arm64 in the native cache by its key, as the other jobs keep their engine and shell: a shell not
       # prebuilt yet is built here with cargo, ~4.5 min, and was built again by each run of main until the pipeline's
       # natives job published it, main 9d59e567 and 1c0b2ca0, 2026-10-29)
