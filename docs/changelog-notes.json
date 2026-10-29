@@ -1,4 +1,8 @@
 {
+  "dbf4ce4a0": {
+    "text": ["密钥申请的结果行，绿点和文字对齐了；密钥名字不再加「」，改用加粗和正文颜色标出"],
+    "parts": ["web", "android", "desktop"]
+  },
   "c53d08464": {
     "text": ["进出对话时开头几帧不再卡。"],
     "parts": ["android", "desktop"]
