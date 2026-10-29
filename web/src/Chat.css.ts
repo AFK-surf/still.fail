@@ -22,7 +22,7 @@ export const chatMessages = style({});
 globalStyle(`${chatMessages} > [data-queued]`, { display: "none" });
 /** A row come into the list as the reader watches takes no room till it opens its own (listQueue.ts growRow): from
  *  its first frame, before the list has measured it, so the list never lays it out whole first. */
-globalStyle(`${chatMessages} > [data-enter]:not([data-grown])`, { height: 0, overflow: "clip" });
+globalStyle(`${chatMessages} > [data-enter]:not([data-grown])`, { height: 0, overflow: "clip", marginTop: "calc(-1 * var(--list-gap, 28px))" });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,

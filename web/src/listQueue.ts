@@ -60,17 +60,22 @@ export function growRow(row: HTMLElement): void {
   if (!pane || document.visibilityState !== "visible") return;
   const height = row.getBoundingClientRect().height;
   if (height < 0.5) return;
-  // the gap before it opening with it (given up by the row before till then: its own negative margin)
+  // The gap before it opens with it, inside its own room as it grows: its margin taken back and given as padding till
+  // it is open (`data-opening`: the list counts the gap taken back so, virtual/list.tsx takenBack).
   const parent = row.parentElement;
   const gap = parent && row !== parent.firstElementChild ? parseFloat(getComputedStyle(parent).rowGap) || 0 : 0;
-  const before = row.previousElementSibling;
-  if (gap && before instanceof HTMLElement) play(before, [{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
+  const cs = getComputedStyle(row);
+  const margin = parseFloat(cs.marginTop) || 0;
+  const pad = parseFloat(cs.paddingTop) || 0;
+  const room = height + gap + margin;
   listSizing(pane, motionMs(GLIDE_MS));
-  // (from nothing in this very frame, before the motion is under way: the list measures it there, not at its height)
-  row.style.height = "0px";
-  row.style.overflow = "clip";
-  const open = play(row, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
-  const done = () => { row.style.removeProperty("height"); row.style.removeProperty("overflow"); };
+  row.dataset.opening = "";
+  Object.assign(row.style, { boxSizing: "border-box", marginTop: `${-gap}px`, paddingTop: `${pad + gap + margin}px`, height: "0px", overflow: "clip" });
+  const open = play(row, [{ height: "0px" }, { height: `${room}px` }], { duration: GLIDE_MS, easing: GLIDE_EASE });
+  const done = () => {
+    for (const p of ["box-sizing", "margin-top", "padding-top", "height", "overflow"]) row.style.removeProperty(p);
+    delete row.dataset.opening;
+  };
   void open.finished.then(done, done);
 }
 
