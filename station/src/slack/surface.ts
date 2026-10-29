@@ -11,7 +11,7 @@ import { ConnectedSurface } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type ChatEvent, type ChatMessage, type Handler, type InboundFile, type Member, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import { answerOf, answeredBlocks, markdown, questionBlocks } from "./cards.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
@@ -421,6 +421,42 @@ export class SlackSurface extends ConnectedSurface {
         const id = text(c?.id);
         if (id === "") continue;
         out.push({ id, name: text(c?.name) || id, kind: "channel", ...(c?.is_private === true ? { private: true } : {}) });
+      }
+      cursor = text(d?.response_metadata?.next_cursor);
+      if (cursor === "") break;
+    }
+    return out;
+  }
+
+  /// The people in a channel (conversations.members), named as users.list says (bots, deactivated accounts and
+  /// Slackbot left out): their display name, their full name beside it where it differs.
+  async peopleIn(channel: string): Promise<Member[]> {
+    const ids = new Set<string>();
+    let cursor = "";
+    for (let page = 0; page < 10; page++) {
+      const params: Params = [
+        ["channel", channel],
+        ["limit", "200"],
+      ];
+      if (cursor !== "") params.push(["cursor", cursor]);
+      const d = await this.client.api("conversations.members", params, this.botToken);
+      for (const id of Array.isArray(d?.members) ? d.members : []) if (typeof id === "string") ids.add(id);
+      cursor = text(d?.response_metadata?.next_cursor);
+      if (cursor === "") break;
+    }
+    const out: Member[] = [];
+    cursor = "";
+    for (let page = 0; page < 50 && out.length < ids.size; page++) {
+      const params: Params = [["limit", "200"]];
+      if (cursor !== "") params.push(["cursor", cursor]);
+      const d = await this.client.api("users.list", params, this.botToken);
+      for (const u of Array.isArray(d?.members) ? d.members : []) {
+        const id = text(u?.id);
+        if (!ids.has(id) || u?.is_bot === true || u?.deleted === true || id === "USLACKBOT") continue;
+        const { name, picture } = personOf({ user: u });
+        if (name === "") continue;
+        const full = text(u?.profile?.real_name) || text(u?.real_name);
+        out.push({ id, name, ...(full !== "" && full !== name ? { aka: full } : {}), ...(picture ? { picture } : {}) });
       }
       cursor = text(d?.response_metadata?.next_cursor);
       if (cursor === "") break;

@@ -1,12 +1,14 @@
 // A chat relayed to a channel (docs/relay.md), for both frames: the places its station's bots are in, read as the
 // picker opens (`chat.relayPlaces`), what the picker shows of them for what is typed and the bot picked (the core's:
-// `chat.relayView`, relay-pick.ts), and the chat relayed where it was picked (`chat.relay`). The desktop's dialog
+// `chat.relayView`, relay-pick.ts), the people there its note can mention once an `@` is typed in it (`chat.relayPeople`,
+// then the core's `chat.relayMentions`), and the chat relayed where it was picked (`chat.relay`). The desktop's dialog
 // (sfdesk relay.mbt, Relay.tsx RelayDialog) and the phone's sheet (sfapp relay.mbt) draw it.
 
 ///|
 /// The picker open (`thread` -1: none), its places as read (0 being read, 1 read, 2 not: `error` says why), the bot
 /// picked ("" the chat's own), all the places asked for, the place picked (a row of the view), what the core showed
-/// for what was asked last (kept while the next is on its way) and what that was.
+/// for what was asked last (kept while the next is on its way) and what that was; the people of where it goes (read for
+/// `people_of`, the place as `relay_target` says it, "" none yet) and whom the note can mention (as `relay_view`).
 pub(all) struct Relaying {
   station : @signals.Signal[String]
   thread : @signals.Signal[Double]
@@ -19,6 +21,10 @@ pub(all) struct Relaying {
   view : @signals.Signal[Json?]
   asked : @signals.Signal[String]
   busy : @signals.Signal[Bool]
+  people : @signals.Signal[Array[Json]]
+  people_of : @signals.Signal[String]
+  mentions : @signals.Signal[Json?]
+  mentions_asked : @signals.Signal[String]
   /// what is typed to find a place (or a Slack message's link), and the note said with the chat where it goes
   query : @ui.Field
   note : @ui.Field
@@ -37,6 +43,10 @@ pub let relaying : Relaying = {
   view: @signals.signal(None),
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   busy: @signals.signal(false, same=fn(a, b) { a == b }),
+  people: @signals.signal([]),
+  people_of: @signals.signal("", same=fn(a, b) { a == b }),
+  mentions: @signals.signal(None),
+  mentions_asked: @signals.signal("", same=fn(a, b) { a == b }),
   query: @ui.Field::new(),
   note: @ui.Field::new(),
 }
@@ -55,6 +65,10 @@ pub fn relay_reset() -> Unit {
   relaying.view.set(None)
   relaying.asked.set("")
   relaying.busy.set(false)
+  relaying.people.set([])
+  relaying.people_of.set("")
+  relaying.mentions.set(None)
+  relaying.mentions_asked.set("")
   relaying.query.set("")
   relaying.note.set("")
 }
@@ -127,9 +141,9 @@ pub fn relay_connect(id : String) -> Json? {
 }
 
 ///|
-/// The chat relayed to the place picked, or to the thread of the Slack message's link typed (through the bot gone on
-/// through), with the note: said where it went when done (Relay.tsx go), why not when not; `done` told once it went.
-pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> Unit {
+/// Where the chat goes, as `chat.relay` and `chat.relayPeople` take it: the place picked, or the thread of the Slack
+/// message's link typed (through the bot gone on through); None, nowhere yet.
+fn relay_target(view : Json?) -> Map[String, Json]? {
   let p : Map[String, Json] = { "station": Json::string(relaying.station.get()), "thread": Json::number(relaying.thread.get()) }
   match (opt_text(view, "link"), relaying.picked.get()) {
     (Some(link), _) => {
@@ -143,7 +157,63 @@ pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> U
       p["connect"] = Json::string(text(Some(row), "connect"))
       p["channel"] = Json::string(text(field(Some(row), "place"), "id"))
     }
-    (None, None) => return
+    (None, None) => return None
+  }
+  Some(p)
+}
+
+///|
+/// Whom the note can mention now (relay-pick.ts MentionView `rows`: each person, with the note as it is once they are
+/// picked), none till an `@` is typed in it: the people of where it goes read then (once for each place), the core asked
+/// once the frame is built when they or the note changed (as `relay_view`).
+pub fn relay_mentions(c : @ui.Ctx, src : Source, view : Json?) -> Array[Json] {
+  let note = relaying.note.text()
+  let target = match relay_target(view) {
+    Some(p) if note.contains("@") => p
+    _ => return []
+  }
+  let thread = relaying.thread.get()
+  let of = Json::object(target).stringify()
+  if relaying.people_of.get() != of {
+    c.after_build("relay/chat.relayPeople", fn() {
+      if relaying.people_of.get() != of && relaying.thread.get() == thread {
+        relaying.people_of.set(of)
+        relaying.people.set([])
+        (src.call)("chat.relayPeople", Json::object(target), fn(res) {
+          match res {
+            Ok(v) if relaying.thread.get() == thread && relaying.people_of.get() == of => relaying.people.set(items(Some(v), "people"))
+            _ => ()
+          }
+        })
+      }
+    })
+    return []
+  }
+  let params = Json::object({ "people": Json::array(relaying.people.get()), "note": Json::string(note) })
+  let asked = params.stringify()
+  if asked != relaying.mentions_asked.get() {
+    c.after_build("relay/chat.relayMentions", fn() {
+      if relaying.mentions_asked.get() != asked && relaying.thread.get() == thread {
+        relaying.mentions_asked.set(asked)
+        (src.call)("chat.relayMentions", params, fn(res) {
+          match res {
+            Ok(v) if relaying.thread.get() == thread && relaying.mentions_asked.get() == asked => relaying.mentions.set(Some(v))
+            _ => ()
+          }
+        })
+      }
+    })
+  }
+  items(relaying.mentions.get(), "rows")
+}
+
+///|
+/// The chat relayed to the place picked, or to the thread of the Slack message's link typed (through the bot gone on
+/// through), with the note: said where it went when done (Relay.tsx go), why not when not; `done` told once it went.
+pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> Unit {
+  let p = match relay_target(view) {
+    Some(p) => p
+    None => return
   }
   let note = relaying.note.text()
   if note.trim(chars=" \n\t").to_owned() != "" {

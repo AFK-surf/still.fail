@@ -57,3 +57,9 @@ export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
 export const via = style({ display: "flex", alignItems: "center", flexWrap: "wrap", margin: "0", padding: "2px 10px 0 34px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
 /** The bot: its picture before its name. */
 export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text });
+/** A person the note can mention: their picture (their initial till it is here), a place's mark's size. */
+export const person = style({
+  flex: "none", display: "inline-grid", placeItems: "center", width: "18px", height: "18px", borderRadius: "999px",
+  overflow: "hidden", background: vars.hover, color: vars.muted, fontSize: vars.textCaption,
+});
+export const personImage = style({ width: "100%", height: "100%", objectFit: "cover" });

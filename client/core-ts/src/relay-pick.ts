@@ -128,3 +128,47 @@ export function readConnects(v: unknown): RelayConnect[] {
     return connect;
   });
 }
+
+/// A person in the place picked (`chat.relayPeople`), as the note can mention them: as they are mentioned there (`id`),
+/// the name people know them by, the other one they go by (`aka`), their picture.
+export type RelayPerson = { id: string; name: string; aka?: string; picture?: string };
+
+/// Who the note can mention now (`chat.relayMentions`): what is typed after its last `@` (null: none being typed), and
+/// those of the place it finds, each with the note as it is once they are picked (`note`: `@name ` in place of it).
+export type MentionView = { query: string | null; rows: (RelayPerson & { note: string })[] };
+
+/** How many people are offered for an `@` at most. */
+export const MENTIONS = 6;
+
+/** What is typed of a mention at the end of the note: after its last `@` that starts it or follows a space, on one line, not too long; else null. */
+export function mentionQuery(note: string): { at: number; query: string } | null {
+  const at = note.lastIndexOf("@");
+  if (at < 0 || (at > 0 && !/\s/.test(note[at - 1]!))) return null;
+  const query = note.slice(at + 1);
+  return /[\n\r]/.test(query) || query.length > 40 ? null : { at, query };
+}
+
+/** The people of `people` the note's `@` being typed finds (their name or other name has it, those starting with it first; then by name), at most MENTIONS. */
+export function mentionView(people: readonly RelayPerson[], note: string): MentionView {
+  const typed = mentionQuery(note);
+  if (typed === null) return { query: null, rows: [] };
+  const q = typed.query.toLowerCase();
+  const names = (p: RelayPerson) => [p.name, p.aka ?? ""].map((n) => n.toLowerCase());
+  const first = (p: RelayPerson) => (names(p).some((n) => n.startsWith(q)) ? 0 : 1);
+  const found = people.filter((p) => names(p).some((n) => n.includes(q)));
+  found.sort((a, b) => first(a) - first(b) || byName(a.name.toLowerCase(), b.name.toLowerCase()));
+  const before = note.slice(0, typed.at);
+  return { query: typed.query, rows: found.slice(0, MENTIONS).map((p) => ({ ...p, note: `${before}@${p.name} ` })) };
+}
+
+/** The people as `chat.relayPeople` answered them, given back by a client: what is not as it says left out. */
+export function readPeople(v: unknown): RelayPerson[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(isObj).flatMap((p) => {
+    if (str(p.id) === "" || str(p.name) === "") return [];
+    const person: RelayPerson = { id: str(p.id), name: str(p.name) };
+    if (str(p.aka) !== "") person.aka = str(p.aka);
+    if (str(p.picture) !== "") person.picture = str(p.picture);
+    return [person];
+  });
+}

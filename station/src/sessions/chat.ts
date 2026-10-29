@@ -34,6 +34,10 @@ export type ChatEvent =
 /// Feishu group (the group's conversation, taken over: docs/feishu.md「会话怎么分」).
 export type Place = { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean };
 
+/// A person in a place, as they are mentioned there (`id`, as `mention` takes it): the name people know them by, the
+/// other one they go by where it differs (`aka`: Slack's full name beside the display name), their picture.
+export type Member = { id: string; name: string; aka?: string; picture?: string };
+
 export type ChatMessage ={ ts: string; user: string; text: string; fromBot: boolean; files?: InboundFile[] };
 
 /// `picture`: their profile picture's address, where the platform gives one; "" when it gives none, absent when looked up
@@ -90,6 +94,9 @@ export interface ChatSurface {
   channelName?(channel: string): Promise<string | null>;
   /// Where the bot can start a conversation (a chat relayed there, sessions/relay.ts): the channels and groups it is in.
   places?(): Promise<Place[]>;
+  /// The people in one of its places (bots left out), at most a couple of thousand: who a note relaying a chat there
+  /// can mention.
+  peopleIn?(channel: string): Promise<Member[]>;
   /// Starts a conversation in one of its places with `message`, as the station: the thread it is from now on.
   begin?(channel: string, message: string): Promise<{ thread: ThreadRef; ts: string }>;
   /// Changes a message the bot posted to `message`, when it fits in one message; false, with nothing changed, when it

@@ -7,6 +7,7 @@
 // toast saying where. A Slack message's link typed (pasted) into the search offers that message's thread instead. What
 // it offers, and in what order, is the core's (sfbase relay.mbt, relay-pick.ts). The search takes the focus as it opens
 // with keyboard and mouse, not with touch (where that would bring the keyboard up over the list: useRelay's `focus`).
+// An `@` typed in the note offers the people there under it; one picked has their name written in its place.
 
 ///|
 /// The editor to be given the focus as it is next drawn (the search as it opens, the note once a place is picked:
@@ -123,8 +124,27 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
     if picked is Some(_) || link is Some(_) {
       c.box(style=relay_note_field, fn() {
         c.text(@sf.t("web-main.relay.note"), style=relay_note_label) |> ignore
-        @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), field=relaying.note) |> ignore
+        let typed = @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), field=relaying.note)
         relay_focused(c, "relay/note")
+        let mentions = relay_mentions(c, src, view)
+        // (Enter picks the first, as a click on it would)
+        let mut chosen = if typed.submitted { mentions.get(0) } else { None }
+        if mentions.length() > 0 {
+          relay_list(c, fn() {
+            for p in mentions {
+              if relay_person(c, src, p) {
+                chosen = Some(p)
+              }
+            }
+          })
+        }
+        match chosen {
+          Some(p) => {
+            relaying.note.set(text(Some(p), "note"))
+            relay_focus.val = "relay/note"
+          }
+          None => ()
+        }
       })
       |> ignore
     }
@@ -214,6 +234,27 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
 }
 
 ///|
+/// A person the note can mention (Relay.tsx's place-like row): their picture, their name, their other name at its end.
+/// True on the frame after a press.
+fn relay_person(c : @ui.Ctx, src : Source, p : Json) -> Bool {
+  let id = c.id("relay/person/" + text(Some(p), "id"))
+  let name = text(Some(p), "name")
+  let b = c.box(style=relay_place_box, id~, fn() {
+    let picture = text(Some(p), "picture")
+    let picture = if picture == "" { "" } else { (src.picture)(picture, c.page_stint()) }
+    @sf.avatar(c, text(Some(p), "id"), name, picture, relay_person_size)
+    c.text(name, style=relay_place_name) |> ignore
+    c.box(style=relay_grow, fn() {  }) |> ignore
+    match opt_text(Some(p), "aka") {
+      Some(aka) => c.text(aka, style=relay_place_note) |> ignore
+      None => ()
+    }
+  })
+  c.semantics(b, Button, id~, label=name)
+  c.clicked(id)
+}
+
+///|
 /// A platform's mark (ElsewhereLogo, 16): Feishu's for Feishu and Lark, else Slack's.
 fn relay_mark(c : @ui.Ctx, kind : String) -> Unit {
   match kind {
@@ -292,6 +333,10 @@ let relay_mark_size : Double = 16.0
 
 ///|
 let relay_kind_size : Double = 10.0
+
+///|
+/// A person's picture (Relay.css.ts person: 18).
+let relay_person_size : Double = 18.0
 
 ///|
 /// A bot's chip's height (scope: 26), a place's least (place: 34).

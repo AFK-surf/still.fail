@@ -48,3 +48,63 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   assert_true(t.find("开头附一句（可选）") is None)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
+
+///|
+test "wide: an @ typed in the relay's note offers the people there (chat.relayPeople, chat.relayMentions); one picked has their name written" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }]
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      match name {
+        "chat.relayPeople" => done(Ok({ "people": people }))
+        // (whom it finds, the core's: relay-pick.ts mentionView, tested there)
+        "chat.relayMentions" => {
+          let note = text(Some(params), "note")
+          let rows : Array[Json] = if note.has_suffix("@p") {
+            [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }]
+          } else {
+            []
+          }
+          done(Ok({ "rows": Json::array(rows) }))
+        }
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.right_click(x, y)
+  t.frame()
+  t.tap_text("接力到频道…")
+  t.frame()
+  t.frame()
+  t.tap_text("#dev")
+  t.frame()
+  // nobody asked for till an @ is typed
+  t.type_text("看下 ")
+  t.frame()
+  assert_eq(named(calls, "chat.relayPeople").length(), 0)
+  t.type_text("@p")
+  t.frame()
+  t.frame()
+  let asked = named(calls, "chat.relayPeople")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "connect"), "slack-1")
+  assert_eq(text(Some(asked[0].params), "channel"), "C1")
+  t.frame()
+  assert_true(t.find("Peng Xiao") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.tap_text("pengxiao")
+  t.frame()
+  assert_eq(relaying.note.text(), "看下 @pengxiao ")
+  t.frame()
+  assert_true(t.find("Peng Xiao") is None, msg="still offered once picked")
+  assert_eq(named(calls, "chat.relayPeople").length(), 1, msg="read once for the place")
+  t.tap_text("接力到 #dev")
+  t.frame()
+  let relayed = named(calls, "chat.relay")
+  assert_eq(text(Some(relayed[0].params), "note"), "看下 @pengxiao ")
+}

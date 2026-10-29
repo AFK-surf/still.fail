@@ -417,6 +417,9 @@ export interface RelayPlace { id: string; name: string; kind: "channel" | "topic
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
 export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; preferred?: boolean; places: RelayPlace[]; error?: string }
 
+/** A person in a place, as a relayed chat's note can mention them (docs/relay.md「附言里 @ 人」). */
+export interface RelayPerson { id: string; name: string; aka?: string; picture?: string }
+
 /** Where a chat was relayed: the place's name, and its link where the platform has one. */
 export interface Relayed { thread: number; to: string; place: string; link: string | null }
 
@@ -459,6 +462,9 @@ export function stationApi(t: StationCall) {
     unpublish: (thread: number, id: string) => t.op<unknown>("chat.unpublish", { thread, id }),
     /** Where the chat can be relayed: each connect's channels and groups its bot is in. */
     relayPlaces: (thread: number) => ops.chatRelayPlaces<{ connects: RelayConnect[] }>({ thread }),
+    /** The people of where the chat would be relayed, for its note to mention. */
+    relayPeople: (thread: number, to: { connect: string; channel: string } | { link: string; connect?: string }) =>
+      ops.chatRelayPeople<{ people: RelayPerson[] }>({ thread, ...to }),
     /** The chat relayed to a connect's channel or group, or the Slack thread of a message's link, with the person's note; its agent goes on there too. */
     relay: (thread: number, to: { connect: string; channel: string } | { link: string; connect?: string }, note: string) =>
       ops.chatRelay<Relayed>(note.trim() === "" ? { thread, ...to } : { thread, ...to, note }),

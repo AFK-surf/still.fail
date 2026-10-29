@@ -803,6 +803,7 @@
   "web-main.relay.kind.groupNote": "普通群就是一个会话：接力后群里接下来的消息都交给这个对话，群里原来的会话照常留在 still.fail",
   "web-main.relay.note": "开头附一句（可选）",
   "web-main.relay.notePlaceholder": "例如：@某人 帮看下这个方案",
+  "web-main.relay.people": "可以 @ 的人",
   "web-main.relay.go": "接力",
   "web-main.relay.verb": "接力",
   "web-main.relay.done": "已接力到 {place}",

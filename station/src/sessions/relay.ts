@@ -7,7 +7,7 @@ import { tr, stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { ThreadRow } from "../store/rows.ts";
 import { threadAddress } from "../agents/instructions.ts";
-import type { ChatSurface, Place, ThreadRef } from "./chat.ts";
+import type { ChatSurface, Member, Place, ThreadRef } from "./chat.ts";
 import type { Connect } from "./config.ts";
 import type { Hub } from "./hub.ts";
 
@@ -107,11 +107,8 @@ export type RelayTarget = { connect: string; channel: string } | { link: string;
 /// Who relays a chat: their name on still.fail and the email of their account there.
 export type Relayer = { name: string; email: string };
 
-/// Relays a chat by `relayer`, with their `note`.
-export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, target: RelayTarget, note: string): Promise<Relayed> {
-  const by = relayer.name;
-  const session = agentOf(hub, thread);
-  const connects = connectsFor(hub, session);
+/// Where a target is: the connect that takes it, the thread of a message's link (null: a new conversation), the place.
+async function targetOf(connects: ReturnType<typeof connectsFor>, target: RelayTarget) {
   let c: (typeof connects)[number] | undefined;
   let existing: ThreadRef | null = null;
   if ("link" in target) {
@@ -131,11 +128,50 @@ export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, targe
   const channel = existing?.channel ?? (target as { channel: string }).channel;
   const place = (await c.chat.places!()).find((p) => p.id === channel);
   if (place === undefined) throw new Error(`the bot is not in ${channel}`);
+  return { c, existing, channel, place };
+}
+
+/// The people of the place a chat would be relayed to, to be mentioned in the note (docs/relay.md「附言里 @ 人」):
+/// none where the platform cannot say.
+export async function relayPeople(hub: Hub, thread: ThreadRow, target: RelayTarget): Promise<Member[]> {
+  const { c, channel } = await targetOf(connectsFor(hub, agentOf(hub, thread)), target);
+  return (await c.chat.peopleIn?.(channel)) ?? [];
+}
+
+/// The note as said there: each `@name` (at its start or after what is not a letter) of one of `people`, by the name
+/// people know them by or their other one (the longest first; one that goes on into more of a word is not it), becomes
+/// their mention on the platform.
+export function mentioned(note: string, people: readonly Member[], mention: (id: string) => string): string {
+  if (!note.includes("@") || people.length === 0) return note;
+  const names = people.flatMap((p) => [p.name, p.aka ?? ""].filter((n) => n !== "").map((name) => ({ id: p.id, name })));
+  names.sort((a, b) => b.name.length - a.name.length);
+  const word = /[\p{L}\p{N}_]/u;
+  let out = "";
+  for (let i = 0; i < note.length; ) {
+    const starts = note[i] === "@" && !word.test(note[i - 1] ?? "");
+    const found = starts ? names.find((n) => note.startsWith(n.name, i + 1)) : undefined;
+    const end = found === undefined ? i : i + 1 + found.name.length;
+    if (found === undefined || (/[A-Za-z0-9_]$/.test(found.name) && word.test(note[end] ?? ""))) {
+      out += note[i];
+      i++;
+      continue;
+    }
+    out += mention(found.id);
+    i = end;
+  }
+  return out;
+}
+
+/// Relays a chat by `relayer`, with their `note`.
+export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, target: RelayTarget, note: string): Promise<Relayed> {
+  const by = relayer.name;
+  const session = agentOf(hub, thread);
+  const { c, existing, channel, place } = await targetOf(connectsFor(hub, session), target);
   const surface = hub.surface(c.id);
   if (existing !== null) {
     // A thread another session of the same bot takes part in is that one's (as slack_api keeps to).
     const known = hub.store.threadAt(surface, existing.channel, existing.threadTs);
-    const members = known === null ? [] : hub.store.threadSessions(known.id).filter((m) => m.connect === c!.id);
+    const members = known === null ? [] : hub.store.threadSessions(known.id).filter((m) => m.connect === c.id);
     if (members.some((m) => m.session === session)) throw new Error("this chat's agent is in that thread already");
     if (members.length > 0) throw new Error("another chat's agent is in that thread: it cannot be relayed there");
   }
@@ -143,7 +179,9 @@ export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, targe
   const title = thread.title ?? thread.autoTitle ?? tr(lang, "station.relay.untitled");
   const page = hub.link(session) ?? null;
   const from = page !== null ? `[${title.replace(/[[\]]/g, "")}](${page})` : title;
-  const said = note.trim();
+  // Those @-mentioned in it by name, as the platform mentions them (asked of it only then).
+  const people = note.includes("@") ? ((await c.chat.peopleIn?.(channel).catch(() => null)) ?? []) : [];
+  const said = mentioned(note.trim(), people, (id) => c.chat.mention?.(id) ?? `<@${id}>`);
   // There they are mentioned, as the account the platform has with their email (as a 抄送 does); else named.
   const user = (await c.chat.userOf?.(relayer.email).catch(() => null)) ?? null;
   const who = user !== null ? (c.chat.mention?.(user) ?? `<@${user}>`) : by;

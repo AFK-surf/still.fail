@@ -12,7 +12,7 @@ import { ConnectedSurface } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import type { ChatEvent, ChatMessage, Handler, InboundFile, Person, Place, ThreadRef } from "../sessions/chat.ts";
+import type { ChatEvent, ChatMessage, Handler, InboundFile, Member, Person, Place, ThreadRef } from "../sessions/chat.ts";
 import { type Answer, answeredCard, inline, questionCard, textCards } from "./cards.ts";
 import { CONTROL, DATA, type Frame, Parts, decode, encode, header } from "./frame.ts";
 import { type FeishuMessage, cardAnswerOf, listedAsEvent, messageOf, resourceOf } from "./parse.ts";
@@ -359,6 +359,22 @@ export class FeishuSurface extends ConnectedSurface {
     return out;
   }
 
+  /// The people in a group (`GET /im/v1/chats/:id/members`; bots are not among them), by their name in it.
+  async peopleIn(chat: string): Promise<Member[]> {
+    const out: Member[] = [];
+    let token = "";
+    for (let page = 0; page < 20; page++) {
+      const d = (await this.client.api("GET", `/open-apis/im/v1/chats/${encodeURIComponent(chat)}/members`, null, { member_id_type: "open_id", page_size: "100", ...(token ? { page_token: token } : {}) }))?.data ?? {};
+      for (const item of Array.isArray(d.items) ? d.items : []) {
+        const id = text(item?.member_id);
+        if (id !== "" && text(item?.name) !== "") out.push({ id, name: text(item.name) });
+      }
+      token = text(d.page_token);
+      if (d.has_more !== true || token === "") break;
+    }
+    return out;
+  }
+
   /// The chat in Feishu's (or Lark's) app; a topic opens with its chat.
   permalink(thread: ThreadRef): string | null {
     const app = this.domain === "lark" ? "https://applink.larksuite.com" : "https://applink.feishu.cn";
@@ -422,13 +438,7 @@ export class FeishuSurface extends ConnectedSurface {
     if (!names) {
       names = new Map();
       try {
-        let token = "";
-        for (let page = 0; page < 20; page++) {
-          const d = (await this.client.api("GET", `/open-apis/im/v1/chats/${encodeURIComponent(chat)}/members`, null, { member_id_type: "open_id", page_size: "100", ...(token ? { page_token: token } : {}) }))?.data ?? {};
-          for (const item of Array.isArray(d.items) ? d.items : []) if (text(item?.member_id) !== "") names.set(item.member_id, text(item.name));
-          token = text(d.page_token);
-          if (d.has_more !== true || token === "") break;
-        }
+        for (const m of await this.peopleIn(chat)) names.set(m.id, m.name);
       } catch {
         return null;
       }
