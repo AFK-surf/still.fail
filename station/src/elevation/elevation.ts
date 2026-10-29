@@ -202,12 +202,13 @@ const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
 const run = promisify(execFile);
 
 /// Whether this process runs elevated, and whether its user is an administrator (the Administrators group in its token,
-/// deny-only while not elevated: whoami says so, where .NET leaves it out).
+/// deny-only while not elevated: whoami says so, where .NET leaves it out). Windows' own whoami by its path: Git's
+/// /usr/bin/whoami comes first on an agent's PATH, and takes no /groups.
 async function probe(): Promise<{ elevated: boolean; admin: boolean }> {
   const script = [
     "$id = [Security.Principal.WindowsIdentity]::GetCurrent()",
     "$e = ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)",
-    "$a = [bool](whoami /groups /fo csv | Select-String -SimpleMatch 'S-1-5-32-544')",
+    "$a = [bool](& (Join-Path $env:SystemRoot 'System32\\whoami.exe') /groups /fo csv | Select-String -SimpleMatch 'S-1-5-32-544')",
     "Write-Output ([string]$e + ' ' + [string]$a)",
   ].join("\r\n");
   const { stdout } = await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true });
