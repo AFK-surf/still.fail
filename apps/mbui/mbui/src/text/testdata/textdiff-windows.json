@@ -1,4 +1,7 @@
 {
  "host": "windows",
- "known": []
+ "known": [
+  "cjk-brackets",
+  "cjk-mixed"
+ ]
 }
