@@ -5,6 +5,8 @@
 ///|
 fn init {
   @ui.words_over_known([
+    // (Android's runs played again, src/sfapp/tape.mbt)
+    ("src/sfapp/tape.mbt", 4),
     ("src/sfreplay/flows/answer_option_test.mbt", 10),
     ("src/sfreplay/flows/bar_going_down_test.mbt", 3),
     ("src/sfreplay/flows/card_motion_test.mbt", 9),

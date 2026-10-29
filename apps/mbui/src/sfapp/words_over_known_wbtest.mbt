@@ -11,6 +11,7 @@ fn init {
     ("src/sfapp/decide_wbtest.mbt", 14),
     ("src/sfapp/downloads_wbtest.mbt", 1),
     ("src/sfapp/duo_wbtest.mbt", 11),
+    ("src/sfapp/linger_wbtest.mbt", 1),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
     ("src/sfapp/place_top_wbtest.mbt", 2),
     ("src/sfapp/preview_wbtest.mbt", 13),
