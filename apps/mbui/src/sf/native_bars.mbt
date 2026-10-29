@@ -163,11 +163,12 @@ pub(all) struct NativeOver {
   mut up : Bool
   mut title : String
   acts : Array[(String, String, String, () -> Unit)]
+  active : Array[String]
 }
 
 ///|
 // kept across runs: put back each frame (native_over_clear), native_bars_reset as the app begins anew
-pub let native_over : NativeOver = { up: false, title: "", acts: [] }
+pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [] }
 
 ///|
 /// None up, as a frame starts.
@@ -175,6 +176,7 @@ pub fn native_over_clear() -> Unit {
   native_over.up = false
   native_over.title = ""
   native_over.acts.clear()
+  native_over.active.clear()
 }
 
 ///|
@@ -192,7 +194,9 @@ pub fn native_over_up(title : String) -> Bool {
 
 ///|
 /// One of its actions in the system's bars (`id`, its words, an icon's name; `lead`: at the bar's lead, where the
-/// system puts back and close), `act` what it does chosen.
-pub fn native_over_act(id : String, title : String, icon : String, act : () -> Unit, lead? : Bool = false) -> Unit {
-  native_over.acts.push(((if lead { "lead/over/" } else { "over/" }) + id, title, icon, act))
+/// system puts back and close), `act` what it does chosen. `active`: the panel it controls is open, shown in the accent.
+pub fn native_over_act(id : String, title : String, icon : String, act : () -> Unit, lead? : Bool = false, active? : Bool = false) -> Unit {
+  let key = (if lead { "lead/over/" } else { "over/" }) + id
+  native_over.acts.push((key, title, icon, act))
+  if active { native_over.active.push(key) }
 }

@@ -71,6 +71,7 @@ priv struct ScreenUi {
   /// 控制中心 ("center") or the view's figures ("net") to open from the bar as it is next built (a fixture's: as if
   /// pressed); "" none
   mut asked_panel : String
+  mut native_panel : (String, Int)?
 }
 
 ///|
@@ -116,6 +117,7 @@ fn screen_ui(key : String) -> ScreenUi {
         bps: None,
         diag_copies: 0,
         asked_panel: "",
+        native_panel: None,
       }
       screen_uis[key] = u
       u
@@ -230,17 +232,32 @@ pub fn screen_page(
   screen_keys_in(c, s, u, kc.keys)
   let (ww, wh) = c.window_size()
   let sideways = ww > wh
+  let native = !in_tab && @sf.native_over_up(title)
+  if native {
+    screen_native(c, s, u, typing, catcher, close)
+  }
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
   // (full, edge to edge: no room kept for what its frame keeps it from)
   let room = fn(h : Double) {
-    if h > 0.0 && !u.full {
+    if h > 0.0 && (!u.full || native) {
       c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
     }
   }
   c.box(style=if u.full { screen_whole } else { screen_page_box }, fn() {
   room(frame.top)
-  c.box(style=screen_within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
-    if u.full {
+  let within = if native { screen_within.then(@ui.style(pr=@sf.room_of(@sf.native_clear()))) } else { screen_within }
+  c.box(style=within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+    if native {
+      c.box(style=screen_fill, fn() {
+        screen_stage(c, s, u, key)
+        if s.can_take_over() {
+          c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
+        }
+        if s.driving() && typing {
+          c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
+        }
+      }) |> ignore
+    } else if u.full {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
         if s.can_take_over() {
@@ -307,6 +324,70 @@ pub fn screen_page(
   room(frame.foot)
   })
   |> ignore
+}
+
+///|
+/// A standalone remote screen uses Duo's system actions, putting away the app's places. A screen in a chat tab
+/// keeps the pane's own controls. The picture is fitted clear of the system column in screen_page.
+fn screen_native_panel_on(u : ScreenUi, id : String) -> Bool {
+  u.native_panel is Some((key, serial)) && key == id && @sf.presented_open_of(serial)
+}
+
+///|
+fn screen_native_panel(u : ScreenUi, id : String, open : () -> Unit) -> Unit {
+  if u.native_panel is Some((key, serial)) && @sf.presented_open_of(serial) {
+    @sf.close_presented_of(serial)
+    u.native_panel = None
+    if key == id { return }
+  }
+  open()
+  u.native_panel = Some((id, @sf.last_presented()))
+}
+
+///|
+fn screen_native_anchor(c : @ui.Ctx) -> @sf.Anchor {
+  let at = @hostapi.nav_tapped_at
+  let (w, h) = c.window_size()
+  if at[2] <= 0.0 && @sf.native_side() { return At(w - @sf.native_clear(), h / 2.0, 0.0, 0.0) }
+  let x = if @sf.native_side() { dmin(at[0], w - @sf.native_clear()) } else { at[0] }
+  At(x, at[1], at[2], at[3])
+}
+
+///|
+fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catcher : String, close : () -> Unit) -> Unit {
+  @sf.native_over_act("screen-close", @sf.t("android-misc.screen.close"), "close", close, lead=true)
+  if s.choosable() {
+    let on = s.controlling()
+    @sf.native_over_act("screen-mode", @sf.t(if on { "android-misc.screen.look" } else { "android-misc.screen.drive" }),
+      if on { "eye" } else { "cursor" }, fn() { control_chosen(c, s, !s.controlling()) })
+  }
+  if s.driving() {
+    @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+    @sf.native_over_act("screen-keyboard", @sf.t("android-misc.screen.keyboard"), "keyboard", fn() { keyboard_toggled(c, catcher, typing) })
+  }
+  if s.pastes() {
+    @sf.native_over_act("screen-paste", @sf.t("android-misc.screen.paste"), "paste", fn() { paste_asked(c, s, u) })
+  }
+  if s.open_now() {
+    @sf.native_over_act("screen-center", @sf.t("web-pages.screen.panel"), "sliders", fn() {
+      let from = screen_native_anchor(c)
+      screen_native_panel(u, "center", fn() {
+        @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
+      })
+    }, active=screen_native_panel_on(u, "center"))
+    @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
+      net_panel_open(s, u, screen_native_anchor(c))
+    }, active=screen_native_panel_on(u, "stats"))
+    let line = text(s.state, "line")
+    if line != "" {
+      @sf.native_over_act("screen-people", line, "users", fn() {
+        screen_native_panel(u, "people", fn() {
+          @sf.panel(line, fn(_, _) {  }, from=screen_native_anchor(c), side=screen_panel_side(), focus=false)
+        })
+      }, active=screen_native_panel_on(u, "people"))
+    }
+  }
+
 }
 
 ///|

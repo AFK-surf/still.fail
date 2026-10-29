@@ -280,7 +280,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       let bar = if over.up {
         let acts : Array[@hostapi.NavItem] = over.acts.map(fn(a) {
           nav_over_was[a.0] = a.3
-          { id: a.0, title: a.1, icon: @sf.icon_path(a.2), dot: false, prominent: false, menu: [] }
+          { id: a.0, title: a.1, icon: @sf.icon_path(a.2), dot: false, prominent: over.active.contains(a.0), menu: [] }
         })
         { ..rail_nav(src, w, all, acts), bare: true, title: over.title }
       } else {

@@ -1090,7 +1090,7 @@ pub fn native_on() -> Bool
 
 pub let native_over : NativeOver
 
-pub fn native_over_act(String, String, String, () -> Unit, lead? : Bool) -> Unit
+pub fn native_over_act(String, String, String, () -> Unit, lead? : Bool, active? : Bool) -> Unit
 
 pub fn native_over_clear() -> Unit
 
@@ -2469,6 +2469,7 @@ pub(all) struct NativeOver {
   mut up : Bool
   mut title : String
   acts : Array[(String, String, String, () -> Unit)]
+  active : Array[String]
 }
 
 pub(all) struct PageBar {

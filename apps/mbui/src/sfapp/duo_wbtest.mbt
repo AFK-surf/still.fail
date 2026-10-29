@@ -3,6 +3,23 @@
 // across in every width; everywhere else nothing of it, the frame as it was.
 
 ///|
+test "Duo standalone screen replaces app navigation with its own controls and restores it on close" {
+  reset()
+  let src = fixture("screen-live")
+  open_fixture_over("screen-live", src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.nav_said().contains("\"bare\":true"), msg=t.nav_said())
+  assert_true(t.nav_said().contains("lead/over/screen-close"), msg=t.nav_said())
+  t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/screen-close\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_false(app.nav.top() is Screen(_))
+  assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
+}
+
+///|
 /// The fixture's chat (or `mode`'s) open in a window `w` × `h` of iOS (platform 1), the system's own bars or not (`able`), its column
 /// down the window's trailing edge `side` wide (0: upright, across), the screen's corners `corner` round (`corners`:
 /// each its own, top left then round it).
@@ -753,4 +770,36 @@ test "Duo chat menu covers sidebar glass until its exit finishes" {
   }
   t.run_for(@ui.nav_push_ms)
   assert_true(t.nav_said().contains("workspace-switch"))
+}
+
+///|
+test "Duo screen panels toggle through native events, switch without stacking and light the active action" {
+  reset()
+  let src = fixture("screen-live")
+  open_fixture_over("screen-live", src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.nav_push_ms)
+  for id in ["center", "stats", "people"] {
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-\{id}\",\"at\":[879,480,48,48]}")
+    t.run_for(@ui.nav_push_ms)
+    let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
+    assert_eq(panels.length(), 1)
+    let (x, _, w, _) = panels[0].rect
+    assert_true(x + w <= 867.0, msg="\{id}: panel \{x} + \{w}")
+    assert_eq(@sf.native_over.active, ["over/screen-\{id}"])
+    let bar = @json.parse(t.nav_said())
+    let mut lit = false
+    for group in items(Some(bar), "groups") {
+      for item in items(Some(group), "items") {
+        if text(Some(item), "id") == "over/screen-\{id}" { lit = flag(Some(item), "prominent") }
+      }
+    }
+    assert_true(lit)
+  }
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-people\",\"at\":[879,480,48,48]}")
+  t.run_for(@ui.nav_push_ms)
+  assert_false(@sf.presenter_visible())
+  assert_eq(@sf.native_over.active, [])
 }

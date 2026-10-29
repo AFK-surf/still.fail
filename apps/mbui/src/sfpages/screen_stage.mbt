@@ -66,8 +66,9 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   match c.laid_size(stage) {
     Some((bw, bh)) if bw != u.box_w || bh != u.box_h => {
       if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
-        // turned: fitted again; else (the keyboard up or down) drawn as large as it was, the pointer in sight
-        if (u.box_w > u.box_h) != (bw > bh) {
+        // Turned, or a fitted view given a new width by the system column: fit again.
+        // Height alone (the keyboard) keeps the picture and pointer as before.
+        if (u.box_w > u.box_h) != (bw > bh) || (bw != u.box_w && u.zoom.fitted) {
           u.zoom.fit_now()
         } else {
           u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)

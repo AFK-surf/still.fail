@@ -180,10 +180,19 @@ fn signal_bars(c : @ui.Ctx, level : String) -> Unit {
 }
 
 ///|
-/// The view's figures, a small panel of words (the web's NetChip panel): the round trip at its head, then groups of a
-/// name and its value a line; 复制诊断 at its foot.
+/// Native events arrive before this frame rebuilds native_over; use the page and system bars, not that transient flag.
+fn screen_panel_side() -> @ui.Side {
+  if @sf.native_side() && app.nav.top() is Screen(_) { Left } else { Bottom }
+}
+
+///|
 fn net_panel_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
-  @sf.panel("", fn(c, _) { net_panel(c, s, u) }, from~, w=net_panel_w, focus=false)
+  let open = fn() { @sf.panel("", fn(c, _) { net_panel(c, s, u) }, from~, side=screen_panel_side(), w=net_panel_w, focus=false) }
+  if @sf.native_on() && !u.in_tab {
+    screen_native_panel(u, "stats", open)
+  } else {
+    open()
+  }
 }
 
 ///|
@@ -265,15 +274,17 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     // everything above as figures (no screen, no names), for a report; 已复制 for a moment after
     let copied = u.diag_copies > 0 &&
       !@kit.after(c, "screen-diag/\{u.diag_copies}", true, diag_said_ms, later=true)
-    if @sf.panel_button(
-        c,
-        "screen-diag",
-        @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
-        tone=Quiet,
-      ) {
-      @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
-      u.diag_copies += 1
-    }
+    c.box(style=@ui.style(w=Full, align=ACenter), fn() {
+      if @sf.panel_button(
+          c,
+          "screen-diag",
+          @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
+          tone=Quiet,
+        ) {
+        @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
+        u.diag_copies += 1
+      }
+    }) |> ignore
   })
   |> ignore
 }
