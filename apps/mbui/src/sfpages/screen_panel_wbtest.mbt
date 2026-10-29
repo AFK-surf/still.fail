@@ -33,7 +33,7 @@ fn shut(r : ScreenRig) -> Unit {
 }
 
 ///|
-test "画质 chosen in 控制中心 is kept on the device and the view asked again at its size" {
+test "画质 chosen in 控制中心 is kept on the device and asked of the open view" {
   let r = screen_rig()
   r.live()
   open_center(r)
@@ -44,19 +44,23 @@ test "画质 chosen in 控制中心 is kept on the device and the view asked aga
   let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenQuality") is Some(_) })
   assert_eq(set.length(), 1)
   assert_eq(text(Some(set[0]), "screenQuality"), "smooth")
-  // the open view let go of, another asked for at 1280 × 720, the frame shown kept meanwhile
-  let asked = r.told("screen.view")
-  assert_eq(asked.length(), 2)
-  assert_eq(r.cancelled, [1])
-  assert_eq(number(Some(asked[1]), "maxWidth"), 1280.0)
-  assert_eq(number(Some(asked[1]), "maxHeight"), 720.0)
+  // the open view goes on, asked for 1280 × 720 (the core opens its stream again before it lets the old one go: a
+  // Windows desktop keeps its display scale), the frame shown kept meanwhile
+  assert_eq(r.told("screen.view").length(), 1)
+  assert_eq(r.cancelled, [])
+  let asked = r.told("screen.bounds")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0]), "view"), text(Some(r.told("screen.view")[0]), "view"))
+  assert_eq(number(Some(asked[0]), "maxWidth"), 1280.0)
+  assert_eq(number(Some(asked[0]), "maxHeight"), 720.0)
   assert_true(r.t.find("720p") is Some(_))
   // back to 自动: the device's screen again
   r.t.tap_text(tr("web-pages.screen.quality.auto"))
   r.t.draw()
-  let again = r.told("screen.view")
-  assert_eq(again.length(), 3)
-  assert_eq(number(Some(again[2]), "maxWidth"), 1920.0)
+  let again = r.told("screen.bounds")
+  assert_eq(again.length(), 2)
+  assert_eq(number(Some(again[1]), "maxWidth"), 1920.0)
+  assert_eq(r.told("screen.view").length(), 1)
   assert_eq(r.quality.val, "")
   shut(r)
   screen_done(r.t)

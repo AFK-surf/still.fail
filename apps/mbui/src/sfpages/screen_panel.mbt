@@ -591,8 +591,8 @@ fn combo_tiles(c : @ui.Ctx, s : ScreenSess, combos : Array[Combo], done : () -> 
 }
 
 ///|
-/// A choice of 控制中心 kept on this device for every screen (`prefs.set`, null for the default): the view opens again
-/// with it once the prefs say so (screen_page's asked_again).
+/// A choice of 控制中心 kept on this device for every screen (`prefs.set`, null for the default): the view takes it
+/// once the prefs say so (screen_page's asked_again: 画质 asked of the open view).
 fn prefs_chosen(c : @ui.Ctx, s : ScreenSess, name : String, value : String) -> Unit {
   let v = if value == "" { Json::null() } else { Json::string(value) }
   c.tell("screen-prefs/" + s.view + "/" + name + "/" + value, fn() {

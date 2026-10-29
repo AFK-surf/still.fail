@@ -122,6 +122,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   const [attempt, setAttempt] = useState(0);
   /** How large a picture is asked for (its panel's 画质; a phone's is as its window is): another opens the view again. */
   const quality: Quality = phone ? "auto" : usePrefs((p) => p.screenQuality) as Quality | undefined ?? "auto";
+  /** The 画质 a view opens with; another chosen while it is open asks it of that view (`screen.bounds`). */
+  const qualityRef = useRef(quality);
+  qualityRef.current = quality;
   /** The codec asked (its panel's 编码): `h264` only, or the best both ends have. Another opens the view again. */
   const codec: "auto" | "h264" = usePrefs((p) => p.screenCodec) === "h264" ? "h264" : "auto";
   /** What came of the view: its panel reads the frames and bits a second from it. */
@@ -278,7 +281,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
       // On a phone, the stage it is shown on: a tab of the station's browser is laid out for it.
       const s = stage.current;
       const fit = phone && s && s.clientWidth > 0 && s.clientHeight > 0 ? { fit: { width: s.clientWidth, height: s.clientHeight, scale: window.devicePixelRatio || 1 } } : {};
-      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(quality), ...fit }, (value, bytes) => {
+      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(qualityRef.current), ...fit }, (value, bytes) => {
         if (!open) return;
         const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
         if (v.frame) {
@@ -303,7 +306,16 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
       abort.abort();
       frames.close();
     };
-  }, [station, screen, attempt, quality, codec, place, drawPointer, phone]);
+  }, [station, screen, attempt, codec, place, drawPointer, phone]);
+
+  // Another 画质: the open view goes on, its pictures asked this large (the core opens its stream again, the one before
+  // kept until the new one has opened: a Windows desktop keeps the display scale set from it).
+  const boundsAsked = useRef(quality);
+  useEffect(() => {
+    if (boundsAsked.current === quality) return;
+    boundsAsked.current = quality;
+    if (view.current) tell("screen.bounds", { view: view.current, ...viewSize(quality) });
+  }, [quality]);
 
   // What is done over the picture, while driving.
   useEffect(() => {
