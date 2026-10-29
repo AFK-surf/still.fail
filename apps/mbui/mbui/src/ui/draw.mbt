@@ -1466,9 +1466,9 @@ pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// How far across what node `i` holds draws (from, to: the words, pictures and grounds in it, as laid out), where it is
-/// narrower than the node (a row as wide as its list, its words at one end): what goes over that part of it is over
-/// what it shows, the rest of it over nothing of it. (i's own x and width where it holds none.)
+/// How far across what node `i` holds draws (from, to: the words, pictures, icons and grounds in it, as laid out),
+/// where it is narrower than the node (a row as wide as its list, its words at one end): what goes over that part of it
+/// is over what it shows, the rest of it over nothing of it. (i's own x and width where it holds none.)
 pub fn Ctx::node_drawn_across(self : Ctx, i : Int) -> (Double, Double) {
   let n0 = self.nodes[i]
   let mut x0 = 1.0e9
@@ -1484,9 +1484,21 @@ pub fn Ctx::node_drawn_across(self : Ctx, i : Int) -> (Double, Double) {
       break
     }
     let n = self.nodes[j]
-    if n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor || n.kind == kind_image || n.bg != 0L {
-      x0 = dmin(x0, n.x)
-      x1 = dmax(x1, n.x + n.fw)
+    match self.editor_drawn_across(n) {
+      Some((e0, e1)) => {
+        x0 = dmin(x0, e0)
+        x1 = dmax(x1, e1)
+      }
+      None =>
+        if n.kind == kind_text ||
+          n.kind == kind_rich ||
+          n.kind == kind_image ||
+          n.bg != 0L ||
+          n.shapes.length() > 0 ||
+          n.lines.length() > 0 {
+          x0 = dmin(x0, n.x)
+          x1 = dmax(x1, n.x + n.fw)
+        }
     }
     j = j + 1
   }
@@ -1494,6 +1506,32 @@ pub fn Ctx::node_drawn_across(self : Ctx, i : Int) -> (Double, Double) {
     (n0.x, n0.x + n0.fw)
   } else {
     (x0, x1)
+  }
+}
+
+///|
+/// How far across field `n` draws (from, to): its words as they are laid out, its placeholder where it shows one, its
+/// caret; not the room it is given beyond them (a composer's field the box's width, a line in it). None for what is no
+/// field, or one with its own ground (all of it shows).
+fn Ctx::editor_drawn_across(self : Ctx, n : Node) -> (Double, Double)? {
+  if n.kind != kind_editor || n.bg != 0L {
+    return None
+  }
+  match self.editors.get(n.id) {
+    Some(st) =>
+      match st.tl {
+        Some(tl) => {
+          let w = if st.text.length() == 0 && (st.ph_color & 0xFFL) != 0L && n.text.length() > 0 {
+            n.hint_shown(st.line).w
+          } else {
+            tl.w
+          }
+          // (the caret, 2 across, where there are no words)
+          Some((st.ox, st.ox + dmax(w, 2.0)))
+        }
+        None => Some((n.x, n.x + n.fw))
+      }
+    None => Some((n.x, n.x + n.fw))
   }
 }
 

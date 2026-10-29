@@ -1335,7 +1335,10 @@ fn makes_room(c : @ui.Ctx) -> Unit {
     // (read for what draws it: the moves it is cut by, as they go)
     c.reads_for(e.node, fn() {
       let (_, ny, _, nh) = c.node_rect(e.node)
-      let dy = c.look_of(e.node).dy
+      let look = c.look_of(e.node)
+      let dy = look.dy
+      // (across, where it draws: rows side by side, a composer's ＋ and send beside its words, are in no one place)
+      let (ex0, ex1) = c.node_drawn_across(e.node)
       let mut top = 0.0
       let mut bottom = nh
       for m in moving {
@@ -1346,7 +1349,12 @@ fn makes_room(c : @ui.Ctx) -> Unit {
         ignore(mr.oy.get())
         ignore(mr.hp.get())
         let (_, my, _, mh) = c.node_rect(me.node)
-        let mdy = c.look_of(me.node).dy
+        let mlook = c.look_of(me.node)
+        let mdy = mlook.dy
+        let (mx0, mx1) = c.node_drawn_across(me.node)
+        if mx1 + mlook.dx <= ex0 + look.dx || mx0 + mlook.dx >= ex1 + look.dx {
+          continue
+        }
         if my >= ny + nh - 0.5 {
           // laid under it, drawn up over it: its words from that one's top on not drawn
           bottom = dmin(bottom, my + mdy - (ny + dy))

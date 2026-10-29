@@ -74,6 +74,8 @@ priv struct Composing {
   mut taking : Bool
   /// its 抄送 menu open (cc_chooser)
   mut cc_open : Bool
+  /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
+  mut hint_shape : String
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
   mut wanted : Bool
   /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
@@ -116,6 +118,7 @@ let composing : Composing = {
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: false,
   cc_open: false,
+  hint_shape: "",
   wanted: false,
   grounds: {},
   pictures: {},
@@ -146,6 +149,7 @@ fn composing_reset() -> Unit {
   composing.outside = false
   composing.menu_up = false
   composing.cc_open = false
+  composing.hint_shape = ""
   composing.wanted = false
   composing.hint_shown.set("")
   composing.taking = false
@@ -275,6 +279,22 @@ pub fn composer(
     Some(was) => was != spec.roomy
     None => false
   }
+  // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
+  // them, not a page's quick start that leaves them behind and goes far in its first frame)
+  let shape = if moved && flight_carried(spec.draft) {
+    @motion.tween(flight_desk_ms, ease=Flight)
+  } else {
+    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Move)
+  }
+  let hint = composer_hint(
+    c,
+    spec,
+    w,
+    focused || held,
+    moved,
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}",
+    shape,
+  )
   // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
   // leave as the new chat's other parts by the composer do (madeChat.ts: fading where they are, @sfbase.new_fade),
   // carried with the row as it goes, drawn only; till the end that fade declared
@@ -306,7 +326,7 @@ pub fn composer(
     fn() {
       if multiline {
         composer_extras(c, src, spec, w)
-        words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
           match (spec.toolbar, composing.toolbar_leaving) {
@@ -331,7 +351,7 @@ pub fn composer(
         |> ignore
       } else {
         plus = attach(c, src, spec, w, no_files)
-        words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
           said = composer_note(c, spec.note)
           send_i = send_button(c, ready, w.starting, submit)
@@ -356,13 +376,6 @@ pub fn composer(
   } else {
     "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
     w.field.text()
-  }
-  // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
-  // them, not a page's quick start that leaves them behind and goes far in its first frame)
-  let shape = if moved && flight_carried(spec.draft) {
-    @motion.tween(flight_desk_ms, ease=Flight)
-  } else {
-    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Move)
   }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
   composing.shaped = Some((c.build_number(), holds, shape))
@@ -576,20 +589,13 @@ fn composer_text(
   w : Writing,
   cap : Int,
   multiline : Bool,
+  hint_in : @motion.Anim,
   submit : () -> Unit,
 ) -> Int {
   let p = @sf.theme().p
   let prefs = (src.topic)("prefs", {}).value
   let hint = space_hint(c, prefs, spec.locked)
-  // words sent leave the field emptied: its hint and its caret (at its start already) gone while they are still over
-  // it, back once they are out of it (madeChat.ts data-made-hint, flight.mbt)
-  let hint_in = @motion.anim(c, "composer/hint", 1.0)
   let away = @sfbase.flight_hint_away(c, w.key)
-  if away {
-    hint_in.snap(0.0)
-  } else {
-    hint_in.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
-  }
   let no_files = spec.locked || spec.offline
   // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
   @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
@@ -673,6 +679,38 @@ fn composer_text(
   })
   |> ignore
   words
+}
+
+///|
+/// How far its field's hint (its placeholder) shows: only on a composer at rest without the cursor, so it never moves
+/// with the composer's shape. Gone at once as the field takes the cursor (`hidden`: or keeps the box a moment after),
+/// and while words sent leave the emptied field, still over it (madeChat.ts data-made-hint, flight.mbt); back over 200 ms
+/// once they are out of it, or, the composer changing `shape` (its box let go to a capsule, a file put in it, `moved`
+/// to another page), once it is there (by `going`, the shape's motion).
+fn composer_hint(
+  c : @ui.Ctx,
+  spec : ComposerSpec,
+  w : Writing,
+  hidden : Bool,
+  moved : Bool,
+  shape : String,
+  going : @motion.Spec,
+) -> @motion.Anim {
+  let hint = @motion.anim(c, "composer/hint", 1.0)
+  // (another chat's draft swapped in is no change of shape: it is where it is laid out at once)
+  let reshaped = shape != composing.hint_shape &&
+    composing.hint_shape != "" &&
+    ("\u{1}" + spec.session == composing.draft_before || moved)
+  composing.hint_shape = shape
+  if hidden || @sfbase.flight_hint_away(c, w.key) {
+    hint.snap(0.0)
+  } else if reshaped {
+    hint.snap(0.0)
+    hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=going.duration(0.0, 1.0, 0.0)))
+  } else {
+    hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
+  }
+  hint
 }
 
 ///|

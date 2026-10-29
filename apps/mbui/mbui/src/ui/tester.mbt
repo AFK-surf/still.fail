@@ -1723,6 +1723,21 @@ pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double,
 }
 
 ///|
+/// Every instance drawn in the last frame in the order drawn, with what cuts it: its kind, x, y, w, h, and the rect it
+/// is cut to (x0, y0, x1, y1: scene.mbt 16-19); what of it lies outside that is not seen.
+pub fn Tester::drawn_cut(self : Tester) -> Array[(Int, Double, Double, Double, Double, (Double, Double, Double, Double))] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let a = c.inst
+    out.push((a[b + 5].to_int(), a[b], a[b + 1], a[b + 2], a[b + 3], (a[b + 16], a[b + 17], a[b + 18], a[b + 19])))
+  }
+  out
+}
+
+///|
 /// How each instance drawn in the last frame fades out towards a cut (scene.mbt 52-55), in drawing order: its kind, its
 /// rect's top and height, then from its top where it is 0 and how far below that it is whole, from its foot where it is
 /// 0 and how far above that it is whole (a soft of 0: none that way).
