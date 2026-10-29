@@ -367,6 +367,7 @@ pub fn emit_clock(@ui.Ctx, Turn) -> Double
 
 pub let emit_drop_ms : Double
 
+pub fn emit_awaited(Emits, Double) -> Bool
 pub fn emit_emitting(Emits, Double) -> Bool
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?
@@ -2712,6 +2713,8 @@ pub(all) struct Reading {
   came : Map[String, (Int32, String)]
   mut came_n : Int32
   makes_way : Map[String, String]
+  mut over : String
+  mut over_frame : Int32
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
   mut list_read : @ui.ListReader?

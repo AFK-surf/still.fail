@@ -262,7 +262,7 @@ pub fn others_message(
       match emits {
         Some((em, rk, seq)) => {
           @motion.measure(c, av, "emit-landing/" + rk + "/" + seq_s(seq))
-          if emit_emitting(em, seq) {
+          if emit_emitting(em, seq) || emit_awaited(em, seq) {
             c.look(av, @ui.look(alpha=0.0))
           }
         }

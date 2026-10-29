@@ -51,6 +51,7 @@ using @sfbase {
   asks_in_view,
   close_turn_ms,
   emit_emitting,
+  emit_awaited,
   emit_flight,
   emit_folded,
   emit_goes,

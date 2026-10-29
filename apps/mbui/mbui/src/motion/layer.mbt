@@ -1287,7 +1287,9 @@ let room_soft : Double = 24.0
 /// list on its way to its place still is, as that one goes there (an agent's line gliding down from where a message
 /// came in, the rows closing up over one gone). The row on its way is drawn whole, over its old place; the one in its
 /// place is cut back to the room left it, shown more as that one goes, never two rows' words in one place (the user,
-/// 2026-10-29: 「会闪」: not out, then in).
+/// 2026-10-29: 「会闪」: not out, then in). What the two move by together (words sent flying, the rows over them going
+/// up with them) changes nothing of that: of two rows that meet, the one further from its place is drawn whole, the
+/// other cut, as when that one stood still.
 fn makes_room(c : @ui.Ctx) -> Unit {
   let moving : Array[(Moving, Rec)] = []
   for e in mo.entries {
@@ -1306,7 +1308,7 @@ fn makes_room(c : @ui.Ctx) -> Unit {
     if e.key == 0 || e.reshape {
       continue
     }
-    guard mo.recs.get(e.key) is Some(r) && r.list != 0 && r.moving_dy.abs() <= 0.5 else { continue }
+    guard mo.recs.get(e.key) is Some(r) && r.list != 0 else { continue }
     // (read for what draws it: the moves it is cut by, as they go)
     c.reads_for(e.node, fn() {
       let (_, ny, _, nh) = c.node_rect(e.node)
@@ -1315,7 +1317,7 @@ fn makes_room(c : @ui.Ctx) -> Unit {
       let mut bottom = nh
       for m in moving {
         let (me, mr) = m
-        if mr.list != r.list || me.node == e.node {
+        if mr.list != r.list || me.node == e.node || mr.moving_dy.abs() <= r.moving_dy.abs() + 0.5 {
           continue
         }
         ignore(mr.oy.get())

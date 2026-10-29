@@ -270,6 +270,7 @@ pub fn elsewhere_of(Json) -> @sfbase.Elsewhere
 
 pub fn emit_clock(@ui.Ctx, @sfbase.Turn) -> Double
 
+pub fn emit_awaited(@sfbase.Emits, Double) -> Bool
 pub fn emit_emitting(@sfbase.Emits, Double) -> Bool
 
 pub fn emit_flight(@ui.Ctx, String, @sfbase.Emits, Array[String]) -> (Double, Double, Double, Double)?

@@ -118,10 +118,11 @@ pub fn chat_list(
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
               let way = makes_way(lf, keys[i])
               @motion.keyed(c, ri, mk, exit=@sf.leave, by=way)
-              // pushed down by a row that came in over it (its cause: the newest that came over it), it glides there;
-              // what else moves it (the page before come in above, words sent flying in, its own message out of its
-              // avatar, which comes back to where it now is) puts it there at once
-              @motion.layout(c, ri, mk, spec=@sf.move_spring, by=way)
+              // moved where it shows by a row that came in over it (its cause: the newest that came over it), it
+              // glides there (followed at its end, it stays where it shows: the rows over it go up instead); what else
+              // moves it (the page before come in above, words sent flying in, its own message out of its avatar,
+              // which comes back to where it now is) puts it there at once
+              @motion.layout(c, ri, mk, spec=@sf.move_spring, by=way, screen=true)
               // (growing from its picture's middle: where the messages' pictures are, at the row's start narrow, out
               // in the margin before the words wider)
               let face = side + (if narrow { 0.0 } else { -@sf.columns.avatar }) + avatar_side / 2.0
@@ -136,6 +137,12 @@ pub fn chat_list(
               _ => ()
             }
             let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow, gutter~)
+            // what it moves for where it shows: what was sent from here not in the chat yet, the newest that came in
+            // over it; any other row, the newest that came in over the rows at the end as the list followed it
+            let cause = match e {
+              Out(_) => makes_way(lf, keys[i])
+              _ => came_over(lf)
+            }
             let ri = row_box(c, side, top, fn() {
               // (where a message out of a picture comes in over it: emit.mbt; read as it changes, Emits::read)
               em.read()
@@ -160,26 +167,18 @@ pub fn chat_list(
               // the rows above go up with the words
               Some(f) if f.placed =>
                 @motion.layout(c, ri, mk, screen=true, drive=flight_up(flight_p(c, f), f.desk))
-              // what was sent from here not in the chat yet, pushed down by a row that came in over it (out of a picture,
-              // or simply: its cause, the newest that came over it): it glides there, as an agent's activity does
-              None if e is Out(_) =>
-                @motion.layout(c, ri, mk, spec=@sf.move_spring, by=makes_way(lf, keys[i]))
-              _ => ()
+              // moved where it shows by a row that came in (what was sent from here not in the chat yet, pushed down by
+              // one over it; followed at its end, the rows over one that came in over the end going up for it): it
+              // glides there, as an agent's activity does
+              _ => @motion.layout(c, ri, mk, spec=@sf.move_spring, by=cause, screen=true)
             }
             // what leaves the chat from the outbox goes as what leaves a list does, not what was sent from here and is
             // now the core's; so does where it stands (gone as an agent takes it up) and the line over what was new
             // (gone once it is read), each a row of the list, not its words going at once
             match e {
-              State(_, _, _) | Line => @motion.keyed(c, ri, mk, exit=@sf.leave, by=makes_way(lf, keys[i]))
-              Out(o) if !local_sent(o) =>
-                @motion.keyed(
-                  c,
-                  ri,
-                  mk,
-                  exit=@sf.leave,
-                  by=makes_way(lf, keys[i]),
-                )
-              _ => @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
+              State(_, _, _) | Line => @motion.keyed(c, ri, mk, exit=@sf.leave, by=cause)
+              Out(o) if !local_sent(o) => @motion.keyed(c, ri, mk, exit=@sf.leave, by=cause)
+              _ => @motion.keyed(c, ri, mk, by=cause)
             }
             // what is new to the list while it is followed eases in ([data-enter]: 220 ms from 6 under), not one out of
             // a picture
@@ -217,7 +216,8 @@ pub fn chat_list(
       },
       stick_end=true,
       // what comes at the end while it follows is glided after, half a second after it was put in place, not while
-      // words sent fly (they put the list in place)
+      // words sent fly (they put the list in place), nor what came in over the rows at its end (at its end at once,
+      // what is at the end staying where it shows: row_keys's `over`)
       glide_on_growth=lf.glides && flight is None,
     )
     |> ignore
@@ -768,4 +768,12 @@ pub fn composer_side() -> Double {
 /// above it, words sent flying in, a row over it grown or gone, a keyboard: none of them, it is put there at once.
 fn makes_way(lf : @sfbase.ListFrame, k : String) -> String {
   "came " + lf.rd.makes_way.get(k).unwrap_or("")
+}
+
+///|
+/// What a row moves for where it shows when the list is followed at its end and a row comes in over the rows at that
+/// end: the newest that did (row_keys's `over`). The list stays at its end at once, so what is at the end stays where
+/// it shows and the rows over the one that came go up for it, from where they showed.
+fn came_over(lf : @sfbase.ListFrame) -> String {
+  "over " + lf.rd.over
 }
