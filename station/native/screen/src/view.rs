@@ -181,6 +181,8 @@ struct View {
     no_still: bool,
     /// The encoder made a picture asked to be a key frame without one: made anew for the next ask instead.
     force_unheeded: bool,
+    /// When (ms since `opened`) the encoder's rate control last started (made, or `restart`ed at the rate asked).
+    rated: f64,
     config: Vec<u8>,
     /// Whether the view's encoder makes H.265, once one was made.
     encoder_hevc: Option<bool>,
@@ -241,6 +243,7 @@ impl View {
             sharp: None,
             no_still: false,
             force_unheeded: false,
+            rated: 0.0,
             config: Vec::new(),
             encoder_hevc: None,
             vps: Vec::new(),
@@ -298,6 +301,7 @@ impl View {
         }
         self.encoder = Some(encoder);
         self.force_key = true;
+        self.rated = self.ms();
         Ok(name)
     }
 
@@ -473,9 +477,23 @@ impl View {
             self.make_encoder(size.0, size.1)?;
         }
         // Another part of the display: from a key frame (the client's config says the part); one 10 s after the last.
-        let key = self.force_key || part != self.pushed_region || self.keys.due(self.ms());
+        let mut key = self.force_key || part != self.pushed_region || self.keys.due(self.ms());
         // The same picture again as a key frame (the screen at rest): encoded finer, by an encoder made for it.
         let still = key && self.still && !self.no_still && self.encoder.as_ref().unwrap().sharpens();
+        // An encoder that keeps the bit rate it started at: started anew at the one asked, now and then (its next
+        // picture a key frame); made anew where it cannot be.
+        let now = self.ms();
+        let encoder = self.encoder.as_mut().unwrap();
+        let (at, asked) = encoder.rates();
+        if !still && encoder.keeps_rate() && pace::restarts(at, asked, now - self.rated, key) {
+            if let Err(e) = encoder.restart() {
+                out.json(4, json!({ "encoder": format!("not started anew at {asked} bps ({}): made anew", e.message()) }));
+                self.make_encoder(size.0, size.1)?;
+            }
+            self.rated = now;
+            self.force_key = true;
+            key = true;
+        }
         if still && self.sharp.is_none() {
             match self.encoder.as_ref().unwrap().still(&self.gpu) {
                 Ok(sharp) => self.sharp = Some(sharp),
