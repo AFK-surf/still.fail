@@ -20,7 +20,8 @@ export type Doc = {
 /// Whom a search is for: their workspace, whether it is the station's home one, and the scopes they have.
 /// `typist`: the device of a person typing the search (a search of theirs typed on takes the place of the one before:
 /// files.ts); none for an agent's or another station's.
-export type Asker = { workspace: string; home: boolean; scopes: string[]; typist?: string };
+/// `again`: a search a client shows asked again as the station's chats changed (`again=1`), not words typed.
+export type Asker = { workspace: string; home: boolean; scopes: string[]; typist?: string; again?: boolean };
 
 export type Hit = { kind: string; key: string; title: string; text: string; at: number | null } & Record<string, unknown>;
 /// `left`: the sessions whose execution history was not looked through, the time being up.

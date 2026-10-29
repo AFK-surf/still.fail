@@ -38,10 +38,10 @@ Later: the cloud's own (feedback), Slack channels' history.
   the station's chats, `mdfind` started more than once a second, Spotlight's `mds_stores` at 790% CPU and 73 hours of
   CPU in 5 days; on a Mac's home a word that common files say, `check`, is in 104k of them, and `*u*` in 198k names,
   17 s): the same words, as the same members may see them, are answered as found for 5 s (`KEPT_MS`: several devices
-  asking the same at once, as they connect again, are one search), and the same words a device asks again within 60 s
-  of its last asking (what it shows, asked again as the chats change; an app from before it let go of each words typed
-  asked them all, for its run: 94 asks in 56 s on 2026-10-29, `mds_stores` at 520%) for 60 s (`ASKED_AGAIN_MS`),
-  taking no one's place; the machine is searched two searches at a time
+  asking the same at once, as they connect again, are one search), a search a client asks again as the station's chats change (the core says so:
+  `again=1`) for 60 s (`ASKED_AGAIN_MS`), and the same words a device asks again with nothing said, once something was
+  found for them (an app from before `again` that let go of no words typed asked them all again: 94 asks in 56 s on
+  2026-10-29, `mds_stores` at 520%), for 20 s (`ASKED_AGAIN_GUESS_MS`); either takes no one's place; the machine is searched two searches at a time
   (`AT_ONCE`), the others waiting, and one that waited 2 s (`TURN_MS`) finds no files (the rest of what the search
   finds is not held up for them); a person's search typed on (from the same device, its words grown or shortened)
   takes the place of the one before, which stops (its `mdfind` killed, its walk left, still.fail Helper's not waited
@@ -68,7 +68,7 @@ Later: the cloud's own (feedback), Slack channels' history.
   looked through). On ccvm a word found in the latest sessions takes 0.1 s; one found nowhere, every file (2.4 GB, and
   400 MB put away), about 4.5 s.
 - The station before kept an index (`search.db`): removed as the station starts.
-- `GET /search?q=&kinds=&limit=&offset=` → `{groups: [{kind, hits, more}], building}` (people's: chat, message, job,
+- `GET /search?q=&kinds=&limit=&offset=&again=` (`again=1`: asked again as the chats changed) → `{groups: [{kind, hits, more}], building}` (people's: chat, message, job,
   file only; `building` always false), as the asker may see: their
   workspace's documents (`ws`; null the home workspace's, `*` every member's), and what only a member who may write
   reaches (`scope: write`) only for them. Those whose title has the first word come first, then the newest.

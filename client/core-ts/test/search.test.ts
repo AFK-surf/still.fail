@@ -121,8 +121,8 @@ test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async
   await host.settle();
   await host.time.pass(SEARCH_SETTLE_MS + 10);
   await host.settle();
-  // Archived on the station: it says so, and finds it so.
-  replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
+  // Archived on the station: it says so, and finds it so (asked again: `again=1`).
+  replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6&again=1"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
   push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
   // Told again and again meanwhile (a busy station): asked again once.
   push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
@@ -165,7 +165,7 @@ test("what_a_search_finds_says_where_it_opens_as_every_client_has_a_page_for_it"
 
 test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_only_for_them", async () => {
   const replies: Record<string, unknown> = { ...base(), "GET /chats": [row("a", 7, "部署页")], "GET /threads": [threadView(7, 0, 0, 0)] };
-  for (const q of ["u", "up", "upd"]) replies[`GET /search?q=${q}&limit=6`] = { building: false, groups: [] };
+  for (const q of ["u", "up", "upd"]) for (const tail of ["", "&again=1"]) replies[`GET /search?q=${q}&limit=6${tail}`] = { building: false, groups: [] };
   const { host, core, push } = await started(replies);
   const ui = core.connect();
   // Typed: each words shown in place of the last (the ones let go are kept a while, not shown).
@@ -185,6 +185,6 @@ test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_onl
   await host.settle();
   await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();
-  assert.deepEqual(asked(before), ["upd&limit=6"]);
+  assert.deepEqual(asked(before), ["upd&limit=6&again=1"]);
   core.close();
 });

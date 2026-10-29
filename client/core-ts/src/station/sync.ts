@@ -481,7 +481,8 @@ export class StationsSync {
   /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
   /// (one shown that long), at the urgency of what is shown, and again as it is shown again; held in memory while
   /// shown, the station's answer as it came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
-  searchShown(topic: Topic): void {
+  /// `again`: asked again as the station's chats changed (said to it: `again=1`, answered as found lately).
+  searchShown(topic: Topic, again = false): void {
     const address = topic.station as string;
     const key = topicKey(topic);
     const link = this.#links.get(address);
@@ -492,14 +493,14 @@ export class StationsSync {
       Effect.sleep(SEARCH_SETTLE_MS).pipe(
         Effect.andThen(
           Effect.sync(() => {
-            if (this.#core.views.searchShownNow(topic)) this.#enqueue(address, `search/${key}`, Priority.shown, this.#search(topic));
+            if (this.#core.views.searchShownNow(topic)) this.#enqueue(address, `search/${key}`, Priority.shown, this.#search(topic, again));
           }),
         ),
       ),
     );
   }
 
-  #search(topic: Topic): Effect.Effect<void, CoreError> {
+  #search(topic: Topic, again: boolean): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const address = topic.station as string;
       const key = topicKey(topic);
@@ -508,6 +509,7 @@ export class StationsSync {
       const params = [`q=${encode(topic.q as string)}`];
       if (typeof topic.kind === "string") params.push(`kinds=${encode(topic.kind)}`);
       if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
+      if (again) params.push("again=1");
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/search?${params.join("&")}`, null, { quiet: true }));
       if (answer._tag === "Success") {
         // (what a search found: asked again each time it is shown, not kept)
@@ -545,7 +547,7 @@ export class StationsSync {
       if (!key.includes('"stationSearch"')) continue;
       const topic = JSON.parse(key) as Topic;
       if (topic.topic !== "stationSearch") continue;
-      if (this.#core.views.searchShownNow(topic)) this.searchShown(topic);
+      if (this.#core.views.searchShownNow(topic)) this.searchShown(topic, true);
       else if (!this.#core.store.inUse(topic)) link.memory.delete(key);
     }
   }

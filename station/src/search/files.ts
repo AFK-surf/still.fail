@@ -29,10 +29,12 @@ export const SHORT = 3;
 /// devices (as they connect again), or again and again by a client from before it let go of what it no longer shows,
 /// are one search of the machine; a file made since is found a few seconds later.
 export const KEPT_MS = 5_000;
-/// The same words asked again by the same device within this long (a client asking what it shows again as the
-/// station's chats change; an app from before it let go of each words typed asks them all, for its run) are answered
-/// as found for this long: words typed anew are searched as they come.
+/// A search a client asks again as the station's chats change (`again=1`) is answered as found for this long: files do
+/// not change with chats. One a device asks again within this long with nothing said (an app from before `again`
+/// asks every words typed again, for its run, having let go of none) is answered as found for ASKED_AGAIN_GUESS_MS,
+/// once something was found for it: words typed anew, or typed again, are searched as they come.
 export const ASKED_AGAIN_MS = 60_000;
+export const ASKED_AGAIN_GUESS_MS = 20_000;
 /// At most this many searches of the machine at once; one that waited this long for its turn finds no files (the
 /// rest of what the search finds is not held up for them).
 export const AT_ONCE = 2;
@@ -196,8 +198,8 @@ export class FileSearch {
   }
 
   /// The files the words find for `asker`: those whose name has the first word first, then the most recently changed.
-  /// The same search within KEPT_MS is answered as it was, and one a device asks again within ASKED_AGAIN_MS of its
-  /// last asking for ASKED_AGAIN_MS; the machine is searched AT_ONCE searches at a time (one that
+  /// The same search within KEPT_MS is answered as it was, one asked again as the chats changed within ASKED_AGAIN_MS
+  /// (one a device seems to ask again, within ASKED_AGAIN_GUESS_MS); the machine is searched AT_ONCE searches at a time (one that
   /// waited TURN_MS finds none), a person's search typed on in place of the one before it.
   async query(words: string[], asker: Asker, limit: number): Promise<Group | null> {
     if (words.length === 0) return null;
@@ -207,12 +209,13 @@ export class FileSearch {
     for (const [k, f] of this.#found) if (now() - f.at > ASKED_AGAIN_MS) this.#found.delete(k);
     for (const [k, at] of this.#asked) if (now() - at > ASKED_AGAIN_MS) this.#asked.delete(k);
     const mine = asker.typist !== undefined ? JSON.stringify([asker.typist, key]) : null;
-    const again = mine !== null && this.#asked.has(mine);
-    if (mine !== null) this.#asked.set(mine, now());
     const kept = this.#found.get(key);
-    if (kept && (now() - kept.at <= KEPT_MS || again)) return kept.files;
+    const age = kept ? now() - kept.at : Infinity;
+    const guessed = mine !== null && this.#asked.has(mine) && kept !== undefined;
+    if (mine !== null) this.#asked.set(mine, now());
+    if (kept && (age <= KEPT_MS || (asker.again === true && age <= ASKED_AGAIN_MS) || (guessed && age <= ASKED_AGAIN_GUESS_MS))) return kept.files;
     // (asked again, nothing is being typed: it takes no one's place, and no one's takes its)
-    const files = this.#turn(again ? undefined : asker.typist, words.join(" "))
+    const files = this.#turn(asker.again === true || guessed ? undefined : asker.typist, words.join(" "))
       .then((stop) =>
         stop === null ? null : this.#search(words, asker, limit, stop.signal).then((found) => (stop.signal.aborted ? null : found)).finally(() => this.#next(stop)),
       )
