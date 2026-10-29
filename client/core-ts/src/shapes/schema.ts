@@ -1232,6 +1232,7 @@ export const SHAPES: Record<string, Shape> = {
     ["service", opt("String")],
     ["history", opt("String")],
     ["entry", opt("i64"), { client: opt("I54") }],
+    ["message", opt("i64"), { client: opt("I54"), doc: "The chat message to scroll to, from ?message=<seq>." }],
     ["screen", opt("String"), { doc: "For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`)." }],
     ["login", opt("String"), { doc: "For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page." }],
   ], { doc: "What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an\nitem (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution\nhistory (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a\nstation's screens (docs/remote-screens.md); `login`, a login an agent started (docs/remote-login.md). The call answers\nnull for any other link." }),

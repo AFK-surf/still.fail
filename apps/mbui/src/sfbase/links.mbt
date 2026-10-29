@@ -35,6 +35,14 @@ pub fn chat_link(station : String, session : String) -> String {
 }
 
 ///|
+/// A link to this exact message, using the same destination as a notification.
+pub fn message_link(station : String, session : String, seq : Double) -> String {
+  let link = chat_link(station, session)
+  if link == "" || seq <= 0.0 { return "" }
+  link + "?message=" + seq_s(seq)
+}
+
+///|
 /// Copies a chat's link as a reference is sent (ChatLink.kt copyChatLink, chatLinkText): `[title](link)`.
 pub fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
   let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()

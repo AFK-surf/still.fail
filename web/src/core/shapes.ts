@@ -4332,6 +4332,8 @@ export interface LinkTarget {
 	service?: string;
 	history?: string;
 	entry?: number;
+	/** The chat message to scroll to, from ?message=<seq>. */
+	message?: number;
 	/** For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`). */
 	screen?: string;
 	/** For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page. */

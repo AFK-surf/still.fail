@@ -55,5 +55,9 @@ pub fn fixture_link_parse(url : String) -> Json {
     Some(e) => o["entry"] = Json::number(seq_of(e))
     None => ()
   }
+  match q.get("message") {
+    Some(m) if seq_of(m) > 0.0 => o["message"] = Json::number(seq_of(m))
+    _ => ()
+  }
   Json::object(o)
 }

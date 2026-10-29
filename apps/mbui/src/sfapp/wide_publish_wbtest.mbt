@@ -79,7 +79,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 }
 
 ///|
-test "wide: hovering a message offers 分享这一轮, which shares its turn as a picture (chat.publishPreview by its seq)" {
+test "wide: the message header offers its position link and its turn's picture separately" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat")
@@ -99,17 +99,31 @@ test "wide: hovering a message offers 分享这一轮, which shares its turn as 
   t.frame()
   t.frame()
   assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
-  let button = t.get(Button, label="分享这一轮").rect
+  t.click(Button, label="复制链接")
+  assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
+  assert_eq(named(calls, "chat.publishPreview").length(), 0)
+  let button = t.get(Button, label="分享图片").rect
   // Beside the author's name and time, above the words, rather than at their far end.
   assert_true(button.1 + button.3 <= before.1)
   assert_true(button.0 < before.0 + 200.0)
   t.move(button.0 + button.2 / 2.0, button.1 + button.3 / 2.0)
   t.frame()
-  assert_true(t.query(Button, label="分享这一轮") is Some(_))
-  t.click(Button, label="分享这一轮")
+  assert_true(t.query(Button, label="分享图片") is Some(_))
+  t.click(Button, label="分享图片")
   t.frame()
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
   assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+}
+
+///|
+test "touch: both message sharing entries are visible without hovering" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  let link = t.all(Button, label="复制链接").last().unwrap().rect
+  assert_true(t.all(Button, label="分享图片").length() > 0)
+  t.tap(link.0 + link.2 / 2.0, link.1 + link.3 / 2.0)
+  assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
+  assert_eq(named(calls, "chat.publishPreview").length(), 0)
 }

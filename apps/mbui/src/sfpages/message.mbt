@@ -119,6 +119,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     "m:" + m.ts,
     m.time,
     emits=emits.map(fn(l) { (l.emits, l.rk, m.seq) }),
+    share_link=@sfbase.message_link(here.station, here.session, m.seq),
     share=if here.list is Some(_) {
       here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(m.seq)) } })
     } else { None },
@@ -200,6 +201,7 @@ pub fn others_message(
   time : Stamp?,
   emits? : (Emits, String, Double)? = None,
   share? : (() -> Unit)? = None,
+  share_link? : String = "",
   avatar : () -> Unit,
   name : () -> Unit,
   route : (() -> Unit)?,
@@ -219,7 +221,7 @@ pub fn others_message(
         }
         message_time(c, key, time)
         match share {
-          Some(go) => @sfbase.share_turn_tool(c, key, row, go)
+          Some(go) => @sfbase.share_turn_tool(c, key, row, share_link, go)
           None => ()
         }
       })
@@ -384,7 +386,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
         absolute_times.val = !absolute_times.val
       }
       @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
-      c.box(id~, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
+      c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
   }
 }
@@ -1025,11 +1027,11 @@ let avatar_held_at : Double = 53.0
 ///|
 /// A name (msgHead msgName): 13 in 600, the accent's ink, 240 at most; the accent itself under the pointer.
 // kept across runs: a value (no field of it changes)
-pub let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
+pub let msg_name_room : @ui.Style = @ui.style(w=Cut, max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false)
+pub let msg_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, leading=L5, color=AccentText, wrap=false, w=Cut)
 
 
 ///|
