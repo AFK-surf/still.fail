@@ -12,9 +12,11 @@
 set -eu
 : "${RELAY_URL:?}"
 metrics=$(curl -fsS --max-time 5 http://127.0.0.1:9090/metrics)
+# When they were read: the post can take many seconds to get there, and rates are worked out between samples.
+now=$(date +%s)
 # The network card's bytes in and out (the default route's), and the load average.
 card=$(ip route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')
-machine=$(awk -v card="$card:" '$1 == card { print "node_rx " $2; print "node_tx " $10 }' /proc/net/dev; awk '{ print "node_load1 " $1 }' /proc/loadavg)
+machine=$(awk -v card="$card:" '$1 == card { print "node_rx " $2; print "node_tx " $10 }' /proc/net/dev; awk '{ print "node_load1 " $1 }' /proc/loadavg; echo "node_time $now")
 printf '%s\n%s\n' "$metrics" "$machine" | curl -4 -fsS --max-time 20 -o /dev/null \
   -H "x-stillfail-relay: $RELAY_URL" -H "content-type: text/plain" \
   --data-binary @- "${CLOUD:-https://app.still.fail}/v1/relays/load"
