@@ -2686,6 +2686,7 @@ pub(all) struct Reading {
   mut bottom_seq : Double
   mut view_frame : Int32
   mut state_seen : Bool
+  mut view_still : Bool
   mut top_off : Double
   mut at_end : Bool
   mut told_place : String
