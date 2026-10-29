@@ -445,7 +445,8 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 
 ///|
 /// What an activity says now, steadied (useSteady): another thing replaces the one shown after it has stayed 700 ms,
-/// crossfading (240 ms); the same thing's new words show at once. In the muted ink, the text's under the pointer.
+/// rolling in under it, its line going from the one's width to the other's as they roll (what is beside it, its clock,
+/// with it); the same thing's new words show at once. In the muted ink, the text's under the pointer.
 fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : Bool) -> Unit {
   let (key, words, mono) = said
   let st = match steadies.get(row) {
@@ -469,17 +470,32 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
     st.mono = mono
     st.at = c.moment()
     swap.snap(0.0)
-    swap.animate(1.0, @motion.tween(steady_cross_ms, ease=Out))
+    swap.animate(1.0, @motion.tween(@ui.move_near_ms, ease=Move))
   } else {
     c.wake_in(st.at + steady_dwell_ms - c.moment())
   }
   let k = swap.get()
+  let style = if hot { now_words_hot } else { now_words }
   c.box(style=now_room, fn() {
-    let cur = c.rich([@ui.span(st.words, mono=st.mono)], style=if hot { now_words_hot } else { now_words })
     if k < 1.0 {
-      c.look(cur, @ui.look(alpha=k))
-      let was = c.layer(fn() { c.rich([@ui.span(st.was, mono=st.was_mono)], style=if hot { now_words_hot } else { now_words }) |> ignore })
-      c.look(was, @ui.look(alpha=1.0 - k))
+      // the one before rolled up out of its line as the new one rolls in under it, the two one over the other in a
+      // window a line high: the line never empty, never two things' words in it at once (docs/motion.md rule 4; a
+      // crossfade had both there, the user 2026-10-29: 「会闪」 of the one out before the other in)
+      let line = c.text_size(Meta).1
+      let from = c.words_across(st.was, style, mono=st.was_mono)
+      let to = c.words_across(st.words, style, mono=st.mono)
+      let across = from + (to - from) * k
+      let window = c.box(style=@ui.style(w=Fixed(across), h=Fixed(line), clip=true), fn() {
+        let wide = if from > to { from } else { to }
+        let both = c.box(style=@ui.style(w=Fixed(wide)), fn() {
+          c.rich([@ui.span(st.was, mono=st.was_mono)], style~) |> ignore
+          c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
+        })
+        c.look(both, @ui.look(dy=-line * k))
+      })
+      ignore(window)
+    } else {
+      c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
     }
   })
   |> ignore
@@ -518,11 +534,8 @@ let fold_ms : Double = 200.0
 let ring_out_ms : Double = 160.0
 
 ///|
-/// Each thing an activity says stays this long at least, and crossfades this long (DWELL_MS, CROSS_MS).
+/// Each thing an activity says stays this long at least (DWELL_MS); it rolls to the next as a near move does.
 let steady_dwell_ms : Double = 700.0
-
-///|
-let steady_cross_ms : Double = 240.0
 
 ///|
 /// The ring round the picture: 24 across, its arcs 1.5 (3 round the 18).

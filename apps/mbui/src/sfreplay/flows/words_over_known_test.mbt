@@ -7,7 +7,7 @@ fn init {
   @ui.words_over_known([
     // (Android's runs played again, src/sfapp/tape.mbt)
     ("src/sfapp/tape.mbt", 3),
-    ("src/sfreplay/flows/answer_option_test.mbt", 5),
+    ("src/sfreplay/flows/answer_option_test.mbt", 3),
     ("src/sfreplay/flows/bar_going_down_test.mbt", 2),
     ("src/sfreplay/flows/card_motion_test.mbt", 6),
     ("src/sfreplay/flows/chat_audio_test.mbt", 1),
@@ -36,7 +36,7 @@ fn init {
     ("src/sfreplay/flows/settings_vault_item_test.mbt", 3),
     ("src/sfreplay/flows/settings_workspace_people_test.mbt", 12),
     ("src/sfreplay/flows/share_files_test.mbt", 5),
-    ("src/sfreplay/flows/share_new_chat_test.mbt", 3),
+    ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
     ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
     ("src/sfreplay/flows/station_file_sent_test.mbt", 4),

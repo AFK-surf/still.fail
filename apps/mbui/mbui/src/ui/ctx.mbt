@@ -1402,8 +1402,8 @@ pub fn Ctx::text(
 ///|
 /// How wide `s` is on one line in `style` in this frame, as Ctx::text lays it (the system's size of words, its weight,
 /// tracking and digits): a column of words of a length known made as wide as the widest of them (a table's labels),
-/// never cut.
-pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle) -> Double {
+/// never cut. `mono`: in the code face, as a rich span said mono is.
+pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle, mono? : Bool = false) -> Double {
   let st = self.text_patch(Some(style))
   let (s_size, _) = self.text_sizes(st)
   let size = self.sp(s_size.unwrap_or(15.0))
@@ -1413,7 +1413,8 @@ pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle) -> Double {
     None => 0.0
   }
   let tabular = st.tabular.unwrap_or(self.theme.tabular)
-  layout_text(s, size, weight, 1.0e9, false, spacing~, style=if tabular { @hostapi.style_tabular } else { 0 }).w
+  let face = (if tabular { @hostapi.style_tabular } else { 0 }) | (if mono { @hostapi.style_mono } else { 0 })
+  layout_text(s, size, weight, 1.0e9, false, spacing~, style=face).w
 }
 
 ///|
