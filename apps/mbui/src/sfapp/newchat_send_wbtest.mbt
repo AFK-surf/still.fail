@@ -184,6 +184,38 @@ test "a new chat's first words stay where typed while the chat is made and read,
 }
 
 ///|
+test "a new chat become its chat: its scene fades where it is, not moving" {
+  let held : Map[String, () -> Unit] = {}
+  let t = held_core(held, Ref(true))
+  new_chat_sent(t, "把发布说明写一下") |> ignore
+  let title = "想让 agent 做什么？"
+  let at = seen_once(t, title)
+  match held.get("newChat.create") {
+    Some(give) => give()
+    None => fail("no chat asked for")
+  }
+  t.draw()
+  match held.get("chat.send") {
+    Some(give) => give()
+    None => fail("the message not sent")
+  }
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  // halfway: where it was, half faded
+  t.run_for(new_leave_ms / 2.0)
+  match t.words().filter(fn(w) { w.0 == title }) {
+    [w] => {
+      assert_at(at, (w.1, w.2))
+      assert_true(w.5 > 0.05 && w.5 < 0.95, msg="fading: \{w.5}")
+    }
+    ws => fail("「\{title}」 seen \{ws.length()} times")
+  }
+  t.run_for(new_leave_ms / 2.0)
+  t.frame()
+  assert_true(t.words().filter(fn(w) { w.0 == title && w.5 > 0.0 }).is_empty())
+}
+
+///|
 test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's too, till they set out" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)

@@ -43,14 +43,14 @@ pub fn fresh_reset() -> Unit {
 }
 
 ///|
-/// A new chat's scene leaving as it becomes the chat: up out of view as it fades; its choices fading where they are.
+/// A new chat's scene leaving as it becomes the chat, fading where it is; its choices fading where they are, sooner.
 pub let new_leave_ms : Double = 140.0
 
 ///|
 pub let new_fade_ms : Double = 80.0
 
 ///|
-/// The new chat's scene leaving (0 … 1: up out of view, Arrive), its choices fading (0 … 1).
+/// The new chat's scene fading (0 … 1), its choices fading (0 … 1).
 pub fn new_leave(c : @ui.Ctx) -> @motion.Anim {
   @motion.anim(c, "new/leave", 1.0, global=true)
 }
