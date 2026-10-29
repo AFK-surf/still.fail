@@ -231,7 +231,11 @@ test("the machine's files are found as the drive lends them: not the station's o
   // Another workspace that pinned nothing: nothing for its readers.
   assert.equal(await files.query(["plan"], { workspace: "W2", home: false, scopes: [] }, 10), null);
   assert.equal(spotlightQuery(['a"b']), '(kMDItemFSName == "*a\\"b*"cd || kMDItemTextContent == "a\\"b*"cdw)');
-  assert.equal(spotlightQuery(["a"], false), 'kMDItemFSName == "*a*"cd');
+  assert.equal(spotlightQuery(["abc"], false), 'kMDItemFSName == "*abc*"cd');
+  // A short word: at the start of a name alone, never what files say.
+  assert.equal(spotlightQuery(["ab"], false), 'kMDItemFSName == "ab*"cd');
+  assert.equal(spotlightQuery(["ab"]), null);
+  assert.equal(spotlightQuery(["ab", "plan"]), 'kMDItemFSName == "ab*"cd && (kMDItemFSName == "*plan*"cd || kMDItemTextContent == "plan*"cdw)');
 });
 
 test("where there is no Spotlight, the home is walked as a search comes: names and the words of small texts, not the station's own nor what tools keep", async () => {
@@ -286,4 +290,56 @@ test("Documents, Desktop and Downloads are searched through still.fail Helper, o
   // A read-only member whose workspace pinned Documents: through the helper too, under that folder.
   const reader = (await files.query(["plan"], { ...writer, scopes: [] }, 10))!;
   assert.deepEqual(reader.hits.map((h) => [h.path, h.rel]), [[doc, "plan.pages"]]);
+});
+
+test("the machine is searched once for the same words a while, one search at a time, a search typed on stopping the one before", async () => {
+  const { FileSearch, KEPT_MS } = await import("../src/search/files.ts");
+  const home = mkdtempSync(join(tmpdir(), "search-queue-"));
+  dirs.push(home);
+  const plan = join(home, "plan.md");
+  writeFileSync(plan, "x");
+  let now = 0;
+  const asked: string[] = [];
+  const stopped: string[] = [];
+  // Spotlight that answers once let (`go`), or once stopped.
+  const waits: (() => void)[] = [];
+  const files = new FileSearch({
+    home, protect: () => [], roots: () => [], personal: () => false, now: () => now,
+    spotlight: (query, _within, _most, signal) => {
+      asked.push(query);
+      return new Promise((resolve) => {
+        waits.push(() => resolve([plan]));
+        signal?.addEventListener("abort", () => {
+          stopped.push(query);
+          resolve([]);
+        });
+      });
+    },
+  });
+  const writer = { workspace: "W1", home: true, scopes: ["write"] };
+  const go = async () => {
+    await new Promise((r) => setImmediate(r));
+    for (const w of waits.splice(0)) w();
+  };
+  // Typed on: the one before stops, and finds nothing; the latest finds the file.
+  const first = files.query(["pla"], writer, 10);
+  await new Promise((r) => setImmediate(r));
+  const second = files.query(["plan"], writer, 10);
+  assert.equal(await first, null);
+  assert.ok(stopped.length > 0 && stopped.every((q) => q.includes("pla")));
+  await go();
+  assert.deepEqual((await second)!.hits.map((h) => h.path), [plan]);
+  // Asked again (a client's chats changed): what was found, the machine not searched again.
+  const before = asked.length;
+  assert.deepEqual((await files.query(["plan"], writer, 10))!.hits.map((h) => h.path), [plan]);
+  assert.equal(asked.length, before);
+  // Another search of other words waits for the one going, and is not stopped by it.
+  const other = files.query(["notes"], writer, 10);
+  now += KEPT_MS + 1;
+  const again = files.query(["plan"], writer, 10);
+  await go();
+  await go();
+  assert.ok((await other) !== null);
+  assert.deepEqual((await again)!.hits.map((h) => h.path), [plan]);
+  assert.ok(asked.length > before);
 });

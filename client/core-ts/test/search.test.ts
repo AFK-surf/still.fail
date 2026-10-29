@@ -1,7 +1,7 @@
 // The search (docs/search.md, views/search.ts): what the device holds and what each station finds, one list.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SEARCH_SETTLE_MS } from "../src/station/sync.ts";
+import { SEARCH_SETTLE_MS, SEARCH_STALE_MS } from "../src/station/sync.ts";
 import { openOf } from "../src/views/search.ts";
 import { apply, subscribe, v } from "./helpers.ts";
 import { base, started, threadView } from "./station-fixture.ts";
@@ -124,8 +124,10 @@ test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async
   // Archived on the station: it says so, and finds it so.
   replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
   push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  // Told again and again meanwhile (a busy station): asked again once.
+  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
   await host.settle();
-  await host.time.pass(SEARCH_SETTLE_MS + 10);
+  await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();
   const values = new Map();
   apply(host, values);

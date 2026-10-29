@@ -34,6 +34,15 @@ Later: the cloud's own (feedback), Slack channels' history.
 - Elsewhere: the home (or the folders pinned) walked as a search comes, a folder at a time, nearest the top first, for
   at most 3 s: names of all, the words of text files up to 256 KB; the same folders passed over. What was not reached
   in time is said (`left`).
+- How much of the machine a search costs (2026-10-29: a client asked the searches it showed again with each change of
+  the station's chats, `mdfind` started more than once a second, Spotlight's `mds_stores` at 790% CPU and 73 hours of
+  CPU in 5 days; on a Mac's home a word that common files say, `check`, is in 104k of them, and `*u*` in 198k names,
+  17 s): the same words for the same asker are answered as found for 60 s (`KEPT_MS`; past 20 searches a minute,
+  what was found up to 10 min before); the machine is searched one search at a time, the others waiting, and one typed
+  on (its words grown or shortened from the last of the same asker's) takes the place of the one before, which stops
+  (its `mdfind` killed, its walk left); a word shorter than 3 is looked for at the start of names alone, never in what
+  files say; what files say is asked for 100 paths at most. A client asks the searches it shows again at most every
+  2 s as the station's chats, sessions and jobs change (core `SEARCH_STALE_MS`), not with each.
 - Never the station's own (ops/own.ts). The person's own mail, messages, calendars, contacts, notes and photos only
   where the station's owners and admins say so: `PUT /search/settings {personal}` (config.json `search.personal`,
   the overview's `search`), a switch on the station's page.
