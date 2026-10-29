@@ -315,7 +315,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         if (key !== undefined && row.isConnected) heights.push(to === undefined ? [key, box.blockSize - less] : [key, box.blockSize - less, Number(to) - less]);
       }
       // What a click in the pane just grew or shrank is the reader's doing, nothing new: their place is kept from here.
-      if (opening && heights.length) model.stay();
+      // (not what a declared motion of its rows does: an answer's card closing as the answer comes, listSizing)
+      if (opening && heights.length && !sizingNow(el)) model.stay();
       // What grows at the end as the reader watches (a reply coming, an image loading) is followed gliding; the pane
       // itself resized lays everything out anew, taken at once.
       if (!entries.some((e) => e.target === el) && performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(!sizingNow(el));
