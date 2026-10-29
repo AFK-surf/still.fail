@@ -315,7 +315,7 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
   // pointed at, a link's card over it, a pull request's as a message's link to it shows it (peeks.mbt)
   if kind != "files" {
     // (at its left: under it, it would cover the rows after it)
-    web_peek(c, src, r.station, url, name, id, side=Left, show=Some(fn() { away(seq) }))
+    web_peek(c, src, r.station, url, name, id, side=Left)
   }
   let show = c.id("things/show/" + kind + "/" + text(t, "key"))
   if c.clicked(show) {

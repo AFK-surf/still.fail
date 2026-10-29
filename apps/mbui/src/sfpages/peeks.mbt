@@ -43,7 +43,7 @@ pub fn link_peek(
 /// A web link's card over what draws it (`id`) while the pointer rests on it, as the link's station reads it (a page's
 /// tile, a pull request's or an issue's card), opened at its `side` (under it, else beside a list it would cover: a
 /// chat's things'); nothing for what is no web link. Under the card what is done with the link at once (the user,
-/// 2026-10-29: 快捷操作放 hover 的卡片上): its address copied, and with `show` 在对话中查看.
+/// 2026-10-29: 快捷操作放 hover 的卡片上, 用原来那个加个复制): its address copied, as a file's path is.
 pub fn web_peek(
   c : @ui.Ctx,
   src : Source,
@@ -52,7 +52,6 @@ pub fn web_peek(
   words : String,
   id : Int,
   side? : @ui.Side = Bottom,
-  show? : (() -> Unit)? = None,
 ) -> Unit {
   if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
@@ -63,24 +62,17 @@ pub fn web_peek(
   }
   hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() {
     link_card(c, src, station, href, words)
-    link_foot(c, href, show)
+    link_foot(c, href)
   })
   |> ignore
 }
 
 ///|
-/// A web link's card's foot, as a file's (file_foot): at its end 在对话中查看 where `show` is given, then its address to
-/// copy (已复制 a moment once copied), in the card's bottom end corner.
-fn link_foot(c : @ui.Ctx, href : String, show : (() -> Unit)?) -> Unit {
+/// A web link's card's foot, as a file's (file_foot): its address to copy (已复制 a moment once copied), in the card's
+/// bottom end corner.
+fn link_foot(c : @ui.Ctx, href : String) -> Unit {
   c.box(style=peek_file_foot, fn() {
     c.box(style=peek_ref, fn() {  }) |> ignore
-    match show {
-      Some(go) =>
-        if @sf.panel_button(c, "link-peek/show/" + href, @sf.t("web-main.things.show"), tone=Quiet) {
-          c.tell("link-peek/show", go)
-        }
-      None => ()
-    }
     let key = "link-peek/copy/" + href
     let said = copied_paths.contains(href) &&
       (if @kit.after(c, key + "/said", true, @sf.copied_ms) {

@@ -624,7 +624,7 @@ pub let video_least : Double
 
 pub let vt_actions : @ui.Style
 
-pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @ui.Side, show? : (() -> Unit)?) -> Unit
+pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @ui.Side) -> Unit
 
 pub fn workspace_mark(@ui.Ctx, @sfbase.Workspace, Double, Int64, @ui.TextStyle, still? : Bool) -> Unit
 

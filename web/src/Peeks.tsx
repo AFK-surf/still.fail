@@ -8,7 +8,7 @@ import { HoverCard } from "radix-ui";
 import { core, prime, useTopic } from "./core/react.ts";
 import type { Attachment } from "./core/shapes.ts";
 import { FilePreview, fileSize, type LocalFile } from "./FilePreview.tsx";
-import { Chat, Check, Copy, File as FileIcon, Folder, Web } from "@stillfail/ui/icons.tsx";
+import { Check, Copy, File as FileIcon, Folder, Web } from "@stillfail/ui/icons.tsx";
 import { GitHubMark } from "@stillfail/ui/brands.tsx";
 import { t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
@@ -87,18 +87,16 @@ const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[
 
 /** A web link in a message, and its card: what the core reads of it (the `linkPreview` topic, kept), asked for as the
  *  pointer comes onto the link. */
-export function LinkHover({ href, label, children, side, onShow }: { href: string; label: string; children: ReactElement;
+export function LinkHover({ href, label, children, side }: { href: string; label: string; children: ReactElement;
   /** Beside it, where under it the card would cover a list's next rows (a chat's things'). */
-  side?: "left" | undefined;
-  /** 在对话中查看 under the card, beside the link's copy: where it was said (a chat's things'). */
-  onShow?: (() => void) | undefined }) {
+  side?: "left" | undefined }) {
   const station = useStation();
-  const content = <><LinkCard href={href} label={label} /><LinkActions href={href} onShow={onShow} /></>;
+  const content = <><LinkCard href={href} label={label} /><LinkActions href={href} /></>;
   return <Hover side={side ?? "bottom"} tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={content}>{children}</Hover>;
 }
 
-/** What is done with a link at once, under its card (the user, 2026-10-29: 快捷操作放 hover 的卡片上): its address copied, and 在对话中查看 where that is given. */
-function LinkActions({ href, onShow }: { href: string; onShow?: (() => void) | undefined }) {
+/** A link's address to copy, under its card as a file's path is (PathActions; the user, 2026-10-29: 用原来那个加个复制). */
+function LinkActions({ href }: { href: string }) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const copy = () => void navigator.clipboard.writeText(href).then(() => {
@@ -109,7 +107,6 @@ function LinkActions({ href, onShow }: { href: string; onShow?: (() => void) | u
   return (
     <div className={`${css.fileFoot} ${panelEdge}`}>
       <span className={css.actions}>
-        {onShow && <PanelButton tone="quiet" onClick={onShow}><Chat size={12} />{t("web-main.things.show")}</PanelButton>}
         <PanelButton tone="quiet" onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.link.copy")}</PanelButton>
       </span>
     </div>
