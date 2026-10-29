@@ -554,10 +554,10 @@ fn list_reset() -> Unit {
 /// How far the rows stand in from the pane's sides: the column 760 wide at most in its middle, 40 in at least
 /// (session.css.ts chatList).
 fn row_side(c : @ui.Ctx) -> Double {
-  // Inline avatars need no hanging-avatar gutter. Keep the narrow card's text
-  // close to its title and composer, without changing other platforms' inset.
+  // Inline avatars need no hanging-avatar gutter. Narrow beside the system's bars (an iPhone Duo's), the rows as wide
+  // as the composer under them, its box's sides theirs (the user, 2026-10-29: 内容比输入框窄); elsewhere 16 in.
   if c.width <= chat_narrow_w {
-    return if @sf.native_on() { dense_row_side_narrow } else { row_side_narrow }
+    return if @sf.native_on() { composer_side() } else { row_side_narrow }
   }
   // (beside the system's bars, an iPhone Duo's: the rows across the pane, dense_row_side in)
   if @sf.native_on() {
@@ -570,9 +570,6 @@ fn row_side(c : @ui.Ctx) -> Double {
 /// (its pictures out in that room, 29 before the words, about as far from the card's edge as the chat's title: the
 /// user, 2026-10-28, 头像都贴边了)
 let dense_row_side : Double = 48.0
-
-///|
-let dense_row_side_narrow : Double = 20.0
 
 ///|
 /// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
@@ -665,7 +662,7 @@ let chat_list_box : @ui.Style = @ui.css("w=Full h=Full")
 fn row_box(c : @ui.Ctx, side : Double, top : Double, body : () -> Unit) -> Int {
   // The system column is reserved by the shell; the text still needs its own
   // inset from the card's edge, also when a details card stands beside it.
-  let trailing = if @sf.native_side() { dense_row_side_narrow } else { side }
+  let trailing = if @sf.native_side() { composer_side() } else { side }
   c.box(style=row_column, fn() {
     if top > 0.0 {
       c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
