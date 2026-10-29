@@ -50,6 +50,7 @@ fn faces_reset() -> Unit {
   faces_had.clear()
   for i in 0..<faces_in.length() {
     faces_in[i] = ""
+    faces_web[i] = ("", "")
   }
   previews.clear()
 }
@@ -77,6 +78,12 @@ fn inter_face() -> Bytes? {
       }
   }
 }
+
+///|
+/// The places' faces as a visualization's page is set in them (viz_file.mbt viz_tokens), by host face (1 ui, 2 text,
+/// 3 code): each one's family as CSS has it ("": the page's own), and the stylesheet a face still.fail keeps is had
+/// from there ("": none, the family the machine's or the page's).
+pub let faces_web : Array[(String, String)] = [("", ""), ("", ""), ("", ""), ("", "")]
 
 ///|
 /// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL): `local:`
@@ -108,6 +115,17 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
     }
     if id != "" {
       wanted.push(id)
+    }
+    // the page loads a face still.fail keeps itself (its stylesheet), here or not yet; with none chosen, the app's
+    // words in the wide frame are Inter, as the page's stylesheet has it from its CDN
+    faces_web[host_face] = if id.has_prefix(local_face) {
+      (face_css_family(id.unsafe_substring(start=local_face.length(), end=id.length())), "")
+    } else if id != "" {
+      (face_css_family(text(face, "family")), text(face, "css"))
+    } else if host_face == @hostapi.face_ui && wide {
+      ("\"Inter Variable\"", "")
+    } else {
+      ("", "")
     }
     // the app's words with none chosen, in the wide frame: the desktop app's face (what people wrote follows them)
     let now = if id == "" {
@@ -170,6 +188,17 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
     if !wanted.contains(id) && faces_had.get(id) is Some(Whole(_)) {
       faces_had.remove(id)
     }
+  }
+}
+
+///|
+/// A family's name as CSS has it, quoted ("" none).
+fn face_css_family(family : String) -> String {
+  let name = family.replace_all(old="\"", new="").replace_all(old="\\", new="").replace_all(old="<", new="").replace_all(old=">", new="")
+  if name == "" {
+    ""
+  } else {
+    "\"" + name + "\""
   }
 }
 

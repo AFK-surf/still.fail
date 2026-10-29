@@ -403,3 +403,24 @@ test "expanded fragments scroll while their inline copies grow with their conten
   assert_false(inline_doc.contains("<style>html{overflow:auto}</style>"))
   assert_true(full_doc.contains("<style>html{overflow:auto}</style>"))
 }
+
+///|
+test "inline HTML is set in the faces the app is set in, a face still.fail keeps linked from its stylesheet" {
+  reset()
+  // none chosen: the stylesheet's own (no font token at all, an empty one would stand in its place)
+  let plain = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
+  assert_false(plain.contains("--e-font-body:"))
+  assert_false(plain.contains("<link rel=\"stylesheet\""))
+  @sfbase.faces_web[@hostapi.face_ui] = ("\"Inter Variable\"", "")
+  @sfbase.faces_web[@hostapi.face_text] = ("\"SF LXGW WenKai\"", "https://app.still.fail/releases/fonts/lxgw-wenkai/1.530/font.css")
+  @sfbase.faces_web[@hostapi.face_code] = ("\"JetBrains Mono\"", "")
+  let doc = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
+  assert_true(doc.contains("--e-font-body:\"Inter Variable\", -apple-system"))
+  assert_true(doc.contains("--e-font-text:\"SF LXGW WenKai\", -apple-system"))
+  assert_true(doc.contains("--e-font-mono:\"JetBrains Mono\", ui-monospace"))
+  assert_true(doc.contains("<link rel=\"stylesheet\" href=\"https://app.still.fail/releases/fonts/lxgw-wenkai/1.530/font.css\">"))
+  // its origin let in for the stylesheet and the files it names, nothing else of it
+  assert_true(doc.contains("fonts.googleapis.com https://app.still.fail;"))
+  assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
+  reset()
+}

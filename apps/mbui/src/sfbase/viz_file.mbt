@@ -80,7 +80,54 @@ pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
     ("text-heading", px(t.heading)),
     ("leading-heading", px(t.heading_line)),
     ("text-display", px(t.display)),
+    // the faces the app is set in (faces.mbt), after them the page's own for what they have no character for; ""
+    // none chosen: the stylesheet's own (what people wrote: as the app's words)
+    ("font-body", viz_family(@hostapi.face_ui, viz_body_faces)),
+    ("font-text", viz_family(@hostapi.face_text, viz_body_faces)),
+    ("font-mono", viz_family(@hostapi.face_code, viz_mono_faces)),
   ].map(fn(e) { ("--e-" + e.0, e.1) })
+}
+
+///|
+/// The page's own faces after a chosen one (web/src/fonts.ts BODY, MONO).
+let viz_body_faces : String = "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"PingFang SC\", \"Hiragino Sans GB\", sans-serif"
+
+///|
+let viz_mono_faces : String = "ui-monospace, SFMono-Regular, Menlo, monospace"
+
+///|
+/// A place's face as the page sets it (host face `at`): its family, then `rest`; "" none chosen.
+fn viz_family(at : Int, rest : String) -> String {
+  let family = faces_web[at].0
+  if family == "" {
+    ""
+  } else {
+    family + ", " + rest
+  }
+}
+
+///|
+/// The stylesheets of the faces chosen that still.fail keeps, each once: linked in a page (its CSP lets their origin in).
+pub fn viz_sheets() -> Array[String] {
+  let out : Array[String] = []
+  for i in 1..<faces_web.length() {
+    let css = faces_web[i].1
+    if css.has_prefix("https://") && !out.contains(css) {
+      out.push(css)
+    }
+  }
+  out
+}
+
+///|
+/// A URL's origin (scheme and host), "" when it has none.
+fn viz_origin(url : String) -> String {
+  guard url.has_prefix("https://") else { return "" }
+  let rest = url.unsafe_substring(start=8, end=url.length())
+  match rest.find("/") {
+    Some(i) => "https://" + rest.unsafe_substring(start=0, end=i)
+    None => url
+  }
 }
 
 ///|
@@ -96,12 +143,21 @@ pub fn viz_tokens_json(dark : Bool) -> String {
 pub let viz_cdns : String = "https://cdnjs.cloudflare.com https://esm.sh https://cdn.jsdelivr.net https://unpkg.com"
 
 ///|
-pub fn viz_csp() -> String {
+pub fn viz_csp(sheets? : Array[String] = []) -> String {
+  let faces = StringBuilder::new()
+  let seen : Array[String] = []
+  for sheet in sheets {
+    let o = viz_origin(sheet)
+    if o != "" && !seen.contains(o) {
+      seen.push(o)
+      faces.write_string(" " + o)
+    }
+  }
   [
     "default-src 'none'",
     "script-src 'unsafe-inline' 'unsafe-eval' " + viz_cdns,
-    "style-src 'unsafe-inline' " + viz_cdns + " https://fonts.googleapis.com",
-    "font-src data: " + viz_cdns + " https://fonts.gstatic.com",
+    "style-src 'unsafe-inline' " + viz_cdns + " https://fonts.googleapis.com" + faces.to_string(),
+    "font-src data: " + viz_cdns + " https://fonts.gstatic.com" + faces.to_string(),
     "img-src data: blob:",
     "media-src data: blob:",
     "connect-src 'none'",
@@ -160,7 +216,9 @@ pub fn viz_is_fragment(html : String) -> Bool {
 /// The page: the content in the stylesheet, the bridge (and what the widget kept) ahead of it, the theme as the app
 /// shows it now (Viz.kt documentOf).
 pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64, scroll? : Bool = false) -> String {
-  let vars = viz_tokens(dark).map(fn(t) { t.0 + ":" + t.1.replace_all(old="<", new="").replace_all(old=">", new="") }).join(";")
+  // (one with no value left out: an empty one would stand in place of the stylesheet's own)
+  let vars = viz_tokens(dark).filter(fn(t) { t.1 != "" }).map(fn(t) { t.0 + ":" + t.1.replace_all(old="<", new="").replace_all(old=">", new="") }).join(";")
+  let sheets = viz_sheets()
   let theme = if dark { "dark" } else { "light" }
   let kept = Json::object({ "widgetState": state.unwrap_or(Json::null()) }).stringify().replace_all(old="<", new="\\u003c")
   "<!doctype html><html data-theme=\"" +
@@ -168,8 +226,9 @@ pub fn viz_document(html : String, state : Json?, dark : Bool, ground : Int64, s
   "\"><head><meta charset=\"utf-8\">" +
   "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
   "<meta http-equiv=\"Content-Security-Policy\" content=\"" +
-  viz_csp() +
+  viz_csp(sheets~) +
   "\">" +
+  sheets.map(fn(h) { "<link rel=\"stylesheet\" href=\"" + h.replace_all(old="\"", new="").replace_all(old="<", new="").replace_all(old=">", new="") + "\">" }).join("") +
   "<style>:root{-webkit-text-size-adjust:100%;text-size-adjust:100%;color-scheme:" +
   theme +
   ";" +

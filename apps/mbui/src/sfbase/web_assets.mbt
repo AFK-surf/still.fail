@@ -74,8 +74,9 @@ pub let viz_css : String =
   #|  --font-size-base: var(--e-text-body, 14px);
   #|
   #|  /* ── What the utilities are made of; not for agents ────────────────────────────── */
-  #|  --font-sans: var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
-  #|  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  #|  /* The page's faces as its person set them (正文, else 界面; their stylesheets linked ahead of this one). */
+  #|  --font-sans: var(--e-font-text, var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif));
+  #|  --font-mono: var(--e-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   #|  --font-size-small: var(--e-text-meta, 12px);
   #|  --font-size-ui: var(--e-text-ui, 13px);
   #|  --font-size-caption: var(--e-text-caption, 11px);
@@ -112,7 +113,10 @@ pub let viz_css : String =
   #|  --radius-field: var(--radius-lg);
   #|  --radius-small: var(--radius-sm);
   #|
-  #|  background: transparent;
+  #|  /* The chat's own ground, not transparent: a frame is composited apart from its page, and a part of it not yet drawn
+  #|     as the chat scrolls is filled with its ground made opaque, black for a transparent one (2026-10-29, a black band
+  #|     along a frame's edge as it scrolled in). */
+  #|  background: var(--background);
   #|  color: var(--foreground);
   #|  font: var(--font-size-base) / var(--line-height-normal) var(--font-sans);
   #|  /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */
@@ -409,6 +413,10 @@ pub let viz_bridge : String =
   #|      for (const [name, value] of Object.entries(event.data.tokens ?? {})) root.style.setProperty(name, value);
   #|      root.dataset.theme = event.data.scheme;
   #|      root.style.colorScheme = event.data.scheme;
+  #|      // A face chosen since the frame was written: its stylesheet too.
+  #|      for (const href of event.data.sheets ?? []) {
+  #|        if (![...document.querySelectorAll("link[rel=stylesheet]")].some((l) => l.href === href)) document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href }));
+  #|      }
   #|      // For charts drawn with resolved colours (a canvas, a chart library): redraw on this.
   #|      dispatchEvent(new CustomEvent("ember-viz:theme", { detail: { scheme: event.data.scheme } }));
   #|    }
@@ -441,7 +449,11 @@ pub let viz_bridge : String =
   #|    sendHeight();
   #|    new ResizeObserver(sendHeight).observe(document.body);
   #|  });
-  #|  addEventListener("load", sendHeight);
+  #|  // Shown only once it is drawn in its own faces (Viz.tsx hides it till then): no empty or unstyled frame flashing first.
+  #|  addEventListener("load", () => {
+  #|    sendHeight();
+  #|    document.fonts.ready.then(() => { sendHeight(); post({ type: "ready" }); });
+  #|  });
   #|  addEventListener("error", (e) => post({ type: "error", message: String(e.message ?? e) }));
   #|})();
 

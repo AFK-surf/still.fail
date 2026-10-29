@@ -24,6 +24,9 @@ export function loadFace(face: FontFace): void {
   document.head.append(link);
 }
 
+/** The stylesheets of the faces added so far: an inline visualization's frame (Viz.tsx) links them too, as it has not the page's. */
+export const faceSheets = (): string[] => [...linked];
+
 /** How a face is written in a style: its family, then the app's own for the place; none (the app's own): null. */
 export function familyOf(face: FontFace, code: boolean): string | null {
   if (!face.family) return null;
@@ -53,6 +56,17 @@ export function followFonts(): void {
   };
   again();
   onPrefs(again);
+}
+
+/** Calls back when the faces the page is set in change, once they are set on the root (followFonts heard them first);
+ * returns how to stop. */
+export function onFaces(f: () => void): () => void {
+  let last = prefs().faces;
+  return onPrefs(() => {
+    if (prefs().faces === last) return;
+    last = prefs().faces;
+    f();
+  });
 }
 
 /** Families installed here, where the browser lets a page ask (Chromium's Local Font Access: the desktop app, Chrome,

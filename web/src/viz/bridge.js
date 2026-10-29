@@ -49,6 +49,10 @@
       for (const [name, value] of Object.entries(event.data.tokens ?? {})) root.style.setProperty(name, value);
       root.dataset.theme = event.data.scheme;
       root.style.colorScheme = event.data.scheme;
+      // A face chosen since the frame was written: its stylesheet too.
+      for (const href of event.data.sheets ?? []) {
+        if (![...document.querySelectorAll("link[rel=stylesheet]")].some((l) => l.href === href)) document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href }));
+      }
       // For charts drawn with resolved colours (a canvas, a chart library): redraw on this.
       dispatchEvent(new CustomEvent("ember-viz:theme", { detail: { scheme: event.data.scheme } }));
     }
@@ -81,6 +85,10 @@
     sendHeight();
     new ResizeObserver(sendHeight).observe(document.body);
   });
-  addEventListener("load", sendHeight);
+  // Shown only once it is drawn in its own faces (Viz.tsx hides it till then): no empty or unstyled frame flashing first.
+  addEventListener("load", () => {
+    sendHeight();
+    document.fonts.ready.then(() => { sendHeight(); post({ type: "ready" }); });
+  });
   addEventListener("error", (e) => post({ type: "error", message: String(e.message ?? e) }));
 })();

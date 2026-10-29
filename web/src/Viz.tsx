@@ -22,6 +22,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
 import { t } from "./i18n.ts";
+import { faceSheets, onFaces } from "./fonts.ts";
 
 /** still.fail's own icons (design/icons, the one source), for a frame's data-icon / data-lucide marks: each SVG's inside. */
 const ICONS = JSON.stringify(Object.fromEntries(Object.entries(import.meta.glob<string>("../../design/icons/*.svg", { query: "?raw", import: "default", eager: true }))
@@ -38,20 +39,24 @@ const TOKENS = [
   "canvas", "raised", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper", "accent",
   "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg", "red",
   "red-bg", "purple", "purple-bg", "neutral-bg", "lifted", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
-  "field-focus", "r-field", "r-card", "corner-shape", "font-body", "text-caption", "leading-caption", "text-meta", "leading-meta", "text-ui", "leading-ui", "text-body",
+  "field-focus", "r-field", "r-card", "corner-shape", "font-body", "font-text", "font-mono", "text-caption", "leading-caption", "text-meta", "leading-meta", "text-ui", "leading-ui", "text-body",
   "leading-body", "text-title", "leading-title", "text-heading", "leading-heading", "text-display",
 ] as const;
 
 const CDNS = "https://cdnjs.cloudflare.com https://esm.sh https://cdn.jsdelivr.net https://unpkg.com";
-const CSP = [
-  "default-src 'none'",
-  `script-src 'unsafe-inline' 'unsafe-eval' ${CDNS}`,
-  `style-src 'unsafe-inline' ${CDNS} https://fonts.googleapis.com`,
-  `font-src data: ${CDNS} https://fonts.gstatic.com`,
-  "img-src data: blob:",
-  "media-src data: blob:",
-  "connect-src 'none'",
-].join("; ");
+/** The frames' CSP; `sheets`, the stylesheets of the faces the page is set in (fonts.ts), whose origins it lets in too. */
+const csp = (sheets: string[] = []) => {
+  const faces = [...new Set(sheets.map((href) => new URL(href, location.href).origin))].join(" ");
+  return [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' 'unsafe-eval' ${CDNS}`,
+    `style-src 'unsafe-inline' ${CDNS} https://fonts.googleapis.com ${faces}`,
+    `font-src data: ${CDNS} https://fonts.gstatic.com ${faces}`,
+    "img-src data: blob:",
+    "media-src data: blob:",
+    "connect-src 'none'",
+  ].join("; ");
+};
 
 /**
  * A fragment's frame is as tall as its content, however tall. Content sized to its window (100vh, min-height:100%)
@@ -60,6 +65,8 @@ const CSP = [
 const RUNAWAY = 60;
 /** A frame's height before its content says (and what its place holds while the file comes), when none was kept. */
 const FIRST_HEIGHT = 120;
+/** How long a frame waits to be told it is drawn before it is shown as it is (ms). */
+const SHOWN_ANYWAY = 1500;
 
 // The height each visualization last had (the latest 300), by its file (`session\npath`) or a mermaid block's source:
 // shown again, its place and its frame start that tall, so the chat does not jump as it loads.
@@ -113,10 +120,12 @@ const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u0
 
 /** The frame's document: the content in the stylesheet, the bridge (and what the widget kept) and the components ahead of it, the theme as the page shows it now. */
 function documentOf(html: string, state: unknown): string {
+  const sheets = faceSheets();
   const vars = Object.entries(tokens()).map(([k, v]) => `${k}:${v.replace(/[<>]/g, "")}`).join(";");
   const theme = scheme();
   return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8">`
-    + `<meta http-equiv="Content-Security-Policy" content="${CSP}">`
+    + `<meta http-equiv="Content-Security-Policy" content="${csp(sheets)}">`
+    + sheets.map((href) => `<link rel="stylesheet" href="${href.replace(/[<>"&]/g, "")}">`).join("")
     + `<style>:root{color-scheme:${theme};${vars}}</style><style>${stylesheet}</style>`
     + `<script type="application/json" id="ember-viz-state">${scriptJson({ widgetState: state })}</script>`
     + `<script type="application/json" id="viz-icons">${ICONS}</script>`
@@ -129,7 +138,7 @@ function documentOf(html: string, state: unknown): string {
  * keeps its mode.
  */
 function pageDocument(html: string): string {
-  const head = `<meta http-equiv="Content-Security-Policy" content="${CSP}"><script>${bridge}</script>`;
+  const head = `<meta http-equiv="Content-Security-Policy" content="${csp()}"><script>${bridge}</script>`;
   const at = /<head[^>]*>/i.exec(html) ?? /<html[^>]*>/i.exec(html) ?? /<!doctype[^>]*>/i.exec(html);
   return at ? html.slice(0, at.index + at[0].length) + head + html.slice(at.index + at[0].length) : head + html;
 }
@@ -144,7 +153,7 @@ export function vizDocument(html: string, state: unknown = null): string {
   return documentOf(html, state);
 }
 
-/** Calls back when the page's theme changes: its own choice (data-theme) or the system's. */
+/** Calls back when the page's theme changes: its own choice (data-theme) or the system's, or its faces (fonts.ts sets them on the root's style). */
 function useThemeChange(onChange: () => void) {
   const latest = useRef(onChange);
   latest.current = onChange;
@@ -154,7 +163,8 @@ function useThemeChange(onChange: () => void) {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const media = matchMedia("(prefers-color-scheme: dark)");
     media.addEventListener("change", fire);
-    return () => { observer.disconnect(); media.removeEventListener("change", fire); };
+    const unwatch = onFaces(fire);
+    return () => { observer.disconnect(); media.removeEventListener("change", fire); unwatch(); };
   }, []);
 }
 
@@ -163,22 +173,24 @@ function useThemeChange(onChange: () => void) {
  * them, and `origin` when known): its height, what it keeps, a failure it reports, words to put in the composer (a click in it);
  * and the page's theme, told to it as it changes.
  */
-export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: given, onHeight, onState, onError }: {
+export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: given, onHeight, onState, onError, onReady }: {
   origin?: string; draftKey?: string | undefined; onHeight?: (height: number) => void; onState?: (state: unknown) => void; onError?: (message: string) => void;
+  onReady?: () => void;
 }) {
   // The chat's draft, where its words go: the page's around it, else as given (a preview kept outside its chat).
   const draftKey = useContext(DraftKey) ?? given;
   const toast = useToast();
-  const latest = useRef({ wins, origin, draftKey, toast, onHeight, onState, onError });
-  latest.current = { wins, origin, draftKey, toast, onHeight, onState, onError };
+  const latest = useRef({ wins, origin, draftKey, toast, onHeight, onState, onError, onReady });
+  latest.current = { wins, origin, draftKey, toast, onHeight, onState, onError, onReady };
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { emberViz?: boolean; type?: string; [k: string]: unknown } | null;
-      const { wins, origin, draftKey, toast, onHeight, onState, onError } = latest.current;
+      const { wins, origin, draftKey, toast, onHeight, onState, onError, onReady } = latest.current;
       if (!data?.emberViz || !wins().includes(event.source as Window) || (origin !== "*" && event.origin !== origin)) return;
       if (data.type === "height" && typeof data.height === "number") onHeight?.(data.height);
       if (data.type === "state" && JSON.stringify(data.state ?? null).length <= MAX_STATE) onState?.(data.state ?? null);
       if (data.type === "failed" && typeof data.message === "string") onError?.(data.message);
+      if (data.type === "ready") onReady?.();
       // A click in the widget asks to send words: they go in the composer, for the person to send (or not).
       if (data.type === "followup" && typeof data.prompt === "string" && data.prompt.trim()) {
         const offered = draftKey !== undefined && offerToDraft(draftKey, { files: [], quotes: [], text: data.prompt.trim().slice(0, 4000) });
@@ -188,7 +200,7 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
   }, []);
-  useThemeChange(() => { for (const win of latest.current.wins()) win.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme() }, latest.current.origin); });
+  useThemeChange(() => { for (const win of latest.current.wins()) win.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme(), sheets: faceSheets() }, latest.current.origin); });
 }
 
 /**
@@ -217,6 +229,8 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   // The state is only what it starts with.
   const srcDoc = useMemo(() => (page ? pageDocument(html) : documentOf(html, state)), [html]); // eslint-disable-line react-hooks/exhaustive-deps
   const grown = useRef({ height: 0, times: 0 });
+  const shownNow = useRef(false);
+  const pending = useRef<number | null>(null);
   const onHeight = (h: number) => {
     if (page || h <= 0) return;
     const last = grown.current;
@@ -225,16 +239,36 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
     last.times = last.height > 0 && h > last.height && h - last.height <= 64 ? last.times + 1 : 0;
     if (last.times > RUNAWAY) return;
     last.height = h;
-    setHeight(h);
+    // Hidden, its place keeps the height it started with: the page moves once, as it shows, not with each height
+    // it comes to while it is drawn (2026-10-29).
+    if (shownNow.current) setHeight(h);
+    else pending.current = h;
     // Only a height it did not creep to is kept: one kept mid-run would start the next load's run further on.
     if (last.times === 0) keepHeight(heightKey, h);
   };
-  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  // Hidden till its document says it is drawn, faces loaded (bridge.js): before, a frame shows its blank first
+  // document, in a dark theme a black box, then its text set again as its faces come (2026-10-29). Shown anyway after
+  // a while, should it never say so (a script of its own that never finishes loading).
+  const [shown, setShown] = useState(false);
+  const show = () => {
+    if (shownNow.current) return;
+    shownNow.current = true;
+    if (pending.current !== null) setHeight(pending.current);
+    pending.current = null;
+    setShown(true);
+  };
+  useEffect(() => {
+    shownNow.current = false;
+    setShown(false);
+    const timer = setTimeout(show, SHOWN_ANYWAY);
+    return () => clearTimeout(timer);
+  }, [srcDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, onReady: show, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
   // From a host: posted each time it loads (once its document is written in, nothing there listens for it any more).
   const source = host === null
     ? { srcDoc }
     : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: srcDoc }, "*") };
-  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={page ? undefined : { height }} />;
+  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={{ ...(page ? {} : { height }), ...(shown ? {} : { visibility: "hidden" }) }} />;
 }
 
 /** An HTML file's content drawn as a visualization, where its file is not read through a station's session (the share

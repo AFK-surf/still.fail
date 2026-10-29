@@ -68,8 +68,9 @@
   --font-size-base: var(--e-text-body, 14px);
 
   /* ── What the utilities are made of; not for agents ────────────────────────────── */
-  --font-sans: var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The page's faces as its person set them (正文, else 界面; their stylesheets linked ahead of this one). */
+  --font-sans: var(--e-font-text, var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif));
+  --font-mono: var(--e-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   --font-size-small: var(--e-text-meta, 12px);
   --font-size-ui: var(--e-text-ui, 13px);
   --font-size-caption: var(--e-text-caption, 11px);
@@ -106,7 +107,10 @@
   --radius-field: var(--radius-lg);
   --radius-small: var(--radius-sm);
 
-  background: transparent;
+  /* The chat's own ground, not transparent: a frame is composited apart from its page, and a part of it not yet drawn
+     as the chat scrolls is filled with its ground made opaque, black for a transparent one (2026-10-29, a black band
+     along a frame's edge as it scrolled in). */
+  background: var(--background);
   color: var(--foreground);
   font: var(--font-size-base) / var(--line-height-normal) var(--font-sans);
   /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */

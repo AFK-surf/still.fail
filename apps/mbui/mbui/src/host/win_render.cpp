@@ -511,6 +511,21 @@ void mb_render_commit(void) {
   if (dcomp) dcomp->Commit();
 }
 
+// A view placed (win_views.cpp apply_place) is committed with the frame that paints its hole where it now is: just
+// after that frame's Present, both then taken by the same composition. Committed as it was placed, the view moved a
+// frame ahead of its hole while a list scrolled, the window's black showing along its edge in the hole (2026-10-29).
+static bool commit_after_present;
+extern "C" void mb_host_request_frame(void);
+void mb_render_commit_with_frame(void) {
+  commit_after_present = true;
+  mb_host_request_frame();
+}
+static void commit_presented(void) {
+  if (!commit_after_present) return;
+  commit_after_present = false;
+  mb_render_commit();
+}
+
 static void ensure_canvas(int tw, int th);
 
 void mb_render_set_size(int pw, int ph, double w, double h, double scale) {
@@ -972,7 +987,10 @@ static int submit(const double *inst, int32_t count, double r, double g, double 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
   int n = -1;
   D3D11_RECT parts[MB_PARTS];
-  if (!submit(inst, count, r, g, b, &n, parts) || !chain) return;
+  if (!submit(inst, count, r, g, b, &n, parts) || !chain) {
+    commit_presented();
+    return;
+  }
   // a hidden or minimized window does not wait for vsync; pace it as if it did. A flip model's swap chain is told the
   // parts that changed (what the compositor takes again; none: a pixel's), all of its buffer the canvas's
   HRESULT hr;
@@ -987,6 +1005,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   } else {
     hr = chain->Present(1, 0);
   }
+  commit_presented();
   if (hr == DXGI_STATUS_OCCLUDED) Sleep(16);
 }
 

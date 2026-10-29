@@ -14,7 +14,7 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 // that needs one is stood in for (src/share/stand-ins/), by the file it is, as the site's build stands in for the core
 // (vite.demo.config.ts). It asks the cloud share-hosts.ts says for the relays, and reads the rest from the station.
 const standIns: Record<string, string> = Object.fromEntries(
-  ["i18n.ts", "ui.tsx", "Peeks.tsx", "ChatRef.tsx", "api.ts", "draft.ts", "station.tsx", "core/react.ts", "annotate/ImageMarks.tsx"]
+  ["i18n.ts", "ui.tsx", "Peeks.tsx", "ChatRef.tsx", "api.ts", "draft.ts", "fonts.ts", "station.tsx", "core/react.ts", "annotate/ImageMarks.tsx"]
     .map((name) => [here(`src/${name}`), here(`src/share/stand-ins/${name}`)]),
 );
 const standIn: Plugin = {
