@@ -4,6 +4,7 @@
 // the phone is not in the station's own server (5037), and a connection of its to the phone's port is turned away.
 import { type ChildProcess, spawn } from "node:child_process";
 import net from "node:net";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
 
@@ -58,7 +59,7 @@ export class GrantServers {
           });
           c.once("error", () => {
             c.destroy();
-            if (++tries.n < 50) setTimeout(poke, 100);
+            if (++tries.n < 50) wall.after(100, poke);
             else resolve(false);
           });
         };
