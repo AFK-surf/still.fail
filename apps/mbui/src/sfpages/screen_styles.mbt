@@ -57,6 +57,14 @@ let screen_foot_end : @ui.Style = @ui.css("w=Full h=Full p=S3 align=AEnd justify
 let screen_top_end : @ui.Style = @ui.css("w=Full p=S3 align=AEnd")
 
 ///|
+/// One of those two (`style`) where it stands in the window's corner: its 12 clear of a corner too square for its
+/// round buttons (@sf.window_corner_clear, a Mac's 16), and past what the system has at the sides turned sideways.
+fn screen_corner_end(style : @ui.Style) -> @ui.Style {
+  let in_ = @sf.window_corner_clear(@ui.Space::S3.px())
+  style.then(@ui.style(p=@sf.room_of(in_))).then(@sf.sides_clear(in_))
+}
+
+///|
 /// 接管 upright, under the bar: 12 from the sides, 4 over and under.
 // kept across runs: a value (no field of it changes)
 let take_over_place : @ui.Style = @ui.css("w=Full px=S3 py=S1 align=ACenter")

@@ -981,16 +981,46 @@ test "corners: a panel beside the window's, past its side, follows the window's 
 
 ///|
 test "corners: what could follow a corner within the ranges, standing where it cannot, is said" {
-  // a circle 30 across 13 in from a 16 window's corner would stand 1 in to follow it: past the ranges, as alone
-  let circle = fn(c : Ctx) {
-    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), pad=13.0, justify=JEnd, fn() {
-        c.box(w=Px(30.0), h=Px(30.0), radius=15.0, bg=0x333333FFL, fn() {  }) |> ignore
+  // a circle 30 across 13 in from a 16 window's corner would stand 1 in to follow it, past the ranges: nothing stands
+  // by the window's corner not concentric with it (the user, 2026-10-30: 圆形可以改方圆角, 只有长胶囊不行), said
+  let in_corner = fn(inset : Double, side : Double, radius : Double) {
+    fn(c : Ctx) {
+      c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), pad=inset, justify=JEnd, fn() {
+          c.box(w=Px(side), h=Px(side), radius~, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
       })
-      |> ignore
-    })
+    }
   }
-  let t = Tester::new(circle, w=600.0, h=400.0, window_corner=16.0)
+  let t = Tester::new(in_corner(13.0, 30.0, 15.0), w=600.0, h=400.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+  assert_true(t.corner_faults()[0].contains("not concentric with it"))
+  // a block 6 in, its corner concentric with the window's (a bar's key there: @sf.bar_keys_link): nothing said
+  let t = Tester::new(in_corner(6.0, 30.0, concentric(16.0, 6.0)), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // and clear of the corner, as far in as it is round (a floating button's: its shape kept), nothing said
+  let t = Tester::new(in_corner(16.0, 30.0, 15.0), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // a bar's last long capsule, 6 under the window's top: beside the arc 16 in from the side (said), past it by the
+  // bar's 12 not
+  let bar_end = fn(side : Double) {
+    fn(c : Ctx) {
+      c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), pt=6.0, pr=side, align=AEnd, fn() {
+          c.box(w=Px(80.0), h=Px(32.0), radius=16.0, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+    }
+  }
+  let t = Tester::new(bar_end(16.0), w=600.0, h=400.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+  let t = Tester::new(bar_end(28.0), w=600.0, h=400.0, window_corner=16.0)
   t.draw()
   assert_eq(t.corner_faults(), [])
   // a pill 24 high in a 26 card's top corner, in the middle of a short row there (a bar's button), 20 from its side and

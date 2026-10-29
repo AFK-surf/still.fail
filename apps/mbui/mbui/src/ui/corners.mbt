@@ -298,7 +298,15 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       let (dx, dy) = corner_gaps(a, b, k)
       // (a circle or a capsule is in the corner as a circle reads it: round_like)
       let reach = if round { round_like(ra, room=c.container_room(ct)) } else { ra }
-      if dx < -0.5 || dy < -0.5 || dx >= reach || dy >= reach || !nearest_corner(k, l, t, r, d) {
+      // (by the window's corner, anything beside its arc counts as in it too: as near one edge as the corner is round,
+      // and the other not past the arc by as much as the theme lets anything stand from an edge, as a bar's last
+      // capsule 6 under the window's top and 16 in from its side; the user, 2026-10-30, 分享图片's 复制图片)
+      let beside = ct.window &&
+        (round || (b.id != 0 && b.hit)) &&
+        !c.half_of(i, p) &&
+        dmin(dx, dy) < ra &&
+        dmax(dx, dy) < ra + c.fit_near()
+      if dx < -0.5 || dy < -0.5 || ((dx >= reach || dy >= reach) && !beside) || !nearest_corner(k, l, t, r, d) {
         continue
       }
       // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
@@ -343,6 +351,18 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       let corner = corner_names[k]
       // none of the theme's ranges makes it concentric there (Theme::corner_fit: the container too square for it, or
       // too round, a window's corner among them): it stands as it would alone, and the rule asks nothing more of it
+      // by the window's corner, nothing that is not concentric with it: no button beside an arc it does not follow
+      // (the user, 2026-10-30: 圆形可以改方圆角, 只有长胶囊不行): a round key there a block following it, a long
+      // capsule past its arc (@sf.window_corner_past). (A
+      // button, or what is round, smaller than half the window: a panel too square to follow a square window's corner
+      // stands as alone, below)
+      let button = (round || (b.id != 0 && b.hit)) && !c.half_of(i, p)
+      if ct.window && !in_step && button {
+        out.push(
+          "\{c.named(i)} (corner \{rb}) by the \{corner} of \{c.named(p)} (the window's, corner \{ra}): \{dx} and \{dy} from its edges, not concentric with it; nothing stands there: past its arc, \{ra + c.fit_near()} in from the side it is near",
+        )
+        continue
+      }
       if !in_step && !c.fit_there(ra, rb, round, room=room_a) {
         continue
       }

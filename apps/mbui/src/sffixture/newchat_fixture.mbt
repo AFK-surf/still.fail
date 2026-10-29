@@ -321,10 +321,11 @@ pub fn fix_new_chat(f : Fixture) -> Json {
     "medium" => "中"
     _ => "高"
   }
-  // (MBUI_FIXTURE=newchat-files: its stations lend their files, its 文件 tab open beside it)
+  // (MBUI_FIXTURE=newchat-files: its stations lend their files, its 文件 tab open beside it; newchat-lend: they lend
+  // them, the tab not open, 文件 in its bar alone)
   let lend = fn(s : Json) -> Json {
     match s {
-      Object(o) if f.mode == "newchat-files" => {
+      Object(o) if f.mode == "newchat-files" || f.mode == "newchat-lend" => {
         let m = o.copy()
         m["overview"] = { "drive": field(Some(fixture_station_drive(true)), "drive").unwrap_or(Json::null()) }
         Json::object(m)

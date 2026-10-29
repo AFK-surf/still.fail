@@ -2140,7 +2140,11 @@ pub let wide_value : @ui.TextStyle
 
 pub fn window_clear_in(Double) -> Double
 
+pub fn window_corner_clear(Double) -> Double
+
 pub fn window_corner_key() -> @ui.CornerOf
+
+pub fn window_corner_past(Double) -> Double
 
 pub fn window_end_in(Double) -> Double
 

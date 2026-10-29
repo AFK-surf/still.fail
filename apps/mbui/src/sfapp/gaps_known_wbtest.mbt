@@ -13,16 +13,17 @@
 /// page opened on the tape the one in use, whole in the window; one with a memory page's bar the frame's; rule 5's last with an agent's
 /// picture in its line on the messages' pictures' edge; rule 4's four more with 共享调试's lent states swept, the
 /// settings' bar they share with settings-adb; eight fewer with every row one least height, 36 with keyboard and mouse,
-/// a sidebar's rows no more 32 high, and words at a capsule's end held by their box, not as a mark by their middle).
+/// a sidebar's rows no more 32 high, and words at a capsule's end held by their box, not as a mark by their middle; one
+/// more with newchat-lend swept, a phone's new chat's bar newchat has too).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
   "zh rule 3": 0,
-  "zh rule 4": 73,
+  "zh rule 4": 74,
   "en rule 1": 0,
   "en rule 2": 0,
   "en rule 3": 0,
-  "en rule 4": 73,
+  "en rule 4": 74,
   "zh rule 5": 0,
   "en rule 5": 0,
   "zh rule 6": 0,
