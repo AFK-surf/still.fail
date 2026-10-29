@@ -10,7 +10,7 @@ import { TestClock } from "effect/testing";
 import { Notifier } from "../src/cloud/notify.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { ops } from "../src/read/ops.ts";
-import { openStore } from "../src/read/store.ts";
+import { blockedAsk, openStore } from "../src/read/store.ts";
 import { turnNotice, wentWrong } from "../src/read/notices.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
@@ -20,17 +20,61 @@ const said = (authorKind: any, author: string, createdAt: number) =>
 
 test("a turn is told by how it ended", () => {
   const mine = said("agent", "k", 150);
-  assert.deepEqual(turnNotice(turn("final", "completed"), mine, "k", "file"), ["done", "修好了"]);
-  assert.deepEqual(turnNotice(turn("block", "completed"), mine, "k", "file"), ["block", "修好了"]);
-  assert.deepEqual(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), mine, "k", "file"), ["block", "要 Stripe 的测试 key"]);
+  assert.deepEqual(turnNotice(turn("final", "completed"), mine, "k", "file", true), ["done", "修好了"]);
+  assert.deepEqual(turnNotice(turn("block", "completed"), mine, "k", "file", true), ["block", "修好了"]);
+  assert.deepEqual(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), mine, "k", "file", true), ["block", "要 Stripe 的测试 key"]);
   const old = said("agent", "k", 50);
-  assert.equal(turnNotice(turn("final", "completed"), old, "k", "file"), null);
-  assert.equal(turnNotice(turn(null, "failed"), old, "k", "file"), null);
+  assert.equal(turnNotice(turn("final", "completed"), old, "k", "file", true), null);
+  assert.equal(turnNotice(turn(null, "failed"), old, "k", "file", true), null);
   assert.equal(wentWrong("⚠️ 无法启动 agent：没有 claude"), "无法启动 agent：没有 claude");
   assert.equal(wentWrong("已停止当前任务"), null);
-  assert.equal(turnNotice(turn("final", "completed"), said("person", "a@b.c", 150), "k", "file"), null);
-  assert.equal(turnNotice(turn(null, "completed"), mine, "k", "file"), null);
-  assert.equal(turnNotice(turn("waiting", "completed"), mine, "k", "file"), null);
+  assert.equal(turnNotice(turn("final", "completed"), said("person", "a@b.c", 150), "k", "file", true), null);
+  assert.equal(turnNotice(turn(null, "completed"), mine, "k", "file", true), null);
+  assert.equal(turnNotice(turn("waiting", "completed"), mine, "k", "file", true), null);
+  // Blocked on what its people were already told of, or on nothing waiting for them: told as a turn that ended done.
+  assert.deepEqual(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), mine, "k", "file", false), ["done", "修好了"]);
+  assert.equal(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), old, "k", "file", false), null);
+});
+
+test("a blocked turn's ask is told once, while it waits", () => {
+  const dir = mkdtempSync(join(tmpdir(), "notify-"));
+  // A clock moving on a millisecond a step: each of the turns and messages below after the one before.
+  let now = 1000;
+  const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"), { currentTimeMillisUnsafe: () => now++ } as never);
+  const reader = openStore(dir);
+  store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
+  const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+  store.joinThread(chat.id, "k", "ember");
+  // `about`: the message (by its ts) the turn says it is about; without, the one it said last.
+  const kinds = (id: string, about?: string) => {
+    const turn = reader.db.prepare("SELECT * FROM turns WHERE id = ?").get(id) as any;
+    const n = about === undefined ? null : (reader.db.prepare("SELECT n FROM entries WHERE thread = ? AND ts = ?").get(chat.id, about) as any).n;
+    const t = { declared: turn.declared, need: turn.need, startedAt: turn.started_at, endedAt: turn.ended_at, ...(n === null ? {} : { about: { thread: chat.id, seq: n } }) };
+    return blockedAsk(reader, chat.id, "k", t as any);
+  };
+  // It asks, and the turn ends blocked on that: new.
+  store.startTurn("t1", "k", "input");
+  store.insertMessage(newMessage(chat.id, "1.2", "agent", "k", "要不要改 Surge？"));
+  store.endTurn("t1", "completed", null, "block", null);
+  assert.equal(kinds("t1")?.fresh, true);
+  // Woken by a job, it says how things go and ends blocked on the same ask: told already.
+  store.startTurn("t2", "k", "notice");
+  store.endTurn("t2", "completed", null, "waiting", 60);
+  store.startTurn("t3", "k", "notice");
+  store.insertMessage(newMessage(chat.id, "1.3", "agent", "k", "CI 过了"));
+  store.endTurn("t3", "completed", null, "block", null);
+  assert.equal(kinds("t3", "1.2")?.fresh, false);
+  // Without saying what it is about, what it said last is what it asks: new.
+  assert.equal(kinds("t3")?.fresh, true);
+  // Once a person has written, nothing waits for them, until it asks again.
+  store.insertMessage(newMessage(chat.id, "1.4", "person", "ada@x.com", "先做别的"));
+  store.startTurn("t4", "k", "input");
+  store.endTurn("t4", "completed", null, "block", null);
+  assert.equal(kinds("t4"), null);
+  store.startTurn("t5", "k", "input");
+  store.insertMessage(newMessage(chat.id, "1.5", "agent", "k", "那 Surge 呢？"));
+  store.endTurn("t5", "completed", null, "block", null);
+  assert.equal(kinds("t5")?.fresh, true);
 });
 
 test("a chat's people hear of its turns and of each other, once, gathered", async (t) => {

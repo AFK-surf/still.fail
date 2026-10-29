@@ -30,7 +30,7 @@ notifications), and only for people who take part in them (the sidebar's
 | kind | when | body |
 | --- | --- | --- |
 | `done` | an agent's turn ended (not blocked, not failed) and it said something in the chat during the turn that the person has not read | `<agent>: <its last message>` |
-| `block` | an agent's turn ended blocked (`chat_post kind:"block"` / `chat_state block`) | `需要处理 · <its last message>` |
+| `block` | an agent's turn ended blocked (`chat_post kind:"block"` / `chat_state block`) on something new that waits for the person: its card still pending, else the message its need asks with, which no earlier blocked turn of it told (a turn blocked on what was told before, or on nothing waiting, is noticed as `done`) | `需要处理 · <its last message>` |
 | `failed` | something went wrong: the station says so in the chat, `⚠️` first (a turn that failed, an agent that could not start) | `出错了 · <what it says>` |
 | `message` | another person said something in the chat, while no agent there is at work | `<name>: <text>` |
 
@@ -65,7 +65,10 @@ A client takes the items it has not seen; the ones in the first value it gets
 are old news (shown by nobody). From a row's changes, `notices` adds one when a
 row that is `mine`:
 
-- becomes `block` (its state was not `block`);
+- is `block` asking something that waits for the person and was not told yet
+  (its `need`, the message 奏 shows: an agent woken by a job that ends blocked
+  on the same ask again, or blocked on one a person has answered since, is not
+  noticed as `block`);
 - gets a new last message from the station starting with `⚠️` (`failed`);
 - is `unread` with a last message it had not noticed yet (a higher `last.seq`)
   that is not the viewer's own, and no agent of it is at work (`run`): `done`

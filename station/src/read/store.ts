@@ -513,6 +513,21 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
   return m && m.n === n && m.authorKind === "agent" ? [m, messages] : null;
 }
 
+/// What a turn of `key` that ended blocked asks the thread's people, as the sidebar and 奏 show it, and whether it is
+/// new: its card still pending, else the message its need asks with (`askingMessage`); null when nothing there waits
+/// for them (answered since, or never asked in it). Not new when an earlier turn of `key` ended blocked after it was
+/// posted: it has waited since, and they were told then.
+export function blockedAsk(s: Store, thread: number, key: string, turn: TurnSummary): { asked: MessageRow; fresh: boolean } | null {
+  const about = turn.about as Json;
+  const seq = about !== null && typeof about === "object" && about.thread === thread && Number.isInteger(about.seq) ? about.seq : null;
+  const started = Number.isInteger(turn.startedAt) ? (turn.startedAt as number) : 0;
+  const ended: number | bigint = Number.isInteger(turn.endedAt) ? (turn.endedAt as number) : I64_MAX;
+  const asked = pendingCard(s, thread)?.[0] ?? askingMessage(s, thread, seq, [started, ended])?.[0] ?? null;
+  if (asked === null) return null;
+  const told = one(s, "SELECT 1 FROM turns WHERE session_key = ? AND declared = 'block' AND ended_at >= ? AND ended_at < ? LIMIT 1", key, asked.createdAt, started) !== undefined;
+  return { asked, fresh: !told };
+}
+
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
 export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {

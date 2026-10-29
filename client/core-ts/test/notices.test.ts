@@ -14,7 +14,10 @@ type J = any;
 function row(state: string | null, seq: number, unread: boolean, by: [string, string]): J {
   const [process, declared, outcome] =
     state === "run" ? ["running", null, "completed"] : state === "block" ? ["warm", "block", "completed"] : state === "failed" ? ["warm", null, "failed"] : ["warm", "final", "completed"];
+  // Blocked, it asks with its last message (the station's `need`, while no person has written since).
+  const need = state === "block" ? { need: { seq, message: { seq, text: "修好了" } } } : {};
   return {
+    ...need,
     id: "ds:C1:1.2", session: "ds:C1:1.2", thread: 7, title: "部署挂了", mine: true, unread, connect: null,
     agents: [{ key: "ds:C1:1.2", model: "gpt-6-astra", runtime: "codex", process, pending: 0, lastTurn: { declared, outcome } }],
     last: { agentIdentity: { model: "claude-opus-5-5" }, seq, authorKind: by[0], author: by[1], authorName: null, text: "修好了\n  再看看" },
@@ -203,6 +206,40 @@ test("needing_help_is_told_by_what_it_needs", () => {
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["block"]);
   assert.equal(notices.value(null).items[0].body, "需要你处理 · 要 Stripe 的测试 key");
+});
+
+test("what_it_asks_is_told_once_while_it_waits", () => {
+  const { rows, notices } = setup();
+  const stations = ["ws/st"];
+  rows.set("ws/st", [row("run", 3, false, agent)]);
+  notices.look(stations);
+  const blocked = (seq: number, asks: number | null) => {
+    const r = row("block", seq, true, agent);
+    if (asks === null) delete r.need;
+    else r.need = { seq: asks, message: { seq: asks, text: "要不要改 Surge？" } };
+    return r;
+  };
+  rows.set("ws/st", [blocked(4, 4)]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), ["block"]);
+  // Woken by a job, it says how things go and ends blocked on the same ask: what it said, not the ask again.
+  rows.set("ws/st", [row("run", 4, true, agent)]);
+  notices.look(stations);
+  rows.set("ws/st", [blocked(5, 4)]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), ["block", "done"]);
+  // A person has written since: nothing waits for them, though its agent ends blocked.
+  rows.set("ws/st", [row("run", 6, false, ["person", "you@x.y"])]);
+  notices.look(stations);
+  rows.set("ws/st", [blocked(7, null)]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), ["block", "done", "done"]);
+  // It asks again: told.
+  rows.set("ws/st", [row("run", 7, true, agent)]);
+  notices.look(stations);
+  rows.set("ws/st", [blocked(8, 8)]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), ["block", "done", "done", "block"]);
 });
 
 test("bodies_are_one_short_line", () => {

@@ -23,8 +23,9 @@ const KEEP = 20;
 /// How long a notice's body may be, in characters.
 export const BODY = 140;
 
-/// How a row stood when last looked at.
-type Seen = { state: string | null; seq: number; decision: number | null; pending: boolean };
+/// How a row stood when last looked at. `told`: the message its agent's need without a card asks with (its `need`) that
+/// was last told, or there when first looked at: one that still waits is not told again.
+type Seen = { state: string | null; seq: number; decision: number | null; pending: boolean; told: number | null };
 
 /// What a workspace has heard of its chats: how the rows that changed this run stood when last looked at.
 type Heard = { seen: Map<string, Map<string, Seen>>; items: J[] };
@@ -100,9 +101,11 @@ export class Notices {
       const old = seenHere.get(change.id) ?? (change.before !== undefined ? seen(change.before) : undefined);
       const next = seen(row);
       if (next.state === "run") next.pending = old !== undefined && (old.pending || next.seq > old.seq);
+      if (old !== undefined) next.told = old.told;
       seenHere.set(change.id, next);
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
+      if (found !== null && found[0] === "block") next.told = needSeq(row);
       if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
     return added;
@@ -138,7 +141,14 @@ export class Notices {
 function seen(row: J): Seen {
   const p = decisions.pending(row);
   const decision = typeof get(p, "seq") === "number" ? p.seq : null;
-  return { state: present.rowState(arr(get(row, "agents"))), seq: lastSeq(row), decision, pending: false };
+  return { state: present.rowState(arr(get(row, "agents"))), seq: lastSeq(row), decision, pending: false, told: needSeq(row) };
+}
+
+/// The message its agent's need without a card asks with, while it waits for its people (the row's `need`, not let go).
+function needSeq(row: J): number | null {
+  const need = get(row, "need");
+  const n = get(need, "seq");
+  return typeof n === "number" && get(need, "dismissed") !== true ? n : null;
 }
 
 function lastSeq(row: J): number {
@@ -150,7 +160,7 @@ function lastSeq(row: J): number {
 function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[], members: J[]): [string, string] | null {
   if (get(row, "mine") !== true || (get(row, "connect") !== undefined && row.connect !== null)) return null;
   const now = seen(row);
-  const then = thenSeen ?? { state: null, seq: 0, decision: null, pending: false };
+  const then = thenSeen ?? { state: null, seq: 0, decision: null, pending: false, told: null };
   const by = present.lastBy(row, me, slackUsers, members);
   const mine = get(by, "mine") === true;
   const card = decisions.ofRow(row);
@@ -166,7 +176,9 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   let text = hasLast ? format.cleanText(format.plainText(typeof last.text === "string" ? last.text : "")) : "";
   if (text === "" && hasLast) text = t("core-misc.notice.file");
   const byName = typeof get(by, "name") === "string" ? by.name : "";
-  if (now.state === "block" && then.state !== "block" && card === null) {
+  // Blocked on what it asks that waits for them and was not told yet: not on an ask told before (woken by a job between,
+  // it ends blocked on it again), nor on one answered since (nothing waits for them, as 奏 shows nothing).
+  if (now.state === "block" && card === null && now.told !== null && now.told !== then.told) {
     let need: string | null = null;
     for (const a of arr(get(row, "agents"))) {
       if (present.sessionStatus(a) !== "block") continue;
