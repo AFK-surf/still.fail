@@ -952,15 +952,18 @@ fn swipe_to_archive(
     }
     _ => ()
   }
-  // gone off: archived (the call once the row has gone, as declared as it set off); refused, it comes back
+  let moved = off.get()
+  // gone off: archived (the call once the row has gone, as declared as it set off), drawn off this frame and its place
+  // forgotten, so the row asked back (its toast's 撤销) is where it rests; refused, it comes back from off to the left
   if going && off.over() {
     rows.swiped_off.remove(key)
+    off.snap(0.0)
     archive_row(src, item, failed=fn() {
       unghost(false)
+      off.snap(-width)
       back(0.0)
     })
   }
-  let moved = off.get()
   // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
   let past = moved < -width * archive_at_share
   // (only while it is past the line or was: a row at rest tells nothing, as one coming into view as its list scrolls

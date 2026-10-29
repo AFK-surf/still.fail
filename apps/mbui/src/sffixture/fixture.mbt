@@ -1117,6 +1117,11 @@ pub fn fixture(mode : String) -> Source {
         }
         None => ()
       }
+      // asked back (a toast's 撤销, the archive's 还原): in the lists again, as well as out of the archive
+      if name == "chat.archive" && field(Some(params), "archived") is Some(False) {
+        f.archived.remove(text(Some(params), "session").view(start_offset=2).to_owned())
+        f.changed()
+      }
       match @settings.fixture_call(name, params) {
         Some(r) => {
           done(r)
