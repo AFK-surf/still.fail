@@ -104,10 +104,11 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   assert_true(words.contains("10月15日 10:00") && !words.contains("分钟前"), msg=words)
   assert_true(!words.contains(".log") && !words.contains(".tar") && !words.contains("已隐藏 1 处"), msg=words)
   assert_true(words.contains("still.fail"), msg=words)
-  // kept in the photo album, a PNG as wide as the screen at its scale, said once it is
+  // kept in the photo album, a PNG as wide as the picture on the page (the screen's 390, less the column of its boxes
+  // to tick: a finger's 22 and 12) at the screen's scale, said once it is
   assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
   match png_size(t.kept()[0].2) {
-    Some((pw, ph)) => assert_true(pw == 780 && ph > 600, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 712 && ph > 600, msg="\{(pw, ph)}")
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
@@ -128,6 +129,21 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
   let ticks = t.all(Checkbox, label="放进图片")
   assert_eq(ticks.length(), 4)
   assert_true(ticks.iter().all(fn(n) { n.check == Some(On) }))
+  // in a column of their own before the words (the phone's picture: the pictures inline, at the words' start)
+  assert_true(ticks_before_words(t, 0.0), msg=ticks.map(fn(n) { n.rect }).to_string())
+  // its attachments not ticked: each has the composer's ✕ on its corner, which takes it out; then a ＋ puts it back
+  assert_eq(t.all(Checkbox).length(), 4)
+  let outs = t.all(Button, label="移出图片")
+  assert_eq(outs.length(), 3)
+  let (ox, oy, ow, oh) = outs[1].rect
+  t.tap(ox + ow / 2.0, oy + oh / 2.0)
+  assert_true(@sfpages.publish_left_out("f1"))
+  assert_eq(t.all(Button, label="移出图片").length(), 2)
+  let backs = t.all(Button, label="放回图片")
+  assert_eq(backs.length(), 1)
+  let (bx, by, bw, bh) = backs[0].rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_true(!@sfpages.publish_left_out("f1"))
   let (x, y, w, h) = ticks[1].rect
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(@sfpages.publish_message_left_out(6.0))
@@ -139,11 +155,38 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
 }
 
 ///|
+/// Whether the picture's boxes to tick (one for each of fix_preview's four messages) stand in one column of their own
+/// before its words, 12 short of where they start (its title's start, less the pictures' `reach` out in the margin
+/// before them), not over a message; each on the middle of its message's first line: the viewer's own words, Ana's
+/// name over hers.
+fn ticks_before_words(t : @ui.Tester, reach : Double) -> Bool {
+  let ticks = t.all(Checkbox, label="放进图片")
+  guard ticks.length() == 4 &&
+    t.rect_of("部署登录页") is Some((title_x, _, _, _)) &&
+    t.rect_of("帮我把登录页部署到预发") is Some((_, mine_y, _, mine_h)) else {
+    return false
+  }
+  let (x, _, w, _) = ticks[0].rect
+  // (Ana's name on the page: past its boxes, not the chat's list's under it)
+  guard t.words().iter().find_first(fn(n) { n.0 == "Ana" && n.1 > x }) is Some((_, _, ana_y, _, ana_h, _)) else {
+    return false
+  }
+  let middle = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
+  // (the viewer's own words' first line: however many it wraps to)
+  let words_line = t.ctx().style_size(@sf.theme().t.words).1
+  ticks.iter().all(fn(n) { n.rect.0 == x }) &&
+  x + w + 12.0 <= title_x - reach &&
+  (middle(ticks[0].rect) - (mine_y + dmin(mine_h, words_line) / 2.0)).abs() < 0.5 &&
+  (middle(ticks[3].rect) - (ana_y + ana_h / 2.0)).abs() < 0.5
+}
+
+///|
 /// Whether the viewer's message stands further along than someone else's in the picture shown (its bubble at the
 /// column's end, as the chat's list has it).
 fn picture_mine_at_end(t : @ui.Tester) -> Bool {
-  match (t.find("帮我把登录页部署到预发，token 是 [已隐藏]"), t.find("截图、日志和构建缓存都附上了")) {
-    (Some((mx, _)), Some((ox, _))) => mx > ox
+  // (where their words start: however wide each wraps to, the viewer's in its bubble further along)
+  match (t.rect_of("帮我把登录页部署到预发，token 是 [已隐藏]"), t.rect_of("截图、日志和构建缓存都附上了")) {
+    (Some((mx, _, _, _)), Some((ox, _, _, _))) => mx > ox
     _ => false
   }
 }

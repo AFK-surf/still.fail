@@ -177,8 +177,8 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
     list: None,
     core: None,
   }
-  // (the column's width: the window's on a phone)
-  let column = dmin(c.width, publish_page_w)
+  // (the picture's width: the window's on a phone, less the column its boxes to tick stand in before it on the page)
+  let column = dmin(c.width - publish_tick_room(), publish_page_w)
   let o = c.overlay("publish", modal=true, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
     let page = c.box(style=publish_fill, fn() {
       match publishing.read.get() {
@@ -193,7 +193,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
               // (under what is over it at the top, over the band at the foot)
               let top = @sf.room_of(@sf.viewer_act_head(c))
               let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
-              c.box(style=publish_column.then(@ui.style(pt=top, pb=foot)), fn() {
+              c.box(style=@ui.style(w=Full, max_w=Fixed(publish_page_w + publish_tick_room()), pt=top, pb=foot), fn() {
                 publish_picture(c, src, here, p, column, false)
               })
               |> ignore
@@ -251,6 +251,12 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
 fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w : Double, taking : Bool) -> Unit {
   let narrow = w <= chat_narrow_w
   let here = { ..here, inline: narrow }
+  // (on the page, before its words a column for its messages' boxes to tick; the picture taken has none)
+  let ticks = if taking { 0.0 } else { publish_tick_room() }
+  let paper = if narrow { publish_paper_narrow } else { publish_paper }
+  // (its edge's room, and how far in its words are: past the pictures out in the margin)
+  let paper_edge = if narrow { row_side_narrow } else { publish_paper_in }
+  let paper_in = if narrow { paper_edge } else { paper_edge + @sf.message_avatar_reach }
   // (how much was hidden in each, by its seq: the preview's `messages`, by their n)
   let hidden : Map[Double, String] = {}
   for m in items(p, "messages") {
@@ -259,7 +265,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
       h => hidden[number(Some(m), "n")] = h
     }
   }
-  c.box(style=if narrow { publish_paper_narrow } else { publish_paper }, fn() {
+  c.box(style=paper.then(@ui.style(pl=@sf.room_of(paper_in + ticks))), fn() {
     match text(p, "title") {
       "" => ()
       title => c.text(title, style=publish_title) |> ignore
@@ -272,42 +278,70 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         if taking && !on {
           continue
         }
-        let said = c.box(style=publish_said, fn() {
-          // (its files drawn each to tick: file_item asks picturing)
-          picturing.val = Some((m.seq, taking))
-          message_row(c, src, here, m)
-          picturing.val = None
-          // on the page its box to tick, at the top of its other side: the end of its head's line, the start of the
-          // viewer's own (theirs at the end)
-          if !taking {
-            c.layer(fn() {
-              c.box(style=if m.mine { publish_message_tick_mine } else { publish_message_tick }, fn() {
-                let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message")).value
-                if (now == On) != on {
-                  if now == On {
-                    publishing.off.remove(k)
-                  } else {
-                    publishing.off[k] = true
-                  }
-                }
-              })
-              |> ignore
-            })
-            |> ignore
+        // on the page, its box to tick pointed at (or pressed): the whole of it lit, a band across the picture from
+        // edge to edge (square: it runs out of its sides as a list's row does, nothing in its corners), half the room
+        // between messages over and under it, so that lit one after another they meet
+        let side = @sf.theme().rows.check
+        let down = centred_in(first_line_h(c, m), side)
+        let lit = if taking {
+          0.0
+        } else {
+          let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k)))
+          @motion.animate(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+        }
+        let ground = if taking {
+          publish_said
+        } else {
+          let start = paper_in + ticks
+          let half = (if narrow { list_gap_narrow } else { list_gap }) / 2.0
+          publish_said.then(@sf.bleed_start(start)).then(@sf.bleed_end(paper_edge)).then(@sf.bleed_y(half))
+        }
+        c.box(style=ground, fn() {
+          if lit > 0.0 {
+            let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
+            c.look(g, @ui.look(alpha=lit))
           }
-          match hidden.get(m.seq) {
-            Some(h) if !taking =>
-              c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
-                @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
-                c.text(h, style=publish_meta) |> ignore
+          let said = c.box(style=publish_said, fn() {
+            // (its files drawn each to tick: file_item asks picturing)
+            picturing.val = Some((m.seq, taking))
+            message_row(c, src, here, m)
+            picturing.val = None
+            // on the page its box to tick, in the column before the words (before the pictures out in the margin), on
+            // the middle of its first line: its head's, or the first of the viewer's own bubble
+            if !taking {
+              c.layer(fn() {
+                let style = @ui.style(ml=@sf.room_of(-(paper_in - paper_edge + ticks)), pt=@sf.room_of(down))
+                c.box(style=publish_message_tick.then(style), fn() {
+                  let look = @kit.checkbox_look_of(size=side, radius=@sf.theme().rows.check_corner)
+                  let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=@sf.t("web-pages.chat.publish.message"), look~).value
+                  if (now == On) != on {
+                    if now == On {
+                      publishing.off.remove(k)
+                    } else {
+                      publishing.off[k] = true
+                    }
+                  }
+                })
+                |> ignore
               })
               |> ignore
-            _ => ()
+            }
+            match hidden.get(m.seq) {
+              Some(h) if !taking =>
+                c.box(style=if m.mine { publish_note_mine } else { publish_note_said }, fn() {
+                  @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
+                  c.text(h, style=publish_meta) |> ignore
+                })
+                |> ignore
+              _ => ()
+            }
+          })
+          let out = if taking { 0.0 } else { publish_out(c, k, on) }
+          if out > 0.0 {
+            c.look(said, @ui.look(alpha=publish_faded(out)))
           }
         })
-        if !on {
-          c.look(said, @ui.look(alpha=publish_off_alpha))
-        }
+        |> ignore
       }
     })
     |> ignore
@@ -354,9 +388,10 @@ fn file_k(seq : Double, a : Attachment) -> String {
 }
 
 ///|
-/// An attachment of message `seq` in the picture, `w` wide, as the chat shows it (file_drawn; FileToggle). On the page,
-/// ticked (its box at its end, half way down: publish_tick) it goes in the picture; unticked, it fades. In the picture
-/// taken (`taking`), as it is.
+/// An attachment of message `seq` in the picture, `w` wide, as the chat shows it (file_drawn). On the page, as what
+/// waits to go in the composer has it, a ✕ hung on its top right corner (@sf.with_corner_remove) takes it out of the
+/// picture (pressed anywhere on it too): it fades, its ✕ a ＋ that puts it back. In the picture taken (`taking`), as it
+/// is, the room its mark hangs in kept.
 fn publish_file(
   c : @ui.Ctx,
   src : Source,
@@ -368,41 +403,39 @@ fn publish_file(
   by~ : (String, String, String)?,
 ) -> Unit {
   let k = file_k(seq, a)
+  // (the room its mark is hung in kept in the picture too, so that it is laid out as the page has it)
   if taking || k == "" {
-    file_drawn(c, src, here, a, w, by~)
+    c.box(style=@ui.style(pr=@sf.room_of(publish_file_hung())), fn() { file_drawn(c, src, here, a, w, by~) }) |> ignore
     return
   }
   let on = !publishing.off.contains(k)
-  let toggle = fn(now : Bool) {
-    if now {
-      publishing.off.remove(k)
-    } else {
-      publishing.off[k] = true
-    }
-  }
-  // (pressed anywhere, ticked or not: FileToggle is a label round the file and its box)
+  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes)
+  let out = publish_out(c, k, on)
   let id = c.id("publish/file/" + k)
-  let mut ticked = false
-  let card = c.box(style=publish_file_box, fn() {
-    file_drawn(c, src, here, a, w, by~)
-    // (over the file, taking its presses: what the chat would open it by does not here)
-    c.layer(fn() {
-      c.box(style=publish_tick, id~, fn() {
-        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=a.name).value
-        if (now == On) != on {
-          ticked = true
-          toggle(now == On)
-        }
+  let hung = @sf.with_corner_remove(
+    c,
+    "publish/file/" + k,
+    @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
+    @sf.message_file_corner,
+    w~,
+    turn=out * publish_plus_turn,
+    fn() {
+      // (pressed anywhere, as its mark is: what the chat would open it by does not here)
+      let card = c.box(style=publish_file_box, fn() {
+        file_drawn(c, src, here, a, w, by~)
+        c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
       })
-      |> ignore
-    })
-    |> ignore
-  })
-  if !ticked && c.clicked(id) {
-    toggle(!on)
-  }
-  if !on {
-    c.look(card, @ui.look(alpha=publish_off_alpha))
+      if out > 0.0 {
+        c.look(card, @ui.look(alpha=publish_faded(out)))
+      }
+    },
+  )
+  if hung || c.clicked(id) {
+    if on {
+      publishing.off[k] = true
+    } else {
+      publishing.off.remove(k)
+    }
   }
 }
 
@@ -410,6 +443,23 @@ fn publish_file(
 /// An attachment left out (file[data-off]: .45); the shield before how much was hidden, in the bar (14) and under a
 /// message (13).
 let publish_off_alpha : Double = 0.45
+
+///|
+/// How far what `k` names is out of the picture (0 in it, 1 out), moving as its tick or its ✕ is pressed: as long as a
+/// control's change takes (vars.dur), easing out.
+fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> Double {
+  @motion.animate(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+}
+
+///|
+/// How opaque it is, `out` of the picture.
+fn publish_faded(out : Double) -> Double {
+  1.0 - out * (1.0 - publish_off_alpha)
+}
+
+///|
+/// The ✕ turned an eighth of a turn: a ＋.
+let publish_plus_turn : Double = 0.7853981633974483
 
 ///|
 let publish_note_icon_small : Double = 13.0
@@ -438,10 +488,6 @@ let publish_problem : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger)
 /// the foot of a small screen).
 // kept across runs: a value (no field of it changes)
 let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let publish_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(publish_page_w))
 
 ///|
 /// The picture (page): 32 round what it holds, 32 down from its top and up from its foot, its parts 16 apart, on the
@@ -519,22 +565,58 @@ let publish_list_narrow : @ui.Style = @ui.style(w=Full, gap=@sf.room_of(list_gap
 let publish_said : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
-/// A message's box to tick: over it, at the top of the side its words leave (its head's end; the viewer's own, its
-/// start).
+/// A message's box to tick (on the page): in a column of its own before the picture's words, the paper's edge's room
+/// before it and 12 after it (doc/ui-panels.md: what goes before a row is a column of its own, the words start after
+/// it), not over the message; on the middle of the message's first line (first_line_h).
 // kept across runs: a value (no field of it changes)
-let publish_message_tick : @ui.Style = @ui.css("w=Full align=AEnd")
+let publish_message_tick : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let publish_message_tick_mine : @ui.Style = @ui.css("w=Full align=AStart")
+/// The column the boxes to tick stand in on the page: a box (the theme's rows' check) and 12 after it.
+fn publish_tick_room() -> Double {
+  @sf.theme().rows.check + publish_tick_gap
+}
 
 ///|
-/// An attachment to tick (file), its box at its end (tick).
+let publish_tick_gap : Double = 12.0
+
+///|
+/// How far down something `h` high is to be in the middle of a line `line` high.
+fn centred_in(line : Double, h : Double) -> Double {
+  (line - h) / 2.0
+}
+
+///|
+/// How high message `m`'s first line is, from its top: its head's line (its name, its time; S6), or for the viewer's
+/// own that begins with its words, its bubble's first line (the bubble's 8 over a line of the theme's words); one that
+/// begins with what it quotes or a file, the head's line as well.
+fn first_line_h(c : @ui.Ctx, m : @sfbase.Message) -> Double {
+  if m.mine && m.text != "" && m.quotes.length() == 0 && beside_quotes(m.quotes, m.attachments).length() == 0 {
+    let line = c.style_size(@sf.theme().t.words).1
+    bubble_in_y * 2.0 + line
+  } else {
+    head_line_h
+  }
+}
+
+///|
+/// An attachment on the page, faded once taken out.
 // kept across runs: a value (no field of it changes)
 let publish_file_box : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Its box (tick): at its end, half way down, the ladder's inset in: where a file card's own buttons are on the web
-/// (FileCard's fileCardAction: download's ✕, retry's ↻), so the box to tick stands where the card's action does.
+/// A message's ground while its box to tick is pointed at: the hand's (hover).
 // kept across runs: a value (no field of it changes)
-let publish_tick : @ui.Style = @ui.css("w=Full h=Full pr=S2_5 align=AEnd justify=JCenter")
+let publish_lit : @ui.Style = @ui.css("w=Full h=Full bg=Hover")
+
+///|
+/// What takes its presses, all over it.
+// kept across runs: a value (no field of it changes)
+let publish_file_press : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The room its ✕ (＋ once taken out) hangs in past its top and right edge (@sf.with_corner_remove), kept in the
+/// picture taken too.
+fn publish_file_hung() -> Double {
+  @sf.corner_remove_reach(@sf.message_file_corner)
+}

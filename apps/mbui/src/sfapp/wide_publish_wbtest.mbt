@@ -30,6 +30,8 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   // its messages as the chat's list draws them (the viewer's own at its end, an agent's vault request as it ended)
   assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("已允许使用「Axiom 查询 token」") is Some(_))
+  // each message's box to tick in a column of its own before them (and before their pictures out in the margin)
+  assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
   t.click(Button, label="复制图片")
   t.frame()
   assert_eq(named(calls, "chat.publish").length(), 0)

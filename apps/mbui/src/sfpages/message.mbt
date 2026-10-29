@@ -1019,6 +1019,10 @@ let msg_main_share : @ui.Style = @ui.css("w=Full")
 let msg_head : @ui.Style = @ui.css("row w=Full min_h=S6 gap=S1_5 align=ACenter")
 
 ///|
+/// Its head's line's height (S6, msg_head's and msg_head_inline's least): what goes beside it is on its middle.
+let head_line_h : Double = 24.0
+
+///|
 /// An inline head (inlineHeads msgHead): in past the picture (25: its 18 and 7); where it went on a line of its own.
 // kept across runs: a value (no field of it changes)
 let msg_head_inline : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, pl=@sf.message_head_in, gap=S1_5, align=ACenter)
@@ -1064,6 +1068,10 @@ let mine_column : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 /// Its bubble (msgMine msgBubble): 8 by 14 in, 18 round, the neutral ground.
 // kept across runs: a value (no field of it changes)
 let bubble : @ui.Style = @ui.css("px=S3_5 py=S2 radius=Xl2 bg=Neutral")
+
+///|
+/// How far the bubble's words are in from its top and its foot (bubble's S2).
+let bubble_in_y : Double = 8.0
 
 ///|
 /// Its ground on its own (coming in round words sent flying here), and the bubble without it meanwhile.

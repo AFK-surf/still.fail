@@ -20,16 +20,21 @@ export type LongPicture = {
   keep?: (node: Node) => boolean;
   /** Each node of the copy as it is made, changed for the picture where it says (a time said as a date). */
   copied?: (node: Node) => void;
+  /** How much of its start (its left padding) is the page's, not the picture's (room for what only the page shows): left
+   * out of the picture, what it holds laid out as wide as on the page. */
+  start?: number;
 };
 
 /** What element `el` shows, all of it, as a PNG. */
 export async function longPicture(el: HTMLElement, o: LongPicture): Promise<Blob> {
-  const width = Math.ceil(el.offsetWidth);
+  const start = o.start ?? 0;
+  const width = Math.ceil(el.offsetWidth - start);
   const height = Math.ceil(el.offsetHeight);
   const m = o.margin ?? 0;
   // (its ground the canvas's, filled under each band: the element keeps its own, a table's frame its tint)
   const svg = await domToForeignObjectSvg(el, {
     width, height, timeout: 15000,
+    ...(start ? { style: { paddingLeft: `${parseFloat(getComputedStyle(el).paddingLeft) - start}px` } } : {}),
     ...(o.keep ? { filter: o.keep } : {}),
     ...(o.copied ? { onCloneEachNode: o.copied } : {}),
   });

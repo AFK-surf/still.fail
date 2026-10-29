@@ -2160,7 +2160,7 @@ pub fn window_keys_w() -> Double
 
 pub let window_page_in : @motion.Trans
 
-pub fn with_corner_remove(@ui.Ctx, String, String, Double, () -> Unit, w? : Double) -> Bool
+pub fn with_corner_remove(@ui.Ctx, String, String, Double, () -> Unit, w? : Double, turn? : Double) -> Bool
 
 pub fn with_ground(@ui.Ctx, Int64, () -> Unit) -> Unit
 
