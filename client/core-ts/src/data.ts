@@ -166,10 +166,11 @@ export type DataOptions = {
   kept?: number;
 };
 
-/// How much room an account's database may take on the device: past it, the items of the logs least recently used go
-/// (agents' transcripts first, then threads' entries, and what was said in them with them), down to KEPT_TO of it.
-/// Rows, threads, sessions, read positions and what was done here are small and always kept; a log let go is read
-/// again once its chat is opened. The database's file keeps the room it took (its free pages are used again).
+/// How much room an account's database may take on the device: past it, the agents' transcripts least recently used go,
+/// down to KEPT_TO of it. A chat's messages, rows, threads, sessions, read positions and what was done here are small
+/// and always kept (messages let go to make room for what could not go left 33 of 1388 chats on a Mac, each opened
+/// waiting for the station); a transcript let go is read again once its history is opened. The database's file keeps
+/// the room it took (its free pages are used again).
 export const KEPT = 256 * 1024 * 1024;
 const KEPT_TO = 0.8;
 /// How often, at most, the room taken is looked at as logs are written.
@@ -1011,23 +1012,21 @@ export class Data {
     return db !== undefined && !db.readOnly ? db.opened(kind, station, id, this.#host.nowMs()) && open : false;
   }
 
-  /// Past its room: the logs not shown, least recently used first, transcripts before entries, let go down to KEPT_TO.
+  /// Past its room: the agents' transcripts not shown, least recently used first, let go down to KEPT_TO.
   #keepWithin(db: AccountDb): void {
     if (db.readOnly || db.used() <= this.#kept) return;
     const to = this.#kept * KEPT_TO;
     const gone = new Set<string>();
-    for (const kind of ["transcript", "entry"] as const) {
-      for (;;) {
-        const logs = db.logsByUse(kind, 50).filter((l) => {
-          const key = `${kind}\u0001${l.station}\u0001${l.id}`;
-          return !this.#shown.has(key) && !gone.has(key);
-        });
-        if (logs.length === 0) break;
-        for (const l of logs) {
-          gone.add(`${kind}\u0001${l.station}\u0001${l.id}`);
-          db.evict(kind, l.station, l.id);
-          if (db.used() <= to) return;
-        }
+    for (;;) {
+      const logs = db.transcriptsByUse(50).filter((l) => {
+        const key = `transcript\u0001${l.station}\u0001${l.id}`;
+        return !this.#shown.has(key) && !gone.has(key);
+      });
+      if (logs.length === 0) return;
+      for (const l of logs) {
+        gone.add(`transcript\u0001${l.station}\u0001${l.id}`);
+        db.evict(l.station, l.id);
+        if (db.used() <= to) return;
       }
     }
   }
