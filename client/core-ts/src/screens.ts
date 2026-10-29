@@ -4,12 +4,14 @@
 // (protocol.ts), and the UI acknowledges each one it decoded, which is what lets the station send the next: a slow link
 // or a slow decoder lowers the frame rate rather than queueing. What the page draws of the view (its phase, 只看/控制,
 // who else is on it) is said whole as `{state}` each time it changes; the page only draws it. The link dropping opens
-// the view again; switching 只看/控制 opens it again with the other. While it drives the screen, the screen's clipboard
+// the view again; switching 只看/控制 opens it again with the other, and another size asked (`screen.bounds`, 画质) with
+// that, the stream before kept until the new one has opened (a Windows desktop puts its display's scale back once its
+// last view ends). While it drives the screen, the screen's clipboard
 // goes both ways (`screen.clipboard` sets it and pastes; a copy made on it comes as `{clipboard}`), and where a file
 // dropped into it goes (`drop`) is in its state, for the page to upload it with the drive's upload. Zoomed in, the page
 // says what part of the screen it shows (`screen.look`): once it has stayed so a moment, the station sends that part
 // alone, as large as the page shows it, each config saying which part (the page draws it there, over the whole).
-import { Deferred, Effect, Option, Queue } from "effect";
+import { Deferred, Effect, Exit, Option, Queue, Scope } from "effect";
 import type { Inner, Progress } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import { CoreError, asCoreError } from "./error.ts";
@@ -51,6 +53,8 @@ export type ScreenCall =
   | { kind: "keyframe"; view: string }
   | { kind: "input"; view: string; input: J }
   | { kind: "control"; view: string; control: boolean }
+  /// The size the view's pictures are asked to fit in from now on (another 画质).
+  | { kind: "bounds"; view: string; maxWidth: number; maxHeight: number }
   /// The part of the screen the page shows (null: the whole), in `width`×`height` of this device's pixels.
   | { kind: "look"; view: string; region: Region | null; width: number; height: number }
   /// The screen's clipboard set to text or a PNG (its bytes), then pasted where its focus is unless `paste` is false.
@@ -139,6 +143,14 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       const control = get(params, "control");
       if (typeof control !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "control" }));
       return { kind: "control", view: text(params, "view"), control };
+    }
+    case "screen.bounds": {
+      const size = (field: string) => {
+        const v = get(params, field);
+        if (!finite(v) || v < 1) throw CoreError.invalid(t("core-misc.params.missing", { field }));
+        return Math.min(Math.round(v), LIMIT);
+      };
+      return { kind: "bounds", view: text(params, "view"), maxWidth: size("maxWidth"), maxHeight: size("maxHeight") };
     }
     default:
       return null;
@@ -367,6 +379,7 @@ type Open = {
   keyframe(): void;
   input(input: J): void;
   control(on: boolean): void;
+  bounds(maxWidth: number, maxHeight: number): void;
   look(region: Region | null, width: number, height: number): void;
   /// Fails (why, in words) while the view does not drive the screen, or the screen carries no such clipboard.
   clipboard(type: ClipType, data: Uint8Array, paste: boolean): CoreError | null;
@@ -392,9 +405,13 @@ export function screensChanged(inner: Inner, station: string): void {
   for (const view of openIn(inner).values()) if (view.station === station) view.listed();
 }
 
+/// A view's next stream, opened before the one it takes the place of closed: its socket, the scope it closes with, and
+/// what it was asked.
+type Next = { socket: WireSocket; scope: Scope.Closeable; asked: ScreenAsk };
+
 /// How a view's stream ended (`gone`: its screen went, a tab closed; `dropped`: the stream went, `seen` whether a frame
 /// came on it first), or why it could not open.
-type Outcome = { ended: string | null; gone?: true } | { reopen: true } | { dropped: true; seen: boolean } | { failed: CoreError };
+type Outcome = { ended: string | null; gone?: true } | { reopen: Next } | { dropped: true; seen: boolean } | { failed: CoreError };
 
 /// What a failure to open a view says the view is now: done for good (a phase), or worth trying again (null). The
 /// station's statuses (docs/remote-screens.md): 404 no such screen, 400/415 no codec in common, 501 not supported here,
@@ -430,6 +447,9 @@ export function install(): void {
       case "control":
         target.control(c.control);
         break;
+      case "bounds":
+        target.bounds(c.maxWidth, c.maxHeight);
+        break;
       case "look":
         target.look(c.region, c.width, c.height);
         break;
@@ -462,6 +482,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     let driving: string[] | null = null;
     // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
+    // What the station is asked for: as the view opened, its size as last asked (`screen.bounds`).
+    let bounds = c.ask;
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
     let reopen: Deferred.Deferred<void> | null = null;
@@ -567,13 +589,18 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       },
       // Shown as large as the page shows it, no larger than the view asked for the whole screen.
       look: (region, width, height) => {
-        looking = region === null ? whole : { region, maxWidth: Math.min(width, c.ask.maxWidth), maxHeight: Math.min(height, c.ask.maxHeight) };
+        looking = region === null ? whole : { region, maxWidth: Math.min(width, bounds.maxWidth), maxHeight: Math.min(height, bounds.maxHeight) };
         Queue.offerUnsafe(looks, undefined);
       },
       control: (on) => {
         const next = on && may;
         if (next === wanted) return;
         wanted = next;
+        if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
+      },
+      bounds: (maxWidth, maxHeight) => {
+        if (maxWidth === bounds.maxWidth && maxHeight === bounds.maxHeight) return;
+        bounds = { ...bounds, maxWidth, maxHeight };
         if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
       },
       listed: () => tell(),
@@ -613,13 +640,23 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     if (c.auto) wanted = may && names(get(listedItem(), "controlledBy")).every((n) => mine.includes(n.toLowerCase()));
     tell();
 
-    /// One stream: opened, its frames read until it ends, is to be opened again, or fails.
-    const attempt = (control: boolean): Effect.Effect<Outcome> =>
+    /// One stream (`ready`: opened already, as the one before it ended): opened, its frames read until it ends, is to be
+    /// opened again, or fails.
+    const attempt = (ready: Next | null): Effect.Effect<Outcome> =>
       Effect.scoped(
         Effect.gen(function* () {
-          const opened = yield* Effect.result(inner.stations.requests.screenView(addr, c.screen, { ...c.ask, control }, ctx));
-          if (opened._tag === "Failure") return { failed: opened.failure } as Outcome;
-          const socket: WireSocket = opened.success;
+          let socket: WireSocket;
+          let sent: ScreenAsk;
+          if (ready !== null) {
+            yield* Effect.addFinalizer(() => Scope.close(ready.scope, Exit.void));
+            ({ socket, asked: sent } = ready);
+          } else {
+            sent = { ...bounds, control: wanted };
+            const opened = yield* Effect.result(inner.stations.requests.screenView(addr, c.screen, sent, ctx));
+            if (opened._tag === "Failure") return { failed: opened.failure } as Outcome;
+            socket = opened.success;
+          }
+          const control = sent.control;
           const queue = yield* Queue.unbounded<Uint8Array>();
           out = queue;
           // A new stream frames the whole screen: the part looked at, asked of it at once.
@@ -630,6 +667,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes)))));
           const again = Deferred.makeUnsafe<void>();
           reopen = again;
+          // Another mode or size asked while it opened: opened again with it.
+          if (wanted !== control || bounds.maxWidth !== sent.maxWidth || bounds.maxHeight !== sent.maxHeight) Deferred.doneUnsafe(again, Effect.void);
           state.control = control;
           if (state.phase !== "live" || state.message !== undefined) {
             state.phase = state.width !== undefined ? "live" : "connecting";
@@ -643,7 +682,17 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
               Effect.map(Effect.result(socket.reply.body.take), (r) => ({ r }) as const),
               Effect.as(Deferred.await(again), { reopen: true } as const),
             );
-            if ("reopen" in next) return { reopen: true } as Outcome;
+            if ("reopen" in next) {
+              // The next stream opened while this one stays: the station has a view of this client's all along.
+              const scope = yield* Scope.make();
+              const nextAsk = { ...bounds, control: wanted };
+              const opened = yield* Effect.result(Scope.provide(inner.stations.requests.screenView(addr, c.screen, nextAsk, ctx), scope));
+              if (opened._tag === "Failure") {
+                yield* Scope.close(scope, Exit.void);
+                return { failed: opened.failure } as Outcome;
+              }
+              return { reopen: { socket: opened.success, scope, asked: nextAsk } } as Outcome;
+            }
             if (next.r._tag === "Failure" || next.r.success === null) return { dropped: true, seen } as Outcome;
             reader.push(next.r.success);
             for (;;) {
@@ -722,9 +771,16 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       );
 
     let misses = 0;
+    let ready: Next | null = null;
+    // (one opened as the view ends: closed with it)
+    yield* Effect.addFinalizer(() => (ready === null ? Effect.void : Scope.close(ready.scope, Exit.void)));
     for (;;) {
-      const outcome = yield* attempt(wanted);
-      if ("reopen" in outcome) continue;
+      const outcome: Outcome = yield* attempt(ready);
+      ready = null;
+      if ("reopen" in outcome) {
+        ready = outcome.reopen;
+        continue;
+      }
       if ("ended" in outcome) {
         // Its screen gone (a tab closed) is over for good, as one no longer listed: nothing to open again.
         state.phase = outcome.gone ? "gone" : "ended";

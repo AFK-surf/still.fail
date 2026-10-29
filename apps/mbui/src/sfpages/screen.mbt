@@ -108,7 +108,7 @@ priv struct ScreenSess {
   mut frames : Int
   mut bytes : Int
   /// the 画质 the open view was asked with (prefs `screenQuality`; "": as this device's screen is): another chosen
-  /// opens it again
+  /// is asked of it (`screen.bounds`)
   mut asked : String
 }
 
@@ -627,13 +627,21 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
 }
 
 ///|
-/// 画质 chosen otherwise since the open view was asked: opened again with it, the frame on screen kept meanwhile.
+/// 画质 chosen otherwise since the open view was asked: the view goes on, its pictures asked this large
+/// (`screen.bounds`: the core opens its stream again, the one before kept until the new one has opened, so a Windows
+/// desktop keeps the display scale set from it), the frame on screen kept meanwhile.
 fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
-  if self.call == 0 || self.asked == screen_quality(src) {
+  let quality = screen_quality(src)
+  if self.call == 0 || self.asked == quality {
     return
   }
-  self.pause(src)
-  self.open(src)
+  self.asked = quality
+  let (mw, mh) = quality_bounds(quality)
+  screen_tell(src, "screen.bounds", {
+    "view": Json::string(self.view),
+    "maxWidth": Json::number(mw.to_double()),
+    "maxHeight": Json::number(mh.to_double()),
+  })
 }
 
 ///|

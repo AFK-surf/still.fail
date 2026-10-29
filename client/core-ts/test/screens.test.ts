@@ -128,6 +128,8 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["h265", "h264", "jpeg"] }) as J).call.ask.codecs, ["h265", "h264", "jpeg"]);
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1" }) as J).call.ask.codecs, ["h264", "jpeg"]);
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
+  assert.deepEqual((parseCall("screen.bounds", { view: "v1", maxWidth: 99999, maxHeight: 720.4 }) as J).call, { kind: "bounds", view: "v1", maxWidth: 7680, maxHeight: 720 });
+  for (const bad of [{ view: "v1", maxWidth: 1280 }, { view: "v1", maxWidth: 0, maxHeight: 720 }, { maxWidth: 1280, maxHeight: 720 }]) assert.throws(() => parseCall("screen.bounds", bad), JSON.stringify(bad));
   // The stage a phone shows it on goes with it (a tab of the station's browser is laid out for it); not a preview's.
   const fit = { width: 389.6, height: 701, scale: 3 };
   assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "browser:T1", view: "v1", codecs: ["jpeg"], fit }) as J).call.ask.fit, { width: 390, height: 701, scale: 3 });
@@ -145,7 +147,8 @@ test("a_screen_link_opens_the_screen", () => {
 // ── a station's views, faked ──
 
 /// One view the fake station has open: what the client asked, what it sent, and the station's side of the stream.
-type Viewing = { head: RequestHead; ask: ScreenAsk; got: ClientFrame[]; closed: boolean; send(bytes: Uint8Array): void; end(): void };
+/// `alongside`: how many of the others were still open as it opened.
+type Viewing = { head: RequestHead; ask: ScreenAsk; got: ClientFrame[]; closed: boolean; alongside: number; send(bytes: Uint8Array): void; end(): void };
 
 /// A wire whose requests go over the host's fetch (station-fixture.ts) and whose screen views a test drives: `answer`
 /// says how the station answers each (200, or a status and its error).
@@ -166,6 +169,7 @@ function screenWire(seed: number) {
             ask,
             got: [],
             closed: false,
+            alongside: views.filter((o) => !o.closed).length,
             send: (bytes) => {
               for (const piece of cut(bytes, draw)) Queue.offerUnsafe(queue, piece);
             },
@@ -513,6 +517,7 @@ each("only_looking_is_opened_again_without_control_and_takes_no_input", async (s
   call(core, ui, 2, "screen.control", { view: "v", control: false });
   await host.settle();
   assert.equal(views.length, 2, "opened again");
+  assert.equal(views[1]!.alongside, 1, "the next opened before the one before it closed");
   assert.equal(views[0]!.closed, true);
   assert.equal(views[1]!.ask.control, false);
   call(core, ui, 3, "screen.input", { view: "v", input: { t: "text", text: "x" } });
@@ -524,6 +529,34 @@ each("only_looking_is_opened_again_without_control_and_takes_no_input", async (s
   assert.deepEqual([watch.phase, watch.control, watch.line], ["live", false, "只看"], "the last frame stays: no connecting in between");
   const all = states(log, 1);
   assert.equal(all.slice(all.findIndex((s: J) => s.phase === "live")).some((s: J) => s.phase !== "live"), false);
+  core.close();
+});
+
+each("another_size_asked_opens_the_view_again_with_it_the_stream_before_kept_until_the_new_one_opened", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1920, maxHeight: 1080 });
+  await host.settle();
+  views[0]!.send(join([configFrame({ codec: "jpeg", width: 1920, height: 1080 }), videoFrame(true, 1, bytesOf(500, seed))]));
+  await host.settle();
+  call(core, ui, 2, "screen.bounds", { view: "v", maxWidth: 1280, maxHeight: 720 });
+  await host.settle();
+  assert.equal(views.length, 2, "opened again");
+  // The station had a view of this client's all along (a Windows desktop puts its display's scale back once none is).
+  assert.equal(views[1]!.alongside, 1);
+  assert.equal(views[0]!.closed, true);
+  assert.deepEqual([views[1]!.ask.maxWidth, views[1]!.ask.maxHeight, views[1]!.ask.control], [1280, 720, true]);
+  // The same size again: nothing opened.
+  call(core, ui, 3, "screen.bounds", { view: "v", maxWidth: 1280, maxHeight: 720 });
+  await host.settle();
+  assert.equal(views.length, 2);
+  // Input goes to the new stream.
+  call(core, ui, 4, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[1]!.got, [{ input: { t: "text", text: "x" } }]);
+  said(host, log);
+  const all = states(log, 1);
+  assert.equal(all.slice(all.findIndex((s: J) => s.phase === "live")).some((s: J) => s.phase !== "live"), false, "the last frame stays: no connecting in between");
   core.close();
 });
 
