@@ -30,6 +30,7 @@ priv struct WordsOver {
 }
 
 ///|
+// kept across runs: begun anew by each Tester (words_over_begin)
 let words_over : WordsOver = { held: true, file: "", pairs: Set::new() }
 
 ///|
