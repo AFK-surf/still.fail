@@ -5,7 +5,7 @@
 // only once it is decided.
 import assert from "node:assert/strict";
 import { createPublicKey, generateKeyPairSync, sign as nodeSign } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -288,6 +288,67 @@ test("a secret its owner types in without security mode: written into their plai
     assert.deepEqual([kept.id, kept.fields], [r.item, { username: "admin", password: PASSWORD }]);
     assert.match(await asked, /Kept: 「Router」.*This chat may use it now/);
     assert.deepEqual(h.secrets.held("s1").map((x) => x.secret.fields.password), [PASSWORD]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a file to keep: read from its path as its bytes, kept as base64 under its name, and written out for each command alone, its path in the variable and the content hidden", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    // A file not all text: its bytes kept as they are.
+    const bytes = Buffer.concat([Buffer.from(`apiVersion: v1\ntoken: ${PASSWORD}\n`), Buffer.from([0, 255, 254])]);
+    writeFileSync(join(h.dir, "kube config"), bytes);
+    const asked = h.secrets.save("s1", { name: "集群", kind: "file", reason: "部署", path: "kube config", env: "KUBECONFIG", cwd: h.dir });
+    const r = await new Promise<Request>((resolve) => h.secrets.listen((x) => x.status === "pending" && resolve(x)));
+    assert.deepEqual(r.save, { kind: "file", name: "集群", modes: ["file"], hosts: [], env: "KUBECONFIG", filename: "kube config" });
+    assert.equal(h.cards[0]!.text, "申请将「集群」存入密钥库（文件 · kube config）：部署");
+    assert.deepEqual(h.cards[0]!.card.vault.save, { kind: "file", filename: "kube config" });
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual(kept.fields, { content: bytes.toString("base64"), filename: "kube config" });
+    assert.match(await asked, /Kept: 「集群」.*as a file/);
+
+    const ran = await h.secrets.run("s1", { grant: r.id, command: 'test "$KUBECONFIG" = "$STILLFAIL_SECRET" && ls -l "$KUBECONFIG" | cut -c1-10 && basename "$KUBECONFIG" && head -2 "$KUBECONFIG" && echo "$KUBECONFIG" > where', cwd: h.dir });
+    assert.match(ran, /^exit code 0\n-rw-------\nkube config\napiVersion: v1\ntoken: /);
+    // (the file is not text, so only its bytes' base64 is hidden; a line of it printed is the agent's to see, as an env value's would be)
+    const where = readFileSync(join(h.dir, "where"), "utf8").trim();
+    assert.ok(where.endsWith("/kube config") && !existsSync(where), "written for the command alone");
+
+    // A text file printed whole comes back hidden; one too big, or a path not a file, is not kept.
+    writeFileSync(join(h.dir, "sa.json"), `{"key": "${PASSWORD}"}\n`);
+    const made = new Promise<Request>((resolve) => h.secrets.listen((x) => x.status === "pending" && x.save?.name === "SA" && resolve(x)));
+    const second = h.secrets.save("s1", { name: "SA", kind: "file", reason: "x", path: join(h.dir, "sa.json"), cwd: h.dir });
+    const r2 = await made;
+    assert.ok(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request: r2.id }) !== "string");
+    await second;
+    assert.equal(await h.secrets.run("s1", { grant: r2.id, command: 'cat "$STILLFAIL_SECRET"', cwd: h.dir }), "exit code 0\n[已隐藏]\n");
+    writeFileSync(join(h.dir, "big"), Buffer.alloc(64 * 1024 + 1));
+    await assert.rejects(h.secrets.save("s1", { name: "Big", kind: "file", reason: "x", path: "big", cwd: h.dir }), /more than 64 KB/);
+    await assert.rejects(h.secrets.save("s1", { name: "None", kind: "file", reason: "x", path: "missing", cwd: h.dir }), /could not be read/);
+    await assert.rejects(h.secrets.save("s1", { name: "T", kind: "token", reason: "x", path: "sa.json", cwd: h.dir }), /give kind file/);
+    await assert.rejects(h.secrets.save("s1", { name: "E", kind: "file", reason: "x", path: "sa.json", modes: ["env"], cwd: h.dir }), /given as a file/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a file its owner picks without security mode: kept with the fields their app sends, its content base64 of 64 KB at most", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    const asked = h.secrets.save("s1", { name: "证书", kind: "file", reason: "签名", env: "CERT", cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.deepEqual(r!.save, { kind: "file", name: "证书", modes: ["file"], hosts: [], env: "CERT", typed: true });
+    assert.equal(h.cards[0]!.text, "请填入「证书」（文件）并存入密钥库：签名");
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id, fields: { content: "not base64!", filename: "a.p12" } }) as string, /base64/);
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id, fields: { content: Buffer.alloc(64 * 1024 + 1).toString("base64") } }) as string, /at most 64 KB/);
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id, fields: { content: "eA==", filename: "../a" } }) as string, /not a path/);
+    const content = Buffer.alloc(64 * 1024, 7).toString("base64");
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id, fields: { content, filename: "a.p12" } });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual(kept.fields, { content, filename: "a.p12" });
+    assert.match(await asked, /Kept: 「证书」/);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

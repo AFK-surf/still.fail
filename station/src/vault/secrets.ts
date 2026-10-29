@@ -12,6 +12,7 @@
 // with its chat: archived or deleted, its session's grants are dropped.
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { LockState } from "../cloud/lock.ts";
 import type { To } from "../api/events.ts";
@@ -23,7 +24,7 @@ import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Held, Keeper, hostAllowed, valueOf } from "./keeper.ts";
-import { KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
+import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
 import { type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
@@ -81,12 +82,14 @@ const SAVE_WORDS = {
   save: { label: "存入密钥库", detail: "agent 之后每次使用仍需你批准" },
   deny: { label: "拒绝", detail: "不保存，通知 agent" },
 };
-const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥" };
-const howWords = (mode: Mode, hosts: string[]): string => (mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : "环境变量（命令可读取明文）");
+const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件" };
+const howWords = (mode: Mode, hosts: string[]): string =>
+  mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : mode === "file" ? "文件（命令运行时临时写出，可读取内容）" : "环境变量（命令可读取明文）";
 
 /// The field of each kind that holds its secret.
-const SECRET_FIELD: Record<Kind, string> = { token: "value", login: "password", ssh_key: "private_key" };
-/// The most a secret typed in may be, its fields together (as a command's output may: one secret).
+const SECRET_FIELD: Record<Kind, string> = { token: "value", login: "password", ssh_key: "private_key", file: "content" };
+/// The most a secret typed in may be, its fields together (as a command's output may: one secret); a file's, as
+/// plainOk says (FILE_MOST of bytes).
 const TYPED_MOST = 64 * 1024;
 
 /// The fields of a secret its owner typed in, as their app sent them: words only, its secret not empty, one secret's
@@ -97,7 +100,7 @@ function typedFields(kind: Kind, v: unknown): Record<string, string> | undefined
   if (!fields.every(([, x]) => typeof x === "string")) return undefined;
   const all = Object.fromEntries(fields) as Record<string, string>;
   const size = fields.reduce((n, [k, x]) => n + k.length + (x as string).length, 0);
-  return (all[SECRET_FIELD[kind]] ?? "").trim() !== "" && size <= TYPED_MOST ? all : undefined;
+  return (all[SECRET_FIELD[kind]] ?? "").trim() !== "" && (kind === "file" || size <= TYPED_MOST) ? all : undefined;
 }
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -392,7 +395,9 @@ export class Secrets {
         ? `The command gets HTTPS_PROXY set to the station's proxy and ${l.env ?? "the variable you name in env"} (and ${SECRET_VAR}) set to the placeholder ${placeholder(r.id)}: put it where the token goes (a header, ${l.env ?? "GH_TOKEN"}); the proxy swaps in the value on HTTPS to ${held.grant.hosts.join(", ")} only.`
         : held.grant.mode === "ssh"
           ? "The command gets SSH_AUTH_SOCK for an agent holding the key (ssh, git over ssh use it)."
-          : `The command gets the value in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR}; its output comes back with the value hidden.`;
+          : held.grant.mode === "file"
+            ? `The file is written out for each command alone (removed when it ends) and its path is in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR} (e.g. kubectl --kubeconfig "$${SECRET_VAR}"); its output comes back with the file's content hidden.`
+            : `The command gets the value in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR}; its output comes back with the value hidden.`;
     const until = new Date(held.grant.exp * 1000).toISOString();
     const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     const where = r.runOn ? ` Its commands run on ${r.runOn.name}, in this chat's directory there (where station_task runs); the value is sent there only for each command.` : "";
@@ -498,24 +503,34 @@ export class Secrets {
   /// on its card (`save.typed`: nothing of it held or sealed here); waits a while for its decision.
   async save(
     session: string,
-    a: { name: string; kind: string; reason: string; value?: string; command?: string; username?: string; public_key?: string; modes?: string[]; hosts?: string[]; env?: string; cwd: string; station?: string },
+    a: {
+      name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
+      cwd: string; station?: string;
+    },
   ): Promise<string> {
     const { ws, lock } = this.#placeOf(session);
+    const kind = a.kind as Kind;
+    if (a.path !== undefined && kind !== "file") throw new Refused("path is a file's: give kind file");
+    if (a.path !== undefined && (a.command !== undefined || a.value !== undefined)) throw new Refused("Give a file as path, command or value, one of them.");
+    // A file given by its path: read as a command printing it would (here or on the station named), ~/ its home there.
+    const quoted = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
+    const command = a.path === undefined ? a.command : `cat -- ${a.path.startsWith("~/") ? `"$HOME"/${quoted(a.path.slice(2))}` : quoted(a.path)}`;
+    const filename = kind === "file" ? (a.filename ?? (a.path !== undefined ? basename(a.path) : "")).trim() : "";
     const from = a.station ? this.#peer(a.station) : null;
-    if (from !== null && a.command === undefined) throw new Refused("station says where command runs: give command");
+    if (from !== null && command === undefined) throw new Refused("station says where command runs: give command (or path)");
     const email = this.#starter(session);
     if (email === null) throw new Refused("No one started this chat: there is no one to keep a secret for.");
-    const kind = a.kind as Kind;
-    if (!KINDS.includes(kind)) throw new Refused("kind is token, login or ssh_key");
+    if (!KINDS.includes(kind)) throw new Refused("kind is token, login, ssh_key or file");
     const name = a.name.trim();
     if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
     if (a.reason.trim() === "") throw new Refused("reason is required: why it is worth keeping, for the person deciding");
-    if (a.value !== undefined && a.command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
-    const typed = a.value === undefined && a.command === undefined;
+    if (a.value !== undefined && command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
+    const typed = a.value === undefined && command === undefined;
     const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
-    const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
-    if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh or env");
+    const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : kind === "file" ? ["file"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
+    if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh, env or file");
     if (modes.includes("ssh") !== (kind === "ssh_key")) throw new Refused("an SSH key is given by ssh (or env), and only an SSH key is");
+    if (kind === "file" && (modes.length !== 1 || modes[0] !== "file")) throw new Refused("a file is given as a file (modes: [\"file\"])");
     const sub = lock === null ? null : this.#memberOf(lock, email);
     if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
     const listing: Listing = { name, kind, modes, hosts, ...(a.env ? { env: a.env } : {}) };
@@ -523,27 +538,33 @@ export class Secrets {
     const item = `i_${ulid(now)}`;
     // What is not secret checked before anything is run.
     const draft = (fields: Record<string, string>): PlainItem => ({ ws, id: item, owner: email, version: 0, kind, name, fields, notes: "", listing, at: Math.floor(now / 1000) });
+    // (a file's value: its bytes in base64; given as value, its text)
     const fieldsOf = (value: string): Record<string, string> =>
-      kind === "token" ? { value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value } : { private_key: value, ...(a.public_key ? { public_key: a.public_key } : {}) };
-    const why = plainOk(null, draft(fieldsOf("x")), email);
+      kind === "token" ? { value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value }
+      : kind === "file" ? { content: value, ...(filename ? { filename } : {}) } : { private_key: value, ...(a.public_key ? { public_key: a.public_key } : {}) };
+    const why = plainOk(null, draft(fieldsOf("eA==")), email);
     if (why !== null) throw new Refused(why);
-    let value = a.value ?? "";
-    if (a.command !== undefined) {
-      const got = from === null ? await capture(a.command, a.cwd, baseEnv(), CAPTURE_MS) : await this.#captureOn(from, session, ws, a.command);
+    let value = kind === "file" && a.value !== undefined ? Buffer.from(a.value, "utf8").toString("base64") : (a.value ?? "");
+    if (command !== undefined) {
+      const got = from === null ? await capture(command, a.cwd, baseEnv(), CAPTURE_MS) : await this.#captureOn(from, session, ws, command);
       const end = got.timedOut ? "it ran too long" : got.code !== null ? `exit code ${got.code}` : `ended by ${got.signal}`;
-      if (got.timedOut || got.code !== 0) throw new Refused(`The command did not print the secret (${end}); nothing was kept. What it said on stderr:\n${got.err.slice(-2000)}`);
-      if (got.tooLong) throw new Refused("The command printed more than 64 KB: that is not one secret; nothing was kept.");
-      value = got.out;
+      const what = a.path !== undefined ? `The file could not be read (${end}); nothing was kept.` : `The command did not print the secret (${end}); nothing was kept.`;
+      if (got.timedOut || got.code !== 0) throw new Refused(`${what} What it said on stderr:\n${got.err.slice(-2000)}`);
+      if (got.tooLong) throw new Refused(`${a.path !== undefined ? "The file is" : "The command printed"} more than 64 KB: that is not one secret; nothing was kept.`);
+      if (kind === "file" && got.raw === undefined) throw new Refused(`${from?.name ?? "That station"} cannot read a file as its bytes yet: update it.`);
+      value = kind === "file" ? got.raw! : got.out;
     }
+    if (kind === "file" && Buffer.byteLength(value, "base64") > FILE_MOST) throw new Refused(`The file is more than ${FILE_MOST / 1024} KB; nothing was kept.`);
     if (value === "" && !typed) throw new Refused("The secret is empty; nothing was kept.");
     const fields = typed ? null : fieldsOf(value);
     const id = `r_${ulid(now)}`;
     const save: Save = {
-      kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(typed ? { typed: true as const } : {}),
+      kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}), ...(filename ? { filename } : {}),
+      ...(typed ? { typed: true as const } : {}),
     };
     const request: Request = {
       id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
-      ...(a.command !== undefined ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}),
+      ...(command !== undefined ? { command } : {}), ...(hosts.length ? { hosts } : {}),
       // A vault's: a box for the grant to this chat that comes with keeping it (the app seals the secret to it too).
       box: lock === null ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
       ...(lock !== null && fields !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
@@ -557,7 +578,7 @@ export class Secrets {
       kept.thread = thread.thread.id;
     }
     this.#save(kept);
-    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${a.command}` : (a.command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
+    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
     const decided = await this.#decision(id, WAIT_MS);
     return this.#saidSave(decided ?? request);
@@ -568,7 +589,7 @@ export class Secrets {
   async #postSave(session: string, thread: SessionThread, r: Request): Promise<string | null> {
     const s = r.save!;
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
-    const kind = `（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : ""}）`;
+    const kind = `（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : s.filename ? ` · ${s.filename}` : ""}）`;
     const text = [
       s.typed ? `请填入「${s.name}」${kind}并存入密钥库：${r.reason}` : `申请将「${s.name}」存入密钥库${kind}：${r.reason}`,
       ...(stillfail ? [] : [s.typed ? "请在 still.fail 客户端的「密钥」中填写并存入。" : "请在 still.fail 客户端的「密钥」中批准。"]),
@@ -582,7 +603,7 @@ export class Secrets {
           vault: {
             request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: s.modes[0] === "proxy" ? s.hosts : [],
             ...(r.runOn ? { station: r.runOn.name } : {}),
-            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.typed ? { typed: true } : {}) },
+            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.filename ? { filename: s.filename } : {}), ...(s.typed ? { typed: true } : {}) },
           },
         }
       : null;
@@ -597,7 +618,7 @@ export class Secrets {
       const held = this.keeper.usable(r.session, r.id);
       const use = typeof held === "string"
         ? `When you need it, ask with secret_use {item: "${s.name}"}, then secret_run.`
-        : `This chat may use it now: secret_run {grant: "${r.id}", command: "…"${s.env ? "" : ', env: "NAME"'}} (${held.grant.mode === "proxy" ? `through the proxy to ${held.grant.hosts.join(", ")}` : held.grant.mode === "ssh" ? "by ssh-agent" : "in the environment"}); other chats ask with secret_use.`;
+        : `This chat may use it now: secret_run {grant: "${r.id}", command: "…"${s.env ? "" : ', env: "NAME"'}} (${held.grant.mode === "proxy" ? `through the proxy to ${held.grant.hosts.join(", ")}` : held.grant.mode === "ssh" ? "by ssh-agent" : held.grant.mode === "file" ? "as a file, its path in the variable" : "in the environment"}); other chats ask with secret_use.`;
       return `Kept: 「${s.name}」 is in ${whose}'s vault now (item ${r.item}). ${use}`;
     }
     if (r.status === "denied") return `${whose} chose not to keep 「${s.name}」 (request ${r.id}).`;
@@ -862,7 +883,10 @@ export class Secrets {
   async #captureOn(on: { id: string; name: string }, session: string, ws: string, command: string): Promise<Captured> {
     const got = (await this.#elsewhere(on, { method: "vault.capture", workspace: ws, session, command, under: "", timeoutMs: CAPTURE_MS }, CAPTURE_MS)) as Partial<Captured> | null;
     if (got === null || typeof got.out !== "string" || typeof got.err !== "string") throw new Refused(`${on.name} said nothing of what the command printed`);
-    return { code: typeof got.code === "number" ? got.code : null, signal: typeof got.signal === "string" ? got.signal : null, out: got.out, err: got.err, timedOut: got.timedOut === true, tooLong: got.tooLong === true };
+    return {
+      code: typeof got.code === "number" ? got.code : null, signal: typeof got.signal === "string" ? got.signal : null, out: got.out, ...(typeof got.raw === "string" ? { raw: got.raw } : {}), err: got.err,
+      timedOut: got.timedOut === true, tooLong: got.tooLong === true,
+    };
   }
 
   /// A request of another station of the workspace (`vault.`): a command to run here with a secret it holds a grant
@@ -899,7 +923,7 @@ export class Secrets {
         .finally(letGo);
       return { started: true };
     }
-    const mode = r.mode === "proxy" || r.mode === "ssh" || r.mode === "env" ? (r.mode as Mode) : null;
+    const mode = MODES.includes(r.mode as Mode) ? (r.mode as Mode) : null;
     const secret = r.secret as { kind?: unknown; name?: unknown; fields?: unknown } | null;
     const hosts = Array.isArray(r.hosts) ? r.hosts.filter((h): h is string => typeof h === "string") : [];
     const env = typeof r.env === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(r.env) ? r.env : undefined;

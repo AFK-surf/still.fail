@@ -223,6 +223,34 @@ test "a secret the person types in: its field over 存入, which waits for somet
 }
 
 ///|
+test "a file the person picks: 选择文件 over 存入, which waits for one; picked, its name and size, its bytes going with the approval; one too big said so, none taken" {
+  reset()
+  let calls = []
+  let src = vault_src(["r1"], true, calls, save=true)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="file") }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  assert_true(t.find("存入文件「OpenCode Go」") is Some(_))
+  let (x, y) = t.find_last("存入").unwrap()
+  t.tap(x, y)
+  t.draw()
+  assert_eq(calls, [], msg="nothing picked, nothing approved")
+  t.picks([("big.bin", Bytes::make(64 * 1024 + 1, b'\x00'))])
+  t.tap_text("选择文件")
+  t.draw()
+  t.draw()
+  assert_true(t.find("big.bin") is None, msg="too big: not taken")
+  t.picks([("sa.json", b"{}\n")])
+  t.tap_text("选择文件")
+  t.draw()
+  t.draw()
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.find("sa.json · 3 B") is Some(_))
+  t.tap(x, y)
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\",\"typed\":{\"secret\":\"e30K\",\"filename\":\"sa.json\"}}"])
+}
+
+///|
 test "a login the person types in, the agent naming no account: 用户名 over its password; Enter in the password approves" {
   reset()
   let calls = []
@@ -287,7 +315,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", mode: "proxy", command: "", save_kind: "", username: "", typed: false, station: "" }
+  let asked : @settings.Asked = { name: "GitHub token", mode: "proxy", command: "", save_kind: "", username: "", filename: "", typed: false, station: "" }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 

@@ -1262,7 +1262,7 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
 // card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
 // chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it; chat-vault-typed,
-// asking the person to type a token in instead.
+// asking the person to type a token in instead; chat-vault-file, to pick a file.
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
@@ -1277,10 +1277,12 @@ pub let fix_replied : Map[Int, String] = {}
 pub let fix_vault : Ref[String] = Ref("")
 
 ///|
-/// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in), its card as the
-/// core says it, answered here; decided, how it went.
-pub fn vault_post(typed : Bool) -> Json {
-  let ask : Map[String, Json] = if typed {
+/// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in; `file`: a file
+/// they pick), its card as the core says it, answered here; decided, how it went.
+pub fn vault_post(typed : Bool, file? : Bool = false) -> Json {
+  let ask : Map[String, Json] = if file {
+    { "name": "生产集群", "mode": "file", "save": { "kind": "file", "typed": true }, "answer": "approve" }
+  } else if typed {
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
   } else {
     { "name": "UniFi UX7", "mode": "env", "save": { "kind": "login", "username": "zzj" }, "answer": "approve" }
@@ -1288,7 +1290,7 @@ pub fn vault_post(typed : Bool) -> Json {
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
   }
-  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
     "card": { "type": "options", "vault": "r-ux7", "vaultAsk": Json::object(ask) },
     "createdAt": Json::number(1.0e9),
   })
@@ -1319,7 +1321,7 @@ pub fn phone_post() -> Json {
 /// The chat `v` with what was answered here in it.
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
-  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted"
   // (chat-phone-granted: its request approved already)
   if f.mode == "chat-phone-granted" && fix_phone.val == "" {
@@ -1364,7 +1366,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post(f.mode == "chat-vault-typed"))
+        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file"))
       }
       // chat-phone's request for the person's phone, last
       if phone {

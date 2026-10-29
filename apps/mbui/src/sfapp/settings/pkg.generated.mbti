@@ -80,6 +80,10 @@ pub fn failing_of(Json?) -> Array[String]
 
 pub fn field_of(String) -> @ui.Field
 
+pub let file_most : Int32
+
+pub fn file_size(String) -> String
+
 pub fn first_text(Json?, Array[String], String) -> String
 
 pub fn fixture_call(String, Json) -> Result[Json, Json]?
@@ -280,6 +284,8 @@ pub fn strings(Json?, String) -> Array[String]
 
 pub fn switch(@ui.Ctx, String, Bool) -> Unit
 
+pub fn take_picked_file(Core, @ui.Pick, (String, String) -> Unit) -> Bool
+
 pub fn tap_text(@ui.Ctx, String, String, color? : Int64, size? : Double, said? : String, room? : Bool) -> Bool
 
 pub fn typed_of(Json?) -> Typed?
@@ -358,6 +364,7 @@ pub(all) struct Asked {
   command : String
   save_kind : String
   username : String
+  filename : String
   typed : Bool
   station : String
 }
@@ -491,6 +498,9 @@ pub(all) struct VaultEditing {
   mut saving : Bool
   reveal : Map[String, Bool]
   serial : Int32
+  mut file_content : String
+  mut file_name : String
+  mut file_pick : @ui.Pick?
 }
 
 pub(all) struct VersionNow {

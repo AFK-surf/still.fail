@@ -28,10 +28,11 @@ export function hostAllowed(host: string, patterns: string[]): boolean {
   return patterns.some((p) => (p.startsWith("*.") ? h.endsWith(p.slice(1)) && h.length > p.length - 1 : h === p));
 }
 
-/// The value a grant's secret is used as: a token's value, a login's password, an SSH key's private key.
+/// The value a grant's secret is used as: a token's value, a login's password, an SSH key's private key, a file's
+/// content (its bytes in base64).
 export function valueOf(secret: Secret): string | null {
   const f = secret.fields ?? {};
-  const v = secret.kind === "ssh_key" ? f.private_key : secret.kind === "login" ? f.password : f.value;
+  const v = secret.kind === "ssh_key" ? f.private_key : secret.kind === "login" ? f.password : secret.kind === "file" ? f.content : f.value;
   return typeof v === "string" && v !== "" ? v : null;
 }
 

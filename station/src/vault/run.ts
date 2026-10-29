@@ -1,7 +1,7 @@
 // A command run with a grant (secret_run, docs/vault.md 三种用法): through the proxy, with the grant's SSH key in an
-// agent, or with the secret in its environment. The station runs it, in the session's workspace, and gives back what it
+// agent, with the secret in its environment, or with a file kept in the vault written out for it. The station runs it, in the session's workspace, and gives back what it
 // said with the secret hidden (scrub.ts) and cut to a size an agent reads, and how it ended.
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
@@ -73,6 +73,18 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
         rmSync(dir, { recursive: true, force: true });
       });
       vars.SSH_AUTH_SOCK = sock;
+    } else if (held.grant.mode === "file") {
+      // Written where only this user reads it, for this command alone: its path is what the command is given.
+      used("file");
+      const dir = mkdtempSync(join(tmpdir(), "sf-file-"));
+      chmodSync(dir, 0o700);
+      ends.push(() => rmSync(dir, { recursive: true, force: true }));
+      const path = join(dir, fileName(held.secret.fields.filename));
+      const bytes = Buffer.from(value, "base64");
+      writeFileSync(path, bytes, { mode: 0o600 });
+      vars[SECRET_VAR] = path;
+      if (ask.env) vars[ask.env] = path;
+      return await spawned(ask, vars, fileHidden(bytes, value));
     } else {
       used("environment");
       vars[SECRET_VAR] = value;
@@ -82,6 +94,19 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
   } finally {
     for (const end of ends) end();
   }
+}
+
+/// The name a file is written under: its own, where it is a plain name, else "secret".
+function fileName(name: string | undefined): string {
+  const n = (name ?? "").trim();
+  return n === "" || n === "." || n === ".." || /[/\\\0]/.test(n) ? "secret" : n;
+}
+
+/// What of a file is hidden in a command's output, as a value in the environment is: its text whole (the command
+/// printing it) and its bytes' base64; a file not text, its base64 only.
+function fileHidden(bytes: Buffer, b64: string): string[] {
+  const text = bytes.toString("utf8");
+  return Buffer.from(text, "utf8").equals(bytes) ? [text.replace(/\r?\n$/, ""), b64] : [b64];
 }
 
 function spawned(ask: RunAsk, env: Record<string, string>, hidden: string[]): Promise<Ran> {
@@ -113,7 +138,8 @@ function spawned(ask: RunAsk, env: Record<string, string>, hidden: string[]): Pr
 
 /// What a command printed, for a secret an agent asks to keep (secret_save): its standard output, kept here (never
 /// given to the agent), and its standard error with that output hidden in it.
-export type Captured = { code: number | null; signal: string | null; out: string; err: string; timedOut: boolean; tooLong: boolean };
+/// `raw`: its standard output as printed, in base64 (a file kept as its bytes; absent from a station from before files).
+export type Captured = { code: number | null; signal: string | null; out: string; raw?: string; err: string; timedOut: boolean; tooLong: boolean };
 
 /// The most of a command's standard output taken as a secret.
 const CAPTURE_MAX = 64 * 1024;
@@ -145,9 +171,9 @@ export function capture(command: string, cwd: string, env: Record<string, string
     });
     child.on("close", (code, signal) => {
       stop();
-      const printed = Buffer.concat(out).toString("utf8");
-      const value = printed.replace(/\r?\n$/, "");
-      resolve({ code, signal, out: tooLong ? "" : value, err: value === "" ? err.text() : scrub(err.text(), [value]), timedOut, tooLong });
+      const bytes = Buffer.concat(out);
+      const value = bytes.toString("utf8").replace(/\r?\n$/, "");
+      resolve({ code, signal, out: tooLong ? "" : value, raw: tooLong ? "" : bytes.toString("base64"), err: value === "" ? err.text() : scrub(err.text(), [value]), timedOut, tooLong });
     });
   });
 }

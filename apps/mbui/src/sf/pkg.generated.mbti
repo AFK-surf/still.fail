@@ -56,6 +56,8 @@ pub fn ask(String, String, (String) -> Unit, value? : String, placeholder? : Str
 
 pub let ask_card_room : @ui.Style
 
+pub let ask_card_room_most : @ui.Style
+
 pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, placeholder? : String, hint? : String) -> Unit
 
 pub fn ask_line_card(@ui.Ctx, column? : Bool, () -> Unit) -> Int32
@@ -166,7 +168,9 @@ pub fn capsule_room(Double, Double, less? : Double) -> @ui.Space
 
 pub let caption : @ui.TextStyle
 
-pub fn card(@ui.Ctx, gap? : Double, () -> Unit) -> Int32
+pub fn card(@ui.Ctx, gap? : Double, fill? : Bool, () -> Unit) -> Int32
+
+pub let card_across : @ui.Size
 
 pub let card_corner : Double
 

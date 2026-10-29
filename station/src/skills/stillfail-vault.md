@@ -30,20 +30,24 @@ station's profiles), or anything the person said not to keep.
 ## Keeping one
 
 - `secret_list` first: what is kept already (by name), and whether their vault is on. Do not keep a second copy.
-- `secret_save {name, kind, reason, command | value | neither, username?, modes?, hosts?, env?}`:
+- `secret_save {name, kind, reason, command | path | value | none, username?, filename?, modes?, hosts?, env?}`:
   - `command` prints the secret and nothing else; it runs here, in your workspace, and you never see what it prints:
     `op read 'op://Personal/Ui/password'`, `op item get <id> --fields password --reveal`, `bw get password <id>`. Its
     approval (1Password's) is asked once. Where the password manager is signed in on another station (1Password's
     desktop app on a Mac), give `station`: the command runs there, in this chat's directory (where station_task runs).
+  - `path` for a file (kind `file`): kept as it is, its bytes; `station` reads it there.
   - `value` only for one you already hold (a token you made or were given).
-  - Neither, for one you do not have: the card has a field the person types or pastes it in (a login's account too,
-    when you give no `username`), kept as they approve it and never shown to you. Say in `reason` where they get it
+  - None of these, for one you do not have: the card has a field the person types or pastes it in (a login's account
+    too, when you give no `username`; a file, a button that picks it), kept as they approve it and never shown to you. Say in `reason` where they get it
     (OpenCode 控制台 → API Keys), and give `hosts` and `env` as for any.
   - `kind`: `token` (an API key, a bearer token), `login` (a password, with `username`), `ssh_key` (a private key, with
-    `public_key` if known).
+    `public_key` if known), `file` (a credential that is a whole file, at most 64 KB: a kubeconfig, a service account's
+    JSON key, a `.p12` certificate, a `.env`).
   - How agents get it later: `proxy` with `hosts` for an HTTP API that takes it in a header (`Authorization: Bearer`,
     `X-Api-Key`): the command only holds a placeholder. `env` (and `env`, the variable's name) for anything else: a
     password sent in a login form or JSON body, a database client, a CLI reading a variable. `ssh` for an SSH key.
+    `file` for a file: each command gets it written out where only it reads it, removed when it ends, its path in
+    `env` (`KUBECONFIG`, `GOOGLE_APPLICATION_CREDENTIALS`) and `$STILLFAIL_SECRET`.
   - `name`: what the person will recognise (UniFi UX7 管理员, GitHub deploy token · AFK-surf/still.fail).
 - It waits 45 s for the person; not decided by then, end your turn need_human about the card. Only their approval in
   the app keeps it: a yes written in the chat does not.
@@ -57,8 +61,8 @@ station's profiles), or anything the person said not to keep.
 - `secret_use {item, reason, command, mode?, hosts?}` puts a card in the chat; the person picks how long the grant
   lasts (one command, an hour, this chat until it is archived). Say all you will run with it, so one grant covers it.
 - `secret_run {grant, command, env?}` runs the command here: through the proxy (the placeholder in `$STILLFAIL_SECRET`
-  and the item's variable, swapped on HTTPS to its hosts only), by ssh-agent, or with the value in the environment
-  (the output comes back with it hidden). Never print, encode or send the value elsewhere.
+  and the item's variable, swapped on HTTPS to its hosts only), by ssh-agent, with the value in the environment, or
+  with the file written out for it, its path in the variable (the output comes back with the value hidden). Never print, encode or send the value elsewhere.
 - What only another station reaches (a router on its network, a tool signed in there): `secret_use {…, station}`, and
   the card says where; `secret_run` then runs each command there, in this chat's directory on that station (where
   station_task runs), the value sent there for that command only. Never copy a value to another machine yourself.

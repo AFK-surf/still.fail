@@ -185,12 +185,16 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     command: ask.command,
     save_kind: ask.save_kind,
     username: ask.username,
+    filename: ask.filename,
     typed: ask.typed,
     station: ask.station,
   }
   let decided = ask.status != ""
+  // (a file the person picks: as wide as it may be from the first, what is picked coming in beside its button with
+  // nothing moving)
+  let room = if ask.typed && ask.save_kind == "file" { @sf.ask_card_room_most } else { @sf.ask_card_room }
   let asking = fn() {
-    c.box(style=@sf.ask_card_room, fn() {
+    c.box(style=room, fn() {
       match here.core {
         Some(core) =>
           @settings.vault_card(

@@ -152,14 +152,16 @@ pub(all) struct PhoneAsk {
 
 ///|
 /// An agent's request about a vault item as its card says it (VaultAsk): the item, how it is given, the command it is
-/// for; one to keep a secret (`save_kind` not empty): what kind, the account, whether the person types it in (`typed`);
-/// once decided, how (`status`, `scope`).
+/// for; one to keep a secret (`save_kind` not empty): what kind, the account (a file: its name), whether the person
+/// types it in (`typed`); once decided, how (`status`, `scope`).
 pub(all) struct VaultAsk {
   name : String
   mode : String
   command : String
   save_kind : String
   username : String
+  /// a file's name, where the agent gave one
+  filename : String
   typed : Bool
   status : String
   scope : String
@@ -388,6 +390,7 @@ pub fn message_of(m : Json) -> Message {
                 command: text(a, "command"),
                 save_kind: text(field(a, "save"), "kind"),
                 username: text(field(a, "save"), "username"),
+                filename: text(field(a, "save"), "filename"),
                 typed: flag(field(a, "save"), "typed"),
                 status: text(a, "status"),
                 scope: text(a, "scope"),

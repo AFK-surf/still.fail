@@ -6,12 +6,14 @@
 // app that keeps keys (or without security mode, anywhere); elsewhere a line says whose it is or where it is approved. A
 // secret to keep while the vault is not on on this device: 开启密钥库 in the button's place, to the vault's page. One
 // the person types in (the agent has none): its field over the buttons (a login's account too, where the agent named
-// none), 存入 once something is in it, Enter as 存入; what was typed goes only with `vault.approve`.
+// none; a file, the button that picks it), 存入 once something is in it, Enter as 存入; what was typed goes only with
+// `vault.approve`.
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { useGo } from "./go.ts";
 import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
-import { type Scope, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
+import { useToast } from "@stillfail/ui/toast.tsx";
+import { type Scope, fileSize, pickFile, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
 import { Button, Chooser, ChooserItem } from "./ui.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -35,6 +37,9 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
   // What the person typed in, for a secret theirs to type: kept only here, till it goes.
   const [secret, setSecret] = useState("");
   const [username, setUsername] = useState("");
+  // a file picked, for a file theirs to pick: its name (its bytes are `secret`, in base64)
+  const [filename, setFilename] = useState("");
+  const toast = useToast();
   if (!view) return null;
   // A web page keeps no keys (the plain library's, without security mode, are approved anywhere).
   if (!view.available && view.plain !== true) return <p className={css.note}>{t("web-pages.vault.approve.inClient")}</p>;
@@ -51,7 +56,7 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
   const answer = (yes: boolean) => {
     if (under || (yes && empty)) return;
     setPending(yes ? "yes" : "no");
-    const given = typed ? { typed: { secret, ...(namesNone && username.trim() ? { username } : {}) } } : {};
+    const given = typed ? { typed: { secret, ...(namesNone && username.trim() ? { username } : {}), ...(kind === "file" && filename ? { filename } : {}) } } : {};
     const asked = yes
       ? run("vault.approve", { workspace, request: id, scope: save ? "once" : scope, ...given }, t(save ? "web-pages.vault.act.saveWhat" : "web-pages.vault.act.allowWhat"))
       : run("vault.deny", { workspace, request: id }, t("web-pages.vault.act.denyWhat"));
@@ -74,7 +79,15 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
         <input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="text" autoComplete="off" spellCheck={false} autoCapitalize="off" disabled={under}
           value={username} placeholder={t("web-pages.vault.ask.typed.username")} aria-label={t("web-pages.vault.ask.typed.username")} onChange={(e) => setUsername(e.target.value)} />
       )}
-      {kind === "ssh_key"
+      {kind === "file"
+        ? <div className={css.typedFile}>
+            <Button variant="secondary" disabled={under} onClick={() => void pickFile().then((got) => {
+              if (got === null) toast(t("web-pages.vault.editor.fileTooBig"));
+              else if (got) { setSecret(got.content); setFilename(got.name); }
+            })}>{t("web-pages.vault.ask.typed.file")}</Button>
+            {secret && <span className={css.typedFileName}>{filename} · {fileSize(secret)}</span>}
+          </div>
+        : kind === "ssh_key"
         ? <textarea className={`${controlsCss.input} ${controlsCss.inputSolid} ${css.typedKey}`} rows={4} spellCheck={false} autoCapitalize="off" autoComplete="off" disabled={under}
             value={secret} placeholder={t("web-pages.vault.ask.typed.ssh_key")} aria-label={t("web-pages.vault.ask.typed.ssh_key")} onChange={(e) => setSecret(e.target.value)} />
         : <input className={`${controlsCss.input} ${controlsCss.inputSolid}`} type="password" autoComplete="off" spellCheck={false} disabled={under}

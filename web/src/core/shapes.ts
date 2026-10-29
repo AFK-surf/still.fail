@@ -1674,13 +1674,15 @@ export interface PhoneAsk {
  * vault (`vault.approve`, turning it on first where it is not).
  */
 export interface VaultSave {
-	/** token | login | ssh_key */
+	/** token | login | ssh_key | file */
 	kind: string;
 	/** A login's account name. */
 	username?: string;
+	/** A file's name, where the agent gave one (the file it read, or the name it is to have). */
+	filename?: string;
 	/**
 	 * The secret is the person's to type in on the card (the agent has none): a field for it (and a login's
-	 * account, when `username` is absent) over the answer, `vault.approve` with `typed`.
+	 * account, when `username` is absent; a file: a button that picks it) over the answer, `vault.approve` with `typed`.
 	 */
 	typed?: boolean;
 }
@@ -1691,7 +1693,7 @@ export interface VaultAsk {
 	name: string;
 	reason: string;
 	command?: string;
-	/** proxy | env | ssh */
+	/** proxy | env | ssh | file */
 	mode: string;
 	/** By the proxy: the hosts it is sent to. */
 	hosts: string[];
@@ -6694,7 +6696,7 @@ export interface VaultItemRow {
 	at: number;
 	/** Its name: what it holds once the vault is unlocked, else its listing's (none: unlisted, locked). */
 	name?: string;
-	/** `token`, `ssh_key` or `login`, where known. */
+	/** `token`, `ssh_key`, `login` or `file`, where known. */
 	kind?: string;
 	/** Agents see it (it has a listing). */
 	listed: boolean;

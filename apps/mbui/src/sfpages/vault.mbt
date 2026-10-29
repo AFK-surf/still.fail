@@ -428,6 +428,7 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
     command: text(rv, "command"),
     save_kind: text(save, "kind"),
     username: text(save, "username"),
+    filename: text(save, "filename"),
     typed: flag(save, "typed"),
     station: "",
   }

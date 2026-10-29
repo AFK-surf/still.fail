@@ -78,6 +78,9 @@ pub fn vault_editor_dialog(
     saving: false,
     reveal: {},
     serial: vault_serial.val,
+    file_content: text(field(was, "fields"), "content"),
+    file_name: text(field(was, "fields"), "filename"),
+    file_pick: None,
   }
   let key = fn(part : String) { "vault-editor/" + e.serial.to_string() + "/" + part }
   let filled : Map[String, Bool] = {}
@@ -130,12 +133,42 @@ pub fn vault_editor_dialog(
         })
         |> ignore
       }
-      input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t("web-pages.vault.editor.namePlaceholder"), false, false, "")
+      input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t(if k == "file" { "web-pages.vault.editor.fileNamePlaceholder" } else { "web-pages.vault.editor.namePlaceholder" }), false, false, "")
       match k {
         "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "ghp_…", true, false, "")
         "ssh_key" => {
           input(c, "private_key", @sf.t("web-pages.vault.editor.privateKey"), "-----BEGIN OPENSSH PRIVATE KEY-----", false, true, "")
           input(c, "public_key", @sf.t("web-pages.vault.editor.publicKey"), "ssh-ed25519 AAAA…", false, false, "")
+        }
+        "file" => {
+          // the system's picker answered: the file it gave (one too big said so, and none kept)
+          match e.file_pick {
+            Some(p) =>
+              if take_picked_file(core, p, fn(content, name) {
+                  e.file_content = content
+                  e.file_name = name
+                }) {
+                e.file_pick = None
+              }
+            None => ()
+          }
+          @sf.field(c, @sf.t("web-pages.vault.editor.file"), fn() {
+            // (the button the same before and after: what was picked fades in beside it, the row no higher)
+            c.box(style=vd_file, fn() {
+              if @sf.button(c, @sf.t("web-pages.vault.editor.pickFile"), key=key("file"), tone=Plain) {
+                e.file_pick = @ui.pick(Files)
+              }
+              if e.file_content != "" {
+                let name = if e.file_name != "" { e.file_name } else { @sf.t("web-pages.vault.kind.file") }
+                let shown = @kit.presence(c, key("file/" + name), true).t
+                c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.alpha(@sf.theme().p.text, shown))], style=vd_file_name)
+                |> ignore
+              }
+            })
+            |> ignore
+          })
+          words["content"] = e.file_content
+          words["filename"] = e.file_name
         }
         _ => {
           input(c, "username", @sf.t("web-pages.vault.editor.username"), "name@example.com", false, false, "")
@@ -148,8 +181,8 @@ pub fn vault_editor_dialog(
         e.agent = @sf.switch_row(c, key("agent"), @sf.t("web-pages.vault.editor.agent"), e.agent, note=@sf.t("web-pages.vault.editor.agentNote"))
         if e.agent {
           @sf.field(c, @sf.t("web-pages.vault.editor.how"), fn() {
-            if k == "ssh_key" {
-              c.text(mode_name("ssh"), style=desk_words) |> ignore
+            if k == "ssh_key" || k == "file" {
+              c.text(mode_name(if k == "file" { "file" } else { "ssh" }), style=desk_words) |> ignore
             } else {
               let i = @sf.segmented(c, key("mode"), [mode_name("proxy"), mode_name("env")], if e.mode == "env" { 1 } else { 0 })
               e.mode = if i == 1 { "env" } else { "proxy" }
@@ -159,6 +192,8 @@ pub fn vault_editor_dialog(
             @sf.t(
               if k == "ssh_key" {
                 "web-pages.vault.editor.sshNote"
+              } else if k == "file" {
+                "web-pages.vault.editor.fileNote"
               } else if e.mode == "proxy" {
                 "web-pages.vault.editor.proxyNote"
               } else {
@@ -168,12 +203,12 @@ pub fn vault_editor_dialog(
             style=desk_note,
           )
           |> ignore
-          if k != "ssh_key" && e.mode == "proxy" {
+          if k != "ssh_key" && k != "file" && e.mode == "proxy" {
             let typed = words.get("hosts").unwrap_or("")
             input(c, "hosts", @sf.t("web-pages.vault.editor.hosts"), @sf.t("web-pages.vault.editor.hostsPlaceholder"), false, false, if typed != "" && vault_hosts(words).length() == 0 { @sf.t("web-pages.vault.editor.hostsNeeded") } else { "" })
           }
           if k != "ssh_key" {
-            input(c, "env", @sf.t("web-pages.vault.editor.env"), @sf.t("web-pages.vault.editor.envPlaceholder"), false, false, "")
+            input(c, "env", @sf.t("web-pages.vault.editor.env"), @sf.t(if k == "file" { "web-pages.vault.editor.fileEnvPlaceholder" } else { "web-pages.vault.editor.envPlaceholder" }), false, false, "")
           }
           @sf.field(c, @sf.t("web-pages.vault.editor.lasts"), fn() {
             e.lasts = @sf.segmented(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts)
@@ -303,6 +338,15 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   )
 }
 
+
+///|
+/// (a file: its name and size, then the button that picks another, 12 apart)
+// kept across runs: a value (no field of it changes)
+let vd_file : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let vd_file_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// (agentBox: the switch and what it opens, 10 apart, 4 over them)

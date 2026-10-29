@@ -241,6 +241,8 @@ pub fn fix_with_syncing(Json) -> Json
 
 pub fn fix_with_trouble(Json, Map[String, Json]) -> Json
 
+pub let fix_working_now : @ref.Ref[(String, String)]
+
 pub fn fix_write(Fixture, String) -> FixWrite
 
 pub let fix_writes : Map[String, FixWrite]
@@ -497,7 +499,7 @@ pub let table_images_md : Json
 
 pub fn text_of(Json, String) -> String
 
-pub fn vault_post(Bool) -> Json
+pub fn vault_post(Bool, file? : Bool) -> Json
 
 pub let viz_answer : String
 

@@ -62,7 +62,7 @@ import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
 import type { VaultOutcome } from "./local.ts";
-import { howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
+import { fileBytes, howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -534,7 +534,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
     howText: howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
-    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
+    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
   });
   const personal = t("core-misc.vault.personal");
   // No security mode: the plain library, one vault on the station keeping most of its items (or the first keeping one).
@@ -727,14 +727,29 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
   }
 }
 
-const KINDS = ["token", "ssh_key", "login"];
-const MODES = ["proxy", "ssh", "env"];
+const KINDS = ["token", "ssh_key", "login", "file"];
+const MODES = ["proxy", "ssh", "env", "file"];
+/// The most a file kept may be, its bytes (the station's FILE_MOST): one credential's file, not a store of files.
+const FILE_MOST = 64 * 1024;
+
+/// Why a file's fields are not one (its content its bytes in base64, FILE_MOST of them at most; its name a name), or
+/// null.
+function fileProblem(fields: Record<string, string>): CoreError | null {
+  const bytes = fileBytes(fields.content ?? "");
+  if (bytes === null || bytes.length === 0) return CoreError.invalid("a file's content is its bytes in base64");
+  if (bytes.length > FILE_MOST) return new CoreError("vault_file_too_big", t("core-misc.vault.fileTooBig", { most: "64 KB" }));
+  const name = fields.filename;
+  if (name !== undefined && (name.length > 200 || /[/\\\0]/.test(name) || name === "." || name === "..")) return CoreError.invalid("a file's name is a name, not a path");
+  return null;
+}
 
 /// An item's plaintext as a call gives it: its kind and name, its fields as words.
 function plainOf(v: unknown): Plain {
-  if (!isObject(v) || !KINDS.includes(v.kind as string) || typeof v.name !== "string") throw CoreError.invalid("plain: {kind: token|ssh_key|login, name, fields, domains, notes}");
+  if (!isObject(v) || !KINDS.includes(v.kind as string) || typeof v.name !== "string") throw CoreError.invalid("plain: {kind: token|ssh_key|login|file, name, fields, domains, notes}");
   const fields: Record<string, string> = {};
   for (const [k, x] of Object.entries(isObject(v.fields) ? v.fields : {})) if (typeof x === "string") fields[k] = x;
+  const bad = v.kind === "file" ? fileProblem(fields) : null;
+  if (bad !== null) throw bad;
   return { kind: v.kind as Plain["kind"], name: v.name, fields, domains: arr(v.domains).filter((d) => typeof d === "string"), notes: typeof v.notes === "string" ? v.notes : "" };
 }
 
@@ -746,12 +761,18 @@ function listingOf(v: unknown): Listing | undefined {
   return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}), ...(lasts ? { lasts } : {}) };
 }
 
-/// What the person typed in for a secret an agent asked to keep (`typed: {secret, username?}`), as the item's fields:
-/// as the vault's editor writes them (a token's trimmed, a private key's ending in its line, a password as typed; a
-/// login's account the agent's, else the one typed); undefined when there is no secret in it.
-function typedFields(s: Save, typed: unknown): Record<string, string> | undefined {
+/// What the person typed in for a secret an agent asked to keep (`typed: {secret, username?}`; a file picked, `{secret:
+/// its bytes in base64, filename}`), as the item's fields: as the vault's editor writes them (a token's trimmed, a
+/// private key's ending in its line, a password as typed; a login's account the agent's, else the one typed; a file's
+/// name the one the agent gave, else its own); undefined when there is no secret in it, why not where a file is not one.
+function typedFields(s: Save, typed: unknown): Record<string, string> | CoreError | undefined {
   const secret = isObject(typed) && typeof typed.secret === "string" ? typed.secret : "";
   if (secret.trim() === "") return undefined;
+  if (s.kind === "file") {
+    const filename = s.filename ?? (isObject(typed) && typeof typed.filename === "string" ? typed.filename.trim() : "");
+    const fields = { content: secret, ...(filename ? { filename } : {}) };
+    return fileProblem(fields) ?? fields;
+  }
   if (s.kind === "token") return { value: secret.trim() };
   if (s.kind === "ssh_key") return { private_key: secret.trim() + "\n", ...(s.public_key ? { public_key: s.public_key } : {}) };
   const username = s.username ?? (isObject(typed) && typeof typed.username === "string" ? typed.username.trim() : "");
@@ -1224,6 +1245,7 @@ class Vaults {
       const s = r.save!;
       const given = s.typed ? typedFields(s, typed) : null;
       if (given === undefined) return yield* fail("vault_typed_empty", t("core-misc.vault.typedEmpty"));
+      if (given instanceof CoreError) return yield* Effect.fail(given);
       if (r.vault === PLAIN) {
         yield* self.#station(station, "POST", "/vault/plain/saves", { request: r.id, ...(given ? { fields: given } : {}) });
         self.#settled(r.id, { status: "granted" });

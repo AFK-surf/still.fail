@@ -68,6 +68,9 @@ export const rowButton = style({
 export const fields = style({ display: "grid", gap: "14px" });
 export const fieldLabel = style({ fontSize: vars.textMeta, color: vars.muted, fontWeight: "500" });
 export const secret = style({ display: "grid", gap: "4px", minWidth: "0" });
+/** A file in the editor: its name and size, then the button that picks another. */
+export const fileLine = style({ display: "flex", alignItems: "center", gap: "12px", minWidth: "0" });
+export const fileName = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textBody });
 export const secretLine = style({ display: "flex", alignItems: "center", gap: "4px", minWidth: "0" });
 export const secretValue = style({
   flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textUi,

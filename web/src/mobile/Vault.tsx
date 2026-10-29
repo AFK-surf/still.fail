@@ -18,7 +18,7 @@ import { stationBase } from "../station.tsx";
 import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
-  ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, lastsChoice, lastsName, useVaultUses, type Kind, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, scopeOf, blankForm, copySecret, lastsChoice, lastsName, useVaultUses, type Kind, fileSize, formOf, formProblem, kindName, masked, modeName, modesOf, pickInto, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, useVaultsItems, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView, type VaultUse,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -379,6 +379,7 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
   const ws = app.entry.id;
   const [f, change] = useForm(() => first);
   const run = useVaultCall();
+  const toast = useToast();
   const saving = useDoing("vault.putItem", { workspace: ws, vault });
   const problem = formProblem(f);
   const save = () => void run("vault.putItem", { workspace: ws, vault, ...(id ? { id } : {}), ...putOf(f) }, t("web-pages.vault.saveWhat"), t("web-pages.vault.saved")).then((r) => { if (r !== undefined) app.sheet(null); });
@@ -399,7 +400,7 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
         {plain && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.editor")}</span>}
         {!id && kinds && <Seg fill options={KINDS.map(kindName)} selected={KINDS.indexOf(f.kind)} onSelect={(i) => change({ kind: KINDS[i]! })} />}
         <span className={css.mLabel}>{t("web-pages.vault.editor.name")}</span>
-        {field("name", t("web-pages.vault.editor.namePlaceholder"))}
+        {field("name", t(f.kind === "file" ? "web-pages.vault.editor.fileNamePlaceholder" : "web-pages.vault.editor.namePlaceholder"))}
         {f.kind === "token" && <><span className={css.mLabel}>{t("web-pages.vault.editor.value")}</span>{field("value", t("web-pages.vault.editor.value"), { secret: true, mono: true })}</>}
         {f.kind === "ssh_key" && <>
           <span className={css.mLabel}>{t("web-pages.vault.editor.privateKey")}</span>{field("privateKey", "-----BEGIN OPENSSH PRIVATE KEY-----", { area: true })}
@@ -410,6 +411,11 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
           <span className={css.mLabel}>{t("web-pages.vault.editor.password")}</span>{field("password", t("web-pages.vault.editor.password"), { secret: true, mono: true })}
           <span className={css.mLabel}>{t("web-pages.vault.editor.totp")}</span>{field("totp", t("web-pages.vault.editor.totp"), { secret: true, mono: true })}
         </>}
+        {f.kind === "file" && <>
+          <span className={css.mLabel}>{t("web-pages.vault.editor.file")}</span>
+          {f.fileContent && <span className={css.mFileName}>{f.fileName || t("web-pages.vault.kind.file")} · {fileSize(f.fileContent)}</span>}
+          <Button label={t("web-pages.vault.editor.pickFile")} primary={false} onClick={() => void pickInto(change, toast)} />
+        </>}
         <button type="button" className={connectsCss.mSwitchRow} onClick={() => change({ agent: !f.agent })}>
           <span className={partsCss.mGrow}><b>{t("web-pages.vault.editor.agent")}</b><span>{t("web-pages.vault.editor.agentNote")}</span></span>
           <span className={connectsCss.mSwitch} data-on={f.agent || undefined} />
@@ -417,9 +423,9 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
         {f.agent && <>
           <span className={css.mLabel}>{t("web-pages.vault.editor.how")}</span>
           {modes.length > 1 ? <Seg fill options={modes.map(modeName)} selected={Math.max(0, modes.indexOf(f.mode))} onSelect={(i) => change({ mode: modes[i]! })} /> : <span>{modeName(modes[0]!)}</span>}
-          <span className={securityCss.mNote}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</span>
+          <span className={securityCss.mNote}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.kind === "file" ? t("web-pages.vault.editor.fileNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</span>
           {f.kind !== "ssh_key" && f.mode === "proxy" && <><span className={css.mLabel}>{t("web-pages.vault.editor.hosts")}</span>{field("hosts", t("web-pages.vault.editor.hostsPlaceholder"))}</>}
-          {f.kind !== "ssh_key" && <><span className={css.mLabel}>{t("web-pages.vault.editor.env")}</span>{field("env", t("web-pages.vault.editor.envPlaceholder"), { mono: true })}</>}
+          {f.kind !== "ssh_key" && <><span className={css.mLabel}>{t("web-pages.vault.editor.env")}</span>{field("env", t(f.kind === "file" ? "web-pages.vault.editor.fileEnvPlaceholder" : "web-pages.vault.editor.envPlaceholder"), { mono: true })}</>}
           <span className={css.mLabel}>{t("web-pages.vault.editor.lasts")}</span>
           <Seg fill options={LASTS.map(lastsChoice)} selected={LASTS.indexOf(f.lasts)} onSelect={(i) => change({ lasts: LASTS[i]! })} />
           <span className={securityCss.mNote}>{t("web-pages.vault.editor.lastsNote")}</span>

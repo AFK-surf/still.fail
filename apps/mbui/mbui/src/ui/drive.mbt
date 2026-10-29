@@ -56,6 +56,8 @@
 //                               title or words, within the timeout       nonotice TEXT   none does
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
+//   picks NAME:SIZE …           what the system's pickers give from then on, under a Tester (film): files so named, of
+//                               so many bytes each (none: called off); a host's own pickers are not stood in for
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
@@ -1260,6 +1262,28 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "log" => {
         h_log("DRIVE LOG " + arg)
+        next()
+      }
+      "picks" => {
+        match fake.val {
+          Some(f) => {
+            f.picks.clear()
+            for part in arg.split(" ") {
+              match part.rev_find(":") {
+                Some(i) => {
+                  let mut n = 0
+                  for ch in part[i + 1:] {
+                    n = n * 10 + (ch.to_int() - 48)
+                  }
+                  let bytes = Bytes::make(n, b'x')
+                  f.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
+                }
+                None => ()
+              }
+            }
+          }
+          None => h_log("DRIVE picks: no Tester here, the host's own pickers answer")
+        }
         next()
       }
       // what the frame shows squeezed (squeeze.mbt), a line each

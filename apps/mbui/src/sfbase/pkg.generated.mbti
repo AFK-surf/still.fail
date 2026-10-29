@@ -2473,6 +2473,7 @@ pub(all) struct NoticeHost {
   answer : () -> Bool?
   opened : () -> String
   token : () -> String
+  service : () -> String
 }
 
 pub(all) struct NoticeState {
@@ -3070,6 +3071,7 @@ pub(all) struct VaultAsk {
   command : String
   save_kind : String
   username : String
+  filename : String
   typed : Bool
   status : String
   scope : String
