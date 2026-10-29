@@ -26,13 +26,15 @@ const CONNECTS: RelayConnect[] = [
   { id: "lk", kind: "lark", name: "Codex", team: "Cue Global", places: [], error: "missing_scope: im:chat:readonly" },
 ];
 
-/** The people of a channel, for the note's `@`: one whose full name says more than their name. */
+/** The people of a channel, for the note's `@`: one whose full name says more than their name, one without a picture. */
+/** A person's picture as Slack gives one: a face on their colour. */
+const face = (bg: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" fill="${bg}"/><circle cx="24" cy="20" r="9" fill="#fff"/><path d="M8 46c2-10 9-15 16-15s14 5 16 15z" fill="#fff"/></svg>`)}`;
 const PEOPLE = [
-  { id: "U1", name: "CatsJuice", aka: "Zhijian Xu" },
-  { id: "U2", name: "darksky" },
-  { id: "U3", name: "Haowen Sun" },
-  { id: "U4", name: "Jimmfly", aka: "JINFEI YANG" },
-  { id: "U5", name: "Peng Xiao" },
+  { id: "U1", name: "CatsJuice", aka: "Zhijian Xu", picture: face("#e8734f") },
+  { id: "U2", name: "darksky", picture: face("#5877ae") },
+  { id: "U3", name: "Haowen Sun", picture: face("#2f8f5b") },
+  { id: "U4", name: "Jimmfly", aka: "JINFEI YANG", picture: face("#9a6f11") },
+  { id: "U5", name: "Peng Xiao", picture: face("#cb6748") },
   { id: "U6", name: "zanwei.guo" },
 ];
 
