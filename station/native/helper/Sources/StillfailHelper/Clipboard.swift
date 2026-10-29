@@ -1,7 +1,9 @@
 // The Mac's clipboard for a view a person drives (docs/remote-screens.md `clipboard`, ScreenView.swift's messages 4–6):
 // set from the viewer and pasted with ⌘V, watched while the view asks (its changeCount looked at every half a second,
 // on the main queue, nothing else read until it changes), and a file shown in Finder. Text first, else a picture as
-// PNG (from PNG or TIFF), each within its bound; what this view set itself is not said back to it.
+// PNG (from PNG or TIFF), each within its bound; what this view set itself is not said back to it, nor what was said
+// last (a viewer on a device of the same Apple Account puts what it was told on its own clipboard, which Universal
+// Clipboard brings back here as a change: said again, it would go round for good).
 import AppKit
 import CoreGraphics
 import Foundation
@@ -18,6 +20,8 @@ final class Clipboard {
   private var timer: DispatchSourceTimer?
   /// The changeCount last seen (or set here): a change after it is a copy made on the Mac.
   private var seen = 0
+  /// What was last said or set (its type, its bytes): the same again is no copy made on the Mac.
+  private var last: Data?
 
   init(channel: Channel, input: ScreenInput) {
     self.channel = channel
@@ -50,6 +54,7 @@ final class Clipboard {
           return false
         }
         self.seen = board.changeCount
+        self.last = Data([type]) + body
         return true
       }
       if done && paste { self.input.paste() }
@@ -101,13 +106,20 @@ final class Clipboard {
     seen = count
     if let text = board.string(forType: .string), !text.isEmpty {
       let data = Data(text.utf8)
-      if data.count <= Clipboard.textMax { channel.send(5, Data([1]) + data) }
+      if data.count <= Clipboard.textMax { say(Data([1]) + data) }
       return
     }
     var png = board.data(forType: .png)
     if png == nil, let tiff = board.data(forType: .tiff), let image = NSBitmapImageRep(data: tiff) {
       png = image.representation(using: .png, properties: [:])
     }
-    if let png, !png.isEmpty, png.count <= Clipboard.pngMax { channel.send(5, Data([2]) + png) }
+    if let png, !png.isEmpty, png.count <= Clipboard.pngMax { say(Data([2]) + png) }
+  }
+
+  /// Message 5 (type, bytes), unless it is what was last said or set.
+  private func say(_ what: Data) {
+    guard what != last else { return }
+    last = what
+    channel.send(5, what)
   }
 }
