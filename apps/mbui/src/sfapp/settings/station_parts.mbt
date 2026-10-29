@@ -546,10 +546,12 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
 /// the requests waiting; and what the phone lacks for it (本机设置), with the switch it can turn on.
 ///|
 /// Settings' 共享调试 as a whole, the page's room.
+// kept across runs: a value (no field of it changes)
 let adb_whole : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What a row says when there is nothing to list, or nothing to lend (muted, the row's width).
+// kept across runs: a value (no field of it changes)
 let adb_quiet : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 
 fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
