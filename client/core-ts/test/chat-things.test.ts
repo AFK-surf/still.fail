@@ -96,6 +96,45 @@ test("every_pull_request_of_a_chat_says_what_its_card_says_not_only_one_whose_ca
   core.close();
 });
 
+test("a_chats_pictures_come_by_the_message_they_were_sent_with_and_are_found_by_what_it_says", async () => {
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [threadView(7, 4)],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 4, entries: [
+      said(1, { authorKind: "person", author: "me@x", text: "\n  列表跳了一下\n第二行", attachments: [file("phone.png")] }),
+      // An agent's: its first words, a heading's, inline code's among them; its pictures in the order it has them.
+      said(2, { text: "## 改了 `rows.mbt` 的高度\n\n改前改后：", attachments: [file("before.png"), file("after.png"), file("notes.pdf")] }),
+      said(3, { text: "```\nlog\n```\n\n录屏", attachments: [file("demo.mp4")] }),
+      said(4, { authorKind: "person", author: "me@x", text: "", attachments: [file("only.png")] }),
+    ] },
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chatThings", station: S, thread: 7 });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const things = v(values, 1);
+  // By the day, then the message, the latest first; a message's as it has them, with when, who and its first words.
+  assert.equal(things.mediaDays.length, 1);
+  const [day] = things.mediaDays;
+  assert.notEqual(day.day, "");
+  assert.deepEqual(day.groups.map((g: J) => [g.seq, g.words, g.items.map((t: J) => t.file.name)]), [
+    [4, "", ["only.png"]],
+    [3, "录屏", ["demo.mp4"]],
+    [2, "改了 rows.mbt 的高度", ["before.png", "after.png"]],
+    [1, "列表跳了一下", ["phone.png"]],
+  ]);
+  assert.match(day.groups[0].clock, /^\d\d:\d\d$/);
+  assert.equal(things.files[0].words, "改了 rows.mbt 的高度");
+  // Found by what their message says, not only their names (a screenshot's name says nothing).
+  subscribe(core, ui, 2, { topic: "chatThings", station: S, thread: 7, q: "高度" });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.deepEqual(v(values, 2).media.map((t: J) => t.file.name), ["after.png", "before.png"]);
+  assert.deepEqual(v(values, 2).mediaDays[0].groups.map((g: J) => g.seq), [2]);
+  core.close();
+});
+
 test("a_messages_links_are_those_drawn_and_a_pull_request_is_known_by_its_address", () => {
   // A person's words are not Markdown: their addresses as written bare, without the marks closing them.
   assert.deepEqual(linksOf({ authorKind: "person", text: "[x](https://a.com) 和 https://b.com/c。" }).map((l) => l.url), ["https://a.com", "https://b.com/c"]);

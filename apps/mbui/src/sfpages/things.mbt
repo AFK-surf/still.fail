@@ -175,29 +175,38 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
       |> ignore
     })
   } else if kind == "media" {
-    // a grid, as many across as leave each 96 at least (3 at least), 4 apart
+    // by the day and the message they were sent with, each message's in lines as high as fill the room (their own
+    // shapes, a phone's screenshot narrow and a desktop's wide), the last as high as the rest would be
     let room = match c.laid_size(room_id) {
       Some((w, _)) if w > 0.0 => w
       _ => c.width - 32.0
     }
-    let fits = ((room + things_gap) / (things_tile_least + things_gap)).to_int()
-    let across = if fits < 3 { 3 } else { fits }
-    let tile = (room - things_gap * (across - 1).to_double()) / across.to_double()
-    let lines = (shown.length() + across - 1) / across
-    for i in 0..<lines {
-      rows.push(fn() {
-        // (the room the tiles share: the field's over them, as wide as the sides leave whatever the tiles take)
-        c.box(style=things_grid_line.then(side), fn() {
-          c.box(style=things_grid_row, fn() {
-            let end = if (i + 1) * across < shown.length() { (i + 1) * across } else { shown.length() }
-            for j in (i * across)..<end {
-              media_tile(c, src, r, thread, Some(shown[j]), tile, away)
-            }
-          })
-          |> ignore
+    for d in items(v, "mediaDays") {
+      let day = Some(d)
+      if text(day, "day") != "" {
+        rows.push(fn() {
+          c.box(style=things_day.then(side), fn() { c.text(text(day, "day"), style=things_day_words) |> ignore }) |> ignore
         })
-        |> ignore
-      })
+      }
+      for g in items(day, "groups") {
+        let group = Some(g)
+        rows.push(fn() { c.box(style=things_said_line.then(side), fn() { media_said(c, group) }) |> ignore })
+        let tiles = items(group, "items")
+        for line in media_lines(tiles.map(media_aspect), room, things_line_high, things_gap) {
+          let (from, to, high) = line
+          rows.push(fn() {
+            c.box(style=things_grid_line.then(side), fn() {
+              c.box(style=things_grid_row, fn() {
+                for j in from..<to {
+                  media_tile(c, src, r, thread, Some(tiles[j]), media_aspect(tiles[j]) * high, high, away)
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+        }
+      }
     }
   } else {
     for t in shown {
@@ -238,9 +247,65 @@ fn copy_link(c : @ui.Ctx, url : String) -> Unit {
 }
 
 ///|
-/// A picture or a video of the chat's, a square tile `side` across: its picture (a video's still with its play mark)
-/// covering it, round as a message's file is. Pressed, the preview, a picture stepping through the chat's.
-fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?, side : Double, away : (Double) -> Unit) -> Unit {
+/// What a message sent its pictures and videos with says, over them: when and who (in the quiet grey), then its first
+/// words, cut to the line.
+fn media_said(c : @ui.Ctx, group : Json?) -> Unit {
+  let when = [text(group, "clock"), text(group, "by")].filter(fn(s) { s != "" })
+  c.box(style=things_said, fn() {
+    if when.length() > 0 {
+      c.text(when.join(" · "), style=things_said_when) |> ignore
+    }
+    if text(group, "words") != "" {
+      c.text(text(group, "words"), style=things_said_words) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A picture's or a video's width over its height as its tile shows it: its file's (a square where it does not say),
+/// kept between things_tallest and things_widest (more and its tile shows a part: a phone's long screenshot its top).
+fn media_aspect(t : Json) -> Double {
+  let f = field(Some(t), "file")
+  let (w, h) = (number(f, "width"), number(f, "height"))
+  let a = if w > 0.0 && h > 0.0 { w / h } else { 1.0 }
+  if a < things_tallest {
+    things_tallest
+  } else if a > things_widest {
+    things_widest
+  } else {
+    a
+  }
+}
+
+///|
+/// Tiles of widths over heights `aspects` laid in lines `room` across, `gap` apart: each line as many as reach across
+/// it at `high`, then as high as fills it exactly (no higher than `high`); the last, not reaching, at `high` from the
+/// start. Each line's first tile, the one after its last and its height.
+fn media_lines(aspects : Array[Double], room : Double, high : Double, gap : Double) -> Array[(Int, Int, Double)] {
+  let out = []
+  let mut from = 0
+  let mut sum = 0.0
+  for i, a in aspects {
+    sum = sum + a
+    let gaps = gap * (i - from).to_double()
+    if sum * high + gaps >= room {
+      out.push((from, i + 1, (room - gaps) / sum))
+      from = i + 1
+      sum = 0.0
+    }
+  }
+  if from < aspects.length() {
+    out.push((from, aspects.length(), high))
+  }
+  out
+}
+
+///|
+/// A picture or a video of the chat's, a tile `w` by `h`: its picture (a video's still) covering it, a part where it is
+/// longer than its tile (its top: what a screenshot is known by), round as a message's file is; a video's length in its
+/// foot corner. Pressed, the preview, a picture stepping through the chat's.
+fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?, w : Double, h : Double, away : (Double) -> Unit) -> Unit {
   let a = @sfbase.attachment_of(field(t, "file").unwrap_or(Json::object({})))
   let owner = if a.owner != "" { a.owner } else { r.session }
   let id = c.id("things/tile/" + text(t, "key"))
@@ -255,17 +320,37 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
     (src.file)(r.station, owner, stored_name(a.path))
   }
   let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
-  let b = c.box(style=things_tile.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
+  // (longer than its tile: as wide as it, its top showing)
+  let tall = a.width > 0.0 && a.height > 0.0 && a.height / a.width > h / w + 0.01
+  let shown = fn(img : String, fade : Bool) {
+    if tall {
+      c.image(img, w=Px(w), h=Px(w * a.height / a.width), fit=FitFill, bg=0L, fade~) |> ignore
+    } else {
+      c.image(img, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade~) |> ignore
+    }
+  }
+  let b = c.box(style=things_tile.then(@ui.style(w=Fixed(w), h=Fixed(h))), id~, fn() {
     if picture != "" && picture != "!" {
-      c.image(picture, w=Px(side), h=Px(side), fit=FitCover, bg=0L) |> ignore
+      shown(picture, true)
     } else if likeness != "" {
-      c.image(likeness, w=Px(side), h=Px(side), fit=FitCover, bg=0L, fade=false) |> ignore
+      shown(likeness, false)
     } else if picture == "!" {
       c.box(style=things_tile_none, fn() { @sf.icon(c, if video { "file-video" } else { "photo" }, size=20.0, color=@sf.theme().p.muted) |> ignore })
       |> ignore
     }
     if video {
-      c.layer(fn() { c.box(style=things_tile_play, fn() { @sf.play_mark(c, things_play_side, @sf.video_shade) |> ignore }) |> ignore })
+      c.layer(fn() {
+        c.box(style=things_tile_foot, fn() {
+          c.box(style=things_length, fn() {
+            @sf.icon(c, "play", size=things_length_mark, color=0xFFFFFFFFL) |> ignore
+            if a.duration > 0.0 {
+              c.text(@sf.clock(a.duration), style=things_length_words) |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
       |> ignore
     }
   })
@@ -382,11 +467,44 @@ let things_head : @ui.Style = @ui.css("w=Full pt=S3 pb=S3 gap=S2")
 let things_kind_alone : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// A tile at least this across, the tiles this far apart.
-let things_tile_least : Double = 96.0
+/// A line of tiles this high where they reach across it (lower to fit), the tiles this far apart; a tile at most this
+/// tall (a phone's screenshot, 9 by 19.5, shows its top) and wide.
+let things_line_high : Double = 136.0
 
 ///|
 let things_gap : Double = 4.0
+
+///|
+let things_tallest : Double = 0.56
+
+///|
+let things_widest : Double = 2.4
+
+///|
+/// A day's heading: 12 over it, 8 to its first message.
+// kept across runs: a value (no field of it changes)
+let things_day : @ui.Style = @ui.css("w=Full pt=S3 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_day_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
+
+///|
+/// What a message says over its pictures: 6 over it, 6 to them.
+// kept across runs: a value (no field of it changes)
+let things_said_line : @ui.Style = @ui.css("w=Full pt=S1_5 pb=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_said : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_said_when : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -403,18 +521,30 @@ let things_measure : @ui.Style = @ui.css("w=Full")
 ///|
 /// A tile: round as a message's file, the hover's grey under its picture while it comes; pointed at, a shade fainter.
 // kept across runs: a value (no field of it changes)
-let things_tile : @ui.Style = @ui.css("radius=Lg clip bg=Hover hovered{opacity=O85}")
+let things_tile : @ui.Style = @ui.style(radius=@sf.message_file_radius, clip=true, bg=Hover).then(@ui.css("hovered{opacity=O85}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let things_tile_none : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
+/// A video's length in its tile's foot corner, a capsule concentric with it.
 // kept across runs: a value (no field of it changes)
-let things_tile_play : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+let things_tile_foot : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd, align=AStart, p=@sf.room_of(@sf.capsule_in(@sf.message_file_corner, things_length_high)))
 
 ///|
-let things_play_side : Double = 32.0
+let things_length_high : Double = 18.0
+
+///|
+let things_length_mark : Double = 10.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_length : @ui.Style = @ui.style(row=true, h=Fixed(things_length_high), gap=S1, px=S1_5, radius=Full, bg=@sf.video_shade, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let things_length_words : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false)
 
 ///|
 /// A row's room in the list: 2 under it.

@@ -2399,6 +2399,8 @@ export interface ChatThing {
 	by: string;
 	/** A picture's, a video's, a file's: as its message has it (its `owner`). */
 	file?: Attachment;
+	/** A picture's, a video's, a file's: what its message says, its first words on a line. */
+	words?: string;
 	/** A link's, a pull request's: its address. */
 	url?: string;
 	/** A link's host and path, as its card says where it goes. */
@@ -2427,6 +2429,28 @@ export interface ThingCounts {
 	pulls: number;
 }
 
+/** The pictures and videos a message was sent with (`chatThings` `mediaDays`). */
+export interface ThingGroup {
+	/** The message they were sent with. */
+	seq: number;
+	/** When it was said: 14:05 (empty where not known). */
+	clock: string;
+	/** Who said it. */
+	by: string;
+	/** What it says, its first words on a line (empty for none). */
+	words: string;
+	/** Its pictures and videos, in the order it has them. */
+	items: ChatThing[];
+}
+
+/** A day's pictures and videos of a chat's (`chatThings`). */
+export interface ThingDay {
+	/** Its heading: 今天, 昨天, 星期三, 9月20日 (empty where when is not known). */
+	day: string;
+	/** Its messages' pictures and videos, the latest message first. */
+	groups: ThingGroup[];
+}
+
 /**
  * What was said in a chat besides words (the `chatThings` view {station, thread, q}), as far as it is on the device;
  * each kind those that have every word of `q`.
@@ -2446,6 +2470,8 @@ export interface ChatThingsView {
 	links: ChatThing[];
 	/** The pull requests linked in it (`url`, `repository`, `number`; `title`, `state` once its card is read), each once, the latest first. */
 	pulls: ChatThing[];
+	/** `media` by the day and the message they were sent with, the latest first (what the page shows). */
+	mediaDays: ThingDay[];
 }
 
 /** Who is looking: the account that reaches the workspace, by its email. */

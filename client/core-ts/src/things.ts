@@ -16,7 +16,12 @@ export type Kind = (typeof KINDS)[number];
 /// A message's part in it: when it was said, by whom, the message (its seq).
 type Said = { seq: number; createdAt: number | null; by: string };
 
-export type Thing = Said & { key: string; file?: J; url?: string; title?: string; site?: string; count?: number; repository?: string; number?: number };
+export type Thing = Said & { key: string; file?: J; words?: string; url?: string; title?: string; site?: string; count?: number; repository?: string; number?: number };
+
+/// A day's pictures and videos (`day`: 今天, 昨天, 9月20日; none where when is not known), message by message.
+export type ThingDay = { day: string; groups: ThingGroup[] };
+/// The pictures and videos a message was sent with, in the order it has them: when (`clock`, 14:05), by whom, what it says.
+export type ThingGroup = { seq: number; clock: string; by: string; words: string; items: Thing[] };
 
 const MEDIA = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|heic|mp4|m4v|webm|mov|ogv)$/i;
 const VIDEO = /\.(mp4|m4v|webm|mov|ogv)$/i;
@@ -42,11 +47,12 @@ export function siteOf(url: string): string {
 /// Which link a link is among the chat's: as written, without its fragment and a closing slash.
 const linkKey = (url: string): string => url.replace(/#.*$/, "").replace(/\/$/, "");
 
-/// The words of a node of an agent's tree (markdown.ts), as read from `source`.
+/// The words of a node of an agent's tree (markdown.ts), as read from `source` (inline code's too).
 function wordsIn(node: J, source: string): string {
   if (typeof node === "string") return node;
   if (!Array.isArray(node)) return "";
   if (typeof node[0] === "number") return source.slice(node[0], node[1]);
+  if (node[0] === "code") return wordsIn(node[1]?.content, source);
   const children = Array.isArray(node[1]) ? node[1] : [];
   return children.map((c: J) => wordsIn(c, source)).join("");
 }
@@ -74,6 +80,23 @@ export function linksOf(message: J): { url: string; words: string }[] {
   return out;
 }
 
+/// What a message says, to know its files by: the words of its first block that has some (an agent's as its Markdown
+/// draws them, a code block's aside; a person's first line), on one line and cut to a line's worth ("" for none).
+export function wordsOf(message: J): string {
+  const text = typeof message?.text === "string" ? message.text : "";
+  let words = "";
+  if (Array.isArray(message?.md)) {
+    for (const n of message.md) {
+      if (!Array.isArray(n) || n[0] === "pre") continue;
+      words = wordsIn(n, text).replace(/\s+/g, " ").trim();
+      if (words !== "") break;
+    }
+  } else {
+    words = text.split("\n").map((l: string) => l.trim()).find((l: string) => l !== "") ?? "";
+  }
+  return [...words].length > 120 ? `${[...words].slice(0, 120).join("")}…` : words;
+}
+
 /// A chat's things from its messages (oldest first, as its page draws them): each kind the latest first. A file is one
 /// per message it was sent with (the same name sent again is another picture); a link and a pull request one however
 /// often said, at the latest time (`count`: how many times), with the words it was last linked by (`title`, none where
@@ -87,9 +110,10 @@ export function thingsOf(messages: readonly J[]): Record<Kind, Thing[]> {
     const seq = typeof m?.seq === "number" ? m.seq : null;
     if (seq === null) continue;
     const said: Said = { seq, createdAt: typeof m.createdAt === "number" ? m.createdAt : null, by: typeof m.by?.name === "string" ? m.by.name : typeof m.authorName === "string" ? m.authorName : "" };
+    const words = Array.isArray(m.attachments) && m.attachments.length > 0 ? wordsOf(m) : "";
     for (const f of Array.isArray(m.attachments) ? m.attachments : []) {
       if (f === null || typeof f !== "object" || typeof f.name !== "string") continue;
-      const thing = { ...said, key: `${seq}/${typeof f.path === "string" ? f.path : f.name}`, file: f };
+      const thing = { ...said, key: `${seq}/${typeof f.path === "string" ? f.path : f.name}`, file: f, ...(words !== "" ? { words } : {}) };
       (isMedia(f.name) ? media : files).push(thing);
     }
     for (const { url, words } of linksOf(m)) {
@@ -111,12 +135,27 @@ export function thingsOf(messages: readonly J[]): Record<Kind, Thing[]> {
   return { media: media.reverse(), files: files.reverse(), links: [...links.values()].reverse(), pulls: [...pulls.values()].reverse() };
 }
 
-/// Those of `things` that have every one of `words` (lower case) in what the page says of them: a file's name, a link's
-/// words and address, a pull request's title, repository and number.
+/// Those of `things` that have every one of `words` (lower case) in what the page says of them: a file's name and what
+/// its message says, a link's words and address, a pull request's title, repository and number.
 export function thingsHaving(things: readonly Thing[], words: readonly string[]): Thing[] {
   if (words.length === 0) return [...things];
   return things.filter((t) => {
-    const said = [t.file?.name, t.title, t.url, t.repository, t.number !== undefined ? `#${t.number}` : undefined].filter((s) => typeof s === "string").join(" ").toLowerCase();
+    const said = [t.file?.name, t.words, t.title, t.url, t.repository, t.number !== undefined ? `#${t.number}` : undefined].filter((s) => typeof s === "string").join(" ").toLowerCase();
     return words.every((w) => said.includes(w));
   });
+}
+
+/// Pictures and videos (`media`, the latest first) by the day (`day`: its heading) and the message (`clock`: its time)
+/// they were sent: the latest first, a message's in the order it has them.
+export function mediaDays(media: readonly Thing[], day: (ms: number) => string, clock: (ms: number) => string): ThingDay[] {
+  const days: ThingDay[] = [];
+  for (const t of media) {
+    const d = t.createdAt !== null ? day(t.createdAt) : "";
+    const last = days[days.length - 1];
+    const into = last !== undefined && last.day === d ? last : (days.push({ day: d, groups: [] }), days[days.length - 1]!);
+    const group = into.groups[into.groups.length - 1];
+    if (group !== undefined && group.seq === t.seq) group.items.unshift(t);
+    else into.groups.push({ seq: t.seq, clock: t.createdAt !== null ? clock(t.createdAt) : "", by: t.by, words: t.words ?? "", items: [t] });
+  }
+  return days;
 }

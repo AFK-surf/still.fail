@@ -4,6 +4,7 @@ import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ChatThing, ChatThingsView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import { SENT, readFile } from "./data.ts";
+import { mediaDays, type Thing } from "../../client/core-ts/src/things.ts";
 
 export function thingsDemo(): DemoExtension {
   let owner = "";
@@ -27,8 +28,8 @@ function things(q: string, owner: string): ChatThingsView {
     ({ key, seq, createdAt: at(minutes), time: { createdAt: stamp(at(minutes)) }, by, ...rest });
   const file = (f: { name: string; path: string; size: number; width?: number; height?: number }) => ({ ...f, owner });
   const media = [
-    thing("m1", 9, 5, "Claude Opus 5.5", { file: file(SENT.picture) }),
-    thing("m2", 7, 25, "Claude Opus 5.5", { file: file(SENT.files[1]!) }),
+    thing("m1", 9, 5, "Claude Opus 5.5", { file: file(SENT.picture), words: "登录页改好了，375 宽下的样子" }),
+    thing("m2", 7, 25, "Claude Opus 5.5", { file: file(SENT.files[1]!), words: "录了一段登录的过程" }),
     thing("m3", 3, 80, "林", { file: file({ ...SENT.picture, path: "/Users/lin/Downloads/login-375-old.png" }) }),
   ];
   const files = [thing("f1", 7, 25, "Claude Opus 5.5", { file: file(SENT.files[0]!) })];
@@ -47,12 +48,17 @@ function things(q: string, owner: string): ChatThingsView {
     pull(124, 2, 90, "去掉旧的分页加载", "closed"),
   ];
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const having = (list: ChatThing[]) => list.filter((x) => words.every((w) => [x.file?.name, x.title, x.url].join(" ").toLowerCase().includes(w)));
+  const having = (list: ChatThing[]) => list.filter((x) => words.every((w) => [x.file?.name, x.words, x.title, x.url].join(" ").toLowerCase().includes(w)));
+  // (by the day and the message, as the core groups them: its day's heading and time as the stories' clock says them)
+  const two = (n: number) => String(n).padStart(2, "0");
+  const day = (ms: number) => (new Date(ms).toDateString() === new Date(now).toDateString() ? "今天" : "昨天");
+  const clock = (ms: number) => `${two(new Date(ms).getHours())}:${two(new Date(ms).getMinutes())}`;
   return {
     title: "首页改版",
     whole: true,
     counts: { media: media.length, files: files.length, links: links.length, pulls: pulls.length },
     media: having(media), files: having(files), links: having(links), pulls: having(pulls),
+    mediaDays: mediaDays(having(media) as Thing[], day, clock) as unknown as ChatThingsView["mediaDays"],
   };
 }
 
