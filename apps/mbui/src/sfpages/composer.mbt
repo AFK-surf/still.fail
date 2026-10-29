@@ -2031,9 +2031,12 @@ fn composer_notice(
   // capsule_pad_alone in; measured, 24.5 in from the composer's edge)
   let inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - side / 2.0
   let drawn_in = width - 2.0 * inset
-  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(drawn_in))), glass=@sf.glass_floating(), fn() {
+  // round as a line of it is high: a capsule while its words fit one line; wrapped, its corners still that round start,
+  // its mark in it on its first line (round all its height, 3 lines made it a blob, its mark halfway down)
+  let round = @ui.style(w=Fixed(drawn_in), radius=@sf.line_capsule_corner(side))
+  let b = c.box(style=composer_notice_box.then(round), glass=@sf.glass_floating(), fn() {
     c.box(style=composer_notice_line, fn() {
-      c.box(style=@ui.style(w=Fixed(side), align=ACenter), fn() {
+      c.box(style=@ui.style(w=Fixed(side), h=Fixed(t.t.meta_line), align=ACenter, justify=JCenter), fn() {
         // (its station gone for its update: the update's mark, turning)
         if icon == "updating" {
           @sf.updating_mark(c, composer_notice_mark, t.p.muted) |> ignore
@@ -2073,20 +2076,20 @@ fn composer_notice(
 }
 
 ///|
-/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark over the composer's ＋ in
-/// the middle of its round start (its ends drawn in to stand so), what it offers 16 from its end, 8 over and under its
-/// words, 8 over the composer.
+/// A notice's capsule (composer_notice): round at its ends as the composer's capsule (as round as a line of it is high:
+/// composer_notice), its mark over the composer's ＋ in the middle of its round start (its ends drawn in to stand so),
+/// what it offers 16 from its end, 8 over and under its words, 8 over the composer.
 // kept across runs: a value (no field of it changes)
-let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 radius=Full gap=S1")
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 gap=S1")
 
 ///|
 /// How far a notice's line is in from its top and bottom (its box's py=S2).
 let composer_notice_pad : Double = 8.0
 
 ///|
-/// A notice's line: its mark, its words and what it offers on its middle.
+/// A notice's line: its mark, its words and what it offers on its first line (its words wrapped under it).
 // kept across runs: a value (no field of it changes)
-let composer_notice_line : @ui.Style = @ui.css("row w=Full align=ACenter")
+let composer_notice_line : @ui.Style = @ui.css("row w=Full align=AStart")
 
 ///|
 /// How big a line's mark is.

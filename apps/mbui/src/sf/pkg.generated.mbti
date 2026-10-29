@@ -808,6 +808,8 @@ pub fn lift_over(@ui.Ctx, Int32, String, Double, Double) -> Unit
 
 pub fn line_art(@ui.Ctx, String, Array[String], Double, Double, Double, Double, Int64) -> Int32
 
+pub fn line_capsule_corner(Double) -> @ui.Radius
+
 pub fn line_end(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn line_end_in(Double, Double, side? : Double) -> Double
