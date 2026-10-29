@@ -376,6 +376,8 @@
   "core-views.station.idle": "Idle",
   "core-views.station.offline": "{name} offline",
   "core-views.station.offline_short": "Offline",
+  "core-views.station.updating": "{name} is updating",
+  "core-views.station.updating_short": "Updating",
   "core-views.station.offline_since": "Offline · {ago}",
   "core-views.station.syncing": "Syncing",
   "core-views.station.syncing_left": {

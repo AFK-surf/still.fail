@@ -2410,7 +2410,8 @@ export interface Link {
 	/**
 	 * Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
 	 * cloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the
-	 * workspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it.
+	 * workspace's members, for a security mode: `message` says why) | updating (it went down while updating itself). Absent otherwise, and from a core
+	 * before it.
 	 */
 	cause?: string;
 }

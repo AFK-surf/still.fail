@@ -55,6 +55,7 @@ export function doing(state: string, cause: unknown, overview: J): { running: nu
   }
   if (state === "connecting") return { running: 0, doing: t("core-views.station.connecting") };
   if (state === "error" || cause === "unreached") return { running: 0, doing: t("core-views.station.unreachable_short") };
+  if (cause === "updating") return { running: 0, doing: t("core-views.station.updating_short") };
   if (cause === "network") return { running: 0, doing: t("core-views.station.network") };
   if (cause === "lock") return { running: 0, doing: t("core-views.station.lock_short") };
   return { running: 0, doing: t("core-views.station.offline_short") };
@@ -72,7 +73,8 @@ export function listNote(stations: J[], days: J[], loading: boolean, unread: str
           const name = strOf(s, "name");
           const cause = get(s, "cause");
           const text = is(s, "error") || cause === "unreached" ? t("core-logic.looks.failing.retrying", { name }) : cause === "network" ? t("core-logic.looks.failing.network")
-            : cause === "lock" ? t("core-logic.looks.failing.lock", { name }) : t("core-logic.looks.failing.offline", { name });
+            : cause === "lock" ? t("core-logic.looks.failing.lock", { name }) : cause === "updating" ? t("core-logic.looks.failing.updating", { name })
+            : t("core-logic.looks.failing.offline", { name });
           return { station: get(s, "station") ?? null, text, message: get(s, "message") ?? null };
         });
   const empty = !loading && !connecting && failing.length === 0;
@@ -234,7 +236,8 @@ export function offlineNote(link: J, name: string): string {
   const cause = get(link, "cause");
   // Refused for a security mode: why, as the station's refusal says it.
   if (cause === "lock" && typeof get(link, "message") === "string") return t("core-logic.looks.offline.lock", { name: name === "" ? "station" : name, reason: get(link, "message") });
-  const key = cause === "network" ? "core-logic.looks.offline.network" : cause === "unreached" ? "core-logic.looks.offline.unreached" : "core-logic.looks.offline.station";
+  const key = cause === "network" ? "core-logic.looks.offline.network" : cause === "unreached" ? "core-logic.looks.offline.unreached"
+    : cause === "updating" ? "core-logic.looks.offline.updating" : "core-logic.looks.offline.station";
   return name === "" ? t(key, { name: "station" }) : t(key, { name });
 }
 
