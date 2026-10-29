@@ -4,9 +4,10 @@
 // token. With it, that program alone reads what it was granted (GET /v1/usage, GET /v1/chats, GET /v1/messages), in
 // the shape of `/v1`.
 import { createHash } from "node:crypto";
-import { chmodSync, createReadStream, rmSync, statSync } from "node:fs";
+import { type FSWatcher, chmodSync, createReadStream, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, watch } from "node:fs";
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
 import { log } from "../ops/log.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
@@ -81,6 +82,9 @@ function int(url: URL, name: string): number | null {
 export class OutflowServer {
   readonly #o: OutflowOptions;
   #server: Server | null = null;
+  /// The socket this process listens on, which `path` links to (see `listen`).
+  #own: string | null = null;
+  #watch: FSWatcher | null = null;
   /// The requests being answered, waited for as it closes (a window asking is called off: their sockets close).
   readonly #answering = new Set<Promise<void>>();
 
@@ -88,9 +92,16 @@ export class OutflowServer {
     this.#o = options;
   }
 
-  /// Listening, the socket only this user may open.
+  /// Listening, the socket only this user may open. Each process listens on a socket of its own beside `path`
+  /// (`outflow-<pid>-<n>.sock`) and `path` links to it: a station's update starts the next process beside the one
+  /// serving, and a socket closed takes its file with it, so a shared path was gone once the process before stopped.
+  /// The link is moved in one step; a process closing removes its own socket, and the link only while it is its own.
   listen(): Promise<void> {
-    rmSync(this.#o.path, { force: true });
+    const dir = dirname(this.#o.path);
+    const stem = basename(this.#o.path).replace(/\.sock$/, "");
+    this.#removeLeftovers(dir, stem);
+    const own = join(dir, `${stem}-${process.pid}-${randomBytes(4).toString("hex")}.sock`);
+    this.#own = own;
     const server = createServer((req, res) => {
       const answering = this.#answer(req, res)
         .catch((e) => {
@@ -106,9 +117,18 @@ export class OutflowServer {
     this.#server = server;
     return new Promise((resolve, reject) => {
       server.once("error", reject);
-      server.listen(this.#o.path, () => {
+      server.listen(own, () => {
         server.off("error", reject);
-        chmodSync(this.#o.path, 0o600);
+        chmodSync(own, 0o600);
+        this.#link();
+        // A process before this fix removes `path` itself as it stops: put back while this one listens.
+        try {
+          // (any change in the directory: not every platform names the file it was)
+          this.#watch = watch(dir, () => {
+            if (this.#own !== null) this.#link(true);
+          });
+          this.#watch.on("error", () => {});
+        } catch {}
         resolve();
       });
     });
@@ -122,7 +142,53 @@ export class OutflowServer {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+    // The link goes only while it is still this process's: the next process's stays.
+    this.#watch?.close();
+    this.#watch = null;
+    const own = this.#own;
+    this.#own = null;
+    if (own !== null) {
+      try {
+        if (readlinkSync(this.#o.path) === basename(own)) rmSync(this.#o.path, { force: true });
+      } catch {}
+      rmSync(own, { force: true });
+    }
     await Promise.allSettled([...this.#answering]);
+  }
+
+  /// `path` linked to this process's socket, in one step; with `missing`, only when it is not there.
+  #link(missing = false) {
+    const own = this.#own;
+    if (own === null) return;
+    if (missing) {
+      try {
+        statSync(this.#o.path);
+        return;
+      } catch {}
+    }
+    const link = `${this.#o.path}.${process.pid}.tmp`;
+    try {
+      rmSync(link, { force: true });
+      symlinkSync(basename(own), link);
+      renameSync(link, this.#o.path);
+    } catch (e) {
+      log.warn("outflow", "the outflow socket is not linked", { error: (e as Error).message });
+    }
+  }
+
+  /// Sockets of processes that are gone (one that ended without closing) go.
+  #removeLeftovers(dir: string, stem: string) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const m = new RegExp(`^${stem}-(\\d+)-[0-9a-f]{8}\\.sock$`).exec(name);
+      if (m === null || alive(Number(m[1]))) continue;
+      rmSync(join(dir, name), { force: true });
+    }
   }
 
   async #answer(req: IncomingMessage, res: ServerResponse) {
@@ -242,6 +308,16 @@ export async function fileHash(path: string): Promise<string | null> {
     return out;
   } catch {
     return null;
+  }
+}
+
+/// Whether process `pid` is there (one of another user's still counts).
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
   }
 }
 
