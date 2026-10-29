@@ -1125,6 +1125,8 @@ priv struct ComposerUi {
   mut content_id : Int
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
   doing : @sf.LiveMap[String, Bool]
+  /// the draft and the shape its field's hint was last shown on (composer_bar): changed, the hint waits till it is there
+  mut hint_shape : (String, String)
 }
 
 ///|
@@ -1138,6 +1140,7 @@ let cui : ComposerUi = {
   cap_id: 0,
   content_id: 0,
   doing: @sf.LiveMap::new(),
+  hint_shape: ("", ""),
 }
 
 ///|
@@ -1852,6 +1855,11 @@ fn composer_bar(
   // each part goes to its new place for what the bar holds (folded or opened, its words, files, quotes, what it says
   // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
   let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}|" + d.field.text()
+  // (what the hint waits for: the same, its words aside; another chat's draft swapped in is no change of shape)
+  let focused = c.editor_focused(field_key)
+  let shape = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}"
+  let reshaped = cui.hint_shape.0 == d.key && cui.hint_shape.1 != shape
+  cui.hint_shape = (d.key, shape)
   let part = fn(i : Int, name : String) {
     @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Move), by=holds)
   }
@@ -1935,11 +1943,17 @@ fn composer_bar(
       pb=fb,
       justify=JCenter,
       fn() {
+        // its hint (its placeholder) only on a bar at rest without the cursor, so it never moves with the bar's shape:
+        // gone at once as the field takes the cursor, and while words sent are over the emptied field (its caret, at
+        // its start already, away with it); back once they leave, or, the bar changing shape for what it holds (let go
+        // of, a file put in), once it is there
         let hint = @motion.anim(c, "composer/hint", 1.0)
-        // words sent are over the emptied field: its hint and its caret (at its start already) away till they leave
         let away = flight_hint_away(c, d.key)
-        if away {
+        if away || focused {
           hint.snap(0.0)
+        } else if reshaped {
+          hint.snap(0.0)
+          hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=part_ms))
         } else {
           hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
         }

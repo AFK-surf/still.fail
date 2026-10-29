@@ -860,9 +860,12 @@ test "wide: a new chat's first words stay where they were typed while the chat i
   let landed = up_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
   assert_true(landed.1 < typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
-  // out of the composer: its hint back
+  // out of the composer: its hint still away while its field has the cursor, back once it is let go of
   t.run_for(@sf.hint_back_ms)
-  assert_true(hint_drawn(t), msg="the hint back once the words are out")
+  assert_false(hint_drawn(t), msg="the hint over the field with the cursor")
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms + @sfpages.morph_ms + @sf.hint_back_ms)
+  assert_true(hint_drawn(t), msg="the hint back once the field is let go of")
 }
 
 ///|

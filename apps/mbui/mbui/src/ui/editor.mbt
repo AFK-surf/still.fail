@@ -1038,7 +1038,10 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     }
   }
   if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
-    self.emit_text(n.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
+    // (a placeholder in no ink at all, hidden for now, is not drawn: nothing there to be seen or read)
+    if (st.ph_color & 0xFFL) != 0L {
+      self.emit_text(n.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
+    }
   } else {
     let spans = if st.secret { [] } else { st.look_shown().1 }
     self.emit_text(tl, st.ox, st.oy, st.color, alpha, spans~)
