@@ -286,8 +286,11 @@ test("a secret its owner types in without security mode: written into their plai
     const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "admin", password: PASSWORD } });
     assert.ok(typeof kept !== "string");
     assert.deepEqual([kept.id, kept.fields], [r.item, { username: "admin", password: PASSWORD }]);
-    assert.match(await asked, /Kept: 「Router」.*This chat may use it now/);
+    assert.match(await asked, /Kept: 「Router」.*This chat may use it now.* The login's account is "admin", in STILLFAIL_USERNAME too\./);
     assert.deepEqual(h.secrets.held("s1").map((x) => x.secret.fields.password), [PASSWORD]);
+    // The account it was typed in with goes to each command beside the password, not hidden: it is not secret.
+    const [grant] = h.secrets.held("s1");
+    assert.equal(await h.secrets.run("s1", { grant: grant!.request.id, command: 'printf "%s %s" "$STILLFAIL_USERNAME" "$STILLFAIL_SECRET"', cwd: h.dir }), "exit code 0\nadmin [已隐藏]");
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

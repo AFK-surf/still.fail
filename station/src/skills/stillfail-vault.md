@@ -63,6 +63,7 @@ station's profiles), or anything the person said not to keep.
 - `secret_run {grant, command, env?}` runs the command here: through the proxy (the placeholder in `$STILLFAIL_SECRET`
   and the item's variable, swapped on HTTPS to its hosts only), by ssh-agent, with the value in the environment, or
   with the file written out for it, its path in the variable (the output comes back with the value hidden). Never print, encode or send the value elsewhere.
+  A login's account is not secret: the grant and `secret_list` say it, and every command gets it in `$STILLFAIL_USERNAME`.
 - What only another station reaches (a router on its network, a tool signed in there): `secret_use {…, station}`, and
   the card says where; `secret_run` then runs each command there, in this chat's directory on that station (where
   station_task runs), the value sent there for that command only. Never copy a value to another machine yourself.

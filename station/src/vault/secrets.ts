@@ -23,10 +23,10 @@ import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
-import { type Held, Keeper, hostAllowed, valueOf } from "./keeper.ts";
+import { type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
-import { type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
+import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 
 const SCHEMA = `
@@ -401,7 +401,7 @@ export class Secrets {
     const until = new Date(held.grant.exp * 1000).toISOString();
     const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     const where = r.runOn ? ` Its commands run on ${r.runOn.name}, in this chat's directory there (where station_task runs); the value is sent there only for each command.` : "";
-    return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how}${where} You never get the value itself.`;
+    return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how}${accountSaid(held)}${where} You never get the value itself.`;
   }
 
   /// Waits for request `id`'s decision, up to `ms`; null when it is still waiting then.
@@ -619,7 +619,7 @@ export class Secrets {
       const use = typeof held === "string"
         ? `When you need it, ask with secret_use {item: "${s.name}"}, then secret_run.`
         : `This chat may use it now: secret_run {grant: "${r.id}", command: "…"${s.env ? "" : ', env: "NAME"'}} (${held.grant.mode === "proxy" ? `through the proxy to ${held.grant.hosts.join(", ")}` : held.grant.mode === "ssh" ? "by ssh-agent" : held.grant.mode === "file" ? "as a file, its path in the variable" : "in the environment"}); other chats ask with secret_use.`;
-      return `Kept: 「${s.name}」 is in ${whose}'s vault now (item ${r.item}). ${use}`;
+      return `Kept: 「${s.name}」 is in ${whose}'s vault now (item ${r.item}). ${use}${typeof held === "string" ? "" : accountSaid(held)}`;
     }
     if (r.status === "denied") return `${whose} chose not to keep 「${s.name}」 (request ${r.id}).`;
     if (r.status === "expired") return `The request to keep 「${s.name}」 (${r.id}) was let go.`;
@@ -951,6 +951,12 @@ export class Secrets {
 }
 
 /// `dir`/`under`, made if need be.
+/// What an agent is told of a login's account: not secret, so said, and in the variable each command gets it in.
+function accountSaid(held: Held): string {
+  const account = accountOf(held.secret);
+  return account === null ? "" : ` The login's account is ${JSON.stringify(account)}, in ${ACCOUNT_VAR} too.`;
+}
+
 function joinUnder(dir: string, under: string): string {
   const at = under === "" ? dir : `${dir}/${under}`;
   mkdirSync(at, { recursive: true });

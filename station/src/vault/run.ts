@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
-import { type Held, valueOf } from "./keeper.ts";
+import { type Held, accountOf, valueOf } from "./keeper.ts";
 import { type Proxy, placeholder } from "./proxy.ts";
 import { Scrubber, scrub } from "./scrub.ts";
 import { parseSshKey, serveAgent } from "./ssh-agent.ts";
@@ -20,6 +20,8 @@ export type Ran = { code: number | null; signal: string | null; output: string; 
 
 /// The variable every run has the secret (or its placeholder) in, besides the one the item or the agent names.
 export const SECRET_VAR = "STILLFAIL_SECRET";
+/// The variable every run of a login's grant has its account in (not secret, so not hidden in the output).
+export const ACCOUNT_VAR = "STILLFAIL_USERNAME";
 
 /// Output kept as it comes: all of it while short, then its first HEAD bytes and its last TAIL.
 class Kept {
@@ -47,6 +49,8 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
   const value = valueOf(held.secret)!;
   const id = held.request.id;
   const vars: Record<string, string> = { ...env };
+  const account = accountOf(held.secret);
+  if (account !== null) vars[ACCOUNT_VAR] = account;
   const ends: (() => void)[] = [];
   try {
     if (held.grant.mode === "proxy") {
