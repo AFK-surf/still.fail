@@ -5,8 +5,8 @@ import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
-import { TEXT_IN, outset, outsetTop } from "@stillfail/ui/styles/align.ts";
-import { panelRow, resizeHandle } from "@stillfail/ui/parts.css.ts";
+import { outset, outsetTop } from "@stillfail/ui/styles/align.ts";
+import { resizeHandle } from "@stillfail/ui/parts.css.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -173,17 +173,10 @@ export const detailRow = style({
   display: "grid", gridTemplateColumns: "6em minmax(0, 1fr)", gap: "12px", fontSize: vars.textUi, alignItems: "center",
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-/**
- * Last in the chat's info: relaying it, its sharing with other workspaces, then its public links, rows to press (ui.tsx PanelRow) as a
- * menu's, at the panel's padding (6). Their icons stand under the details' words, which are in by a row's padding
- * (align.ts panelText): the 14 icon in the middle of its 20, 3 back.
- */
-export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "16px" });
-/** What is in the chat, in its info (its pull requests, its files, its agents' letters, it in Slack): rows with their icons, as a panel's are; 16 under what is over them, the groups apart without a line. */
+/** A group of rows in the chat's info (what is in it: its pull requests, its files, its agents' letters, it in Slack; what is done with it: relaying, sharing, a picture of it): rows with their icons, as a panel's are; 16 under what is over them, the groups apart without a line. */
 export const infoTools = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "16px" });
 /** What holds a pull request's row in it (its card's and its menu's trigger): the row across it, as the others are. */
 export const infoPull = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)" });
-globalStyle(`${infoRows} ${panelRow}`, { padding: `0 6px 0 ${TEXT_IN - 3}px` });
 
 /** Where the chat is shared, at the end of its row. */
 export const shareText = style({

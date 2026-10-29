@@ -96,10 +96,10 @@ export const headNote = style({ display: "inline-flex", alignItems: "center", ga
 export const problem = style({ margin: "0", fontSize: vars.textUi, color: vars.red });
 /**
  * A chat's public links in its info: a row each under 「分享图片」, a link's mark where the rows' icons are, when and by
- * whom, 复制 and 撤销 at its end; its words under the row's (ChatPage.css.ts infoRows: 3 in, a 20 icon, 10 between).
+ * whom, 复制 and 撤销 at its end; its words under the row's (parts.css.ts panelRow: 10 in, a 20 icon, 10 between).
  */
 export const link = style({
-  display: "flex", alignItems: "center", gap: "8px", minHeight: "30px", padding: "2px 6px 2px 3px",
+  display: "flex", alignItems: "center", gap: "8px", minHeight: "30px", padding: "2px 6px 2px 10px",
   fontSize: vars.textMeta, color: vars.muted,
 });
 /** Its mark: 14 in the rows' icons' 20, its words 10 after that (with the row's 8). */

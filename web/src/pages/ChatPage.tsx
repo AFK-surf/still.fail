@@ -789,7 +789,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
       </div>}
       {/* What is done with it, last: relaying it, sharing it, a picture of it. */}
       {thread && (onRelay || share || publish) && (
-        <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
+        <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
           {onRelay && <PanelRow icon={<ArrowUpRight size={14} />} label={t("web-main.relay.action")} onClick={onRelay} />}
           {share && <ShareRow share={share} onOpen={onShare} />}
           {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
