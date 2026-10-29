@@ -213,8 +213,10 @@ client, so any client that acknowledges what it drew is paced.
   cannot carry the larger picture lowers the rate, and nothing more is sent. A source with no rate of its own (a tab's
   JPEGs, each as sharp as the next) is not asked. The desktop's helpers encode such a picture (a key frame asked while
   the screen did not change) finer than the moving ones where the rate asked is 4 Mbit/s or more: its QP at most 28 and
-  twice the bit rate for that frame (macOS: VideoToolbox's `MaxAllowedFrameQP`; Windows: `CODECAPI_AVEncVideoMaxQP`,
-  where the encoder takes it), the next moving picture as before, so moving frames keep their latency.
+  twice the bit rate for that frame (macOS: VideoToolbox's `MaxAllowedFrameQP`, the next moving picture as before, so
+  moving frames keep their latency; Windows: `CODECAPI_AVEncVideoMaxQP` where the encoder takes it, set on another
+  encoder of the same kind made for that picture, as one that started takes it without heeding it, NVIDIA's at least;
+  the next moving picture is then a key frame of the view's encoder).
 - **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
   (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web, and in
   the app by VideoToolbox on macOS and iOS where the hardware decodes it (`@ui.h265_here`; the app asks `h265` first

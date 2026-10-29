@@ -174,6 +174,11 @@ struct View {
     last_ts: i64,
     scaler: Option<Scaler>,
     encoder: Option<H264>,
+    /// A still picture's encoder (`H264::still`), made for its key frame and gone once that came out; the next picture
+    /// from `encoder` is a key frame (the decoder's references are this one's). `no_still`: it could not be made, for
+    /// this `encoder`.
+    sharp: Option<H264>,
+    no_still: bool,
     /// The encoder made a picture asked to be a key frame without one: made anew for the next ask instead.
     force_unheeded: bool,
     config: Vec<u8>,
@@ -233,6 +238,8 @@ impl View {
             last_ts: 0,
             scaler: None,
             encoder: None,
+            sharp: None,
+            no_still: false,
             force_unheeded: false,
             config: Vec::new(),
             encoder_hevc: None,
@@ -264,6 +271,8 @@ impl View {
 
     fn make_encoder(&mut self, width: u32, height: u32) -> windows::core::Result<String> {
         self.encoder = None;
+        self.sharp = None;
+        self.no_still = false;
         let bitrate = self.options.bitrate.unwrap_or((width * height * 3).max(1_000_000));
         // H.265 where it was asked and the hardware has it (a size's encoder made anew keeps the codec it had).
         let hevc = self.options.hevc && self.encoder_hevc.unwrap_or(true);
@@ -295,7 +304,7 @@ impl View {
     fn run(&mut self, rx: Receiver<Msg>, out: &Out) {
         loop {
             // Waiting on the encoder: looked at again in a moment; else until something comes.
-            let busy = self.encoder.as_ref().is_some_and(|e| e.busy()) || (self.wanted > 0 && self.fresh);
+            let busy = self.busy() || (self.wanted > 0 && self.fresh);
             let msg = if busy {
                 match rx.recv_timeout(Duration::from_millis(1)) {
                     Ok(m) => Some(m),
@@ -409,6 +418,11 @@ impl View {
         self.opened.elapsed().as_secs_f64() * 1000.0
     }
 
+    /// A picture is in an encoder, not out yet.
+    fn busy(&self) -> bool {
+        self.encoder.as_ref().is_some_and(|e| e.busy()) || self.sharp.as_ref().is_some_and(|e| e.busy())
+    }
+
     fn timestamp(&mut self) -> i64 {
         let ts = (self.last_ts + 1).max(self.latest_at);
         self.last_ts = ts;
@@ -424,48 +438,73 @@ impl View {
             done = encoder.poll()?;
         }
         for encoded in done {
-            self.sent(encoded, out);
+            self.sent(encoded, false, out);
+        }
+        let mut done = Vec::new();
+        if let Some(sharp) = self.sharp.as_mut() {
+            done = sharp.poll()?;
+        }
+        let came = !done.is_empty();
+        for encoded in done {
+            self.sent(encoded, true, out);
+        }
+        if came && self.sharp.as_ref().is_some_and(|e| !e.busy()) {
+            self.sharp = None;
         }
         // A picture the encoder never gave back (a driver that dropped it): the view would wait for it for ever. The
         // encoder is made anew, and the picture owed comes from it as a key frame.
-        if self.encoder.as_ref().is_some_and(|e| e.busy()) && self.pushed_at.elapsed() > STUCK {
+        if self.busy() && self.pushed_at.elapsed() > STUCK {
             out.json(4, json!({ "encoder": "gave nothing back; made anew" }));
             self.encoder = None;
+            self.sharp = None;
             self.regions.clear();
             self.pushed_region = self.told_region;
             self.wanted += 1;
             self.force_key = true;
             self.fresh = self.latest.is_some();
         }
-        if self.wanted == 0 || !self.fresh || self.latest.is_none() || !self.gate.open(self.ms()) {
+        if self.wanted == 0 || !self.fresh || self.latest.is_none() || self.busy() || !self.gate.open(self.ms()) {
             return Ok(());
         }
         let (crop, size, part) = self.framing();
         let remake = self.encoder.as_ref().is_none_or(|e| (e.width, e.height) != size) || (self.force_key && self.force_unheeded);
         if remake {
-            if self.encoder.as_ref().is_some_and(|e| e.busy()) {
-                return Ok(());
-            }
             self.force_unheeded = false;
             self.make_encoder(size.0, size.1)?;
         }
+        // Another part of the display: from a key frame (the client's config says the part); one 10 s after the last.
+        let key = self.force_key || part != self.pushed_region || self.keys.due(self.ms());
+        // The same picture again as a key frame (the screen at rest): encoded finer, by an encoder made for it.
+        let still = key && self.still && !self.no_still && self.encoder.as_ref().unwrap().sharpens();
+        if still && self.sharp.is_none() {
+            match self.encoder.as_ref().unwrap().still(&self.gpu) {
+                Ok(sharp) => self.sharp = Some(sharp),
+                Err(e) => {
+                    out.json(4, json!({ "encoder": format!("no still picture's encoder ({}): its key frame as the others", e.message()) }));
+                    self.no_still = true;
+                }
+            }
+        }
+        let still = still && self.sharp.is_some();
+        // One made for a picture that moved before it went in.
+        if !still {
+            self.sharp = None;
+        }
         let mut early = Vec::new();
-        let ready = self.encoder.as_mut().unwrap().ready(&mut early)?;
+        let ready = if still { self.sharp.as_mut() } else { self.encoder.as_mut() }.unwrap().ready(&mut early)?;
         for encoded in early {
-            self.sent(encoded, out);
+            self.sent(encoded, still, out);
         }
         if !ready {
             return Ok(());
         }
         let texture = self.scaled(crop, size, DXGI_FORMAT_NV12)?;
         let ts = self.timestamp();
-        // Another part of the display: from a key frame (the client's config says the part); one 10 s after the last.
-        let now = self.ms();
-        let key = self.force_key || part != self.pushed_region || self.keys.due(now);
         if key {
+            let now = self.ms();
             self.keys.keyed(now);
         }
-        self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key, self.still)?;
+        if still { self.sharp.as_mut() } else { self.encoder.as_mut() }.unwrap().push(&self.gpu, &texture, ts, key)?;
         self.still = false;
         self.pushed_region = part;
         self.regions.push((ts, part));
@@ -473,20 +512,33 @@ impl View {
         self.gate.went(self.ms());
         self.wanted -= 1;
         self.fresh = false;
-        self.force_key = false;
+        // After a still picture's key frame, the next of the moving ones is one too.
+        self.force_key = still;
         Ok(())
     }
 
-    /// One picture out: its config first when it changed.
-    fn sent(&mut self, encoded: super::encode::Encoded, out: &Out) {
+    /// One picture out (of the still picture's encoder: `still`): its config first when it changed.
+    fn sent(&mut self, encoded: super::encode::Encoded, still: bool, out: &Out) {
         let hevc = self.encoder.as_ref().is_some_and(|e| e.hevc);
-        let (data, key, vps, sps, pps) = if hevc {
+        let (data, key, mut vps, mut sps, mut pps) = if hevc {
             let p = hevc::picture(&encoded.stream);
             (p.data, p.key, p.vps, p.sps, p.pps)
         } else {
             let p = avc::picture(&encoded.stream);
             (p.data, p.key, None, p.sps, p.pps)
         };
+        // A key frame without its parameter sets in band: its encoder's output type names them (the still picture's
+        // encoder's may be other than the view's, and the view's again after it).
+        if (key || encoded.clean) && sps.is_none() {
+            let header = if still { self.sharp.as_ref() } else { self.encoder.as_ref() }.map(|e| e.header.clone()).unwrap_or_default();
+            if hevc {
+                let h = hevc::picture(&header);
+                (vps, sps, pps) = (h.vps, h.sps, h.pps);
+            } else {
+                let h = avc::picture(&header);
+                (sps, pps) = (h.sps, h.pps);
+            }
+        }
         // The part this picture shows, as it was pushed (those before it gone with it).
         let mut part = self.told_region;
         while let Some(&(ts, p)) = self.regions.first() {

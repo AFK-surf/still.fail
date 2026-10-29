@@ -4,7 +4,9 @@
 // picture out for each in), no B-frames, constrained baseline where the encoder has it, a key frame when asked for and
 // at least every 10 s besides. One picture is in it at a time: the view asks for the next only once one went. A still
 // screen's picture sent again as a key frame (docs/remote-screens.md "Still") is encoded finer than the moving ones: its
-// QP no higher than STILL_QP and twice the bit rate for it, where the link carries STILL_FROM or more.
+// QP no higher than STILL_QP and twice the bit rate for it, where the link carries STILL_FROM or more. That is another
+// encoder of the same kind, made for that picture with those set before it starts (`still`): an encoder takes them
+// once it started without heeding them (NVIDIA's, both codecs: the same picture again the same size to the byte).
 use std::collections::VecDeque;
 
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
@@ -45,9 +47,10 @@ pub struct H264 {
     pub hevc: bool,
     /// The parameter sets the output type names (an encoder that does not put them in band).
     pub header: Vec<u8>,
-    /// The bit rate asked, and whether the picture in it is a still one's, encoded finer (`push`'s `still`).
+    /// The bit rate asked.
     bitrate: u32,
-    finer: bool,
+    /// The hardware encoder's name (to make another of it), empty for the software one.
+    mft: String,
     /// The pictures a second it is set for (pace.rs `encoder_fps`: the view's 帧率, at most 60; 60 where none is asked):
     /// its rate control's bits a picture, its GOP (view.rs also asks a key frame every 10 s by the clock), each
     /// picture's duration.
@@ -58,7 +61,6 @@ pub struct H264 {
 /// A still picture's key frame: its QP at most this (of 51), at STILL_BOOST times the bit rate, where the bit rate asked
 /// is STILL_FROM or more (a narrow link's would take seconds to go).
 const STILL_QP: u32 = 28;
-const MOVING_QP: u32 = 51;
 const STILL_BOOST: u32 = 2;
 const STILL_FROM: u32 = 4_000_000;
 
@@ -103,28 +105,37 @@ fn friendly(activate: &IMFActivate) -> String {
 impl H264 {
     /// The best H.265 encoder there is for `width`×`height`, on the hardware; an error where there is none.
     pub fn hevc(gpu: &Gpu, width: u32, height: u32, bitrate: u32, fps: u32) -> Result<H264> {
-        let mut last = None;
-        for activate in hardware(true) {
-            let name = friendly(&activate);
-            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, true, width, height, bitrate, fps, name)) {
-                Ok(encoder) => return Ok(encoder),
-                Err(error) => {
-                    unsafe {
-                        let _ = activate.ShutdownObject();
-                    }
-                    last = Some(error);
-                }
-            }
-        }
-        Err(last.unwrap_or_else(|| windows::core::Error::new(MF_E_TOPO_CODEC_NOT_FOUND, "no H.265 encoder on this machine's hardware")))
+        H264::make(gpu, true, false, None, width, height, bitrate, fps, false)
     }
 
     /// The best encoder there is for `width`×`height`: hardware first (unless `software`), then software.
     pub fn new(gpu: &Gpu, width: u32, height: u32, bitrate: u32, fps: u32, software: bool) -> Result<H264> {
+        H264::make(gpu, false, software, None, width, height, bitrate, fps, false)
+    }
+
+    /// Whether a still picture's key frame is encoded finer (by `still`'s encoder) at the bit rate asked now.
+    pub fn sharpens(&self) -> bool {
+        self.bitrate >= STILL_FROM
+    }
+
+    /// Another encoder of this one's kind, codec, size and profile, for a still picture's key frame: its QP at most
+    /// STILL_QP and STILL_BOOST times the bit rate asked now, set before it starts.
+    pub fn still(&self, gpu: &Gpu) -> Result<H264> {
+        let hardware = (!self.mft.is_empty()).then_some(self.mft.as_str());
+        H264::make(gpu, self.hevc, hardware.is_none(), hardware, self.width, self.height, self.bitrate.saturating_mul(STILL_BOOST), self.fps, true)
+    }
+
+    /// The first hardware encoder (the one named `only`, where given) that opens, else (H.264, unless `only`) the
+    /// software one.
+    #[allow(clippy::too_many_arguments)]
+    fn make(gpu: &Gpu, hevc: bool, software: bool, only: Option<&str>, width: u32, height: u32, bitrate: u32, fps: u32, still: bool) -> Result<H264> {
         let mut last = None;
-        for activate in if software { Vec::new() } else { hardware(false) } {
+        for activate in if software { Vec::new() } else { hardware(hevc) } {
             let name = friendly(&activate);
-            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, false, width, height, bitrate, fps, name)) {
+            if only.is_some_and(|o| o != name) {
+                continue;
+            }
+            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, hevc, width, height, bitrate, fps, still, name)) {
                 Ok(encoder) => return Ok(encoder),
                 Err(error) => {
                     unsafe {
@@ -134,15 +145,19 @@ impl H264 {
                 }
             }
         }
+        if hevc || only.is_some() {
+            let what = if hevc { "no H.265 encoder on this machine's hardware" } else { "the hardware encoder is not there" };
+            return Err(last.unwrap_or_else(|| windows::core::Error::new(MF_E_TOPO_CODEC_NOT_FOUND, what)));
+        }
         let software: Result<IMFTransform> = unsafe { CoCreateInstance(&CLSID_MSH264EncoderMFT, None, CLSCTX_INPROC_SERVER) };
-        match software.and_then(|t| H264::open(gpu, t, false, false, width, height, bitrate, fps, "Microsoft H.264 (software)".into())) {
+        match software.and_then(|t| H264::open(gpu, t, false, false, width, height, bitrate, fps, still, "Microsoft H.264 (software)".into())) {
             Ok(encoder) => Ok(encoder),
             Err(error) => Err(last.unwrap_or(error)),
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, hevc: bool, width: u32, height: u32, bitrate: u32, fps: u32, name: String) -> Result<H264> {
+    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, hevc: bool, width: u32, height: u32, bitrate: u32, fps: u32, still: bool, name: String) -> Result<H264> {
         unsafe {
             let attributes = transform.GetAttributes().ok();
             let asynchronous = attributes.as_ref().and_then(|a| a.GetUINT32(&MF_TRANSFORM_ASYNC).ok()).unwrap_or(0) != 0;
@@ -173,6 +188,10 @@ impl H264 {
                 set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
                 set(c, &CODECAPI_AVEncMPVDefaultBPictureCount, VARIANT::from(0u32));
                 set(c, &CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * 10));
+                // A still picture's (bitrate already raised): an encoder that takes no QP bound keeps its own.
+                if still {
+                    set(c, &CODECAPI_AVEncVideoMaxQP, VARIANT::from(STILL_QP));
+                }
             }
             let size = ((width as u64) << 32) | height as u64;
             let rate = ((fps as u64) << 32) | 1;
@@ -245,8 +264,8 @@ impl H264 {
                 hevc,
                 header,
                 bitrate,
-                finer: false,
                 fps,
+                mft: if hardware { name } else { String::new() },
                 _manager: manager,
             })
         }
@@ -256,20 +275,7 @@ impl H264 {
     pub fn rate(&mut self, bitrate: u32) {
         self.bitrate = bitrate;
         if let Some(c) = self.codec.as_ref() {
-            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(if self.finer { bitrate.saturating_mul(STILL_BOOST) } else { bitrate }));
-        }
-    }
-
-    /// The pictures from the next on encoded finer (a still one's key frame) or as the moving ones are. An encoder that
-    /// takes no QP bound keeps its own (the bit rate's rise alone).
-    fn finer(&mut self, on: bool) {
-        if on == self.finer {
-            return;
-        }
-        self.finer = on;
-        if let Some(c) = self.codec.as_ref() {
-            set(c, &CODECAPI_AVEncVideoMaxQP, VARIANT::from(if on { STILL_QP } else { MOVING_QP }));
-            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(if on { self.bitrate.saturating_mul(STILL_BOOST) } else { self.bitrate }));
+            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
         }
     }
 
@@ -284,10 +290,8 @@ impl H264 {
         Ok(self.pending.is_empty() && (self.events.is_none() || self.credits > 0))
     }
 
-    /// `texture` (NV12, its size) in, at `ts` (µs), a key frame when `key`; `still`: the same picture again (the screen
-    /// at rest), encoded finer.
-    pub fn push(&mut self, gpu: &Gpu, texture: &ID3D11Texture2D, ts: i64, key: bool, still: bool) -> Result<()> {
-        self.finer(key && still && self.bitrate >= STILL_FROM);
+    /// `texture` (NV12, its size) in, at `ts` (µs), a key frame when `key`.
+    pub fn push(&mut self, gpu: &Gpu, texture: &ID3D11Texture2D, ts: i64, key: bool) -> Result<()> {
         unsafe {
             let buffer = if self.gpu {
                 let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, false)?;
@@ -406,6 +410,120 @@ impl Drop for H264 {
             if let Ok(shutdown) = self.transform.cast::<IMFShutdown>() {
                 let _ = shutdown.Shutdown();
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use windows::Win32::Graphics::Direct3D11::*;
+    use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_SAMPLE_DESC};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+    use super::*;
+
+    /// A desktop's page (NV12): light, lines of small dark marks as text, a coloured side bar, a grey ramp.
+    fn page(gpu: &Gpu, width: u32, height: u32) -> ID3D11Texture2D {
+        let (w, h) = (width as usize, height as usize);
+        let mut bytes = vec![128u8; w * h * 3 / 2];
+        let mut seed = 7u32;
+        let mut next = move || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            seed >> 8
+        };
+        let glyphs: Vec<u32> = (0..4096).map(|_| next()).collect();
+        for y in 0..h {
+            for x in 0..w {
+                bytes[y * w + x] = if x < w / 8 {
+                    (16 + 200 * y / h) as u8
+                } else if y % 28 < 16 && (x / 8) % 12 != 11 && (y / 28) % 9 != 8 {
+                    // A glyph: 8×16 of 2×2 dots, picked by its place.
+                    let glyph = glyphs[((y / 28) * 977 + x / 8) % glyphs.len()];
+                    let bit = ((y % 28) / 2) * 4 + (x % 8) / 2;
+                    if glyph >> (bit % 24) & 1 == 1 { 40 } else { 235 }
+                } else {
+                    235
+                };
+            }
+        }
+        for y in 0..h / 2 {
+            for x in 0..w / 2 {
+                if x < w / 16 {
+                    bytes[w * h + y * w + x * 2] = 90;
+                    bytes[w * h + y * w + x * 2 + 1] = 160;
+                }
+            }
+        }
+        let desc = D3D11_TEXTURE2D_DESC {
+            Width: width,
+            Height: height,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: DXGI_FORMAT_NV12,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: D3D11_USAGE_DEFAULT,
+            BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
+            CPUAccessFlags: 0,
+            MiscFlags: 0,
+        };
+        let data = D3D11_SUBRESOURCE_DATA { pSysMem: bytes.as_ptr() as _, SysMemPitch: width, SysMemSlicePitch: 0 };
+        let mut texture = None;
+        unsafe { gpu.device.CreateTexture2D(&desc, Some(&data), Some(&mut texture)).unwrap() };
+        texture.unwrap()
+    }
+
+    /// One picture through `encoder`, what came of it.
+    fn one(encoder: &mut H264, gpu: &Gpu, picture: &ID3D11Texture2D, ts: i64, key: bool) -> Encoded {
+        let until = Instant::now() + Duration::from_secs(5);
+        let mut out = Vec::new();
+        while !encoder.ready(&mut out).unwrap() {
+            assert!(Instant::now() < until, "the encoder takes no picture");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        encoder.push(gpu, picture, ts, key).unwrap();
+        loop {
+            if let Some(e) = encoder.poll().unwrap().pop() {
+                return e;
+            }
+            assert!(Instant::now() < until, "the encoder gave nothing back");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn a_still_pictures_key_frame_is_finer() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+        }
+        let Ok(gpu) = Gpu::new() else {
+            eprintln!("no GPU here: not tried");
+            return;
+        };
+        let (width, height, rate) = (3840, 2160, 8_000_000);
+        let picture = page(&gpu, width, height);
+        for hevc in [false, true] {
+            let made = if hevc { H264::hevc(&gpu, width, height, rate, 60) } else { H264::new(&gpu, width, height, rate, 60, false) };
+            let Ok(mut moving) = made else {
+                eprintln!("no {} encoder here", if hevc { "H.265" } else { "H.264" });
+                continue;
+            };
+            assert!(moving.sharpens());
+            for i in 0..5 {
+                one(&mut moving, &gpu, &picture, i * 16_667, i == 0);
+            }
+            // The same picture again as a key frame, by the view's encoder (as before) and by one made for it.
+            let again = one(&mut moving, &gpu, &picture, 5 * 16_667, true);
+            let at = Instant::now();
+            let mut still = moving.still(&gpu).unwrap();
+            let made_in = at.elapsed();
+            let sharp = one(&mut still, &gpu, &picture, 6 * 16_667, true);
+            eprintln!("{}: key frame again {} bytes, the still one's {} bytes (its encoder made in {made_in:?})", moving.name, again.stream.len(), sharp.stream.len());
+            let key = if hevc { crate::hevc::picture(&sharp.stream).key } else { crate::avc::picture(&sharp.stream).key };
+            assert!(key, "the still one's is a key frame");
+            assert!(sharp.stream.len() > again.stream.len() * 3 / 2, "{} bytes, not finer than {}", sharp.stream.len(), again.stream.len());
         }
     }
 }
