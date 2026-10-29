@@ -12,7 +12,7 @@ fn init {
     ("src/sfapp/publish_wbtest.mbt", 2),
     ("src/sfapp/screens_wbtest.mbt", 43),
     ("src/sfapp/stations_now_wbtest.mbt", 3),
-    ("src/sfapp/tape.mbt", 3),
+    ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/tape_wbtest.mbt", 1),
     ("src/sfapp/wide_publish_wbtest.mbt", 2),
     ("src/sfapp/wide_wbtest.mbt", 3),

@@ -456,16 +456,25 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   let a_end = @motion.layout_rest("row/a")
   t.run_for((if e_end > a_end { e_end } else { a_end }) - t.time())
   assert_eq(t.drawn_of("a").unwrap().1, 40.0)
-  // one going ahead of the others is lifted over them
+  // one going ahead of the others goes from where it was and comes in where it is, never across them: drawn at its
+  // place from the first frame (coming in there), a copy of it leaving where it was
   keys.val = ["d", "e", "a", "c"]
   t.frame()
-  let lifted_at = t.time()
-  assert_true(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d") >= 0.0)
-  // (its move starts in that frame) to the end of d's move
-  t.run_for(@motion.layout_rest("row/d") - t.time())
+  assert_eq(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d"), -1.0)
+  // (its copy leaving and its coming in, by its key)
+  assert_true(@motion.layout_rest("row/d") > t.time())
+  // (half way in: at its place, never on its way across)
+  t.run_for((@motion.layout_rest("row/d") - t.time()) / 2.0)
   assert_eq(t.drawn_of("d").unwrap().1, 0.0)
-  // and of its lift over the others
-  t.run_for(lifted_at + @motion.lift_ms - t.time())
+  // (to the end of its coming in, of the rest making room and closing up, and of its copy leaving)
+  t.run_for(@motion.layout_rest("row/d") - t.time())
+  for k in ["e", "a", "c"] {
+    let end = @motion.layout_rest("row/" + k)
+    if end > t.time() {
+      t.run_for(end - t.time())
+    }
+  }
+  assert_eq(t.drawn_of("d").unwrap().1, 0.0)
   t.assert_idle()
 }
 
@@ -495,21 +504,21 @@ test "a list's rows alike at its start and its end are none of its change: only 
     h=400.0,
   )
   let list = t.ctx().id("rows")
-  // y goes ahead of x: it alone is lifted, not those before them nor after
+  // y goes ahead of x: it alone comes in anew where it is (at its place at once, never across x), x alone moves; none
+  // before them nor after
   keys.val = ["p", "q", "y", "x", "r", "s"]
   t.frame()
-  let lifted_at = t.time()
-  assert_true(@motion.lifted(t.ctx(), list, "row/y") >= 0.0)
-  for k in ["p", "q", "x", "r", "s"] {
+  assert_true(@motion.layout_rest("row/x") > t.time())
+  for k in ["p", "q", "r", "s"] {
+    assert_eq(@motion.layout_rest("row/" + k), -1.0, msg=k)
     assert_eq(@motion.lifted(t.ctx(), list, "row/" + k), -1.0, msg=k)
   }
-  // (to the end of their moves and of y's lift over x)
+  // (to the end of x's move, y's coming in and its copy's leaving)
   let x_end = @motion.layout_rest("row/x")
   let y_end = @motion.layout_rest("row/y")
+  t.run_for((y_end - t.time()) / 2.0)
+  assert_eq(t.drawn_of("y").unwrap().1, 80.0)
   t.run_for((if x_end > y_end { x_end } else { y_end }) - t.time())
-  if lifted_at + @motion.lift_ms > t.time() {
-    t.run_for(lifted_at + @motion.lift_ms - t.time())
-  }
   t.assert_idle()
   // between them x goes and n comes: n comes in, x's copy leaves, the rest stay where they are
   keys.val = ["p", "q", "y", "n", "r", "s"]

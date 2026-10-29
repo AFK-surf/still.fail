@@ -297,6 +297,10 @@ priv struct ListMo {
   mut close_until : Double
   arrived : Map[Int, Double]
   lifted : Map[Int, Double]
+  /// rows gone ahead of others this change: not moved across them, but gone from where they were (a copy shrinking
+  /// there as the rest close over it) and come in where they are now (grown in as the rest make room), each its words
+  /// over none of theirs (docs/motion.md rule 4; the user, 2026-10-29: 「它先缩下去，然后在目标位置挤出来」)
+  reborn : Map[Int, Int]
   /// what moves its rows lifted over others (read where a row reads how long ago it was lifted: `lifted`)
   lift_mover : @ui.Mover
   /// rows let go without a copy left behind (swiped away: list_unghost)
@@ -864,11 +868,13 @@ pub fn layout_rest(key : String) -> Double {
 /// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
 /// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
 /// they change: rows new to it come in (layout's `enter`), rows gone that showed leave by a copy (its `exit`), rows
-/// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and in the frame of the
+/// that went ahead of others go from where they were by a copy and come in where they are, never across them (one with
+/// no copy to leave by, never drawn or with no `exit`, passes over them: lifted), the rest close over what left 100 ms
+/// late, and in the frame of the
 /// change the rows' moves are the list's (moved to on their springs); otherwise rows are put in their places at once:
 /// the list's rows laid out in that frame (frame_body builds it again while what it read changes), no window of time
 /// after it lets in a move another cause made.
-/// `liftable`: which keys can go over others (not a day's heading). Its answer is the list's id (for lifted, from its
+/// `liftable`: which keys can go ahead of others so (not a day's heading). Its answer is the list's id (for lifted, from its
 /// rows).
 pub fn list_keys(
   c : @ui.Ctx,
@@ -899,6 +905,7 @@ pub fn list_keys(
         close_until: -1.0e9,
         arrived: {},
         lifted: {},
+        reborn: {},
         lift_mover: @ui.Mover::new(),
         unghost: {},
         seen: frame,
@@ -976,11 +983,29 @@ pub fn list_keys(
     let k = ks[i]
     if old.contains(k) {
       match kept_before.get(k) {
-        Some(r) if r > kept_i && liftable(keys[i]) => {
-          lm.lifted[k] = now
-          // frames while it passes over the others (lift_ms from now)
-          c.moving(lm.lift_mover, (Lift::{ at: now }) as &@ui.Moving, what="a row lifted")
-        }
+        Some(r) if r > kept_i && liftable(keys[i]) =>
+          // gone from where it was, by a copy as a row gone goes, and come in where it is as a row new comes
+          match mo.recs.get(k) {
+            Some(rec) if rec.seen >= frame - 2 && rec.list == id && !rec.drawing.is_empty() && rec.exit is Some(_) => {
+              let t = rec.exit.unwrap()
+              let pf = Anim::new(0.0)
+              let pm = Anim::new(0.0)
+              pf.name = keys[i] + " leaving"
+              pm.name = pf.name
+              pf.animate(1.0, t.fade_spec)
+              pm.animate(1.0, t.spec)
+              mo.ghosts.push({ list: id, key: k, drawing: rec.drawing.copy(), trans: t, pf, pm })
+              lm.reborn[k] = frame
+              lm.arrived[k] = now
+              lm.close_until = now + 50.0
+            }
+            // (none drawn yet, or one leaving no copy: over the others as before)
+            _ => {
+              lm.lifted[k] = now
+              // frames while it passes over the others (lift_ms from now)
+              c.moving(lm.lift_mover, (Lift::{ at: now }) as &@ui.Moving, what="a row lifted")
+            }
+          }
         _ => ()
       }
       kept_i = kept_i + 1
@@ -1027,6 +1052,11 @@ pub fn list_keys(
   lm.arrived.each(fn(k, at) { if now - at >= 500.0 { stale.push(k) } })
   for k in stale {
     lm.arrived.remove(k)
+  }
+  let past : Array[Int] = []
+  lm.reborn.each(fn(k, f) { if f < frame { past.push(k) } })
+  for k in past {
+    lm.reborn.remove(k)
   }
   id
 }
@@ -1230,15 +1260,15 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Where down the window the rows of list `list` (its id) in their places are drawn this frame (none on its way there):
-/// what a row gone from it, drawn as it goes, gives way to (draw_ghosts).
-fn rows_in_place(c : @ui.Ctx, list : Int) -> Array[(Double, Double)] {
+/// Where down the window the rows of list `list` (its id) are drawn this frame, in their places or on their way there:
+/// what a row gone from it, drawn as it goes, gives way to (draw_ghosts), never under their words.
+fn rows_drawn(c : @ui.Ctx, list : Int) -> Array[(Double, Double)] {
   let out = []
   for e in mo.entries {
     if e.key == 0 || e.reshape {
       continue
     }
-    guard mo.recs.get(e.key) is Some(r) && r.list == list && r.moving_dy.abs() <= 0.5 else { continue }
+    guard mo.recs.get(e.key) is Some(r) && r.list == list else { continue }
     let (_, y, _, h) = c.node_rect(e.node)
     let dy = c.look_of(e.node).dy
     out.push((y + dy, y + dy + h))
@@ -1434,10 +1464,22 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           if r.was_oy == 0.0 { r.oy.snap(0.0) } else { r.oy.animate(0.0, e.spec) }
         }
       }
-      if !(e.flip && was_seen) {
+      // gone ahead of others (list_keys' reborn): where it is now at once, come in there as a row new to it
+      // (every build of the frame its list changed in: the frame's first lays it out where it was)
+      let reborn = match lm {
+        Some(l) => l.reborn.get(e.key) == Some(frame)
+        None => false
+      }
+      if reborn {
+        r.ox.snap(0.0)
+        r.oy.snap(0.0)
+        r.driven = false
+        r.moved_now = false
+      }
+      if !(e.flip && was_seen) || reborn {
         undo()
       }
-      if e.flip && was_seen {
+      if e.flip && was_seen && !reborn {
         let dx = r.was_x - rx
         let dy = if e.screen { r.was_vy - vy } else { r.was_y - ry }
         if dx.abs() <= 0.5 && dy.abs() <= 0.5 {
@@ -1744,9 +1786,9 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
       continue
     }
     // (its two Anims say their ends as they are read: frames until they are there)
-    // from as it was (1) to its far end (0); not where a row of its list is in its place now: what goes gives way to
-    // what is there, never its words under that's (docs/motion.md rule 4)
-    c.draw_drawing(gh.drawing, li, gh.trans.at(1.0 - pf, 1.0 - pm), apart=rows_in_place(c, id))
+    // from as it was (1) to its far end (0); not where a row of its list is drawn now: what goes gives way to what is
+    // there or comes over it, never its words under theirs (docs/motion.md rule 4)
+    c.draw_drawing(gh.drawing, li, gh.trans.at(1.0 - pf, 1.0 - pm), apart=rows_drawn(c, id))
   }
   let mut j = done.length() - 1
   while j >= 0 {
