@@ -106,7 +106,7 @@ export const cleared = (key: string, threads: string[]) => `People cleared your 
 
 /// Its process was ended with work going in the background (agents/runtime.ts `background`), which ended with it:
 /// `resumable` are the subagents SendMessage takes up where they stopped.
-export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) => `The station ended your earlier process (to move this session to another account, take a change to it, or start it again), and the work it had going in the background was stopped with it. None of it will report back:
+export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) => `The station ended your earlier process (people stopped you, or it moved this session to another account, took a change to it or started it again), and the work it had going in the background was stopped with it. None of it will report back:
 ${tasks.map((t) => `- ${t.kind === "agent" ? "subagent" : "background command"} ${t.id}${t.description === "" ? "" : ` (${t.description})`}${resumable.includes(t.id) ? ": SendMessage to it goes on from where it stopped" : ""}`).join("\n")}
 Before you wait on any of it, check where each got to and start again what is still needed.`;
 

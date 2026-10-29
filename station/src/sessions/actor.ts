@@ -1216,7 +1216,10 @@ export class SessionActor {
       await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
-      if (stopRequested) await this.notice(t("station.notice.stopped"));
+      if (stopRequested) {
+        await this.stopBackground();
+        await this.notice(t("station.notice.stopped"));
+      }
     }
 
     // Told to whoever opened its chat: how the turn ended, when it ended in a state or did not get there.
@@ -1305,6 +1308,19 @@ export class SessionActor {
     await agent?.session.dispose();
     store.stopWait(this.key);
     if (say) await this.notice(t("station.notice.stopped"));
+  }
+
+  /// Stopped by hand while it ran: what would bring it back on its own ends too, as with a wait (`stopWaiting`). Its
+  /// process ends, with the work it had going in the background and what that work had to tell it at the turn's end
+  /// (Claude runs that as a turn of its own the moment the stopped one ends); so do the jobs that would tell it, and
+  /// what they told meanwhile is let go. Only a message brings it back; its next turn is told what was stopped.
+  private async stopBackground() {
+    const agent = this.agent;
+    this.agent = null;
+    await this.endProcess(agent);
+    await this.deps.stopJobs(this.key);
+    this.notices = [];
+    this.deps.store.notify(this.key);
   }
 
   /// Archived (by hand or by the station): what would bring it back ends, without a word in its thread.
