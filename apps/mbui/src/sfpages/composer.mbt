@@ -50,7 +50,7 @@ priv struct Composing {
   /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown the frame before)
   mut notices_new : Bool
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
-  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??)]
+  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String)]
   /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
   /// from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -1932,7 +1932,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
           @sf.t("web-main.chat.offline")
         }
     }
-    composer_notice(c, width, "unplug", said, None, chat=key)
+    composer_notice(c, width, "unplug", said, None, icon=if v.updating { "updating" } else { "unplug" }, chat=key)
   }
   notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline])
 }
@@ -1946,9 +1946,9 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
       continue
     }
     match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
-      Some((said, offer, failed)) => {
+      Some((said, offer, failed, icon)) => {
         let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
-        composer_notice(c, width, mark, said, offer, failed?=failed, chat~, gone=true)
+        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true)
       }
       None => ()
     }
@@ -1956,10 +1956,12 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 }
 
 ///|
-/// A notice over a chat's composer (chat_notices): a capsule as the composer is, `width` wide, on its glass, 8 over
-/// it; its mark (icon `mark`) as wide as the composer's ＋ and over it, its words quiet where the composer's are, what
-/// it offers at its end (`offer`: its target, its words' key now, its name's key for what reads the screen, whether it
-/// is out of reach) in the words' colour, a step heavier; why what it offers failed (`failed`) under its words, red.
+/// A notice over a chat's composer (chat_notices): a capsule as the composer is, on its glass, 8 over it, its ends
+/// drawn in from the composer's (`width`) so its mark (icon `icon`, else `mark`, which notice it is; `updating`, the
+/// update's mark turning) stands over the composer's ＋ in the middle of its round start, its words quiet where the
+/// composer's are, what it offers at its end (`offer`: its target, its words' key now, its name's key for what reads
+/// the screen, whether it is out of reach) in the words' colour, a step heavier; why what it offers failed (`failed`)
+/// under its words, red.
 fn composer_notice(
   c : @ui.Ctx,
   width : Double,
@@ -1967,14 +1969,16 @@ fn composer_notice(
   said : String,
   offer : (Int, String, String, Bool)?,
   failed? : String?,
+  icon? : String,
   chat? : String = "",
   gone? : Bool = false,
 ) -> Unit {
+  let icon = icon.unwrap_or(mark)
   // shown while its chat is, it comes in as what is put in the composer does, one its chat opens with there at once;
   // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
   let key = "composer/notice/" + chat + "/" + mark
   if !gone {
-    composing.notices_said[key] = (said, offer, failed)
+    composing.notices_said[key] = (said, offer, failed, icon)
   }
   let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
@@ -1982,11 +1986,23 @@ fn composer_notice(
     return
   }
   let t = @sf.theme()
-  let side = t.round.side + 1.0
-  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+  // its mark over the composer's ＋, in the middle of its round start: in a square as high as it is (a line and its
+  // padding), its ends drawn in from the composer's as far as that takes (2026-10-29 the user: 圆角往里缩, 图标依然对准
+  // 加号; as wide as the composer, its mark stood 7.5 off the middle of its round end)
+  let side = t.t.meta_line + 2.0 * composer_notice_pad
+  // (the ＋'s middle as the composer draws it: its round control's, a point wider for the capsule's edge line, its
+  // capsule_pad_alone in; measured, 24.5 in from the composer's edge)
+  let inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - side / 2.0
+  let drawn_in = width - 2.0 * inset
+  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(drawn_in))), glass=@sf.glass_floating(), fn() {
     c.box(style=composer_notice_line, fn() {
       c.box(style=@ui.style(w=Fixed(side), align=ACenter), fn() {
-        @sf.icon(c, mark, size=composer_notice_mark, color=t.p.muted) |> ignore
+        // (its station gone for its update: the update's mark, turning)
+        if icon == "updating" {
+          @sf.updating_mark(c, composer_notice_mark, t.p.muted) |> ignore
+        } else {
+          @sf.icon(c, icon, size=composer_notice_mark, color=t.p.muted) |> ignore
+        }
       })
       |> ignore
       c.text(said, style=composer_notice_words) |> ignore
@@ -2020,10 +2036,15 @@ fn composer_notice(
 }
 
 ///|
-/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark as far in as the
-/// composer's ＋ (capsule_pad_alone), what it offers 16 from its end, 8 over and under its words, 8 over the composer.
+/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark over the composer's ＋ in
+/// the middle of its round start (its ends drawn in to stand so), what it offers 16 from its end, 8 over and under its
+/// words, 8 over the composer.
 // kept across runs: a value (no field of it changes)
-let composer_notice_box : @ui.Style = @ui.css("mb=S2 pl=S2 pr=S4 py=S2 radius=Full gap=S1")
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 radius=Full gap=S1")
+
+///|
+/// How far a notice's line is in from its top and bottom (its box's py=S2).
+let composer_notice_pad : Double = 8.0
 
 ///|
 /// A notice's line: its mark, its words and what it offers on its middle.
