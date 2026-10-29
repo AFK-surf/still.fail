@@ -1096,7 +1096,6 @@ let inner_even : Double = 0.5
 /// `InnerOr` keeps its own corner in no container or near none of its edges (it stands alone there), and at different
 /// distances keeps it too, said so.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
-  self.corners_found()
   self.inner_faults.clear()
   // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
   self.arounds_after_layout()

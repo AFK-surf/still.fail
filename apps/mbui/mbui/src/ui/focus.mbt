@@ -1,7 +1,8 @@
-// The keyboard's focus beyond a field's: any widget can take it (Ctx::interact registers what can, in the order it
-// is built). Tab goes to the next, Shift+Tab to the one before, round from the last to the first; inside a layer that
-// traps it (a modal dialog's: overlay.mbt), only among what that layer holds. A roving group (Radix's
-// RovingFocusGroup: a radio group, a toolbar, tabs, a menu's items) is one stop for Tab, its current item (the one
+// The keyboard's focus beyond a field's: any widget can take it (Ctx::interact registers what can; Tab goes among
+// them in the tree's order, a list's rows where the list is). Tab goes to the next, Shift+Tab to the one before, round
+// from the last to the first; inside a layer that traps it (a modal dialog's: overlay.mbt), only among what that layer
+// holds. A roving group (Radix's RovingFocusGroup: a radio group, a toolbar, tabs, a menu's items) is one stop for Tab,
+// its current item (the one
 // last focused in it, else the one it says, else its first); the arrows along it move among its items (Left and Right
 // swap where the direction is right to left), Home and End to its first and last. Enter and Space press what has the
 // focus (as its widget says: a checkbox only takes Space). The focus shows (a ring) only once it came by the keyboard,
@@ -85,10 +86,11 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
 }
 
 ///|
-/// What can take the focus this build, in Tab's order: the nodes said to (Node's `focus`), in the order they were made.
+/// What can take the focus this build, in Tab's order: the nodes said to (Node's `focus`), in the tree's order (a node
+/// before what it holds, what it holds as it lies: a list's rows where the list is, top to bottom; Ctx::tree_order).
 fn Ctx::focusables_found(self : Ctx) -> Unit {
   self.focusables.clear()
-  for i in 0..<self.count {
+  for i in self.tree_order() {
     match self.nodes[i].focus {
       Some(f) => self.focusables.push({ ..f, node: i })
       None => ()

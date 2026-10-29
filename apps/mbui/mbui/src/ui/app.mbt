@@ -301,6 +301,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // its box is, or built there where it cannot be (kept_part.mbt)
       c.parts_rows_left()
       c.parts_placed()
+      // what the nodes hold of the frame, all of them made now (a list's rows as it was laid out): what Tab goes among
+      // (focus.mbt), the corners worked out once laid out (corners.mbt)
+      c.focusables_found()
+      c.corners_found()
       // what rows left out where they had not the room, drawn nowhere (readback.mbt)
       c.left_out_after_layout()
       // what covers an item, over it as laid out now (cover.mbt)
@@ -609,8 +613,6 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
-  // what Tab goes among, as the nodes made it (focus.mbt)
-  c.focusables_found()
   root
 }
 
