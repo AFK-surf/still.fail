@@ -531,13 +531,38 @@ let lift_gap : Double = 12.0
 pub let fly_lift_ms : Double = 100.0
 
 ///|
-/// The share of the flight's way that is the thumbnail's going out from under the bar or composer, for a flight
-/// `grow_ms` long: none when nothing hides `t`.
-fn lift_share(t : Thumb, grow_ms : Double) -> Double {
-  if lift_of(t).abs() < 0.5 {
-    0.0
+/// The share of the flight's way that is the thumbnail's going out from under the bar or composer, on its way to `to`
+/// (where the picture is on the stage): as much of it as the going out is of the way the picture goes, its edges no
+/// quicker as it goes out than as it then grows (a picture mostly hidden goes out far, a time's share of it was
+/// a leap there, the user, 2026-10-29: 「从上往下的还有问题」); none when nothing hides `t`; `to` not known, as
+/// much as its time.
+fn lift_share(t : Thumb, to : (Double, Double, Double, Double)?, grow_ms : Double) -> Double {
+  let lift = lift_of(t).abs()
+  if lift < 0.5 {
+    return 0.0
+  }
+  match to {
+    Some((tx, ty, tw, th)) => {
+      // (the growing's way: as far as its furthest going edge goes, from where the going out leaves it)
+      let y = t.y + lift_of(t)
+      let grow = dmax(
+        dmax((tx - t.x).abs(), (tx + tw - t.x - t.w).abs()),
+        dmax((ty - y).abs(), (ty + th - y - t.h).abs()),
+      )
+      lift / (lift + grow)
+    }
+    None => fly_lift_ms / (fly_lift_ms + grow_ms)
+  }
+}
+
+///|
+/// How long a flight `grow_ms` long when nothing hides its thumbnail is with `lift` of its way going out from under
+/// the bar or the composer.
+fn lift_ms(lift : Double, grow_ms : Double) -> Double {
+  if lift > 0.0 {
+    grow_ms + fly_lift_ms
   } else {
-    fly_lift_ms / (fly_lift_ms + grow_ms)
+    grow_ms
   }
 }
 
@@ -1292,7 +1317,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
     c.blur()
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
     match v.flight_target(c, src) {
-      Some(_) =>
+      Some(to) =>
         match thumb_of(c, v.id()) {
           Some(t) => {
             v.flies = true
@@ -1305,9 +1330,9 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
             }
             // (the whole way on one curve, its way out from under the bar or composer first, if any, then the growing:
             // Viewer::flying, Viewer::lifted)
-            v.fly_lift = lift_share(t, fly_open_ms)
+            v.fly_lift = lift_share(t, Some(to), fly_open_ms)
             v.fly.set(0.0)
-            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms / (1.0 - v.fly_lift), ease=Move)))
+            ignore(v.fly.start(1.0, @motion.tween(lift_ms(v.fly_lift, fly_open_ms), ease=Move)))
             pv_hidden.val = v.id()
           }
           None => ()
@@ -1454,10 +1479,10 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
     match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
-      (Some(t), Some(KImage), Some(_)) => {
+      (Some(t), Some(KImage), Some(r)) => {
         self.fly_from = Some(t)
         self.fly_back = true
-        self.fly_home_from(t)
+        self.fly_home_from(t, Some(r))
         pv_hidden.val = self.id()
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
@@ -1496,26 +1521,26 @@ pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
   self.fly_pic = picture
   self.fly_back = true
   match self.fly_from {
-    Some(t) => self.fly_home_from(t)
+    Some(t) => self.fly_home_from(t, self.fly_to)
     None => ()
   }
   pv_hidden.val = self.id()
 }
 
 ///|
-/// Back towards thumbnail `t` from as far along as it was, in as much of its time: shrinking, then (if the bar or the
-/// composer hides it now) going in under them at its own size. The way re-shared for where `t` is now, so that it
-/// has grown, or gone out, as far as it had. A move of its own, on Move from where it is: quick as it sets out, at
+/// Back towards thumbnail `t` from as far along as it was (from `from`, where the picture is on the stage), in as much
+/// of its time: shrinking, then (if the bar or the composer hides it now) going in under them at its own size. The
+/// way re-shared for where `t` is now, so that it has grown, or gone out, as far as it had. A move of its own, on Move from where it is: quick as it sets out, at
 /// rest as it lands (the way in run backwards would land at its quickest, the thumbnail and the bars come back at
 /// once: a flash).
-fn Viewer::fly_home_from(self : Viewer, t : Thumb) -> Unit {
+fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Double, Double)?) -> Unit {
   if !self.flies {
     self.flies = true
     self.fly_lift = 0.0
     self.fly.set(1.0)
   }
   let (was, q) = (self.fly_lift, self.fly.get())
-  let lift = lift_share(t, fly_close_ms)
+  let lift = lift_share(t, from, fly_close_ms)
   let q = if q >= was {
     lift + (q - was) / (1.0 - was) * (1.0 - lift)
   } else if was > 0.0 {
@@ -1525,7 +1550,7 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb) -> Unit {
   }
   self.fly_lift = lift
   self.fly.set(q)
-  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms / (1.0 - lift) * q), ease=Move)))
+  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, lift_ms(lift, fly_close_ms) * q), ease=Move)))
 }
 
 ///|
