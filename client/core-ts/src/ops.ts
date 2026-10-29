@@ -72,6 +72,7 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
   "network.setRelayUdp": "relayUdp:boolean",
+  "station.restart": "",
   "context.setAfresh": "afreshWhenCold:boolean",
   "diagnostics.setLogs": "logs:boolean",
   "elevation.set": "on:boolean",
@@ -316,6 +317,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
     case "network.setRelayUdp":
       return op("PUT", () => "/network/settings", p.pick(["relayUdp"]), OVERVIEW);
+    // The station started again by its launcher (its routes/network.ts), managers only.
+    case "station.restart":
+      return op("POST", () => "/station/restart", null, OVERVIEW);
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
     // Whether it sends its log to still.fail, scrubbed (its station's routes/diagnostics.ts); set by the workspace's

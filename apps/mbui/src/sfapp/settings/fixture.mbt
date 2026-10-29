@@ -2072,6 +2072,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx.congestion = text(p, "congestion")
       Some(Ok(obj([])))
     }
+    "station.restart" => Some(Ok(obj([("restarting", Json::boolean(true))])))
     "network.setRelayUdp" => {
       fx.relay_udp = flag(p, "relayUdp")
       Some(Ok(obj([])))

@@ -6,8 +6,9 @@ import type { ConfigFile } from "../../ops/config.ts";
 import { managesStation } from "../../mesh/credential.ts";
 import { networkView } from "../../mesh/settings.ts";
 import { tr } from "../../ops/i18n.ts";
+import { log } from "../../ops/log.ts";
 
-export const routes = ({ config, changed }: { config: ConfigFile; changed?: () => void }): Route[] => [{
+export const routes = ({ config, changed, restart }: { config: ConfigFile; changed?: () => void; restart?: () => (() => Promise<void>) | null }): Route[] => [{
   method: "PUT",
   pattern: /^\/network\/settings$/,
   handle: async (r) => {
@@ -28,5 +29,18 @@ export const routes = ({ config, changed }: { config: ConfigFile; changed?: () =
     config.update((raw) => { raw.network = { ...raw.network, ...set }; });
     changed?.();
     return json(200, JSON.stringify(networkView(config.raw())));
+  },
+}, {
+  // The station started again (ops/restart.ts), so what was saved above takes effect; the answer goes before it does.
+  method: "POST",
+  pattern: /^\/station\/restart$/,
+  handle: async (r) => {
+    if (!managesStation(r.viewer)) return error(403, tr(r.lang, "station.restart.managersOnly"));
+    const go = restart?.() ?? null;
+    if (go === null) return error(409, tr(r.lang, "station.restart.cannot"));
+    log.info("restart", "asked from the station's page", { by: r.viewer.email });
+    // The old process serves on (this answer too) until the new one has taken over.
+    await go();
+    return json(202, JSON.stringify({ restarting: true }));
   },
 }];

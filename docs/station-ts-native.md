@@ -63,6 +63,7 @@ runner → 客户端：
 4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
    - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
+   - station 页右上角 ⋯ 的「重启 station」（管理员，`POST /station/restart`，`station/src/ops/restart.ts`）就是请启动器做这次交接：`run/station.json` 里的 pid、`handoff: 1`，Unix 上发 SIGUSR2，Windows 上往管道写 `{"op":"handover"}`。新进程重新读 config.json（高级网络设置在这时生效），会话不中断；没有启动器（直接从源码跑）时回 409。
    - SIGUSR1（drain）、SIGHUP：转给当前 Node（在控制管道上发 `{"op":"drain"}` / `{"op":"hup"}`）。
    - SIGTERM / SIGINT：转给 Node（`{"op":"stop"}`），等它退出（最多 30 秒），然后自己退出。
 6. Node 意外退出（不是启动器让它退的）：按 1s、2s、4s… 最多 60s 退避重启；连续 5 次起不来就退出（交给 launchd）。

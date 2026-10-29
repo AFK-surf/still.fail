@@ -63,3 +63,24 @@ test("the relays' UDP way is off until a manager turns it on, and is saved apart
     assert.throws(() => config.update((raw) => { raw.network.relayUdp = 1; }), /relayUdp: expected a boolean/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a manager restarts the station through its launcher, which a station without one cannot", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "network-settings-"));
+  try {
+    const config = new ConfigFile(dir);
+    let asked = 0;
+    let launcher = false;
+    const route = routes({ config, restart: () => (launcher ? async () => { asked++; } : null) }).find((r) => String(r.pattern).includes("restart"))!;
+    const request = (role: string): Request => ({
+      method: "POST", path: "/station/restart", query: [], headers: {}, lang: "zh", body: Buffer.alloc(0),
+      viewer: { sub: "a", email: "a@x", name: "A", role, workspace: "w", device: "d" },
+    });
+    assert.equal((await route.handle(request("member"), [])).status, 403);
+    assert.equal((await route.handle(request("owner"), [])).status, 409);
+    launcher = true;
+    assert.equal((await route.handle(request("member"), [])).status, 403);
+    assert.equal(asked, 0);
+    assert.equal((await route.handle(request("admin"), [])).status, 202);
+    assert.equal(asked, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
