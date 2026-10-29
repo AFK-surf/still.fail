@@ -32,24 +32,28 @@ pub fn message_files(
       _ => dmin(@sf.file_card_w, room)
     }
   })
+  // (in a picture of the chat being shared, each with the room its ✕ hangs in past its top and right: publish.mbt)
+  let hung = if picturing.val is Some(_) { publish_file_hung() } else { 0.0 }
   let rows : Array[Array[Int]] = []
   let mut used = 0.0
   for i, w in widths {
-    if rows.length() == 0 || used + files_gap + w > room {
+    if rows.length() == 0 || used + files_gap + w + hung > room {
       rows.push([i])
-      used = w
+      used = w + hung
     } else {
       rows[rows.length() - 1].push(i)
-      used = used + files_gap + w
+      used = used + files_gap + w + hung
     }
   }
-  c.box(style=if mine { files_column_end } else { files_column }, id=at, fn() {
+  let column = if mine { files_column_end } else { files_column }
+  let column = if hung > 0.0 { column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(files_gap + hung))) } else { column }
+  c.box(style=column, id=at, fn() {
     for r in rows {
       c.box(style=files_row, fn() {
         for i in r {
           // (each in a box of its own: where a file sent from the composer flies to, sfbase's flight.mbt)
           // (as wide as laid out for it: a card does not give way to the picture beside it)
-          let item = c.box(style=@ui.style(w=Fixed(widths[i])), fn() { file_item(c, src, here, list[i], widths[i], by~) })
+          let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, list[i], widths[i], by~) })
           match flight_here(here) {
             Some(f) => flight_landing(c, f, item, @sfbase.file_key(list[i]), share=landing_share(list[i]))
             None => ()

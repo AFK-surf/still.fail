@@ -1293,7 +1293,9 @@ web-pages.chat.openPanel
 web-pages.chat.pickSaved
 web-pages.chat.profileDetails
 web-pages.chat.publish.empty
+web-pages.chat.publish.leaveOut
 web-pages.chat.publish.message
+web-pages.chat.publish.putBack
 web-pages.chat.publish.reading
 web-pages.chat.publish.revoke
 web-pages.chat.publish.revokeAsk

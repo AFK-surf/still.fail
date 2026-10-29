@@ -315,8 +315,9 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
             _ => ()
           }
         })
-        if !on {
-          c.look(said, @ui.look(alpha=publish_off_alpha))
+        let out = if taking { 0.0 } else { publish_out(c, k, on) }
+        if out > 0.0 {
+          c.look(said, @ui.look(alpha=publish_faded(out)))
         }
       }
     })
@@ -364,9 +365,10 @@ fn file_k(seq : Double, a : Attachment) -> String {
 }
 
 ///|
-/// An attachment of message `seq` in the picture, `w` wide, as the chat shows it (file_drawn; FileToggle). On the page,
-/// ticked (its box at its end, half way down: publish_tick) it goes in the picture; unticked, it fades. In the picture
-/// taken (`taking`), as it is.
+/// An attachment of message `seq` in the picture, `w` wide, as the chat shows it (file_drawn). On the page, as what
+/// waits to go in the composer has it, a ✕ hung on its top right corner (@sf.with_corner_remove) takes it out of the
+/// picture (pressed anywhere on it too): it fades, its ✕ a ＋ that puts it back. In the picture taken (`taking`), as it
+/// is, the room its mark hangs in kept.
 fn publish_file(
   c : @ui.Ctx,
   src : Source,
@@ -378,42 +380,39 @@ fn publish_file(
   by~ : (String, String, String)?,
 ) -> Unit {
   let k = file_k(seq, a)
+  // (the room its mark is hung in kept in the picture too, so that it is laid out as the page has it)
   if taking || k == "" {
-    file_drawn(c, src, here, a, w, by~)
+    c.box(style=@ui.style(pr=@sf.room_of(publish_file_hung())), fn() { file_drawn(c, src, here, a, w, by~) }) |> ignore
     return
   }
   let on = !publishing.off.contains(k)
-  let toggle = fn(now : Bool) {
-    if now {
-      publishing.off.remove(k)
-    } else {
-      publishing.off[k] = true
-    }
-  }
-  // (pressed anywhere, ticked or not: FileToggle is a label round the file and its box)
+  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes)
+  let out = publish_out(c, k, on)
   let id = c.id("publish/file/" + k)
-  let mut ticked = false
-  let card = c.box(style=publish_file_box, fn() {
-    file_drawn(c, src, here, a, w, by~)
-    // (over the file, taking its presses: what the chat would open it by does not here)
-    c.layer(fn() {
-      c.box(style=publish_tick, id~, fn() {
-        let look = @kit.checkbox_look_of(size=@sf.theme().rows.check, radius=@sf.theme().rows.check_corner)
-        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=a.name, look~).value
-        if (now == On) != on {
-          ticked = true
-          toggle(now == On)
-        }
+  let hung = @sf.with_corner_remove(
+    c,
+    "publish/file/" + k,
+    @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
+    @sf.message_file_corner,
+    w~,
+    turn=out * publish_plus_turn,
+    fn() {
+      // (pressed anywhere, as its mark is: what the chat would open it by does not here)
+      let card = c.box(style=publish_file_box, fn() {
+        file_drawn(c, src, here, a, w, by~)
+        c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
       })
-      |> ignore
-    })
-    |> ignore
-  })
-  if !ticked && c.clicked(id) {
-    toggle(!on)
-  }
-  if !on {
-    c.look(card, @ui.look(alpha=publish_off_alpha))
+      if out > 0.0 {
+        c.look(card, @ui.look(alpha=publish_faded(out)))
+      }
+    },
+  )
+  if hung || c.clicked(id) {
+    if on {
+      publishing.off[k] = true
+    } else {
+      publishing.off.remove(k)
+    }
   }
 }
 
@@ -421,6 +420,23 @@ fn publish_file(
 /// An attachment left out (file[data-off]: .45); the shield before how much was hidden, in the bar (14) and under a
 /// message (13).
 let publish_off_alpha : Double = 0.45
+
+///|
+/// How far what `k` names is out of the picture (0 in it, 1 out), moving as its tick or its ✕ is pressed: as long as a
+/// control's change takes (vars.dur), easing out.
+fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> Double {
+  @motion.animate(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+}
+
+///|
+/// How opaque it is, `out` of the picture.
+fn publish_faded(out : Double) -> Double {
+  1.0 - out * (1.0 - publish_off_alpha)
+}
+
+///|
+/// The ✕ turned an eighth of a turn: a ＋.
+let publish_plus_turn : Double = 0.7853981633974483
 
 ///|
 let publish_note_icon_small : Double = 13.0
@@ -561,12 +577,18 @@ fn first_line_h(c : @ui.Ctx, m : @sfbase.Message) -> Double {
 }
 
 ///|
-/// An attachment to tick (file), its box at its end (tick).
+/// An attachment on the page, faded once taken out.
 // kept across runs: a value (no field of it changes)
 let publish_file_box : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Its box (tick): at its end, half way down, the ladder's inset in: where a file card's own buttons are on the web
-/// (FileCard's fileCardAction: download's ✕, retry's ↻), so the box to tick stands where the card's action does.
+/// What takes its presses, all over it.
 // kept across runs: a value (no field of it changes)
-let publish_tick : @ui.Style = @ui.css("w=Full h=Full pr=S2_5 align=AEnd justify=JCenter")
+let publish_file_press : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The room its ✕ (＋ once taken out) hangs in past its top and right edge (@sf.with_corner_remove), kept in the
+/// picture taken too.
+pub fn publish_file_hung() -> Double {
+  @sf.corner_remove_reach(@sf.message_file_corner)
+}

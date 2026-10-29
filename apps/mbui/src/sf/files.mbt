@@ -340,7 +340,8 @@ pub fn file_card(
 /// end, so what comes next in its row stands the row's gap past it; the width it is given (a quote: nothing beside it),
 /// none: it reaches past its right edge into the room round it as past its top, as far from that room's edge there as
 /// it is from its top (the user, 2026-10-26: 上边距和右边距不一致). `key` names it (its ✕ `key/remove`), `label` what a screen reader
-/// calls its ✕. Whether its ✕ was pressed.
+/// calls its ✕; `turn` how far its ✕ is turned (a quarter of a half turn: a ＋, which puts back what was taken out: a
+/// shared picture's attachments). Whether its ✕ was pressed.
 pub fn with_corner_remove(
   c : @ui.Ctx,
   key : String,
@@ -348,6 +349,7 @@ pub fn with_corner_remove(
   corner : Double,
   body : () -> Unit,
   w? : Double,
+  turn? : Double = 0.0,
 ) -> Bool {
   let x = c.id(key + "/remove")
   let reach = corner_remove_reach(corner)
@@ -366,7 +368,12 @@ pub fn with_corner_remove(
         body()
         c.layer(fn() {
           c.box(style=corner_remove_at, fn() {
-            let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() { corner_remove_mark(c) })
+            let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
+              let m = c.box(fn() { corner_remove_mark(c) })
+              if turn != 0.0 {
+                c.look(m, @ui.look(rot=turn))
+              }
+            })
             c.semantics(b, Button, id=x, label~)
           })
           |> ignore

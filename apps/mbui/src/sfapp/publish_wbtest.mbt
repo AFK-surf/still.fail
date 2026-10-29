@@ -131,6 +131,19 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
   assert_true(ticks.iter().all(fn(n) { n.check == Some(On) }))
   // in a column of their own before the words (the phone's picture: the pictures inline, at the words' start)
   assert_true(ticks_before_words(t, 0.0), msg=ticks.map(fn(n) { n.rect }).to_string())
+  // its attachments not ticked: each has the composer's ✕ on its corner, which takes it out; then a ＋ puts it back
+  assert_eq(t.all(Checkbox).length(), 4)
+  let outs = t.all(Button, label="移出图片")
+  assert_eq(outs.length(), 3)
+  let (ox, oy, ow, oh) = outs[1].rect
+  t.tap(ox + ow / 2.0, oy + oh / 2.0)
+  assert_true(@sfpages.publish_left_out("f1"))
+  assert_eq(t.all(Button, label="移出图片").length(), 2)
+  let backs = t.all(Button, label="放回图片")
+  assert_eq(backs.length(), 1)
+  let (bx, by, bw, bh) = backs[0].rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_true(!@sfpages.publish_left_out("f1"))
   let (x, y, w, h) = ticks[1].rect
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(@sfpages.publish_message_left_out(6.0))
