@@ -166,6 +166,9 @@ for t in ${TARGETS:-native}; do
   # pages', 152 s and 179, the second's and third's 96 and 101, main 9a748590, 40942683567, 2026-10-30.) (On a runner of
   # its own since: beside kept_rows' two runs the third's was then the longest, 162-185 s against the first's 110-118,
   # fix/side-bar-under-band 40955953763, msg-highlight 40955729359; wherever it went it was some 50 s of that runner's.)
+  # (kept_rows' second run on the second since: with both of them the third's job was the part's longest after the
+  # pages', the second's the shortest, 65-123 s against 157-182, fix/swipe-archive-undo 40972095755, mbui-node-asks
+  # 40971809575, main ff97a641 40971760122, 2026-10-30.)
   app_group_of() {
     local n=$1
     shift
@@ -177,7 +180,8 @@ for t in ${TARGETS:-native}; do
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
-      "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
+      "src/sfapp/kept_rows_kinds_wbtest.mbt --index 0-"*) echo 3 ;;
+      "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 2 ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
