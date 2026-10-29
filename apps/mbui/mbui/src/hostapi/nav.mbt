@@ -17,7 +17,7 @@ pub(all) struct NavItem {
   dot : Bool
   prominent : Bool
   menu : Array[(String, String, Bool, String)]
-}
+} derive(Eq)
 
 ///|
 /// A group of items on one piece of glass: at the column's foot (`foot`: where a thumb holding the device rests) or
@@ -27,7 +27,7 @@ pub(all) struct NavGroup {
   items : Array[NavItem]
   foot : Bool
   foldable : Bool
-}
+} derive(Eq)
 
 ///|
 /// A native glass button placed in the app's content, in view points. Its menu and accessibility belong to the host.
@@ -38,7 +38,7 @@ pub(all) struct NavFloating {
   w : Double
   h : Double
   blocked : Bool
-}
+} derive(Eq)
 
 ///|
 /// What the app hands over: its groups, the item chosen (lit: its ground moves to it as it changes), the ink of what is
@@ -54,7 +54,7 @@ pub(all) struct NavBar {
   more_icon : String
   bare : Bool
   title : String
-}
+} derive(Eq)
 
 ///|
 fn nav_item_json(i : NavItem) -> Json {
@@ -99,19 +99,19 @@ pub fn NavBar::to_json(self : NavBar) -> String {
 
 ///|
 /// What was handed to the host last (handed again only as it changes), and whether it shows them.
-let nav_said : Ref[(String, Bool)?] = { val: None }
+let nav_said : Ref[(NavBar, Bool)?] = { val: None }
 
 ///|
 /// The system's controls as `bar` has them, where the host has them: true when it shows them (the app then draws none
 /// of its own for them), false where it has none. Said to the host only as it changes, whatever the frames.
 pub fn nav_bar(bar : NavBar) -> Bool {
-  let spec = bar.to_json()
+  // (compared as it is, written out only as it changes: the frames hand it each time, the host rarely needs it)
   match nav_said.val {
-    Some((was, shown)) if was == spec => return shown
+    Some((was, shown)) if was == bar => return shown
     _ => ()
   }
-  let shown = nv_bar(spec) != 0
-  nav_said.val = Some((spec, shown))
+  let shown = nv_bar(bar.to_json()) != 0
+  nav_said.val = Some((bar, shown))
   shown
 }
 

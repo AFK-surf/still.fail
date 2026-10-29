@@ -9,7 +9,8 @@
 //
 //   MBUI_BENCH_DRIVE=<script> MBUI_BENCH_NAME=<scene> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_POINTING=finger|mouse] [MBUI_BENCH_FPS=120] [MBUI_BENCH_FRAMES=<file>: each of the display's frames, a line,
-//   with what asked for it and why it was built or painted]
+//   with what asked for it and why it was built or painted] [MBUI_BENCH_WHOLE=1: each frame from `log measure` on drawn
+//   and built whole, keeping nothing]
 
 ///|
 /// What one frame drawn did, as measured.
@@ -60,6 +61,8 @@ pub fn bench(
   )
   // (a frame of the looks alone drawn once, as a host draws it: a test's draws it whole too, frame_watch.mbt)
   t.check_looks(false)
+  // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
+  t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
   let buf = Ref::new(FixedArray::make(0, 0.0))
   let damage = @damage.Damage::new()
   let timing = FixedArray::make(2, 0.0)

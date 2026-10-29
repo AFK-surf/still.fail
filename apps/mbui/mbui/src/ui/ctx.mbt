@@ -934,7 +934,7 @@ fn item_key(k : Int) -> Int {
 /// and those made before and not since (a page covered a while, its nodes kept at the end of the frame's), until
 /// their node is someone else's.
 // kept across runs: let go of as a run begins (nodes_forget)
-let known_nodes : Map[Int, Node] = {}
+let known_nodes : IdentMap = IdentMap::new()
 
 ///|
 /// How many nodes past twice those a pass made the frame's may hold, kept for one to come (Ctx::node_known).
@@ -960,7 +960,7 @@ fn Ctx::nodes_known(self : Ctx) -> Unit {
   for k in 0..<self.count {
     let n = self.nodes[k]
     n.slot = k
-    known_nodes[n.ident] = n
+    known_nodes.set(n.ident, n)
   }
 }
 
@@ -1034,7 +1034,7 @@ fn Ctx::node_known(self : Ctx, i : Int, kind : Int, key : Int) -> Unit {
       _ => ()
     }
   }
-  known_nodes[ident] = n
+  known_nodes.set(ident, n)
   n.ident = ident
   n.keyless = key == 0 && self.cur >= 0
   n.seed = self.id_seed
@@ -1166,14 +1166,19 @@ pub fn Ctx::box(
         self.theme.dark,
         selected,
         id != 0 && self.lit(id),
-        id != 0 && self.focus_shown(id),
-        id != 0 && self.pressed(id),
+        // (asked only where the style looks otherwise for it: what it is not built by is not read, nor looked up)
+        id != 0 && s.focused is Some(_) && self.focus_shown(id),
+        id != 0 && s.pressed is Some(_) && self.pressed(id),
         disabled,
       )
   }
   // (a ground it has in any of its states, whichever it is in now: the corner rule holds it as one with a ground)
   n.state_ground = match style {
-    Some(s) => [s.hovered, s.pressed, s.selected, s.focused].iter().any(fn(p) { p is Some({ bg: Some(_), .. }) })
+    Some(s) =>
+      s.hovered is Some({ bg: Some(_), .. }) ||
+      s.pressed is Some({ bg: Some(_), .. }) ||
+      s.selected is Some({ bg: Some(_), .. }) ||
+      s.focused is Some({ bg: Some(_), .. })
     None => false
   }
   let th = self.theme
@@ -1209,44 +1214,37 @@ pub fn Ctx::box(
     },
   ).unwrap_or(Auto)
   // one side said on its own wins over both sides, both over all four; said here over the style's
-  let pad = said(pad)
-  let px = first(said(padx), pad)
-  let py = first(said(pady), pad)
-  let s_x = opt_px(first(st.px, st.p))
-  let s_y = opt_px(first(st.py, st.p))
-  n.pad_l = first(said(pl), first(px, first(opt_px(st.pl), s_x))).unwrap_or(0.0)
-  n.pad_r = first(said(pr), first(px, first(opt_px(st.pr), s_x))).unwrap_or(0.0)
+  // (each side picked from what says it, in turn, no option made on the way: a box's lengths are picked for every box
+  // on every frame)
+  n.pad_l = pad_side(pl, padx, pad, st.pl, st.px, st.p)
+  n.pad_r = pad_side(pr, padx, pad, st.pr, st.px, st.p)
   // right to left, the start (left said) is the right
   if n.rtl {
     let l = n.pad_l
     n.pad_l = n.pad_r
     n.pad_r = l
   }
-  n.pad_t = first(said(pt), first(py, first(opt_px(st.pt), s_y))).unwrap_or(0.0)
-  n.pad_b = first(said(pb), first(py, first(opt_px(st.pb), s_y))).unwrap_or(0.0)
+  n.pad_t = pad_side(pt, pady, pad, st.pt, st.py, st.p)
+  n.pad_b = pad_side(pb, pady, pad, st.pb, st.py, st.p)
   // margins as the padding: one side said over both, both over all four, said here over the style's (below 0 too)
-  let mx = first(mx, m)
-  let my = first(my, m)
-  let sm_x = opt_margin(first(st.mx, st.m))
-  let sm_y = opt_margin(first(st.my, st.m))
-  n.mar_l = first(ml, first(mx, first(opt_margin(st.ml), sm_x))).unwrap_or(0.0)
-  n.mar_r = first(mr, first(mx, first(opt_margin(st.mr), sm_x))).unwrap_or(0.0)
+  n.mar_l = margin_side(ml, mx, m, st.ml, st.mx, st.m)
+  n.mar_r = margin_side(mr, mx, m, st.mr, st.mx, st.m)
   if n.rtl {
     let l = n.mar_l
     n.mar_l = n.mar_r
     n.mar_r = l
   }
-  n.mar_t = first(mt, first(my, first(opt_margin(st.mt), sm_y))).unwrap_or(0.0)
-  n.mar_b = first(mb, first(my, first(opt_margin(st.mb), sm_y))).unwrap_or(0.0)
+  n.mar_t = margin_side(mt, my, m, st.mt, st.my, st.m)
+  n.mar_b = margin_side(mb, my, m, st.mb, st.my, st.m)
   n.at_l = left.unwrap_or(0.0 / 0.0)
   n.at_t = top.unwrap_or(0.0 / 0.0)
   n.at_r = right.unwrap_or(0.0 / 0.0)
   n.at_b = bottom.unwrap_or(0.0 / 0.0)
-  n.min_w = first(min_w, opt_bound(st.min_w, 0.0)).unwrap_or(0.0)
+  n.min_w = bound_of(min_w, st.min_w, 0.0)
   n.min_w_within = min_w is None && st.min_w is Some(Within(_))
-  n.max_w = first(max_w, opt_bound(st.max_w, 1.0e9)).unwrap_or(1.0e9)
-  n.min_h = first(min_h, opt_bound(st.min_h, 0.0)).unwrap_or(0.0)
-  n.max_h = first(max_h, opt_bound(st.max_h, 1.0e9)).unwrap_or(1.0e9)
+  n.max_w = bound_of(max_w, st.max_w, 1.0e9)
+  n.min_h = bound_of(min_h, st.min_h, 0.0)
+  n.max_h = bound_of(max_h, st.max_h, 1.0e9)
   let (sh_blur, sh_y) = match st.shadow {
     Some(s) => {
       let (b, y) = s.blur_y()
@@ -1262,18 +1260,42 @@ pub fn Ctx::box(
       None => None
     },
   ).unwrap_or(0x0000002EL)
-  n.shadow_y = first(shadow_y, sh_y).unwrap_or(-1.0)
-  n.gap = first(gap, opt_px(st.gap)).unwrap_or(0.0)
-  n.align = first(align, st.align).unwrap_or(AStretch)
-  n.justify = first(justify, st.justify).unwrap_or(JStart)
-  n.bg = first(bg, opt_color(th, st.bg)).unwrap_or(0L)
-  n.radius = first(
-    radius,
-    match st.radius {
-      Some(r) => Some(th.corner(r))
-      None => None
-    },
-  ).unwrap_or(0.0)
+  n.shadow_y = match shadow_y {
+    Some(y) => y
+    None => sh_y.unwrap_or(-1.0)
+  }
+  n.gap = match gap {
+    Some(g) => g
+    None =>
+      match st.gap {
+        Some(s) => s.px()
+        None => 0.0
+      }
+  }
+  n.align = match align {
+    Some(a) => a
+    None => st.align.unwrap_or(AStretch)
+  }
+  n.justify = match justify {
+    Some(j) => j
+    None => st.justify.unwrap_or(JStart)
+  }
+  n.bg = match bg {
+    Some(b) => b
+    None =>
+      match st.bg {
+        Some(c) => th.color(c)
+        None => 0L
+      }
+  }
+  n.radius = match radius {
+    Some(r) => r
+    None =>
+      match st.radius {
+        Some(r) => th.corner(r)
+        None => 0.0
+      }
+  }
   // each corner its own (`Corners`); else all four `radius` (the node's look is not reset before a box sets it: none
   // of a box's before it in this place kept)
   n.radii = None
@@ -1300,29 +1322,44 @@ pub fn Ctx::box(
     (None, Some(Around)) => corner_around
     _ => 0
   }
-  n.border_w = first(
-    border,
-    match st.border {
-      Some(b) => Some(b.px())
-      None => None
-    },
-  ).unwrap_or(0.0)
-  n.border_c = first(border_color, opt_color(th, st.border_color)).unwrap_or(0L)
+  n.border_w = match border {
+    Some(b) => b
+    None =>
+      match st.border {
+        Some(b) => b.px()
+        None => 0.0
+      }
+  }
+  n.border_c = match border_color {
+    Some(c) => c
+    None =>
+      match st.border_color {
+        Some(c) => th.color(c)
+        None => 0L
+      }
+  }
   n.dashed = st.dashed.unwrap_or(false)
-  n.shadow = first(shadow, sh_blur).unwrap_or(0.0)
-  n.clip = first(clip, st.clip).unwrap_or(false)
+  n.shadow = match shadow {
+    Some(s) => s
+    None => sh_blur.unwrap_or(0.0)
+  }
+  n.clip = match clip {
+    Some(c) => c
+    None => st.clip.unwrap_or(false)
+  }
   n.tx = tx
   n.ty = ty
   // (placed by its own size only when told so this frame, Ctx::place_by_size: a slot a menu was placed in last
   // frame is not where a box built there now goes)
   n.place = None
-  n.opacity = first(
-    opacity,
-    match st.opacity {
-      Some(o) => Some(o.value())
-      None => None
-    },
-  ).unwrap_or(1.0)
+  n.opacity = match opacity {
+    Some(o) => o
+    None =>
+      match st.opacity {
+        Some(o) => o.value()
+        None => 1.0
+      }
+  }
   n.glass = glass
   n.glass_group = glass_group
   n.notch_y = notch_y
@@ -1357,27 +1394,75 @@ pub fn Ctx::box(
 }
 
 ///|
-/// A padding said in a call: one below 0 is not (the -1 Ctx::row and the like pass on).
-fn said(v : Double?) -> Double? {
-  match v {
-    Some(x) if x >= 0.0 => v
-    _ => None
+/// A side's padding (Ctx::box): said for it alone, for both of its axis (`both`), for all four (`all`), each only when
+/// 0 or more (one below 0 is not said: the -1 Ctx::row and the like pass on); else the style's, in the same order;
+/// else none.
+fn pad_side(one : Double?, both : Double?, all : Double?, st_one : Space?, st_both : Space?, st_all : Space?) -> Double {
+  match one {
+    Some(x) if x >= 0.0 => return x
+    _ => ()
+  }
+  match both {
+    Some(x) if x >= 0.0 => return x
+    _ => ()
+  }
+  match all {
+    Some(x) if x >= 0.0 => return x
+    _ => ()
+  }
+  match st_one {
+    Some(v) => return v.px()
+    None => ()
+  }
+  match st_both {
+    Some(v) => return v.px()
+    None => ()
+  }
+  match st_all {
+    Some(v) => v.px()
+    None => 0.0
   }
 }
 
 ///|
-fn opt_margin(v : Space?) -> Double? {
-  match v {
-    Some(v) => Some(v.margin_px())
-    None => None
+/// A side's margin (Ctx::box), as pad_side picks a padding, below 0 too.
+fn margin_side(one : Double?, both : Double?, all : Double?, st_one : Space?, st_both : Space?, st_all : Space?) -> Double {
+  match one {
+    Some(x) => return x
+    None => ()
+  }
+  match both {
+    Some(x) => return x
+    None => ()
+  }
+  match all {
+    Some(x) => return x
+    None => ()
+  }
+  match st_one {
+    Some(v) => return v.margin_px()
+    None => ()
+  }
+  match st_both {
+    Some(v) => return v.margin_px()
+    None => ()
+  }
+  match st_all {
+    Some(v) => v.margin_px()
+    None => 0.0
   }
 }
 
 ///|
-fn opt_px(v : Space?) -> Double? {
-  match v {
-    Some(v) => Some(v.px())
-    None => None
+/// A bound (Ctx::box's min_w and the like): said, else the style's, else `none_is`.
+fn bound_of(said : Double?, st : Len?, none_is : Double) -> Double {
+  match said {
+    Some(x) => x
+    None =>
+      match st {
+        Some(l) => l.bound(none_is)
+        None => none_is
+      }
   }
 }
 
@@ -1385,14 +1470,6 @@ fn opt_px(v : Space?) -> Double? {
 fn opt_color(th : Theme, v : Color?) -> Int64? {
   match v {
     Some(v) => Some(th.color(v))
-    None => None
-  }
-}
-
-///|
-fn opt_bound(v : Len?, none_is : Double) -> Double? {
-  match v {
-    Some(v) => Some(v.bound(none_is))
     None => None
   }
 }
@@ -1523,8 +1600,15 @@ pub fn Ctx::text(
   let (s_size, s_line) = self.text_sizes(st)
   let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
-  n.center = first(center, st.center).unwrap_or(false)
-  n.wrap = first(wrap, st.wrap).unwrap_or(true)
+  // (each picked from what says it, no option or closure made on the way: for every words' node on every frame)
+  n.center = match center {
+    Some(b) => b
+    None => st.center.unwrap_or(false)
+  }
+  n.wrap = match wrap {
+    Some(b) => b
+    None => st.wrap.unwrap_or(true)
+  }
   n.text = if n.wrap || breaks || !has_nl(s) {
     s
   } else {
@@ -1534,19 +1618,50 @@ pub fn Ctx::text(
     }
   }
   // (sizes as the original's sp: the system's size of words applied, fontscale.mbt)
-  n.font_size = self.sp(first(size, s_size).unwrap_or(15.0))
-  n.line_h = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * n.font_size)
+  n.font_size = self.sp(
+    match size {
+      Some(v) => v
+      None => s_size.unwrap_or(15.0)
+    },
+  )
+  n.line_h = match line {
+    Some(l) => self.sp(l)
+    None =>
+      match s_line {
+        Some(l) => self.sp(l)
+        None => self.theme.text_line * n.font_size
+      }
+  }
   n.line_trim = trim
-  n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
-  n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
-  n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
+  n.weight = match weight {
+    Some(v) => v
+    None => opt_weight(st.weight).unwrap_or(400)
+  }
+  n.color = match color {
+    Some(c) => c
+    None =>
+      match st.color {
+        Some(c) => self.theme.color(c)
+        None => self.theme.fg
+      }
+  }
+  n.w = match w {
+    Some(v) => v
+    None => opt_size(st.w).unwrap_or(Auto)
+  }
   n.spacing = match (tracking, st.tracking) {
     (Some(v), _) => self.sp(v)
     (None, Some(t)) => t.px(n.font_size)
     (None, None) => 0.0
   }
-  n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
-  n.tabular = first(tabular, st.tabular).unwrap_or(self.theme.tabular)
+  n.max_lines = match max_lines {
+    Some(v) => v
+    None => st.max_lines.unwrap_or(0)
+  }
+  n.tabular = match tabular {
+    Some(b) => b
+    None => st.tabular.unwrap_or(self.theme.tabular)
+  }
   n.keep = keep
   n.shorter = shorter
   i

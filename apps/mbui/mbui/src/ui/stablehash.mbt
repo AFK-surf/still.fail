@@ -21,24 +21,24 @@ pub fn stable_hash_bytes(data : Bytes) -> Int64 {
 ///|
 /// `s`'s FNV-1a (64 bits) over its UTF-8 bytes: the same for the same words in every run and on every target.
 pub fn stable_hash(s : String) -> Int64 {
+  // (the bytes folded in as they come, no closure: what names a node is hashed for each node on every frame)
   let mut h = fnv_offset
-  let byte = fn(b : Int) { h = (h ^ b.to_int64()) * fnv_prime }
   for ch in s {
     let c = ch.to_int()
     if c < 0x80 {
-      byte(c)
+      h = (h ^ c.to_int64()) * fnv_prime
     } else if c < 0x800 {
-      byte(0xC0 | (c >> 6))
-      byte(0x80 | (c & 0x3F))
+      h = (h ^ (0xC0 | (c >> 6)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | (c & 0x3F)).to_int64()) * fnv_prime
     } else if c < 0x10000 {
-      byte(0xE0 | (c >> 12))
-      byte(0x80 | ((c >> 6) & 0x3F))
-      byte(0x80 | (c & 0x3F))
+      h = (h ^ (0xE0 | (c >> 12)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | ((c >> 6) & 0x3F)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | (c & 0x3F)).to_int64()) * fnv_prime
     } else {
-      byte(0xF0 | (c >> 18))
-      byte(0x80 | ((c >> 12) & 0x3F))
-      byte(0x80 | ((c >> 6) & 0x3F))
-      byte(0x80 | (c & 0x3F))
+      h = (h ^ (0xF0 | (c >> 18)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | ((c >> 12) & 0x3F)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | ((c >> 6) & 0x3F)).to_int64()) * fnv_prime
+      h = (h ^ (0x80 | (c & 0x3F)).to_int64()) * fnv_prime
     }
   }
   h

@@ -576,7 +576,7 @@ pub(all) struct NavBar {
   more_icon : String
   bare : Bool
   title : String
-}
+} derive(Eq)
 pub fn NavBar::to_json(Self) -> String
 
 pub(all) struct NavFloating {
@@ -586,13 +586,13 @@ pub(all) struct NavFloating {
   w : Double
   h : Double
   blocked : Bool
-}
+} derive(Eq)
 
 pub(all) struct NavGroup {
   items : Array[NavItem]
   foot : Bool
   foldable : Bool
-}
+} derive(Eq)
 
 pub(all) struct NavItem {
   id : String
@@ -601,7 +601,7 @@ pub(all) struct NavItem {
   dot : Bool
   prominent : Bool
   menu : Array[(String, String, Bool, String)]
-}
+} derive(Eq)
 
 pub struct Pick {
   // private fields

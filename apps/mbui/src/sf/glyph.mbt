@@ -277,6 +277,24 @@ pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Doub
 /// the failing stations' dots, the robot with its eyes cut out of it (`5`: what it covers cleared). No blink, no
 /// breath: the system's tab bar draws it once.
 pub fn station_glyph_icon(g : GlyphCounts) -> String {
+  // (the same counts the same icon: the bars are handed it every frame, it is worked out as they change)
+  match glyph_icon_last.val {
+    Some((was, icon)) if was == g => return icon
+    _ => ()
+  }
+  let icon = glyph_icon_of(g)
+  glyph_icon_last.val = Some((g, icon))
+  icon
+}
+
+///|
+/// The last counts station_glyph_icon was asked for and its icon.
+// kept across runs: what a pure function of the counts gave for them, the same in any run
+let glyph_icon_last : Ref[(GlyphCounts, String)?] = Ref(None)
+
+///|
+/// station_glyph_icon's icon, worked out.
+fn glyph_icon_of(g : GlyphCounts) -> String {
   let (arcs, dots) = glyph_layout(g)
   let whole = if g.asleep { 0.4 } else { 1.0 }
   let out = StringBuilder()

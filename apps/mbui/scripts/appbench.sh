@@ -25,7 +25,8 @@ medium chat 690x840 2 finger
 medium-idle chat 690x840 2 finger
 hover chat 1280x800 0 mouse
 card chat 1280x800 0 mouse
-send-wide chat 1280x800 0 mouse"
+send-wide chat 1280x800 0 mouse
+whole chat 690x840 2 finger"
 built=$(APP=sfbench MODE=release bash scripts/mac.sh build 2>&1) || { echo "$built" | grep -E "Error|error" -A6 | head -60; echo "appbench: sfbench not built"; exit 1; }
 [ "${QUIET:-1}" = 0 ] || QUIET_MAX=${QUIET_MAX:-300} bash mbui/scripts/bench_quiet.sh
 exe=./_build/native/release/build/stillfail/sfbench/sfbench.exe
@@ -40,7 +41,10 @@ while read -r scene fixture win platform pointing; do
   best=""
   best_work=""
   for k in $(seq 1 "${REPEAT:-3}"); do
-    out=$(env MBUI_FIXTURE=$fixture MBUI_WIN=$win MBUI_FILM_PLATFORM=$platform MBUI_POINTING=$pointing \
+    # (whole: every frame built anew, keeping nothing: what a frame built whole costs, whatever it is built for)
+    whole=0
+    [ $scene = whole ] && whole=1
+    out=$(env MBUI_BENCH_WHOLE=$whole MBUI_FIXTURE=$fixture MBUI_WIN=$win MBUI_FILM_PLATFORM=$platform MBUI_POINTING=$pointing \
       MBUI_BENCH_NAME=$scene MBUI_BENCH_DRIVE="$PWD/scripts/bench/$scene.drive" MBUI_BENCH_FRAMES="$frames" "$exe" 2>&1)
     st=$?
     if [ $st != 0 ]; then

@@ -183,7 +183,7 @@ pub fn Tester::bench(
   while driver.val is Some(_) && n < max {
     tick = tick + step
     let due = self.wanted_after()
-    let frame = due <= tick + 1.0e-9
+    let frame = due <= tick + 1.0e-9 || (measuring && bench_whole.val)
     if frame {
       self.frame_at(tick)
     } else {
@@ -194,10 +194,32 @@ pub fn Tester::bench(
       each(self, frame)
     } else {
       measuring = self.fake.logs.iter().any(fn(l) { l == "DRIVE LOG measure" })
+      bench_measuring.val = measuring
     }
     n = n + 1
   }
+  bench_measuring.val = false
   self.fake.logs.copy()
+}
+
+///|
+/// Whether a bench builds every frame whole, keeping nothing, from its `log measure` on (Tester::bench_whole): what a
+/// frame built anew costs, whatever it is built for.
+// kept across runs: a bench's, set once as it begins
+let bench_whole : Ref[Bool] = Ref(false)
+
+///|
+/// Whether a bench is past its script's `log measure` (Tester::bench).
+// kept across runs: a bench's, let go as it ends
+let bench_measuring : Ref[Bool] = Ref(false)
+
+///|
+/// Every frame of the bench from its `log measure` on drawn, and built whole, keeping nothing (no part, no row, no
+/// layout of before but what the flex engine keeps): what building the frame anew costs (scripts/appbench.sh's
+/// `whole`).
+pub fn Tester::bench_whole(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  bench_whole.val = on
 }
 
 ///|
