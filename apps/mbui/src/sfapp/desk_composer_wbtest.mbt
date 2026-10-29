@@ -472,8 +472,19 @@ test "desk composer: an image sent while it goes up is among its message's files
   @ui.add_image(flying[0].picture, png_head())
   face.draw()
   assert_true(face.find("照片.png") is None)
-  assert_eq(face.image_loads().length(), 1)
+  assert_eq(loaded_sources(face), 1)
   send_flight.set(None)
+}
+
+///|
+/// How many pictures a tester decoded (each at as many sizes as it was drawn at: a picture covering its tile, once its
+/// proportions are known, again at the size it is drawn).
+fn loaded_sources(t : @ui.Tester) -> Int {
+  let seen : Map[String, Bool] = {}
+  for l in t.image_loads() {
+    seen[l.0] = true
+  }
+  seen.length()
 }
 
 ///|
@@ -518,7 +529,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   // (its bytes again: a tester of its own starts with none)
   @ui.add_image(flying[0].picture, png_head())
   face.draw()
-  assert_eq(face.image_loads().length(), 1)
+  assert_eq(loaded_sources(face), 1)
   let spun = face.drawn_lines().length() > 0
   send_flight.set(None)
   (tile, spun)
@@ -553,7 +564,7 @@ test "desk composer: a draft kept, read again as the app starts, shows its pictu
   t.frame()
   assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{asked}")
   // (its picture, the one image drawn)
-  assert_eq(t.image_loads().length(), 1)
+  assert_eq(loaded_sources(t), 1)
   // a tile, not a card naming it; the other file a card
   let words = t.words().map(fn(w) { w.0 })
   assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{words}")
