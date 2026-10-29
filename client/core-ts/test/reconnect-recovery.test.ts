@@ -7,14 +7,14 @@ import { Deferred, Effect, Queue } from "effect";
 import { Core } from "../src/core.ts";
 import { t } from "../src/i18n.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import { BRIEF_MAX_MS, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS } from "../src/station/link.ts";
+import { BRIEF_MAX_MS, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS, UPDATE_DOWN_MS } from "../src/station/link.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SOCKET_RETRY_MAX_MS } from "../src/sync/cloud.ts";
 import { apply, call, subscribe } from "./helpers.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { Wake } from "../src/wake.ts";
 import { run } from "./run.ts";
-import { base, started, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
+import { base, overview, started, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 
 const ST = "ws/st";
 
@@ -457,6 +457,34 @@ test("a_station_down_says_why_as_the_device_can_tell_and_its_chat_takes_messages
     assert.equal(chat().offline, false);
     assert.equal(chat().offlineNote, undefined);
     assert.equal(row()?.offline, undefined);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_station_its_update_takes_down_is_said_updating_until_it_has_been_down_longer_than_an_update_takes", async () => {
+  // Updating, a station goes down while the installer hands over or restarts it: it said only 离线 (2026-10-29).
+  const row7 = { id: "k1", session: "k1", thread: 7, title: "部署", agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null };
+  const updating = { ...overview, updates: [{ id: "station", name: "still.fail", installed: true, version: "0.1.1", latest: "0.1.2", newer: true, updatable: true, state: "updating" }] };
+  const s = await started({ ...base(), "GET /overview": updating, "GET /chats": [row7] });
+  try {
+    const values = new Map<number, unknown>();
+    subscribe(s.core, 1, 1, { topic: "chat", station: ST, thread: 7 });
+    subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
+    await s.host.time.pass(1000, 250);
+    await takenDown(s);
+    await s.host.time.pass(500, 250);
+    apply(s.host, values);
+    const chat = () => values.get(1) as Shown;
+    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1");
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "updating");
+    assert.equal(chat().offlineNote, t("core-logic.looks.offline.updating", { name: "studio" }));
+    assert.equal(row()?.offline, t("core-views.station.updating", { name: "studio" }));
+    // Down longer than an update takes: no longer taken for its update.
+    await s.host.time.pass(UPDATE_DOWN_MS + OFFLINE_RETRY_MS, 60_000);
+    apply(s.host, values);
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "unreached");
+    assert.equal(chat().offlineNote, t("core-logic.looks.offline.unreached", { name: "studio" }));
   } finally {
     s.core.close();
   }

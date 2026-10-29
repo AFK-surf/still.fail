@@ -81,8 +81,15 @@ export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number |
 /// cloud says it is, and this device does not reach it. A weak network took a phone's stations for down and said each
 /// "离线" while they were up (2026-10-23). `lock`: it answered, refusing this device or the workspace's members for a
 /// security mode (this device not approved there, or the station not taking that workspace's members yet): its words
-/// say why, in place of 离线 (2026-10-23: a station added to another workspace showed only 离线 there).
-export type DownCause = "network" | "station" | "unreached" | "lock";
+/// say why, in place of 离线 (2026-10-23: a station added to another workspace showed only 离线 there). `updating`: it
+/// went down while its overview said it was updating itself (the installer hands over to a new process or restarts
+/// it), for at most UPDATE_DOWN_MS: an update takes it down for a while and it comes back by itself (2026-10-29: it
+/// said only 离线, and people could not tell why).
+export type DownCause = "network" | "station" | "unreached" | "lock" | "updating";
+
+/// How long a station down while updating is taken to be updating: the station's own limit for an update (updates.ts
+/// `stationLimit`), past which it counts the update failed.
+export const UPDATE_DOWN_MS = 20 * 60_000;
 
 /// Whether a station's refusal is for a security mode (DownCause `lock`).
 export const lockRefusal = (e: { code: string }) => e.code === "lock_unconfirmed" || e.code === "lock_station";
@@ -114,6 +121,8 @@ export class Link {
   replaced: Fiber.Fiber<void, never> | null = null;
   /// When the open stream last gave anything; null while none is open.
   heard: number | null = null;
+  /// When its link stopped being online; null while it is (or until it first was).
+  down: number | null = null;
   /// When the station last answered a request (2xx); null until one is.
   answered: number | null = null;
   /// Where it is in the station's log of events: what its next stream goes on from (cursor.ts).
@@ -256,9 +265,19 @@ export class Links {
     return get(station, "online") === false;
   }
 
+  /// Whether the station went down as its update took it down: its overview as last heard says it was updating
+  /// itself, and it has not been down longer than an update takes.
+  #updating(address: string): boolean {
+    const down = this.#links.get(address)?.down ?? null;
+    if (down === null || this.#core.host.nowMs() - down > UPDATE_DOWN_MS) return false;
+    const updates = get(this.#core.data.shared({ topic: "overview", station: address }), "updates");
+    return Array.isArray(updates) && updates.some((u) => get(u, "id") === "station" && get(u, "state") === "updating");
+  }
+
   /// Why the station is not reached, as the device can tell now (DownCause).
   #cause(address: string): DownCause {
     if (this.#core.status.cloudDown()) return "network";
+    if (this.#updating(address)) return "updating";
     return this.#cloudSaysOffline(address) ? "station" : "unreached";
   }
 
@@ -382,6 +401,8 @@ export class Links {
     if ((state === "online" || state === "offline") && this.#core.data.record("link", address) !== state) this.#core.data.put("link", address, state);
     const was = link.state.state;
     link.state = value;
+    if (state === "online") link.down = null;
+    else if (was === "online") link.down = this.#core.host.nowMs();
     // Not reached: nothing is being caught up on (its stream says so again once it opens).
     if (state !== "online") link.catching = null;
     this.#told.changed(address, "link");

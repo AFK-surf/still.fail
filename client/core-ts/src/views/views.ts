@@ -91,9 +91,10 @@ export function down(link: J): boolean {
 }
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
-/// the way between them.
+/// the way between them, or its update.
 export function downWords(link: J, name: string): string {
   const cause = get(link, "cause");
+  if (cause === "updating") return t("core-views.station.updating", { name });
   if (cause === "network") return t("core-views.station.offline_network", { name });
   if (cause === "unreached") return t("core-views.station.unreachable", { name });
   if (cause === "lock") return t("core-views.station.lock", { name });
@@ -1650,7 +1651,8 @@ export class Views implements Owner {
       const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
       let summary: string;
       const cause = get(this.link(s.address), "cause");
-      if (!s.online && cause === "network") summary = t("core-views.station.network");
+      if (!s.online && cause === "updating") summary = t("core-views.station.updating_short");
+      else if (!s.online && cause === "network") summary = t("core-views.station.network");
       else if (!s.online && cause === "unreached") summary = t("core-views.station.unreachable_short");
       else if (!s.online && cause === "lock") summary = t("core-views.station.lock_short");
       else if (!s.online) {

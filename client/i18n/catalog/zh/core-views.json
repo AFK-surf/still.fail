@@ -322,6 +322,8 @@
   "core-views.station.idle": "空闲",
   "core-views.station.offline": "{name} 离线",
   "core-views.station.offline_short": "离线",
+  "core-views.station.updating": "{name} 正在更新",
+  "core-views.station.updating_short": "正在更新",
   "core-views.station.offline_since": "离线 · {ago}",
   "core-views.station.syncing": "正在同步",
   "core-views.station.syncing_left": "正在同步 · 还剩 {n} 个对话",

@@ -1142,7 +1142,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String"],
     ["message", opt("String"), { said: true }],
     ["retrying", opt("bool"), { doc: "Found offline and tried again just now (a person's 重试, or the device back): still taken for down\nuntil the try reaches it, its 重试 turning meanwhile." }],
-    ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the\nworkspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it." }],
+    ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the\nworkspace's members, for a security mode: `message` says why) | updating (it went down while updating itself). Absent otherwise, and from a core\nbefore it." }],
   ], { doc: "A station's mesh link: connecting | online | offline | error." }),
   StationState: struct([
     ["station", "String"],
