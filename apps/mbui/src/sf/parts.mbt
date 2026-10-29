@@ -3557,24 +3557,44 @@ fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bo
 let options_card_radius : Double = list_card_corner
 
 ///|
-/// One line asked of the viewer on an options card's ground (what the chat needs, at its end, with 忽略): the card an
-/// options card is under a post (on the text at 5%, its corner, list_pad in) and one row in it laid as an option's
-/// (pad_in in on every side, so its words sit as far in as an option's and its corner's concentric), `body` that
-/// row's (a row; `column` lays it a column instead).
+/// One line asked of the viewer on an option's ground (what the chat needs, at its end, with 忽略): one row laid as an
+/// option's, alone (pad_in in on every side, its corner an option row's, so its words sit as far in from every side
+/// and its corner's concentric with them), on the text at 5% as an options card under a post. No card round it: an
+/// options card's list_pad is room for its rows' grounds lit under the hand, and nothing in this row lights up;
+/// framed so (#2543) its words stood twice as far in and one line was a fat capsule. `body` the row's (a row;
+/// `column` lays it a column instead).
 pub fn ask_line_card(c : @ui.Ctx, column? : Bool = false, body : () -> Unit) -> Int {
   // (the row's room round its words an option's, the theme's for the screen: option_type)
   let inside = @ui.style(p=room(option_type().pad_in))
-  c.box(style=ask_line_frame, fn() {
-    c.box(style=(if column { ask_line_column } else { ask_line_row }).then(inside), body) |> ignore
-  })
+  c.box(style=(if column { ask_line_column } else { ask_line_row }).then(ask_line_ground).then(inside), body)
 }
 
 ///|
-/// ask_line_card's frame: the options card's ground under a post (on the text at 5%: options_card `wide`).
+/// What leads ask_line_card's words (what the chat needs: its bell), where an option's number is: in the middle of a
+/// column as wide and as high as its disc, so it stands as far in from the row's corner as the disc, concentric.
+pub fn ask_line_mark() -> @ui.Style {
+  let d = ask_line_disc()
+  @ui.style(w=Fixed(d), h=Fixed(d), align=ACenter, justify=JCenter)
+}
+
+///|
+/// Room at the end of ask_line_card's row for what ends it (忽略) to stand as far from the row's end as a mark `icon`
+/// wide in the middle of ask_line_mark's column stands from its start.
+pub fn ask_line_end(icon : Double) -> @ui.Style {
+  let side = (ask_line_disc() - icon) / 2.0
+  @ui.style(pr=room(side))
+}
+
+///|
+/// The width of ask_line_mark's column: an option's disc, the theme's for the screen.
+fn ask_line_disc() -> Double {
+  option_type().disc
+}
+
+///|
+/// ask_line_card's ground: an option row's corner, on the text at 5% (options_card `wide`).
 // kept across runs: a value (no field of it changes)
-let ask_line_frame : @ui.Style = @ui.css("w=Full bg=A(Fg,O5)").then(
-  @ui.style(p=room(options_card_pad), radius=rounded(options_card_radius)),
-)
+let ask_line_ground : @ui.Style = @ui.css("bg=A(Fg,O5)").then(@ui.style(radius=rounded(option_row_corner)))
 
 ///|
 /// Its row: 12 between its words and what is at its end, as an option's disc and label.

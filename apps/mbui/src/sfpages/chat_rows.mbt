@@ -115,19 +115,23 @@ fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest
       None => c.text(@sf.t("web-main.chat.asks.dismiss"), style=look.state_quiet.then(dismiss_end)) |> ignore
     }
   }
-  // (an options card's frame and its row's room, @sf.ask_line_card: its corner and its sides the options')
+  // (an option row's ground and room, @sf.ask_line_card: its corner and its sides an option's)
   @sf.ask_line_card(c, column=stacked, fn() {
     c.box(style=need_card_words, label=words, fn() {
-      c.box(style=look.state_slot, fn() { lead_icon(c, "need", @sf.theme().p.text) }) |> ignore
+      // (the bell where an option's number is, in the middle of its disc: concentric with the row's corner as it is)
+      c.box(style=@sf.ask_line_mark(), fn() { lead_icon(c, "need", @sf.theme().p.text, centred=true) }) |> ignore
       if rest != "" {
         c.text(rest, style=said) |> ignore
       }
     })
     |> ignore
+    // (its words' end as far in from the row's end as the bell's from its start: the bell's room in its disc's column
+    // mirrored, so neither end's thing lies nearer its round end than the other's)
+    let end_room = @sf.ask_line_end(state_icon)
     if stacked {
-      c.box(style=need_card_actions, dismiss) |> ignore
+      c.box(style=need_card_actions.then(end_room), dismiss) |> ignore
     } else {
-      dismiss()
+      c.box(style=end_room, dismiss) |> ignore
     }
   })
   |> ignore
@@ -674,7 +678,8 @@ let chat_state_wraps : @ui.TextStyle = @ui.text_style(wrap=true)
 
 ///|
 /// What the chat needs of the viewer, with 忽略 (chat_state): its words taking what 忽略 leaves at its end (a column of
-/// them, 忽略 under them at the end, where a native narrow chat has little room).
+/// them, 忽略 under them at the end, where a native narrow chat has little room); after the bell's disc as far as a
+/// state line's words after its icon (no disc drawn round it, an option's 12 leaves the bare bell far off).
 // kept across runs: a value (no field of it changes)
 let need_card_words : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart)
 
