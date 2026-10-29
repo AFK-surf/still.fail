@@ -44,7 +44,7 @@ export const ElevationLive = Layer.effectDiscard(
     const { data, app } = yield* Paths;
     const events = yield* Events;
     const parts = yield* Parts;
-    const elevation = new Elevation({ data, app, now: wall.now, changed: () => events.overviewChanged() });
+    const elevation = new Elevation({ data, app, now: wall.now, after: wall.after, changed: () => events.overviewChanged() });
     yield* Effect.acquireRelease(
       Effect.sync(() => void elevation.start().catch((e) => log.warn("elevation", "how it runs not looked at", { error: (e as Error).message }))),
       () => Effect.sync(() => elevation.stop()),

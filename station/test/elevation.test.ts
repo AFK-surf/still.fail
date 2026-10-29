@@ -36,11 +36,38 @@ function fakeShell() {
   return { ran, run };
 }
 
-async function station(o: { windows?: unknown; elevated?: boolean; admin?: boolean; data?: { data: string; app: string } }) {
+/// A clock the test moves: timers fire as it passes them.
+function clock(start = 1_000_000) {
+  let now = start;
+  const timers: { at: number; f: () => void; off: boolean }[] = [];
+  return {
+    now: () => now,
+    after: (ms: number, f: () => void) => {
+      const t = { at: now + ms, f, off: false };
+      timers.push(t);
+      return () => void (t.off = true);
+    },
+    /// `ms` on, a millisecond at a time where it is short, so a timer armed by one firing fires in its turn.
+    pass(ms: number) {
+      const end = now + ms;
+      while (now < end) {
+        const next = timers.filter((t) => !t.off && t.at > now && t.at <= end).sort((a, b) => a.at - b.at)[0];
+        now = next?.at ?? end;
+        for (const t of timers.filter((t) => !t.off && t.at <= now)) {
+          t.off = true;
+          t.f();
+        }
+      }
+    },
+  };
+}
+
+async function station(o: { windows?: unknown; elevated?: boolean; admin?: boolean; data?: { data: string; app: string }; c?: ReturnType<typeof clock> }) {
   const paths = o.data ?? installed(o.windows);
   const shell = fakeShell();
+  const c = o.c ?? clock();
   let changes = 0;
-  const e = new Elevation({ ...paths, now: () => Date.now(), changed: () => void changes++, probe: async () => ({ elevated: o.elevated ?? false, admin: o.admin ?? true }), run: shell.run });
+  const e = new Elevation({ ...paths, now: c.now, after: c.after, changed: () => void changes++, probe: async () => ({ elevated: o.elevated ?? false, admin: o.admin ?? true }), run: shell.run });
   await e.start();
   return { e, shell, paths, changes: () => changes };
 }
@@ -75,39 +102,39 @@ test("switched on: Windows asks in a PowerShell of the station's, which a refusa
   s.e.stop();
 });
 
-test("a prompt nobody answers (the secure desktop no remote screen shows) is given up, the station as it was", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  const s = await station({});
+test("a prompt nobody answers (the secure desktop no remote screen shows) is given up, the station as it was", async () => {
+  const c = clock();
+  const s = await station({ c });
   s.e.change(true);
-  t.mock.timers.tick(ASK_MS - 1);
+  c.pass(ASK_MS - 1);
   assert.equal(s.e.view(true).step, "asking");
-  t.mock.timers.tick(1);
+  c.pass(1);
   assert.equal(s.shell.ran[0]!.killed, true);
   assert.equal(s.e.view(true).failed, "unanswered");
   // Answered after all, late: the elevated side does nothing past the deadline it was given.
   const apply = readFileSync(join(s.paths.data, "run", "elevation-apply.ps1"), "utf8");
   const deadline = Number(/-gt (\d+)\) \{ exit 3 \}/.exec(apply)![1]);
-  assert.equal(deadline, Date.now());
+  assert.equal(deadline, c.now());
   assert.ok(apply.indexOf("exit 3") < apply.indexOf("Level 'still.fail station'"), "checked before anything is changed");
   s.e.stop();
 });
 
-test("answered: what the elevated side says is shown; nothing heard from it in a minute, the change is over", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  const s = await station({});
+test("answered: what the elevated side says is shown; nothing heard from it in a minute, the change is over", async () => {
+  const c = clock();
+  const s = await station({ c });
   s.e.change(true);
   s.shell.ran[0]!.child.emit("exit", 0);
   elevated(s.paths.data, "applying");
-  t.mock.timers.tick(1000);
+  c.pass(1000);
   assert.equal(s.e.view(true).step, "applying");
-  t.mock.timers.tick(60_000);
+  c.pass(60_000);
   assert.equal(s.e.view(true).failed, "error");
   // Said restarting: left so for the station that comes up.
-  const r = await station({});
+  const r = await station({ c });
   r.e.change(true);
   r.shell.ran[0]!.child.emit("exit", 0);
   elevated(r.paths.data, "restarting");
-  t.mock.timers.tick(120_000);
+  c.pass(120_000);
   assert.equal(r.e.view(true).step, "restarting");
 });
 

@@ -44,6 +44,8 @@ export type ElevationDeps = {
   data: string;
   app: string;
   now: () => number;
+  /// `f` once, `ms` from now (fibers.ts `wall.after`); the returned function calls it off.
+  after: (ms: number, f: () => void) => () => void;
   changed: () => void;
   probe?: () => Promise<{ elevated: boolean; admin: boolean }>;
   /// Runs `script` (PowerShell) apart: hidden, its exit code when it ends.
@@ -61,7 +63,7 @@ export class ChangeRefused extends Error {
 export class Elevation {
   #probed: { elevated: boolean; admin: boolean } | null = null;
   #asking: ChildProcess | null = null;
-  #timer: ReturnType<typeof setTimeout> | null = null;
+  #cancel: (() => void) | null = null;
   readonly #d: ElevationDeps;
 
   constructor(d: ElevationDeps) {
@@ -85,7 +87,7 @@ export class Elevation {
   }
 
   stop(): void {
-    if (this.#timer !== null) clearTimeout(this.#timer);
+    this.#cancel?.();
     this.#asking?.kill();
   }
 
@@ -150,25 +152,25 @@ export class Elevation {
     const child = (this.#d.run ?? runHidden)(askScript(join(this.#run, "elevation-apply.ps1"), !p.elevated));
     this.#asking = child;
     const over = (failed: Failure | null) => {
-      if (this.#timer !== null) clearTimeout(this.#timer);
-      this.#timer = null;
+      this.#cancel?.();
+      this.#cancel = null;
       this.#asking = null;
       const k = this.kept();
       // Said by the elevated side meanwhile (applying, restarting, failed): its, not this.
       if (failed !== null && k?.step === "asking") this.#keep({ want: on, at: this.#d.now(), failed });
       this.#d.changed();
     };
-    this.#timer = setTimeout(() => {
+    this.#cancel = this.#d.after(ASK_MS, () => {
       child.kill();
       over("unanswered");
-    }, ASK_MS);
+    });
     child.on("error", () => over("error"));
     child.on("exit", (code) => {
       if (this.#asking !== child) return;
       if (code === 4) return over("declined");
       if (code !== 0) return over("error");
       // Answered: the elevated side says how it goes; not heard from at all, the change is over.
-      if (this.#timer !== null) clearTimeout(this.#timer);
+      this.#cancel?.();
       this.#asking = null;
       this.#d.changed();
       const until = this.#d.now() + APPLY_MS;
@@ -176,11 +178,11 @@ export class Elevation {
         const k = this.kept();
         this.#d.changed();
         if (k?.step === "asking" || k?.step === "applying") {
-          if (this.#d.now() < until) this.#timer = setTimeout(look, 1000);
+          if (this.#d.now() < until) this.#cancel = this.#d.after(1000, look);
           else this.#keep({ want: on, at: this.#d.now(), failed: "error" });
-        } else this.#timer = null;
+        } else this.#cancel = null;
       };
-      this.#timer = setTimeout(look, 1000);
+      this.#cancel = this.#d.after(1000, look);
     });
   }
 }
