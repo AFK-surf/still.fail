@@ -732,22 +732,13 @@ static void draw_layout(IDWriteTextLayout *l, double sc, Target *t, Drawn *d) {
   bool stripes = params_ct && !color;
   t->rt->BeginDraw();
   t->rt->Clear(D2D1::ColorF(0, 0, 0, stripes ? 1.0f : 0.0f));
-  // (a premultiplied target draws ClearType only in a layer made for it, over what is opaque)
-  ID2D1Layer *layer = NULL;
-  if (stripes && SUCCEEDED(t->rt->CreateLayer(&layer))) {
-    t->rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), NULL, D2D1_ANTIALIAS_MODE_ALIASED,
-                                           D2D1::IdentityMatrix(), 1.0f, NULL,
-                                           D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE),
-                     layer);
+  // (over the opaque black cleared above; a ClearType layer pushed here drew it gray after all)
+  if (stripes) {
     t->rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
     t->rt->SetTextRenderingParams(params_ct);
   }
   t->rt->DrawTextLayout(D2D1::Point2F((FLOAT)-x0, (FLOAT)-y0), l, t->white,
                         D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT | D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
-  if (layer) {
-    t->rt->PopLayer();
-    layer->Release();
-  }
   t->rt->EndDraw();
   if (stripes) {
     t->rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
