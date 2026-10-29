@@ -1704,6 +1704,29 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 }
 
 ///|
+/// What cuts each image instance of the last frame, in drawn_images' order: its clip (left, top, right, bottom) and that
+/// clip's corners (top left, then round it; 0 square).
+pub fn Tester::drawn_image_clips(
+  self : Tester,
+) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 4.0 {
+      out.push(
+        (
+          (c.inst[b + 16], c.inst[b + 17], c.inst[b + 18], c.inst[b + 19]),
+          (c.inst[b + 24], c.inst[b + 25], c.inst[b + 26], c.inst[b + 27]),
+        ),
+      )
+    }
+  }
+  out
+}
+
+///|
 /// The host says the app is shown or not, in front or not (as a window's or an activity's changes are told); `awake`:
 /// it goes on while not shown (a desktop's app put away: @ui.app_awake).
 pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool, awake? : Bool = false) -> Unit {

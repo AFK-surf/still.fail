@@ -270,6 +270,32 @@ test "a picture under the composer goes out from under it at its own size first,
 }
 
 ///|
+test "a picture going back in under the composer keeps its corners round: what it shows is cut with it, not behind it" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(640.0), held, bar=true, listed=true)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let th = thumb_of(t.ctx(), id).unwrap()
+  let foot = 844.0 - flight_bar_h
+  let at = t.locate("img:sent-key")
+  t.tap(at[0].0, (th.y + foot) / 2.0)
+  t.run_for(fly_open_ms / (1.0 - fly_lift_ms / (fly_lift_ms + fly_open_ms)))
+  // back, halfway in under the composer: its box moved half the way, its corners round as the thumbnail's
+  t.back()
+  let lift = fly_lift_ms / (fly_lift_ms + fly_open_ms)
+  t.run_for(way_at(1.0 - lift / 2.0) * fly_close_ms / (1.0 - lift))
+  let v = pv_leaving.val.unwrap()
+  assert_eq(v.flying(), 0.0)
+  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  let clips = t.drawn_image_clips()
+  let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
+  assert_true(flying.length() > 0)
+  for p in flying {
+    let (_, (r0, r1, r2, r3)) = p.1
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+  }
+}
+
+///|
 /// Whether the composer over the chat's foot is drawn after the picture in flight (over it).
 fn composer_over_picture(t : @ui.Tester) -> Bool {
   let order = t.drawn_order()
