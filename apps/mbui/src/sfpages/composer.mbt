@@ -1957,8 +1957,8 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 
 ///|
 /// A notice over a chat's composer (chat_notices): a capsule as the composer is, `width` wide, on its glass, 8 over
-/// it; its mark (icon `icon`, else `mark`, which notice it is; `updating`, the update's mark turning) as wide as the
-/// composer's ＋ and over it, its words quiet where the composer's are, what it offers at its end (`offer`: its target,
+/// it; its mark (icon `icon`, else `mark`, which notice it is; `updating`, the update's mark turning) in the middle of
+/// its round start, its words quiet where the composer's are, what it offers at its end (`offer`: its target,
 /// its words' key now, its name's key for what reads the screen, whether it is out of reach) in the words' colour, a
 /// step heavier; why what it offers failed (`failed`) under its words, red.
 fn composer_notice(
@@ -1985,7 +1985,9 @@ fn composer_notice(
     return
   }
   let t = @sf.theme()
-  let side = t.round.side + 1.0
+  // (its mark in a square as high as a line of it is, at its start: in the middle of the capsule's round end, as far
+  // from its edge as from its top and bottom)
+  let side = t.t.meta_line + 2.0 * composer_notice_pad
   let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
     c.box(style=composer_notice_line, fn() {
       c.box(style=@ui.style(w=Fixed(side), align=ACenter), fn() {
@@ -2028,10 +2030,15 @@ fn composer_notice(
 }
 
 ///|
-/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark as far in as the
-/// composer's ＋ (capsule_pad_alone), what it offers 16 from its end, 8 over and under its words, 8 over the composer.
+/// A notice's capsule (composer_notice): round at its ends as the composer's capsule, its mark in the middle of its round
+/// start (2026-10-29 the user: 圆角跟图标的边距不是很对, as far in as the composer's ＋ it stood off it), what it offers 16
+/// from its end, 8 over and under its words, 8 over the composer.
 // kept across runs: a value (no field of it changes)
-let composer_notice_box : @ui.Style = @ui.css("mb=S2 pl=S2 pr=S4 py=S2 radius=Full gap=S1")
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 radius=Full gap=S1")
+
+///|
+/// How far a notice's line is in from its top and bottom (its box's py=S2), and its mark from its start.
+let composer_notice_pad : Double = 8.0
 
 ///|
 /// A notice's line: its mark, its words and what it offers on its middle.
