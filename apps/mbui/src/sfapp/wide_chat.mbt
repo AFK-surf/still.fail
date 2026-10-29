@@ -5,13 +5,6 @@
 // its end, the way to the newest, telling the core what shows) is the same page's.
 
 ///|
-/// What a chat's rows stand in from the pane's sides: 14.
-fn row_side(c : @ui.Ctx) -> Double {
-  ignore(c)
-  14.0
-}
-
-///|
 /// What the composer's column holds, in the pane's middle (the column and the capsule's curve each side, 804 wide at
 /// most, 12 from the pane's sides: dock.css.ts), in the wide frame; as it is elsewhere.
 fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {

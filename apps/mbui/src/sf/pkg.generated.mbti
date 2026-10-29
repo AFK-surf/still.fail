@@ -1164,7 +1164,7 @@ pub fn one_of(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit
 
 pub let option_check_share : Double
 
-pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, room? : Double, history? : Bool) -> Int32?
+pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, history? : Bool) -> Int32?
 
 pub fn outset(Double) -> @ui.Style
 

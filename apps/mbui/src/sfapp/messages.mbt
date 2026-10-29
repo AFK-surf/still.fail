@@ -303,7 +303,6 @@ fn decision_options(
     enabled,
     at(busy),
     chosen=at(chosen),
-    room=c.width - 2.0 * row_side(c),
   )
   match picked {
     Some(i) => Some(options[i])

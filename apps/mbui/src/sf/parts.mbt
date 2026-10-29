@@ -3577,11 +3577,13 @@ fn option_type() -> OptionType {
 let options_least_wide : Double = 460.0
 
 ///|
-/// The card's width: as wide as its widest label or detail with its number and paddings, 460 at least, `room` at most
-/// (the web's `width: fit-content; min-width: min(100%, 460px)`); on a phone where it is's.
-fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bool, room : Double) -> @ui.Size {
+/// The card's width at most: as wide as its widest label or detail with its number and paddings, 460 at least (the
+/// web's `width: fit-content; min-width: min(100%, 460px)`), where it is at most as its layout gives it (the card fills
+/// where it is up to this: never its room read back from a frame before, which a chat's first frame has not, the card
+/// laid out none wide there and the list again in the next); on a phone where it is's (none).
+fn options_most(options : Array[(String, String, Bool)], ot : OptionType, wide : Bool) -> Double {
   if !wide {
-    return Fill(1.0)
+    return 1.0e9
   }
   let mut words = 0.0
   for o in options {
@@ -3589,7 +3591,7 @@ fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bo
     words = dmax(words, @ui.text_advance(o.1, size=ot.detail, weight=400))
   }
   // (the card's inset each side, the row's number in by 8 and 12 after it, the row's 12 at its end)
-  Px(dmin(room, dmax(options_least_wide, options_card_pad * 2.0 + ot.pad_in + ot.disc + 12.0 + words + 12.0)).ceil())
+  dmax(options_least_wide, options_card_pad * 2.0 + ot.pad_in + ot.disc + 12.0 + words + 12.0).ceil()
 }
 
 ///|
@@ -3680,8 +3682,8 @@ let ask_line_column : @ui.Style = @ui.css("w=Full align=AStart")
 /// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
-/// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, `room` at most, on the text at
-/// 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
+/// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, where it is at most, on the
+/// text at 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
 /// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped,
 /// on the frame after.
 pub fn options_card(
@@ -3692,7 +3694,6 @@ pub fn options_card(
   busy : Int?,
   chosen? : Int? = None,
   wide? : Bool = false,
-  room? : Double = 0.0,
   history? : Bool = false,
 ) -> Int? {
   let t = theme()
@@ -3703,7 +3704,8 @@ pub fn options_card(
   let padding = if history { 0.0 } else { options_card_pad }
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
-    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=ground, pad=padding, fn() {
+    let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide)))
+    c.box(style=across, radius=options_card_radius, bg=ground, pad=padding, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())

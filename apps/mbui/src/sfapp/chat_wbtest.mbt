@@ -259,6 +259,28 @@ test "what waits to be decided and is out of view: a bell over the way to the en
 }
 
 ///|
+test "a chat opened with a card to decide in view: its first frame lays the card out as it rests, nothing read back of it" {
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  // (pressed and let go between frames, one frame drawn: the one the chat opens in)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.touch(0, x, y)
+  t.touch(2, x, y)
+  t.frame()
+  // its first frames, the page set out to slide in: the card as wide as where it is from there, not its room read
+  // back from a frame before (none, as a chat opens: laid out none wide, the list again in the next frame)
+  assert_true(!t.wanted_why().contains("read back moved"), msg=t.wanted_why())
+  t.frame()
+  assert_true(!t.wanted_why().contains("read back moved"), msg=t.wanted_why())
+  let first = t.rect_of("先不换")
+  t.run_for(@ui.nav_push_ms)
+  let rest = t.rect_of("先不换")
+  assert_true(rest is Some(_), msg="the card in view at rest")
+  assert_eq(first.map(fn(r) { (r.2, r.3) }), rest.map(fn(r) { (r.2, r.3) }))
+}
+
+///|
 test "a chat's place: told the core as the list comes to rest (the message at the top, its top's pixels below the list's); opened again there, it is where it was left" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
