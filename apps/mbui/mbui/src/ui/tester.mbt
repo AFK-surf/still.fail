@@ -371,6 +371,7 @@ pub fn Tester::new(
   looks_check.val = true
   looks_made_at.val = loc.to_string()
   words_over_begin(loc.to_string(), words_over_held)
+  seen_whole.val = ""
   said_log.on = false
   said_log.built.reset()
   said_log.sb.reset()
@@ -643,6 +644,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
   self.hold_words_over()
+  self.hold_seen_whole_now()
   self.hold_corners()
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()

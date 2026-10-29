@@ -37,6 +37,9 @@ Opening a layer over the page draws whatever flies on the page under it too.
 
 `Flying`, `OverCover`, `OverScrim` and `OverLayers` are put off as they are painted (`drawn_paint`) and painted where the stratum
 over them starts: what flies at the next `Bar` or `Cover` painted after it, a layer opened, or the frame's end;
-`OverCover` once a cover is painted; `OverScrim` once a scrim is; `OverLayers` at the frame's end, after all of it. The instances of what flies that could not be put off
-(in what is drawn moved by a look of its own) are moved after the rest painted so far at the same points
-(`raise_flying`), under the handles (`raise_tops`). Tests: `mbui/src/ui/strata_wbtest.mbt`, pair by pair.
+`OverCover` once a cover is painted; `OverScrim` once a scrim is; `OverLayers` at the frame's end, after all of it.
+What flies is never painted in its place, in what is drawn moved by a look of its own too: it is put off with the
+moves of what holds it, and moved by them as it is painted (as Flutter's Hero and Compose's shared elements are drawn
+in an overlay over the page, never in their place), so that nothing that records what is painted (a kept part, a
+list's row: kept_part.mbt, kept_rows.mbt) holds any of it nor needs to know of it. Handles are over all of it (`raise_tops`). Tests:
+`mbui/src/ui/strata_wbtest.mbt`, pair by pair; a Tester holds words seen whole (`Tester::hold_seen_whole`).

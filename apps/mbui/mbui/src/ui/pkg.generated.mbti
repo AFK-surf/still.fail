@@ -2316,6 +2316,7 @@ pub fn Tester::haptics(Self) -> Array[Haptic]
 pub fn Tester::hold_drag(Self, Double, Double, Double, Double, steps? : Int32) -> Unit
 pub fn Tester::hold_files(Self, (Double, Double)?) -> Unit
 pub fn Tester::hold_mods(Self, Int32) -> Unit
+pub fn Tester::hold_seen_whole(Self, String) -> Unit
 pub fn Tester::hold_words(Self) -> (String, String, String)?
 pub fn Tester::hole_corners(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hole_parts(Self) -> Array[(Int32, Double, Double, Double, Double)]
