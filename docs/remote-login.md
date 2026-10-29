@@ -306,11 +306,11 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 
 ### 安卓
 
-实现（第二步）：卡片 `apps/android/shared/.../screens/LoginCards.kt`（`LoginCard`、station 页的 `StationLogins`），和网页同一套状态、同一套文字（`web-main.logins.*`），用在 chat 里 agent 消息下面、奏、station 页「登录」区；agent 贴的登录链接（`/w/<ws>/s/<station>/login/<id>`，core `link.parse` 的 `login`）打开 station 页并把那张卡片滚到眼前、浅色底标出来。
+安卓 app（`apps/mbui`）的卡片是 `apps/mbui/src/sfpages/login_card.mbt`（每种屏幕同一张，测试 `sfapp/login_card_wbtest.mbt`、`login_link_wbtest.mbt`），和网页同一套状态、同一套文字（`web-main.logins.*`），用在 chat 里 agent 消息下面、奏、station 页「登录」区；agent 贴的登录链接（`/w/<ws>/s/<station>/login/<id>`，core `link.parse` 的 `login`）打开 station 页并把那张卡片滚到眼前、浅色底标出来。
 
-- 网页都在 Chrome Custom Tab 里打开（没有支持 Custom Tab 的浏览器就交给系统浏览器）。设备码「复制并打开」、点码只复制（toast「验证码已复制」）、只要打开网址，和网页一样。
-- 回环：core 的 `Host.listen` 在安卓上是 app 的（bridge 的 `listen.open/next/respond/close`，引擎把 `listen.*` 和 `secure.*` 一样交给 Kotlin：`:core` 的 `Loopback.kt`，`ServerSocket` 只绑 127.0.0.1 / ::1），所以 `canRelay` 为真，核对 Host、路径、state、只转一次、10 秒后关，全是 core 里桌面那一套（`Relays`）。没有改 Rust shell。
-- 后台：Custom Tab 在前面时 app 在后台；Android 14 起默认开着「缓存应用冻结」，进了后台的进程几秒后就被冻住，冻住的进程接不了浏览器的回调。所以监听开着的时候（只在那时）起一个前台服务 `LoginRelayService`（`:app` 的 `LoginRelay.kt`，通知「在 studio 上登录 gcloud · 正在等待浏览器」）：由打开浏览器的那一下起（app 在前台，Android 只允许这时起），最后一个监听关掉就自己结束（转完一次后 10 秒、登录结束或取消、最多 15 分钟）。类型用 `specialUse`（和共享调试一样）：没有别的类型合适，`shortService` 的 3 分钟对要第二步验证的登录太短。
+- 网页都在 Chrome Custom Tab 里打开（`BrowserLogin.java`；没有支持 Custom Tab 的浏览器就交给系统浏览器）。设备码「复制并打开」、点码只复制（toast「验证码已复制」）、只要打开网址，和网页一样。
+- 回环：core 的 `Host.listen` 在安卓上是 app 的（bridge 的 `listen.open/next/respond/close`，引擎把 `listen.*` 和 `secure.*` 一样交给宿主的 Java：`Loopback.java`，`ServerSocket` 只绑 127.0.0.1 / ::1），所以 `canRelay` 为真，核对 Host、路径、state、只转一次、10 秒后关，全是 core 里桌面那一套（`Relays`）。没有改 Rust shell。
+- 后台：Custom Tab 在前面时 app 在后台；Android 14 起默认开着「缓存应用冻结」，进了后台的进程几秒后就被冻住，冻住的进程接不了浏览器的回调。所以监听开着的时候（只在那时）起一个前台服务（`LoginService.java`，`specialUse`，通知「在 studio 上登录 gcloud · 正在等待浏览器」）：第一个监听打开时起（app 在前台，Android 只允许这时起），最后一个监听关掉就自己停，最多 16 分钟。
 - 本机端口被占：core 记下原因（`MachineLoginShown.relayText`「本机 8085 端口被占用」），卡片上红字说，按钮还在、可以再试；不弹 toast、什么都不打开（网页桌面同样改成说在卡片上）。
 
 ### 跨机器实测（2026-10-18）

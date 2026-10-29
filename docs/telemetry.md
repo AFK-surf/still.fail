@@ -53,41 +53,29 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ## 安卓
 
-`apps/android/.../Crashes.kt`（`Tombstone.kt`）报闪退，`BarTiming.kt` 报下方栏切换的耗时，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
+安卓 app（`apps/mbui`）的上报在 `apps/mbui/android/app/src/main/java/dev/mbui/`：`Crashes.java`（`Tombstone.java`）报闪退，`MemoryWatch.java` 报原生堆失控，`BarTiming.java` 报下方栏切换的耗时，`CoreProfileReceiver.java` 按需采样核心。MoonBit 那边只告诉宿主它自己才知道的事（`src/stillfail/reports.mbt`：登录的账号、核心死掉重启、下方栏切换、页面新订阅的 topic），时间都由 Java 取。和网页版的错误进同一个项目（`$exception`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
 
-- Kotlin 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
+- `app` 是 `android`（正式版和测试版，`beta` 分开二者，`$lib` 是 `stillfail-android`）；每次推送出的 still.fail mbui（`fail.still.mbui`，apps/mbui/README.md）是 `android-mbui`（`$lib` 是 `stillfail-mbui-android`），不算进发布的 app。看的是 manifest 里 `dev.mbui.env` 的 `MBUI_OWN`、`MBUI_BETA`（`android/apk.json` 的各个 variant）。`in_app` 看 `dev.mbui.` 开头的类。
+- Java 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
 - 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；native 崩溃另带 `webview`（系统 WebView 的包名和版本，崩在 WebView 里时看是哪个 Chromium）和 `logcat`（报告时从系统日志里读到的那个进程最后 80 条 warning 及以上，有的手机 tombstone 里不带日志）；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。在前台或可见时被系统杀掉（内存不足、信号、资源超用、OEM 的管控等，`reason` 是 `killed_low_memory`、`killed_signaled`…）也报一条 `Killed`：用户看到的是闪退回桌面，App 自己没机会报；值是原因、系统给的说明和当时的 PSS/RSS，带 `logcat`，按原因归 issue。在后台被杀是 Android 的常态，不报。
-- 原生堆超过 1.5 GB（`MemoryWatch.kt`，每 30 秒看一次 `Debug.getNativeHeapAllocatedSize`）：每个进程报一次 `MemoryRunaway`（`$exception_level: error`，`reason: memory_runaway`）。报之前看 15 秒：Rust shell 这段时间里各操作被调了多少次（`shell_calls`，来自 client/shell 的 `sf_shell_stats`；核心和 shell 之间的死循环会是一个操作远远多于其他），进程启动以来各操作的总次数（`shell_calls_total`），没回的调用（`shell_unanswered`），shell 手里各类 handle 的数量（`shell_handles`；`gone` 是已关、已放掉的 iroh 连接），各线程占的 CPU（`threads`，百分之一核），核心 JS 的采样（`js`：不空闲的比例，最热的函数和调用栈，函数写成 `名字@行:列`，对照那个版本的 core.js），以及原生堆的大小和每分钟涨多少。起因是 2026-10 一台 OPPO PLP110 上原生堆每分钟涨约 300 MB，shell 线程在 app 空闲时一直转，模拟器复现不出来。
-- 核心死掉重启（`StillFailCore.onFailed`）也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
-- 懒加载列表（LazyColumn/LazyRow，`ui/ListKeys.kt`）遇到同一个 key 出现两次，不再让 App 崩溃，而是把这一行换个 key，并当场报一条 `DuplicateListKey`（`$exception_level: error`，`reason: duplicate_list_key`，值是 `column`/`row` 加上那个 key），每个进程里同一个 key 只报一次。出现这条，说明列表背后的数据里有本该唯一、却给了两次的 id。
-- 下方栏切换一次地方发一条 `bar_switch`（`BarTiming.kt`；攒 20 条或一分钟一批发到 `/batch/`，`distinct_id` 同上，没有账号就不发）。设备上同时写一行 `adb logcat -s StillfailTiming`，没有 key 的构建也写。时间都从手指抬起算（`MotionEvent.eventTime`；`touched: false` 是不是点出来的，比如返回手势）：
+- 原生堆超过 1.5 GB（`MemoryWatch.java`，每 30 秒看一次 `Debug.getNativeHeapAllocatedSize`）：每个进程报一次 `MemoryRunaway`（`$exception_level: error`，`reason: memory_runaway`）。报之前看 15 秒：Rust shell 这段时间里各操作被调了多少次（`shell_calls`，来自 client/shell 的 `sf_shell_stats`；核心和 shell 之间的死循环会是一个操作远远多于其他），进程启动以来各操作的总次数（`shell_calls_total`），没回的调用（`shell_unanswered`），shell 手里各类 handle 的数量（`shell_handles`；`gone` 是已关、已放掉的 iroh 连接），各线程占的 CPU（`threads`，百分之一核），核心 JS 的采样（`js`：不空闲的比例，最热的函数和调用栈，函数写成 `名字@行:列`，对照那个版本的 core.js），以及原生堆的大小和每分钟涨多少。起因是 2026-10 一台 OPPO PLP110 上原生堆每分钟涨约 300 MB，shell 线程在 app 空闲时一直转，模拟器复现不出来。
+- 核心死掉重启也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
+- 下方栏切换一次地方发一条 `bar_switch`（`BarTiming.java`；攒 20 条或一分钟一批发到 `/batch/`，`distinct_id` 同上，没有账号就不发）。设备上同时写一行 `adb logcat -s StillfailTiming`，没有 key 的构建也写。时间都从手指抬起算（`touched: false` 是不是点出来的，比如返回手势）：
 
   | 属性 | |
   |---|---|
   | `from`、`to` | 地方的名字（`chats`、`files`…） |
   | `first` | 这次启动后第一次到这个地方；`away_ms` 离开它多久了 |
-  | `place_ms` | 到页面放进栈（`AppState.place`） |
-  | `effect_ms`、`snap_ms`、`wait_ms` | 到 Pages 的切换开始（栈变后的那一帧）、到页面换上；中间等页面打开要的数据（最多 `LOCAL_MS`） |
-  | `waited`、`timed_out` | 这个页面有没有要等的数据；等到了上限 |
-  | `composed_ms`、`drawn_ms`、`frame_ms` | 到新页面开始组合、第一次画、画完后的下一帧（交给屏幕了） |
+  | `place_ms` | 到页面放进栈 |
+  | `composed_ms`、`frame_ms` | 到第一次建出新页面的那一帧建完、其后主线程的下一帧（交给屏幕了） |
   | `frames`、`longest_frame_ms`、`frame_gaps_ms` | 从点到 `frame_ms` 之间的帧和间隔：主线程卡没卡 |
   | `cut` | 3 秒内没走完，或被下一次切换打断 |
-  | `topics` | 页面新订阅的每个 topic：`topic`（名字，不带参数）、`opening`（切换要等它）、`held`（订阅时已有值）、`core_ms`（订阅到核心的第一个值到 app）、`decode_ms`、`shown_ms`（订阅到在主线程显示）、`tap_shown_ms`、`bytes`（第一个值的 JSON 大小） |
+  | `topics` | 页面新订阅的每个 topic：`topic`（名字，不带参数）、`core_ms`（订阅到第一条消息在 UI 线程解完）、`tap_shown_ms`、`bytes`（第一个值的 JSON 大小）、`failed` |
 
-- release 包关了 R8 的混淆（`proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
-- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
-- 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs 的 `telemetry`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
-
-### still.fail mbui（`apps/mbui`）
-
-mbui 版安卓客户端照上面同样上报，代码是 `apps/mbui/android/app/src/main/java/dev/mbui/` 下的 `Crashes.java`、`Tombstone.java`、`MemoryWatch.java`、`BarTiming.java`、`CoreProfileReceiver.java`（Java 照 Kotlin 原版逐项抄），MoonBit 那边只告诉宿主它自己才知道的事（`src/stillfail/reports.mbt`：登录的账号、核心死掉重启、下方栏切换、页面新订阅的 topic），时间都由 Java 取。和原版的不同：
-
-- `app` 是 `android-mbui`，`$lib` 是 `stillfail-mbui-android`，`beta` 恒为 `false`，`in_app` 看 `dev.mbui.` 开头的类。
-- 没有 `DuplicateListKey`：mbui 的列表按下标建行，没有会因 key 重复而崩的 keyed 列表。
-- `bar_switch` 没有 `effect_ms`、`snap_ms`、`wait_ms`、`waited`、`timed_out`、`drawn_ms`（mbui 换页不等数据，也没有 Compose 的组合/绘制两步）；`composed_ms` 是第一次建出新页面的那一帧建完，`frame_ms` 是其后主线程的下一帧。topic 只有 `core_ms`（订阅到第一条消息在 UI 线程解完）、`tap_shown_ms`、`bytes`、`failed`，没有 `opening`、`held`、`decode_ms`、`shown_ms`。
-- key 由 `apps/mbui/android/app/build.gradle.kts` 读 `STILLFAIL_POSTHOG`；CI（`.github/workflows/mbui.yml` → `apps/mbui/scripts/beta.sh build`）从 `POSTHOG_JSON` 写这个文件。
-- 开关存在同一个地方（app prefs `stillfail` 的 `telemetry`，`Crashes.reporting`），设置 → 此设备里「发送使用统计和错误报告」那一行跟原版一样（没有 key 的构建不显示）；关掉以后 `Crashes.send` 什么都不发，崩溃、`bar_switch` 都走它。
-- 采样 core：`adb shell am broadcast -n fail.still.mbui/dev.mbui.CoreProfileReceiver --ei seconds 60`。
+- release 包关了 R8 的混淆（`android/app/proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
+- 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`android/apk.json` 的 `strings`：`posthog_host`、`posthog_key`）；CI 的安卓构建从 `POSTHOG_JSON` 写这个文件（`.github/release.sh android`、`.github/workflows/mbui.yml` → `apps/mbui/scripts/beta.sh build`）。没有 key 的构建（本地、开发）什么都不发。
+- 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs `stillfail` 的 `telemetry`，`Crashes.reporting`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
+- 采样 core：`adb shell am broadcast -n <包名>/dev.mbui.CoreProfileReceiver --ei seconds 60`（正式版 `fail.still.android`）。
 
 ## key 从哪来
 

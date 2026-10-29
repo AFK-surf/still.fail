@@ -46,7 +46,7 @@ const PARTS: [RegExp, Part[]][] = [
   [/^apps\/android\//, ["android"]],
   [/^apps\/desktop\//, ["desktop"]],
   // still.fail's mbui app (apps/mbui, mbui itself in apps/mbui/mbui): the Android app since 2026-10-23 (the Kotlin one,
-  // apps/android, is frozen), and the desktop app, in the Electron one's place since 2026-10-26 (it tells the core it is
+  // apps/android, before it), and the desktop app, in the Electron one's place since 2026-10-26 (it tells the core it is
   // "desktop"). What one platform's host alone builds reaches that platform (iOS is no part yet); the desktop's own
   // pages (src/sfdesk, and what sfapp still has of them: its wide frame, the menu bar, the settings ported from the
   // web's) the desktop.

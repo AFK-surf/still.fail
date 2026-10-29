@@ -411,8 +411,9 @@ row) until the drive reaches protected folders through still.fail Helper.
 
 The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topic and the `screen.*` calls) holds each
 station's list (read as its stream opens, then its `screens` events; kept with the station's documents, station/memory.ts) and opens views. A view's frames
-go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
-desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
+go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them; in the apps,
+apps/mbui, the engine hands them to the host beside the message, a tapped screen's straight from the shell to its
+decoder); the
 page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; the app's host
 decoders, which ask H.265 where the host decodes it: VideoToolbox on macOS and iOS) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
 changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the

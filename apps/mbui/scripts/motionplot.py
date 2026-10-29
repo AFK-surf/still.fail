@@ -5,7 +5,7 @@
 
 LOG: a run with MBUI_MOTION_LOG=1 (scripts/record.sh writes out/rec/<name>/log.txt; on Android adb logcat -s mbui:I):
 lines `MOTION <ms> <key> name=value …`. Each motion (a key's run of frames) is matched to the spec the Android app
-gives that motion (docs/stillfail-motion.md; SPECS below, by its key), and its values compared with Compose's, worked
+gave that motion (SPECS below, by its key), and its values compared with Compose's, worked
 out here from Compose's formulas apart from the MoonBit (CubicBezierEasing, tween(), SpringSimulation with the
 duration of SpringEstimation; src/motion/motion_test.mbt checks the MoonBit against Compose's own classes), from the frame
 the motion was asked in, with Compose's frame from being asked to moving. Prints, per motion, its frames and the

@@ -309,12 +309,12 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 - 存的东西：`vault-box`（X25519 私钥，`user: true`）、`lock-signer`（`user: false`）。`lock-signer` 已经挪进来（`lock.ts` 的 `Signer`）：host 有 `secureSet` 时先读密封的；没有而普通文件里有，就封进去、读回来核对一样后删掉文件；新建的直接封。没有 `secure*` 的 host 照旧用普通文件。
 - 批准一次申请、打开一个条目都要过一次 `user: true` 的读；解开的库钥匙在内存里缓存 5 分钟。
 
-**安卓**（`apps/android/core/.../SecureStore.kt`）：`secure.*` 不经 Rust shell，`engine.cpp` 把它们交给 Kotlin（`HermesListener.onSecure`），Kotlin 在自己的线程做完后用 `HermesNative.complete` 回答。每个值一个文件，在 app 私有目录 `files/stillfail-sealed/<key>`（不进备份）。Keystore 里两把钥匙，有 StrongBox 就放 StrongBox：
+**安卓**（`apps/mbui/android/app/src/main/java/dev/mbui/CoreHost.java`）：`secure.*` 不经 Rust shell，引擎把它们交给宿主的 Java，在自己的线程做完再回答。Keystore 里两把钥匙，有 StrongBox 就放 StrongBox：
 
-- `user: false`：AES-256-GCM，不要求认证。
-- `user: true`：RSA-2048（OAEP，SHA-256），私钥每次使用都要认证（Android 11 起 `setUserAuthenticationParameters(0, BIOMETRIC_STRONG | DEVICE_CREDENTIAL)`，用 `BiometricPrompt` 的 CryptoObject 解锁这一次解密；Android 10 不支持按次的屏幕锁认证，改成先弹提示、再在 10 秒内用钥匙）。值用一把新的 AES 钥匙加密，AES 钥匙用公钥包起来，所以**存的时候不用问人**，只有读的时候问。新录指纹不作废这把钥匙（能解锁手机的人本来就能录指纹）；关掉屏幕锁会作废它。
-- 提示用系统的 `android.hardware.biometrics.BiometricPrompt`（minSdk 29 就有），不用 androidx.biometric：后者要 `FragmentActivity`，而 app 的界面都是 `ComponentActivity`。提示弹在前台的那个 activity 上（`Foreground` 从 `StillFailCore.start` 起记着），标题是 app 名，`reason` 是说明。
-- 文件格式：版本字节 `1`、`user` 字节，`user: false` 接 IV(12)‖GCM 输出；`user: true` 接包好的钥匙长度(2，大端)‖包好的钥匙‖IV(12)‖GCM 输出。附加数据 `"stillfail-sealed/1\0<key>\0<0|1>"`，文件挪到别的 key 名下、或改了 `user` 字节都打不开。
+- `user: false`：每个值一个文件，在 app 数据目录 `secure/`（文件名是 key 的 UTF-8 十六进制），AES-256-GCM，不要求认证；附加数据是值的名字，一个文件顶替不了另一个。
+- `user: true`：RSA-2048（OAEP，SHA-256），私钥每次使用都要认证（生物识别或屏幕锁，`BiometricPrompt` 的 CryptoObject 解锁这一次解密，`reason` 在提示里）。值用一把新的 AES 钥匙加密，AES 钥匙用公钥包起来，所以存的时候不问人、只有读的时候问。没有屏幕锁存不了；屏幕锁去掉后钥匙作废（`key_invalidated`）。文件在 `secure-user/`：版本字节 `1`、`1`、包好的钥匙长度(2，大端)‖包好的钥匙‖IV(12)‖GCM 输出，附加数据写明 key 和 `user`。
+- 提示用系统的 `android.hardware.biometrics.BiometricPrompt`（minSdk 29 就有），弹在前台的那个 activity 上。
+- 2026-10-24 以前的安卓 app 是 Kotlin 写的，存在 `files/stillfail-sealed/<key>`。新 app 用同一个包名接替它，第一次要某个 key 时把那份读出来（`CoreHost.java` 的 `former`）。
 
 **桌面**（mbui 的 app，`apps/mbui`）：`secure.*` 由宿主答，每个值按 key 和 `user` 分开存，只能按存时的 `user` 读出。
 

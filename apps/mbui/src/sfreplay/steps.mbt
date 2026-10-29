@@ -1,4 +1,4 @@
-// A flow of e2e/flows seen again in a Tester, its steps written as a test's (docs/stillfail-port.md, "Seen again"):
+// A flow of e2e/flows seen again in a Tester, its steps written as a test's (e2e/README.md):
 // the app (source.mbt) over a run's conversation with its core (e2e/traces), every input given by the test. An input
 // draws only the frames it causes (Tester::draw); what the core said comes as the run had it, posted to mbui's queue
 // (Tester::post on "core") as a frame ends once what it came after has been asked again (Replay::deliver,

@@ -1,4 +1,4 @@
-// still.fail in mbui (docs/stillfail-port.md): the core started (src/sfcore), signed out its sign-in page, signed in
+// still.fail in mbui: the core started (src/sfcore), signed out its sign-in page, signed in
 // Home (src/sfapp), over the account's own data. (The made-up chats are src/sffix's, never this app's.) A build with
 // no core (the web's) says so.
 //

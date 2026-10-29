@@ -109,7 +109,7 @@ final class Push {
      * What the app's environment says of `key`, as its activity sets it (MainActivity: the process's own, else the
      * defaults its manifest's dev.mbui.env says): "" none. A push's process may have no activity yet.
      */
-    private static String env(Context c, String key) {
+    static String env(Context c, String key) {
         String v = System.getenv(key);
         if (v != null && !v.isEmpty()) return v;
         try {

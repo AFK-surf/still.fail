@@ -1,8 +1,8 @@
-# Working on still.fail's mbui app (for agents)
+# Working on still.fail's apps (for agents)
 
-The app is still.fail's Android app, rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
-mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md` applies here as well. In short, and what is
-particular to this app:
+This is still.fail's app on every platform (README.md: which app is built), written in mbui, which is in this
+repository at `mbui/` (no pin: a change to mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md`
+applies here as well. In short, and what is particular to this app:
 
 ## The terms (术语)
 
@@ -20,15 +20,18 @@ Four things decide how the app looks and answers (docs/architecture.md, the term
 
 Write PR descriptions and anything said to people in these words: not 电脑版, 手机版, 桌面端, 移动端 or 触屏设备.
 
-## The app, and the Kotlin one before it
+## The app
 
-- This is still.fail's app on every platform: Android's since 2026-10-23 (beta) and 2026-10-24 (stable), the desktop's
-  since 2026-10-26. The Kotlin app it took the place of stopped at 0.1.4520 and is gone from the repository (2026-10-29;
-  its last tree is in git history, before that commit). New work is this app's own.
-- What it took from the Kotlin app (sizes, radii, colours, timings, behaviour: its `ui/{Glass,Corners,Parts}.kt` and
-  each screen's file) stays as it is unless a change means to differ. Nothing in this
+- The released apps are this one: Android's since 2026-10-24, the Mac's and Windows' since 2026-10-26, each built in
+  the place of the one before it. Nothing else of still.fail's apps is developed; the web app (`web/`) is the other
+  client, and the design of a page is read from it and from architecture.md.
+- What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
+- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `ember … apps/android` mean the Kotlin
+  Android app's (gone in #2547: `git show 5065f823b^:apps/android/…`); `apps/desktop/…` the Electron app's (gone in
+  #2182: `git show eba1e7f47^:apps/desktop/…`). They say where a way of doing a thing came from; where they name a
+  format this app still reads (a sealed value's, a store's files, an updater's), the old file is its spec.
 
 ## The component library
 
@@ -63,7 +66,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - `src/sfbase` is the model: the core's topics and calls (`Source`), the views, the pages (`Page`, `app.nav`), the
     app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
-  - `src/sfapp` holds the pages ported from the Kotlin app and the Small frame. It takes `sfbase`'s names in by
+  - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
     `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
   - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
 - **What doesn't change:**
@@ -77,8 +80,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).
-  - A page is designed once from what it is for; the web's two and the Kotlin app's are read for their reasons, not
-    copied or picked between. Merging two copies keeps neither and drops the other: the page is no worse on either
+  - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
+    between. Merging two copies keeps neither and drops the other: the page is no worse on either
     screen than its copy was there, shown before and after.
 
 ## Motion

@@ -1,6 +1,6 @@
 // What the core gives its clients, declared once (docs/client-core.md, Types): every value the core sends on a topic
-// passes through its shape first (conform.ts), and the clients' types are made from these by scripts/shapes.ts —
-// web/src/core/shapes.ts and the Android app's data/Shapes.kt, checked in CI so they cannot drift. A field a client
+// passes through its shape first (conform.ts), and the web's types are made from these by scripts/shapes.ts —
+// web/src/core/shapes.ts, checked in CI so it cannot drift. A field a client
 // reads is here, with its type, or it is not sent. Whole numbers (times in ms, counts) are `i64` on the wire and `I54`
 // to the clients (a JS number holds them); an absent `opt` is left out.
 //

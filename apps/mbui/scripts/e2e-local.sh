@@ -4,8 +4,7 @@
 # iroh-relay of its own, a test station enrolled there from a checkout of ember, with ember's fake claude
 # (station/test/fake) as its agent, and a second client of alice's (e2e/peer.ts, ember's TS core in Node) that makes
 # the chat and says things in it. Nothing reaches app.still.fail, the machine's own station or ~/.stillfail: every part
-# has its own ports and directories under $E2E_WORK, the station its own HOME. See docs/stillfail-port.md, "Checked
-# end to end".
+# has its own ports and directories under $E2E_WORK, the station its own HOME. See e2e/README.md.
 #
 #   scripts/e2e-local.sh install    what `up` installs first, alone: ember's packages, the station built, the natives
 #                                   (fetched or built): ios-smoke.sh's, while the app builds

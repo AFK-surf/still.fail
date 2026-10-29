@@ -74,6 +74,9 @@ final class Crashes {
     private static String posthogHost = "";
     private static String posthogKey = "";
     private static String versionName = "";
+    /** Which app this is (the manifest's dev.mbui.env, android/apk.json's variants): still.fail's own (stable or beta,
+     *  MBUI_OWN) or the build of every push beside it (still.fail mbui); a beta's (MBUI_BETA). */
+    private static boolean own, beta;
 
     static boolean hasKey() {
         return !posthogKey.isEmpty();
@@ -89,6 +92,8 @@ final class Crashes {
         } catch (Exception e) {
             versionName = "";
         }
+        own = "1".equals(Push.env(context, "MBUI_OWN"));
+        beta = "1".equals(Push.env(context, "MBUI_BETA"));
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
         if (before instanceof Keeper) return;
         Thread.setDefaultUncaughtExceptionHandler(new Keeper(new File(context.getFilesDir(), DIR), before));
@@ -236,16 +241,16 @@ final class Crashes {
     static JSONObject device() throws Exception {
         JSONObject d = new JSONObject();
         d.put("release", versionName);
-        // still.fail mbui, not still.fail's Android app (its "android"): its own crashes and timings told apart
-        d.put("app", "android-mbui");
-        // it is still.fail's (app.still.fail), not the beta channel's
-        d.put("beta", false);
+        // still.fail's Android app ("android", the beta's told apart by `beta`), or the build of every push beside it
+        // ("android-mbui"): its crashes and timings not counted as the released app's
+        d.put("app", own ? "android" : "android-mbui");
+        d.put("beta", beta);
         d.put("$app_version", versionName);
         d.put("$os", "Android");
         d.put("$os_version", Build.VERSION.RELEASE);
         d.put("$device_manufacturer", Build.MANUFACTURER);
         d.put("$device_model", Build.MODEL);
-        d.put("$lib", "stillfail-mbui-android");
+        d.put("$lib", own ? "stillfail-android" : "stillfail-mbui-android");
         return d;
     }
 
