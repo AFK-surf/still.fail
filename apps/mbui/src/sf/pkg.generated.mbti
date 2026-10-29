@@ -64,6 +64,8 @@ pub fn ask_line_end(Double) -> @ui.Style
 
 pub fn ask_line_mark() -> @ui.Style
 
+pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
+
 pub fn at_head_end() -> Bool
 
 pub fn at_point(Double, Double) -> Beside
