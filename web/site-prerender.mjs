@@ -80,6 +80,10 @@ for (const [lang, file, mark, build] of [
   writeFileSync(page, built.replace(link, head).replace("</body>", `${link}\n</body>`));
   console.log(`prerendered ${page}`);
 }
+// The faces are each page's from its head: said again in the sheet, each would be a face of its own, loaded once more
+// (from the cache) and saying so (document.fonts' loadingdone), on which the scene reads its rows again (OneComputer.tsx).
+const faceless = transform({ filename: sheet, code: sheetCode, minify: true, visitor: { Rule: { "font-face": () => [] } } }).code;
+writeFileSync(dist(`${root}/assets/${sheet}`), faceless);
 rmSync(dist("site-ssr"), { recursive: true, force: true });
 // What the app started (timers, the demo's lingering topics) has nothing more to do.
 process.exit(0);

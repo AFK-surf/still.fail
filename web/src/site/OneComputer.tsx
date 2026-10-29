@@ -112,7 +112,14 @@ function ground(el: HTMLElement): string {
  */
 function drawnAs(row: HTMLElement, sheet: string[]): HTMLElement {
   const out = row.cloneNode(true) as HTMLElement;
-  const all = (cs: CSSStyleDeclaration) => Array.from(cs, (p) => `${p}:${cs.getPropertyValue(p)}`).join(";");
+  // Every computed style lists the same properties: named once, not read off each of them again (which took two
+  // thirds of the time).
+  const names = Array.from(getComputedStyle(row));
+  const all = (cs: CSSStyleDeclaration) => {
+    let text = "";
+    for (let k = 0; k < names.length; k++) text += `${k ? ";" : ""}${names[k]}:${cs.getPropertyValue(names[k]!)}`;
+    return text;
+  };
   const copy = (from: Element, to: Element) => {
     (to as HTMLElement | SVGElement).style.cssText = all(getComputedStyle(from));
     for (const pseudo of ["::before", "::after"]) {
