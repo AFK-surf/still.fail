@@ -1,19 +1,8 @@
 // An agent's request to debug its person's phone as a card (docs/adb-share.md, 2026-10-29: as a vault request's): what
 // is asked in its title, the agent's reason under it, and at its foot 允许 as the one solid button, 拒绝 beside it, and
 // how long it is allowed a choice beside them that starts at the longest (`adb.decide` on the chat's station). Only the
-// viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went.
-
-///|
-/// The length picked for each request; put back with the app.
-let phone_picked : Map[String, String] = {}
-
-///|
-/// The request whose length menu is open (empty: none).
-let phone_menu : Ref[String] = Ref("")
-
-///|
-/// The answer under way for each request (true: 允许), till the card says how it went.
-let phone_pending : Map[String, Bool] = {}
+// viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it
+// keeps between frames (its menu, the length picked, the answer under way) is the vault card's, keyed `phone/<id>`.
 
 ///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
@@ -47,19 +36,19 @@ pub fn phone_card(
 fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String) -> Unit {
   // (up to its owner's 默认最长授权, starting at the longest)
   let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
-  let scope = match phone_picked.get(request) {
+  let scope = match vault_picked.get("phone/" + request) {
     Some(s) if scopes.contains(s) => s
     _ => scopes[scopes.length() - 1]
   }
   let on = [("station", station), ("request", request)]
-  let pending = phone_pending.get(request)
+  let pending = vault_pending.get("phone/" + request)
   let under = pending is Some(_) || is_doing(core, ["adb.decide"], on)
   let decide = fn(yes : Bool) {
     if core.read_only != "" {
       (core.say)(core.read_only)
       return
     }
-    phone_pending[request] = yes
+    vault_pending["phone/" + request] = yes
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
     if yes {
       params.push(("scope", str(scope)))
@@ -67,7 +56,7 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     (core.call)("adb.decide", obj(params), fn(r) {
       match r {
         Err(e) => {
-          phone_pending.remove(request)
+          vault_pending.remove("phone/" + request)
           let what = tr(if yes { "android-settings.vault.act.allowWhat" } else { "android-settings.vault.act.denyWhat" })
           (core.say)(fill("android-misc.act.failed", [("what", what), ("error", error_text(e))]))
         }
@@ -86,16 +75,16 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       return
     }
     let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
-    let m = @sf.chooser(c, "phone/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, phone_menu.val == request)
+    let m = @sf.chooser(c, "phone/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.val == "phone/" + request)
     if m.open {
-      phone_menu.val = request
-    } else if phone_menu.val == request {
-      phone_menu.val = ""
+      vault_menu.val = "phone/" + request
+    } else if vault_menu.val == "phone/" + request {
+      vault_menu.val = ""
     }
     match m.chosen {
       Some(s) => {
-        phone_picked[request] = s
-        phone_menu.val = ""
+        vault_picked["phone/" + request] = s
+        vault_menu.val = ""
       }
       None => ()
     }

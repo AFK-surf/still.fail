@@ -544,6 +544,14 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
 /// Settings' 共享调试 (docs/adb-share.md, 2026-10-29: as the vault's page): no switch, a chat's agent asks for the phone
 /// and its person grants it on the card in the chat. Here: the chats it is granted to now, each taken back with 收回;
 /// the requests waiting; and what the phone lacks for it (本机设置), with the switch it can turn on.
+///|
+/// Settings' 共享调试 as a whole, the page's room.
+let adb_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// What a row says when there is nothing to list, or nothing to lend (muted, the row's width).
+let adb_quiet : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
+
 fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let t = @sf.theme()
   let view = (core.topic)("adbShare", Map([])).value
@@ -561,7 +569,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       None => station_name(address)
     }
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+  c.box(style=adb_whole, fn() {
     // (what it is, in the title's ⓘ: not a card of words over the page)
     nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"), about=tr("android-misc.adb.chats.about"))
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
@@ -592,7 +600,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       list_card(c, fn() {
         if live.is_empty() {
           list_row(c, fn() {
-            c.text(tr("android-misc.adb.chats.none"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+            c.text(tr("android-misc.adb.chats.none"), style=adb_quiet) |> ignore
           })
           |> ignore
         }
@@ -659,7 +667,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         blocks.push(fn() {
           list_card(c, fn() {
             list_row(c, fn() {
-              c.text(tr("android-misc.adb.unsupported"), size=t.t.body, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
+              c.text(tr("android-misc.adb.unsupported"), style=adb_quiet) |> ignore
             })
             |> ignore
           })
