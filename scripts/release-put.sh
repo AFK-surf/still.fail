@@ -12,6 +12,7 @@
 # 2026-10-23): each left in the directory as <name>.staged, saying where it is. A put finding one takes the file back
 # from there first, and deletes it there once all is put (scripts/release-prune.ts deletes what stays after two days).
 #   release-put.sh [--files | --feeds | --stage] <dir>…
+#   release-put.sh --hand <dir> | --unhand <dir> <name>…
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -104,6 +105,25 @@ case "${1:-}" in
         pids="$pids $!"
       done
       for pid in $pids; do wait "$pid" || { echo "not all of $dir was staged" >&2; exit 1; }; done
+    done
+    exit 0 ;;
+  # --hand <dir>: what is left in a job's directory (its feeds, the .staged markers), as one tar, put under staged/
+  # as --stage puts files, its name said on stdout: what a job on mini1 hands the put, not in a run artifact (whose
+  # upload, through the proxy mini1's DNS sends GitHub to, broke off: ECONNRESET, main's android 09a022da and 5c89fdd1,
+  # 2026-10-29). --unhand <dir> <name>…: each taken back into <dir>, then deleted there.
+  --hand)
+    dir=$2; [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
+    key="staged/$(date -u +%s)-${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD)}/hand-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n').tar"
+    # (COPYFILE_DISABLE: macOS's tar without its ._ files of each file's extended attributes)
+    tar_=$(mktemp); (cd "$dir" && COPYFILE_DISABLE=1 tar -cf "$tar_" .)
+    put "$key" "$tar_" application/x-tar >&2; rm -f "$tar_"
+    echo "$key"; exit 0 ;;
+  --unhand)
+    dir=$2; shift 2; mkdir -p "$dir"
+    for key in "$@"; do
+      tar_=$(mktemp); get "$key" "$tar_" || { echo "could not get $key back" >&2; exit 1; }
+      tar -xf "$tar_" -C "$dir"; rm -f "$tar_"; echo "got $key back"
+      drop "$key" || echo "deleting $key failed: scripts/release-prune.ts deletes it in two days" >&2
     done
     exit 0 ;;
 esac
