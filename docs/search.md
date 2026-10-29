@@ -38,7 +38,10 @@ Later: the cloud's own (feedback), Slack channels' history.
   the station's chats, `mdfind` started more than once a second, Spotlight's `mds_stores` at 790% CPU and 73 hours of
   CPU in 5 days; on a Mac's home a word that common files say, `check`, is in 104k of them, and `*u*` in 198k names,
   17 s): the same words, as the same members may see them, are answered as found for 5 s (`KEPT_MS`: several devices
-  asking the same at once, as they connect again, are one search); the machine is searched two searches at a time
+  asking the same at once, as they connect again, are one search), and the same words a device asks again within 60 s
+  of its last asking (what it shows, asked again as the chats change; an app from before it let go of each words typed
+  asked them all, for its run: 94 asks in 56 s on 2026-10-29, `mds_stores` at 520%) for 60 s (`ASKED_AGAIN_MS`),
+  taking no one's place; the machine is searched two searches at a time
   (`AT_ONCE`), the others waiting, and one that waited 2 s (`TURN_MS`) finds no files (the rest of what the search
   finds is not held up for them); a person's search typed on (from the same device, its words grown or shortened)
   takes the place of the one before, which stops (its `mdfind` killed, its walk left, still.fail Helper's not waited

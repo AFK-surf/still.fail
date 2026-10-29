@@ -29,6 +29,10 @@ export const SHORT = 3;
 /// devices (as they connect again), or again and again by a client from before it let go of what it no longer shows,
 /// are one search of the machine; a file made since is found a few seconds later.
 export const KEPT_MS = 5_000;
+/// The same words asked again by the same device within this long (a client asking what it shows again as the
+/// station's chats change; an app from before it let go of each words typed asks them all, for its run) are answered
+/// as found for this long: words typed anew are searched as they come.
+export const ASKED_AGAIN_MS = 60_000;
 /// At most this many searches of the machine at once; one that waited this long for its turn finds no files (the
 /// rest of what the search finds is not held up for them).
 export const AT_ONCE = 2;
@@ -178,6 +182,8 @@ export class FileSearch {
   readonly #home: string;
   /// What searches found lately, by what they asked (KEPT_MS): the same asked again meanwhile is answered from it.
   readonly #found = new Map<string, { at: number; files: Promise<Group | null> }>();
+  /// When each device last asked each search (Asker.typist and the search's key).
+  readonly #asked = new Map<string, number>();
   /// The searches going now and those waiting for their turn. `typist`: the device a person types on (Asker.typist),
   /// `typed`: its words; a search typed on (later words of the same typist's, grown or shortened) takes the place of
   /// the one before, which stops. An agent's and another station's have no typist: each goes, none stops another.
@@ -190,17 +196,23 @@ export class FileSearch {
   }
 
   /// The files the words find for `asker`: those whose name has the first word first, then the most recently changed.
-  /// The same search within KEPT_MS is answered as it was; the machine is searched AT_ONCE searches at a time (one that
+  /// The same search within KEPT_MS is answered as it was, and one a device asks again within ASKED_AGAIN_MS of its
+  /// last asking for ASKED_AGAIN_MS; the machine is searched AT_ONCE searches at a time (one that
   /// waited TURN_MS finds none), a person's search typed on in place of the one before it.
   async query(words: string[], asker: Asker, limit: number): Promise<Group | null> {
     if (words.length === 0) return null;
     const now = this.#deps.now ?? (() => wall.now());
     const writer = asker.scopes.includes("write");
     const key = JSON.stringify([words, asker.workspace, asker.home, writer, limit, this.#deps.personal(), this.#deps.roots(asker.home ? null : asker.workspace)]);
-    for (const [k, f] of this.#found) if (now() - f.at > KEPT_MS) this.#found.delete(k);
+    for (const [k, f] of this.#found) if (now() - f.at > ASKED_AGAIN_MS) this.#found.delete(k);
+    for (const [k, at] of this.#asked) if (now() - at > ASKED_AGAIN_MS) this.#asked.delete(k);
+    const mine = asker.typist !== undefined ? JSON.stringify([asker.typist, key]) : null;
+    const again = mine !== null && this.#asked.has(mine);
+    if (mine !== null) this.#asked.set(mine, now());
     const kept = this.#found.get(key);
-    if (kept) return kept.files;
-    const files = this.#turn(asker.typist, words.join(" "))
+    if (kept && (now() - kept.at <= KEPT_MS || again)) return kept.files;
+    // (asked again, nothing is being typed: it takes no one's place, and no one's takes its)
+    const files = this.#turn(again ? undefined : asker.typist, words.join(" "))
       .then((stop) =>
         stop === null ? null : this.#search(words, asker, limit, stop.signal).then((found) => (stop.signal.aborted ? null : found)).finally(() => this.#next(stop)),
       )
