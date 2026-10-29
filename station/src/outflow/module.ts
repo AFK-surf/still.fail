@@ -12,6 +12,7 @@ import type { HelperApp } from "../helper/app.ts";
 import { bytesOf } from "../mesh/bus.ts";
 import { managesStation } from "../mesh/credential.ts";
 import { loadMesh } from "../mesh/native.ts";
+import { platform } from "../platform/index.ts";
 import { wall } from "../ops/fibers.ts";
 import { stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -106,7 +107,7 @@ export const OutflowLive = Layer.effectDiscard(
     // Who a program is: still.fail Helper says it on macOS, the executable on Linux; both need the addon that says
     // the other end of a socket.
     const peer = loadMesh().peerProcess;
-    const identify = peer === undefined ? null : helper !== null ? helperIdentify(helper, peer) : process.platform === "linux" ? procIdentify(peer) : null;
+    const identify = peer === undefined ? null : helper !== null ? helperIdentify(helper, peer) : platform.os === "linux" ? procIdentify(peer) : null;
     if (identify === null) return;
     yield* Effect.acquireRelease(
       Effect.promise(async () => {
