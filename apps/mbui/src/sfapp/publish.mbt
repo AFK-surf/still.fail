@@ -59,7 +59,8 @@ fn publish_list_rows(
   info_list(c, fn() {
     if flag(p, "may") &&
       info_row(c, "info/publish", fn() {
-        @sf.icon(c, "photo", size=16.0, color=t.p.text) |> ignore
+        // (a picture going out: not the photo of 图片、文件和链接)
+        @sf.icon(c, "image-upload", size=16.0, color=t.p.text) |> ignore
         c.text(tr("web-pages.chat.shareImage"), style=publish_row_words.then(@sf.full_words)) |> ignore
         chevron(c)
       }) {

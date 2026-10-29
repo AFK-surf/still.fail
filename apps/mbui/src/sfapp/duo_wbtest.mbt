@@ -422,7 +422,7 @@ test "an iPhone Duo: a chat's actions each its own in the system's bars, its his
   assert_true(said_at(t, @sf.t("web-pages.chat.info")) is None)
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
+  assert_true(t.find(@sf.t("web-pages.chat.info.created")) is Some(_))
 }
 
 ///|
@@ -749,7 +749,7 @@ test "Duo short system column keeps the complete chat menu reachable" {
   assert_eq(nav_icon_of(t, "page/chat/info"), Some(@sf.icon_path("more")))
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
+  assert_true(t.find(@sf.t("web-pages.chat.info.created")) is Some(_))
 }
 
 ///|
@@ -758,7 +758,7 @@ test "Duo chat menu covers sidebar glass until its exit finishes" {
   assert_true(t.nav_said().contains("workspace-switch"))
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[270,0,44,44]}")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
+  assert_true(t.find(@sf.t("web-pages.chat.info.created")) is Some(_))
   for id in ["workspace-switch", "sidebar/search", "sidebar/filter"] {
     assert_false(t.nav_said().contains(id), msg="covered control: \{id}")
   }

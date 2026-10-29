@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, List, Monitor, More, PanelClose, PanelOpen, Phone, Photo, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, ImageUpload, Info, List, Monitor, More, PanelClose, PanelOpen, Phone, Photo, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { Letters } from "../Letters.tsx";
 import { PullMark, pullTitle, ThingMenu, Things, useChatThings } from "../Things.tsx";
 import { LinkHover } from "../Peeks.tsx";
@@ -59,7 +59,6 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
-import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { WorkspaceNamed } from "../WorkspaceMark.tsx";
 import { tx } from "../cloud/words.tsx";
@@ -749,23 +748,31 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
+  const onlyStarter = chat.people.length === 0 || (chat.people.length === 1 && !!thread?.creator?.id && chat.people[0]!.id === thread.creator.id);
   const share = chat.xshare;
   // A read-only member does not publish, but sees what is published.
   const publish = chat.publish && (chat.publish.may || chat.publish.links.length > 0) ? chat.publish : undefined;
   return (
     <>
       <dl className={css.details}>
-        {row(t("web-pages.chat.info.from"), where
-          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
-          : t("web-pages.chat.info.native", { name: NAME }))}
+        {/* Where it came from only when that is not here: a still.fail chat's says nothing. */}
+        {where && row(t("web-pages.chat.info.from"),
+          <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>)}
         {thread && <>
           {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
-          {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
+          {/* Who takes part only when that is more than who started it. */}
+          {!onlyStarter && row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
           {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
           {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
         </>}
       </dl>
-      {pulls.length > 0 && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
+      {chat.agents.length > 0 && (
+        <ul className={css.detailsList}>
+          {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
+        </ul>
+      )}
+      {/* What is in it: its pull requests, what else was said in it, the stations' files, its agents' letters, it in Slack or Feishu. */}
+      {(pulls.length > 0 || said > 0 || onFiles || chat.letters || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
         {/* Pointed at, its card (as a message's link to it); right clicked, 在对话中查看 and its link copied. */}
         {pulls.slice(0, PULLS_SHOWN).map((p) => (
           <ThingMenu key={p.key} thing={p} onShow={(seq) => { if (thread) onShow(thread.id, seq); }}>
@@ -773,23 +780,17 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
           </ThingMenu>
         ))}
         {pulls.length > PULLS_SHOWN && <PanelRow icon={<List size={14} />} label={t("web-main.things.pullsAll", { n: pulls.length })} onClick={() => onThings("pulls")} />}
-      </div>}
-      {chat.agents.length > 0 && (
-        <ul className={css.detailsList}>
-          {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
-        </ul>
-      )}
-      {(said > 0 || onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
         {said > 0 && <PanelRow icon={<Photo size={14} />} label={t("web-main.things.title")} end={String(said)} onClick={() => onThings()} />}
         {onFiles && <PanelRow icon={<Folder size={14} />} label={t("web-pages.chat.files")} onClick={onFiles} />}
         {/* What its agents and other chats' wrote each other, not in the chat: their tab beside it. */}
         {chat.letters && <PanelRow icon={<Chats size={14} />} label={t("web-main.letters.title")} end={t("web-main.letters.count", { n: chat.letters })} onClick={onLetters} />}
-        {onRelay && <PanelRow icon={<ArrowUpRight size={14} />} label={t("web-main.relay.action")} onClick={onRelay} />}
         {chat.slackUrl && <PanelRow icon={<SlackLogo size={14} />} label={t("web-pages.chat.openInSlack")} onClick={() => window.open(chat.slackUrl!, "_blank", "noopener")} />}
         {chat.feishuUrl && <PanelRow icon={<FeishuLogo size={14} />} label={t("web-pages.chat.openInFeishu")} onClick={() => window.open(chat.feishuUrl!, "_blank", "noopener")} />}
       </div>}
-      {thread && (share || publish) && (
-        <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
+      {/* What is done with it, last: relaying it, sharing it, a picture of it. */}
+      {thread && (onRelay || share || publish) && (
+        <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
+          {onRelay && <PanelRow icon={<ArrowUpRight size={14} />} label={t("web-main.relay.action")} onClick={onRelay} />}
           {share && <ShareRow share={share} onOpen={onShare} />}
           {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
           {publish && <PublishedLinks links={publish.links} onRevoke={(id) => onRevoke(thread.id, id)} />}
@@ -804,7 +805,8 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
  * read-only member); the public links made of it before pictures under it (PublishedLinks, docs/public-share.md).
  */
 function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void }) {
-  return <PanelRow icon={<Photo size={14} />} label={t("web-pages.chat.shareImage")} onClick={publish.may ? onOpen : undefined} />;
+  // (a picture going out: not the photo of 图片、文件和链接 above it)
+  return <PanelRow icon={<ImageUpload size={14} />} label={t("web-pages.chat.shareImage")} onClick={publish.may ? onOpen : undefined} />;
 }
 
 /**

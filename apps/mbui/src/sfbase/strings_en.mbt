@@ -1326,7 +1326,6 @@ let en : Map[String, String] = {
   "web-pages.chat.info.created": "Created",
   "web-pages.chat.info.from": "From",
   "web-pages.chat.info.lastMessage": "Last message",
-  "web-pages.chat.info.native": "{name} chat",
   "web-pages.chat.info.people": "People",
   "web-pages.chat.info.started": "Started",
   "web-pages.chat.info.unknown": "Unknown",

@@ -21,7 +21,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { askClear, ChatRows, ChatSample, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, List, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, ImageUpload, List, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -803,25 +803,6 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           {open && <button type="button" className={css.mInfoEdit} aria-label={t("web-mobile.home.renameTitle")} onClick={rename}><Edit size={16} /></button>}
         </div>
         <div className={css.mInfoFacts}><PeopleStack people={view.people} max={5} /><span>{facts}</span></div>
-        {pulls.length > 0 && (
-          <InfoList>
-            {/* Held, 在对话中查看 and its link copied, as on the page of them. */}
-            {pulls.slice(0, 3).map((p) => (
-              <ThingMenu key={p.key} thing={p} onShow={(seq) => { app.sheet(null); jumpTo({ station: here.station, thread: thread.id, seq }); }}>
-                <div>
-                  <InfoRow onClick={() => { app.sheet(null); window.open(p.url!, "_blank", "noopener"); }}>
-                    <PullMark pull={p} size={16} /><span className={partsCss.mGrow}>{pullTitle(p)}</span><span className={partsCss.mMuted}>#{p.number}</span>
-                  </InfoRow>
-                </div>
-              </ThingMenu>
-            ))}
-            {pulls.length > 3 && (
-              <InfoRow onClick={() => openThings(app, here.station, thread.id, keeper, "pulls")}>
-                <List size={16} /><span className={partsCss.mGrow}>{t("web-main.things.pullsAll", { n: pulls.length })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
-              </InfoRow>
-            )}
-          </InfoList>
-        )}
         {view.agents.length > 0 && (
           <InfoList>
             {view.agents.map((a) => {
@@ -842,13 +823,22 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             })}
           </InfoList>
         )}
-        {(
+        {/* Then what is in it, one card: who works in it before what it made, what it holds apart from what is done with it. */}
+        {(pulls.length > 0 || said > 0 || letters) && (
           <InfoList>
-            {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
-            {open && view.pinned != null && (
-              <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
-                .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
-                <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
+            {/* Held, 在对话中查看 and its link copied, as on the page of them. */}
+            {pulls.slice(0, 3).map((p) => (
+              <ThingMenu key={p.key} thing={p} onShow={(seq) => { app.sheet(null); jumpTo({ station: here.station, thread: thread.id, seq }); }}>
+                <div>
+                  <InfoRow onClick={() => { app.sheet(null); window.open(p.url!, "_blank", "noopener"); }}>
+                    <PullMark pull={p} size={16} /><span className={partsCss.mGrow}>{pullTitle(p)}</span><span className={partsCss.mMuted}>#{p.number}</span>
+                  </InfoRow>
+                </div>
+              </ThingMenu>
+            ))}
+            {pulls.length > 3 && (
+              <InfoRow onClick={() => openThings(app, here.station, thread.id, keeper, "pulls")}>
+                <List size={16} /><span className={partsCss.mGrow}>{t("web-main.things.pullsAll", { n: pulls.length })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
             {said > 0 && (
@@ -861,6 +851,17 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
               <InfoRow onClick={letters.open}>
                 <Chats size={16} /><span className={partsCss.mGrow}>{t("web-main.letters.title")}</span>
                 <span className={partsCss.mMuted}>{t("web-main.letters.count", { n: letters.n })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+          </InfoList>
+        )}
+        {(
+          <InfoList>
+            {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
+            {open && view.pinned != null && (
+              <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
+                .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
+                <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
             <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>
@@ -923,7 +924,7 @@ function PublishList({ here, thread, publish }: { here: Here; thread: ChatThread
     <InfoList>
       {publish.may && (
         <InfoRow onClick={() => app.sheet({ height: 0.9, content: () => <PublishSheet here={here} thread={thread.id} /> })}>
-          <Photo size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.shareImage")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+          <ImageUpload size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.shareImage")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
         </InfoRow>
       )}
       {publish.links.map((l) => <PublishedRow key={l.id} here={here} thread={thread.id} link={l} />)}

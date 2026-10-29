@@ -1302,7 +1302,6 @@ let zh : Map[String, String] = {
   "web-pages.chat.info.created": "创建",
   "web-pages.chat.info.from": "来自",
   "web-pages.chat.info.lastMessage": "最近消息",
-  "web-pages.chat.info.native": "{name} 对话",
   "web-pages.chat.info.people": "参与",
   "web-pages.chat.info.started": "发起",
   "web-pages.chat.info.unknown": "未记录",
