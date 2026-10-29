@@ -84,3 +84,22 @@ test("a manager restarts the station through its launcher, which a station witho
     assert.equal(asked, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("the running mesh takes the network settings as they are saved, each once it changes", async () => {
+  const { applyNetwork } = await import("../src/mesh/mesh.ts");
+  const dir = mkdtempSync(join(tmpdir(), "network-settings-"));
+  try {
+    const config = new ConfigFile(dir);
+    const said: string[] = [];
+    const off = applyNetwork({ setCongestion: (c) => void said.push(`congestion ${c}`), setRelayUdp: async (on) => void said.push(`udp ${on}`) }, config);
+    config.update((raw) => { raw.unrelated = 1; });
+    assert.deepEqual(said, []);
+    config.update((raw) => { raw.network = { congestion: "bbr" }; });
+    config.update((raw) => { raw.network = { congestion: "bbr", relayUdp: true }; });
+    config.update((raw) => { raw.network = { congestion: "cubic", relayUdp: false }; });
+    assert.deepEqual(said, ["congestion bbr", "udp true", "congestion cubic", "udp false"]);
+    off();
+    config.update((raw) => { raw.network = { congestion: "bbr" }; });
+    assert.equal(said.length, 4);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

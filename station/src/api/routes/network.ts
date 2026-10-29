@@ -1,5 +1,6 @@
-// An operator's network choices (the congestion controller, the relays' UDP way). Saved now, read by the mesh on the
-// next station start. A request sets what it names.
+// An operator's network choices (the congestion controller, the relays' UDP way). Saved, and taken by the running mesh
+// as saved (mesh.ts applyNetwork); a station started again (below) has them from its start. A request sets what it
+// names.
 import { error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -31,7 +32,7 @@ export const routes = ({ config, changed, restart }: { config: ConfigFile; chang
     return json(200, JSON.stringify(networkView(config.raw())));
   },
 }, {
-  // The station started again (ops/restart.ts), so what was saved above takes effect; the answer goes before it does.
+  // The station started again (ops/restart.ts): its launcher hands over to a new process.
   method: "POST",
   pattern: /^\/station\/restart$/,
   handle: async (r) => {

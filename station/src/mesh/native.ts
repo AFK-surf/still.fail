@@ -56,6 +56,10 @@ export type Endpoint = {
   removeRelay(url: string): Promise<void>;
   publicRelays(on: boolean): Promise<void>;
   keep(urls: string[]): void;
+  /// The advanced network settings changed while running (lib.rs): the controller of the connections made from now
+  /// on; the relays' UDP way, each relay link dialed again. Absent from an addon from before.
+  setCongestion?(congestion: "cubic" | "bbr"): void;
+  setRelayUdp?(on: boolean): Promise<void>;
   accept(): Promise<Connection | null>;
   /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks).
   connect(addr: Addr, alpn: Buffer, additional?: Buffer[]): Promise<Connection>;

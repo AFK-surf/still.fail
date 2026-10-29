@@ -33,7 +33,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),
-    Layer.succeed(StationConfig)({ raw: () => ({ network: { congestion, relayUdp } }) } as never),
+    Layer.succeed(StationConfig)({ raw: () => ({ network: { congestion, relayUdp } }), listen: () => () => {} } as never),
     Layer.succeed(ControlPlane)({
       state: cloud,
       changes: Stream.never,
