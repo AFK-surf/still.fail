@@ -1993,7 +1993,8 @@ fn composer_notice(
   // (the ＋'s middle as the composer draws it: its round control's, a point wider for the capsule's edge line, its
   // capsule_pad_alone in; measured, 24.5 in from the composer's edge)
   let inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - side / 2.0
-  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width - 2.0 * inset))), glass=@sf.glass_floating(), fn() {
+  let drawn_in = width - 2.0 * inset
+  let b = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(drawn_in))), glass=@sf.glass_floating(), fn() {
     c.box(style=composer_notice_line, fn() {
       c.box(style=@ui.style(w=Fixed(side), align=ACenter), fn() {
         // (its station gone for its update: the update's mark, turning)
