@@ -33,13 +33,11 @@ export function pullTitle(p: ChatThing): string {
   return p.title || `${p.repository ?? ""} #${p.number ?? ""}`;
 }
 
-/** Whether something is wrong with a pull request: closed without being merged, a check failed (its mark in red). */
-const wrong = (p: ChatThing) => p.state === "closed" || (p.checks?.failed ?? 0) > 0;
-
-/** A pull request's mark: GitHub's octicon for how it stands, grey while it stands as it should, red where something is wrong. */
+/** A pull request's mark: GitHub's octicon for how it stands, in its state's colour as its card's pill has it (open green,
+ *  merged purple, closed red, a draft grey; the user, 2026-10-29: 为啥没颜色), grey until its card is read. */
 export function PullMark({ pull, size = 14 }: { pull: ChatThing; size?: number }) {
   return (
-    <svg className={css.pullMark} data-wrong={wrong(pull) || undefined} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+    <svg className={css.pullMark} data-state={pull.state} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
       <path d={PULL_GLYPH[pull.state ?? "open"] ?? PULL_GLYPH.open} fill="currentColor" />
     </svg>
   );
