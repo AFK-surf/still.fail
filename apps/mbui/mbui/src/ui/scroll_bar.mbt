@@ -398,7 +398,9 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
     if content <= size + 1.0 {
       return None
     }
-    let (top, foot) = self.floated(n, x0, n.y, x1, n.y + n.fh)
+    // (what floats over it is read across its own box, as its ends are: the clip it shows in may cut its sides short
+    // of what floats over it, a sidebar's list a point inside its panel's line, its band not cut so)
+    let (top, foot) = self.floated(n, n.x, n.y, n.x + n.fw, n.y + n.fh)
     let (ty, th, ratio) = bar_track(n.y, n.fh, size, content, off, dmax(top, r_tr), dmax(foot, r_br))
     if th <= 0.0 {
       return None
