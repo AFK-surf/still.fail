@@ -1534,6 +1534,12 @@ export class Views implements Owner {
     if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
     row.station = s.address;
     row.stationName = s.name;
+    // A chat made here keeps the key it was asked for by (its page still open by it) as long as this device keeps it:
+    // its station says it only a while (CLIENT_KEY_KEPT_MS), and the row and that page are one chat all along.
+    if (typeof row.clientKey !== "string" && typeof row.session === "string") {
+      const key = this.local.pendingKey(s.address, row.session);
+      if (key !== undefined) row.clientKey = key;
+    }
     if (mark?.emoji) row.stationEmoji = mark.emoji;
     if (mark?.icon) row.stationIcon = mark.icon;
     if (!s.online) row.offline = downWords(this.link(s.address), s.name);
