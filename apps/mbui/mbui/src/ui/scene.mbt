@@ -669,6 +669,10 @@ fn Ctx::emit_text(
       g.gw * (sc / zoom),
       g.gh * (sc / zoom),
     )
+    if inst_owners_kept() {
+      let x0 = ox + dx + tl.xs[c] + s.pad
+      inst_cell(self.ninst - 1, gx, gw, x0, x0 + s.adv[c] - 2.0 * s.pad)
+    }
     if adaptive {
       let b = (self.ninst - 1) * inst_size
       self.inst[b + 21] = glass_paint.ink_x

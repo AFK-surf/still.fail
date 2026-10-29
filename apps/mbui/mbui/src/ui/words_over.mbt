@@ -119,10 +119,12 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
     if o < 0 {
       continue
     }
-    // its ink, a little inside its cell, cut by its clip
-    let x0 = dmax(a[b] + 0.75, a[b + 16])
+    // its ink, a little inside its picture and within its own cell across (a picture is made with room round its
+    // ink: a full stop's spills well past its advance), cut by its clip
+    let (l, r) = inst_cell_of(k)
+    let x0 = dmax(dmax(a[b] + 0.75, a[b] + a[b + 2] * l), a[b + 16])
     let y0 = dmax(a[b + 1] + 0.75, a[b + 17])
-    let x1 = dmin(a[b] + a[b + 2] - 0.75, a[b + 18])
+    let x1 = dmin(dmin(a[b] + a[b + 2] - 0.75, a[b] + a[b + 2] * r), a[b + 18])
     let y1 = dmin(a[b + 1] + a[b + 3] - 0.75, a[b + 19])
     if x1 > x0 && y1 > y0 {
       ks.push(k)

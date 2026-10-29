@@ -21,17 +21,22 @@ priv struct InstOwners {
   mut track : Bool
   mut painting : Int
   owner : Array[Int]
+  /// a glyph's cell across (where its advance starts and ends), as shares of its picture's width (0, 1: the picture's
+  /// own), kept beside its owner: what of its picture is its own room, not the room its picture spills into
+  /// (words_over.mbt)
+  cell : Array[(Double, Double)]
   own_colours : Set[Int]
 }
 
 ///|
-let inst_owners : InstOwners = { on: false, track: false, painting: -1, owner: [], own_colours: Set::new() }
+let inst_owners : InstOwners = { on: false, track: false, painting: -1, owner: [], cell: [], own_colours: Set::new() }
 
 ///|
 /// The frame's contrast asked again from nothing: no instance's owner known, no node said in its own colours.
 fn inst_owners_clear() -> Unit {
   inst_owners.painting = -1
   inst_owners.owner.clear()
+  inst_owners.cell.clear()
   inst_owners.own_colours.clear()
   bone_insts.clear()
 }
@@ -57,10 +62,33 @@ fn inst_owners_kept() -> Bool {
 /// Instance `k` drawn by the node being painted.
 fn inst_owned(k : Int) -> Unit {
   let o = inst_owners.owner
+  let cl = inst_owners.cell
   while o.length() <= k {
     o.push(-1)
   }
+  while cl.length() <= k {
+    cl.push((0.0, 1.0))
+  }
   o[k] = inst_owners.painting
+  cl[k] = (0.0, 1.0)
+}
+
+///|
+/// Glyph `k`'s cell across, from `x0` to `x1` where its picture is `gx` across `gw` wide (inst_owners' `cell`).
+fn inst_cell(k : Int, gx : Double, gw : Double, x0 : Double, x1 : Double) -> Unit {
+  if k < inst_owners.cell.length() && gw > 0.0 {
+    inst_owners.cell[k] = ((x0 - gx) / gw, (x1 - gx) / gw)
+  }
+}
+
+///|
+/// Instance `k`'s cell (inst_owners' `cell`).
+fn inst_cell_of(k : Int) -> (Double, Double) {
+  if k < inst_owners.cell.length() {
+    inst_owners.cell[k]
+  } else {
+    (0.0, 1.0)
+  }
 }
 
 ///|
@@ -76,24 +104,25 @@ fn inst_owner(k : Int) -> Int {
 ///|
 /// The owners moved as Ctx::raise_tops moves the instances, `tops` (from, to) after the rest of the `count` painted.
 fn inst_owners_raised(tops : Array[(Int, Int)], count : Int) -> Unit {
-  let raised : Array[Int] = []
+  let raised : Array[(Int, (Double, Double))] = []
   for r in tops {
     for q in r.0..<r.1 {
-      raised.push(inst_owner(q))
+      raised.push((inst_owner(q), inst_cell_of(q)))
     }
   }
-  let moved : Array[Int] = []
+  let moved : Array[(Int, (Double, Double))] = []
   for k, r in tops {
     let end = if k + 1 < tops.length() { tops[k + 1].0 } else { count }
     for q in r.1..<end {
-      moved.push(inst_owner(q))
+      moved.push((inst_owner(q), inst_cell_of(q)))
     }
   }
   let was = inst_owners.painting
   let mut to = tops[0].0
   for o in moved + raised {
-    inst_owners.painting = o
+    inst_owners.painting = o.0
     inst_owned(to)
+    inst_owners.cell[to] = o.1
     to = to + 1
   }
   inst_owners.painting = was

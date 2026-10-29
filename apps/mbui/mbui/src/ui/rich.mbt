@@ -1149,6 +1149,10 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       g.gw * (sc / zoom),
       g.gh * (sc / zoom),
     )
+    if inst_owners_kept() {
+      let (x0, x1) = lay.span_x(c, c + 1)
+      inst_cell(self.ninst - 1, gx, g.gw / z, ox + x0 + lay.pre[c], ox + x1)
+    }
   }
   for k, run in r.runs {
     if !run.strike && !run.underline {
