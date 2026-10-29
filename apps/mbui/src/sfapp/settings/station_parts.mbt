@@ -240,11 +240,17 @@ pub fn adb_lend(address : String, name : String) -> Unit {
   if @ui.notice_permission() != "granted" {
     @ui.notice_ask() |> ignore
   }
+  adb_switch_on()
+  adb_ask("adb.start", obj([("station", str(address)), ("name", str(name)), ("texts", adb_texts())]))
+}
+
+///|
+/// Wireless debugging turned on by the app, where it is off and the app may (adb.grant let it).
+fn adb_switch_on() -> Unit {
   let phone = adb_host.phone
   if !flag(phone, "wireless") && flag(phone, "canSwitch") {
     adb_ask("adb.switch", obj([]))
   }
-  adb_ask("adb.start", obj([("station", str(address)), ("name", str(name)), ("texts", adb_texts())]))
 }
 
 ///|

@@ -85,6 +85,40 @@ test "共享调试: the phone asked of its host as the page shows; the first thi
 }
 
 ///|
+test "an agent's request for this phone while it lacks something to be lent: what first, and 查看步骤 in 允许's place" {
+  let t = chat_tester("chat-phone")
+  let only = fn(w : String) { t.words().filter(fn(x) { x.0 == w }).length() }
+  for c in t.native_calls() {
+    if c.1 == "adb.phone" {
+      t.answer_native(c.0, adb_phone_of(developer=false))
+    }
+  }
+  t.draw()
+  assert_true(t.find("需要先打开开发者选项") is Some(_))
+  assert_eq(only("允许"), 0)
+  assert_eq(only("拒绝"), 1)
+  t.tap_text("查看步骤")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("本机设置") is Some(_))
+  // all it takes there (Wireless debugging the app turns on itself): 允许, which turns it on
+  let t = chat_tester("chat-phone")
+  for c in t.native_calls() {
+    if c.1 == "adb.phone" {
+      t.answer_native(c.0, adb_phone_of(can_switch=true))
+    }
+  }
+  t.draw()
+  assert_true(t.find("需要先") is None)
+  let only = fn(w : String) { t.words().filter(fn(x) { x.0 == w }).length() }
+  assert_eq(only("允许"), 1)
+  // (the button, not the title that asks 允许…)
+  let allow = t.words().filter(fn(x) { x.0 == "允许" })[0]
+  t.tap(allow.1 + allow.3 / 2.0, allow.2 + allow.4 / 2.0)
+  t.draw()
+  assert_eq(asked_native(t, "adb.switch").length(), 1)
+}
+
+///|
 test "共享调试: granted, the app turns Wireless debugging on itself; the host says it changed, the page with it" {
   let t = settings_tester("adb:ws1/st1")
   t.answer_native(t.native_calls()[0].0, adb_phone_of(can_switch=true))

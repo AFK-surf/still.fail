@@ -354,7 +354,12 @@ pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
 /// (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
 pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true) -> Unit {
-  let words = vault_outcome_words(ask, status, scope)
+  ask_outcome(c, status == "granted", vault_outcome_words(ask, status, scope), inline~)
+}
+
+///|
+/// A request's outcome line (vault_outcome's, phone_outcome's): a dot (green once `granted`) and its words.
+pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : String, inline? : Bool = true) -> Unit {
   // the dot in the middle of the words' first line, not of all of them (on two lines it stays by the first); under the
   // message's picture, as wide as it, laid over the line as the picture is over its head (message.mbt: inline at the
   // head's start, the words past it where the name is; else out in the margin, the words at the row's start)
@@ -363,7 +368,7 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, 
     |> ignore
     c.layer(fn() {
       c.box(style=if inline { ask_dot_line } else { ask_dot_line_out }, fn() {
-        c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+        c.box(style=if granted { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
       })
       |> ignore
     })
