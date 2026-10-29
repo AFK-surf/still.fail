@@ -1367,7 +1367,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "1.0.3"
-source = "git+https://github.com/zzj3720/iroh?rev=43a6892ffe0689de0cf2545e3a8f3d567146b408#43a6892ffe0689de0cf2545e3a8f3d567146b408"
+source = "git+https://github.com/zzj3720/iroh?rev=a091b3326b7859ea0338240f57896f7b93406079#a091b3326b7859ea0338240f57896f7b93406079"
 dependencies = [
  "backon",
  "blake3",
@@ -1486,7 +1486,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/iroh?rev=43a6892ffe0689de0cf2545e3a8f3d567146b408#43a6892ffe0689de0cf2545e3a8f3d567146b408"
+source = "git+https://github.com/zzj3720/iroh?rev=a091b3326b7859ea0338240f57896f7b93406079#a091b3326b7859ea0338240f57896f7b93406079"
 dependencies = [
  "blake3",
  "bytes",
@@ -1515,6 +1515,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_bytes",
+ "socket2",
  "strum",
  "tokio",
  "tokio-rustls",
