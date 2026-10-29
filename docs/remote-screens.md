@@ -88,7 +88,8 @@ JPEG frames are all key frames and their config has no `description`.
   than that (Pace, "Frame rate"), and the desktop captures and encodes at it; a station from before it, or a value
   not among these, lets it be: as many as the source makes and the link carries, as before. A preview's is not read.
   With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
-  The desktop captures it on Windows and macOS; the Apple native client plays it. Older sources ignore the request.
+  The desktop captures it on Windows and macOS; the mbui app plays it on macOS, iOS, Windows and Android (Android
+  only while its window is on the screen). Older sources ignore the request.
   Previews never request or capture audio. No audio frames are sent without negotiation.
   Colours: a video's are sRGB's, tagged so in its VUI (colour_primaries 1, transfer 13, matrix 1, studio range; the
   Windows desktop's BT.709's transfer). With `"gamut": "p3"` (the client shows a video tagged Display P3 as such) this

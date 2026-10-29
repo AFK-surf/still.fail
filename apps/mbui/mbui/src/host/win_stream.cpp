@@ -20,7 +20,16 @@
 // queue: fed to the decoder in order, each decoded one shown at once (on the window's thread between frames, nothing of
 // the app's run) and acknowledged to its sender, one let go acknowledged too. The app is told what came so in one event
 // when it next reads the stream's ("D TS N BYTES": the last shown, how many frames came and their bytes since it was
-// last told). A config stops the route until the app has taken it and routes it again. (No sound here: none routed.)
+// last told). A config stops the route until the app has taken it and routes it again. Its sound too: each packet
+// played as it comes (below), nothing of the app's queue.
+//
+// A stream's sound (@hostapi.stream_audio, 48 kHz stereo PCM16 in 20 ms packets, the app's and a route's alike): a
+// source voice of XAudio2's of its own (one engine for all), as apple_stream.m's player: started once its reserve is
+// queued (100 ms at first), emptied once more than that and 200 ms are (after a stall in the transport) and as it runs
+// dry (an underrun refills the reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the
+// stream closes. The reserve follows how late packets come: a gap between two longer than it covers makes it that
+// long and a packet more, at most 300 ms (packets of a Mac's sound, each 20 ms by their own clock, came here 50 to
+// 270 ms apart now and then, a busy Mac's: 60 ms ran dry, and each time it did was heard as a crackle).
 //
 // A stream's system video layer (@hostapi.stream_layers, a native view of kind 4: win_views.cpp hands its content's
 // visual here, mb_stream_attach): a composition swap chain the size of the frame, in a visual of the views'
@@ -44,6 +53,7 @@
 #include <mftransform.h>
 #include <mferror.h>
 #include <wmcodecdsp.h>
+#include <xaudio2.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +67,7 @@
 #pragma comment(lib, "wmcodecdspuuid.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "xaudio2.lib")
 
 // A frame of NV12 on the GPU (the stream's own texture, the decoder's surface copied into it), as the video processor
 // takes it: its size (even), its colours, its view for the processor (made as it is first shown, for the processor of
@@ -165,6 +176,14 @@ struct Stream {
   double ptr_w, ptr_h, ptr_hx, ptr_hy, ptr_x, ptr_y;
   int ptr_shown, ptr_new;
   IDCompositionSurface *ptr_surface;
+  // its sound (under sound_lock): its voice, whether it plays, its packets' memory (the voice reads each till played)
+  IXAudio2SourceVoice *voice;
+  int sound_playing, sound_gone;
+  // the packets queued before it plays (5 at first: sound_play), and when the last one came (QueryPerformanceCounter)
+  int sound_reserve;
+  LONGLONG sound_at;
+  uint8_t *sound_ring;
+  unsigned sound_next;
 };
 
 static Stream **streams;  // by id (ids are not reused)
@@ -1485,10 +1504,114 @@ void mb_host_stream_show(int32_t id, double ts) {
   layer_present(s);
 }
 
+// ---- a stream's sound (XAudio2) ----
+
+#define SOUND_PACKET 3840  // 20 ms: 960 frames of 48 kHz stereo PCM16
+#define SOUND_FRAMES 960
+#define SOUND_RING 32      // packets' memory: the 25 queued at most, the one playing, and room
+#define SOUND_MOST 15      // the largest reserve: 300 ms
+
+static SRWLOCK sound_lock = SRWLOCK_INIT;
+static IXAudio2 *sound_engine;
+static IXAudio2MasteringVoice *sound_master;
+static int sound_state;  // 0 not tried, 1 here, -1 none (no audio device, XAudio2 refused)
+
+// (under sound_lock) the engine and its output, made once
+static int sound_ready(void) {
+  if (sound_state) return sound_state > 0;
+  sound_state = -1;
+  if (FAILED(XAudio2Create(&sound_engine, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
+    fprintf(stderr, "win: streams: no sound (XAudio2)\n");
+    return 0;
+  }
+  if (FAILED(sound_engine->CreateMasteringVoice(&sound_master))) {
+    fprintf(stderr, "win: streams: no sound (no output device)\n");
+    sound_engine->Release();
+    sound_engine = NULL;
+    return 0;
+  }
+  sound_state = 1;
+  return 1;
+}
+
+// (under sound_lock) its voice let go, what is queued with it
+static void sound_stop(Stream *s) {
+  if (s->voice) s->voice->DestroyVoice();
+  s->voice = NULL;
+  s->sound_playing = 0;
+  s->sound_at = 0;
+}
+
+// (under sound_lock) one 20 ms packet played after those queued
+static void sound_play(Stream *s, const uint8_t *bytes) {
+  if (!sound_ready()) return;
+  if (!s->voice) {
+    WAVEFORMATEX f = {};
+    f.wFormatTag = WAVE_FORMAT_PCM;
+    f.nChannels = 2;
+    f.nSamplesPerSec = 48000;
+    f.wBitsPerSample = 16;
+    f.nBlockAlign = 4;
+    f.nAvgBytesPerSec = 48000 * 4;
+    if (FAILED(sound_engine->CreateSourceVoice(&s->voice, &f))) {
+      s->voice = NULL;
+      return;
+    }
+    if (!s->sound_ring) s->sound_ring = (uint8_t *)malloc((size_t)SOUND_RING * SOUND_PACKET);
+    s->sound_playing = 0;
+  }
+  if (!s->sound_reserve) s->sound_reserve = 5;
+  // how long since the last packet: a gap longer than the reserve covers makes it that long and a packet more
+  static LARGE_INTEGER freq;
+  if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER now;
+  QueryPerformanceCounter(&now);
+  if (s->sound_at) {
+    int gap = (int)((now.QuadPart - s->sound_at) * 1000 / freq.QuadPart);
+    int need = gap / 20 + 2;
+    // (a gap of a second or more: the sound paused, not late)
+    if (gap < 1000 && need > s->sound_reserve && s->sound_reserve < SOUND_MOST) {
+      s->sound_reserve = need < SOUND_MOST ? need : SOUND_MOST;
+      fprintf(stderr, "win: stream %d: sound %d ms apart, its reserve %d ms\n", s->id, gap, s->sound_reserve * 20);
+    }
+  }
+  s->sound_at = now.QuadPart;
+  XAUDIO2_VOICE_STATE st;
+  s->voice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+  // more than the reserve and 200 ms queued (a stall), or run dry while playing: emptied, the reserve filled again
+  if ((int)st.BuffersQueued >= s->sound_reserve + 10 || (s->sound_playing && st.BuffersQueued == 0)) {
+    s->voice->Stop();
+    s->voice->FlushSourceBuffers();
+    s->sound_playing = 0;
+    st.BuffersQueued = 0;
+  }
+  uint8_t *slot = s->sound_ring + (size_t)(s->sound_next++ % SOUND_RING) * SOUND_PACKET;
+  memcpy(slot, bytes, SOUND_PACKET);
+  XAUDIO2_BUFFER b = {};
+  b.AudioBytes = SOUND_PACKET;
+  b.pAudioData = slot;
+  if (FAILED(s->voice->SubmitSourceBuffer(&b))) return;
+  // started once its reserve is queued
+  if (!s->sound_playing && (int)st.BuffersQueued + 1 >= s->sound_reserve && SUCCEEDED(s->voice->Start()))
+    s->sound_playing = 1;
+}
+
+// (any thread) stream s's packet played, or (empty) its sound stopped
+static void sound_take(Stream *s, const uint8_t *bytes, size_t len) {
+  AcquireSRWLockExclusive(&sound_lock);
+  if (s->sound_gone || len == 0) sound_stop(s);
+  else if (len == SOUND_PACKET) sound_play(s, bytes);
+  ReleaseSRWLockExclusive(&sound_lock);
+}
+
 void mb_host_stream_close(int32_t id) {
   Stream *s = stream_of(id);
   if (!s) return;
   unroute(id, 3);
+  AcquireSRWLockExclusive(&sound_lock);
+  s->sound_gone = 1;
+  sound_stop(s);
+  ReleaseSRWLockExclusive(&sound_lock);
   layer_drop(s);
   if (s->ptr_px) free(s->ptr_px);
   s->ptr_px = NULL;
@@ -1574,17 +1697,32 @@ void *mb_stream_srv(int id) {
   return s->bgra_srv;
 }
 
-int32_t mb_host_stream_audio_here(void) { return 0; }
-void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }
-// The app's (the window's thread): stream id takes route's frames (`what` 1; sound, 2, is never taken here: no player)
-// from now, where the last record offered by it is the `after`th (nothing of it left in the app's queue); those not
-// asked no longer.
+// Sound plays here unless a run says not to (MBUI_STREAM_AUDIO=0, to compare).
+int32_t mb_host_stream_audio_here(void) {
+  const char *v = getenv("MBUI_STREAM_AUDIO");
+  return v && strcmp(v, "0") == 0 ? 0 : 1;
+}
+
+void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) {
+  Stream *s = stream_of(id);
+  if (!s || s->closed) return;
+  size_t len = (size_t)Moonbit_array_length(data);
+  // (stopped: what its route plays stops with it, until the app routes it again)
+  if (len == 0) unroute(id, 2);
+  sound_take(s, (const uint8_t *)data, len);
+}
+
+// The app's (the window's thread): stream id takes route's frames (`what` 1) and sound (2) from now, where the last
+// record offered by it is the `after`th (nothing of it left in the app's queue); those not asked no longer.
 void mb_host_stream_direct(int32_t id, double route, double after, int32_t what) {
   unroute(id, ~what & 3);
-  if (!(what & 1) || route < 1) return;
+  if (!(what & 3) || route < 1) return;
   AcquireSRWLockExclusive(&routes_lock);
   Route *r = route_at((uint64_t)route, 0);
-  if (r && (double)r->seq == after) r->video = id;
+  if (r && (double)r->seq == after) {
+    if (what & 1) r->video = id;
+    if (what & 2) r->audio = id;
+  }
   ReleaseSRWLockExclusive(&routes_lock);
 }
 
@@ -1600,6 +1738,7 @@ int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64
     if (kind == 1) r->video = 0;
     else if (kind == 5) r->audio = 0;
     else if (kind == 2) sid = r->video;
+    else if (kind == 6 && len == SOUND_PACKET) sid = r->audio;
   }
   ReleaseSRWLockExclusive(&routes_lock);
   if (!sid) return 0;
@@ -1607,6 +1746,10 @@ int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64
   Stream *s = stream_of(sid);
   ReleaseSRWLockShared(&streams_lock);
   if (!s || s->closed) return 0;
+  if (kind == 6) {
+    sound_take(s, bytes, len);
+    return 1;
+  }
   EnterCriticalSection(&lock);
   s->direct_frames += 1;
   s->direct_bytes += (long)len;
