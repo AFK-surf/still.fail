@@ -361,6 +361,9 @@ class Engine {
     shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
     if (!shell_) {
       fatal("the core's files cannot be kept: " + dataDir_);
+    } else if (host_.shell) {
+      // (what the host asks of the shell itself: a remote screen's frames, past the core's JS)
+      host_.shell(host_.ctx, shell_);
     }
     std::unique_ptr<facebook::hermes::HermesRuntime> rt;
     if (!dead_) {

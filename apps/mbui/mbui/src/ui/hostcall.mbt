@@ -216,6 +216,9 @@ struct FakeHost {
   /// whether a stream may be shown by a system video layer of the host's (stream.mbt: Tester::set_stream_layers; a
   /// run's ENV line)
   mut stream_layers : Bool
+  /// whether those layers show a frame as sRGB, not in its tagged colours (Tester::set_stream_layers_srgb; a run's
+  /// ENV line, "layer":2)
+  mut stream_layers_srgb : Bool
   mut stream_ids : Int
   streams_fed : Map[Int, Array[String]]
   stream_said : Map[Int, Array[String]]

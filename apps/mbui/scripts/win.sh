@@ -30,7 +30,8 @@ export APP=${APP:-stillfail}
 if [ "$APP" = stillfail ]; then
   engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
   shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
-  export LIB="$(cygpath -w "$engine");$LIB"
+  # (the shell's import library too: the app asks the shell itself for a remote screen's frames, src/host/win_core.c)
+  export LIB="$(cygpath -w "$engine");$(cygpath -w "$shell");$LIB"
   export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
 fi
 core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }

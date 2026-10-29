@@ -114,6 +114,11 @@ test "a remote screen asks for Display P3 only where the system's video layer sh
   s.pause(s.src)
   s.open(s.src)
   assert_eq(text(Some(r.told("screen.view").last().unwrap()), "gamut"), "p3")
+  // (a layer that shows it as sRGB, Windows': asked for none)
+  r.t.set_stream_layers_srgb(true)
+  s.pause(s.src)
+  s.open(s.src)
+  assert_true(text(Some(r.told("screen.view").last().unwrap()), "gamut") == "")
 }
 
 ///|

@@ -26,7 +26,8 @@
 // stream_broken), its picture a placeholder in the draw list: `image N PX "stream WxH ts=TS"`.
 //
 // Shown by the system (`layer`, where the host has a layer of its own for it: @hostapi.stream_layers, macOS's and
-// iOS's, whose contents are the decoded frame's IOSurface): an H.264 stream drawn whole and as it is (`Ctx::stream`'s
+// iOS's, whose contents are the decoded frame's IOSurface; Windows', a composition swap chain the GPU puts the frame
+// in): an H.264 stream drawn whole and as it is (`Ctx::stream`'s
 // `layer`, stretched to its rect, not faded) is a native view of kind 4 under the canvas, its hole painted where the
 // picture would be (native.mbt), each frame shown put on that layer by the host as well. While that view shows, a frame
 // decoded of the picture's size (and one its app says may: Stream::new's `quiet`) changes nothing the app draws: its
@@ -34,12 +35,12 @@
 // nothing built or painted for it, no frame asked, as a video plays under the app's canvas. Its first frame, another
 // size, what the app let go of itself and whatever else comes, as before.
 //
-// Routed (`route`, where the host has routes: @hostapi.stream_direct, macOS's and iOS's): while it shows itself so, the
-// app may have the host take a route's frames and sound straight from the app's engine (still.fail's shell reading a
-// remote screen), not by way of the app's queue: the host decodes, shows and acknowledges each, nothing of the app's
-// run. What came so is said in one event as the stream's are next taken ("D TS N BYTES": the frame it shows, how many
-// came and their bytes), on the run's tape as any; no ticket is the app's for them. A config of the route stops it
-// (the host's), and a stream that no longer shows itself stops it as the frame begins.
+// Routed (`route`, where the host has routes: @hostapi.stream_direct, macOS's, iOS's and Windows'): while it shows
+// itself so, the app may have the host take a route's frames and sound straight from the app's engine (still.fail's
+// shell reading a remote screen), not by way of the app's queue: the host decodes, shows and acknowledges each, nothing
+// of the app's run. What came so is said in one event as the stream's are next taken ("D TS N BYTES": the frame it
+// shows, how many came and their bytes), on the run's tape as any; no ticket is the app's for them. A config of the
+// route stops it (the host's), and a stream that no longer shows itself stops it as the frame begins.
 
 ///|
 /// A picture decoded frame by frame.
@@ -592,7 +593,7 @@ fn streams_said(id : Int) -> Unit {
     if s.id == id {
       // (what is left: a frame, which takes it)
       if s.take_said() {
-        outside_counted()
+        outside_left()
       }
       return
     }
@@ -883,13 +884,33 @@ let feeds_known : Ref[Int] = Ref::new(-1)
 fn h_stream_layers() -> Bool {
   match fake.val {
     Some(f) => f.stream_layers
-    None => {
-      if layers_known.val < 0 {
-        layers_known.val = if @hostapi.stream_layers() { 1 } else { 0 }
-      }
-      layers_known.val == 1
+    None => layers_kind() != 0
+  }
+}
+
+///|
+/// Whether that layer shows the stream's tagged colours (@hostapi.stream_layers_tagged): a Tester's unless it said its
+/// host's are sRGB (Tester::set_stream_layers_srgb), a run's ENV line.
+fn h_stream_layers_tagged() -> Bool {
+  match fake.val {
+    Some(f) => f.stream_layers && !f.stream_layers_srgb
+    None => layers_kind() == 1
+  }
+}
+
+///|
+/// The real host's layers (asked once): 0 none, 1 in the stream's tagged colours, 2 in sRGB.
+fn layers_kind() -> Int {
+  if layers_known.val < 0 {
+    layers_known.val = if !@hostapi.stream_layers() {
+      0
+    } else if @hostapi.stream_layers_tagged() {
+      1
+    } else {
+      2
     }
   }
+  layers_known.val
 }
 
 ///|
@@ -999,16 +1020,24 @@ pub fn Tester::set_stream_layers(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
+/// Whether its layers (set_stream_layers) show a frame as sRGB whatever colours it is tagged with (Windows'), not as
+/// tagged (Apple's, the default).
+pub fn Tester::set_stream_layers_srgb(self : Tester, on : Bool) -> Unit {
+  self.fake.stream_layers_srgb = on
+}
+
+///|
 /// Stream `id`'s host's decoder or surface said `e` (stream_feed.mbt's words, without "c "): taken at the next frame.
 pub fn Tester::stream_codec_said(self : Tester, id : Int, e : String) -> Unit {
   fake_said(self.fake, id, "c " + e)
 }
 
 ///|
-/// Whether a stream asking for it is shown by the host's own video layer (@hostapi.stream_layers): one that shows a
-/// video in the colours it is tagged with (Display P3's wider than sRGB's), not the app's sRGB canvas.
+/// Whether a stream asking for it is shown by the host's own video layer (@hostapi.stream_layers) that shows a
+/// video in the colours it is tagged with (Display P3's wider than sRGB's), not the app's sRGB canvas: false where the
+/// host has none, or one that shows it as sRGB (@hostapi.stream_layers_tagged: Windows').
 pub fn stream_layers_here() -> Bool {
-  h_stream_layers()
+  h_stream_layers_tagged()
 }
 
 ///|

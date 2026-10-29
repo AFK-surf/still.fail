@@ -74,7 +74,9 @@ static int snap_state, snap_held, tracking_nc_leave;
 // which draws frames as it goes)
 static DWORD drag_time;
 static POINT drag_at;
-enum { WM_MB_DRAG = WM_APP + 6 };  // (win_life.h has 1 to 5, win.h 4)
+// a message posted from outside (mb_post_wake), a stream shown by its layer that said something (mb_app_streamed:
+// wParam its id), each told the app between frames, which asks for a frame only where something is left for one
+enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9 };  // (win_life.h has 1 to 5, win.h 4)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
@@ -154,6 +156,22 @@ static void update_tell(mb_outside_fn tell);  // win_update.h: how an update goe
 // what the core said); what it asks for itself (a motion's frames, its timers) waits till it is shown again, when
 // what is owed is drawn at once.
 static int outside_asked;  // a frame asked for from outside since the last one
+
+// What came from outside told the app between frames (ui's messages_between, streams_said): it takes what changes
+// nothing drawn as it comes, and asks for a frame (as from outside: one built while the window is away) only where
+// something is left for one. Before the app has said who is told: a frame, which takes it.
+static void told_between(int kind, int id) {
+  if (!outside_cb) {
+    want_frame = 1;
+    outside_asked = 1;
+    return;
+  }
+  int was = want_frame;
+  want_frame = 0;
+  outside_cb(kind, id, 0);
+  if (want_frame) outside_asked = 1;
+  want_frame |= was;
+}
 static int presenting = 1;  // the frame under way is put on the screen
 
 static void draw_frame(void) {
@@ -616,6 +634,9 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_ERASEBKGND: return 1;
     case WM_APP: want_frame = 1; outside_asked = 1; return 0;  // mb_app_wake
+    case WM_MB_POSTED: told_between(MB_OUTSIDE_POSTED, 0); return 0;
+    case WM_MB_STREAMED: told_between(MB_OUTSIDE_STREAMED, (int)wp); return 0;
+    case WM_MB_CALL: ((void (*)(void *))wp)((void *)lp); return 0;  // mb_app_call
     case WM_MB_DRAG:
       if (GetKeyState(VK_LBUTTON) < 0) {
         ReleaseCapture();
@@ -935,8 +956,13 @@ void mb_host_request_frame(void) { want_frame = 1; }
 
 void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }
 
-// A message posted from outside the frames (post.h), on whatever thread: the window's loop asked for a frame.
-static void mb_post_wake(void) { mb_app_wake(); }
+// A message posted from outside the frames (post.h), on whatever thread: the app told on the window's thread
+// (told_between), which takes what changes only signals (a remote screen's frame) without a frame.
+static void mb_post_wake(void) { PostMessageW(hwnd, WM_MB_POSTED, 0, 0); }
+
+void mb_app_streamed(int id) { PostMessageW(hwnd, WM_MB_STREAMED, (WPARAM)id, 0); }
+
+void mb_app_call(void (*fn)(void *), void *arg) { PostMessageW(hwnd, WM_MB_CALL, (WPARAM)fn, (LPARAM)arg); }
 
 void *mb_app_hwnd(void) { return hwnd; }
 
