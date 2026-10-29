@@ -399,10 +399,17 @@ function remote() {
       socket.on("error", () => socket.destroy());
     });
     // Another program of the same station in this sandbox may serve the port already: the same station's door behind
-    // it either way. Tried again while this one runs, in case that one ends first.
-    server.on("error", () => setTimeout(() => child !== null && server.listen(port, "127.0.0.1"), 2000).unref());
-    server.listen(port, "127.0.0.1");
+    // it either way. Tried again while this one runs (or is about to), in case that one ends first.
+    const running = () => child === null || (child.exitCode === null && child.signalCode === null);
+    server.on("error", () => setTimeout(() => running() && server.listen(port, "127.0.0.1"), 2000).unref());
     servers.push(server);
+    // Listening (or served by that other one) before the program starts: a connection it makes at once found nothing
+    // there and was refused (the test of the bridge saw its curl answered by nothing, main 573471e1, 40853552409).
+    return new Promise((done) => {
+      server.once("listening", done);
+      server.once("error", done);
+      server.listen(port, "127.0.0.1");
+    });
   };
   const end = (signal) => {
     if (child === null || child.exitCode !== null || child.signalCode !== null) return;
@@ -612,7 +619,7 @@ function remote() {
     // Where it runs as the station names it: the data directory there is a link (into `persist`), and a shell's `pwd`
     // says the path it was given, not where the link leads, when PWD is that path.
     env.PWD = cwd;
-    for (const port of spec.ports ?? []) listen(typeof port === "number" ? port : port.sandbox);
+    await Promise.all((spec.ports ?? []).map((port) => listen(typeof port === "number" ? port : port.sandbox)));
     child = spawn(program, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     if (spec.agent) keep(child.pid);
     out(T.started, 0);
