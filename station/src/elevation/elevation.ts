@@ -255,9 +255,11 @@ function notes(run: string, data: string, on: boolean): string[] {
     "  if ($kept.Count -gt 0) { $kept | ConvertTo-Json | Set-Content -LiteralPath $windowsJson -Encoding UTF8 }",
     "  else { Remove-Item -LiteralPath $windowsJson -ErrorAction SilentlyContinue }",
     "}",
+    // The user by its full name: the task keeps it short (l-sun), which Windows refuses again where the machine has the
+    // same name (L-SUN\l-sun).
     "function Level([string]$task, [string]$level) {",
-    "  $t = Get-ScheduledTask -TaskName $task -ErrorAction Stop",
-    "  Set-ScheduledTask -TaskName $task -Principal (New-ScheduledTaskPrincipal -UserId $t.Principal.UserId -LogonType Interactive -RunLevel $level) -ErrorAction Stop | Out-Null",
+    "  $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name",
+    "  Set-ScheduledTask -TaskName $task -Principal (New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel $level) -ErrorAction Stop | Out-Null",
     "}",
   ];
 }
