@@ -232,6 +232,8 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   // The state is only what it starts with.
   const srcDoc = useMemo(() => (page ? pageDocument(html) : documentOf(html, state)), [html]); // eslint-disable-line react-hooks/exhaustive-deps
   const grown = useRef({ height: 0, times: 0 });
+  const shownNow = useRef(false);
+  const pending = useRef<number | null>(null);
   const onHeight = (h: number) => {
     if (page || h <= 0) return;
     const last = grown.current;
@@ -240,7 +242,10 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
     last.times = last.height > 0 && h > last.height && h - last.height <= 64 ? last.times + 1 : 0;
     if (last.times > RUNAWAY) return;
     last.height = h;
-    setHeight(h);
+    // Hidden, its place keeps the height it started with: the page moves once, as it shows, not with each height
+    // it comes to while it is drawn (2026-10-29).
+    if (shownNow.current) setHeight(h);
+    else pending.current = h;
     // Only a height it did not creep to is kept: one kept mid-run would start the next load's run further on.
     if (last.times === 0) keepHeight(heightKey, h);
   };
@@ -248,12 +253,20 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   // document, in a dark theme a black box, then its text set again as its faces come (2026-10-29). Shown anyway after
   // a while, should it never say so (a script of its own that never finishes loading).
   const [shown, setShown] = useState(false);
+  const show = () => {
+    if (shownNow.current) return;
+    shownNow.current = true;
+    if (pending.current !== null) setHeight(pending.current);
+    pending.current = null;
+    setShown(true);
+  };
   useEffect(() => {
+    shownNow.current = false;
     setShown(false);
-    const timer = setTimeout(() => setShown(true), SHOWN_ANYWAY);
+    const timer = setTimeout(show, SHOWN_ANYWAY);
     return () => clearTimeout(timer);
-  }, [srcDoc]);
-  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, onReady: () => setShown(true), ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  }, [srcDoc]); // eslint-disable-line react-hooks/exhaustive-deps
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, onReady: show, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
   // From a host: posted each time it loads (once its document is written in, nothing there listens for it any more).
   const source = host === null
     ? { srcDoc }
