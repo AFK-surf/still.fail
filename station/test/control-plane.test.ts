@@ -10,6 +10,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from "effect";
 import { enroll } from "../src/cli.ts";
 import { loadKey } from "../src/cloud/key.ts";
 import { makeControlPlane } from "../src/cloud/plane.ts";
+import { ROSTER_GRACE_MS, applyState, lapse } from "../src/cloud/presence.ts";
 import { COMMA, STILLFAIL, providerOf } from "../src/cloud/provider.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
@@ -46,6 +47,32 @@ async function enrolled(t: { after(f: () => unknown): void }, provider: "stillfa
   });
   return { fake, origin, data, state, key, plane };
 }
+
+test("the roster stays current a while after its socket ends, until a fresh one or the station is removed", () => {
+  const s = new Cloud(mkdtempSync(join(tmpdir(), "roster-")));
+  const timers: { ms: number; f: () => void }[] = [];
+  const after = (ms: number, f: () => void) => timers.push({ ms, f });
+  applyState(s, JSON.stringify({ type: "state", peers: [] }));
+  assert.equal(s.peersCurrent, true);
+  // The socket ends: still current, until the grace is over with no roster since.
+  lapse(s, after);
+  assert.equal(s.peersCurrent, true);
+  assert.equal(timers[0]!.ms, ROSTER_GRACE_MS);
+  timers.shift()!.f();
+  assert.equal(s.peersCurrent, false);
+  // Back within it: the fresh roster keeps it current past the old socket's grace.
+  applyState(s, JSON.stringify({ type: "state", peers: [] }));
+  lapse(s, after);
+  applyState(s, JSON.stringify({ type: "state", peers: [] }));
+  timers.shift()!.f();
+  assert.equal(s.peersCurrent, true);
+  // Removed: at once.
+  s.state = { removed_at: 1 } as any;
+  lapse(s, after);
+  assert.equal(s.peersCurrent, false);
+  assert.equal(timers.length, 0);
+  s.close();
+});
 
 test("still.fail cloud: enrollment, presence, notices, traces and releases as they always were", async (t) => {
   const { fake, origin, data, state, key, plane } = await enrolled(t, "stillfail");
