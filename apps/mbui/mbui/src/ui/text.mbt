@@ -238,6 +238,30 @@ fn line_metrics(size : Double, weight : Int, cjk : Bool, style? : Int = 0) -> (D
 }
 
 ///|
+/// Whether lines are set as a browser sets them now (set_web_lines).
+pub fn web_lines_on() -> Bool {
+  web_lines.val
+}
+
+///|
+/// Where the baseline of one line of words in `size` and `weight` (no Chinese in it) falls from the top of a line
+/// `line` high, as set_line sets it: by the ascent and descent of the face the words are in, or, given `em`, of a face
+/// reaching those shares of its size above and below its baseline (one the words are not in, to compare with).
+pub fn line_baseline(
+  line : Double,
+  size? : Double = 15.0,
+  weight? : Int = 400,
+  em? : (Double, Double),
+) -> Double {
+  let (asc, desc) = match em {
+    Some((a, d)) if web_lines.val => ((a * size).round(), (d * size).round())
+    Some((a, d)) => (a * size, d * size)
+    None => line_metrics(size, weight, false)
+  }
+  set_line(line, asc, desc, g().scale, whole_pixel_lines(size, weight)).1
+}
+
+///|
 /// Whether the host sets a line of words on whole device pixels, as Android's StaticLayout does (its font metrics
 /// whole pixels too): the sixth number it answers of font_metrics, 1. A host that does not say does not.
 fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
