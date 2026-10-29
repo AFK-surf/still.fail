@@ -30,6 +30,8 @@ export interface Access {
 export interface ActivityNow {
 	key: string;
 	text: string;
+	/** A tool call, shown in a monospaced font like its execution history summary. */
+	mono?: boolean;
 }
 
 /** What an agent at work is doing, as a chat shows it (activity.ts). */

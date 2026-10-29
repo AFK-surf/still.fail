@@ -756,7 +756,7 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   if (steps.some((st) => st?.subagent !== true && st?.ended !== true && s(st, "step") === "tool" && toolName(s(st, "tool")) === "chat_post")) replying = true;
   const rate = Number.isInteger(live?.rate) && live.rate > 0 ? (live.rate as number) : 0;
   const said = (key: string, word: string) => ({ key, text: rate > 0 ? `${t(word)} · ≈ ${rate} token/s` : t(word) });
-  if (call) return { now: { key: call[0], text: call[1] } };
+  if (call) return { now: { key: call[0], text: call[1], mono: true } };
   if (replying) return { now: said("reply", "core-logic.activity.replying") };
   const flight = liveSteps.at(-1);
   if (flight) return { now: flight.step === "text" ? said("write", "core-logic.activity.writing") : said("think", "core-logic.activity.thinking") };
