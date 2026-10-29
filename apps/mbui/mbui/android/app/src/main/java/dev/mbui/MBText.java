@@ -10,7 +10,6 @@ import android.icu.text.Bidi;
 import android.icu.text.BreakIterator;
 import android.opengl.GLES30;
 import android.opengl.GLUtils;
-import android.os.Build;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -275,19 +274,10 @@ final class MBText {
         out[2] = Math.round(size * 1.42);
         // the font a Han ideograph is drawn in (Noto Sans CJK, taller than the Latin face): a line with Chinese in it is
         // measured by the taller of the two, as StaticLayout's fallback line spacing does
-        if (Build.VERSION.SDK_INT >= 34) {
-            Paint.FontMetricsInt c = new Paint.FontMetricsInt();
-            p.getFontMetricsInt(HAN, 0, HAN.length(), 0, HAN.length(), false, c);
-            out[3] = -c.ascent / d;
-            out[4] = c.descent / d;
-        } else {
-            // the text-run getFontMetricsInt is API 34's (below it: NoSuchMethodError, the app aborted as it started);
-            // StaticLayout's fallback line spacing gives the taller of the two directly
-            StaticLayout l = StaticLayout.Builder.obtain(HAN, 0, HAN.length(), new TextPaint(p), 1 << 20)
-                    .setIncludePad(false).setUseLineSpacingFromFallbacks(true).build();
-            out[3] = -l.getLineAscent(0) / d;
-            out[4] = l.getLineDescent(0) / d;
-        }
+        Paint.FontMetricsInt c = new Paint.FontMetricsInt();
+        p.getFontMetricsInt(HAN, 0, HAN.length(), 0, HAN.length(), false, c);
+        out[3] = -c.ascent / d;
+        out[4] = c.descent / d;
         // lines set on whole pixels, as StaticLayout sets them
         out[5] = 1;
     }

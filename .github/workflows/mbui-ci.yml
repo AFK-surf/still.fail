@@ -193,6 +193,34 @@ jobs:
             apps/mbui/mbui/out/android/streams/
             apps/mbui/mbui/out/android/keyboard/
 
+  # The oldest Android the apps run on (minSdk 29, Android 10): the demo started there and its first frame shown, or
+  # its crash. The other jobs' emulator is API 34's, so a call newer than the oldest system has went unseen until a
+  # person's phone aborted at each start (#2665: API 34's Paint.getFontMetricsInt overload, Android 10-13).
+  android-oldest:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ABI: x86_64
+      EMU_PORT: "5554"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: ./.github/actions/mbui-apk
+      - uses: ./.github/actions/mbui-moonbit
+      # (started, the app built meanwhile)
+      - uses: ./.github/actions/mbui-android-emulator
+        with: { api: "29", target: default, profile: pixel_6, phase: start }
+      - name: Build the demo
+        run: scripts/android.sh build
+      - uses: ./.github/actions/mbui-android-emulator
+        with: { api: "29", target: default, profile: pixel_6, phase: wait }
+      - name: "Started on Android 10 (scripts/android-launch.sh: its first frame, or its crash)"
+        run: bash scripts/android-launch.sh
+
   # MediaCodec is diagnostic, and must not consume the contract job's time budget.
   android-streams-real:
     defaults:
