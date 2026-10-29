@@ -197,11 +197,13 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
   return { body, ready: picked !== null || link !== null, busy, go, label };
 }
 
-/** Which bot the agent speaks through there, its picture before its name (「那里由 [picture] Claude 回复」). */
+/** Which bot the agent speaks through there, its picture before its name (「那里由 [picture] Claude 回复」). Words before
+ * it start under the place's name; with none (「[picture] Claude replies there」), the picture stands under the place's
+ * mark and the bot's name under the place's. */
 function Via({ connect }: { connect: RelayConnect }) {
   const [before, after = ""] = t("web-main.relay.via", { bot: BOT }).split(BOT);
   return (
-    <p className={css.via}>
+    <p className={css.via} data-lead={before === "" || undefined}>
       {before}<span className={css.viaBot}><ConnectAvatar connect={connect} size={16} />{connect.name}</span>{after}
     </p>
   );

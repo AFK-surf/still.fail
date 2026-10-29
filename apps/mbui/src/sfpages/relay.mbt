@@ -357,8 +357,9 @@ fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Boo
 }
 
 ///|
-/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, in line
-/// with the place's name.
+/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, its words
+/// in line with the place's name; with none before the bot (「[picture] Claude replies there」), its picture in the
+/// place's mark's column and its name in line with the place's.
 fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   let conn = match relay_connect(bot) {
     Some(conn) => conn
@@ -366,10 +367,13 @@ fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   }
   let words = @sf.t("web-main.relay.via", args=[("bot", "\u{E000}")])
   let split : Array[String] = words.split("\u{E000}").map(fn(w) { w.to_owned() }).collect()
+  let lead = split[0] == ""
   c.box(style=relay_via_box, fn() {
-    c.box(style=relay_via_indent, fn() {  }) |> ignore
-    c.text(split[0], style=relay_via_words) |> ignore
-    c.box(style=relay_via_bot, fn() {
+    if !lead {
+      c.box(style=relay_via_indent, fn() {  }) |> ignore
+      c.text(split[0], style=relay_via_words) |> ignore
+    }
+    c.box(style=if lead { relay_via_bot_lead } else { relay_via_bot }, fn() {
       relay_avatar(c, src, conn)
       c.text(text(Some(conn), "name"), style=relay_via_name) |> ignore
     })
@@ -544,6 +548,11 @@ let relay_via_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 ///|
 // kept across runs: a value (no field of it changes)
 let relay_via_bot : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+/// The bot first: its picture as a place's mark is, 8 before its name.
+// kept across runs: a value (no field of it changes)
+let relay_via_bot_lead : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
