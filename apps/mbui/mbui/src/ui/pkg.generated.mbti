@@ -245,6 +245,8 @@ pub fn keyboard() -> Bool
 
 pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> Line
 
+pub fn line_baseline(Double, size? : Double, weight? : Int32, em? : (Double, Double)) -> Double
+
 pub fn link(String, String) -> Run
 
 pub let list_glide_ms : Double
@@ -508,6 +510,8 @@ pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[Sha
 pub fn wake_after(Double) -> Unit
 
 pub fn wall_ms() -> Double
+
+pub fn web_lines_on() -> Bool
 
 pub fn wheel(Ctx, Int32) -> Double
 

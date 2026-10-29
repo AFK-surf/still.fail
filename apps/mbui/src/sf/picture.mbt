@@ -267,7 +267,20 @@ pub fn station_mark(
     // A mark keeps its natural width, including Windows' wider emoji. A column's
     // one-line text is otherwise capped to its slot and replaced by an ellipsis.
     let width = @ui.text_advance(emoji, size=c.sp(size * 0.9))
-    c.text(emoji, size=size * 0.9, wrap=false, line=size, w=Px(width)) |> ignore
+    // On the baseline the app's own face gives it, whatever face its words are in: a taller one chosen (思源黑体's
+    // ascent 1.16) set it lower in its line, under the marks beside it.
+    let ty = if @ui.web_lines_on() {
+      let (line, words) = (c.sp(size), c.sp(size * 0.9))
+      @ui.line_baseline(line, size=words, em=mark_em) - @ui.line_baseline(line, size=words)
+    } else {
+      0.0
+    }
+    let draw = fn() { c.text(emoji, size=size * 0.9, wrap=false, line=size, w=Px(width)) |> ignore }
+    if ty == 0.0 {
+      draw()
+    } else {
+      c.box(ty~, draw) |> ignore
+    }
     return
   }
   // none of its own: `none`'s icon, if given (Parts.kt StationMark's `none`)
@@ -276,6 +289,13 @@ pub fn station_mark(
     None => ()
   }
 }
+
+///|
+/// How far the app's own face (Inter 4.001, the wide frame's words with none chosen: sfbase's inter_face.mbt) reaches
+/// above and below its baseline, shares of its size (its 1984 and 494 of 2048): where a station's emoji stands in its
+/// line (station_mark).
+// kept across runs: a value (no field of it changes)
+let mark_em : (Double, Double) = (1984.0 / 2048.0, 494.0 / 2048.0)
 
 ///|
 /// A workspace before its name where it is named among other words (a list's row, a chip, a heading; the web's
