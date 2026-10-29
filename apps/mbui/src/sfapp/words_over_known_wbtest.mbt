@@ -5,28 +5,26 @@
 ///|
 fn init {
   @ui.words_over_known([
-    ("src/sfapp/agent_tile_wbtest.mbt", 8),
+    ("src/sfapp/agent_tile_wbtest.mbt", 6),
     ("src/sfapp/chat_parity_wbtest.mbt", 1),
     ("src/sfapp/composer_wbtest.mbt", 2),
     ("src/sfapp/decide_wbtest.mbt", 14),
     ("src/sfapp/downloads_wbtest.mbt", 1),
     ("src/sfapp/duo_wbtest.mbt", 11),
-    ("src/sfapp/linger_wbtest.mbt", 1),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
     ("src/sfapp/place_top_wbtest.mbt", 2),
     ("src/sfapp/preview_wbtest.mbt", 13),
-    ("src/sfapp/publish_wbtest.mbt", 4),
-    ("src/sfapp/screens_wbtest.mbt", 42),
+    ("src/sfapp/publish_wbtest.mbt", 2),
+    ("src/sfapp/screens_wbtest.mbt", 43),
     ("src/sfapp/stations_now_wbtest.mbt", 18),
-    ("src/sfapp/tape.mbt", 4),
+    ("src/sfapp/tape.mbt", 3),
     ("src/sfapp/tape_wbtest.mbt", 1),
     ("src/sfapp/touch_wide_wbtest.mbt", 2),
-    ("src/sfapp/viewers_desk_wbtest.mbt", 1),
     ("src/sfapp/wide_panel_wbtest.mbt", 3),
     ("src/sfapp/wide_publish_wbtest.mbt", 2),
     ("src/sfapp/wide_rail_wbtest.mbt", 6),
     ("src/sfapp/wide_relay_wbtest.mbt", 2),
     ("src/sfapp/wide_share_wbtest.mbt", 1),
-    ("src/sfapp/wide_wbtest.mbt", 121),
+    ("src/sfapp/wide_wbtest.mbt", 117),
   ])
 }

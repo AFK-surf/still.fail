@@ -143,6 +143,8 @@ priv struct Rec {
   drawing : @ui.Drawing
   mut exit : Trans?
   mut list : Int
+  /// how far down from its place it is drawn on its way there this frame (0: in its place; makes_room)
+  mut moving_dy : Double
   /// where it was drawn last frame (its last build's place), taken as this frame first lays it out: every build of a
   /// frame (frame_body) moves it from there, none from another build's place, which was never drawn; and its offsets
   /// then, which a move this frame sets from (not adds to, once a build)
@@ -224,6 +226,7 @@ fn Rec::new() -> Rec {
     fy: 0.0,
     driven: false,
     drove: 0.0,
+    moving_dy: 0.0,
     enter: None,
     ef: Anim::new(1.0),
     em: Anim::new(1.0),
@@ -1205,8 +1208,67 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       None => ()
     }
   }
+  makes_room(c)
   kept_recs_taken(c)
   forget_recs(c)
+}
+
+///|
+/// What comes into a list's place shows only in the room what was there has left (docs/motion.md rule 4, words over
+/// words): a row in its place (one new to the list, or one a row closes over) is not drawn where a row of the same
+/// list on its way to its place still is, as that one goes there (an agent's line gliding down from where a message
+/// came in, the rows closing up over one gone). The row on its way is drawn whole, over its old place; the one in its
+/// place is cut back to the room left it, shown more as that one goes, never two rows' words in one place (the user,
+/// 2026-10-29: 「会闪」: not out, then in).
+fn makes_room(c : @ui.Ctx) -> Unit {
+  let moving : Array[(Moving, Rec)] = []
+  for e in mo.entries {
+    if e.key == 0 || e.reshape {
+      continue
+    }
+    match mo.recs.get(e.key) {
+      Some(r) if r.list != 0 && r.moving_dy.abs() > 0.5 => moving.push((e, r))
+      _ => ()
+    }
+  }
+  if moving.is_empty() {
+    return
+  }
+  for e in mo.entries {
+    if e.key == 0 || e.reshape {
+      continue
+    }
+    guard mo.recs.get(e.key) is Some(r) && r.list != 0 && r.moving_dy.abs() <= 0.5 else { continue }
+    // (read for what draws it: the moves it is cut by, as they go)
+    c.reads_for(e.node, fn() {
+      let (_, ny, _, nh) = c.node_rect(e.node)
+      let dy = c.look_of(e.node).dy
+      let mut top = 0.0
+      let mut bottom = nh
+      for m in moving {
+        let (me, mr) = m
+        if mr.list != r.list || me.node == e.node {
+          continue
+        }
+        ignore(mr.oy.get())
+        let (_, my, _, mh) = c.node_rect(me.node)
+        let mdy = c.look_of(me.node).dy
+        if my >= ny + nh - 0.5 {
+          // laid under it, drawn up over it: its words from that one's top on not drawn
+          bottom = dmin(bottom, my + mdy - (ny + dy))
+        } else if my + mh <= ny + 0.5 {
+          // laid over it, drawn down over it
+          top = dmax(top, my + mdy + mh - (ny + dy))
+        }
+      }
+      if bottom < nh {
+        c.cut_to_top(e.node, dmax(bottom, 0.0))
+      }
+      if top > 0.0 {
+        c.cut_to_bottom(e.node, dmax(nh - top, 0.0))
+      }
+    })
+  }
 }
 
 ///|
@@ -1549,6 +1611,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       }
       let ox = ox + cx
       let oy = oy + cy
+      r.moving_dy = oy
       if ox != 0.0 || oy != 0.0 {
         look = look.then({ ..@ui.still_look, dx: ox, dy: oy })
         flip_dy = oy
