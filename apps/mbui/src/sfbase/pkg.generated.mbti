@@ -2293,12 +2293,6 @@ pub(all) struct FreshChat {
   room : @signals.Signal[Double]
 }
 
-pub(all) struct Going {
-  entry : Entry
-  at : Double
-  after : String
-}
-
 pub(all) struct Install {
   runtime : String
   state : String
@@ -2749,6 +2743,7 @@ pub(all) struct Reading {
   mut following_row : Bool
   mut follow_key : String
   sent : Map[Double, String]
+  sent_as : Map[String, String]
   linger : Map[String, Lingering]
   mut lingered : Int32
   mut floor : Double
@@ -2771,12 +2766,7 @@ pub(all) struct Reading {
   mut motion_of : Array[String]
   mut motion_list : String
   mut motion_keys : Array[String]
-  came_at : Map[String, Double]
-  changed_at : Map[String, Double]
-  going : Map[String, Going]
-  mut last_rows : Array[(String, Entry)]
-  mut rows_now : Double
-  rows_mover : @ui.Mover
+  rows : @ui.ListRows[Entry]
 }
 pub fn Reading::sees(Self, Int32, Double?) -> Bool
 

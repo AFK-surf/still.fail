@@ -343,8 +343,11 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
       isWaiting = false;
       isDismissed = false;
     } else {
-      isWaiting = pendingOf[0] === seq;
-      isDismissed = pendingOf[0] === seq && pendingOf[1];
+      // (an answer from here on its way settles it at once, as when the row is not known: its station's row says so
+      // only once it has it)
+      const sentHere = !replaced && sending.length > 0 && answer !== undefined;
+      isWaiting = pendingOf[0] === seq && !sentHere;
+      isDismissed = pendingOf[0] === seq && pendingOf[1] && !sentHere;
     }
     const decision: J = { resolved: !isWaiting };
     if (isDismissed) {

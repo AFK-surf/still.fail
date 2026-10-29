@@ -77,6 +77,19 @@ pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
 }
 
 ///|
+/// The words of the box marked `key` as they were last laid out, as `words_of`, read only for their shape: how they
+/// are cut into lines and how large, not where they lie (what places something by where they are reads that as it is
+/// laid out or painted, @motion.measured_rect). Read back as they come, go or are laid out otherwise, never as their
+/// box moves: what moves with it builds nothing again.
+pub fn Ctx::words_shape_of(self : Ctx, key : String) -> Words? {
+  let v = words_kept.get(key)
+  if building.val && !self.words_shape_reads.contains(key) {
+    self.words_shape_reads[key] = v is Some(_)
+  }
+  v
+}
+
+///|
 /// Once laid out: what each marked box holds, kept; the selections to draw. Words read as the view built (words_of)
 /// and kept elsewhere than before (their box moved: a page sliding in, a list scrolled) are a layout read back that
 /// moved (Ctx::read_changed): what the app placed from them this frame (handles over a passage) was placed where they
@@ -127,6 +140,8 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
       // (read where they were as the view built: words not read move with their box, nothing built again)
       Some(was) if !same_place(was.pieces, pieces) && self.words_reads.contains(m.key) =>
         self.read_changed("words_of \"" + m.key + "\"")
+      Some(was) if (was.text != sb.to_string() || !same_shape(was.pieces, pieces)) &&
+        self.words_shape_reads.contains(m.key) => self.read_changed("words_shape_of \"" + m.key + "\"")
       _ => ()
     }
     let words = { text: sb.to_string(), pieces }
@@ -144,6 +159,22 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
   for k in gone {
     words_kept.remove(k)
   }
+}
+
+///|
+/// Whether paragraphs kept twice are the same size, cut the same, wherever they lie.
+fn same_shape(a : Array[WordsPiece], b : Array[WordsPiece]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for k in 0..<a.length() {
+    let p = a[k]
+    let q = b[k]
+    if p.w != q.w || p.h != q.h || p.start != q.start || p.layout.line_count() != q.layout.line_count() {
+      return false
+    }
+  }
+  true
 }
 
 ///|

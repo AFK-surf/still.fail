@@ -23,7 +23,9 @@ switch home 351x805 2 finger
 keyboard chat 390x844 2 finger
 medium chat 690x840 2 finger
 medium-idle chat 690x840 2 finger
-hover chat 1280x800 0 mouse"
+hover chat 1280x800 0 mouse
+card chat 1280x800 0 mouse
+send-wide chat 1280x800 0 mouse"
 built=$(APP=sfbench MODE=release bash scripts/mac.sh build 2>&1) || { echo "$built" | grep -E "Error|error" -A6 | head -60; echo "appbench: sfbench not built"; exit 1; }
 [ "${QUIET:-1}" = 0 ] || QUIET_MAX=${QUIET_MAX:-300} bash mbui/scripts/bench_quiet.sh
 exe=./_build/native/release/build/stillfail/sfbench/sfbench.exe

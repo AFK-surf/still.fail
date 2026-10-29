@@ -243,12 +243,18 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("words_of \"\{key}\" (laid out or gone)")
     }
   })
+  self.words_shape_reads.each(fn(key, was) {
+    if words_kept.contains(key) != was {
+      moved.push("words_shape_of \"\{key}\" (laid out or gone)")
+    }
+  })
   self.laid_reads.clear()
   self.size_reads.clear()
   self.place_reads.clear()
   self.info_reads.clear()
   self.row_reads.clear()
   self.words_reads.clear()
+  self.words_shape_reads.clear()
   for m in moved {
     self.read_changed(m)
   }

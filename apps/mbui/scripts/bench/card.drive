@@ -1,0 +1,9 @@
+# 大屏, a mouse: the made-up chat's card answered: its options go, how it went comes in, the reply under it, all one
+# move (docs/list-motion.md).
+timeout 20000
+until =一起换
+wait 800
+log measure
+tap =一起换
+wait 2500
+exit

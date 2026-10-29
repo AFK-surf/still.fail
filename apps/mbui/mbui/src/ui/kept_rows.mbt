@@ -819,6 +819,8 @@ fn Ctx::rows_words_again(self : Ctx, seen : Map[String, Bool]) -> Unit {
           match words_kept.get(w.0) {
             Some(was) if !same_place(was.pieces, pieces) && self.words_reads.contains(w.0) =>
               self.read_changed("words_of \"" + w.0 + "\"")
+            Some(was) if (was.text != w.1.text || !same_shape(was.pieces, pieces)) &&
+              self.words_shape_reads.contains(w.0) => self.read_changed("words_shape_of \"" + w.0 + "\"")
             _ => ()
           }
           words_kept[w.0] = { text: w.1.text, pieces }

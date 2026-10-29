@@ -407,7 +407,9 @@ fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
 /// is kept as its nodes while nothing it read changed, however what builds the
 /// list is built again (kept_nodes.mbt); without, what builds the list built
 /// again builds its rows anew. A Tester holds it: each frame that kept a row is
-/// built again keeping none and must come out the same.
+/// built again keeping none and must come out the same. `sized`: what changed
+/// its rows' heights, by their keys (ListRows::sized): each laid out as tall as
+/// its way to its new height has it now (list_size.mbt).
 pub fn Ctx::list(
   self : Ctx,
   key : String,
@@ -420,6 +422,7 @@ pub fn Ctx::list(
   bg? : Int64 = 0L,
   glide_on_growth? : Bool = false,
   rows_read? : Bool = false,
+  sized? : RowCauses,
 ) -> Int {
   let id = self.id(key)
   let st = match self.lists.get(id) {
@@ -496,7 +499,7 @@ pub fn Ctx::list(
         direction: self.direction,
         layer: self.layer_cur,
         part: 0,
-        row_causes: {},
+        causes: None,
         sizes: {},
         sizes_mover: Mover::new(),
       }
@@ -513,6 +516,8 @@ pub fn Ctx::list(
   }
   st.count = count
   st.row = row
+  // what changed its rows' heights, by their keys (list_size.mbt ListRows)
+  st.causes = sized
   st.seed = self.id_seed
   st.bones = self.bones
   st.owner = self.owner
@@ -593,10 +598,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.nodes[r].item = k
   let row = st.row
   // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
-  row_causes_built.push(None)
   part_rows(st.part, fn() { self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) }) })
-  // (what it said changed its height, for its layout: list_size.mbt)
-  row_built_said[r] = row_causes_built.pop().unwrap_or(None)
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner
@@ -690,13 +692,13 @@ fn Ctx::place_list(
     // (kept as its nodes where nothing it shows changed: kept_nodes.mbt; as its last build drew it where parts are
     // kept so: kept_rows.mbt)
     let (r, h) = if self.rows_on() {
-      let r = self.row_of(li, st, k, iw, force=st.row_sizing(k, self.clock))
+      let r = self.row_of(li, st, k, iw)
       (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
     } else {
       self.row_laid(li, st, k, ix, y, iw)
     }
     // as tall as what changed its height has it now (list_size.mbt), what it holds cut there
-    let shown = st.row_sized(k, r, h, self.clock, self.frame_no)
+    let shown = st.row_sized(k, h, self.clock, self.frame_no)
     // (as tall as it is laid out once there: a row kept as its nodes keeps what it was last cut to otherwise)
     let sized = (shown - h).abs() > 0.001
     self.nodes[r].clip = sized
