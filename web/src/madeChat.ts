@@ -141,8 +141,8 @@ export function notSent(): void {
 }
 
 /**
- * The new chat becomes its chat (`go`, rendered at once). What leaves is what `scope` marks `data-made-leave` ("up":
- * out of view above, "fade": where it is). The chat's page is waited for (a little) until it shows its first message
+ * The new chat becomes its chat (`go`, rendered at once). What leaves is what `scope` marks `data-made-leave`, fading
+ * where it is ("up": the scene, 140 ms; "fade": what is by the composer, 80 ms). The chat's page is waited for (a little) until it shows its first message
  * of its own; then the words sent (`sendingFirst`) go there, drawn in `layer` at `z` (over the composer), and the rest
  * of its `list` comes up after them, `wait` ms after what leaves has begun to (a composer that stays put, with the
  * choices by it: they are gone first; one that moves away takes the words with it at once).
@@ -183,8 +183,8 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   let following: MutationObserver | null = null;
   // The departing scene responds now, while the first row becomes ready behind it.
   for (const { el, up } of leaving) moves.push(play(el, [
-    { opacity: 1, transform: "none" },
-    { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
+    { opacity: 1 },
+    { opacity: 0 },
   ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
   // The new page, before its first paint: what arrives set where it comes from.
   pageChanging()?.settle.push(() => {

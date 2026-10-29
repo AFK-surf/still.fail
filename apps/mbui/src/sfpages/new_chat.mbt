@@ -15,7 +15,7 @@
 // makes the chat (`newChat.create`, made once a page, anew when the picks changed: useEnsureChat) and goes to it
 // (`chat.send` by its key); the page becomes the chat in place, its first words carried where they were typed till
 // their row is in the chat's list (flight.mbt), what is written meanwhile going on into the chat's draft
-// (`composer.carry`); over the chat its scene goes up out of view as it fades and what is under it fades where it is
+// (`composer.carry`); over the chat its scene and what is under it fade where they are
 // (madeChat.ts toMadeChat, NewChat.kt). The frame says what is over it and under it, and what it does as the page
 // becomes the chat (NewChatFrame).
 
@@ -102,8 +102,8 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 
 ///|
 /// The new chat of view `v` as it is left (madeChat.ts toMadeChat, data-made-leave): as it was but for its composer
-/// (the chat's now, its place kept), its scene `up` of the way up out of view as it fades, what is under the composer
-/// `fade` of the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms, what is
+/// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
+/// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms, what is
 /// under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a layer drawn only.
 pub fn new_chat_left(
   c : @ui.Ctx,
@@ -126,8 +126,8 @@ pub fn new_chat_left(
 
 ///|
 /// What the page on a station is: here (`Here`); its stations not read yet (`Held`: why they could not be, "" while
-/// they are read), the station it last started on in its place; become its chat (`Going`: how far its scene has gone up
-/// and how far what is under its composer has faded, 0 … 1 each).
+/// they are read), the station it last started on in its place; become its chat (`Going`: how far its scene and what is
+/// under its composer have faded, 0 … 1 each).
 priv enum NewState {
   Here
   Held(String)
@@ -204,9 +204,9 @@ fn new_narrow(
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-        // up out of view as it fades, a little smaller, from its middle (madeChat.ts: translateY(-32px) scale(.96))
+        // fading where it is (madeChat.ts)
         if going {
-          c.look(scene, @ui.look(alpha=1.0 - up, dy=-new_leave_rise * up, scale=1.0 - new_leave_shrink * up))
+          c.look(scene, @ui.look(alpha=1.0 - up))
         }
         list_space(c, clear)
       })
@@ -510,7 +510,7 @@ fn new_wide(
   new_column(
     c,
     fn(col) {
-      // (data-made-leave="up": out of view above as it fades)
+      // (data-made-leave="up": the scene, fading where it is)
       let head : Array[Int] = []
       new_head(c, station, state, new_scene_w, fn(i) {
         new_part(c, i, state, true)
@@ -579,11 +579,11 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
 }
 
 ///|
-/// Part `i` of the page wide as it leaves: `up`, out of view above as it fades (madeChat.ts: translateY(-32px)
-/// scale(.96)); else fading where it is. While it stays, as it is.
+/// Part `i` of the page wide as it leaves, fading where it is: `up` (the scene) as its scene does, else as what is under
+/// the composer does (madeChat.ts). While it stays, as it is.
 fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
-    Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u, dy=-new_leave_rise * u, scale=1.0 - new_leave_shrink * u))
+    Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u))
     Going(_, f) => c.look(i, @ui.look(alpha=1.0 - f))
     _ => ()
   }
@@ -989,13 +989,6 @@ fn new_send(
 
 // ── the run picker ────────────────────────────────────────────────────────
 
-
-///|
-/// How far what leaves goes up, and how much smaller it gets.
-let new_leave_rise : Double = 32.0
-
-///|
-let new_leave_shrink : Double = 0.04
 
 ///|
 /// The column wide (newChatInner: 720 at most, 32 in from the pane's sides), the scene's width (ILLUS_SIZE: 320;

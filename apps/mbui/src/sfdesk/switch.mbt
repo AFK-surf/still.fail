@@ -1,6 +1,6 @@
 // Between a chat and a new chat in the wide frame, by the sidebar's 新建对话 or a chat's row (ember web/src/dock.tsx
 // useComposerMove): the composer goes from its place on the one to its place on the other (340 ms, the ease out: its
-// own reshape, composer.mbt), a new chat left leaves by its own way (its scene up out of view as it fades, its choices
+// own reshape, composer.mbt), a new chat left leaves by its own way (its scene fading where it is, its choices
 // fading where they are: fresh.mbt, as a new chat become its chat does), and what comes in is there at once. No page
 // crossfades whole (docs/motion.md: what is swapped does not move; the web's root view transition is not taken).
 // Between two chats nothing moves; a new chat become its chat has its own (newchat.mbt new_chat_after).
@@ -53,7 +53,7 @@ fn page_switch_frame(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// The new chat left for a chat, leaving over it by its own way (its scene up out of view as it fades, its choices
+/// The new chat left for a chat, leaving over it by its own way (its scene fading where it is, its choices
 /// fading where they are: fresh.mbt), drawn only, its composer gone to the chat's.
 fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let gone = new_leave(c).get()

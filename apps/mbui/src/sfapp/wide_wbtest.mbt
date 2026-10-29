@@ -898,7 +898,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
-  // back to the chat by its row: the composer down to its foot, the new chat's scene up out of view as it fades (its
+  // back to the chat by its row: the composer down to its foot, the new chat's scene fading where it is (its
   // own way, as one become its chat leaves), the chat there at once under it
   t.tap_text("整理发布清单")
   t.draw()
