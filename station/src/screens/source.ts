@@ -110,6 +110,10 @@ export type ScreenCursor = { x: number; y: number; shape: string };
 /// steps it takes, in percent.
 export type ScreenScale = { percent: number; recommended: number; steps: number[] };
 
+/// A display's resolution as its system has it (Windows' Settings › Display › Display resolution): now, and the modes
+/// it takes (landscape, the largest first), in pixels.
+export type ScreenResolution = { width: number; height: number; modes: { width: number; height: number }[] };
+
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
 /// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the
 /// machine asks for it now.
@@ -142,6 +146,11 @@ export interface ScreenSource {
   /// Sets its display's scale to one of its steps, and says it as `scale` does; until its last view ends, after which
   /// it is put back as it was before the first change.
   setScale?(percent: number): Promise<ScreenScale>;
+  /// Its display's resolution (null when it is not had now); none: a source whose resolution is not changed.
+  resolution?(): Promise<ScreenResolution | null>;
+  /// Sets its display's resolution to one of its modes, and says it as `resolution` does; until its last view ends,
+  /// after which it is put back as it was before the first change.
+  setResolution?(width: number, height: number): Promise<ScreenResolution>;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

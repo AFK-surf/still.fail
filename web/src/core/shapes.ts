@@ -6140,6 +6140,21 @@ export interface ScreenLatency {
 	before: number;
 }
 
+/** A display mode's size, in pixels. */
+export interface ScreenSize {
+	width: number;
+	height: number;
+}
+
+/** A screen's display resolution (docs/remote-screens.md `resolution`). */
+export interface ScreenResolution {
+	/** Now, in pixels (Windows' Settings › Display › Display resolution). */
+	width: number;
+	height: number;
+	/** Those it takes, landscape, the largest first. */
+	modes: ScreenSize[];
+}
+
 /** A screen's display scale (docs/remote-screens.md `scale`): what makes its windows and text larger or smaller on it. */
 export interface ScreenScale {
 	/** Now, in percent (Windows' Settings › Display › Scale). */
@@ -6210,6 +6225,11 @@ export interface ScreenViewState {
 	 * once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
 	 */
 	scale?: ScreenScale;
+	/**
+	 * While driving it: its display's resolution, set with `screen.input` `{t: "resolution", width, height}`
+	 * and put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
+	 */
+	resolution?: ScreenResolution;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

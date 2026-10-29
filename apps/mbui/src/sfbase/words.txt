@@ -1791,6 +1791,9 @@ web-pages.screen.qualityHint.original
 web-pages.screen.qualityHint.smooth
 web-pages.screen.scale
 web-pages.screen.scaleRecommended
+web-pages.screen.resolution
+web-pages.screen.resolutionFits
+web-pages.screen.resolutionMark
 web-pages.screen.section
 web-pages.screen.someone
 web-pages.screen.stat.beforeSent

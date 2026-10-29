@@ -75,6 +75,13 @@ export function parseScale(v: any): number | null {
   return v !== null && typeof v === "object" && v.t === "scale" && Number.isInteger(v.percent) && v.percent >= 100 && v.percent <= 500 ? v.percent : null;
 }
 
+/// What a client's input frame asks of the display's resolution (`{t: "resolution", width, height}`): the size, or null
+/// when it is not that.
+export function parseResolution(v: any): { width: number; height: number } | null {
+  const n = (x: unknown) => Number.isInteger(x) && (x as number) >= 640 && (x as number) <= 16384;
+  return v !== null && typeof v === "object" && v.t === "resolution" && n(v.width) && n(v.height) ? { width: v.width, height: v.height } : null;
+}
+
 /// What a client's input frame asks of the file manager (`{t: "reveal", path}`): the path, or null when it is not that.
 export function parseReveal(v: any): string | null {
   return v !== null && typeof v === "object" && v.t === "reveal" && typeof v.path === "string" && v.path !== "" && v.path.length <= 4096 ? v.path : null;
@@ -381,6 +388,12 @@ class ViewSession {
         if (scale !== null && !this.#closed) void this.#state({ scale });
       });
     }
+    // Its resolution too (a source whose resolution is changed: Windows' desktop).
+    if (this.control && this.source.resolution) {
+      void this.source.resolution().then((resolution) => {
+        if (resolution !== null && !this.#closed) void this.#state({ resolution });
+      });
+    }
     void this.stream.stopped().then(
       () => this.#stop(null),
       () => this.#stop(null),
@@ -521,6 +534,19 @@ class ViewSession {
                   source.setScale!(percent).then(
                     (scale) => void this.#state({ scale }),
                     (error) => log.info("screens", "the display's scale was not set", { screen: this.id, percent, error: (error as Error).message }),
+                  ),
+                );
+              }
+              break;
+            }
+            const size = parseResolution(raw);
+            if (size !== null) {
+              const source = this.source;
+              if (source.setResolution) {
+                this.#then(() =>
+                  source.setResolution!(size.width, size.height).then(
+                    (resolution) => void this.#state({ resolution }),
+                    (error) => log.info("screens", "the display's resolution was not set", { screen: this.id, ...size, error: (error as Error).message }),
                   ),
                 );
               }

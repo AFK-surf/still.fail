@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { AudioFrame, Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import type { AudioFrame, Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenResolution, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -39,6 +39,14 @@ export function scaleOf(told: any): ScreenScale | null {
   const n = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 100 && v <= 500;
   if (told === null || typeof told !== "object" || !n(told.percent) || !n(told.recommended) || !Array.isArray(told.steps) || !told.steps.every(n)) return null;
   return { percent: told.percent, recommended: told.recommended, steps: [...told.steps] };
+}
+
+/// A resolution as stillfail-screen says it, checked: null when it is not one.
+export function resolutionOf(told: any): ScreenResolution | null {
+  const n = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v > 0 && v <= 16384;
+  const size = (v: any) => v !== null && typeof v === "object" && n(v.width) && n(v.height);
+  if (!size(told) || !Array.isArray(told.modes) || !told.modes.every(size)) return null;
+  return { width: told.width, height: told.height, modes: told.modes.map((m: any) => ({ width: m.width, height: m.height })) };
 }
 
 /// How the process is started (a test's fake in tests).
@@ -71,6 +79,10 @@ export class WindowsDesktop implements ScreenSource {
   #original: number | null = null;
   /// Scale changes, one after another.
   #scaling: Promise<unknown> = Promise.resolve();
+  /// The display's resolution before a view first changed it, put back once the last view ends; null while unchanged.
+  #originalSize: { width: number; height: number } | null = null;
+  /// Resolution changes, one after another.
+  #sizing: Promise<unknown> = Promise.resolve();
 
   constructor(options: WindowsDesktopOptions) {
     this.#o = options;
@@ -171,10 +183,49 @@ export class WindowsDesktop implements ScreenSource {
     return set;
   }
 
-  /// The last view ended: the display's scale as it was before a view changed it.
+  /// As it is once the changes asked before are made.
+  resolution(): Promise<ScreenResolution | null> {
+    const read = this.#sizing.then(() => this.#ask(["resolution"])).then(resolutionOf, (error) => {
+      log.info("screens", "the display's resolution was not had", { error: (error as Error).message });
+      return null;
+    });
+    this.#sizing = read;
+    return read;
+  }
+
+  setResolution(width: number, height: number): Promise<ScreenResolution> {
+    const set = this.#sizing.then(async () => {
+      if (this.#originalSize === null) {
+        const before = resolutionOf(await this.#ask(["resolution"]));
+        if (before === null) throw new Error("the display's resolution was not had");
+        this.#originalSize = { width: before.width, height: before.height };
+      }
+      const now = resolutionOf(await this.#ask(["resolution", `${Math.round(width)}x${Math.round(height)}`]));
+      if (now === null) throw new Error("the display's resolution was not had");
+      log.info("screens", "the display's resolution set", { width: now.width, height: now.height, was: this.#originalSize });
+      // (its size another now: listed anew)
+      this.#o.changed();
+      return now;
+    });
+    this.#sizing = set.catch(() => {});
+    return set;
+  }
+
+  /// The last view ended: the display's scale and resolution as they were before a view changed them.
   #putBack() {
+    if (this.#views.size > 0) return;
+    const size = this.#originalSize;
+    if (size !== null) {
+      this.#originalSize = null;
+      this.#sizing = this.#sizing.then(() =>
+        this.#ask(["resolution", `${size.width}x${size.height}`]).then(
+          () => (log.info("screens", "the display's resolution put back", size), this.#o.changed()),
+          (error) => log.warn("screens", "the display's resolution was not put back", { ...size, error: (error as Error).message }),
+        ),
+      );
+    }
     const original = this.#original;
-    if (original === null || this.#views.size > 0) return;
+    if (original === null) return;
     this.#original = null;
     this.#scaling = this.#scaling.then(() =>
       this.#ask(["scale", String(original)]).then(

@@ -1852,6 +1852,15 @@ export const SHAPES: Record<string, Shape> = {
     ["recommended", "u32", { doc: "The one its system recommends." }],
     ["steps", vec("u32"), { doc: "Those it takes, lowest first." }],
   ], { doc: "A screen's display scale (docs/remote-screens.md `scale`): what makes its windows and text larger or smaller on it." }),
+  ScreenSize: struct([
+    ["width", "u32"],
+    ["height", "u32"],
+  ], { doc: "A display mode's size, in pixels." }),
+  ScreenResolution: struct([
+    ["width", "u32", { doc: "Now, in pixels (Windows' Settings › Display › Display resolution)." }],
+    ["height", "u32"],
+    ["modes", vec("ScreenSize"), { doc: "Those it takes, landscape, the largest first." }],
+  ], { doc: "A screen's display resolution (docs/remote-screens.md `resolution`)." }),
   ScreenViewState: struct([
     ["phase", "String", { doc: "`connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the\nstation is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to\ncapture, no display) or `failed`." }],
     ["message", opt("String"), { doc: "Why, in the viewer's words, for a phase that is not `connecting` or `live`." }],
@@ -1873,6 +1882,7 @@ export const SHAPES: Record<string, Shape> = {
     ["latency", opt("ScreenLatency"), { doc: "How late its frames are, said each second while they come (none from a station before it)." }],
     ["video", opt("ScreenVideo"), { doc: "How its pictures are made, as the station said as the view opened (none from a station before it)." }],
     ["scale", opt("ScreenScale"), { doc: "While driving it: its display's scale, set with `screen.input` `{t: \"scale\", percent}` and put back as it was\nonce nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
+    ["resolution", opt("ScreenResolution"), { doc: "While driving it: its display's resolution, set with `screen.input` `{t: \"resolution\", width, height}`\nand put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),
   PrefsView: struct([
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],
