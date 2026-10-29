@@ -336,6 +336,31 @@ impl @hostapi.Host for Native with cpu_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with perf_state(_) {
+  perf_state()
+}
+
+///|
+impl @hostapi.Host for Native with set_perf(_, on) {
+  set_perf(on)
+}
+
+///|
+impl @hostapi.Host for Native with perf_line(_, line) {
+  perf_line(line)
+}
+
+///|
+impl @hostapi.Host for Native with perf_where(_) {
+  perf_where()
+}
+
+///|
+impl @hostapi.Host for Native with perf_size(_) {
+  perf_size()
+}
+
+///|
 impl @hostapi.Host for Native with env(_, name) {
   env(name)
 }

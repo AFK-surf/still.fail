@@ -1147,6 +1147,13 @@ void mb_host_set_sideways(int32_t on) { (void)on; }
 // Let turn as held (@hostapi.set_turnable): a window does not turn, and is not held upright.
 int32_t mb_host_set_turnable(int32_t on) { (void)on; return 0; }
 
+// The performance record (@hostapi.perf_state): none kept here (iOS keeps one, ios_app.m).
+int32_t mb_host_perf_state(void) { return -1; }
+void mb_host_set_perf(int32_t on) { (void)on; }
+void mb_host_perf_line(moonbit_string_t line) { (void)line; }
+moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
+double mb_host_perf_size(void) { return 0; }
+
 // The app drawn dark (@hostapi.set_dark): GTK's own parts (the title bar) drawn as dark.
 void mb_host_set_dark(int32_t dark) {
   GtkSettings *s = gtk_settings_get_default();

@@ -1762,20 +1762,112 @@ let probe_steps : Ref[Int] = { val: 0 }
 let probe_paints : Ref[Int] = { val: 0 }
 
 ///|
+/// Whether the probe ran the frame before (MBUI_PROBE=1, or the device's performance record kept): as it starts again
+/// (the record turned on), what it summed before is dropped.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_live : Ref[Bool] = { val: false }
+
+///|
+/// The frames slower than the display's since the last summary (the record's: one count, not a line each).
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_slow : Ref[Int] = { val: 0 }
+
+///|
+/// What the frames since the last summary were for, each its count and work (ms), by why (`built: <built_why>`,
+/// `painted: <painted_why>`, `looks`: frame_watch.mbt's, with where it was asked or read); the heaviest one's work and
+/// why; the messages posted to the app, by channel, each its count and bytes (messages_take).
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_whys : Map[String, (Int, Double)] = {}
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_worst : Ref[(Double, String)] = { val: (0.0, "") }
+
+///|
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_channels : Map[String, (Int, Int)] = {}
+
+///|
+/// What else is said with each summary into the record (perf_also), by name: an app's (its core's calls and topics,
+/// its page, a remote screen's frames).
+// kept across runs: said once as an app starts
+let probe_also : Map[String, (Double) -> String] = {}
+
+///|
+/// `f`'s line said with each summary of the frames into the device's performance record (@hostapi.perf_line) while it
+/// is kept, as `<name>: <its line>` ("" says nothing): what an app knows of where its time goes that mbui does not (the
+/// calls and topics of its core, the page it shows, a remote screen's frames). Asked after the frame is drawn, outside
+/// any build, with the summary's span (ms); it says what it counted since it was last asked.
+pub fn perf_also(name : String, f : (Double) -> String) -> Unit {
+  probe_also[name] = f
+}
+
+///|
+/// A message posted to the app, counted for the probe while it runs (messages_take): its channel, its bytes.
+fn probe_message(channel : String, json : String, bytes : Bytes?) -> Unit {
+  if !probe_live.val {
+    return
+  }
+  let n = json.length() +
+    (match bytes {
+      Some(b) => b.length()
+      None => 0
+    })
+  let (k, b) = probe_channels.get(channel).unwrap_or((0, 0))
+  probe_channels[channel] = (k + 1, b + n)
+}
+
+///|
+/// The `n` heaviest of `m` (by its second number, then its first), as ` <second><unit>/<first> <key>` each, `sep`
+/// between.
+fn[N : Compare + Show] probe_top(m : Map[String, (Int, N)], n : Int, unit : String, sep? : String = " ") -> String {
+  let all = m.to_array()
+  all.sort_by(fn(a, b) {
+    let c = b.1.1.compare(a.1.1)
+    if c != 0 { c } else { b.1.0.compare(a.1.0) }
+  })
+  let out = StringBuilder::new()
+  for i, e in all {
+    if i >= n {
+      break
+    }
+    out.write_string((if i == 0 { " " } else { sep }) + "\{e.1.1}\{unit}/\{e.1.0} \{e.0}")
+  }
+  out.to_string()
+}
+
+///|
 let probe_slow_ms : Double = 24.0
 
 ///|
+/// How often the probe sums up: on the log (MBUI_PROBE=1), into the performance record.
+let probe_log_ms : Double = 2000.0
+
+///|
+let probe_record_ms : Double = 5000.0
+
+///|
+/// The probe (above): on the log every 2 s with MBUI_PROBE=1, a line for each slow frame too; into the device's
+/// performance record (@hostapi.perf_line, the person's 性能记录) every 5 s while it is kept, its slow frames counted
+/// only. Neither: nothing summed.
 fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   if probe_on.val < 0 {
     probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
     presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
   }
-  if probe_on.val == 0 {
+  let recording = @hostapi.perf_recording()
+  if probe_on.val == 0 && !recording {
+    probe_live.val = false
     return
+  }
+  if !probe_live.val {
+    probe_live.val = true
+    probe_reset(-1.0)
+    probe_last_t.val = -1.0
   }
   let gap = if probe_last_t.val < 0.0 { 0.0 } else { t - probe_last_t.val }
   probe_last_t.val = t
-  // (how many frames a second, said every 2 s it draws)
+  // (how many frames a second, said every 2 s it draws: 5 s into the record alone)
   probe_frames.val = probe_frames.val + 1
   probe_work.val = probe_work.val + work + present
   probe_phase[0] = probe_phase[0] + probe_msgs_ms.val
@@ -1783,6 +1875,21 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   probe_phase[2] = probe_phase[2] + c.t_layout
   probe_phase[3] = probe_phase[3] + c.t_paint
   probe_phase[4] = probe_phase[4] + present
+  // (what it was for: the record's attribution, its heaviest)
+  if recording {
+    let why = if built_why.val != "" {
+      "built: " + built_why.val
+    } else if painted_why.val != "" {
+      "painted: " + painted_why.val
+    } else {
+      "looks"
+    }
+    let (k, ms) = probe_whys.get(why).unwrap_or((0, 0.0))
+    probe_whys[why] = (k + 1, ms + work + present)
+    if probe_worst.val.1 == "" || work + present > probe_worst.val.0 {
+      probe_worst.val = (work + present, why)
+    }
+  }
   // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
   let share = presented_share.val
   probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
@@ -1797,7 +1904,9 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   if probe_since.val < 0.0 {
     probe_since.val = t
     probe_cpu.val = h_cpu_ms()
-  } else if t - probe_since.val >= 2000.0 {
+    probe_steps.val = looks_frames.val
+    probe_paints.val = paints_alone.val
+  } else if t - probe_since.val >= (if probe_on.val == 1 { probe_log_ms } else { probe_record_ms }) {
     let span = t - probe_since.val
     // (the whole process's share of one CPU since, whatever drew: 100% one core busy throughout)
     let cpu_now = h_cpu_ms()
@@ -1807,35 +1916,69 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
     probe_steps.val = looks_frames.val
     let painted = paints_alone.val - probe_paints.val
     probe_paints.val = paints_alone.val
-    h_log(
-      "PROBE fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (built: \{built_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
+    let said = "fps=\{(probe_frames.val.to_double() * 1000.0 / span).round()} cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (built: \{built_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
       "work_avg=\{(probe_work.val / probe_frames.val.to_double() * 10.0).round() / 10.0}ms " +
       "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / probe_frames.val.to_double() * 10.0).round() / 10.0 })} nodes=\{c.count} " +
       "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / probe_frames.val.to_double() * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / probe_frames.val.to_double()).round()}% " +
-      "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms",
-    )
-    for i in 0..<3 {
-      probe_parts[i] = 0
+      "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms slow=\{probe_slow.val}"
+    if probe_on.val == 1 {
+      h_log("PROBE " + said)
     }
-    for i in 0..<6 {
-      probe_why[i] = 0
+    if recording {
+      @hostapi.perf_line("frames: " + said)
+      let r = (fn(x : Double) { (x * 10.0).round() / 10.0 })
+      let whys = probe_whys.map(fn(_, v) { (v.0, r(v.1)) })
+      @hostapi.perf_line(
+        "frames why (the 5 heaviest, ms/frames):" + probe_top(whys, 5, "ms", sep=" | "),
+      )
+      if probe_worst.val.1 != "" {
+        @hostapi.perf_line("frames heaviest: \{r(probe_worst.val.0)}ms \{probe_worst.val.1}")
+      }
+      if probe_channels.length() > 0 {
+        @hostapi.perf_line("messages (bytes/count, by channel):" + probe_top(probe_channels, 6, "B", sep=" | "))
+      }
+      for name, f in probe_also {
+        let line = @signals.untracked(fn() { f(span) })
+        if line != "" {
+          @hostapi.perf_line(name + ": " + line)
+        }
+      }
     }
-    probe_share.val = 0.0
-    probe_damage.val = 0.0
-    probe_gpu.val = 0.0
-    probe_gpu_n.val = 0
-    for i in 0..<5 {
-      probe_phase[i] = 0.0
-    }
-    probe_frames.val = 0
-    probe_work.val = 0.0
-    probe_since.val = t
+    probe_reset(t)
   }
   if work > probe_slow_ms || gap > 3.0 * probe_slow_ms {
+    probe_slow.val = probe_slow.val + 1
+  }
+  if probe_on.val == 1 && (work > probe_slow_ms || gap > 3.0 * probe_slow_ms) {
     h_log(
       "PROBE slow frame: work=\{work.round()}ms (messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
       "layout=\{c.t_layout.round()} paint=\{c.t_paint.round()} present=\{present.round()}) since_last=\{gap.round()}ms " +
       "handed=\{messages_handed.val} nodes=\{c.count}",
     )
   }
+}
+
+///|
+/// The probe's sums begun again from `t` (-1: from its next frame, its CPU's time asked then).
+fn probe_reset(t : Double) -> Unit {
+  for i in 0..<3 {
+    probe_parts[i] = 0
+  }
+  for i in 0..<6 {
+    probe_why[i] = 0
+  }
+  probe_share.val = 0.0
+  probe_damage.val = 0.0
+  probe_gpu.val = 0.0
+  probe_gpu_n.val = 0
+  for i in 0..<5 {
+    probe_phase[i] = 0.0
+  }
+  probe_frames.val = 0
+  probe_work.val = 0.0
+  probe_slow.val = 0
+  probe_whys.clear()
+  probe_worst.val = (0.0, "")
+  probe_channels.clear()
+  probe_since.val = t
 }

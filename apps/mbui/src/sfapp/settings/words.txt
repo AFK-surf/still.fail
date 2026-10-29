@@ -1057,6 +1057,9 @@ web-mobile.settings.securityOff
 web-mobile.settings.securityOn
 web-mobile.settings.securityWaiting
 web-pages.about.legal
+web-pages.about.diagnostics
+web-pages.about.perf.note
+web-pages.about.perf.title
 web-pages.about.privacy
 web-pages.addProfile.editAction
 web-pages.addProfile.openAction

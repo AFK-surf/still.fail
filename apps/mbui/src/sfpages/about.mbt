@@ -1,9 +1,10 @@
 // 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
 // narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
-// terms and privacy policy on its site. 更新日志: the core's `changelog`, a tab a part, by day, each change's lines
-// with their kind before them, its version, what is not out yet; opened, what the last update brought is read
-// (`changelog.seen`). Laid out by the page's width (page_look.mbt).
+// terms and privacy policy on its site; last, where the device keeps one, its performance record (性能记录: what
+// warms it, kept on the device alone, @hostapi.perf_state). 更新日志: the core's `changelog`, a tab a part, by day,
+// each change's lines with their kind before them, its version, what is not out yet; opened, what the last update
+// brought is read (`changelog.seen`). Laid out by the page's width (page_look.mbt).
 
 ///|
 /// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen): this build and the way to a
@@ -54,6 +55,25 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   })
+  // this device's performance record, last and out of the way (where the device keeps one: iOS)
+  let perf = @hostapi.perf_state()
+  if perf >= 0 {
+    blocks.push(fn() {
+      @sf.section(c, heads=false, @sf.t("web-pages.about.diagnostics"), fn() {
+        @sf.group(c, card=true, fn() {
+          let on = perf == 1
+          let now = @sf.switch_row(c, "about/perf",
+            @sf.t("web-pages.about.perf.title"),
+            on,
+            note=@sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(@hostapi.perf_size()))]),
+          )
+          if now != on {
+            @hostapi.set_perf(now)
+          }
+        })
+      })
+    })
+  }
   @sf.page(c, on_back=core.pop, frame~, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
 

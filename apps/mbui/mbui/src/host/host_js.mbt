@@ -428,6 +428,32 @@ fn cpu_ms() -> Double {
 }
 
 ///|
+/// A browser's page keeps no performance record (@hostapi.perf_state).
+fn perf_state() -> Int {
+  -1
+}
+
+///|
+fn set_perf(on : Bool) -> Unit {
+  ignore(on)
+}
+
+///|
+fn perf_line(line : String) -> Unit {
+  ignore(line)
+}
+
+///|
+fn perf_where() -> String {
+  ""
+}
+
+///|
+fn perf_size() -> Double {
+  0.0
+}
+
+///|
 /// The page's query parameter `name` ("" when there is none).
 fn env(name : String) -> String {
   js_env(name)

@@ -22,6 +22,35 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
 }
 
 ///|
+test "关于's 性能记录 where the device keeps one, at each width and with either hand: last, under 诊断; its note says where it is kept and how much; turned on and off, the host told at once; none where the device keeps none" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(About, w, platform~)
+    let at = "\{w} platform \{platform}"
+    // (a Tester's host keeps none, as Android's, a Mac's, Windows')
+    assert_true(t.find("性能记录") is None, msg=at)
+    t.set_perf(0)
+    t.draw()
+    t.scroll_to_end()
+    t.draw()
+    assert_true(t.find("性能记录") is Some(_), msg=at)
+    assert_eq(t.find("诊断") is Some(_), laid_wide(w), msg=at)
+    assert_true(t.find("每 5 秒把 CPU、各线程占用、发热等级和帧数记在本机 Documents/perf（现有 0 B），不会上传。") is Some(_), msg=at)
+    // last: under the terms
+    let (_, terms, _, _) = t.rect_of("服务条款").unwrap()
+    let (_, perf, _, _) = t.rect_of("性能记录").unwrap()
+    assert_true(perf > terms, msg=at)
+    t.click(Switch, label="性能记录")
+    assert_eq(t.perf_said().0, [true], msg=at)
+    assert_eq(@hostapi.perf_state(), 1, msg=at)
+    t.draw()
+    t.click(Switch, label="性能记录")
+    assert_eq(t.perf_said().0, [true, false], msg=at)
+    assert_eq(@hostapi.perf_state(), 0, msg=at)
+  }
+}
+
+///|
 test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words and the bar under them, the row as tall all the way, pressed still" {
   for case in page_cases {
     let (w, platform) = case

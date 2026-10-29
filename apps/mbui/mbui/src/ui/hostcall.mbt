@@ -172,6 +172,11 @@ struct FakeHost {
   mut marks_next : Bytes?
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
+  /// the device's performance record (@hostapi.perf_state: -1 none kept here, 0 off, 1 on; Tester::set_perf), and
+  /// what the app said of it: each set_perf, each perf_line while it was on, oldest first (Tester::perf_said)
+  mut perf : Int
+  perf_sets : Array[Bool]
+  perf_lines : Array[String]
   /// what a real host said of its views as a run recorded it (Tester::view_said): a video's frames' times, by (view,
   /// what) (view_text), and the frames grabbed, by view, oldest first (view_still)
   view_texts : Map[(Int, Int), String]

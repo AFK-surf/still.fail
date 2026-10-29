@@ -147,6 +147,17 @@ extern "C" fn ffi_gpu_ms() -> Double = "mb_host_gpu_ms"
 
 extern "C" fn ffi_cpu_ms() -> Double = "mb_host_cpu_ms"
 
+extern "C" fn ffi_perf_state() -> Int = "mb_host_perf_state"
+
+extern "C" fn ffi_set_perf(on : Int) -> Unit = "mb_host_set_perf"
+
+#borrow(line)
+extern "C" fn ffi_perf_line(line : String) -> Unit = "mb_host_perf_line"
+
+extern "C" fn ffi_perf_where() -> String = "mb_host_perf_where"
+
+extern "C" fn ffi_perf_size() -> Double = "mb_host_perf_size"
+
 extern "C" fn ffi_set_back(
   back : FuncRef[(Int, Double, Double, Int) -> Unit],
 ) -> Unit = "mb_host_set_back"
@@ -737,6 +748,32 @@ fn gpu_ms() -> Double {
 /// The CPU's time the process has had, every thread's, in ms (-1: not known on this host).
 fn cpu_ms() -> Double {
   ffi_cpu_ms()
+}
+
+///|
+/// The performance record (@hostapi.perf_state): iOS keeps one (ios_app.m), the other hosts none (-1).
+fn perf_state() -> Int {
+  ffi_perf_state()
+}
+
+///|
+fn set_perf(on : Bool) -> Unit {
+  ffi_set_perf(if on { 1 } else { 0 })
+}
+
+///|
+fn perf_line(line : String) -> Unit {
+  ffi_perf_line(line)
+}
+
+///|
+fn perf_where() -> String {
+  ffi_perf_where()
+}
+
+///|
+fn perf_size() -> Double {
+  ffi_perf_size()
 }
 
 ///|
