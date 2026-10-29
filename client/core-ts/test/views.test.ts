@@ -1740,6 +1740,22 @@ test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async (
   assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
 });
 
+// A video sent with a new chat's first message showed as a file card (zuozijian, 2026-10-29): a new chat's files go up
+// only as its message goes, so its video was still going up when its row came. Drawn as its message draws it once up:
+// in its place and shape, its still the one picked here.
+test("a_video_sent_while_going_up_is_among_its_messages_files_at_once", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(threads("ws/a"), [thread(7, [], t.host.nowMs())]);
+  t.set(pageOf("ws/a", 7), page(5, ["早"], null));
+  await t.read(u, 1);
+  t.views.outboxAdd("ws/a", 7, { text: "", attachments: [], quotes: [], uploads: [{ id: "v1", name: "clip.MP4", size: 900, width: 1080, height: 1920, sent: 0 }] });
+  await t.read(u, 1);
+  const [o] = u.value.outbox;
+  assert.deepEqual([o.attachments, o.uploads], [[{ name: "clip.MP4", path: "upload:v1", size: 900, width: 1080, height: 1920, upload: "v1" }], undefined]);
+});
+
 // A message going up said only 正在上传, however long it took (mbui, 2026-10-26): under it, how far all its files are
 // together, as each says how much of it the station has; until every one has said (a station's file copied across says
 // nothing until it is there), only that they go up.

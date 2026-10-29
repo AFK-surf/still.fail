@@ -388,13 +388,17 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
-  if c.clicked(open) {
+  // (still going up: no station has it to play or ask its still of yet)
+  let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
+  if c.clicked(open) && !going_up {
     open_file(here, a)
   }
   let name = stored_name(a.path)
   let coming = download_of(src, here.station, owner, name)
   // (being downloaded to be saved: it comes anyway, nothing to load or stop here)
-  let load : Array[@sf.MenuItem?] = if flag(coming, "active") && flag(coming, "keep") {
+  let load : Array[@sf.MenuItem?] = if going_up {
+    []
+  } else if flag(coming, "active") && flag(coming, "keep") {
     let id = text(coming, "id")
     [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { download_cancel(src, id) }, icon="stop"))]
   } else if flag(coming, "active") {
@@ -418,7 +422,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
-  let still = video_still(c, src, here.station, owner, a, thumb)
+  // (going up: the picture this device has of it, else its play mark on black alone)
+  let still = if going_up { sent_picture(here.station, a).unwrap_or("") } else { video_still(c, src, here.station, owner, a, thumb) }
   // its still kept on the device and not decoded yet: what the app's first page waits for
   if a.held && (still == "" || (still != "!" && !c.image_ready(still, reveal_px(c, w, h)))) {
     @sfbase.held_pictures_waiting.val = true

@@ -1566,10 +1566,11 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   const { letterbox, ...size } = look.box(file, video ? 96 : undefined);
-  if (video && sessionKey !== null) {
+  // (one still going up: on no station yet, its play mark on black alone, opening nothing)
+  if (video) {
     return (
       <>
-        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={thumbId(station.address, sessionKey, file.path)} onClick={() => setOpen(true)} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined} data-unavailable={videoFailed || undefined}
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} data-viewer-thumb={sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined} onClick={() => { if (sessionKey !== null) setOpen(true); }} aria-label={t(videoFailed ? "web-main.file.view" : "web-main.file.play", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined} data-unavailable={videoFailed || undefined}
           data-loaded={still.poster ? "instant" : undefined}>
           {still.url && !videoFailed && (still.poster
             ? <img src={still.url} alt="" aria-hidden="true" />
