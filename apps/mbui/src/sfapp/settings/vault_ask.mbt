@@ -414,13 +414,18 @@ pub fn vault_foot(
   }
   // its buttons, last in the card's foot corners; how long beside them where the line has the room for it, else on a
   // line of its own over them (never under: the buttons keep the foot), its ends where theirs are (over_foot_reach).
-  // Whether it has the room: the widths they were laid at (the last frame's; none yet: beside them)
-  let foot_id = c.id("vault/" + request + "/foot")
+  // Whether it has the room: the widths they were laid at, against the card's width inside it (the last frame's; none
+  // yet: beside them). Not the foot's own: it is as wide as what is in it, a line short of the room once one goes over
+  let room_id = c.id("vault/" + request + "/room")
   let acts_id = c.id("vault/" + request + "/acts")
   let picks = !save && scopes.length() > 1
   let over = picks &&
-    (match (c.laid_size(foot_id), c.laid_size(acts_id), c.laid_size(c.id("vault/" + request + "/scope"))) {
-      (Some((fw, _)), Some((aw, _)), Some((sw, _))) => aw + ask_foot_gap + sw > fw + 0.5
+    (match (c.laid_size(room_id), c.laid_size(acts_id), c.laid_size(c.id("vault/" + request + "/scope"))) {
+      (Some((fw, _)), Some((aw, _)), Some((sw, _))) => {
+        // (its foot reaching out past the card's words to its corners on a page card: that room the line's too)
+        let out = if foot { 2.0 * dmax(0.0, @sf.card_pad - @sf.card_foot_in(@sf.button_height())) } else { 0.0 }
+        aw + ask_foot_gap + sw > fw + out + 0.5
+      }
       _ => false
     })
   let pick = fn() {
@@ -468,18 +473,21 @@ pub fn vault_foot(
     })
     |> ignore
   }
-  if over {
-    c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
-  }
-  c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, id=foot_id, flow=true, line_gap=ask_foot_lines, fn() {
-    acts()
-    if !over {
-      pick()
+  c.box(style=ask_room, id=room_id, fn() {
+    if over {
+      c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
     }
-    match extra {
-      Some(f) => f()
-      None => ()
-    }
+    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
+      acts()
+      if !over {
+        pick()
+      }
+      match extra {
+        Some(f) => f()
+        None => ()
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -523,6 +531,11 @@ let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 ///|
 /// Between the answer's buttons (ask_foot's gap), to say whether how long has the room beside them.
 let ask_foot_gap : Double = 10.0
+
+///|
+/// The answer across the card, its width what says whether how long has the room beside the buttons.
+// kept across runs: a value (no field of it changes)
+let ask_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// How long, on a line of its own over the buttons where it has not the room beside them: the foot's lines apart.
