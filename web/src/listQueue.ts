@@ -60,7 +60,12 @@ export function growRow(row: HTMLElement): void {
   const height = row.getBoundingClientRect().height;
   if (height < 0.5) return;
   listSizing(pane, motionMs(GLIDE_MS));
-  play(row, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
+  // (from nothing in this very frame, before the motion is under way: the list measures it there, not at its height)
+  row.style.height = "0px";
+  row.style.overflow = "clip";
+  const open = play(row, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
+  const done = () => { row.style.removeProperty("height"); row.style.removeProperty("overflow"); };
+  void open.finished.then(done, done);
 }
 
 /** A promise over in `ms` (a motion of that length played). */

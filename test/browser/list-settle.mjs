@@ -299,8 +299,8 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     const found = backAndForth(frames);
     if (found.length) failures.push(`${where}: moved and back\n    ${found.slice(0, 6).join('\n    ')}`);
     const jumped = jumps(frames, phone ? 844 : 800);
-    const early = frames.filter((f) => f.early).map((f) => f.t);
-    if (early.length) failures.push(`${where}: an agent's line showed before the message sent had landed (at ${early.slice(0, 3).join(', ')}ms)`);
+    // (an agent's line may come as the words sent fly: nothing waits for another, each row opening its own room,
+    // docs/list-motion.md, 2026-10-30)
     // Said, not failed on, unless JUMPS=1: how big a step a frame takes is the machine's (a slow frame's is bigger).
     if (jumped.length) (process.env.JUMPS ? failures : notes).push(`${where}: jumped\n    ${jumped.slice(0, 6).join('\n    ')}`);
     // (One taller than the pane is read from its top: not followed to the end.)
