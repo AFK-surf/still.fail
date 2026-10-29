@@ -1,10 +1,12 @@
 // still.fail's macOS, iOS, Windows and Linux icons (the Android app's launcher icon, android/app/src/main/res:
 // still.fail's face, its eyes and cheeks, on its app's colour; design/brand): drawn into the shape of a macOS app icon and
-// made an .icns, the iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon
+// made an .icns, macOS 26's Icon Composer document (OUT.icon: the face's layers, each appearance's colours, for actool;
+// scripts/mac-app.sh), the iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon
 // (scripts/ios.sh), Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape). Which app's:
 // VARIANT, as mac-app.sh's MBUI_VARIANT (stable by default, still.fail's black face, as mbui's app is still.fail's now;
-// beta youdid.wtf's, the orange tape across its corner; stable-dark and beta-dark their white faces, for a dark Dock).
+// beta youdid.wtf's, the orange tape across its corner; stable-dark and beta-dark their white faces, for a dark system).
 //   swift apps/mbui/scripts/mac-icon.swift [VARIANT] OUT.icns
+//   swift apps/mbui/scripts/mac-icon.swift --icon [VARIANT] OUT.icon
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
 //   swift apps/mbui/scripts/mac-icon.swift --ico OUT.ico
 //   swift apps/mbui/scripts/mac-icon.swift --png OUT.png
@@ -131,6 +133,43 @@ func render(_ size: Int) -> Data {
   return rep.representation(using: .png, properties: [:])!
 }
 
+// macOS 26's: an Icon Composer document (OUT.icon, which actool compiles into the app's Assets.car), its tile and face
+// each appearance's own (the variant's, and its -dark's for a dark system), the system giving it its shape and glass
+if args.contains("--icon") {
+  let dark = colours[variant + "-dark"]!
+  func colour(_ c: NSColor) -> String {
+    let s = c.usingColorSpace(.sRGB)!
+    return "srgb:" + [s.redComponent, s.greenComponent, s.blueComponent, 1].map { String(format: "%.5f", $0) }.joined(separator: ",")
+  }
+  func fill(_ light: NSColor, _ dark: NSColor) -> [String: Any] {
+    ["fill-specializations": [["value": ["solid": colour(light)]], ["appearance": "dark", "value": ["solid": colour(dark)]]]]
+  }
+  // a layer: its shapes on the tile's 100, the whole of the document's 1024
+  func svg(_ paths: [(String, String)]) -> String {
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 100 100\">"
+      + paths.map { "<path d=\"\($0.0)\" fill=\"\($0.1)\"/>" }.joined() + "</svg>"
+  }
+  var layers: [[String: Any]] = []
+  var files: [String: String] = [:]
+  if taped {
+    files["tape.svg"] = svg([(tapePath, "#E5704A"), (tapeWords, "#FFFFFF")])
+    layers.append(["name": "tape", "image-name": "tape.svg", "glass": false])
+  }
+  files["eyes.svg"] = svg(eyePaths.map { ($0, "#FFFFFF") })
+  files["cheeks.svg"] = svg(cheekPaths.map { ($0, "#F6BC9F") })
+  layers.append(["name": "eyes", "image-name": "eyes.svg", "glass": false].merging(fill(ink, dark.1)) { a, _ in a })
+  layers.append(["name": "cheeks", "image-name": "cheeks.svg", "glass": false].merging(fill(cheekColour, dark.2)) { a, _ in a })
+  let doc: [String: Any] = fill(ground, dark.0).merging([
+    "groups": [["layers": layers, "shadow": ["kind": "neutral", "opacity": 0.5], "translucency": ["enabled": false, "value": 0.5]]],
+    "supported-platforms": ["squares": ["macOS"]],
+  ]) { a, _ in a }
+  let dir = URL(fileURLWithPath: out)
+  try? FileManager.default.removeItem(at: dir)
+  try FileManager.default.createDirectory(at: dir.appendingPathComponent("Assets"), withIntermediateDirectories: true)
+  for (name, body) in files { try body.write(to: dir.appendingPathComponent("Assets/" + name), atomically: true, encoding: .utf8) }
+  try JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys]).write(to: dir.appendingPathComponent("icon.json"))
+  exit(0)
+}
 if ios {
   try render(1024).write(to: URL(fileURLWithPath: out))
   exit(0)

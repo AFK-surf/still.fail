@@ -93,14 +93,29 @@ BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
 t2=$(now)
 
 # the icon, the app's own (still.fail's face; youdid.wtf's under its tape; still.fail mbui's still.fail's), made once
-# for each version of its script; and its white face for a dark system (AppIconDark.icns: the host shows it in the Dock
-# while the system is dark, src/host/mac_app.m dock_icon)
+# for each version of its script: an Icon Composer document whose tile and face are each appearance's own (the black
+# face, the white one on a dark system), compiled by actool into the app's Assets.car, which macOS 26 draws as the
+# system's appearance is, the app open or not; and the black face's .icns for the macOS before (CFBundleIconFile).
+# actool knows .icon from Xcode 26: the newest Xcode's that does, whichever is selected.
 VARIANT=${MBUI_VARIANT:-mbui}
 [ "$VARIANT" = beta ] && FACE=beta || FACE=stable
-ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE.icns
-ICON_DARK=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE-dark.icns
-[ -f "$ICON" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON" > /dev/null
-[ -f "$ICON_DARK" ] || swift "$D/mac-icon.swift" "$FACE-dark" "$ICON_DARK" > /dev/null
+ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE
+[ -f "$ICON.icns" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON.icns" > /dev/null
+if [ ! -f "$ICON.assets/Assets.car" ]; then
+  ACTOOL=
+  for dev in "$(xcode-select -p)" $(ls -d /Applications/Xcode*.app/Contents/Developer 2>/dev/null | sort -rV); do
+    v=$(DEVELOPER_DIR=$dev xcrun actool --version 2>/dev/null | awk -F'[<>.]' '/short-bundle-version/ { getline; print $3 }') || true
+    if [ "${v:-0}" -ge 26 ] 2>/dev/null; then ACTOOL=$dev; break; fi
+  done
+  [ -n "$ACTOOL" ] || { echo "mac-app.sh: no Xcode 26 or later's actool here, to compile the app's icon" >&2; exit 1; }
+  # (the document named as the icon it is: actool compiles nothing for a name it is not)
+  rm -rf "$ICON.assets" && mkdir -p "$ICON.assets"
+  swift "$D/mac-icon.swift" --icon "$FACE" "$ICON.assets/AppIcon.icon" > /dev/null
+  DEVELOPER_DIR=$ACTOOL xcrun actool "$ICON.assets/AppIcon.icon" --compile "$ICON.assets" --app-icon AppIcon --platform macosx \
+    --target-device mac --minimum-deployment-target "$MACOSX_DEPLOYMENT_TARGET" \
+    --output-partial-info-plist "$ICON.assets/partial.plist" > "$ICON.assets/actool.log" 2>&1 \
+    && [ -f "$ICON.assets/Assets.car" ] || { cat "$ICON.assets/actool.log" >&2; rm -rf "$ICON.assets"; exit 1; }
+fi
 
 rm -rf "$APPDIR" "$ZIP"
 mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents/Frameworks"
@@ -134,8 +149,8 @@ if [ -n "$OWN" ]; then
   ln -s Versions/Current/Resources "$SQUIRREL/Resources"
 fi
 cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
-cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
-cp "$ICON_DARK" "$APPDIR/Contents/Resources/AppIconDark.icns"
+cp "$ICON.icns" "$APPDIR/Contents/Resources/AppIcon.icns"
+cp "$ICON.assets/Assets.car" "$APPDIR/Contents/Resources/Assets.car"
 # the oldest macOS the program runs on, as it was linked: the one asked for
 MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
 [ "$MINOS" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "mac-app.sh: linked for macOS $MINOS, not $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1; }
@@ -147,6 +162,7 @@ put CFBundleName -string "$NAME"
 put CFBundleDisplayName -string "$NAME"
 put CFBundleExecutable -string "$EXE"
 put CFBundleIconFile -string AppIcon
+put CFBundleIconName -string AppIcon
 put CFBundlePackageType -string APPL
 put CFBundleInfoDictionaryVersion -string 6.0
 put CFBundleShortVersionString -string "0.1.$N"

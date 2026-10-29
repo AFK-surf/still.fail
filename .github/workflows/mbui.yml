@@ -256,10 +256,12 @@ jobs:
             .ci/hbc
           key: ${{ env.STORE_KEY }}
 
+  # On macOS 26: its app icon is an Icon Composer document, which actool compiles only there (Xcode 26's actool on
+  # macos-15 crashed in its asset agent, IBPlatformToolFailureException, 2026-10-29, 40819418131)
   mac:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
-    runs-on: macos-15
+    runs-on: macos-26
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 10
     env:
