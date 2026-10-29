@@ -60,7 +60,7 @@ export const viaBot = style({ display: "inline-flex", alignItems: "center", gap:
 /** A person the note can mention: their picture (their initial till it is here), in the row's 16 for a mark. */
 export const person = style({
   flex: "none", display: "inline-grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "999px",
-  overflow: "hidden", background: vars.hover, color: vars.muted, fontSize: vars.textCaption,
+  overflow: "hidden", background: vars.hover, color: vars.text, fontSize: vars.textCaption,
 });
 export const personImage = style({ width: "100%", height: "100%", objectFit: "cover" });
 /** The people the note can mention: a popover under it, as wide as it (the composer's `@` menu's rows: ChatRef.css.ts). */
