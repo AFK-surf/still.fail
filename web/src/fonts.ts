@@ -24,6 +24,9 @@ export function loadFace(face: FontFace): void {
   document.head.append(link);
 }
 
+/** The stylesheets of the faces added so far: an inline visualization's frame (Viz.tsx) links them too, as it has not the page's. */
+export const faceSheets = (): string[] => [...linked];
+
 /** How a face is written in a style: its family, then the app's own for the place; none (the app's own): null. */
 export function familyOf(face: FontFace, code: boolean): string | null {
   if (!face.family) return null;

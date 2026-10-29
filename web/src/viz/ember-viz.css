@@ -68,8 +68,9 @@
   --font-size-base: var(--e-text-body, 14px);
 
   /* ── What the utilities are made of; not for agents ────────────────────────────── */
-  --font-sans: var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The page's faces as its person set them (正文, else 界面; their stylesheets linked ahead of this one). */
+  --font-sans: var(--e-font-text, var(--e-font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif));
+  --font-mono: var(--e-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   --font-size-small: var(--e-text-meta, 12px);
   --font-size-ui: var(--e-text-ui, 13px);
   --font-size-caption: var(--e-text-caption, 11px);
