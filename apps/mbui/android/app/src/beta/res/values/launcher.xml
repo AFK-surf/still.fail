@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The beta app's (fail.still.android.beta; design/brand/icon-beta.svg): night, the s white, the dot orange. -->
+<!-- The beta app's (fail.still.android.beta; design/brand/icon-beta.svg): still.fail's face under the orange tape; values-night's the white. -->
 <resources>
-    <color name="launcher_bg">#111114</color>
-    <color name="launcher_ink">#FAFAFA</color>
-    <color name="launcher_dot">#E5704A</color>
+    <color name="launcher_bg">#1C1D20</color>
+    <color name="launcher_ink">#FFFFFF</color>
+    <color name="launcher_cheek">#F6BC9F</color>
+    <color name="launcher_tape">#E5704A</color>
 </resources>

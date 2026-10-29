@@ -417,7 +417,13 @@ fn main {
     if app.1 != "" {
       read_colors(@sys.read_text(@sys.join(src, app.1 + "/res/values/launcher.xml")).unwrap_or(""))
     }
-    launcher(line, app.0, @sys.read_text(@sys.join(src, "main/res/drawable/launcher_face.xml")))
+    // an app's own face where it has one (youdid.wtf's, under its tape), else the one they share
+    let own = if app.1 == "" { None } else { @sys.read_text(@sys.join(src, app.1 + "/res/drawable/launcher_face.xml")) }
+    let face = match own {
+      Some(_) => own
+      None => @sys.read_text(@sys.join(src, "main/res/drawable/launcher_face.xml"))
+    }
+    launcher(line, app.0, face)
   }
   line("}")
   line("")

@@ -162,6 +162,8 @@ static double frame_late, last_tick = -1;
 // clock), or -1; the time of the frame being built (what wake_after counts from); the display's frame (ms).
 static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
 
+static void dock_icon(void);
+
 @implementation MBView
 
 - (instancetype)initWithFrame:(NSRect)f {
@@ -1824,10 +1826,15 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       [[NSNotificationCenter defaultCenter] addObserverForName:name object:nil queue:nil
                                                     usingBlock:^(NSNotification *n) { tell_state(); }];
     }
-    // the system's appearance switched (light, dark, auto at dusk): a frame, which asks it again (mb_host_system_dark)
+    // the system's appearance switched (light, dark, auto at dusk): a frame, which asks it again (mb_host_system_dark),
+    // and the Dock's icon its own for it
     [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"AppleInterfaceThemeChangedNotification"
                                                                  object:nil queue:[NSOperationQueue mainQueue]
-                                                             usingBlock:^(NSNotification *n) { [the_view requestFrame]; }];
+                                                             usingBlock:^(NSNotification *n) {
+                                                               [the_view requestFrame];
+                                                               dispatch_async(dispatch_get_main_queue(), ^{ dock_icon(); });
+                                                             }];
+    dock_icon();
     dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
     [NSApp run];
   }
@@ -2357,6 +2364,21 @@ int32_t mb_host_system_dark(void) {
   NSAppearanceName n = [NSApp.effectiveAppearance
       bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
   return [n isEqualToString:NSAppearanceNameDarkAqua] ? 1 : 0;
+}
+
+// The Dock's icon as the system's appearance is: an app with an icon of its own for dark (AppIconDark.icns in its
+// Resources, still.fail's white face) shows it while the system is dark, its bundle's icon (nil) otherwise. While it
+// runs only: a closed app's is its bundle's.
+static void dock_icon(void) {
+  static NSImage *dark_icon = nil;
+  static bool looked = false;
+  if (!looked) {
+    looked = true;
+    NSString *path = [NSBundle.mainBundle pathForResource:@"AppIconDark" ofType:@"icns"];
+    if (path) dark_icon = [[NSImage alloc] initWithContentsOfFile:path];
+  }
+  if (!dark_icon) return;
+  NSApp.applicationIconImage = mb_host_system_dark() ? dark_icon : nil;
 }
 
 // Sharing out (@hostapi.share): the system's sharing picker over the window, the words or the file (kept in a folder

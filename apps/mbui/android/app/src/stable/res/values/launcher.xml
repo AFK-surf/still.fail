@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The released app's (fail.still.android; design/brand/icon-stable.svg): the paper, the s in ink, the dot orange. -->
+<!-- The released app's (fail.still.android; design/brand/icon-stable.svg): the black face; values-night's the white. -->
 <resources>
-    <color name="launcher_bg">#FAFAF9</color>
-    <color name="launcher_ink">#18181B</color>
-    <color name="launcher_dot">#E5704A</color>
+    <color name="launcher_bg">#1C1D20</color>
+    <color name="launcher_ink">#FFFFFF</color>
+    <color name="launcher_cheek">#F6BC9F</color>
 </resources>

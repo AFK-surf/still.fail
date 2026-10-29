@@ -1,7 +1,8 @@
 """still.fail's illustrations (web/public/illus-*.svg), drawn as the site draws its idea: devices, and the wires that
 join them. One line weight for all of it; the devices outlined in ink, what is on them in the lighter line; orange
 only for what is joined (a live wire, the dots running on it) and a station's light. What is not joined yet is a
-dashed grey wire, what is not there yet a dashed outline. No ground, no backdrop, no character.
+dashed grey wire, what is not there yet a dashed outline. No ground, no backdrop; a station has still.fail's face (its
+eyes and cheeks, the app icon's), its eyes shut when it is asleep.
 
 make.py writes them and mbui's VectorDrawables of them, as `python3 design/brand/illus.py` alone does.
 Dashes are drawn as their own strokes, not stroke-dasharray, which VectorDrawables do not have.
@@ -81,12 +82,22 @@ LAPTOP = (84, 54)   # its screen; the base is wider and under it
 PHONE = (32, 60)
 
 
+BLUSH = "#F6BC9F"
+
+
 def station(x, y, asleep=False):
-    """A station: a machine, a rounded box with its light (orange; grey asleep) and a slot."""
+    """A station: a machine, a rounded box with still.fail's face (its eyes shut asleep) and its light in the corner
+    (orange; grey asleep)."""
     w, h = STATION
     light = "var(--sleep)" if asleep else ORANGE
+    ex, ey = (x + w / 2 - 7, x + w / 2 + 7), y + h / 2 - 2
+    if asleep:
+        eyes = stroke("".join(f"M{f(e - 2.6)} {f(ey - .6)}Q{f(e)} {f(ey + 2.2)} {f(e + 2.6)} {f(ey - .6)}" for e in ex))
+    else:
+        eyes = "".join(dot(e, ey, 2.4, "var(--ink)") for e in ex)
+    cheeks = "".join(f'<rect x="{f(e - 6.4 + (0 if e < x + w / 2 else 7.6))}" y="{f(ey + 5)}" width="5" height="2.6" rx="1.3" fill="{BLUSH}"/>' for e in ex)
     return (f'<g data-station="{"asleep" if asleep else "awake"}">' + box(x, y, w, h, 8)
-            + dot(x + 13, y + h / 2, 3, light) + stroke(f"M{f(x + 24)} {f(y + h / 2)}H{f(x + w - 13)}", "var(--line)") + "</g>")
+            + eyes + cheeks + dot(x + w - 8, y + 8, 2.2, light) + "</g>")
 
 
 def station_missing(x, y):

@@ -270,7 +270,7 @@ fn barcode(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 /// 终端: still.fail fetched in a terminal, as a system's fetch says what it runs on. Its window's dots and title; the
-/// command; still.fail's mark large (s, its dot the orange) beside who and when; a line a figure, its key in the code
+/// command; still.fail's mark large (its white face, the terminal being dark) beside who and when; a line a figure, its key in the code
 /// face in the orange: each kind's share, the chats at work, the devices, the tasks across devices, the week's chats
 /// archived, tokens and spend; the palette; the prompt again, its cursor.
 fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
@@ -286,7 +286,7 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     |> ignore
     prompt(c, "still.fail fetch")
     c.box(style=term_who, fn() {
-      c.rich([@ui.span("s"), @ui.span(".", color=@sf.share_orange)], style=term_mark) |> ignore
+      @sf.drawable(c, "stillfail_mark_dark", term_mark) |> ignore
       c.box(style=term_who_words, fn() {
         c.rich(
           [@ui.span("agents", mono=true, color=@sf.share_orange), @ui.span("@", mono=true), @ui.span("still.fail", mono=true, color=@sf.share_orange)],
@@ -567,9 +567,8 @@ let term_title : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_te
 let term_who : @ui.Style = @ui.css("row w=Full gap=S4 align=ACenter py=S2")
 
 ///|
-/// The mark: still.fail's own (design/brand: s and its dot, in the face of words, bold), as large as the scale's largest.
-// kept across runs: a value (no field of it changes)
-let term_mark : @ui.TextStyle = @ui.text_style(size=Xl7, weight=Bold, tracking=Tighter, color=Data(@sf.share_terminal_ink), wrap=false)
+/// The mark: still.fail's own face (design/brand), as tall as the who and when beside it with room to spare.
+let term_mark : Double = 56.0
 
 ///|
 // kept across runs: a value (no field of it changes)

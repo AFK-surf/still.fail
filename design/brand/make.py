@@ -25,17 +25,17 @@ import illus  # noqa: E402
 ORANGE = "#E5704A"
 INK, INK_DARK = "#18181B", "#F4F4F5"
 PAPER, NIGHT = "#FAFAF9", "#111114"
-# Each app's tile, its s and its dot: still.fail, youdid.wtf, still.fail mbui (its violet, the dot as yellow as the
-# moon it had), the debug build.
+BLACK_FACE, WHITE_FACE, BLUSH = "#1C1D20", "#F4F4F5", "#F6BC9F"
+# Each app's face: its tile, its eyes, its cheeks, and whether the beta's tape is across its corner. still.fail is the
+# black face where things are light and the white face where they are dark (mbui's app is still.fail's now, its own
+# violet gone: 2026-10-29); youdid.wtf the same under the tape; the debug build grey.
 VARIANTS = {
-    "stable": (PAPER, INK, ORANGE),
-    "beta": (NIGHT, "#FAFAFA", ORANGE),
-    "mbui": ("#5B4FD6", "#FFFFFF", "#FFD66B"),
-    "debug": ("#5F646B", "#FFFFFF", "#C9CDD2"),
+    "stable": (BLACK_FACE, "#FFFFFF", BLUSH, False),
+    "stable-dark": (WHITE_FACE, BLACK_FACE, BLUSH, False),
+    "beta": (BLACK_FACE, "#FFFFFF", BLUSH, True),
+    "beta-dark": (WHITE_FACE, BLACK_FACE, BLUSH, True),
+    "debug": ("#5F646B", "#FFFFFF", "#9AA0A7", False),
 }
-ICON_H = 0.44          # the s's height, of the tile's side
-NUDGE = 0.018          # the mark's ink box moved right by this much of its width: the dot is light, the s carries it
-TRACK = -0.03          # the mark's tracking (em)
 WORD_TRACK = -0.02     # the wordmark's (em), as the site's headline
 DOT_IN = 0.035         # the wordmark's dot drawn closer to the words it joins, each side (em)
 
@@ -130,29 +130,90 @@ def shape(text, tracking):
     return out
 
 
-# ---- the mark: s. ----
+# ---- the face ----
+# On a tile 100 square (the old app icon's, design/app-icon before 2026-10-26, its eyes a little larger to hold at
+# 16 px): two round eyes, two cheeks; the beta's tape a band at 45° across the top right corner, between the lines
+# x − y = 42 and 62, so it stays inside a launcher's round mask (the middle circle of 50) and clear of the eyes, BETA on
+# it in Inter Bold.
 
-S, DOT = glyph("s"), glyph(".")
-SB, DB = bounds(S), bounds(DOT)
-DOT_R = max(DB[2] - DB[0], DB[3] - DB[1]) / 2                       # the period made a round dot of its size
-DOT_C = (GS[S].width + TRACK * UPM + (DB[0] + DB[2]) / 2, (DB[1] + DB[3]) / 2)
-INK_BOX = (SB[0], min(SB[1], DOT_C[1] - DOT_R), DOT_C[0] + DOT_R, SB[3])
-MARK_W_PER_H = (INK_BOX[2] - INK_BOX[0]) / (INK_BOX[3] - INK_BOX[1])
-
-
-def mark_parts(cx, cy, h, nudge=0.0):
-    """The mark's s (a path) and dot (cx, cy, r), its ink `h` tall, its ink box's middle at (cx, cy) (+ `nudge` of its
-    width to the right)."""
-    k = h / (INK_BOX[3] - INK_BOX[1])
-    w = (INK_BOX[2] - INK_BOX[0]) * k
-    x0 = cx - w / 2 + nudge * w - INK_BOX[0] * k
-    y0 = cy + h / 2 + INK_BOX[1] * k
-    return outline(S, k, x0, y0), (x0 + DOT_C[0] * k, y0 - DOT_C[1] * k, DOT_R * k)
+EYES = ((32.4, 47.6), (67.6, 47.6))
+EYE_R = 6.6
+CHEEKS = ((14, 67.8), (71.6, 67.8))
+CHEEK = (14.4, 7.8)
+TAPE = (42, 62)
+K = 0.5523  # a quarter circle's cubic handle
 
 
-def mark_svg(cx, cy, h, ink, dot=ORANGE, nudge=0.0):
-    s, (dx, dy, r) = mark_parts(cx, cy, h, nudge)
-    return f'<path d="{s}" fill="{ink}"/><circle cx="{f(dx)}" cy="{f(dy)}" r="{f(r)}" fill="{dot}"/>'
+def circle_path(cx, cy, r):
+    k = K * r
+    return (f"M{f(cx + r)} {f(cy)}C{f(cx + r)} {f(cy + k)} {f(cx + k)} {f(cy + r)} {f(cx)} {f(cy + r)}"
+            f"C{f(cx - k)} {f(cy + r)} {f(cx - r)} {f(cy + k)} {f(cx - r)} {f(cy)}"
+            f"C{f(cx - r)} {f(cy - k)} {f(cx - k)} {f(cy - r)} {f(cx)} {f(cy - r)}"
+            f"C{f(cx + k)} {f(cy - r)} {f(cx + r)} {f(cy - k)} {f(cx + r)} {f(cy)}Z")
+
+
+def pill_path(x, y, w, h):
+    r = h / 2
+    k = K * r
+    return (f"M{f(x + r)} {f(y)}L{f(x + w - r)} {f(y)}C{f(x + w - r + k)} {f(y)} {f(x + w)} {f(y + r - k)} {f(x + w)} {f(y + r)}"
+            f"C{f(x + w)} {f(y + r + k)} {f(x + w - r + k)} {f(y + h)} {f(x + w - r)} {f(y + h)}L{f(x + r)} {f(y + h)}"
+            f"C{f(x + r - k)} {f(y + h)} {f(x)} {f(y + r + k)} {f(x)} {f(y + r)}C{f(x)} {f(y + r - k)} {f(x + r - k)} {f(y)} {f(x + r)} {f(y)}Z")
+
+
+def tape_text():
+    """BETA's outline on the tile's 100, along the tape's middle, its letters 6.4 high."""
+    glyphs = shape("BETA", 0.04)
+    cap = bounds(glyph("B"))[3]
+    k = 6.4 / cap
+    width = (glyphs[-1][1] + GS[glyphs[-1][0]].width) * k
+    mid = (TAPE[0] + TAPE[1]) / 2
+    cx, cy = (mid + 100) / 2, (100 - mid) / 2      # the middle of the tape's line between the top and right edges
+    c = s_ = 0.70710678
+    pen = CubicPen(GS)
+    for name, x in glyphs:
+        # along the line, then turned 45° clockwise about the tape's middle (y down)
+        lx, ly = x * k - width / 2, cap * k / 2
+        m = (c * k, s_ * k, s_ * k, -c * k, cx + c * lx - s_ * ly, cy + s_ * lx + c * ly)
+        GS[name].draw(TransformPen(pen, m))
+    return "".join(pen.d)
+
+
+TAPE_TEXT = tape_text()
+
+
+def face_parts(variant):
+    """The face's shapes on the tile's 100, each (path, what it is: eye, cheek, tape, words): no tile."""
+    out = [(circle_path(x, y, EYE_R), "eye") for x, y in EYES] + [(pill_path(x, y, *CHEEK), "cheek") for x, y in CHEEKS]
+    if VARIANTS[variant][3]:
+        a, b = TAPE
+        out += [(f"M{a} 0L{b} 0L100 {100 - b}L100 {100 - a}Z", "tape"), (TAPE_TEXT, "words")]
+    return out
+
+
+def face_shapes(variant):
+    """The face's shapes on the tile's 100, each (path, colour)."""
+    _, eye, cheek, _ = VARIANTS[variant]
+    colour = {"eye": eye, "cheek": cheek, "tape": ORANGE, "words": "#FFFFFF"}
+    return [(d, colour[part]) for d, part in face_parts(variant)]
+
+
+def moved(d, k, x, y):
+    """A path of M, L, C and Z, scaled by k and moved by (x, y)."""
+    out, nums = [], re.findall(r"[MLCZ]|-?[\d.]+", d)
+    i = 0
+    while i < len(nums):
+        t = nums[i]
+        if t in "MLCZ":
+            out.append(t); i += 1; pair = 0
+            continue
+        v = float(t) * k + (x if pair % 2 == 0 else y)
+        out.append(("" if out[-1] in "MLCZ" else " ") + f(v))
+        pair += 1; i += 1
+    return "".join(out)
+
+
+def face_svg(variant, x, y, side):
+    return "".join(f'<path d="{moved(d, side / 100, x, y)}" fill="{c}"/>' for d, c in face_shapes(variant))
 
 
 def svg_file(w, h, body, title):
@@ -160,15 +221,15 @@ def svg_file(w, h, body, title):
             f"<title>{title}</title>{body}</svg>")
 
 
-def mark_file(ink):
-    """A square of 32, the mark nearly as wide (30)."""
-    return svg_file(32, 32, mark_svg(16, 16, 30 / MARK_W_PER_H, ink), "still.fail")
+def mark_file(variant):
+    """The face on its rounded tile, a square of 32 (the corner 22.5%, as an app icon's)."""
+    return svg_file(32, 32, f'<rect width="32" height="32" rx="7.2" fill="{VARIANTS[variant][0]}"/>' + face_svg(variant, 0, 0, 32), "still.fail")
 
 
 def tile(side, variant, corner=None):
-    bg, ink, dot = VARIANTS[variant]
+    bg = VARIANTS[variant][0]
     r = f' rx="{f(corner)}"' if corner else ""
-    return f'<rect width="{f(side)}" height="{f(side)}"{r} fill="{bg}"/>' + mark_svg(side / 2, side / 2, ICON_H * side, ink, dot, NUDGE)
+    return f'<rect width="{f(side)}" height="{f(side)}"{r} fill="{bg}"/>' + face_svg(variant, 0, 0, side)
 
 
 def icon_square(variant):
@@ -177,23 +238,31 @@ def icon_square(variant):
 
 
 def icon_mac(variant):
-    """The app's icon on macOS's grid: its 824 tile at 100, its corner 185, its shadow (the paper's edged faintly)."""
-    bg, ink, dot = VARIANTS[variant]
-    edge = '<rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#000" stroke-opacity=".06"/>' if variant == "stable" else ""
+    """The app's icon on macOS's grid: its 824 tile at 100, its corner 185, its shadow (the white face edged faintly)."""
+    bg = VARIANTS[variant][0]
+    edge = '<rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#000" stroke-opacity=".06"/>' if bg == WHITE_FACE else ""
     return svg_file(1024, 1024,
-                     '<defs><filter id="s" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".28"/></filter></defs>'
+                     '<defs><filter id="s" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".28"/></filter>'
+                     '<clipPath id="t"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath></defs>'
                      f'<rect x="100" y="100" width="824" height="824" rx="185" fill="{bg}" filter="url(#s)"/>{edge}'
-                     + mark_svg(512, 512, ICON_H * 824, ink, dot, NUDGE), "still.fail")
+                     f'<g clip-path="url(#t)">{face_svg(variant, 100, 100, 824)}</g>', "still.fail")
 
 
 def favicon(variant):
-    bg, ink, dot = VARIANTS[variant]
-    edge = '<rect x=".25" y=".25" width="31.5" height="31.5" rx="7" fill="none" stroke="#000" stroke-opacity=".12" stroke-width=".5"/>' if variant == "stable" else ""
+    """The browser's tab: the black face, the white one where the browser is dark."""
+    light, dark = variant, variant + "-dark"
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">'
-            f'<rect width="32" height="32" rx="7" fill="{bg}"/>{edge}' + mark_svg(16, 16, 16, ink, dot, NUDGE) + "</svg>")
+            '<style>.d{display:none}@media (prefers-color-scheme: dark){.l{display:none}.d{display:inline}}</style>'
+            f'<g class="l"><rect width="32" height="32" rx="7.2" fill="{VARIANTS[light][0]}"/>{face_svg(light, 0, 0, 32)}</g>'
+            f'<g class="d"><rect width="32" height="32" rx="7.2" fill="{VARIANTS[dark][0]}"/>{face_svg(dark, 0, 0, 32)}</g></svg>')
 
 
 # ---- the wordmarks ----
+
+DOT = glyph(".")
+DB = bounds(DOT)
+DOT_R = max(DB[2] - DB[0], DB[3] - DB[1]) / 2                       # the period made a round dot of its size
+
 
 def wordmark(text, ink):
     """`text` in Inter Bold, its period a round orange dot; still.fail's letters 60 high (the same scale for youdid.wtf,
@@ -238,8 +307,11 @@ def vector(size, paths, comment):
             f"{body}</vector>\n")
 
 
-# the launcher's 108 viewport, of which a launcher shows the middle 72: the s 44% of that, as on every tile
-LAUNCH_S, LAUNCH_DOT = mark_parts(54, 54, ICON_H * 72, NUDGE)
+# the launcher's 108 viewport, of which a launcher shows the middle 72: the face on that 72 as on every tile
+def launcher_shapes(variant, colour=None):
+    """The face's shapes on the launcher's 108, in the launcher's named colours (or one `colour`)."""
+    names = {"eye": "@color/launcher_ink", "cheek": "@color/launcher_cheek", "tape": "@color/launcher_tape", "words": "#FFFFFF"}
+    return [(moved(d, 0.72, 18, 18), colour or names[part]) for d, part in face_parts(variant)]
 
 
 def colors(comment, pairs):
@@ -255,8 +327,8 @@ def put(path, text):
 
 
 def make():
-    put("web/public/mark.svg", mark_file(INK))
-    put("web/public/mark-dark.svg", mark_file(INK_DARK))
+    put("web/public/mark.svg", mark_file("stable"))
+    put("web/public/mark-dark.svg", mark_file("stable-dark"))
     for name, text, ink in [("wordmark", "still.fail", INK), ("wordmark-dark", "still.fail", INK_DARK),
                             ("wordmark-beta", "youdid.wtf", INK), ("wordmark-beta-dark", "youdid.wtf", INK_DARK)]:
         put(f"web/public/{name}.svg", wordmark(text, ink))
@@ -267,32 +339,49 @@ def make():
         put(f"design/brand/icon-mac-{v}.svg", icon_mac(v))
     # the illustrations, and mbui's VectorDrawables of them (illus.py)
     illus.write(REPO)
-    M = "apps/mbui/android/app/src/main/res"
-    dot = circle_d(*LAUNCH_DOT)
-    put(f"{M}/drawable/launcher_face.xml", vector(108, [(LAUNCH_S, "@color/launcher_ink"), (dot, "@color/launcher_dot")],
-        "The launcher's mark (design/brand/make.py): s. on launcher_bg, in the 66dp safe circle; the s in launcher_ink, its dot in launcher_dot."))
-    put(f"{M}/drawable/launcher_face_mono.xml", vector(108, [(LAUNCH_S, "#FFFFFF"), (dot, "#FFFFFF")],
-        "The launcher's mark in one colour (themed icons)."))
-    for name, ink in [("stillfail_mark", INK), ("stillfail_mark_dark", INK_DARK)]:
-        s, (dx, dy, r) = mark_parts(16, 16, 30 / MARK_W_PER_H)
-        put(f"{M}/drawable/{name}.xml", vector(32, [(s, ink), (circle_d(dx, dy, r), ORANGE)],
+    R = "apps/mbui/android/app/src"
+    M = f"{R}/main/res"
+    # one face for every app, its colours each app's (values/launcher.xml); youdid.wtf's its own, with the tape
+    put(f"{M}/drawable/launcher_face.xml", vector(108, launcher_shapes("stable"),
+        "The launcher's face (design/brand/make.py): its eyes in launcher_ink, its cheeks in launcher_cheek, on launcher_bg, in the 66dp safe circle."))
+    put(f"{R}/beta/res/drawable/launcher_face.xml", vector(108, launcher_shapes("beta"),
+        "youdid.wtf's launcher face (design/brand/make.py): still.fail's, the orange tape (launcher_tape) across its top right corner, BETA on it."))
+    put(f"{M}/drawable/launcher_face_mono.xml", vector(108, launcher_shapes("stable", "#FFFFFF"),
+        "The launcher's face in one colour (themed icons)."))
+    for name, v in [("stillfail_mark", "stable"), ("stillfail_mark_dark", "stable-dark")]:
+        bg = VARIANTS[v][0]
+        put(f"{M}/drawable/{name}.xml", vector(32, [(rounded_square(32, 7.2), bg)]
+                                           + [(moved(d, 0.32, 0, 0), c) for d, c in face_shapes(v)],
             f"still.fail's mark (web/public/{name.replace('stillfail_', '').replace('_', '-')}.svg; design/brand/make.py)."))
-    for v, where, comment in [
-        ("mbui", "main", "still.fail mbui's (release, fail.still.mbui; design/brand/icon-mbui.svg): violet, the s white, the dot yellow."),
-        ("debug", "debug", "The debug build (dev.mbui.demo) apart from the others on a launcher: grey."),
-        ("stable", "stable", "The released app's (fail.still.android; design/brand/icon-stable.svg): the paper, the s in ink, the dot orange."),
-        ("beta", "beta", "The beta app's (fail.still.android.beta; design/brand/icon-beta.svg): night, the s white, the dot orange."),
+    for v, where, night, comment in [
+        ("stable", "main", "stable-dark", "Every app's but the debug build's: still.fail's black face (design/brand/icon-stable.svg); values-night's the white."),
+        ("debug", "debug", "debug", "The debug build (dev.mbui.demo) apart from the others on a launcher: grey."),
+        ("stable", "stable", "stable-dark", "The released app's (fail.still.android; design/brand/icon-stable.svg): the black face; values-night's the white."),
+        ("beta", "beta", "beta-dark", "The beta app's (fail.still.android.beta; design/brand/icon-beta.svg): still.fail's face under the orange tape; values-night's the white."),
     ]:
-        bg, ink, d = VARIANTS[v]
-        pairs = [("launcher_bg", bg), ("launcher_dot", d)] if v == "debug" else [("launcher_bg", bg), ("launcher_ink", ink), ("launcher_dot", d)]
-        put(f"apps/mbui/android/app/src/{where}/res/values/launcher.xml", colors(comment, pairs))
-    # mac-icon.swift draws the same launcher mark: its s and dot, between the markers
+        for v2, qual in [(v, "values")] + ([(night, "values-night")] if night else []):
+            bg, eye, cheek, tape = VARIANTS[v2]
+            pairs = [("launcher_bg", bg), ("launcher_ink", eye), ("launcher_cheek", cheek)] + ([("launcher_tape", ORANGE)] if tape else [])
+            put(f"{R}/{where}/res/{qual}/launcher.xml", colors(comment, pairs))
+    # mac-icon.swift draws the same face: its shapes on the tile's 100, between the markers
     swift = os.path.join(REPO, "apps/mbui/scripts/mac-icon.swift")
     text = open(swift).read()
-    block = (f'let sPath = "{LAUNCH_S}"\n'
-             f"let dot = (x: {f(LAUNCH_DOT[0])} as CGFloat, y: {f(LAUNCH_DOT[1])} as CGFloat, r: {f(LAUNCH_DOT[2])} as CGFloat)\n")
+    eyes = [d for d, _ in face_shapes("stable")[:2]]
+    cheeks = [d for d, _ in face_shapes("stable")[2:4]]
+    tape = [d for d, _ in face_shapes("beta")[4:]]
+    q = lambda ds: "[" + ", ".join(f'"{d}"' for d in ds) + "]"
+    block = f"let eyePaths = {q(eyes)}\nlet cheekPaths = {q(cheeks)}\nlet tapePath = \"{tape[0]}\"\nlet tapeWords = \"{tape[1]}\"\n"
     text = re.sub(r"(// brand: made by design/brand/make\.py\n).*?(// brand end\n)", lambda m: m.group(1) + block + m.group(2), text, flags=re.S)
     put(os.path.relpath(swift, REPO), text)
+
+
+def rounded_square(side, r):
+    """A square `side` with corners of `r`, as M L C Z."""
+    k = K * r
+    s = side
+    return (f"M{f(r)} 0L{f(s - r)} 0C{f(s - r + k)} 0 {f(s)} {f(r - k)} {f(s)} {f(r)}L{f(s)} {f(s - r)}"
+            f"C{f(s)} {f(s - r + k)} {f(s - r + k)} {f(s)} {f(s - r)} {f(s)}L{f(r)} {f(s)}C{f(r - k)} {f(s)} 0 {f(s - r + k)} 0 {f(s - r)}"
+            f"L0 {f(r)}C0 {f(r - k)} {f(r - k)} 0 {f(r)} 0Z")
 
 
 # ---- rasters ----
@@ -333,7 +422,7 @@ def square(variant, side, corner=0):
     """The app's tile `side` square, rounded `corner` (none: the system rounds it); the paper's edged faintly."""
     k = 1024 / side
     edge = (f'<rect x=".5" y=".5" width="{side - 1}" height="{side - 1}" rx="{max(corner - .5, 0)}" fill="none" stroke="#000" stroke-opacity=".08"/>'
-            if variant == "stable" and corner else "")
+            if VARIANTS[variant][0] == WHITE_FACE and corner else "")
     return svg(side, side, f'<g transform="scale({1 / k})">' + tile(1024, variant, corner * k if corner else None) + "</g>" + edge)
 
 

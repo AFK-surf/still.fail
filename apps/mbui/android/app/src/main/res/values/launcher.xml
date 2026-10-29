@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- still.fail mbui's (release, fail.still.mbui; design/brand/icon-mbui.svg): violet, the s white, the dot yellow. -->
+<!-- Every app's but the debug build's: still.fail's black face (design/brand/icon-stable.svg); values-night's the white. -->
 <resources>
-    <color name="launcher_bg">#5B4FD6</color>
+    <color name="launcher_bg">#1C1D20</color>
     <color name="launcher_ink">#FFFFFF</color>
-    <color name="launcher_dot">#FFD66B</color>
+    <color name="launcher_cheek">#F6BC9F</color>
 </resources>
