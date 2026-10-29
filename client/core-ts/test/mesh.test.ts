@@ -25,7 +25,7 @@ import { Tracer } from "../src/trace.ts";
 import { hex } from "../src/util.ts";
 import { Wake, Wakes } from "../src/wake.ts";
 import { Station } from "./mesh-station.ts";
-import { type RelaySpec, SimNet, SimTime } from "./sim-iroh.ts";
+import { PATH_IDLE_MS, type RelaySpec, SimNet, SimTime } from "./sim-iroh.ts";
 import { seeds } from "./sim-seeds.ts";
 
 holdLanguage();
@@ -449,7 +449,6 @@ sim("a_read_asked_as_its_station_drops_every_connection_is_answered", async (s) 
   const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
   const ask = () => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
   assert.equal(await s.settle(ask()), 200);
-  await s.until(() => mesh.ways(addr.toString()).length >= 2);
   for (const c of station.conns.filter((c) => !c.isClosed())) c.close(0, "restart");
   assert.equal(await s.settle(ask()), 200);
   await close(s, station, mesh);
@@ -657,6 +656,26 @@ sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) =>
 /// between it and the station, and the phone dialled the station there alone: most tries waited out CONNECT_TIMEOUT_MS,
 /// those that got through answered in seconds. Dialled every way at once, the link is the first through; the requests
 /// settle on the way that answers quickest, and stay there.
+/// One connection, a path through every relay both ends are on: the relay its packets go through going away, they go
+/// on through another once that path is given up (PATH_IDLE_MS), the link and what is asked on it going on, not
+/// replaced (2026-10-29: a link moved to another way took the adb tunnels and the event stream on it with it).
+sim("a_relay_going_away_moves_the_links_packets_to_another_and_the_link_goes_on", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const link = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  assert.ok(sameRelay(via(mesh, id), a), `through ${via(mesh, id)}`);
+  s.net.down(a, 60 * 60_000);
+  const started = s.time.now();
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  assert.ok(s.time.now() - started < PATH_IDLE_MS + 2_000, `answered ${s.time.now() - started} ms after it was asked`);
+  assert.ok(sameRelay(via(mesh, id), b), `through ${via(mesh, id)}`);
+  assert.equal(mesh.current(id), link);
+  assert.equal(station.conns.filter((c) => !c.isClosed()).length, 1);
+  await close(s, station, mesh);
+});
+
 sim("a_device_whose_own_relay_loses_the_station_is_linked_through_the_others", async (s) => {
   // a: next to the device, the station 70 ms away losing 35% (Beijing); b: 30 ms each side (Hong Kong); c: the station
   // next to it, the device 150 ms away (Cloudflare, Tokyo).
@@ -696,98 +715,6 @@ sim("a_device_whose_own_relay_loses_the_station_is_linked_through_the_others", a
   assert.equal(s.net.open().length, 0, s.net.open().map((c) => `${c.endpoint.side} ${c.way.relay} ${c.reason?.kind ?? "open"} peer ${c.peer.reason?.kind ?? "open"}`).join("; "));
 });
 
-/// 2026-10-08, bft and phones in the mainland again: Beijing's machine took a way on into Hong Kong's relay (an entry,
-/// cloud relays.ts), handed to devices among their relays. Their main endpoint went onto Hong Kong's relay straight and
-/// through the entry under one key, and their endpoints of a relay of their own, looking the station up, onto its home
-/// relay besides: one key on a relay twice, each connection taking the other's place there, and a phone's connects to
-/// any station failed one in five. An entry is dialled on an endpoint of its own, relay-only, and through it alone: no
-/// key is on a relay twice, and the station is reached through the entry, its best way.
-sim("an_entry_is_dialled_on_its_own_endpoint_and_no_key_is_on_a_relay_twice", async (s) => {
-  // a: next to the device, its line to the station losing a third (Beijing); b: the device's line to it long (Hong
-  // Kong's back to the mainland); the entry: on a's machine, on to b over a good line.
-  const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 70, loss: 0.35 } });
-  const b = s.relay("https://b.relay.test/", { device: { ms: 60 }, station: { ms: 30 } });
-  const entry = s.net.entry("https://a.relay.test:8443/", b, { device: { ms: 5 }, station: { ms: 40 } });
-  const station = await s.stationOn(b, a);
-  const id = station.id();
-  const mesh = await s.run(Mesh.make(env(s), [a, b], [entry]));
-  await reach(s, mesh, id);
-  await s.time.pass(5 * 60_000);
-  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
-  // Dialled again on every way past EXPLORE_MS, and let go of: no key went onto a relay twice meanwhile.
-  await s.time.pass(EXPLORE_MS + 60_000);
-  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
-  assert.deepEqual(s.net.twice(), []);
-  assert.deepEqual(mesh.relays, [a, b]);
-  await close(s, station, mesh);
-});
-
-/// A run whose mesh came up on the relays kept from the last, from a cloud that had the entries among them: its first
-/// `/v1/me` tells them apart (`retune`). The endpoint is bound anew on the relays alone, and from then on no key is on a
-/// relay twice; the station is reached through the entry, its own endpoint's.
-sim("told_the_entries_apart_the_mesh_binds_anew_on_the_relays_alone", async (s) => {
-  const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 70, loss: 0.35 } });
-  const b = s.relay("https://b.relay.test/", { device: { ms: 60 }, station: { ms: 30 } });
-  const entry = s.net.entry("https://a.relay.test:8443/", b, { device: { ms: 5 }, station: { ms: 40 } });
-  const station = await s.stationOn(b, a);
-  const id = station.id();
-  const mesh = await s.run(Mesh.make(env(s), [a, b, entry]));
-  assert.notDeepEqual(s.net.twice(true), [], "kept from before, the entry among the relays: on b twice");
-  const before = mesh.endpoint();
-  mesh.retune([a, b], [entry]);
-  await s.until(() => mesh.endpoint() !== before);
-  assert.deepEqual([mesh.relays, mesh.entries], [[a, b], [entry]]);
-  await reach(s, mesh, id);
-  await s.time.pass(5 * 60_000);
-  assert.equal(via(mesh, id), entry, JSON.stringify(mesh.measured(id)));
-  assert.deepEqual(s.net.twice(true), []);
-  // Told the same again: nothing changes.
-  const now = mesh.endpoint();
-  mesh.retune([a, b], [entry]);
-  await s.time.pass(TICK_MS);
-  assert.equal(mesh.endpoint(), now);
-  await close(s, station, mesh);
-});
-
-/// A way that turns bad under requests (its relay's line to the station starts losing packets): they move to another
-/// within a minute, not at the next measuring minutes later.
-sim("requests_leave_a_way_that_turns_bad", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
-  const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
-  const { station, mesh, id } = await onRelays(s, [a, b]);
-  await reach(s, mesh, id);
-  await s.time.pass(60_000);
-  assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
-  s.relay(a, { station: { ms: 10, loss: 0.5 } });
-  const turned = s.time.now();
-  await s.until(() => sameRelay(via(mesh, id), b), 2 * 60_000);
-  assert.ok(s.time.now() - turned <= 12 * TICK_MS, `moved ${s.time.now() - turned} ms after a turned bad`);
-  await close(s, station, mesh);
-});
-
-/// A read whose way stops answering is asked on the next best way as well, and answered there, before the pings tell;
-/// the requests follow once the pings do.
-sim("a_read_slow_on_its_way_is_answered_on_another", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
-  const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
-  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
-  const id = `w/${bare}`;
-  await reach(s, mesh, id);
-  await s.time.pass(60_000);
-  assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
-  const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(id);
-  // Down: a ping on it tells after PING_TIMEOUT_MS at the soonest, the read is asked on b well before.
-  s.net.down(a, 5 * 60_000);
-  const started = s.time.now();
-  const status = await s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/overview", headers: [] }, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
-  assert.equal(status, 200);
-  const took = s.time.now() - started;
-  assert.ok(took < HEDGE_FLOOR_MS + 1_000, `answered after ${took} ms`);
-  await s.until(() => sameRelay(via(mesh, id), b), 2 * 60_000);
-  await close(s, station, mesh);
-});
-
 /// A read let go of while the station is slow to answer it (a player gone elsewhere, its view closed): its stream goes
 /// with it, and the station stops sending what no one would read.
 sim("a_read_let_go_of_before_its_answer_stops_the_station_sending_it", async (s) => {
@@ -810,25 +737,6 @@ sim("a_read_let_go_of_before_its_answer_stops_the_station_sending_it", async (s)
   await close(s, station, mesh);
 });
 
-/// A read asked on another way as well, the station slow to answer it on both: once one answer is taken, the other
-/// attempt is let go of, not left to bring its answer to no one.
-sim("a_read_asked_on_two_ways_lets_go_of_the_one_not_taken", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
-  const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
-  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
-  const id = `w/${bare}`;
-  await reach(s, mesh, id);
-  await s.time.pass(60_000);
-  const wire = wireOf(s, mesh);
-  station.lateMs = 3_000;
-  const status = await s.run(Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/part", headers: [] }, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
-  assert.equal(status, 200);
-  assert.equal(station.served.filter((h) => h.path === "/admin/api/part").length, 2, "asked on both ways");
-  await s.time.pass(10_000);
-  assert.deepEqual(station.letGo, ["/admin/api/part"]);
-  await close(s, station, mesh);
-});
-
 /// Two ways as good as each other: the requests are not moved back and forth between them.
 sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
   const a = s.relay("https://a.relay.test/", { station: { ms: 20 } });
@@ -837,36 +745,6 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
   await reach(s, mesh, id);
   await s.time.pass(60 * 60_000);
   assert.ok(mesh.moves(id) <= 1, `moved ${mesh.moves(id)} times in an hour`);
-  await close(s, station, mesh);
-});
-
-/// Judged by what it chooses: b answers sooner than a but brings a reply slowly (the device 60 ms away each way on a
-/// 256 KiB/s line, as Hong Kong's back to the mainland). Its speed not known, requests go there; a large reply through
-/// it shows how slow it is, and they go back to a at once (not minutes on, each read meanwhile coming as slowly: a
-/// phone's videos from ccvm, 2026-10-28), where the same reply comes sooner.
-sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
-  const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 256 * 1024 } });
-  const { station, mesh, id: bare } = await onRelays(s, [b, a]);
-  const id = `w/${bare}`;
-  await reach(s, mesh, id);
-  const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(id);
-  const big = async () => {
-    const started = s.time.now();
-    const bytes = await s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body))));
-    assert.ok(bytes.length >= SPEED_MIN_BYTES, `${bytes.length}`);
-    return s.time.now() - started;
-  };
-  await s.until(() => sameRelay(via(mesh, id), b), 5 * 60_000);
-  const throughB = await big();
-  assert.ok(mesh.speed(id, b) !== null, "how fast b is, seen");
-  assert.ok(sameRelay(via(mesh, id), a), `through ${via(mesh, id)} as the reply through b ended`);
-  const throughA = await big();
-  assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
-  // And it stays on a.
-  await s.time.pass(30 * 60_000);
-  assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
   await close(s, station, mesh);
 });
 
@@ -884,51 +762,6 @@ sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   await s.run(Effect.all([big, big], { concurrency: "unbounded" }));
   const seen = mesh.speed(id, b);
   assert.ok(seen !== null && seen > 0.75 * 256 * 1024, `b at ${seen} B/s, its line 256 KiB/s`);
-  await close(s, station, mesh);
-});
-
-/// b brings replies fast, then slowly (its line to the device down to 256 KiB/s: more crowded, a hop further). Past
-/// SPEED_FRESH_MS the slower replies say how fast it is now, and the requests leave it for a, not held there for hours
-/// by how fast it once was. And a network change: what was seen is let go, to be found out again from there.
-sim("a_way_grown_slower_is_judged_by_how_it_brings_replies_now_and_a_new_network_by_its_own", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
-  const b = s.relay("https://b.relay.test/", { device: { ms: 60 } });
-  const { station, mesh, id: bare } = await onRelays(s, [b, a]);
-  const id = `w/${bare}`;
-  await reach(s, mesh, id);
-  const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(id);
-  const big = () => s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body))));
-  await s.until(() => sameRelay(via(mesh, id), b), 5 * 60_000);
-  await big();
-  const fast = mesh.speed(id, b);
-  assert.ok(fast !== null, "how fast b is, seen");
-  await s.time.pass(SPEED_FRESH_MS);
-  s.relay(b, { device: { ms: 60, bps: 256 * 1024 } });
-  await big();
-  const now = mesh.speed(id, b);
-  assert.ok(now !== null && now < fast / 2, `b at ${now} B/s now, at ${fast} before`);
-  await s.until(() => sameRelay(via(mesh, id), a), 5 * 60_000);
-  // Elsewhere now: nothing seen on the last network counts.
-  s.wakes.wake(network(s.host));
-  await s.time.pass(TICK_MS);
-  assert.equal(mesh.speed(id, b), null);
-  await close(s, station, mesh);
-});
-
-/// A way let go (past KEEP_WAYS) is dialled again every EXPLORE_MS: once it became the best, the requests go there.
-sim("a_way_let_go_is_tried_again_and_taken_once_it_is_the_best", async (s) => {
-  const a = s.relay("https://a.relay.test/", { station: { ms: 50 } });
-  const b = s.relay("https://b.relay.test/", { station: { ms: 60 } });
-  const c = s.relay("https://c.relay.test/", { station: { ms: 200 } });
-  const { station, mesh, id } = await onRelays(s, [a, b, c]);
-  await reach(s, mesh, id);
-  await s.time.pass(60_000);
-  assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
-  assert.ok(!mesh.ways(id).some((w) => sameRelay(w.link.via(), c)), "c let go");
-  s.relay(c, { station: { ms: 2 } });
-  await s.until(() => sameRelay(via(mesh, id), c), EXPLORE_MS + 2 * 60_000);
-  assert.ok(truly(s, c) < truly(s, a));
   await close(s, station, mesh);
 });
 
@@ -1007,21 +840,6 @@ sim("a_phone_on_its_stations_lan_goes_direct_within_seconds", async (s) => {
   await close(s, station, mesh);
 });
 
-/// The direct link lost alone (the requests on to a relay meanwhile): the main endpoint dials the station again well
-/// before EXPLORE_MS, and the requests go direct again.
-sim("a_direct_link_lost_is_dialled_again_soon", async (s) => {
-  const { station, mesh, id } = await onLan(s);
-  await reach(s, mesh, id);
-  await s.until(() => direct(mesh, id), 60_000);
-  await s.time.pass(60_000);
-  const lost = s.time.now();
-  for (const c of station.conns) if (c.remoteId() === mesh.deviceId() && c.reason === null) c.close(0, "restart");
-  await s.until(() => !direct(mesh, id), 60_000);
-  await s.until(() => direct(mesh, id), EXPLORE_MS);
-  assert.ok(s.time.now() - lost <= REDIAL_MAIN_MS + 3 * TICK_MS, `direct again ${s.time.now() - lost} ms after it was lost`);
-  await close(s, station, mesh);
-});
-
 /// 2026-10-17, studio and a phone on its LAN: the path iroh punched went quiet seconds after it opened, and the requests
 /// on it waited out iroh's 15 s each time before going back through a relay. The station says its LAN addresses with its
 /// answer to the credential; the device dials them on an endpoint of its own, by address alone, and the requests go
@@ -1030,127 +848,12 @@ sim("a_station_on_the_lan_is_dialled_at_its_lan_addresses_and_the_requests_stay_
   const { station, mesh, id } = await onLan(s, 5_000);
   station.lan = station.addr().ips;
   await reach(s, mesh, id);
-  await s.until(() => mesh.current(id)?.pinned === LAN, 60_000);
-  assert.ok(direct(mesh, id));
+  await s.until(() => direct(mesh, id), 60_000);
   const moves = mesh.moves(id);
   await s.time.pass(10 * 60_000);
-  assert.equal(mesh.current(id)?.pinned, LAN, JSON.stringify(mesh.measured(id)));
+  assert.ok(direct(mesh, id), JSON.stringify(mesh.measured(id)));
   assert.ok(mesh.moves(id) - moves <= 1, `moved ${mesh.moves(id) - moves} times in ten minutes`);
   assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
-  await close(s, station, mesh);
-});
-
-/// 2026-10-18, a phone on studio's LAN: each way direct went quiet within a minute of the requests moving to it, and
-/// they moved to the next one dialled, and back to a relay once it went quiet too, every minute or so. Lost soon after
-/// twice in a row, ways direct are held off a while, longer each time; once one stays, they are taken again.
-sim("ways_direct_that_keep_going_quiet_are_held_off_a_while", async (s) => {
-  const { station, mesh, id } = await onLan(s);
-  station.lan = station.addr().ips;
-  await reach(s, mesh, id);
-  await s.until(() => mesh.current(id)?.path() === "direct", 60_000);
-  // Each way direct goes quiet 20 s after the requests move to it, for good.
-  let flaky = true;
-  let on: Link | null = null;
-  let since = s.time.now();
-  let quieted = 0;
-  const watch = () => {
-    const cur = mesh.current(id);
-    if (cur !== on) [on, since] = [cur, s.time.now()];
-    if (!flaky || cur?.path() !== "direct" || s.time.now() - since < 20_000) return;
-    for (const c of station.conns) {
-      if (c.reason !== null || c.way.relay !== null || c.way.silentUntil === Infinity) continue;
-      c.way.silentUntil = c.peer.way.silentUntil = Infinity;
-      quieted++;
-    }
-  };
-  const moves = mesh.moves(id);
-  for (let t = 0; t < 30 * 60_000; t += TICK_MS) {
-    watch();
-    await s.time.pass(TICK_MS);
-  }
-  // Moved to a way direct and off it again a few times in half an hour, not every minute.
-  assert.ok(quieted >= 3, `${quieted} ways quieted`);
-  assert.ok(mesh.moves(id) - moves <= 16, `moved ${mesh.moves(id) - moves} times in half an hour, ${quieted} ways quieted`);
-  // The LAN well again: the requests go direct once the hold is over, and stay.
-  flaky = false;
-  await s.until(() => mesh.current(id)?.path() === "direct", DIRECT_HOLD_MAX_MS + 2 * 60_000);
-  await s.time.pass(10 * 60_000);
-  assert.equal(mesh.current(id)?.path(), "direct");
-  await close(s, station, mesh);
-});
-
-/// On its station's LAN, the requests keep off the main endpoint: the LAN way is enough, and the main endpoint's link
-/// would only punch one more path to the station. It is not dialled again every REDIAL_MAIN_MS: its LAN way lost, they
-/// go to a relay's own way until the LAN endpoint's is dialled again.
-sim("on_its_stations_lan_the_requests_keep_off_the_main_endpoint", async (s) => {
-  const { station, mesh, id } = await onLan(s);
-  station.lan = station.addr().ips;
-  await reach(s, mesh, id);
-  await s.until(() => mesh.current(id)?.pinned === LAN, 60_000);
-  await s.time.pass(30_000);
-  const on: string[] = [];
-  let mains = 0;
-  const note = () => {
-    const cur = mesh.current(id);
-    on.push(cur === null ? "none" : cur.pinned === LAN ? "lan" : cur.pinned === null ? "main" : "relay");
-    if (mesh.ways(id).some((w) => w.link.pinned === null)) mains++;
-  };
-  for (let t = 0; t < 2 * 60_000; t += TICK_MS) {
-    note();
-    await s.time.pass(TICK_MS);
-  }
-  // The LAN endpoint's link goes quiet for good.
-  for (const c of station.conns) if (c.reason === null && c.peer.endpoint.relays.length === 0) c.way.silentUntil = c.peer.way.silentUntil = Infinity;
-  for (let t = 0; t < 5 * 60_000; t += TICK_MS) {
-    note();
-    await s.time.pass(TICK_MS);
-  }
-  assert.ok(!on.includes("main"), on.join(" "));
-  assert.ok(on.includes("relay"), on.join(" "));
-  assert.equal(on.at(-1), "lan", on.join(" "));
-  assert.equal(mains, 0, `a way on the main endpoint open ${mains} ticks of ${on.length}`);
-  assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
-  await close(s, station, mesh);
-});
-
-/// 2026-10-17: a phone's punched paths went quiet seconds after they opened, which no Mac on the LAN did again. A
-/// `mesh.path` span says each change of a way's paths and its first ping missed, with its paths then and a tick before.
-sim("a_ways_paths_changing_and_going_quiet_are_told_in_spans", async (s) => {
-  const { station, mesh, id, tracer } = await onLan(s, 5_000);
-  const spans = spansOf(tracer);
-  await reach(s, mesh, id);
-  await s.time.pass(2 * 60_000);
-  tracer.flush();
-  await s.time.pass(TICK_MS);
-  const told = spans.filter((x) => x.name === "mesh.path");
-  const direct = /^\*127\.0\.0\.1:\d+ \d+ms \d+\/\d+$/;
-  const punched = told.find((x) => x.at["stillfail.why"] === "paths" && direct.test(String(x.at["stillfail.paths"])));
-  assert.ok(punched, JSON.stringify(told));
-  assert.equal(punched.at["stillfail.way"], "direct");
-  // Gone quiet: its first ping missed, said with the punched path it was missed on; then back through the relay.
-  assert.ok(told.some((x) => x.at["stillfail.why"] === "missed" && direct.test(String(x.at["stillfail.paths"]))), JSON.stringify(told));
-  assert.ok(told.some((x) => x.at["stillfail.why"] === "paths" && direct.test(String(x.at["stillfail.before.paths"])) && /^\*a\.relay\.test /.test(String(x.at["stillfail.paths"]))), JSON.stringify(told));
-  // Not every tick: a few changes in two minutes.
-  assert.ok(told.length < 20, `${told.length} spans`);
-  await close(s, station, mesh);
-});
-
-/// Off the station's LAN, its LAN addresses lead nowhere: tried once, not again every while; tried again once the
-/// network changes.
-sim("off_the_stations_lan_its_lan_addresses_are_tried_once_and_again_as_the_network_changes", async (s) => {
-  const { station, mesh, id } = await onLan(s);
-  s.net.away = true;
-  station.lan = station.addr().ips;
-  await reach(s, mesh, id);
-  await s.time.pass(60_000);
-  const lanTries = () => s.net.tries.filter((t) => t.ips && t.to === id).length;
-  assert.equal(lanTries(), 1);
-  await s.time.pass(10 * 60_000);
-  assert.equal(lanTries(), 1);
-  assert.notEqual(mesh.current(id)?.pinned, LAN);
-  s.wakes.wake(network(s.host));
-  await s.time.pass(60_000);
-  assert.equal(lanTries(), 2);
   await close(s, station, mesh);
 });
 
@@ -1168,42 +871,19 @@ async function onTailnet(s: Sim, ms: number) {
   return { station, mesh, id: station.id(), a, b };
 }
 
-/// Where the station said Tailscale reaches it: dialled there on an endpoint of its own, and the requests go there once
-/// it answers clearly quicker than the relays, as they would to another relay's way.
-sim("a_station_on_the_devices_tailnet_is_reached_there_when_it_is_quicker", async (s) => {
-  const { station, mesh, id } = await onTailnet(s, 3);
-  await reach(s, mesh, id);
-  await s.until(() => mesh.current(id)?.pinned === TAILNET, MIN_STAY_MS + 2 * 60_000);
-  assert.equal(mesh.current(id)!.net().path, TAILNET);
-  assert.ok(mesh.measured(id)!.relays.some(([name, ms]) => name === TAILNET && ms !== null), JSON.stringify(mesh.measured(id)));
-  assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
-  await close(s, station, mesh);
-});
-
-/// Tailscale through relays of its own (it could not punch through) is slower than still.fail's nearest: the requests
-/// stay there. A LAN way is taken at once; a tailnet one is not.
-sim("a_tailnet_slower_than_a_relay_is_not_taken", async (s) => {
-  const { station, mesh, id, b } = await onTailnet(s, 150);
-  await reach(s, mesh, id);
-  await s.time.pass(20 * 60_000);
-  assert.ok(sameRelay(via(mesh, id), b), `${via(mesh, id)} ${JSON.stringify(mesh.measured(id))}`);
-  assert.ok(s.net.tries.some((t) => t.to === id && t.ips), "the tailnet was dialled");
-  await close(s, station, mesh);
-});
-
 /// Where the station said it is reached straight is kept: the next run dials it there at once, beside the relays,
 /// and reaches it with none of them answering.
 sim("a_station_said_tailnet_is_kept_and_reached_with_the_relays_down", async (s) => {
   const { station, mesh, id, a, b } = await onTailnet(s, 3);
   await reach(s, mesh, id);
-  await s.until(() => mesh.ways(id).some((w) => w.link.pinned === TAILNET), 60_000);
+  await s.until(() => direct(mesh, id), 60_000);
   await s.run(mesh.close());
   s.net.down(a, 60 * 60_000);
   s.net.down(b, 60 * 60_000);
   const next = await s.run(Mesh.make(env(s), [a, b]));
   const started = s.time.now();
   const link = await s.run(next.link(id, grants("ok", { n: 0 })));
-  assert.equal(link.pinned, TAILNET);
+  assert.equal(link.path(), "direct");
   assert.ok(s.time.now() - started < 5_000, `reached ${s.time.now() - started} ms after it was asked`);
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   await close(s, station, next);
@@ -1438,7 +1118,7 @@ sim("tunnels_are_answered_on_the_lan_way", async (s) => {
   const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => grants("ok", { n: 0 }), relays: () => [], lends: () => true });
   const addr = `ws/${id}`;
   await s.run(adb.run({ kind: "share", offer: { station: addr, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
-  await s.until(() => mesh.current(addr)?.pinned === LAN && station.offers.length > 0, 5 * 60_000);
+  await s.until(() => direct(mesh, addr) && station.offers.length > 0, 5 * 60_000);
   const answers: string[] = [];
   for (let i = 0; i < 12; i++) {
     const answer = await tunnelOn(s, station.offers.at(-1)!.conn);
