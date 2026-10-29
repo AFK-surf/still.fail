@@ -265,6 +265,7 @@ pub fn reset() -> Unit {
   relay_reset()
   // the messages chats are to go to (jump.mbt)
   go_tos.clear()
+  go_to_passages.clear()
   go_to_words.clear()
   // a new chat while it is made (fresh.mbt)
   fresh_reset()

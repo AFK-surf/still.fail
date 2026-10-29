@@ -155,6 +155,10 @@ pub(all) struct Reading {
   flash_lit : @motion.Anim
   /// flashes started (each one's own hold, with motion reduced)
   mut flash_n : Int
+  /// what of it a quote that led there quoted ("" the whole of it: Chat.tsx flashRange), lit alone where it is found in
+  /// its words; yet to be put in the list's middle when it lies low (`flash_centre`)
+  mut flash_passage : String
+  mut flash_centre : Bool
   /// a message the search opened the chat at (ChatMotion.kt foundAt, "" none) and its words marked in it (`found`),
   /// for as long as the chat shows; how far their strokes are drawn in (ms of drawFound's); its first word yet to be
   /// put in the list's middle when it lies low (Chat.kt rememberJump's FOUND)
@@ -273,6 +277,8 @@ pub fn reading_of(key : String) -> Reading {
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
         flash_n: 0,
+        flash_passage: "",
+        flash_centre: false,
         found_at: "",
         found_words: [],
         found_drawn: @motion.Anim::new(0.0),
@@ -1690,7 +1696,11 @@ pub fn list_after(
                     rd.found_words = words
                     found = true
                   }
-                  None => rd.flash = m.ts
+                  None => {
+                    rd.flash = m.ts
+                    rd.flash_passage = go_to_passages.get(gk).unwrap_or("")
+                    rd.flash_centre = rd.flash_passage != ""
+                  }
                 }
                 break
               }
@@ -1700,6 +1710,7 @@ pub fn list_after(
         }
         if at >= 0 {
           go_tos.remove(gk)
+          go_to_passages.remove(gk)
           if found {
             on_found(rd)
           } else {

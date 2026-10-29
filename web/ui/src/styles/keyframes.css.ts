@@ -19,21 +19,18 @@ export const fadeInKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opa
 export const nowInKeyframes = keyframes({ "from": { opacity: "0", transform: "translateY(5px)" }, "to": { opacity: "1", transform: "none" } });
 export const nowOutKeyframes = keyframes({ "from": { opacity: "1", transform: "none" }, "to": { opacity: "0", transform: "translateY(-5px)" } });
 export const emitOutKeyframes = keyframes({ "from": { opacity: "0", transform: "scale(.35)", clipPath: "inset(0 0 100% 0)" }, "35%": { opacity: "1" }, "to": { opacity: "1", transform: "none", clipPath: "inset(0 0 0 0)" } });
-/** A message a jump led to (Jobs.css.ts msgFlash, as Android's ChatMotion.flash): the accent's ground round it, 8px past
- *  its words and its avatar out in the margin (`--flash-reach` before it), comes in over 160ms, holds until 900ms, then
- *  fades out until 1700ms. */
-const flashGround = (c: string) => `0 0 0 8px ${c}, calc(-1 * var(--flash-reach, 0px)) 0 0 8px ${c}`;
+/** A message a jump led to (Jobs.css.ts msgFlash, docs/ui-panels.md 跳到某条消息时的高亮): the accent's ground as a band
+ *  across the list from edge to edge (its gutters, `--list-gutter`, either side), square, half the gap between messages
+ *  (`--list-gap`) over and under it; comes in over 160ms, holds until 900ms, then fades out until 1700ms. Your words'
+ *  row the same: the band is the row's, not their bubble's. */
+const flashY = "calc(var(--list-gap, 28px) / 2)";
+const flashGround = (c: string) =>
+  `0 0 0 ${flashY} ${c}, calc(-1 * var(--list-gutter, 0px)) 0 0 ${flashY} ${c}, var(--list-gutter, 0px) 0 0 ${flashY} ${c}`;
 const msgFlashPeak = { background: vars.accentBg, boxShadow: flashGround(vars.accentBg) };
 export const msgFlashKeyframes = keyframes({
   "0%": { background: "transparent", boxShadow: flashGround("transparent"), animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
   "9.4%, 53%": { ...msgFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, 1, 1)" },
   "100%": { background: "transparent", boxShadow: flashGround("transparent") },
-});
-/** Your words a jump led to: their bubble takes the accent's tint instead, in the same time. */
-const bubbleFlashPeak = { background: `color-mix(in srgb, ${vars.accent} 20%, ${vars.neutralBg})` };
-export const bubbleFlashKeyframes = keyframes({
-  "0%": { animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "9.4%, 53%": { ...bubbleFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, 1, 1)" },
 });
 /** A quote's passage marked where it was said (global.css.ts [data-passage-marks]): in over 160ms, held until 1400ms,
  *  faded out until 2400ms. */
@@ -44,7 +41,6 @@ export const passageFlashKeyframes = keyframes({
 });
 /** The flashes above with motion reduced (still.ts stillFlash): their peak alone, held for their time, then gone. */
 export const msgFlashHeldKeyframes = keyframes({ "0%, 100%": msgFlashPeak });
-export const bubbleFlashHeldKeyframes = keyframes({ "0%, 100%": bubbleFlashPeak });
 export const passageFlashHeldKeyframes = keyframes({ "0%, 100%": { opacity: "1" } });
 /** A search's stroke under a word it found, drawn in left to right (global.css.ts [data-search-marks]). */
 export const searchStrokeKeyframes = keyframes({ to: { strokeDashoffset: "0" } });

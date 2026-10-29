@@ -233,6 +233,26 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
 }
 
 ///|
+test "a message gone to is lit whole as a band: across the list from edge to edge, square, half the gaps over and under it" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys)
+  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
+  if held > t.time() {
+    t.run_for(held - t.time())
+  }
+  let ground = @sf.theme().p.accent_bg
+  let bands = t.drawn_rect_corners().filter(fn(r) { r.4 >> 8 == ground >> 8 && (r.4 & 0xFFL) != 0L })
+  assert_eq(bands.length(), 1)
+  let (x, _, w, h, _, corners) = bands[0]
+  assert_true(x.abs() < 0.5 && (w - 390.0).abs() < 0.5 && h > 0.0)
+  assert_eq(corners, (0.0, 0.0, 0.0, 0.0))
+}
+
+///|
 test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
   let calls : Array[Made] = []
   let sys = fake_system()

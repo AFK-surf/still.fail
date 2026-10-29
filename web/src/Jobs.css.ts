@@ -1,8 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashHeldKeyframes, msgFlashKeyframes, msgWaitingInKeyframes, bubbleFlashHeldKeyframes, bubbleFlashKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { msg, msgBubble } from "./styles/conversation.css.ts";
-import { msgMine } from "./styles/chat.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashHeldKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { msg } from "./styles/conversation.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
@@ -197,19 +196,9 @@ globalStyle(`${msg}[data-emitting] > *`, {
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
-globalStyle(msgFlash, {
-  animation: `${msgFlashKeyframes} 1700ms`,
-  borderRadius: `calc(6px * ${vars.cornerScale})`, // own corner: 14 outside with its ground's 8px (as Android's flash)
-  cornerShape: vars.cornerShape,
-});
-/** Your words: their bubble is the message, and takes the tint; the row round it does not. */
-globalStyle(`${msgMine}${msgFlash}:has(${msgBubble})`, { animation: "none" });
-globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
+globalStyle(msgFlash, { animation: `${msgFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
 globalStyle(`${STILL} ${msgFlash}`, stillFlash(msgFlashHeldKeyframes, "1700ms"));
-// Your words: still their bubble, not the row (the held tint above is over every rule without it).
-globalStyle(`${STILL} ${msgMine}${msgFlash}:has(${msgBubble})`, { animation: "none !important" });
-globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, stillFlash(bubbleFlashHeldKeyframes, "1700ms"));
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
   position: "relative", display: "block", width: "64px", height: "64px",

@@ -660,8 +660,6 @@ globalStyle(`${msgRow} > ${msgAvatar}`, {
     },
   },
 });
-/** How far the row's avatar is out before it: a jump's ground (keyframes.css.ts msgFlashKeyframes) reaches it too. */
-globalStyle(msgRow, { vars: { "--flash-reach": `${columns.avatar}px` }, "@media": { "(max-width: 700px)": { vars: { "--flash-reach": `${columns.avatarNarrow}px` } } } });
 /** Sticky offsets count from inside the list's padding: these put the avatar 8px under the pane's top. */
 globalStyle(`${msgRow} > ${msgAvatar}`, { position: "sticky", top: "-16px" });
 globalStyle(`${msgRow} > ${msgAvatar}`, {
@@ -677,7 +675,7 @@ globalStyle(`${msgRow} > ${msgAvatar}`, { marginTop: "3px" });
  * margin (the phone's): the avatar lies at the head's start, and what is said unrolls from it.
  */
 export const inlineHeads = style({});
-globalStyle(`${inlineHeads} ${msgRow}`, { gridTemplateColumns: "minmax(0, 1fr)", columnGap: "0", position: "relative", vars: { "--flash-reach": "0px" } });
+globalStyle(`${inlineHeads} ${msgRow}`, { gridTemplateColumns: "minmax(0, 1fr)", columnGap: "0", position: "relative" });
 globalStyle(`${inlineHeads} ${msgRow} > ${msgAvatar}`, { position: "absolute", left: "0", top: "3px", margin: "0" });
 globalStyle(`${inlineHeads} ${msgRow} > ${msgMain} > ${msgHead}`, { paddingLeft: "25px" });
 globalStyle(`${inlineHeads} ${msgRow}[data-emitting] > ${msgMain}`, { transformOrigin: "9px 12px" });

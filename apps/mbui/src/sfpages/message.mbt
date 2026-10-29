@@ -7,7 +7,7 @@
 
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
-/// message (by its seq: a quote's card pressed); None out of one (a letter, a decision's). `inline`: no margin for
+/// message (by its seq, and the passage of it a quote's card pressed quoted: lit alone there); None out of one (a letter, a decision's). `inline`: no margin for
 /// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
 /// room beside the words either side that is only the page's margin (`--list-gutter`: a list's sides, narrow or wide,
 /// its pictures out in it standing by their heads' line; none out of a list), which the message's own tables scroll
@@ -17,7 +17,7 @@ pub(all) struct MessageHere {
   station : String
   session : String
   view : ChatView
-  go : ((Double) -> Unit)?
+  go : ((Double, String) -> Unit)?
   inline : Bool
   gutter : Double
   list : ListMotion?
@@ -72,7 +72,9 @@ pub fn picking(
     Some(_) => {
       let share = here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } })
       let link = @sfbase.message_link(here.station, here.session, turn)
-      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, share~, link~)
+      // gone to by a quote of it: the passage quoted lit as it flashes (chat_list.mbt passage_lit)
+      let lit = passage_lit(c, here, ts)
+      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, keep=passage_wanted(here, ts), share~, link~, lit~)
     }
     None => body()
   }
@@ -511,12 +513,6 @@ fn mine_bubble(
         let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
         c.look(g, @ui.look(alpha=ground))
       }
-      // gone to (a notification's), it takes the accent's ground as it flashes
-      let (at, lit) = flashing_now.val
-      if lit > 0.0 && "m:" + at == key {
-        let g = c.layer(fn() { c.box(style=bubble_lit, fn() {  }) |> ignore })
-        c.look(g, @ui.look(alpha=lit))
-      }
       // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
       match flight {
         Some(f) => {
@@ -873,8 +869,9 @@ pub fn quotes(
         // (its own box, as the message's files have theirs: at most as wide as the card has room)
         picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
       )
+      // (the passage it quotes lit there alone, where that message's words have it)
       match here.go {
-        Some(go) if done.jumped && seq >= 0.0 => go(seq)
+        Some(go) if done.jumped && seq >= 0.0 => go(seq, q.text)
         _ => ()
       }
       // sent from the composer: it flies here from its card there
@@ -1106,11 +1103,6 @@ let bubble_in_y : Double = 8.0
 /// Its ground on its own (coming in round words sent flying here), and the bubble without it meanwhile.
 // kept across runs: a value (no field of it changes)
 let bubble_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Neutral")
-
-///|
-/// Its ground lit as it flashes (msgFlash: the accent's).
-// kept across runs: a value (no field of it changes)
-let bubble_lit : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)

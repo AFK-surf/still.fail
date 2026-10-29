@@ -31,6 +31,64 @@ pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
 }
 
 ///|
+/// Where `passage` (a quote's) is in `text`, its spaces and line breaks aside (Chat.tsx findText: each run of them one
+/// space, either side): (from, to), UTF-16, its first letter to its last; None where it is not, or is only spaces.
+pub fn find_passage(text : String, passage : String) -> (Int, Int)? {
+  // each side's letters with their runs of spaces as one; the text's with where each starts and ends in it
+  let flat : Array[Char] = []
+  let from : Array[Int] = []
+  let to : Array[Int] = []
+  let mut at = 0
+  for ch in text {
+    let n = if ch.to_int() > 0xFFFF { 2 } else { 1 }
+    if is_space(ch.to_int()) {
+      if flat.length() > 0 && flat[flat.length() - 1] != ' ' {
+        flat.push(' ')
+        from.push(at)
+        to.push(at + n)
+      }
+    } else {
+      flat.push(ch)
+      from.push(at)
+      to.push(at + n)
+    }
+    at = at + n
+  }
+  let wanted : Array[Char] = []
+  let mut gap = false
+  for ch in passage {
+    if is_space(ch.to_int()) {
+      gap = true
+    } else {
+      if gap && wanted.length() > 0 {
+        wanted.push(' ')
+      }
+      gap = false
+      wanted.push(ch)
+    }
+  }
+  let m = wanted.length()
+  if m == 0 {
+    return None
+  }
+  for k in 0..<(flat.length() - m + 1) {
+    let mut j = 0
+    while j < m && flat[k + j] == wanted[j] {
+      j = j + 1
+    }
+    if j == m {
+      return Some((from[k], to[k + m - 1]))
+    }
+  }
+  None
+}
+
+///|
+fn is_space(u : Int) -> Bool {
+  u == 32 || u == 9 || u == 10 || u == 13 || u == 0xA0 || u == 0x3000
+}
+
+///|
 /// `runs` with `words` (a search's) semibold wherever they are in their text (TextMark.kt markWeight): each run cut
 /// where a word starts or ends in it. As they were with none.
 pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.Run] {

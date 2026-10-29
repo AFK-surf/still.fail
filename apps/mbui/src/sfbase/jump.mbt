@@ -8,10 +8,21 @@ pub let go_tos : Map[String, Double] = {}
 
 ///|
 /// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
-/// there), which flashes (ChatHost.kt goTo, jumpTo.ts jumpTo).
-pub fn go_to(r : ChatRef, seq : Double) -> Unit {
-  go_tos[r.station + "\u{1}" + r.session] = seq
+/// there), which flashes (ChatHost.kt goTo, jumpTo.ts jumpTo): only the `passage` of it a quote quoted, where its words
+/// have it (Chat.tsx Quotes' jump); the whole message else.
+pub fn go_to(r : ChatRef, seq : Double, passage? : String = "") -> Unit {
+  let k = r.station + "\u{1}" + r.session
+  go_tos[k] = seq
+  if passage.trim(chars=" \n\t") != "" {
+    go_to_passages[k] = passage
+  } else {
+    go_to_passages.remove(k)
+  }
 }
+
+///|
+/// The passage of the message each chat is to go to that is to flash alone (go_to), by chat.
+pub let go_to_passages : Map[String, String] = {}
 
 ///|
 /// The words a search opened each chat at its message with (Screen.Chat.words, jumpTo.ts `words`), by chat: marked in
