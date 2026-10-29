@@ -45,6 +45,7 @@ jobs:
           - { part: app, group: 3/4, store: app-sfapp }
           - { part: app, group: 4/4, store: app-sfapp }
           - { part: app, group: pkgs, store: app-pkgs }
+          - { part: app, group: contrast, store: app-sfapp }
           - { part: replay, group: "", store: replay }
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store

@@ -163,7 +163,9 @@ for t in ${TARGETS:-native}; do
   # packages went to a runner of their own: the fourth's job was the part's longest, the pages' 72 s beside contrast's 25,
   # while the first ran its two corners runs in 26, fix/back-cancel-follows-system 40828675419, mbui-panel-ground
   # 40843559612, 2026-10-29.) (Then on the third: the first's job beside the corners runs was the part's longest but the
-  # pages', 152 s and 179, the second's and third's 96 and 101, main 9a748590, 40942683567, 2026-10-30.)
+  # pages', 152 s and 179, the second's and third's 96 and 101, main 9a748590, 40942683567, 2026-10-30.) (On a runner of
+  # its own since: beside kept_rows' two runs the third's was then the longest, 162-185 s against the first's 110-118,
+  # fix/side-bar-under-band 40955953763, msg-highlight 40955729359; wherever it went it was some 50 s of that runner's.)
   app_group_of() {
     local n=$1
     shift
@@ -176,7 +178,7 @@ for t in ${TARGETS:-native}; do
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
-      "src/sfapp/contrast_wbtest.mbt  ") echo 3 ;;
+      "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
   }
@@ -184,7 +186,9 @@ for t in ${TARGETS:-native}; do
     mine=()
     for r in "${runs[@]}"; do
       [ -n "${r// /}" ] || continue
-      [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r")
+      # (APP_GROUP=contrast: contrast's run alone, on a runner of its own, beside the four)
+      if [ "$APP_GROUP" = contrast ]; then [ "$(app_group_of 4 $r)" = contrast ] && mine+=("$r")
+      else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
   fi
