@@ -31,6 +31,7 @@ import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
+import { KINDS as THING_KINDS, thingsHaving, thingsOf } from "../things.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -62,7 +63,7 @@ const DAY_MS = 86_400_000;
 /// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
 export const HEAD = 80;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -526,6 +527,8 @@ export class Views implements Owner {
   readonly local: Local;
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
+  /// The latest chats' things read (`#things`), by station and thread, with what they were read from.
+  readonly #thingsKept = new Map<string, { entries: unknown; agents: unknown; value: { messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } }>();
   readonly #updateNoticesOpen = new Set<string>();
   /// The threads chats copy what is sent from here to (`ccOn`), by `<station> <thread> <to>`.
   readonly #cc = new Set<string>();
@@ -819,8 +822,21 @@ export class Views implements Owner {
         perStation = (s) => [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }];
         break;
       case "chatJobs":
-      case "imageNear":
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null }];
+      // (an image of a chat steps through all of its, as far as it is on the device: its `letters`, all its entries)
+      case "imageNear":
+        return [
+          { topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null },
+          ...(typeof view.thread === "number" ? [{ topic: "letters", station, thread: view.thread }] : []),
+        ];
+      // (and each pull request's card, for its title and how it stands)
+      case "chatThings":
+        return [
+          { topic: "chat", station, thread: view.thread, session: null },
+          { topic: "letters", station, thread: view.thread },
+          { topic: "workspace", workspace: ofAddress(station) },
+          ...(this.#things(station, view.thread as number)?.things.pulls ?? []).map((p): Topic => ({ topic: "linkPreview", station, url: p.url! })),
+        ];
       case "chatLetters":
         return [
           { topic: "chat", station, thread: view.thread, session: null },
@@ -1180,6 +1196,8 @@ export class Views implements Owner {
       }
       case "chatLetters":
         return this.#chatLetters(view.station as string, view.thread as number);
+      case "chatThings":
+        return this.#chatThings(view.station as string, view.thread as number, typeof view.q === "string" ? view.q : "");
       case "history":
         return this.#history(view.station as string, view.key as string);
       case "stationNet": {
@@ -1212,7 +1230,9 @@ export class Views implements Owner {
       case "imageNear": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
         if (chat === undefined || !("ok" in chat)) return chat;
-        return { ok: near(chat.ok, view.path as string) };
+        // All of the chat's held, where it has a thread (its page holds a window of it); the outbox's after them.
+        const whole = typeof view.thread === "number" ? this.#things(view.station as string, view.thread) : null;
+        return { ok: near(whole === null ? chat.ok : { messages: whole.messages, outbox: get(chat.ok, "outbox") }, view.path as string) };
       }
       case "workspaceWays": {
         const ways = this.#core.ways?.(view.workspace as string);
@@ -2045,6 +2065,69 @@ export class Views implements Owner {
       return { ...c, letters: arr(get(out.ok, "messages")) };
     });
     return { ok: { title: view.title, chats, whole: get(held.ok, "whole") === true } };
+  }
+
+  /// A chat's messages as far as they are on the device (its `letters` topic: all its entries held), those that say
+  /// something besides words (a file, a web link) drawn as its page draws them (`drawn`), and its things read from them
+  /// (things.ts); kept while neither its entries nor its agents change. Null until its chat and its entries are read.
+  #things(station: string, id: number): { messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } | null {
+    const chat = this.value({ topic: "chat", station, thread: id, session: null });
+    const held = this.value({ topic: "letters", station, thread: id });
+    if (chat === undefined || !("ok" in chat) || held === undefined || !("ok" in held)) return null;
+    const view = chat.ok as J;
+    const key = `${station}/${id}`;
+    const was = this.#thingsKept.get(key);
+    if (was !== undefined && was.entries === held.ok && was.agents === view.agents) return was.value;
+    const thread = view.thread as J;
+    const keys = new Set(members(thread));
+    const agents = arr(view.agents);
+    const scope = ofAddress(station);
+    const viewer = this.me(scope);
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const some = merge(arr(get(held.ok, "entries"))).filter((m) => {
+      if (isLetter(m, keys) || m.authorKind === "ember" || m.authorKind === "stillfail") return false;
+      return (Array.isArray(m.attachments) && m.attachments.length > 0) || (str(m.text) ?? "").includes("://");
+    });
+    const shown = some.map((m) => shownMessage(m, agents, viewer, [], members_, [], thread?.creator));
+    const out = drawn({ ok: { agents, messages: shown } }, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, `t:${id}`));
+    const messages = arr(get(out.ok, "messages"));
+    const value = { messages, things: thingsOf(messages), whole: get(held.ok, "whole") === true, title: view.title };
+    this.#thingsKept.delete(key);
+    this.#thingsKept.set(key, { entries: held.ok, agents: view.agents, value });
+    // (a few chats': those open, and the last ones left)
+    for (const k of this.#thingsKept.keys()) if (this.#thingsKept.size > 6) this.#thingsKept.delete(k);
+    return value;
+  }
+
+  /// What was said in a chat besides words (`chatThings`), as far as it is on the device (`whole` once all is): its
+  /// pictures and videos, files, web links and pull requests, each the latest first, how many of each, those of each
+  /// that have the words `q` (all of them without any). A pull request says what its card says of it (its title, how it
+  /// stands, its checks, when it last changed) once its station has read it.
+  #chatThings(station: string, id: number, q: string): Value | undefined {
+    const chat = this.value({ topic: "chat", station, thread: id, session: null });
+    if (chat === undefined || "err" in chat) return chat;
+    const held = this.value({ topic: "letters", station, thread: id });
+    if (held === undefined || "err" in held) return held;
+    const read = this.#things(station, id);
+    if (read === null) return undefined;
+    const clock = this.#clock();
+    const pulls = read.things.pulls.map((p) => {
+      const card = this.ok({ topic: "linkPreview", station, url: p.url! });
+      if (get(card, "kind") !== "github_pull_request") return p;
+      const changed = u64(get(card, "updatedAt"));
+      const checks = get(card, "checks");
+      return {
+        ...p,
+        title: str(get(card, "title")) ?? "",
+        ...(typeof get(card, "state") === "string" ? { state: get(card, "state") } : {}),
+        ...(isObject(checks) ? { checks } : {}),
+        ...(changed !== null && changed > 0 ? { updatedAt: changed, time: { updatedAt: present.stamp(changed, clock) } } : {}),
+      };
+    });
+    const all = { ...read.things, pulls };
+    const words = refs.terms(q);
+    const counts = Object.fromEntries(THING_KINDS.map((k) => [k, all[k].length]));
+    return { ok: { title: read.title, whole: read.whole, counts, ...Object.fromEntries(THING_KINDS.map((k) => [k, thingsHaving(all[k], words)])) } };
   }
 
   /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it

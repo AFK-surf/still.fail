@@ -1,0 +1,7 @@
+# As things-side.drive, then its files.
+timeout 20000
+until 媒体 4
+wait 1500
+tap 文件 2
+wait 1200
+exit

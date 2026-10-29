@@ -117,7 +117,8 @@ export function times(value: unknown, c: Clock): unknown {
     }
   }
   if (any) {
-    map.time = stamps;
+    // (beside the times a value already says in words: a pull request's `updatedAt`, from its card)
+    map.time = isObject(map.time) ? { ...map.time, ...stamps } : stamps;
     changed = true;
   }
   return changed ? map : value;

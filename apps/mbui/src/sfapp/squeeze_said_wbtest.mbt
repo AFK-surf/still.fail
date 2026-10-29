@@ -59,7 +59,7 @@ test "squeeze: every screen fits what people, agents and stations wrote in it at
 /// squeeze sweep's until 2026-10-26, when that took every screen the corner test opens (corner_modes).
 let said_modes : Array[String] = [
   "home", "chat", "chat-compose", "chat-attach", "chat-quote", "chat-cards", "chat-md", "chat-pick", "chat-info",
-  "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side",
+  "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side", "chat-things", "chat-things-side",
   "chat-find", "chat-model-pop", "chat-login", "chat-update", "chat-working", "chat-station-files", "chat-preview-image",
   "chat-preview-code", "newchat", "newchat-station", "newchat-model", "newchat-profiles", "place", "files",
   "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-roots", "drive-sub",

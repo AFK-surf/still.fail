@@ -1,0 +1,8 @@
+# What was said in a chat besides words (sfpages things.mbt), opened from the chat's info: MBUI_FIXTURE=chat-info on a
+# phone's window (things-side.drive the tab on a desktop's). things-pulls, things-links: the same, then that kind.
+timeout 20000
+until 图片、文件和链接
+wait 600
+tap 图片、文件和链接
+wait 1500
+exit

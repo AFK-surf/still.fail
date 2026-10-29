@@ -28,6 +28,7 @@ pub fn reset() -> Unit {
   xsharing_reset()
   list_reset()
   menus_reset()
+  things_reset()
   steps_reset()
   composing_reset()
   triple_reset()

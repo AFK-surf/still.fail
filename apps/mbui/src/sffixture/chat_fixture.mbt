@@ -570,6 +570,9 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         },
       ])
     "chatJobs" => Some({ "jobs": [] })
+    // what was said in the chat besides words (the core's `chatThings`: sfpages things.mbt)
+    // (the chat's sheet with one pull request, as tall as the window holds: its others with chat-info-pulls)
+    "chatThings" => Some(fixture_things(text(Some(Json::object(params)), "q"), many=f.mode != "chat-info"))
     // the `@` menu's (chat_refs.mbt): the workspace's chats whose title has the words (not the one written in), those
     // of another station than the one written on saying so, then those of 个人 (fix_outside), saying whose
     "chatSearch" => {
@@ -1915,5 +1918,85 @@ pub fn fix_relay_places() -> Json {
         ],
       },
     ],
+  }
+}
+
+///|
+/// What was said in the chat besides words, as the core's `chatThings` says it: its pictures and a video, its files,
+/// its links and its pull requests (`many`: four, else the latest), the latest first; those of each kind whose name has
+/// the words `q`.
+pub fn fixture_things(q : String, many? : Bool = true) -> Json {
+  let thing = fn(key : String, seq : Int, by : String, when : String, more : Map[String, Json]) -> Json {
+    let m : Map[String, Json] = {
+      "key": Json::string(key),
+      "seq": Json::number(seq.to_double()),
+      "createdAt": Json::number(seq.to_double()),
+      "by": Json::string(by),
+      "time": ago(when, "10/19 0\{seq % 10}:12:00"),
+    }
+    for k, v in more {
+      m[k] = v
+    }
+    Json::object(m)
+  }
+  let media = [
+    thing("5/work/s-c1/compare.png", 5, "Claude", "1 小时前", { "file": file("compare.png", 1600, 900, 402000) }),
+    thing("5/work/s-c1/home-after.png", 5, "Claude", "1 小时前", { "file": file("home-after.png", 1170, 2532, 812000) }),
+    thing("4/work/s-c1/演示录屏.mp4", 4, "Claude", "2 小时前", { "file": file("演示录屏.mp4", 1920, 1080, 3200000) }),
+    thing("4/work/s-c1/插画参考.png", 4, "Ana", "2 小时前", { "file": file("插画参考.png", 1200, 800, 245760) }),
+  ]
+  let files = [
+    thing("5/work/s-c1/build.log", 5, "Claude", "1 小时前", { "file": file("build.log", 0, 0, 18432) }),
+    thing("3/work/s-c1/性能报告.pdf", 3, "Claude", "2 小时前", { "file": file("性能报告.pdf", 0, 0, 1048576) }),
+  ]
+  let links = [
+    thing("https://example.com/bench/list", 6, "Claude", "40 分钟前", {
+      "url": "https://example.com/bench/list",
+      "site": "example.com/bench/list",
+      "title": "列表滚动的性能数据",
+      "count": 2,
+    }),
+    thing("https://example.com/review/42", 4, "Ana", "2 小时前", { "url": "https://example.com/review/42", "site": "example.com/review/42", "count": 1 }),
+  ]
+  let pull = fn(n : Int, seq : Int, title : String, state : String, failed : Int, when : String) -> Json {
+    thing("acme/shop#\{n}", seq, "Claude", when, {
+      "url": Json::string("https://github.com/acme/shop/pull/\{n}"),
+      "repository": "acme/shop",
+      "number": Json::number(n.to_double()),
+      "title": Json::string(title),
+      "state": Json::string(state),
+      "count": 1,
+      "checks": { "passed": 9, "failed": Json::number(failed.to_double()), "pending": 0 },
+    })
+  }
+  let pulls = [
+    pull(131, 7, "列表里的图片按需解码", "open", 1, "10 分钟前"),
+    pull(128, 6, "首页列表按天分组", "merged", 0, "40 分钟前"),
+    pull(127, 5, "虚拟列表：按估计高度占位", "merged", 0, "1 小时前"),
+    pull(124, 3, "去掉旧的分页加载", "closed", 0, "2 小时前"),
+  ]
+  let pulls = if many { pulls } else { pulls[:1].to_array() }
+  let words : Array[String] = q.to_lower().split(" ").map(fn(w) { w.to_string() }).filter(fn(w) { w != "" }).collect()
+  let having = fn(list : Array[Json]) -> Json {
+    Json::array(
+      list.filter(fn(t) {
+        let said = (text(Some(t), "title") + " " + text(field(Some(t), "file"), "name") + " " + text(Some(t), "url")).to_lower()
+        words.iter().all(fn(w) { said.contains(w) })
+      }),
+    )
+  }
+  {
+    "title": "聊天页虚拟列表",
+    "whole": true,
+    "counts": {
+      "media": Json::number(media.length().to_double()),
+      "files": Json::number(files.length().to_double()),
+      "links": Json::number(links.length().to_double()),
+      "pulls": Json::number(pulls.length().to_double()),
+    },
+    "media": having(media),
+    "files": having(files),
+    "links": having(links),
+    "pulls": having(pulls),
   }
 }

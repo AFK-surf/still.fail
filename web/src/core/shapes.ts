@@ -2344,6 +2344,76 @@ export interface ChatTabs {
 	auto?: boolean;
 }
 
+/** A pull request's checks, by how they stand. */
+export interface LinkChecks {
+	passed: number;
+	failed: number;
+	pending: number;
+}
+
+/** A thing of a chat's (`chatThings`). */
+export interface ChatThing {
+	/** Which it is among its kind's. */
+	key: string;
+	/** The message it was last said in (where 在对话里看 goes). */
+	seq: number;
+	/** When that was said. */
+	createdAt?: number;
+	/** `createdAt`, `updatedAt` in words. */
+	time?: Record<string, Stamp>;
+	/** Who said it then. */
+	by: string;
+	/** A picture's, a video's, a file's: as its message has it (its `owner`). */
+	file?: Attachment;
+	/** A link's, a pull request's: its address. */
+	url?: string;
+	/** A link's host and path, as its card says where it goes. */
+	site?: string;
+	/** A link's words where they are not its address; a pull request's title once its card is read. */
+	title?: string;
+	/** A link's, a pull request's: how many times it was said. */
+	count?: number;
+	/** A pull request's repository (owner/name). */
+	repository?: string;
+	/** A pull request's number. */
+	number?: number;
+	/** A pull request's: open | closed | merged | draft, once its card is read. */
+	state?: string;
+	/** A pull request's checks, once its card is read and where it has some. */
+	checks?: LinkChecks;
+	/** When a pull request last changed, once its card is read. */
+	updatedAt?: number;
+}
+
+/** How many of each kind a chat has (`chatThings`). */
+export interface ThingCounts {
+	media: number;
+	files: number;
+	links: number;
+	pulls: number;
+}
+
+/**
+ * What was said in a chat besides words (the `chatThings` view {station, thread, q}), as far as it is on the device;
+ * each kind those that have every word of `q`.
+ */
+export interface ChatThingsView {
+	/** The chat's title. */
+	title: string;
+	/** All of the chat is on the device: nothing is missing. Until then, what is held, more coming. */
+	whole: boolean;
+	/** How many of each there are in the chat, whatever `q` is. */
+	counts: ThingCounts;
+	/** Its pictures and videos (`file`), one per message it was sent with, the latest first. */
+	media: ChatThing[];
+	/** Its other files (`file`), the same. */
+	files: ChatThing[];
+	/** The web links in its messages (`url`, `site`, `title`) other than pull requests, each once, the latest first. */
+	links: ChatThing[];
+	/** The pull requests linked in it (`url`, `repository`, `number`; `title`, `state` once its card is read), each once, the latest first. */
+	pulls: ChatThing[];
+}
+
 /** Who is looking: the account that reaches the workspace, by its email. */
 export interface Me {
 	id?: string;
@@ -4271,13 +4341,6 @@ export interface KeymapView {
 	 * (not changeable).
 	 */
 	workspace: string[];
-}
-
-/** A pull request's checks, by how they stand. */
-export interface LinkChecks {
-	passed: number;
-	failed: number;
-	pending: number;
 }
 
 /** Who opened a pull request or an issue. */

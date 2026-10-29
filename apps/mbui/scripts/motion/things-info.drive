@@ -1,0 +1,8 @@
+# A chat's info with its pull requests (sfdesk chat_page.mbt chat_info, sfpages things.mbt): MBUI_FIXTURE=chat
+# MBUI_WIN=1280x800; on a phone's window MBUI_FIXTURE=chat-info opens it at once.
+timeout 20000
+until 整理发布清单
+wait 600
+tapxy 1216 22
+wait 1200
+exit

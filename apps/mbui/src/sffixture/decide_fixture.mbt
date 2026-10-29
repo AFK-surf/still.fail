@@ -25,6 +25,7 @@ pub fn decide_mode(mode : String) -> Bool {
     "decisions", "decisions-text", "decisions-idle", "history", "history-reading", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
+    "chat-things", "chat-things-side", "chat-info-pulls",
     "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
     "chat-station-tag", "home-attention", "home-syncing",
   ].contains(mode)

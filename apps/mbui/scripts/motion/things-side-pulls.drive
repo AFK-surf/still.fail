@@ -1,0 +1,7 @@
+# As things-side.drive, then its pulls.
+timeout 20000
+until 媒体 4
+wait 1500
+tap PR 4
+wait 1200
+exit

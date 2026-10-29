@@ -46,6 +46,7 @@ import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
+import { thingsDemo } from "./things.ts";
 import { shareImageDemo } from "./publish.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
@@ -849,6 +850,12 @@ export const stories: Story[] = [
   { id: "app-chat-letters-entry", group: "应用", title: "对话 · agent 往来的入口（对话信息里）", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "app-chat-letters", group: "应用", title: "对话 · agent 往来", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
   { id: "app-chat-letters-open", group: "应用", title: "对话 · agent 往来 · 打开一个对话的", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },
+  { id: "app-chat-things-entry", group: "应用", title: "对话 · 对话信息里的 PR 和「图片、文件和链接」", app: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "app-chat-things", group: "应用", title: "对话 · 图片、文件和链接", app: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=图片、文件和链接" }] },
+  { id: "app-chat-things-pulls", group: "应用", title: "对话 · 图片、文件和链接 · PR", app: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=图片、文件和链接" }, { click: '[role="radio"]:has-text("PR")' }] },
+  { id: "phone-chat-things-entry", group: "手机", title: "对话 · 对话信息里的 PR 和「图片、文件和链接」", app: true, phone: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "phone-chat-things", group: "手机", title: "对话 · 图片、文件和链接", app: true, phone: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=图片、文件和链接" }] },
+  { id: "phone-chat-things-pulls", group: "手机", title: "对话 · 图片、文件和链接 · PR", app: true, phone: true, demo: thingsDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=图片、文件和链接" }, { click: '[role="radio"]:has-text("PR")' }] },
   { id: "phone-chat-letters-info", group: "手机", title: "对话 · agent 往来的入口（对话信息里）", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "phone-chat-letters", group: "手机", title: "对话 · agent 往来", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
   { id: "phone-chat-letters-open", group: "手机", title: "对话 · agent 往来 · 打开一个对话的", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },

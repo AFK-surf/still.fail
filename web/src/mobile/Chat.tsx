@@ -21,7 +21,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { askClear, ChatRows, ChatSample, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, List, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -44,6 +44,7 @@ import { useAction } from "../action.ts";
 import { PeopleStack, PersonNamed } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { Letters } from "../Letters.tsx";
+import { PullMark, pullTitle, Things, useChatThings } from "../Things.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
@@ -571,6 +572,18 @@ function openLetters(app: MobileApp, station: string, thread: number, keeper: st
   ) });
 }
 
+/** What was said in the chat besides words (Things.tsx), in a sheet; 在对话中查看 closes it and goes to the message. */
+function openThings(app: MobileApp, station: string, thread: number, keeper: string, initial?: "pulls") {
+  app.sheet({ height: 0.8, draggable: true, content: () => (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.things.title")} />
+      <div className={sheetsCss.mSheetScroll}><Things station={station} thread={thread} keeper={keeper} initial={initial}
+        onShow={(seq) => { app.sheet(null); jumpTo({ station, thread, seq }); }} /></div>
+    </>
+  ) });
+}
+
 /** One of the chat's agents in brief, in a sheet (AgentSheet.tsx): from its name, its mark in the bar, its row in the chat's sheet. */
 function agentCard(app: MobileApp, here: Here, key: string) {
   const agent = here.view.agents.find((a) => a.session.key === key);
@@ -752,6 +765,11 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const open = !view.archived && !view.offline;
   const publish = shownPublish(view);
   const letters = lettersOf(app, { ...here, view });
+  // What was said in it besides words: its pull requests, the latest 3 named here, the rest counted on the row to them.
+  const things = useChatThings(here.station, thread.id);
+  const keeper = view.agents[0]?.session.key ?? here.key;
+  const pulls = things?.pulls ?? [];
+  const said = things ? things.counts.media + things.counts.files + things.counts.links : 0;
   const rename = () => ask(app, {
     title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
     run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
@@ -774,6 +792,20 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           {open && <button type="button" className={css.mInfoEdit} aria-label={t("web-mobile.home.renameTitle")} onClick={rename}><Edit size={16} /></button>}
         </div>
         <div className={css.mInfoFacts}><PeopleStack people={view.people} max={5} /><span>{facts}</span></div>
+        {pulls.length > 0 && (
+          <InfoList>
+            {pulls.slice(0, 3).map((p) => (
+              <InfoRow key={p.key} onClick={() => { app.sheet(null); window.open(p.url!, "_blank", "noopener"); }}>
+                <PullMark pull={p} size={16} /><span className={partsCss.mGrow}>{pullTitle(p)}</span><span className={partsCss.mMuted}>#{p.number}</span>
+              </InfoRow>
+            ))}
+            {pulls.length > 3 && (
+              <InfoRow onClick={() => openThings(app, here.station, thread.id, keeper, "pulls")}>
+                <List size={16} /><span className={partsCss.mGrow}>{t("web-main.things.pullsAll", { n: pulls.length })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+          </InfoList>
+        )}
         {view.agents.length > 0 && (
           <InfoList>
             {view.agents.map((a) => {
@@ -801,6 +833,12 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
+              </InfoRow>
+            )}
+            {said > 0 && (
+              <InfoRow onClick={() => openThings(app, here.station, thread.id, keeper)}>
+                <Photo size={16} /><span className={partsCss.mGrow}>{t("web-main.things.title")}</span>
+                <span className={partsCss.mMuted}>{said}</span><ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
             {letters && (
