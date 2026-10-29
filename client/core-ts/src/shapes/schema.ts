@@ -857,7 +857,15 @@ export const SHAPES: Record<string, Shape> = {
     ["network", opt("StationNetwork"), { doc: "Advanced network settings, applied on station restart. Absent on older stations." }],
     ["context", opt("StationContext"), { doc: "How it goes on with a session whose prompt cache is over. None from a station older than it, which then\ndoes not offer it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
+    ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
+  StationElevation: struct([
+    ["on", "bool", { doc: "Where its switch stands: the setting, or what a change under way goes to (`elevation.set`)." }],
+    ["busy", "bool", { doc: "A change is under way (Windows' prompt up, the station restarting): the switch waits." }],
+    ["line", "String", { doc: "What it means, or how the change under way goes." }],
+    ["failed", opt("String"), { doc: "How the last change failed (nothing changed then), in a line; none when it did not." }],
+    ["canChange", "bool", { doc: "The viewer may switch it now (one of the workspace's owners and admins, its Windows user an administrator,\nno change under way)." }],
+  ], { doc: "Whether a Windows station runs as the machine's administrator (docs/station-ts-native.md), as its page shows it." }),
   StationPermissions: struct([
     ["grants", vec("StationGrant"), { doc: "Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that\norder." }],
     ["note", opt("String"), { doc: "What is unavailable now for want of a grant, in a line; none when every one is granted." }],

@@ -11,6 +11,7 @@ import * as prefsMod from "./prefs.ts";
 import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import { permissionsShown } from "./permissions.ts";
+import { elevationShown } from "./elevation.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
@@ -1091,6 +1092,10 @@ function overview(value: J, c: Clock, station: string | null): J {
   const permissions = station === null ? undefined : permissionsShown(v.permissions, station);
   if (permissions === undefined) delete v.permissions;
   else v.permissions = permissions;
+  // A Windows station's running as administrator, in words (elevation.ts); none said, none shown.
+  const elevation = elevationShown(v.elevation);
+  if (elevation === undefined) delete v.elevation;
+  else v.elevation = elevation;
   const decided = v.automaticDecisions;
   if (isObject(decided)) {
     const shown: J = { ...decided };

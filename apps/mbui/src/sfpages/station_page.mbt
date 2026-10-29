@@ -596,6 +596,10 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     Some(Object(_)) as context => out.push(fn() { station_context(c, core, address, context, manager) })
     _ => ()
   }
+  match field(o, "elevation") {
+    Some(Object(_)) as elevation if online => out.push(fn() { station_elevation(c, core, address, elevation) })
+    _ => ()
+  }
   if manager {
     out.push(fn() { station_workspaces(c, core, address) })
   }
@@ -921,6 +925,39 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
         )
       }
     })
+  })
+}
+
+///|
+/// Whether a Windows station runs as the machine's administrator (StationElevation.tsx ElevationSection): switched by
+/// the workspace's managers, Windows asking on the machine and the station restarting; what it means or how a change
+/// goes under it, how the last one failed under that.
+fn station_elevation(c : @ui.Ctx, core : Core, address : String, elevation : Json?) -> Unit {
+  st_section(c, @sf.t("web-pages.stations.elevation.section"), fn() {
+    @sf.group(c, fn() {
+      let busy = is_doing(core, ["elevation.set"], [("station", address)]) || flag(elevation, "busy")
+      let on = flag(elevation, "on")
+      let now = @sf.switch_row(
+        c,
+        "elevation/" + address,
+        @sf.t("web-pages.stations.elevation.admin"),
+        on,
+        note=text(elevation, "line"),
+        disabled=!flag(elevation, "canChange"),
+        busy~,
+      )
+      if now != on {
+        @settings.act(
+          core,
+          @sf.t("web-pages.stations.elevation.what"),
+          "elevation.set",
+          obj([("station", str(address)), ("on", Json::boolean(now))]),
+        )
+      }
+    })
+    if text(elevation, "failed") != "" {
+      c.text(text(elevation, "failed"), style=st_problem_bad) |> ignore
+    }
   })
 }
 

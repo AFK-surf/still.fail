@@ -72,6 +72,7 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
   "context.setAfresh": "afreshWhenCold:boolean",
+  "elevation.set": "on:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.compact": "key:string",
@@ -311,6 +312,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
+    // Whether a Windows station runs as the machine's administrator (its station's elevation/elevation.ts): asked of
+    // Windows there, then the station restarted; set by the workspace's owners and admins.
+    case "elevation.set":
+      return op("PUT", () => "/elevation", p.pick(["on"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":

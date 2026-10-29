@@ -75,6 +75,54 @@ test "a station's 设置 switches going on afresh once a session's cache is over
 }
 
 ///|
+test "a Windows station's 设置 switches running as administrator, waiting while Windows asks, with how it last failed" {
+  let asked : Array[Json] = []
+  let t = setting_tester(
+    Station("ws1/st1"),
+    390.0,
+    platform=2,
+    h=2400.0,
+    over=fn(s) {
+      {
+        ..s,
+        call: fn(name, params, done) {
+          if name == "elevation.set" {
+            asked.push(params)
+          }
+          (s.call)(name, params, done)
+        },
+      }
+    },
+    ready=fn() {
+      @settings.station_parts["ws1/st1"] = "settings"
+      @settings.fixture_elevation(
+        Some(
+          @settings.obj([
+            ("on", Json::boolean(false)),
+            ("busy", Json::boolean(false)),
+            ("line", Json::string("agent 的命令都以管理员权限运行")),
+            ("failed", Json::string("2 分钟内没人确认 UAC，已取消，设置没有改变")),
+            ("canChange", Json::boolean(true)),
+          ]),
+        ),
+      )
+    },
+  )
+  t.run_for(@ui.nav_push_ms)
+  scrolled_to(t, 390.0, "以管理员身份运行")
+  assert_true(t.find("2 分钟内没人确认 UAC，已取消，设置没有改变") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Switch, label="以管理员身份运行")
+  t.draw()
+  assert_eq(asked.length(), 1, msg="switched")
+  assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(true)))
+  // (a change under way: the switch waits, not pressed again)
+  t.run_for(500)
+  t.click(Switch, label="以管理员身份运行")
+  t.draw()
+  assert_eq(asked.length(), 1, msg="not again while it is under way")
+}
+
+///|
 test "network settings stay folded and save the selected controller" {
   let asked : Array[Json] = []
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0,

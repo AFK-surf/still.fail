@@ -18,6 +18,9 @@ priv struct SettingsFixture {
   mut afresh : Bool
   /// a program granted Studio's data (docs/data-outflow.md: its overview's `outflowGrants`), as a test sets it
   mut outflow : Bool
+  /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
+  /// it; none: not a Windows station
+  mut elevation : Json?
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
@@ -64,6 +67,7 @@ let fx : SettingsFixture = {
   congestion: "cubic",
   afresh: false,
   outflow: false,
+  elevation: None,
   none: false,
   login: "",
   login_station: false,
@@ -142,6 +146,7 @@ fn fixture_reset() -> Unit {
   fx.auto = false
   fx.afresh = false
   fx.outflow = false
+  fx.elevation = None
   fx.congestion = "cubic"
   fx.none = false
   fx_adb.val = ""
@@ -205,6 +210,12 @@ pub fn fixture_pair_ended() -> String {
 /// Studio with a program granted its data (its page's 数据外流), or not.
 pub fn fixture_outflow(on : Bool) -> Unit {
   fx.outflow = on
+}
+
+///|
+/// Studio a Windows station, running as administrator as `v` says (the core's `StationElevation`), or not.
+pub fn fixture_elevation(v : Json?) -> Unit {
+  fx.elevation = v
 }
 
 ///|
@@ -922,6 +933,7 @@ fn fx_station(address : String) -> Json {
           ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 1.0 } else { 0.0 })),
+          ("elevation", fx.elevation.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
@@ -2005,6 +2017,20 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     }
     "network.setCongestion" => {
       fx.congestion = text(p, "congestion")
+      Some(Ok(obj([])))
+    }
+    "elevation.set" => {
+      match fx.elevation {
+        Some(Object(e)) => {
+          let shown = e.copy()
+          shown["on"] = Json::boolean(flag(p, "on"))
+          shown["busy"] = Json::boolean(true)
+          shown["canChange"] = Json::boolean(false)
+          fx.elevation = Some(Json::object(shown))
+          fx_changed()
+        }
+        _ => ()
+      }
       Some(Ok(obj([])))
     }
     "context.setAfresh" => {
