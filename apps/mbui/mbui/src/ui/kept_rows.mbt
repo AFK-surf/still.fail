@@ -698,8 +698,8 @@ let clip_scratch : FixedArray[Double] = FixedArray::make(24, 0.0)
 /// A clip `c` (a level's 24 numbers: its rect, its corners' radii, how smooth they are, its outer's 12) as what is in
 /// the clip at `k` (in `clip_stack`) is cut where they meet, by the rule a clip pushed in it is (push_round_clip,
 /// push_clip_r): their rects' intersection; each corner its own where it is still its own (the rounder where it is also
-/// the outer clip's), else the outer clip's where it is that one's, else square; its outer that clip's outer, else that
-/// clip where it cuts through a rounded corner of it, else its own. One that holds that clip's rect whole, square and
+/// the outer clip's), else the outer clip's where it is that one's, else square; its outer, of its own, that clip and
+/// that clip's outer, the one whose curves cut into it (push_clip_r's rule), none where none does. One that holds that clip's rect whole, square and
 /// with no outer (what a row draws in nothing of its own that cuts) is that clip.
 fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
   let s = clip_stack
@@ -725,19 +725,6 @@ fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
   let y0 = dmax(oy0, s[k + 1])
   let x1 = dmin(ox1, s[k + 2])
   let y1 = dmin(oy1, s[k + 3])
-  // (cut by the window's edges alone, as much of its own rect kept as its corners take: push_round_clip)
-  let most = dmax(dmax(c[4], c[5]), dmax(c[6], c[7]))
-  let edges = clip_is_window(k)
-  let (x0, x1) = if edges && x1 - x0 < 2.0 * most {
-    (if x0 > ox0 { dmax(ox0, x1 - 2.0 * most) } else { x0 }, if x1 < ox1 { dmin(ox1, x0 + 2.0 * most) } else { x1 })
-  } else {
-    (x0, x1)
-  }
-  let (y0, y1) = if edges && y1 - y0 < 2.0 * most {
-    (if y0 > oy0 { dmax(oy0, y1 - 2.0 * most) } else { y0 }, if y1 < oy1 { dmin(oy1, y0 + 2.0 * most) } else { y1 })
-  } else {
-    (y0, y1)
-  }
   for j in 0..<4 {
     let left = j == 0 || j == 3
     let top = j < 2
@@ -750,19 +737,39 @@ fn clip_into(k : Int, c : FixedArray[Double]) -> Unit {
       c[8 + j] = ls
     }
   }
-  if clip_has_outer(k) {
-    for m in 0..<12 {
-      c[12 + m] = s[k + 12 + m]
-    }
-  } else if clip_cuts(k, x0, y0, x1, y1, (c[4], c[5], c[6], c[7])) {
-    for m in 0..<12 {
-      c[12 + m] = s[k + m]
-    }
-  }
   c[0] = x0
   c[1] = y0
   c[2] = x1
   c[3] = y1
+  // its outer: of its own, that clip and that clip's outer, the one whose curves cut into it (push_clip_r's rule)
+  let r = (c[4], c[5], c[6], c[7])
+  let sm = (c[8], c[9], c[10], c[11])
+  let beyond = clip_has_outer(k)
+  let apart = beyond && clip_is_apart(k)
+  let own = if c[16] > 0.0 || c[17] > 0.0 || c[18] > 0.0 || c[19] > 0.0 {
+    clip_cut_depth(c, 12, x0, y0, x1, y1, r, sm)
+  } else {
+    -1.0e9
+  }
+  let mut most = dmax(own, clip_cut_least)
+  let mut from = if own > clip_cut_least { -2 } else { -1 }
+  for o in if beyond && !apart { [k, k + 12] } else { [k] } {
+    let d = clip_cut_depth(s, o, x0, y0, x1, y1, r, sm)
+    if d > most {
+      most = d
+      from = o
+    }
+  }
+  if from >= 0 || (from == -1 && apart) {
+    let from = if from >= 0 { from } else { k + 12 }
+    for m in 0..<12 {
+      c[12 + m] = s[from + m]
+    }
+  } else if from == -1 {
+    for m in 12..<24 {
+      c[m] = 0.0
+    }
+  }
 }
 
 ///|

@@ -1709,6 +1709,15 @@ pub fn Tester::images_kept(self : Tester) -> Int {
 }
 
 ///|
+/// Every instance drawn in the last frame in the order drawn, each its numbers whole (scene.mbt's layout: its rect 0-3,
+/// its kind 5, its clip 16-19 and 24-31, its outer 40-51…): what is cut where, read as the renderers read it.
+pub fn Tester::drawn_instances(self : Tester) -> Array[Array[Double]] {
+  ignore(self)
+  let c = g()
+  Array::makei(c.ninst, fn(k) { Array::makei(inst_size, fn(j) { c.inst[k * inst_size + j] }) })
+}
+
+///|
 /// Every instance drawn in the last frame in the order drawn (later over earlier): its kind (0 a rect, 4 an image…),
 /// x, y, w, h and opacity.
 pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double)] {

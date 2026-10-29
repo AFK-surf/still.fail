@@ -167,6 +167,52 @@ fn smooth_b(t : Double) -> Double {
 }
 
 ///|
+/// The signed distance of (`px`, `py`) from a clip: its rect (`x0` `y0` `x1` `y1`), its corners `r` (top left, then
+/// clockwise; 0 square), how smooth each is `s`. A corner is the curve of the box whose corner it is, where that box
+/// has it, as round as that box drew it: drawn there whatever the clip's own size (a band a few points high sharing a
+/// frame's corner is cut by the frame's very curve, not one flattened to its half height); each corner against its own
+/// corner point, the rect's edges straight. The renderers' `mb_sd_clip` (src/host/corner.sl).
+pub fn sd_clip(
+  px : Double,
+  py : Double,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  r : (Double, Double, Double, Double),
+  s : (Double, Double, Double, Double),
+  band? : Double = 1.0e30,
+) -> Double {
+  let hx = dmax((x1 - x0) / 2.0, 0.0)
+  let hy = dmax((y1 - y0) / 2.0, 0.0)
+  let qx = (px - (x0 + hx)).abs() - hx
+  let qy = (py - (y0 + hy)).abs() - hy
+  let mx = dmax(qx, 0.0)
+  let my = dmax(qy, 0.0)
+  let mut d = (mx * mx + my * my).sqrt() + dmin(dmax(qx, qy), 0.0)
+  // each rounded corner against its own corner point, its curve where its box has it (`ix`, `iy`: the way in)
+  let corner = fn(kx : Double, ky : Double, ix : Double, iy : Double, rr : Double, ss : Double) {
+    let reach = rr * (1.0 + (smooth_scale - 1.0) * ss)
+    let vx = dmax(hx, reach)
+    let vy = dmax(hy, reach)
+    sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss, band~)
+  }
+  if r.0 > 0.0 {
+    d = dmax(d, corner(x0, y0, 1.0, 1.0, r.0, s.0))
+  }
+  if r.1 > 0.0 {
+    d = dmax(d, corner(x1, y0, -1.0, 1.0, r.1, s.1))
+  }
+  if r.2 > 0.0 {
+    d = dmax(d, corner(x1, y1, -1.0, -1.0, r.2, s.2))
+  }
+  if r.3 > 0.0 {
+    d = dmax(d, corner(x0, y1, 1.0, -1.0, r.3, s.3))
+  }
+  d
+}
+
+///|
 /// A box's own: (`px`, `py`) from its middle, `hx` by `hy` its half sides, its corners `r` (capped at the shorter half),
 /// as smooth as its size has room for. The renderers' `mb_sd_box`.
 pub fn sd_box(px : Double, py : Double, hx : Double, hy : Double, r : Double) -> Double {

@@ -110,27 +110,23 @@ test "a capsule's clip is round, not smooth; one with a little more room than it
 fn covered(a : Array[Double], px : Double, py : Double, scale : Double) -> Double {
   let cover = fn(d : Double) { dclamp(0.5 - d * scale, 0.0, 1.0) }
   let own = cover(sd_box(px - (a[0] + a[2] / 2.0), py - (a[1] + a[3] / 2.0), a[2] / 2.0, a[3] / 2.0, a[4]))
-  // a clip: its rect at `k`, its corners' radii at `kr`, how smooth they are at `ks`
+  // a clip: its rect at `k`, its corners' radii at `kr`, how smooth they are at `ks` (sd_clip, the renderers')
   let cut = fn(k : Int, kr : Int, ks : Int) {
     if dmax(dmax(a[kr], a[kr + 1]), dmax(a[kr + 2], a[kr + 3])) <= 0.0 {
       return if px < a[k] || py < a[k + 1] || px > a[k + 2] || py > a[k + 3] { 0.0 } else { 1.0 }
     }
-    let hx = (a[k + 2] - a[k]) / 2.0
-    let hy = (a[k + 3] - a[k + 1]) / 2.0
-    let mx = a[k] + hx
-    let my = a[k + 1] + hy
-    let j = if px < mx {
-      if py < my {
-        0
-      } else {
-        3
-      }
-    } else if py < my {
-      1
-    } else {
-      2
-    }
-    cover(sd_corner(px - mx, py - my, hx, hy, dmin(a[kr + j], dmin(hx, hy)), a[ks + j]))
+    cover(
+      sd_clip(
+        px,
+        py,
+        a[k],
+        a[k + 1],
+        a[k + 2],
+        a[k + 3],
+        (a[kr], a[kr + 1], a[kr + 2], a[kr + 3]),
+        (a[ks], a[ks + 1], a[ks + 2], a[ks + 3]),
+      ),
+    )
   }
   let outer = if dmax(dmax(a[44], a[45]), dmax(a[46], a[47])) > 0.0 { cut(40, 44, 48) } else { 1.0 }
   own * cut(16, 24, 28) * outer
@@ -218,7 +214,7 @@ test "a rect clip inside a rounded one: its corners round where they are the rou
 }
 
 ///|
-test "a band sharing a rounded clip's corners with no room to draw them as long: cut by that clip, pixel by pixel" {
+test "a band sharing a rounded clip's corners with no room to draw them as long: drawn by them, pixel by pixel" {
   // a frame 80 square at (20, 20), rounded 12 (wholly smooth: 15 long) and cutting what it holds; in it a band 8 high
   // across its top and one 6 high along its foot, each cutting a fill (a picture's likeness brushed off in steps), and
   // one 40 high between them, room enough for a corner of its own
@@ -247,12 +243,13 @@ test "a band sharing a rounded clip's corners with no room to draw them as long:
   t.draw()
   let top = rect_of_color(red)
   let foot = rect_of_color(blue)
-  // the frame whole, as their outer
+  // the frame's corners their own, drawn where the frame has them however short the band (sd_clip): no outer
+  assert_eq([top[24], top[25], top[26], top[27]], [12.0, 12.0, 0.0, 0.0])
+  assert_eq([foot[24], foot[25], foot[26], foot[27]], [0.0, 0.0, 12.0, 12.0])
   for a in [top, foot] {
-    assert_eq([a[40], a[41], a[42], a[43]], [20.0, 20.0, 100.0, 100.0])
-    assert_eq([a[44], a[45], a[46], a[47]], [12.0, 12.0, 12.0, 12.0])
+    assert_eq([a[44], a[45], a[46], a[47]], [0.0, 0.0, 0.0, 0.0])
   }
-  // one with room for the frame's corners draws them itself
+  // one with room for them alike
   let tall = rect_of_color(green)
   assert_eq([tall[24], tall[25]], [12.0, 12.0])
   assert_eq([tall[44], tall[45], tall[46], tall[47]], [0.0, 0.0, 0.0, 0.0])
@@ -278,6 +275,72 @@ test "a band sharing a rounded clip's corners with no room to draw them as long:
           let have = covered(a, px, py, scale)
           let want = covered(ground, px, py, scale)
           if have != want {
+            fail("(\{px}, \{py}): the band covers \{have}, the frame's ground \{want}")
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
+test "a band across a frame's curve, in a clip that cuts a pane's: the frame its outer, not the pane far off, pixel by pixel" {
+  // a pane 300 square at (20, 20), rounded 30; in it a list's clip from 10 in, through the pane's curves (its outer the
+  // pane); in that a frame 100 by 60, rounded 12, far from the pane's corners; in the frame a band 3 high across its
+  // top (its corners the frame's) and one 5 high across its left curve below that (at no corner of it)
+  let blue = 0x0000FFFFL
+  let band = fn(c : Ctx, h : Double, color : Int64) {
+    c.box(w=Fill(1.0), h=Px(h), clip=true, fn() { c.box(w=Fill(1.0), h=Fill(1.0), bg=color, fn() { () }) |> ignore })
+    |> ignore
+  }
+  let framed = fn(inner : (Ctx) -> Unit) {
+    fn(c : Ctx) {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(300.0), h=Px(300.0), radius=30.0, clip=true, fn() {
+          c.box(w=Px(290.0), h=Px(300.0), left=10.0, top=0.0, clip=true, fn() {
+            c.box(w=Px(100.0), h=Px(60.0), left=10.0, top=200.0, radius=12.0, clip=true, fn() { inner(c) }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  }
+  let t = Tester::new(
+    framed(fn(c) {
+      band(c, 3.0, red)
+      c.box(w=Fill(1.0), h=Px(4.0), fn() { () }) |> ignore
+      band(c, 5.0, blue)
+    }),
+    w=360.0,
+    h=360.0,
+  )
+  t.draw()
+  let top = rect_of_color(red)
+  let across = rect_of_color(blue)
+  // the one across the curve keeps the frame whole, its outer
+  assert_eq([across[40], across[41], across[42], across[43]], [40.0, 220.0, 140.0, 280.0])
+  assert_eq([across[44], across[45], across[46], across[47]], [12.0, 12.0, 12.0, 12.0])
+  // each covers what the frame's own ground covers, no more
+  let plain = Tester::new(
+    framed(fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore }),
+    w=360.0,
+    h=360.0,
+  )
+  plain.draw()
+  let ground = rect_of_color(red)
+  let scale = 3.0
+  for part in [(top, 220.0, 3.0), (across, 227.0, 5.0)] {
+    let (a, y0, h) = part
+    for x0 in [40.0, 124.0] {
+      for i in 0..<(16.0 * scale).to_int() {
+        for j in 0..<(h * scale).to_int() {
+          let px = x0 + (i.to_double() + 0.5) / scale
+          let py = y0 + (j.to_double() + 0.5) / scale
+          let have = covered(a, px, py, scale)
+          let want = covered(ground, px, py, scale)
+          if (have - want).abs() > 0.02 {
             fail("(\{px}, \{py}): the band covers \{have}, the frame's ground \{want}")
           }
         }
@@ -395,7 +458,7 @@ test "a rounded clip cutting through another's corner: what it holds cut by both
 }
 
 ///|
-test "a rounded clip mostly past the window's edge keeps as much of its rect as its corners take: its far corner as round as its line" {
+test "a rounded clip mostly past the window's edge keeps what shows of its rect: its far corner as round as its line" {
   let t = Tester::new(
     fn(c) {
       // a card 240 wide, 184 of it past the window's left edge: 56 shown, its foot right corner 46 round
@@ -409,19 +472,30 @@ test "a rounded clip mostly past the window's edge keeps as much of its rect as 
   )
   t.draw()
   let a = rect_of_color(red)
-  // as much of its own rect kept past the window's edge as its corners take (not cut to the 56 shown, whose corner
-  // the renderers would draw 28), its far corners its own
-  assert_eq([a[16], a[17], a[18], a[19]], [56.0 - 92.0, 0.0, 56.0, 200.0])
+  // cut to the 56 shown, its far corners its own, drawn 46 round where the card has them (sd_clip), not flattened to
+  // the 28 half of what shows
+  assert_eq([a[16], a[17], a[18], a[19]], [0.0, 0.0, 56.0, 200.0])
   assert_eq([a[25], a[26]], [46.0, 46.0])
+  let scale = 2.0
+  for k in 0..<(46.0 * scale).to_int() {
+    let px = 10.0 + (k.to_double() + 0.5) / scale
+    for py in [1.0, 199.0] {
+      let want = dclamp(0.5 - sd_box(px - (56.0 - 120.0), py - 100.0, 120.0, 100.0, 46.0) * scale, 0.0, 1.0)
+      let have = covered(a, px, py, scale)
+      if (have - want).abs() > 0.01 {
+        fail("(\{px}, \{py}): the clip keeps \{have}, the card's ground \{want}")
+      }
+    }
+  }
 }
 
 ///|
-test "an outer clip kept as what holds it is pushed again: the outermost a frame cuts through, not the one between" {
+test "a clip two curves cut into at once: the one that cuts more of it its outer" {
   let t = Tester::new(
     fn(c) {
       c.box(pad=20.0, align=AStart, fn() {
         // the pane, a card in its corner (cutting through its curve), a frame in the card's corner (cutting through
-        // the card's): the frame's outer the pane, the card's curve the old error's
+        // both curves): its outer the card's, which cuts more of it; the pane's the error left (scene.mbt clip_stack)
         c.box(w=Px(200.0), h=Px(200.0), radius=30.0, clip=true, fn() {
           c.box(w=Px(120.0), h=Px(120.0), radius=20.0, clip=true, left=6.0, top=6.0, fn() {
             c.box(w=Px(40.0), h=Px(40.0), radius=4.0, clip=true, left=2.0, top=2.0, fn() {
@@ -440,6 +514,6 @@ test "an outer clip kept as what holds it is pushed again: the outermost a frame
   )
   t.draw()
   let a = rect_of_color(red)
-  assert_eq([a[40], a[41], a[42], a[43]], [20.0, 20.0, 220.0, 220.0])
-  assert_eq([a[44], a[45], a[46], a[47]], [30.0, 30.0, 30.0, 30.0])
+  assert_eq([a[40], a[41], a[42], a[43]], [26.0, 26.0, 146.0, 146.0])
+  assert_eq([a[44], a[45], a[46], a[47]], [20.0, 20.0, 20.0, 20.0])
 }

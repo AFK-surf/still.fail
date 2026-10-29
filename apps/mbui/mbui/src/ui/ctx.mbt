@@ -2221,8 +2221,8 @@ fn press_reach(
 
 ///|
 /// Whether (x, y), in hit target `k`'s rect, is within the rounded corners of what cut it (`clips`, Ctx::hit_clips):
-/// a corner as round, and as smooth, as the renderers cut it (smooth.mbt sd_corner; its radius at most half the clip's
-/// shorter side); and within its outer clip's too, where it has one (clip_stack: a pane round a rounded frame).
+/// a corner as round, and as smooth, as the renderers cut it (smooth.mbt sd_clip: where its box has it, whatever the
+/// clip's own size); and within its outer clip's too, where it has one (clip_stack: a pane round a rounded frame).
 fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool {
   let b = k * clip_n
   if b + clip_n > clips.length() {
@@ -2233,27 +2233,24 @@ fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool
 }
 
 ///|
-/// Whether (x, y) is within the rounded rect of `clips` at `b` (a clip_stack clip's 12 numbers) at its corners.
+/// Whether (x, y) is within the rounded rect of `clips` at `b` (a clip_stack clip's 12 numbers) at its corners, as the
+/// renderers cut it (sd_clip).
 fn in_round_rect(clips : Array[Double], b : Int, x : Double, y : Double) -> Bool {
-  let (x0, y0, x1, y1) = (clips[b], clips[b + 1], clips[b + 2], clips[b + 3])
-  let hx = dmax((x1 - x0) / 2.0, 0.0)
-  let hy = dmax((y1 - y0) / 2.0, 0.0)
-  let mx = x0 + hx
-  let my = y0 + hy
-  // the corner of the quarter it is in (top left, then clockwise)
-  let j = if x < mx {
-    if y < my {
-      0
-    } else {
-      3
-    }
-  } else if y < my {
-    1
-  } else {
-    2
+  let r = (clips[b + 4], clips[b + 5], clips[b + 6], clips[b + 7])
+  if r.0 <= 0.0 && r.1 <= 0.0 && r.2 <= 0.0 && r.3 <= 0.0 {
+    return true
   }
-  let r = dmin(clips[b + 4 + j], dmin(hx, hy))
-  r <= 0.0 || sd_corner(x - mx, y - my, hx, hy, r, clips[b + 8 + j]) <= 0.0
+  sd_clip(
+    x,
+    y,
+    clips[b],
+    clips[b + 1],
+    clips[b + 2],
+    clips[b + 3],
+    r,
+    (clips[b + 8], clips[b + 9], clips[b + 10], clips[b + 11]),
+  ) <=
+  0.0
 }
 
 ///|
