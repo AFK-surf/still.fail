@@ -204,6 +204,8 @@ class Cache {
 }
 
 const K = (...parts: (string | number)[]) => parts.join("\u0001");
+/// A word looked for, as `LIKE ? ESCAPE '\'` takes it: anywhere in the text, its own `%` `_` `\` as they are.
+const like = (term: string) => `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 /// What chats show small, kept (`file_kept`, in characters of base64): at most this much, let go to FILES_KEPT_TO of it
 /// past that; one larger than FILE_KEPT_MOST is not kept (a thumbnail is a few dozen KB). When one was shown is noted
 /// at most once in FILE_SHOWN_EVERY: a note writes its row again, the image with it.
@@ -231,8 +233,8 @@ export class AccountDb {
   readonly readOnly: boolean;
   /// Its version as found (before migrating): 0 for a database made now.
   readonly found: number;
-  /// How what was said is found: by its full-text index, by scanning it, or not at all (it could not be made).
-  readonly #said: "index" | "scan" | null = null;
+  /// Whether what was said can be found (`said` is there; it could not be made without room).
+  readonly #said: boolean = false;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -271,7 +273,8 @@ export class AccountDb {
       const was = this.sql.all("SELECT value FROM meta WHERE key = 'account'")[0]?.[0];
       if (was === undefined) this.sql.run("INSERT INTO meta (key, value) VALUES ('account', ?)", [sub]);
       try {
-        this.#said = ensureSaid(sql) ? "index" : "scan";
+        ensureSaid(sql);
+        this.#said = true;
       } catch {
         // No room to make it: messages are not found by their words this time.
       }
@@ -282,6 +285,8 @@ export class AccountDb {
       }
       try {
         ensureKept(sql);
+        // A chat's messages are no longer let go for room: those an earlier core let go are the sync's to bring again.
+        sql.run("UPDATE log_use SET evicted = 0 WHERE kind = 'entry' AND evicted = 1");
         for (const r of sql.all("SELECT kind, station, id FROM log_use WHERE evicted = 1")) this.#evicted.add(K(String(r[0]), String(r[1]), String(r[2])));
       } catch {
         // No room to make it: nothing is let go this time.
@@ -290,7 +295,7 @@ export class AccountDb {
       this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
       this.#mdKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'md_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
-      this.#said = "scan";
+      this.#said = true;
     }
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
@@ -1316,41 +1321,23 @@ export class AccountDb {
 
   // ── what was said ──
 
-  /// The messages of these stations whose latest text has every one of `terms` (case aside), newest first: the full-text
-  /// index finds those of three characters or more, shorter ones are looked for in what it found (or in everything).
+  /// The messages of these stations whose latest text has every one of `terms` (case aside), newest first.
   findSaid(stations: string[], terms: string[], limit: number): { station: string; thread: number; seq: number; at: number | null; text: string }[] {
-    if (this.#said === null || stations.length === 0 || terms.length === 0) return [];
-    const indexed = this.#said === "index" ? terms.filter((t) => [...t].length >= 3) : [];
-    const scanned = terms.filter((t) => !indexed.includes(t));
-    const where = [`s.station IN (${stations.map(() => "?").join(", ")})`, ...scanned.map(() => "s.text LIKE ? ESCAPE '\\'")];
-    const params: SqlValue[] = [...stations, ...scanned.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)];
-    let from = "said s";
-    if (indexed.length > 0) {
-      from = "said_index JOIN said s ON s.id = said_index.rowid";
-      where.unshift("said_index MATCH ?");
-      params.unshift(indexed.map((t) => `"${t.replace(/"/g, '""')}"`).join(" "));
-    }
-    params.push(limit);
+    if (!this.#said || stations.length === 0 || terms.length === 0) return [];
+    const where = [`s.station IN (${stations.map(() => "?").join(", ")})`, ...terms.map(() => "s.text LIKE ? ESCAPE '\\'")];
+    const params: SqlValue[] = [...stations, ...terms.map(like), limit];
     return this.sql
-      .all(`SELECT s.station, s.thread, s.seq, s.at, s.text FROM ${from} WHERE ${where.join(" AND ")} ORDER BY s.at IS NULL, s.at DESC, s.seq DESC LIMIT ?`, params)
+      .all(`SELECT s.station, s.thread, s.seq, s.at, s.text FROM said s WHERE ${where.join(" AND ")} ORDER BY s.at IS NULL, s.at DESC, s.seq DESC LIMIT ?`, params)
       .map((r) => ({ station: String(r[0]), thread: Number(r[1]), seq: Number(r[2]), at: typeof r[3] === "number" ? r[3] : null, text: String(r[4]) }));
   }
 
   /// The messages of one thread whose latest text has every one of `terms` (case aside), oldest first, with their
   /// words (a chat's own find: all of them, as `findSaid` looks).
   findInThread(station: string, thread: number, terms: string[]): { seq: number; text: string }[] {
-    if (this.#said === null || terms.length === 0) return [];
-    const indexed = this.#said === "index" ? terms.filter((t) => [...t].length >= 3) : [];
-    const scanned = terms.filter((t) => !indexed.includes(t));
-    const where = ["s.station = ?", "s.thread = ?", ...scanned.map(() => "s.text LIKE ? ESCAPE '\\'")];
-    const params: SqlValue[] = [station, thread, ...scanned.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)];
-    let from = "said s";
-    if (indexed.length > 0) {
-      from = "said_index JOIN said s ON s.id = said_index.rowid";
-      where.unshift("said_index MATCH ?");
-      params.unshift(indexed.map((t) => `"${t.replace(/"/g, '""')}"`).join(" "));
-    }
-    return this.sql.all(`SELECT s.seq, s.text FROM ${from} WHERE ${where.join(" AND ")} ORDER BY s.seq`, params).map((r) => ({ seq: Number(r[0]), text: String(r[1]) }));
+    if (!this.#said || terms.length === 0) return [];
+    const where = ["s.station = ?", "s.thread = ?", ...terms.map(() => "s.text LIKE ? ESCAPE '\\'")];
+    const params: SqlValue[] = [station, thread, ...terms.map(like)];
+    return this.sql.all(`SELECT s.seq, s.text FROM said s WHERE ${where.join(" AND ")} ORDER BY s.seq`, params).map((r) => ({ seq: Number(r[0]), text: String(r[1]) }));
   }
 
   // ── what is kept within the device's room ──
@@ -1382,36 +1369,27 @@ export class AccountDb {
     return typeof v === "number" ? v : null;
   }
 
-  /// The logs held, of `kind`, least recently used first: by when their chat was last opened here or last said
-  /// something (an agent's: last active), whichever is later.
-  logsByUse(kind: "entry" | "transcript", limit: number): { station: string; id: string }[] {
-    const rows =
-      kind === "entry"
-        ? this.sql.all(
-            `SELECT e.station, e.thread FROM (SELECT DISTINCT station, thread FROM entry) e
-             LEFT JOIN log_use u ON u.kind = 'entry' AND u.station = e.station AND u.id = CAST(e.thread AS TEXT)
-             LEFT JOIN thread t ON t.station = e.station AND t.id = e.thread
-             ORDER BY max(coalesce(u.opened, 0), coalesce(t.sort_at, 0), coalesce(t.created_at, 0)), e.station, e.thread LIMIT ?`,
-            [limit],
-          )
-        : this.sql.all(
-            `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
-             LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
-             LEFT JOIN session s ON s.station = x.station AND s.key = x.session
-             ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
-            [limit],
-          );
-    return rows.map((r) => ({ station: String(r[0]), id: String(r[1]) }));
+  /// The agents' transcripts held, least recently used first: by when their history was last opened here or their agent
+  /// last active, whichever is later. (A chat's messages are never let go: they are the chat, and small.)
+  transcriptsByUse(limit: number): { station: string; id: string }[] {
+    return this.sql
+      .all(
+        `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
+         LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
+         LEFT JOIN session s ON s.station = x.station AND s.key = x.session
+         ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
+        [limit],
+      )
+      .map((r) => ({ station: String(r[0]), id: String(r[1]) }));
   }
 
-  /// A log's items let go for room: they are read again when its chat is opened. Its thread, read position and row stay.
-  evict(kind: "entry" | "transcript", station: string, id: string): void {
-    this.#evicted.add(K(kind, station, id));
+  /// A transcript's items let go for room: they are read again when its history is opened. Its session stays.
+  evict(station: string, session: string): void {
+    this.#evicted.add(K("transcript", station, session));
     this.#write(() => {
       this.#logCache.clear();
-      if (kind === "entry") this.#forgetEntries(station, Number(id));
-      else if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("transcript", station, id);
-      this.sql.run("INSERT INTO log_use (kind, station, id, evicted) VALUES (?, ?, ?, 1) ON CONFLICT (kind, station, id) DO UPDATE SET evicted = 1", [kind, station, id]);
+      if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
+      this.sql.run("INSERT INTO log_use (kind, station, id, evicted) VALUES ('transcript', ?, ?, 1) ON CONFLICT (kind, station, id) DO UPDATE SET evicted = 1", [station, session]);
     });
   }
 

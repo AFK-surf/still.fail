@@ -1104,7 +1104,7 @@ test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_a
   assert.deepEqual(cut.map((m: J) => m.seq), [3]);
   assert.ok(cut[0].text.startsWith("…") && cut[0].text.includes("Login 页面"), cut[0].text);
   assert.equal(cut[0].text.slice(cut[0].marks[0].from, cut[0].marks[0].to), "Login");
-  // Three characters or more: the full-text index.
+  // Three characters or more, as any.
   assert.deepEqual(v(values, 4).messages.map((m: J) => m.seq), [1]);
   core.close();
 });

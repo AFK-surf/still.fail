@@ -47,16 +47,17 @@ instead.
 | `draft` | station, chat | — | `draft.put` |
 | `workspace_pref` | workspace, key | — | a workspace's new-chat picks (`choice:…`), chats' links (`links`) |
 | `meta` | key | — | the account, when what came before was imported |
-| `said` (+ `said_index`, FTS5 trigram) | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds |
-| `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`) |
+| `said` | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds, by scanning it (no index: the FTS5 index an earlier core kept is taken away at open, as a row's words left it only as its segments merged and it grew to some 200 times what it found) |
+| `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`; only a transcript's are) |
 | `file_kept` | station, session, name, kind (`thumb`, `poster`) | type, size, used; `bytes` (base64: they are small, and given beside the answer) | an image's thumbnail and a video's poster as the station sent them (`station.file` with `thumb`, `station.poster`): a file sent never changes, and a chat opened again shows them without reading them again (`ensureFilesKept`) |
 | `md_kept` | station, key (markdown.ts `mdKey`: the reading, the length, the text's hashes) | of (`t:<thread>`, `s:<session>`), size, used; `json` (the tree) | the trees of what agents said as markdown.ts reads them: reading a page of agents' replies was the most of opening a chat in Hermes, so each is read once on the device (`ensureMdKept`); the latest replies of chats spoken in lately are read ahead as they come (md-ahead.ts) |
 
 `said` and `log_use` are made where missing at every open, `file_kept` and `md_kept` as the first is kept, not by a migration
 (the version stays, so an older core still writes the database; `said`'s triggers keep it current under it too). The
-room an account's database takes is kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown,
-least recently used first (opened here, or last active), transcripts before entries, go down to 80% of it, their words
-with them; a log let go is not synced again until its chat is opened. `file_kept` has room of its own (account.ts
+room an account's database takes is kept within `KEPT` (data.ts, 256 MB): past it, the agents' transcripts not shown,
+least recently used first (opened here, or last active), go down to 80% of it; one let go is not synced again until its
+history is opened. A chat's messages are never let go (they are the chat, and small; an earlier core let them go too,
+to make room for what could not go, and at open those it let go are the sync's again). `file_kept` has room of its own (account.ts
 `FILES_KEPT`, 64 MB of base64, none over 1 MB): past it, the least lately shown go down to 80% of it (when one was
 shown is noted at most once a day, as noting it writes its row again); they count with their session's first chat in
 `cache.usage` and go with it in `cache.clear`. `md_kept` too (`MD_KEPT`, 32 M characters of JSON), with the chat or the
@@ -179,7 +180,7 @@ what is its own and what is of the workspaces it reaches, as the accounts' `/v1/
 to the device's storage once (`device-imported`). Lists, documents, details, the outbox and drafts come first, before
 the first view; threads' entries and transcripts after, in the background, a station at a time, without writing over
 what the sync brought meanwhile. Nothing is taken away, so an older core still finds what it kept (a rollback works).
-All of it comes over; past the room an account may take (`KEPT`, above), the least used logs go as the sync writes.
+All of it comes over; past the room an account may take (`KEPT`, above), the least used transcripts go as the sync writes.
 
 ## Tests
 

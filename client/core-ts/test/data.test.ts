@@ -633,37 +633,14 @@ test("what_was_said_is_found_by_its_words_as_its_entries_change", async () => {
   assert.deepEqual(found(data, "登录"), ["w/a 7 1 排查登录很慢"]);
   assert.deepEqual(db().all("SELECT station, thread, seq FROM said ORDER BY station, thread, seq"), [["w/a", 7, 1], ["w/b", 10, 4]]);
   // A database from before (none of it) has it filled from the entries held when opened.
-  db().exec("DROP TRIGGER said_put; DROP TRIGGER said_drop; DROP TABLE said_index; DROP TABLE said;");
+  db().exec("DROP TRIGGER said_put; DROP TRIGGER said_drop; DROP TABLE said;");
   const d = await again();
   assert.deepEqual(found(d, "说法"), ["w/b 10 4 新的说法"]);
   assert.deepEqual(found(d, "排查"), ["w/a 7 1 排查登录很慢"]);
   runner.shutdown();
 });
 
-test("without_full_text_search_what_was_said_is_scanned", async () => {
-  const { host, runner } = fresh();
-  const inner = new NodeSql(new DatabaseSync(":memory:"), true);
-  // A build without FTS5.
-  const sql: Sql = {
-    exec: (q) => {
-      if (/fts5/i.test(q)) throw new SqlError("no such module: fts5", "other");
-      inner.exec(q);
-    },
-    run: (q, p) => inner.run(q, p),
-    all: (q, p) => inner.all(q, p),
-    close: () => {},
-  };
-  host.openDbHook = () => sql;
-  const data = new Data(host, runner, { owner: () => "s1" });
-  await run(data.open(["s1"]));
-  data.putItems("entry", "w/a", "7", [[1, { n: 1, kind: "message", text: "登录流程太慢", at: 1 }]]);
-  await run(data.written);
-  assert.deepEqual(data.findSaid(["w/a"], ["登录流程"], 5).map((f) => f.seq), [1]);
-  assert.deepEqual(inner.all("SELECT name FROM sqlite_master WHERE name LIKE 'said_index%'"), []);
-  runner.shutdown();
-});
-
-test("past_its_room_the_logs_least_recently_used_go_transcripts_first_and_come_back_when_opened", async () => {
+test("past_its_room_agents_transcripts_least_recently_used_go_and_a_chats_messages_stay", async () => {
   const host = new FakeHost();
   const runner = new Runner(host.time.clock);
   const sql = new NodeSql(new DatabaseSync(":memory:"), true);
@@ -672,34 +649,65 @@ test("past_its_room_the_logs_least_recently_used_go_transcripts_first_and_come_b
   await run(data.open(["s1"]));
   const big = "字".repeat(2000);
   const said = (thread: number) => Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text: `${thread} ${big}`, at: i }] as [number, J]);
-  // Two transcripts and eight threads, thread 1 the least recently used; thread 2 shown.
+  // Three transcripts, k1 the least recently used and k3 shown; and eight threads, more than the room alone.
   data.putItems("transcript", "w/a", "k1", [[0, { text: big }], [1, { text: big }]]);
   data.putItems("transcript", "w/a", "k2", [[0, { text: big }]]);
+  data.putItems("transcript", "w/a", "k3", [[0, { text: big }]]);
   await run(data.written);
-  data.opened("entry", "w/a", "2", true);
+  data.opened("transcript", "w/a", "k3", true);
   for (let t = 1; t <= 8; t++) {
     host.advance(60_000);
     data.putItems("entry", "w/a", String(t), said(t));
     await run(data.written);
   }
   await run(data.written);
-  const db = data.db("s1")!;
-  assert.ok(db.used() <= 1024 * 1024, `${db.used()}`);
-  // The transcripts went first; then the threads least recently used, not the one shown.
-  assert.deepEqual(sql.all("SELECT count(*) FROM transcript"), [[0]]);
-  const kept = sql.all("SELECT DISTINCT thread FROM entry ORDER BY thread").map((r) => r[0]);
-  assert.ok(kept.includes(2) && kept.includes(8) && !kept.includes(1), JSON.stringify(kept));
-  assert.equal(data.evicted("entry", "w/a", "1"), true);
+  // The transcripts not shown went; every chat's messages stayed, and what was said in them is found.
+  assert.deepEqual(sql.all("SELECT DISTINCT session FROM transcript"), [["k3"]]);
   assert.equal(data.evicted("transcript", "w/a", "k1"), true);
-  assert.equal(data.evicted("entry", "w/a", "2"), false);
-  // What was said in it goes with it.
-  assert.deepEqual(data.findSaid(["w/a"], ["1 字字字"], 5), []);
+  assert.deepEqual(sql.all("SELECT DISTINCT thread FROM entry ORDER BY thread").map((r) => r[0]), [1, 2, 3, 4, 5, 6, 7, 8]);
+  for (let t = 1; t <= 8; t++) assert.equal(data.evicted("entry", "w/a", String(t)), false);
+  assert.equal(data.findSaid(["w/a"], [`1 字字字`], 50).length, 20);
   // Opened again: kept, and said to be brought back; let go no more after a restart either.
-  assert.equal(data.opened("entry", "w/a", "1", true), true);
-  assert.equal(data.evicted("entry", "w/a", "1"), false);
+  assert.equal(data.opened("transcript", "w/a", "k1", true), true);
+  assert.equal(data.evicted("transcript", "w/a", "k1"), false);
   await run(data.written);
-  assert.deepEqual(sql.all("SELECT evicted FROM log_use WHERE kind = 'entry' AND id = '1'"), [[0]]);
-  assert.deepEqual(sql.all("SELECT count(*) FROM log_use WHERE evicted = 1 AND kind = 'transcript'"), [[2]]);
+  assert.deepEqual(sql.all("SELECT evicted FROM log_use WHERE kind = 'transcript' AND id = 'k1'"), [[0]]);
+  runner.shutdown();
+});
+
+test("a_chats_messages_let_go_for_room_before_come_back_and_what_the_search_index_kept_of_them_goes", async () => {
+  const { data, open, again, runner } = fresh();
+  await open();
+  const db = () => data.db("s1")!.sql;
+  const text = (t: number, round: number) => `第 ${round} 遍 ${t} 号对话里说的话 ${"排查登录很慢".repeat(20)}`;
+  // The full-text index of what was said an earlier core kept.
+  db().exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS said_index USING fts5(text, content = 'said', content_rowid = 'id', tokenize = 'trigram');
+    CREATE TRIGGER IF NOT EXISTS said_index_put AFTER INSERT ON said BEGIN INSERT INTO said_index (rowid, text) VALUES (new.id, new.text); END;
+    CREATE TRIGGER IF NOT EXISTS said_index_drop AFTER DELETE ON said BEGIN INSERT INTO said_index (said_index, rowid, text) VALUES ('delete', old.id, old.text); END;
+    CREATE TRIGGER IF NOT EXISTS said_index_set AFTER UPDATE OF text ON said WHEN old.text IS NOT new.text BEGIN
+      INSERT INTO said_index (said_index, rowid, text) VALUES ('delete', old.id, old.text);
+      INSERT INTO said_index (rowid, text) VALUES (new.id, new.text);
+    END;
+  `);
+  // As that core did: a chat's messages let go for room and read again as it was opened, over and over; what the index
+  // held of each went only as a deleted row's terms, kept until its segments merge.
+  for (let round = 0; round < 30; round++) {
+    for (let t = 1; t <= 20; t++) data.putItems("entry", "w/a", String(t), [[1, { n: 1, kind: "message", text: text(t, round), at: 1 }]]);
+    await run(data.written);
+    db().run("DELETE FROM entry WHERE station = 'w/a' AND thread > 1");
+  }
+  for (let t = 2; t <= 20; t++) db().run("INSERT INTO log_use (kind, station, id, evicted) VALUES ('entry', 'w/a', ?, 1)", [String(t)]);
+  const used = () => data.db("s1")!.used();
+  const before = used();
+  const d = await again();
+  // Opened again: none is let go, so the sync brings them all; the room the index took is the database's again, and
+  // what was said is found by scanning it.
+  for (let t = 1; t <= 20; t++) assert.equal(d.evicted("entry", "w/a", String(t)), false, `thread ${t}`);
+  assert.ok(used() < before, `${used()} of ${before}`);
+  assert.deepEqual(db().all("SELECT name FROM sqlite_master WHERE name LIKE 'said_index%'"), []);
+  assert.equal(d.findSaid(["w/a"], ["第 29 遍 1 号"], 5).length, 1);
+  assert.equal(d.findSaid(["w/a"], ["第 28 遍"], 5).length, 0);
   runner.shutdown();
 });
 
@@ -1037,14 +1045,14 @@ test("log_removal_paths_invalidate_their_number_indices_and_payload_windows", as
       data.putItems("transcript", "w/a", "k1", [[0, { text: "held" }]]);
       data.logNumbers("entry", "w/a", "7"); data.logRange("entry", "w/a", "7", 1, 1);
       data.logNumbers("transcript", "w/a", "k1"); data.logRange("transcript", "w/a", "k1", 0, 0);
-      if (action === "evict") {
-        data.of("w/a")!.evict("entry", "w/a", "7");
-        data.of("w/a")!.evict("transcript", "w/a", "k1");
-      } else if (action === "chat") data.forgetChat("w/a", 7);
+      if (action === "evict") data.of("w/a")!.evict("w/a", "k1");
+      else if (action === "chat") data.forgetChat("w/a", 7);
       else data.of("w/a")!.forgetStation("w/a");
-      assert.deepEqual(data.logNumbers("entry", "w/a", "7"), [], action);
+      // A transcript let go for room; a chat's messages never are.
+      const entries = action === "evict" ? 1 : 0;
+      assert.deepEqual(data.logNumbers("entry", "w/a", "7"), entries ? [1] : [], action);
       assert.deepEqual(data.logNumbers("transcript", "w/a", "k1"), [], action);
-      assert.equal(data.logRange("entry", "w/a", "7", 1, 1).size, 0, action);
+      assert.equal(data.logRange("entry", "w/a", "7", 1, 1).size, entries, action);
       assert.equal(data.logRange("transcript", "w/a", "k1", 0, 0).size, 0, action);
     } finally { runner.shutdown(); }
   }
