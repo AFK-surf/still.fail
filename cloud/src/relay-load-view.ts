@@ -13,7 +13,8 @@ export type Sample = { at: number; load: Load };
 export type Series = {
   start: number;
   step: number;
-  /** Bytes a second it sent and received. */
+  /** The most bytes a second it sent and received between two samples (about a minute): an average over the whole
+   * bucket would hide every burst, and its peak would depend on the range shown. */
   sent: (number | null)[];
   recv: (number | null)[];
   /** The most connections it held. */
@@ -42,7 +43,7 @@ const openOf = (load: Load) => Math.max(0, load.accepts - load.disconnects);
 
 function series(samples: Sample[], now: number, step: number, count: number): Series {
   const start = (Math.floor(now / step) - count + 1) * step;
-  const sums = Array.from({ length: count }, () => ({ secs: 0, sent: 0, recv: 0, packets: 0, dropped: 0, open: null as number | null }));
+  const sums = Array.from({ length: count }, () => ({ secs: 0, sent: null as number | null, recv: null as number | null, packets: 0, dropped: 0, open: null as number | null }));
   for (let i = 1; i < samples.length; i++) {
     const [a, b] = [samples[i - 1]!, samples[i]!];
     const secs = b.at - a.at;
@@ -50,8 +51,8 @@ function series(samples: Sample[], now: number, step: number, count: number): Se
     if (k < 0 || k >= count || secs <= 0 || secs > GAP) continue;
     const s = sums[k]!;
     s.secs += secs;
-    s.sent += grew(a.load.sent, b.load.sent);
-    s.recv += grew(a.load.recv, b.load.recv);
+    s.sent = Math.max(s.sent ?? 0, grew(a.load.sent, b.load.sent) / secs);
+    s.recv = Math.max(s.recv ?? 0, grew(a.load.recv, b.load.recv) / secs);
     s.packets += grew(a.load.packets, b.load.packets);
     s.dropped += grew(a.load.dropped, b.load.dropped);
     s.open = Math.max(s.open ?? 0, openOf(b.load));
@@ -60,15 +61,23 @@ function series(samples: Sample[], now: number, step: number, count: number): Se
   return {
     start,
     step,
-    sent: of((s) => Math.round(s.sent / s.secs)),
-    recv: of((s) => Math.round(s.recv / s.secs)),
+    sent: of((s) => Math.round(s.sent!)),
+    recv: of((s) => Math.round(s.recv!)),
     open: of((s) => s.open),
     dropped: of((s) => (s.packets + s.dropped > 0 ? s.dropped / (s.packets + s.dropped) : null)),
   };
 }
 
+/** When a sample was read: the relay's own time when it says it (relay-load.sh: its post can take many seconds to get
+ * here, and timed by its arrival a minute's growth would be divided by however much less time it seemed to take). */
+const readAt = (s: Sample): Sample => {
+  const time = s.load.time;
+  return time !== undefined && time <= s.at && time > s.at - GAP ? { at: time, load: s.load } : s;
+};
+
 /** A relay's view from its samples (oldest first) at `now` (seconds). */
-export function relayLoadView(url: string, samples: Sample[], now: number): RelayLoadView {
+export function relayLoadView(url: string, received: Sample[], now: number): RelayLoadView {
+  const samples = received.map(readAt).sort((a, b) => a.at - b.at);
   const last = samples.at(-1);
   const recent = samples.filter((s) => s.at >= now - NOW);
   let current: RelayLoadView["now"] = null;

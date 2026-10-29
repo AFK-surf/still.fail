@@ -71,10 +71,24 @@ public final class AdbShareService extends Service {
             if (s == null || s.isEmpty()) return START_NOT_STICKY;
             name = intent.getStringExtra(AdbShare.NAME);
             if (name == null) name = "station";
+            // already lending for the grants: nothing to begin again
+            if (AdbShare.GRANTS.equals(s) && AdbShare.GRANTS.equals(station) && ports != null) return START_NOT_STICKY;
             android.app.Notification shown = AdbShare.notification(this, null, name, null);
             if (Build.VERSION.SDK_INT >= 34) startForeground(AdbShare.ID, shown, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(AdbShare.ID, shown);
             begin(s);
+        } else if (AdbShare.STOP.equals(action) && AdbShare.GRANTS.equals(station)) {
+            // 停止, lent for chats' grants: each taken back (the service ends as none wants it lent)
+            org.json.JSONArray grants = view == null ? null : view.optJSONArray("grants");
+            if (grants == null || grants.length() == 0) stopSelf();
+            else for (int i = 0; i < grants.length(); i++) {
+                JSONObject g = grants.optJSONObject(i);
+                if (g == null || !"granted".equals(g.optString("status"))) continue;
+                try {
+                    AdbCore.call("adb.revoke", new JSONObject().put("station", g.optString("station")).put("request", g.optString("id")), null);
+                } catch (Exception ignored) {
+                }
+            }
         } else if (AdbShare.STOP.equals(action)) {
             AdbCore.call("adb.stop", null, new AdbCore.Answer() {
                 @Override
@@ -131,7 +145,9 @@ public final class AdbShareService extends Service {
     /** The notifications again, as it stands now (or as `note` and `pairNote` say). */
     private void say() {
         NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.notify(AdbShare.ID, AdbShare.notification(this, view, name, note));
+        manager.notify(AdbShare.ID, AdbShare.GRANTS.equals(station)
+                ? AdbShare.notificationTitled(this, view, name, note)
+                : AdbShare.notification(this, view, name, note));
         boolean pairing = AdbShare.pairing(view);
         int port = view == null ? -1 : view.optInt("pairPort", -1);
         AdbShare.setPairingPort(pairing ? port : -1);
@@ -185,12 +201,20 @@ public final class AdbShareService extends Service {
                 refused = gone;
                 ports.again();
             }
-            boolean here = v.optBoolean("sharing") && station.equals(v.optString("station"));
+            boolean here = AdbShare.GRANTS.equals(station)
+                    ? v.optJSONArray("wanted") != null && v.optJSONArray("wanted").length() > 0
+                    : v.optBoolean("sharing") && station.equals(v.optString("station"));
+            if (AdbShare.GRANTS.equals(station)) {
+                org.json.JSONArray grants = v.optJSONArray("grants");
+                int chats = 0;
+                if (grants != null) for (int i = 0; i < grants.length(); i++) if ("granted".equals(grants.optJSONObject(i).optString("status"))) chats++;
+                name = AdbShare.t("android-misc.adb.notify.chats", "n", String.valueOf(chats));
+            }
             if (here) lent = true;
             if (here && v.has("until") && !v.isNull("until")) AdbShare.keepUntil(this, v.optLong("until"));
             if (lent && !here) {
                 AdbShare.setPairingPort(-1);
-                if (!v.has("station") || v.isNull("station")) stopSelf();
+                if (AdbShare.GRANTS.equals(station) || !v.has("station") || v.isNull("station")) stopSelf();
                 return;
             }
             say();
@@ -212,7 +236,9 @@ public final class AdbShareService extends Service {
                 String key = connect + "/" + pair;
                 if (key.equals(offered)) return;
                 offered = key;
-                AdbCore.call("adb.share", AdbShare.offer(this, station, connect, pair), new AdbCore.Answer() {
+                // for the grants: the ports, lent with them to every station a grant wants it on
+                boolean grants = AdbShare.GRANTS.equals(station);
+                AdbCore.call(grants ? "adb.ports" : "adb.share", AdbShare.offer(this, grants ? "" : station, connect, pair), new AdbCore.Answer() {
                     @Override
                     public void ok(Object value) {}
 

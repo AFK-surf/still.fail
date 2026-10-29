@@ -48,6 +48,8 @@ final class AdbShare {
     private AdbShare() {}
 
     static final String STATION = "station";
+    /** The service's station while it lends for chats' grants (docs/adb-share.md): to every station they want it on. */
+    static final String GRANTS = "*grants";
     static final String NAME = "name";
     static final String CODE = "code";
     static final String PORT = "port";
@@ -247,7 +249,22 @@ final class AdbShare {
                 reply.fail(String.valueOf(e));
             }
         });
+        Natives.put("adb.texts", (params, reply) -> {
+            try {
+                JSONObject words = new JSONObject(params);
+                synchronized (texts) {
+                    for (java.util.Iterator<String> it = words.keys(); it.hasNext(); ) {
+                        String k = it.next();
+                        texts.put(k, words.optString(k));
+                    }
+                }
+                reply.ok("{}");
+            } catch (Exception e) {
+                reply.fail(String.valueOf(e));
+            }
+        });
         resume(c, System.currentTimeMillis() + 30_000);
+        if (supported()) followGrants(c, System.currentTimeMillis() + 30_000);
         if (!supported()) return;
         // Wireless debugging switched (by the app, by the person, or by Android as the Wi-Fi goes)
         c.getContentResolver().registerContentObserver(wirelessUri(), false, new ContentObserver(new Handler(Looper.getMainLooper())) {
@@ -292,6 +309,31 @@ final class AdbShare {
 
     private static final String TEXTS = "texts";
     private static final String UNTIL = "until";
+
+    /** Whether the service was started for chats' grants and not yet seen to end. */
+    private static boolean granting;
+
+    /**
+     * The service started while a chat's grant wants the phone lent (`adbShare` `wanted`), once the core runs (asked
+     * again each second till then, up to `by`); the service follows it from then, and ends as none does.
+     */
+    private static void followGrants(Context c, long by) {
+        long id = AdbCore.follow("adbShare", value -> {
+            if (!(value instanceof JSONObject)) return;
+            org.json.JSONArray wanted = ((JSONObject) value).optJSONArray("wanted");
+            boolean want = wanted != null && wanted.length() > 0;
+            if (want && !granting) {
+                granting = true;
+                try {
+                    c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START).putExtra(STATION, GRANTS).putExtra(NAME, ""));
+                } catch (Exception e) {
+                    Host.log("adb share: not lent for the grants: " + e);
+                    granting = false;
+                }
+            } else if (!want) granting = false;
+        });
+        if (id < 0 && System.currentTimeMillis() < by) new Handler(Looper.getMainLooper()).postDelayed(() -> followGrants(c, by), 1000);
+    }
 
     static android.content.SharedPreferences kept(Context c) {
         return c.getSharedPreferences("adb-share", Context.MODE_PRIVATE);
@@ -378,6 +420,11 @@ final class AdbShare {
     }
 
     static Notification notification(Context c, JSONObject view, String name, String said) {
+        return notificationTitled(c, view, t("android-misc.adb.notify.title", "name", name), said);
+    }
+
+    /** The share's notification titled `title` (for chats' grants: how many chats it is lent to). */
+    static Notification notificationTitled(Context c, JSONObject view, String title, String said) {
         NotificationManager manager = c.getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
@@ -386,7 +433,7 @@ final class AdbShare {
         return new Notification.Builder(c, CHANNEL)
                 .setSmallIcon(c.getApplicationInfo().icon)
                 .setColor(ACCENT)
-                .setContentTitle(t("android-misc.adb.notify.title", "name", name))
+                .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(new Notification.BigTextStyle().bigText(text))
                 .setContentIntent(open)

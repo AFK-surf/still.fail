@@ -107,12 +107,14 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
 /// nothing left to let go).
 fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest : String, seq : Double?) -> Unit {
   let look = @sf.theme().chat_list
-  let said = look.state_turn.then(chat_state_wraps)
+  let said = @sf.ask_line_words(look.state_turn.then(chat_state_wraps))
   let stacked = @sf.native_on() && c.width <= chat_narrow_w
   let dismiss = fn() {
     match seq {
       Some(seq) => ask_dismiss(c, src, here, seq, true, false, at_end=true)
-      None => c.text(@sf.t("web-main.chat.asks.dismiss"), style=look.state_quiet.then(dismiss_end)) |> ignore
+      None =>
+        c.text(@sf.t("web-main.chat.asks.dismiss"), style=@sf.ask_line_words(look.state_quiet.then(dismiss_end)))
+        |> ignore
     }
   }
   // (an option row's ground and room, @sf.ask_line_card: its corner and its sides an option's)
@@ -328,12 +330,12 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   let tail = @motion.animate(c, "tail/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(fold_ms, ease=Out))
   let live = (src.topic)("live", { "station": Json::string(here.station), "key": Json::string(a.key) })
   let said = match a.wait {
-    Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") })
+    Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false)
     None => {
       let n = field(field(live.value, "activity"), "now")
       match text(n, "text") {
-        "" => ("busy", @sf.t("web-main.activity.busy"))
-        s => (text(n, "key"), s)
+        "" => ("busy", @sf.t("web-main.activity.busy"), false)
+        s => (text(n, "key"), s, flag(n, "mono"))
       }
     }
   }
@@ -444,12 +446,12 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 ///|
 /// What an activity says now, steadied (useSteady): another thing replaces the one shown after it has stayed 700 ms,
 /// crossfading (240 ms); the same thing's new words show at once. In the muted ink, the text's under the pointer.
-fn steady_words(c : @ui.Ctx, row : String, said : (String, String), hot : Bool) -> Unit {
-  let (key, words) = said
+fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : Bool) -> Unit {
+  let (key, words, mono) = said
   let st = match steadies.get(row) {
     Some(s) => s
     None => {
-      let s = { key, words, was: "", at: -1.0e9 }
+      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9 }
       steadies[row] = s
       s
     }
@@ -458,10 +460,13 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String), hot : Bool) 
   if key == st.key || words == st.words {
     st.key = key
     st.words = words
+    st.mono = mono
   } else if c.moment() >= st.at + steady_dwell_ms {
     st.was = st.words
+    st.was_mono = st.mono
     st.key = key
     st.words = words
+    st.mono = mono
     st.at = c.moment()
     swap.snap(0.0)
     swap.animate(1.0, @motion.tween(steady_cross_ms, ease=Out))
@@ -470,10 +475,10 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String), hot : Bool) 
   }
   let k = swap.get()
   c.box(style=now_room, fn() {
-    let cur = c.text(st.words, style=if hot { now_words_hot } else { now_words })
+    let cur = c.rich([@ui.span(st.words, mono=st.mono)], style=if hot { now_words_hot } else { now_words })
     if k < 1.0 {
       c.look(cur, @ui.look(alpha=k))
-      let was = c.layer(fn() { c.text(st.was, style=if hot { now_words_hot } else { now_words }) |> ignore })
+      let was = c.layer(fn() { c.rich([@ui.span(st.was, mono=st.was_mono)], style=if hot { now_words_hot } else { now_words }) |> ignore })
       c.look(was, @ui.look(alpha=1.0 - k))
     }
   })
@@ -485,7 +490,9 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String), hot : Bool) 
 priv struct Steady {
   mut key : String
   mut words : String
+  mut mono : Bool
   mut was : String
+  mut was_mono : Bool
   mut at : Double
 }
 

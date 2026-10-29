@@ -593,6 +593,21 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
         row()
       }
     }
+    // (in a card, a row of it: its title over the control, what it is for under it, as on the page, as far in as its
+    // rows' words; a section of the page there stood at the card's edge, 2026-10-29 高级网络设置. Its words last, not
+    // the control: a capsule as tall as a control is rounder than the card's corner, never concentric in it)
+    Narrow if in_card.val > 0 =>
+      c.box(style=narrow_row(false), fn() {
+        c.box(style=pg_row_words, fn() {
+          c.text(title, style=pg_switch_title) |> ignore
+          c.box(style=setting_in_card_control, control) |> ignore
+          if note != "" {
+            c.text(note, style=meta.then(full_words)) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
     // (a section of its own, not a card's: what is in it stands on the page)
     Narrow =>
       section(c, title, heads=true, fn() {
@@ -603,6 +618,11 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
       })
   }
 }
+
+///|
+/// A narrow card's setting's control: between its title and its note, 8 from each.
+// kept across runs: a value (no field of it changes)
+let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 
 ///|
 /// A setting kept on a page of its own (字体: the faces chosen): its `title`, what it is for (`note`) and what it is

@@ -1,5 +1,27 @@
 # A phone's adb, shared with a station's agents
 
+> **Being changed (2026-10-29, user: 「不再需要全局开关，而是改成全局配置和 chat 授权」「跟密钥授权一样」).** What
+> follows below is how it works until then. The target, as vault grants work (docs/vault.md 申请和授权):
+>
+> - **An agent asks** with a tool (`phone_use {reason}`, as `secret_use`): a card in its chat asks the phone's owner
+>   (the chat's starter by default: `card.assignee`) whether this chat's agent may debug their phone, with the reason;
+>   pushed. The tool waits up to 45 s: approved, it answers how to use the phone (its serial, `ANDROID_ADB_SERVER_PORT`);
+>   else the agent ends its turn need_human about the card and is told in its session when it is decided. Someone
+>   writing yes in the chat is not a grant.
+> - **Approved for a scope**, as a vault grant's: 本对话 1 小时内 (`hour`) or 本对话直到归档 (`chat`, 30 days at most),
+>   up to the owner's 默认最长授权 (a setting of theirs, default `chat`); the card offers what that allows and
+>   recommends the longest. A grant ends as its scope does, when the chat is archived or deleted, or when the owner
+>   takes it back (the card, the phone's notification, settings).
+> - **Only that chat's agent reaches the phone.** The station runs an adb server of the grant's own
+>   (`adb -P <port> server`), the phone connected in it alone, and gives its port to that session's commands only
+>   (`ANDROID_ADB_SERVER_PORT`); the phone's tunnel listener takes connections from that server's process alone (the
+>   peer of a loopback TCP connection, found by its ports in the processes' sockets). Another chat's agent, knowing the
+>   port, is not let in.
+> - **The phone lends while a grant is live**, to the station of that chat (one offer per station, its grants listed):
+>   its foreground service and notification say which chats it is lent to, each with 停止. No per-station switch.
+> - **Settings, 共享调试** (one page, not a station's): 默认最长授权, the phone's settings (本机设置: what it lacks, the
+>   switches it can turn on), the stations it is paired with, and the grants live now (each with 收回).
+> - **Recorded** in the chat as a system message each: asked, approved, refused, taken back, ended.
 A person can lend their Android phone to the agents of one station: the phone's
 own adbd (Wireless debugging, Android 11 and later) is reached from the station
 at `127.0.0.1:<port>`, so an agent there runs `adb -s 127.0.0.1:<port> …` as if

@@ -74,6 +74,8 @@ test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
     { kind: "tool_call", tool: "Grep", text: '{"pattern":"TODO"}', callId: "s3", subagent: true },
   ];
   const steps = [{ id: "s2", step: "tool", tool: "Bash", input: '{"command":"other"}' }];
+  assert.equal(present({ timeline, steps }).now.mono, true);
+  assert.equal(present({ timeline: timeline.slice(0, 5), phase: { phase: "thinking" } }).now.mono, undefined);
   assert.deepEqual(now({ timeline, steps, phase: { phase: "working" } }), ["s2", "Run the tests"]);
   assert.deepEqual(now({ timeline: timeline.slice(0, 5), phase: { phase: "thinking" } }), ["think", "思考中"], "nothing of this turn runs");
   // Writing its reply (chat_post's input streaming in); chat_state says nothing of its own.

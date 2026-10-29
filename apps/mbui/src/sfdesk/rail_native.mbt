@@ -141,8 +141,8 @@ fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw?
 
 ///|
 /// A chat's actions in the system's bars, each its own button there being room (the user, 2026-10-28): its info, its
-/// agents' history beside it (its switch, the panel's icon open or closed; with several agents a menu of them, the one
-/// in front ticked), archiving it where it may be. In place of its buttons (who is in it and where it runs stay by its
+/// side panel's switch (opening the first agent's history, or closing all its tabs), archiving it where it may be.
+/// In place of its buttons (who is in it and where it runs stay by its
 /// title, as the desktop's); false where there are no system's bars (the page draws its own).
 fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit, archive : (() -> Unit)?) -> Bool {
   if !@sf.native_on() {
@@ -152,16 +152,17 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "more", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
-  let history = @sf.t("android-chat.history.title")
-  if agents.length() == 1 {
+  let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
+  if agents.length() > 0 {
     let key = agents[0].key
-    bar_action(history_item, history, icon, fn() { side_toggle(src, r, key) }) |> ignore
-  } else if agents.length() > 1 {
-    let rows = agents.map(fn(a) {
-      let key = a.key
-      (history_row + key, a.who, "", fn() { side_toggle(src, r, key) })
-    })
-    bar_menu(history_item, history, icon, rows) |> ignore
+    bar_action(history_item, title, icon, fn() {
+      let (now, _) = side_now(src, r)
+      if now.length() > 0 {
+        side_change(src, r, "clear", None)
+      } else {
+        side_change(src, r, "open", Some(key))
+      }
+    }) |> ignore
   }
   match archive {
     Some(act) => bar_action("chat/archive", @sf.t("web-pages.chat.archive"), "archive", act) |> ignore
@@ -171,35 +172,8 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
 }
 
 ///|
-/// The chat's history switch in the system's bars (bar_chat), and each agent's row in its menu, by its key after this.
+/// The chat's side panel switch in the system's bars (bar_chat).
 let history_item : String = "chat/history"
-
-///|
-let history_row : String = "page/chat/history/"
-
-///|
-/// One of the page's actions in the system's bars with a menu of others (`rows`: each its id, its words, its icon's
-/// name and what it does chosen; "-" a line between them), as bar_action.
-fn bar_menu(id : String, title : String, icon : String, rows : Array[(String, String, String, () -> Unit)]) -> Bool {
-  if !bar_action(id, title, icon, fn() {  }) {
-    return false
-  }
-  let key = "page/" + id
-  guard nav_page.search_by(fn(p) { p.0.id == key }) is Some(i) else { return false }
-  let (item, act) = nav_page[i]
-  nav_page[i] = ({ ..item, menu: rows.map(fn(m) { (m.0, m.1, false, if m.2 == "" { "" } else { @sf.icon_path(m.2) }) }) }, act)
-  for m in rows {
-    if m.0 != "-" {
-      nav_page_rows[m.0] = m.3
-    }
-  }
-  true
-}
-
-///|
-/// What each row of a page's menus in the system's bars does chosen (bar_menu), kept with the page's actions.
-// kept across runs: said by bar_menu, put back with the page's actions (nav_frame)
-let nav_page_rows : Map[String, () -> Unit] = {}
 
 ///|
 /// The chat whose actions bar_chat handed (kept with it while the page's part is kept), None as another page comes.
@@ -207,26 +181,21 @@ let nav_page_rows : Map[String, () -> Unit] = {}
 let bar_chat_of : Ref[(Source, ChatRef)?] = Ref(None)
 
 ///|
-/// The chat's history switch as the side panel is this frame (its icon open or closed, its menu's agent in front
-/// ticked): said again each frame, the page that handed it kept as it was drawn or not (its part kept while the panel
+/// The chat's side panel switch as the panel is this frame (its icon and words open or closed): said again each
+/// frame, the page that handed it kept as it was drawn or not (its part kept while the panel
 /// changes).
 fn histories_ticked() -> Unit {
   guard bar_chat_of.val is Some((src, r)) else { return }
-  let (tabs, front) = side_now(src, r)
+  let (tabs, _) = side_now(src, r)
   let icon = @sf.icon_path(if tabs.length() > 0 { "panel-close" } else { "panel-open" })
+  let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
   for i, p in nav_page {
     let (item, act) = p
     if item.id != "page/" + history_item {
       continue
     }
-    let menu = item.menu.map(fn(m) {
-      match m.0.strip_prefix(history_row) {
-        Some(key) => (m.0, m.1, tabs.length() > 0 && front == key.to_string(), m.3)
-        None => m
-      }
-    })
-    if menu != item.menu || icon != item.icon {
-      nav_page[i] = ({ ..item, icon, menu }, act)
+    if title != item.title || icon != item.icon {
+      nav_page[i] = ({ ..item, icon, title }, act)
     }
   }
 }
@@ -281,7 +250,6 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   let page = app.nav.top()
   if nav_page_of.val != Some(page) {
     nav_page.clear()
-    nav_page_rows.clear()
     bar_chat_of.val = None
     nav_page_of.val = Some(page)
   }
@@ -290,9 +258,6 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   nav_page_was.clear()
   for p in nav_page {
     nav_page_was[p.0.id] = p.1
-  }
-  for id, act in nav_page_rows {
-    nav_page_was[id] = act
   }
   match nav_want.val {
     Some((src, w, all)) => {
@@ -507,7 +472,6 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   defer {
     if nav_page_of.val != Some(app.nav.top()) {
       nav_page.clear()
-      nav_page_rows.clear()
       bar_chat_of.val = None
       nav_page_of.val = Some(app.nav.top())
     }
@@ -631,7 +595,6 @@ fn rail_native_reset() -> Unit {
   floating_bar.val = None
   native_floating.val = []
   nav_page.clear()
-  nav_page_rows.clear()
   bar_chat_of.val = None
   nav_page_was.clear()
   nav_over_was.clear()

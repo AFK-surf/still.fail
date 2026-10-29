@@ -3583,6 +3583,14 @@ pub fn ask_line_end(icon : Double) -> @ui.Style {
 }
 
 ///|
+/// The words of ask_line_card's row (what it says, 忽略 at its end): `words` on lines as high as ask_line_mark's
+/// column, as an option's label on its disc, so the first line has the mark in its middle and the row as far over it
+/// as under it. (On a list's state line, 18 against the disc's 20 laid from the top, the words stood 1 over the bell.)
+pub fn ask_line_words(words : @ui.TextStyle) -> @ui.TextStyle {
+  words.then(@ui.text_style(leading=theme().items.mark_line))
+}
+
+///|
 /// The width of ask_line_mark's column: an option's disc, the theme's for the screen.
 fn ask_line_disc() -> Double {
   option_type().disc

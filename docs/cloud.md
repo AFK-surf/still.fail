@@ -127,7 +127,7 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 - 设备（core `Mesh.link` 的 `off`）：关掉的中继不拨、不测；关掉 still.fail 的任何一个中继或 `direct` 时不用主 endpoint（它的家在 still.fail 的中继上、打洞也只在它上面），剩下的每个中继都在各自的 endpoint 上拨；关掉 still.fail 的中继时也不用 entry（entry 经过两台中继的机器，分不清是哪台）。改了以后已经开着的、走关掉方式的连接立刻断开，请求换到别的路上。
 - station 不管这个：它照样挂在所有中继上（它可能在几个 workspace 里），station 之间的连接也照旧；只是这个 workspace 的新版设备不再从关掉的方式连它。
 
-**中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数和负载 `POST /v1/relays/load`（中继以 IP 为名，cloud 只认 Cloudflare 看到的来源地址就是那个 IP 的；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
+**中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`；转发速率每格画的是格内最忙那一分钟，不是整格平均，所以两种范围的峰值一致）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数、负载和读数时刻（速率按读数时刻算，不按 cloud 收到的时刻：跨境 POST 常晚到十几秒）`POST /v1/relays/load`（中继以 IP 为名，cloud 只认 Cloudflare 看到的来源地址就是那个 IP 的；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
 
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 

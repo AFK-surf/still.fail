@@ -47,7 +47,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     return
   }
   // an agent's request about a vault item that says what it is: its card is in place of the words (message.mbt)
-  if m.card is Some({ ask: Some(_), .. }) {
+  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {
@@ -243,6 +243,53 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 }
 
 ///|
+/// An agent's request for its person's phone in place of its post's words (docs/adb-share.md): its card while it waits
+/// (answered with `adb.decide` on the chat's station), then a line saying how it went.
+fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : PhoneAsk) -> Unit {
+  let decided = ask.status != ""
+  let asking = fn() {
+    c.box(style=@sf.ask_card_room, fn() {
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text)
+    })
+    |> ignore
+  }
+  let ended = fn() { @settings.phone_outcome(c, ask.status, ask.scope, ask.why) }
+  match here.list {
+    Some(l) => {
+      let key = here.station + "/" + m.ts
+      let open = l.turns.in_turn(c, "phone/" + m.ts, !decided, close_turn_ms)
+      let at = l.turns.started_at("phone/" + m.ts)
+      let start_at = if at >= 0.0 { Some(at) } else { None }
+      under_post(
+        c,
+        "phone-card/" + key,
+        open,
+        exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+        close=close_gap,
+        start_at?,
+        asking,
+      )
+      under_post(
+        c,
+        "phone-ended/" + key,
+        decided && !open,
+        start_at?,
+        enter=@motion.trans(
+          fade=0.0,
+          spec=@motion.Snap(0.0),
+          fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
+        ),
+        open=close_gap,
+        exit=@motion.trans(spec=@motion.Snap(0.0)),
+        close=@motion.Snap(0.0),
+        ended,
+      )
+    }
+    None => if decided { ended() } else { asking() }
+  }
+}
+
+///|
 /// Whether what is asked of `assignee` is the viewer's to answer (anyone's where it names no one).
 pub fn mine_to(here : MessageHere, assignee : String) -> Bool {
   let me = here.view.me
@@ -373,10 +420,12 @@ fn ask_dismiss(
   if at_end {
     if asking {
       let words = @sf.t("web-main.chat.asks.dismiss")
-      // (on the line's own leading, level with its first line; a press reaches it from round it, press_reach)
+      // (on the card row's lines, level with its first line and the bell: ask_line_words; a press reaches it from
+      // round it, press_reach)
       let look = @sf.theme().chat_list
       let b = c.box(id=if shown { id } else { 0 }, fn() {
-        c.text(words, style=(if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)) |> ignore
+        let said = (if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)
+        c.text(words, style=@sf.ask_line_words(said)) |> ignore
       })
       if shown {
         c.semantics(b, Button, id~, label=words)

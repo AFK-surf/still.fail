@@ -172,6 +172,8 @@ pub(all) struct Items {
   name : @ui.TextStyle
   meta : @ui.TextStyle
   mark : Double
+  /// a line as high as the mark (L6 20, L7 22): words with the mark in the middle of their first line
+  mark_line : @ui.Leading
 }
 
 // ---------------------------------------------------------------------------
@@ -1091,6 +1093,7 @@ let wide_items : Items = {
   name: @ui.text_style(size=Ui, color=Fg, wrap=false),
   meta: @ui.text_style(size=Meta, color=Muted, wrap=false),
   mark: 20.0,
+  mark_line: L6,
 }
 
 ///|
@@ -1100,6 +1103,7 @@ let narrow_items : Items = {
   name: @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false),
   meta: @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false),
   mark: 22.0,
+  mark_line: L7,
 }
 
 ///|
