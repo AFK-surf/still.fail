@@ -56,9 +56,15 @@ export function queueRow(row: HTMLElement, start: () => Promise<unknown> | void 
  *  (listSizing): the rows over it go up as it opens, never put up at once nor glided after. */
 export function growRow(row: HTMLElement): void {
   const pane = listPaneOf(row);
+  row.dataset.grown = "";
   if (!pane || document.visibilityState !== "visible") return;
   const height = row.getBoundingClientRect().height;
   if (height < 0.5) return;
+  // the gap before it opening with it (given up by the row before till then: its own negative margin)
+  const parent = row.parentElement;
+  const gap = parent && row !== parent.firstElementChild ? parseFloat(getComputedStyle(parent).rowGap) || 0 : 0;
+  const before = row.previousElementSibling;
+  if (gap && before instanceof HTMLElement) play(before, [{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
   listSizing(pane, motionMs(GLIDE_MS));
   // (from nothing in this very frame, before the motion is under way: the list measures it there, not at its height)
   row.style.height = "0px";

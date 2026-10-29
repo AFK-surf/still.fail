@@ -81,7 +81,8 @@ type Made = {
 /** How much of the list's gap before it a row takes back (its own negative margin, list.css.ts): held back, all of it;
  *  going with the row before it (`data-joined`), all but JOINED_GAP. */
 function takenBack(row: HTMLElement, gap: number): number {
-  return row.hasAttribute("data-held") || row.hasAttribute("data-queued") ? gap : row.hasAttribute("data-joined") ? gap - css.JOINED_GAP : 0;
+  const unopened = row.hasAttribute("data-enter") && !row.hasAttribute("data-grown");
+  return row.hasAttribute("data-held") || row.hasAttribute("data-queued") || unopened ? gap : row.hasAttribute("data-joined") ? gap - css.JOINED_GAP : 0;
 }
 
 /** A list's model, one for each `key` (a chat): made before its rows are, so where it opens can be said to it first. */

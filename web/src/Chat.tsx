@@ -60,7 +60,7 @@ import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
 import { sendingHere, sendingNow, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
-import { after, claimReserved, listQueue, queueRow } from "./listQueue.ts";
+import { after, claimReserved, growRow, listQueue, queueRow } from "./listQueue.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "@stillfail/ui/toast.tsx";
@@ -737,7 +737,9 @@ function useQueuedEntries(list: RefObject<HTMLElement | null>) {
     for (const el of pane.querySelectorAll<HTMLElement>(":scope > [data-enter]")) {
       if (seen.current.has(el)) continue;
       seen.current.add(el);
-      if (el.dataset.vk?.startsWith("o:") && (sendingNow() || claimReserved(el))) continue;
+      // (words flying in from the composer open their own room as they fly: there whole)
+      if (el.dataset.vk?.startsWith("o:") && sendingNow()) { el.dataset.grown = ""; continue; }
+      if (el.dataset.vk?.startsWith("o:") && claimReserved(el)) { growRow(el); continue; }
       queueRow(el, () => after(motionMs(ENTER.duration)));
     }
   });
