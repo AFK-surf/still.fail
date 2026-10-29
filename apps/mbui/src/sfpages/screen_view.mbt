@@ -28,6 +28,13 @@ priv struct ScreenUi {
   /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
   mut in_tab : Bool
   mut tools_open : Bool
+  /// how far the folded tools were dragged from their corner (so they cover another part of the screen)
+  mut tools_dx : Double
+  mut tools_dy : Double
+  /// where they were as a drag of them began
+  mut tools_from : (Double, Double)?
+  /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
+  mut scale_asked : Int
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
   mut sayings : Int
@@ -90,6 +97,10 @@ fn screen_ui(key : String) -> ScreenUi {
         fulled: false,
         in_tab: false,
         tools_open: false,
+        tools_dx: 0.0,
+        tools_dy: 0.0,
+        tools_from: None,
+        scale_asked: 0,
         saying: false,
         sayings: 0,
         box_w: 0.0,
@@ -232,7 +243,9 @@ pub fn screen_page(
   screen_keys_in(c, s, u, kc.keys)
   let (ww, wh) = c.window_size()
   let sideways = ww > wh
-  let native = !in_tab && @sf.native_over_up(title)
+  // 全屏 there: the system's bars put away too (no title, no actions), the frame edge to edge with its tools folded as
+  // anywhere else
+  let native = !in_tab && @sf.native_over_up(if u.full { "" } else { title }) && !u.full
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
@@ -384,6 +397,7 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
     @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
       net_panel_open(s, u, screen_native_anchor(c))
     }, active=screen_native_panel_on(u, "stats"))
+    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full = true })
     let line = text(s.state, "line")
     if line != "" {
       @sf.native_over_act("screen-people", line, "users", fn() {
@@ -834,7 +848,8 @@ fn keyboard_button(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 ///|
 /// 全屏's tools, folded into one round button over the frame's corner (in the letterbox, as a screen wider than the
 /// device leaves one): open, the same as the rail's down from it — 只看/控制, trackpad, pasting, the keyboard,
-/// 控制中心, 退出全屏.
+/// 控制中心, 退出全屏. Its button dragged, they go where it is let go, kept inside the window (what is under the corner
+/// in sight again).
 fn full_tools(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -843,12 +858,50 @@ fn full_tools(
   catcher : String,
   close : () -> Unit,
 ) -> Unit {
+  let capsule = c.id("screen-tools-capsule")
+  // kept inside the window as it was last laid out (opened longer, or the window turned)
+  // (laid out moved as far as it was drawn: its corner's place is that less how far)
+  let (laid_dx, laid_dy) = (u.tools_dx, u.tools_dy)
+  let keep = fn() {
+    match c.laid_rect(capsule) {
+      Some((x, y, w, h)) => {
+        let (ww, wh) = c.window_size()
+        let x0 = x - laid_dx
+        let y0 = y - laid_dy
+        u.tools_dx = dmax(-x0, dmin(ww - w - x0, u.tools_dx))
+        u.tools_dy = dmax(-y0, dmin(wh - h - y0, u.tools_dy))
+      }
+      None => ()
+    }
+  }
   // a round button 4 in from the capsule's edge: its corner 20 + 4
-  c.box(style=full_tools_box, fn() {
+  c.box(style=full_tools_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
     let (icon, label) = if u.tools_open {
       ("close", @sf.t("android-misc.screen.toolsClose"))
     } else {
       ("more", @sf.t("android-misc.screen.tools"))
+    }
+    let id = c.id("screen-tools")
+    c.drag_on(id, axis=Free)
+    match c.drag_of(id) {
+      Some(d) => {
+        if d.moving {
+          let (fx, fy) = match u.tools_from {
+            Some(f) => f
+            None => {
+              let f = (u.tools_dx, u.tools_dy)
+              u.tools_from = Some(f)
+              f
+            }
+          }
+          u.tools_dx = fx + d.x - d.x0
+          u.tools_dy = fy + d.y - d.y0
+        } else {
+          u.tools_from = None
+        }
+        d.take_end() |> ignore
+      }
+      None => ()
     }
     if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
       u.tools_open = !u.tools_open
@@ -869,6 +922,7 @@ fn full_tools(
     }
   })
   |> ignore
+  keep()
 }
 
 ///|

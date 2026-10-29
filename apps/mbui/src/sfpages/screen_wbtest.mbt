@@ -579,6 +579,35 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
 }
 
 ///|
+test "only looking, a double tap zooms in where it is and another back to fitted; taps further apart do not" {
+  let r = screen_rig()
+  r.state("live", control=false, others=[])
+  r.config()
+  r.frame(1000.0)
+  let u = r.ui()
+  assert_false(u.zoom.zoomed())
+  r.tap_at(0.25, 0.25)
+  r.tap_at(0.25, 0.25)
+  r.t.run_for(@ui.nav_push_ms)
+  assert_true(u.zoom.zoomed())
+  assert_eq(r.inputs().length(), 0)
+  // the same point of the screen, still under the finger
+  r.t.run_for(screen_double_tap_ms)
+  r.tap_at(0.25, 0.25)
+  r.tap_at(0.25, 0.25)
+  r.t.run_for(@ui.nav_push_ms)
+  assert_false(u.zoom.zoomed())
+  // one tap, then the wait over before the next: no zoom
+  r.t.run_for(screen_double_tap_ms)
+  r.tap_at(0.25, 0.25)
+  r.t.run_for(screen_double_tap_ms)
+  r.tap_at(0.25, 0.25)
+  r.t.run_for(@ui.nav_push_ms)
+  assert_false(u.zoom.zoomed())
+  screen_done(r.t)
+}
+
+///|
 test "the keys row short of room on a phone: Esc and the arrows in it, the least used out; its ⋯ turns it to them, a modifier held there stays in it once back" {
   let r = screen_rig()
   r.live(others=[])
