@@ -10,6 +10,7 @@
 //               {"at": 3000, "post": {"text": …, "files": […], "placed": […], "options": [{"label", "detail",
 //                "recommended"}], "ending": "all_done"}}]],
 //     "answered": [[…]],
+//     "opened": [[…]],   (steps done as the chat is first read, at once: what its agent posted as it opened)
 //     "pictures": {"before.png": "<base64>"},
 //     "words": {"整理发布清单": "Release checklist", …} }
 // A story told in another language says the made-up chats' words in it (`words`: each of their words as a whole, its
@@ -30,9 +31,22 @@ let story_sent : Ref[Int] = { val: 0 }
 ///|
 let story_answered : Ref[Int] = { val: 0 }
 
+
 ///|
 /// The story's chat as it opens: its title and what was said before.
 pub fn story_chat(story : Json) -> Json {
+  // (its `opened` steps in its chat as it is read, each once: what the chat's made-up state holds, as it may be begun
+  // again, not a flag)
+  match items(Some(story), "opened") {
+    [Array(steps), ..] =>
+      for k, s in steps {
+        let ts = "opened\{k}"
+        if !fix_chat("s-c1").sent.iter().any(fn(m) { text(Some(m), "ts") == ts }) {
+          story_step(s, ts~)
+        }
+      }
+    _ => ()
+  }
   let session = "s-c1"
   let claude = by_agent("anthropic", "claude", session)
   let before = items(Some(story), "before")
@@ -122,59 +136,63 @@ fn story_play(list : String, n : Int) -> Unit {
   let lists = items(fix_story.val, list)
   guard n < lists.length() else { return }
   guard lists[n] is Array(steps) else { return }
-  let session = "s-c1"
   for s in steps {
-    fix_later(number(Some(s), "at"), fn() {
-      let fc = fix_chat(session)
-      match field(Some(s), "working") {
-        Some(True) => fc.working = @ui.now()
-        Some(False) => {
-          fc.working = -1.0
-          story_now.val = ("", "")
-        }
-        _ => ()
+    fix_later(number(Some(s), "at"), fn() { story_step(s) })
+  }
+}
+
+///|
+/// One of the story's steps done: its agent at work or done, what it does now, what it posts (as `ts`, where given).
+fn story_step(s : Json, ts? : String) -> Unit {
+  let session = "s-c1"
+  let fc = fix_chat(session)
+  match field(Some(s), "working") {
+    Some(True) => fc.working = @ui.now()
+    Some(False) => {
+      fc.working = -1.0
+      story_now.val = ("", "")
+    }
+    _ => ()
+  }
+  match text(Some(s), "activity") {
+    "" => ()
+    words => story_now.val = ("step:" + number(Some(s), "at").to_string(), words)
+  }
+  match field(Some(s), "post") {
+    Some(p) => {
+      fix_serial.val += 1
+      let seq = 200 + fix_serial.val
+      let more : Map[String, Json] = {
+        "ts": Json::string(ts.unwrap_or("story\{fix_serial.val}")),
+        "said": true,
+        "attachments": Json::array(story_files(p)),
+        "placed": Json::array(items(Some(p), "placed")),
       }
-      match text(Some(s), "activity") {
+      match text(Some(p), "ending") {
         "" => ()
-        words => story_now.val = ("step:" + number(Some(s), "at").to_string(), words)
+        e => more["ending"] = Json::string(e)
       }
-      match field(Some(s), "post") {
-        Some(p) => {
-          fix_serial.val += 1
-          let seq = 200 + fix_serial.val
-          let more : Map[String, Json] = {
-            "ts": Json::string("story\{fix_serial.val}"),
-            "said": true,
-            "attachments": Json::array(story_files(p)),
-            "placed": Json::array(items(Some(p), "placed")),
-          }
-          match text(Some(p), "ending") {
-            "" => ()
-            e => more["ending"] = Json::string(e)
-          }
-          let options = items(Some(p), "options")
-          if options.length() > 0 {
-            more["ending"] = "need_decision"
-            more["card"] = { "type": "options", "assigneeText": "待你决定", "options": Json::array(options) }
-            more["decision"] = { "resolved": false }
-            more["asked"] = true
-          }
-          // (an agent asking to keep a secret the viewer types in, or to use one: its vault card, `vault` the request as
-          // its card says it, with its `request` id)
-          match field(Some(p), "vault") {
-            Some(ask) =>
-              more["card"] = { "type": "options", "vault": Json::string(text(Some(ask), "request")), "vaultAsk": ask }
-            None => ()
-          }
-          // (another person's, `by`: one in the Slack thread the chat came from)
-          match text(Some(p), "by") {
-            "" => fc.sent.push(msg(seq, "agent", by_agent("anthropic", "claude", session), text(Some(p), "text"), "刚刚", more))
-            by => fc.sent.push(msg(seq, "person", by_person(by), text(Some(p), "text"), "刚刚", more))
-          }
-        }
+      let options = items(Some(p), "options")
+      if options.length() > 0 {
+        more["ending"] = "need_decision"
+        more["card"] = { "type": "options", "assigneeText": "待你决定", "options": Json::array(options) }
+        more["decision"] = { "resolved": false }
+        more["asked"] = true
+      }
+      // (an agent asking to keep a secret the viewer types in, or to use one: its vault card, `vault` the request as
+      // its card says it, with its `request` id)
+      match field(Some(p), "vault") {
+        Some(ask) =>
+          more["card"] = { "type": "options", "vault": Json::string(text(Some(ask), "request")), "vaultAsk": ask }
         None => ()
       }
-    })
+      // (another person's, `by`: one in the Slack thread the chat came from)
+      match text(Some(p), "by") {
+        "" => fc.sent.push(msg(seq, "agent", by_agent("anthropic", "claude", session), text(Some(p), "text"), "刚刚", more))
+        by => fc.sent.push(msg(seq, "person", by_person(by), text(Some(p), "text"), "刚刚", more))
+      }
+    }
+    None => ()
   }
 }
 

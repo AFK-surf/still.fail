@@ -117,10 +117,10 @@ export function filmSound({ seconds, marks, taps, keys = [], unfold, flip, end, 
       }
     }
   }
-  // a key typed on the keyboard (a `keys` step's letters, each when it was typed): its tick
+  // a key typed on the keyboard (a `keys` step's letters, each when it was typed): its tick, soft (at 0.22 it stood out over all else: the user, 2026-10-29)
   for (const tk of keys) {
     const bp = biquad('bp', 3200 + 900 * Math.sin(tk * 77), 1.6), lp = biquad('lp', 900, 0.8), r2 = noise(Math.round(tk * 997));
-    add(tk, 0.035, (t) => (bp(r2()) * 1.6 + lp(r2()) * 0.8) * Math.exp(-t * 160) * Math.min(1, t / 0.0008), 0.22);
+    add(tk, 0.035, (t) => (bp(r2()) * 1.6 + lp(r2()) * 0.8) * Math.exp(-t * 160) * Math.min(1, t / 0.0008), 0.07);
   }
   // the words sent: a whoosh going up
   {

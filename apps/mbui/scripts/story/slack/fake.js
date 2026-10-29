@@ -166,26 +166,14 @@
     message(tRoot, { who: 'Ana Costa', at: '9:29 AM', img: ANA, html: ANA_TEXT, replies: '1 reply' }),
   ];
   mainBox.replaceChildren(...main);
-  // the thread beside it: the agent's question to Lin as still.fail's card in Slack (station/src/slack/cards.ts: its words,
-  // then the options as radio buttons, the recommended last and chosen already, each its detail under it, and OK),
-  // answered from the phone: then its words and who answered what (answeredBlocks)
-  const FOUND = `Found it: the 3-D Secure redirect drops the locale. The fix touches payments. ${mention('@Lin')}, ship it?`;
-  const FIXED = `Fixed and live. ${mention('@Ana Costa')} can you try again?`;
-  const radio = (label, detail, on) =>
-    `<label style="display:flex;gap:9px;align-items:flex-start;padding:4px 0;cursor:default">` +
-    `<span style="flex:none;width:16px;height:16px;margin-top:2px;border-radius:50%;box-sizing:border-box;` +
-    (on ? 'border:5px solid #1d9bd1;background:#fff' : 'border:1px solid rgba(232,232,232,.5)') + `"></span>` +
-    `<span><span style="display:block;font-size:15px;line-height:22px">${label}</span>` +
-    `<span style="display:block;font-size:13px;line-height:18px;opacity:.7">${detail}</span></span></label>`;
-  const card = `<div class="p-block_kit_renderer__block_wrapper" data-card="ask"><div style="padding:4px 0 2px">` +
-    radio('Not yet', 'Leave it for review', false) + radio('Fix and deploy', 'Patch, test, deploy', true) +
-    `</div><button class="c-button c-button--primary c-button--small" type="button" style="margin-top:6px">OK</button></div>`;
-  const answered = `<div class="p-block_kit_renderer__block_wrapper" data-card="answered"><div class="p-context_block">` +
-    `<span class="p-context_block__text" style="opacity:.7;font-size:13px">✓ Lin answered: Fix and deploy</span></div></div>`;
+  // the thread beside it: the agent's answer, the fix waiting on the production key in Lin's vault (no card in Slack: a
+  // vault's ask is allowed only in still.fail, with its owner's finger), then the fix live and Ana's thanks
+  const FOUND = `Found it: the 3-D Secure redirect drops the locale. The fix is ready, but deploying it needs the production key from Lin's vault. ${mention('@Lin')}, can you approve it?`;
+  const FIXED = `Fixed and live. Lin's key never left the vault. ${mention('@Ana Costa')} can you try again?`;
   const sep = tSeparator.cloneNode(true);
   sep.style.position = 'absolute';
   const sepCount = $('.p-threads_flexpane__separator_count', sep);
-  const ask = message(tApp, { who: 'still.fail', at: '9:33 AM', img: APP, app: true, html: FOUND, after: card + answered });
+  const ask = message(tApp, { who: 'still.fail', at: '9:33 AM', img: APP, app: true, html: FOUND });
   const thread = [
     message(tThreadRoot, { who: 'Ana Costa', at: '9:29 AM', img: ANA, html: ANA_TEXT, replies: null }),
     sep,
@@ -292,6 +280,9 @@
   const anaMsg = main[main.length - 1];
   const anaBlocks = $('.c-message__message_blocks', anaMsg);
   anaBlocks?.after(eyes);
+  // (and on it as the thread shows it, at its top: the same reaction)
+  const eyesRoot = eyes.cloneNode(true);
+  $('.c-message__message_blocks', thread[0])?.after(eyesRoot);
 
   // the thread open beside the channel once Ana opens it (a click on its replies); the channel the window's width till
   // then: the pane taken out of the layout's grid, as Slack lays it with no thread open
@@ -320,12 +311,11 @@
     show(thread[0], m.ana);
     show(sep, m.found);
     show(ask, m.found);
-    $('[data-card="ask"]', ask).style.display = on(m.deploy) ? 'none' : '';
-    $('[data-card="answered"]', ask).style.display = on(m.deploy) ? '' : 'none';
     show(thread[3], m.fixed);
     show(thread[4], m.thanks);
     status.style.display = 'none';
     eyes.style.display = between(m.eyes, m.found) || between(m.deploy, m.fixed) ? 'flex' : 'none';
+    eyesRoot.style.display = eyes.style.display;
     // the boxes: the channel's while Ana asks (focused till she opens the thread), the thread's while she answers
     const a = on(m.ana) ? { s: '', last: m.ana } : typedAt(t, m.typing, TYPED);
     fill(mainIn, a.s, !open, caretOnAt(t, a.last));

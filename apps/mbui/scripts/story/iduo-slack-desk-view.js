@@ -7,6 +7,6 @@ export default (M) => {
   const box = [2.5, -538, -927, 1500], thread = [3.0, -1406, -545, 1500], phone = [1, -1150, 0, 0], both = [1, 0, 0, 470];
   const S = M.start, P = M.read, D = M['tap=deploy'], E = M.end;
   const v = (t, s) => [t, ...s];
-  return [v(M.from, box), v(S + 4.9, box), v(S + 5.6, thread), v(P - 0.5, thread), v(P + 0.2, phone), v(D + 0.8, phone),
-    v(D + 1.5, thread), v(E - 2.2, thread), v(E - 1.3, both)];
+  return [v(M.from, box), v(S + 4.9, box), v(S + 5.6, thread), v(P - 0.5, thread), v(P + 0.2, phone), v(D + 3.6, phone),
+    v(D + 4.3, thread), v(E - 2.2, thread), v(E - 1.3, both)];
 };
