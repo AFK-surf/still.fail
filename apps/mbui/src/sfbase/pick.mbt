@@ -11,20 +11,21 @@
 
 ///|
 /// What is picked in the chat: one passage of one message at a time (mbui's @kit.Pick), the message it is of, who
-/// said it and as what (agent | person), what shares its turn (None: it is not a chat's list's); the press something
-/// else in the message took (a link's menu, an image quoted: its frame), which picks nothing.
+/// said it and as what (agent | person), what shares its turn (None: it is not a chat's list's), the link to it ("":
+/// none); the press something else in the message took (a link's menu, an image quoted: its frame), which picks nothing.
 pub(all) struct ChatPick {
   /// the message picked from ("" none)
   mut ts : String
   mut author : String
   mut role : String
   mut share : (() -> Unit)?
+  mut link : String
   sel : @kit.Pick
   mut taken_at : Int
 }
 
 ///|
-pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, sel: @kit.Pick::new(), taken_at: -1 }
+pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
 
 ///|
 /// A message right clicked with a mouse, and what shares its turn: the frame, where, and the share, for the window's
@@ -32,17 +33,17 @@ pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, sel: @kit.P
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit)?] = Ref(None)
 
 ///|
-/// Links to this message and pictures of its turn, beside its author's name and time.
-/// A resting pointer reveals them; touch keeps both visible because there is no hover.
+/// Links to this message and pictures of its turn, beside its author's name and time, where a mouse is the native
+/// input: shown while the pointer rests on the message. A finger has no resting pointer: where it is the native input
+/// both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) if !@sf.more_held() => share_offered.val = Some((c.frame_number(), x, y, go))
-    _ => ()
+    Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))
+    None => ()
   }
-  let touch = @sf.more_held()
-  c.box(style=if touch { share_tools_touch } else { share_tools_mouse }, fn() {
+  c.box(style=share_tools_mouse, fn() {
     c.box(style=share_turn_room, fn() {
-      c.hand_shown(touch || c.hovered(row), fn() {
+      c.hand_shown(c.hovered(row), fn() {
         if @sf.icon_button(c, "link", key=key + "/message-link", size=24.0, label=@sf.t("common.link.copy"), disabled=link == "") {
           c.copy_text(link)
           say(c, @sf.t("common.link.copied"))
@@ -50,7 +51,7 @@ pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go :
       })
     }) |> ignore
     c.box(style=share_turn_room, fn() {
-      c.hand_shown(touch || c.hovered(row), fn() {
+      c.hand_shown(c.hovered(row), fn() {
         if @sf.icon_button(c, "photo", key=key + "/share-turn", size=24.0, label=@sf.t("web-pages.chat.shareImage")) {
           pick_clear()
           go()
@@ -69,10 +70,6 @@ let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
 let share_tools_mouse : @ui.Style = @ui.css("row w=Hug gap=S3")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let share_tools_touch : @ui.Style = @ui.css("row w=Hug pl=S3_5 gap=S5")
-
-///|
 /// Let go of what is picked.
 pub fn pick_clear() -> Unit {
   pk.ts = ""
@@ -86,6 +83,7 @@ pub fn pick_reset() -> Unit {
   pk.author = ""
   pk.role = ""
   pk.share = None
+  pk.link = ""
   share_offered.val = None
   pk.taken_at = -1
   pk.sel.reset()
@@ -105,7 +103,8 @@ pub fn mouse_picks() -> Bool {
 /// A message's words to be picked from (MessagePick.kt messagePick), round what draws them (`body`): its ts, who said
 /// it and as what, its words; `fill`, as wide as its column (else as its words: the viewer's bubble). With a mouse
 /// (`mouse`), what of it the page's selection holds is told the pill, and a right click on it offers its turn shared
-/// (`share`, where it is given: share_offered). `marks` drawn behind its words first (a search's strokes), its words
+/// (`share`, where it is given: share_offered); held with a finger, its bar shares its turn and copies `link` too
+/// (where they are given). `marks` drawn behind its words first (a search's strokes), its words
 /// kept as laid out then too (`keep`).
 pub fn pickable(
   c : @ui.Ctx,
@@ -119,6 +118,7 @@ pub fn pickable(
   keep? : Bool = false,
   marks? : (Int) -> Unit = fn(_) {  },
   share? : (() -> Unit)? = None,
+  link? : String = "",
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
@@ -152,6 +152,7 @@ pub fn pickable(
             pk.author = author
             pk.role = role
             pk.share = share
+    pk.link = link
           }
           _ => ()
         }
@@ -181,6 +182,7 @@ pub fn pickable(
     pk.author = author
     pk.role = role
     pk.share = share
+    pk.link = link
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -205,8 +207,9 @@ let pick_felt : Ref[Int] = Ref(-1)
 /// Over list `list` (MessagePick.kt PickLayer): the picked passage's handles and its bar (over it; under it when the
 /// bar over the list is too near: `top`, where the list's bar ends; `foot`, what is kept clear at its foot), the bar
 /// gone while the list moves or the passage is being changed; with a mouse (`mouse`), the pill. A tap anywhere else
-/// lets go of it, as back does. Quoted: `quote` told whose words, the words, their message and its role. The bar's
-/// 分享 shares the message's turn (the message's `share`), where it has one.
+/// lets go of it, as back does. Quoted: `quote` told whose words, the words, their message and its role. After what
+/// the bar does with the passage, a line and what it does with the message, each a mark alone (named, as a reader
+/// says it): share its turn as a picture (its `share`), copy the link to it (its `link`), where it has them.
 pub fn pick_layer(
   c : @ui.Ctx,
   list : String,
@@ -242,6 +245,7 @@ pub fn pick_layer(
   let copy = c.id("pick/copy")
   let all = c.id("pick/all")
   let share = c.id("pick/share")
+  let link = c.id("pick/link")
   let ends = [c.id("pick/start"), c.id("pick/end")]
   // the bar's buttons
   if c.clicked(quote_id) {
@@ -268,6 +272,12 @@ pub fn pick_layer(
       return
     }
     _ => ()
+  }
+  if pk.link != "" && c.clicked(link) {
+    c.copy_text(pk.link)
+    say(c, @sf.t("common.link.copied"))
+    pick_clear()
+    return
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
@@ -338,6 +348,13 @@ pub fn pick_layer(
     })
     |> ignore
   }
+  let mark = fn(id : Int, label : String, icon : String) {
+    let b = c.box(style=pick_mark_button, id~, fn() {
+      @sf.icon(c, icon, size=pick_icon, color=t.p.text) |> ignore
+      @motion.ripple(c, id, pick_button_round)
+    })
+    c.semantics(b, Button, id~, label~)
+  }
   c.layer(fn() {
     // (its row `y` down the layer)
     c.box(style=@ui.style(h=Fixed(y - fy)), fn() {  }) |> ignore
@@ -352,8 +369,14 @@ pub fn pick_layer(
             if !everything {
               button(all, @sf.t("android-chat.annotate.selectAll"), "")
             }
+            if pk.share is Some(_) || pk.link != "" {
+              c.box(style=pick_bar_rule, fn() {  }) |> ignore
+            }
             if pk.share is Some(_) {
-              button(share, @sf.t("web-main.chat.shareTurn"), "photo")
+              mark(share, @sf.t("web-main.chat.shareTurn"), "photo")
+            }
+            if pk.link != "" {
+              mark(link, @sf.t("common.link.copy"), "link")
             }
           },
         )
@@ -471,6 +494,15 @@ let pick_button : @ui.Style = @ui.css("row h=S8 px=S3 gap=S1_25 radius=Full alig
 ///|
 // kept across runs: a value (no field of it changes)
 let pick_button_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
+
+///|
+/// What the bar does with the message, a mark alone 32 round, after a line 16 high 4 off what does with the passage.
+// kept across runs: a value (no field of it changes)
+let pick_mark_button : @ui.Style = @ui.css("h=S8 w=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_bar_rule : @ui.Style = @ui.css("w=SPx h=S4 mx=S1 bg=Line")
 
 ///|
 let pick_icon : Double = 15.0

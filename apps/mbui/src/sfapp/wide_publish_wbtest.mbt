@@ -120,12 +120,14 @@ test "wide: the message header offers its position link and its turn's picture s
 }
 
 ///|
-test "touch: both message sharing entries are visible without hovering" {
+test "touch: the message header has neither; the held bar copies its position link" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  let link = t.all(Button, label="复制链接").last().unwrap().rect
-  assert_true(t.all(Button, label="分享图片").length() > 0)
-  t.tap(link.0 + link.2 / 2.0, link.1 + link.3 / 2.0)
+  assert_true(t.query(Button, label="分享图片") is None)
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  assert_true(t.query(Button, label="分享这一轮") is Some(_))
+  t.click(Button, label="复制链接")
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
+  assert_eq(pk.ts, "")
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
 }
