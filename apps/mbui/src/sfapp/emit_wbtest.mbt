@@ -56,6 +56,30 @@ test "an answer said while its agent's activity shows waits, then comes out of i
 }
 
 ///|
+test "an answer taller than the window out of the avatar, the list at its end: read from its top, under the bar" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  // its agent at work, the list at its end: it says something long (in over its line), before the fixture's answer
+  let first = "列表改成虚拟列表"
+  let more = Array::makei(30, fn(i) { "第 \{i + 1} 段，接着往下讲。" }).join("\n\n")
+  fix_later(1.0, fn() {
+    fix_chat("s-c1").sent.push(
+      msg(170, "agent", @sffixture.by_agent("anthropic", "claude", "s-c1"), long_reply + "\n\n" + more, "刚刚", {
+        "ts": Json::string("long170"),
+        "said": true,
+      }),
+    )
+  })
+  clock.val = clock.val + 1.0
+  t.draw()
+  t.run_for(emit_all_ms() + 1000.0)
+  // its top in view under the bar (Follow.kt), not the list at the end of it
+  guard t.drawn_of(first) is Some((_, y)) else { fail("the answer's top is not in view") }
+  assert_true(y > bar_foot() && y < 844.0 / 2.0, msg="the answer's top at \{y}, the bar's foot at \{bar_foot()}")
+  emit_restore()
+}
+
+///|
 /// As the flying avatar lands on the answer (Spit): where the agent's picture is in its line and where the answer's is
 /// (their left edges, in the window).
 fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {

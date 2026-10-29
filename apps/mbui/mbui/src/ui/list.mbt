@@ -700,7 +700,19 @@ fn Ctx::place_list(
   let mut blocked_top = 0.0
   let mut hit_end = false
   let mut hit_top = false
-  if st.stick_end && st.at_end && st.pending >= 0.0 {
+  // held at its end with a row followed from its top (Ctx::list_follow_from): laid from that row's top `follow_margin`
+  // under the view's, down; short of the view, the end pass below holds it at its end all the same. Held there, not
+  // past the row's top, however the list came to its end (glided, or put there at once: a row in over its end rows)
+  let follows = st.follow_item >= 0 && st.follow_item < st.count
+  if st.stick_end && st.at_end && st.pending >= 0.0 && follows {
+    let y = iy + st.follow_margin - st.pending
+    let (r, h) = lay(st.follow_item, y)
+    rows.push(r)
+    top = y
+    bottom = y + h
+    first = st.follow_item
+    last = st.follow_item
+  } else if st.stick_end && st.at_end && st.pending >= 0.0 {
     blocked_end = st.pending
     hit_end = st.pending > 0.0
     // the last row's bottom on the view's
