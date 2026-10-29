@@ -15,7 +15,7 @@ export function relayCounters(text: string): Counters {
 
 /**
  * What a relay's load is read from (relay-load.ts): its counters since it started, and, for a relay on a machine of
- * its own, the machine's network card and load average (the lines relay-load.sh adds to the metrics it sends).
+ * its own, the machine's network card, load average and clock (the lines relay-load.sh adds to the metrics it sends).
  */
 export type Load = {
   /** Bytes it sent to clients and received from them. */
@@ -32,6 +32,8 @@ export type Load = {
   tx?: number;
   /** The machine's load average over a minute. */
   load1?: number;
+  /** When the relay's machine read these (seconds). */
+  time?: number;
 };
 
 export function relayLoad(text: string): Load {
@@ -47,7 +49,7 @@ export function relayLoad(text: string): Load {
     accepts: counters.accepts,
     disconnects: counters.disconnects,
   };
-  for (const key of ["rx", "tx", "load1"] as const) {
+  for (const key of ["rx", "tx", "load1", "time"] as const) {
     const v = value(`node_${key}`);
     if (Number.isFinite(v) && v >= 0) load[key] = v;
   }

@@ -59,6 +59,29 @@ test("rates come from what the counters grew by, a restart counting from zero an
   assert.equal(view.week.sent.length, 168);
 });
 
+test("a chart shows each bucket's busiest minute, timed by when the relay read its counters", () => {
+  const now = 1_800_000_000 - (1_800_000_000 % 3600);
+  const samples: Sample[] = [
+    { at: now - 590, load: load({ sent: 0 }) },
+    // A burst of a minute, then quiet: the five minutes' average would be a fifth of it.
+    { at: now - 530, load: load({ sent: 600_000 }) },
+    { at: now - 470, load: load({ sent: 600_000 }) },
+    { at: now - 410, load: load({ sent: 600_000 }) },
+    { at: now - 350, load: load({ sent: 600_000 }) },
+    { at: now - 290, load: load({ sent: 600_000 }) },
+    // Read a minute later, but its post took 50 s to arrive: 60 000 bytes in a minute, not in 10 s.
+    { at: now - 180, load: load({ sent: 600_000, time: now - 230 }) },
+    { at: now - 170, load: load({ sent: 660_000, time: now - 170 }) },
+  ];
+  const view = relayLoadView("https://r.example", samples, now);
+  const day = view.day.sent.length - 1, week = view.week.sent.length - 1;
+  assert.equal(view.day.sent[day - 2], 10_000);
+  assert.equal(view.day.sent[day - 1], 1_000);
+  // The same peak over the week, whose buckets are an hour.
+  assert.equal(view.week.sent[week - 1], 10_000);
+  assert.equal(relayLoad(`${METRICS}\nnode_time 1800000000\n`).time, 1_800_000_000);
+});
+
 test("a relay sampled long ago has no rate now", () => {
   const now = 1_800_000_000;
   const view = relayLoadView("https://r.example", [{ at: now - 3600, load: load({ accepts: 3 }) }, { at: now - 3540, load: load({ accepts: 4, sent: 600 }) }], now);
