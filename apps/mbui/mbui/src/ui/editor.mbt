@@ -1002,7 +1002,15 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     Some(t) => t
     None => return
   }
-  push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
+  // (its rect within the clip it is in, as a box's (push_round_clip): its own alone let its words show past what cuts
+  // it, a growing composer's new line under its foot over its send, 2026-10-30)
+  let k = clip_top()
+  push_clip(
+    dmax(n.x, clip_stack[k]),
+    dmax(n.y, clip_stack[k + 1]),
+    dmin(n.x + n.fw, clip_stack[k + 2]),
+    dmin(n.y + n.fh, clip_stack[k + 3]),
+  )
   // its scroll bar, where its words scroll in it (scroll_bar.mbt)
   let bar = if sideways.contains(n.id) { self.bar_at(n) } else { None }
   let focused = self.has_focus(n.id)

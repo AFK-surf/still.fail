@@ -788,6 +788,40 @@ test "a chat's composer growing a line as it is typed in keeps its send whole on
 }
 
 ///|
+test "a composer growing a line as it is typed in fades none of its words on its way: its last lines neither dim nor come back (the user, 2026-10-30: 「换行的时候最后两行会闪烁」)" {
+  for screen in [(@ui.Pointing::Finger, 2), (@ui.Pointing::Mouse, 0)] {
+    let (pointing, platform) = screen
+    let calls : Array[Made] = []
+    let (t, _) = desk_composer_tester(calls, pointing~, platform~)
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    t.type_text("先看第三项")
+    t.run_for(2.0 * @sfpages.morph_ms)
+    t.draw()
+    // (its words: the glyphs drawn in its field (focused) as laid out, to a line under its foot)
+    let faded = fn() {
+      let (ex, ey, ew, eh) = t.focused().unwrap().rect
+      let line = @sf.theme().round.side
+      t
+      .drawn_order()
+      .filter(fn(d) {
+        d.0 == 1 && d.1 >= ex - 1.0 && d.1 <= ex + ew && d.2 + d.4 / 2.0 >= ey - 1.0 && d.2 <= ey + eh + line &&
+        d.5 > 0.0 && d.5 < 0.99
+      })
+      .length()
+    }
+    assert_eq(faded(), 0, msg="at rest, platform \{platform}")
+    t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
+    t.frame()
+    assert_eq(faded(), 0, msg="as it sets off, platform \{platform}")
+    t.run_for(@sfpages.morph_ms / 4.0)
+    assert_eq(faded(), 0, msg="a quarter of the way, platform \{platform}")
+    t.run_for(@sfpages.morph_ms / 2.0)
+    assert_eq(faded(), 0, msg="three quarters of the way, platform \{platform}")
+  }
+}
+
+///|
 test "on a phone a finger 3 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
   for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
     let calls : Array[Made] = []
