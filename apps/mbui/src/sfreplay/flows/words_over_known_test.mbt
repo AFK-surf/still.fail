@@ -9,16 +9,14 @@ fn init {
     ("src/sfapp/tape.mbt", 1),
     ("src/sfreplay/flows/answer_option_test.mbt", 3),
     ("src/sfreplay/flows/bar_going_down_test.mbt", 2),
-    // (recorded again for #2642, cards answered on screen staying: its run's own pairs, none of them the cards'; see
-    // that PR: the failure line's 「·上报」 5, the activity's clock 4, an answer out of the avatar across the activity
-    // 2, words sent flying 2, the run's own 出错：意外停止 2, the station's line rising 1)
-    ("src/sfreplay/flows/card_motion_test.mbt", 16),
+    // (recorded again for #2642: its run's own pairs, none of them the cards'; fewer since words sent flying and an
+    // answer coming in over the end make room for what they pass, #2674 and #2689)
+    ("src/sfreplay/flows/card_motion_test.mbt", 6),
     ("src/sfreplay/flows/chat_audio_test.mbt", 1),
     ("src/sfreplay/flows/chinese_enter_test.mbt", 2),
     ("src/sfreplay/flows/close_option_test.mbt", 1),
     ("src/sfreplay/flows/dismiss_test.mbt", 1),
-    ("src/sfreplay/flows/glass_test.mbt", 3),
-    ("src/sfreplay/flows/history_test.mbt", 3),
+    ("src/sfreplay/flows/history_test.mbt", 1),
     ("src/sfreplay/flows/markdown_test.mbt", 1),
     ("src/sfreplay/flows/new_chat_test.mbt", 4),
     ("src/sfreplay/flows/notice_failed_test.mbt", 1),
@@ -27,15 +25,15 @@ fn init {
     ("src/sfreplay/flows/paste_short_test.mbt", 2),
     ("src/sfreplay/flows/pick_words_test.mbt", 3),
     ("src/sfreplay/flows/quote_test.mbt", 3),
-    ("src/sfreplay/flows/send_flying_test.mbt", 3),
+    ("src/sfreplay/flows/send_flying_test.mbt", 2),
     ("src/sfreplay/flows/send_text_test.mbt", 2),
-    ("src/sfreplay/flows/service_page_test.mbt", 2),
+    ("src/sfreplay/flows/service_page_test.mbt", 1),
     ("src/sfreplay/flows/share_files_test.mbt", 5),
     ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
-    ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
+    ("src/sfreplay/flows/sheets_sinking_test.mbt", 1),
     ("src/sfreplay/flows/station_file_sent_test.mbt", 3),
-    ("src/sfreplay/flows/station_files_test.mbt", 2),
+    ("src/sfreplay/flows/station_files_test.mbt", 1),
     ("src/sfreplay/flows/viewer_test.mbt", 6),
     ("src/sfreplay/flows/wide_resize_test.mbt", 1),
   ])

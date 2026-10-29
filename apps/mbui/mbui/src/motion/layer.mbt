@@ -1315,7 +1315,16 @@ fn makes_room(c : @ui.Ctx) -> Unit {
       _ => ()
     }
   }
-  if moving.is_empty() {
+  // what flies over the rows (words sent to their bubble): where it is drawn now
+  let flying : Array[(Int, Double, Double, Double, Double)] = []
+  for e in mo.entries {
+    if e.fly is Some(_) {
+      let (fx, fy, fw, fh) = c.node_rect(e.node)
+      let l = c.look_of(e.node)
+      flying.push((e.node, fx + l.dx + l.ox * fw * (1.0 - l.sx), fy + l.dy + l.oy * fh * (1.0 - l.sy), fw * l.sx, fh * l.sy))
+    }
+  }
+  if moving.is_empty() && flying.is_empty() {
     return
   }
   for e in mo.entries {
@@ -1344,6 +1353,28 @@ fn makes_room(c : @ui.Ctx) -> Unit {
         } else if my + mh <= ny + 0.5 {
           // laid over it, drawn down over it (as much of it as shows: grown, coming out with its move)
           top = dmax(top, my + mdy + dmin(mh, mr.shown_h) - (ny + dy))
+        }
+      }
+      // what flies over it: none of it drawn where that is, on the side of it that is (its words under none of them,
+      // shown again as it goes on: an agent's line, a message's time, under words sent on their way up)
+      let (ax0, ax1) = if flying.is_empty() { (0.0, 0.0) } else { c.node_drawn_across(e.node) }
+      for f in flying {
+        let (fnode, fx, fy, fw, fh) = f
+        if fnode == e.node || fx + fw <= ax0 || fx >= ax1 || fy + fh <= ny + dy || fy >= ny + dy + nh {
+          continue
+        }
+        // (not the row it flies to, which holds it)
+        let mut q = fnode
+        while q >= 0 && q != e.node {
+          q = c.node_parent(q)
+        }
+        if q == e.node {
+          continue
+        }
+        if fy + fh / 2.0 > ny + dy + nh / 2.0 {
+          bottom = dmin(bottom, fy - (ny + dy))
+        } else {
+          top = dmax(top, fy + fh - (ny + dy))
         }
       }
       // (its edge soft: what it draws fades in over room_soft as it is shown, the softness going as the room opens
