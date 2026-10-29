@@ -1,9 +1,9 @@
-// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, what asks
-// for a menu, whether the mouse drags lists, what is told outside once the builds are over. Its paint: where presses
-// go (its targets), what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the
-// scroll bars, a Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or
-// `paint_lists`), added to in the order said. What a target is said to be as it is built (the pointer's shape over
-// it, what a press on it does besides) is no list: its node holds it (Node's `marks`), and its targets carry it
+// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, whether
+// the mouse drags lists, what is told outside once the builds are over. Its paint: where presses go (its targets),
+// what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the scroll bars, a
+// Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`), added
+// to in the order said. What a target is said to be as it is built (the pointer's shape over it, what a press on it
+// does besides, whether it asks for a menu) is no list: its node holds it (Node's `marks`), and its targets carry it
 // (hit_marks).
 //
 // A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its build and its paint
@@ -145,12 +145,11 @@ let paint_lists : Array[&SaidList] = [
 ]
 
 ///|
-/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, what asks for a menu,
-/// whether the mouse drags lists, what is told once the builds are over.
+/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, whether the mouse drags
+/// lists, what is told once the builds are over.
 // kept across runs: never written
 let build_lists : Array[&SaidList] = [
   FocusSaid::{  },
-  AskersSaid::{  },
   MouseDragsSaid::{  },
   TellsSaid::{  },
 ]
@@ -340,49 +339,6 @@ impl SaidAgain for FocusTaken with said_show(self, sb) {
       "focus \{said_id(f.id)} \{said_id(f.group)} \{said_id(f.layer)} \{f.keys} \{f.on_press}\n",
     )
   }
-}
-
-///|
-/// Ids said by what is built (what asks for a menu).
-priv struct IdsTaken {
-  name : String
-  all : Array[Int]
-  to : Array[Int]
-}
-
-///|
-impl SaidAgain for IdsTaken with said_again(self, c, _) {
-  ignore(c)
-  self.to.append(self.all)
-}
-
-///|
-impl SaidAgain for IdsTaken with said_show(self, sb) {
-  for id in self.all {
-    sb.write_string("\{self.name} \{said_id(id)}\n")
-  }
-}
-
-///|
-/// What asks for a menu (Ctx::menu_asked).
-priv struct AskersSaid {}
-
-///|
-impl SaidList for AskersSaid with said_len(_, c) {
-  ignore(c)
-  desk.next_askers.length()
-}
-
-///|
-impl SaidList for AskersSaid with said_take(_, c, from) {
-  ignore(c)
-  IdsTaken::{ name: "asks", all: desk.next_askers[from:].to_owned(), to: desk.next_askers }
-}
-
-///|
-impl SaidList for AskersSaid with said_cut(_, c, len) {
-  ignore(c)
-  desk.next_askers.truncate(len)
 }
 
 ///|

@@ -78,7 +78,7 @@ struct Node {
   mut points : Bool
   /// what its build said of it as a target, held by it (docs/retained.md, the way there's 1): the pointer's shape over it
   /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
-  /// holds_through); 0 none said
+  /// holds_through, menu_asked); 0 none said
   mut marks : Int
   mut parent : Int
   mut first : Int

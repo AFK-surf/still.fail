@@ -183,9 +183,6 @@ priv struct Desk {
   mutable_menus : Array[(Array[Int], Double, Double)]
   /// what this frame reads of them (moved over from `mutable_menus` as a frame starts)
   menus : Array[(Array[Int], Double, Double)]
-  /// what asked for a menu (Ctx::menu_asked) as the frame those targets are of was built, and as this one is
-  askers : Array[Int]
-  next_askers : Array[Int]
   /// keys since the last frame: code, modifiers, whether a field took it
   mutable_keys : Array[(Int, Int, Bool)]
   keys : Array[(Int, Int, Bool)]
@@ -271,8 +268,6 @@ let no_spot : SelSpot = { base: 0, off: 0, at: [] }
 let desk : Desk = {
   mutable_menus: [],
   menus: [],
-  askers: [],
-  next_askers: [],
   mutable_keys: [],
   keys: [],
   shown: 0,
@@ -290,8 +285,6 @@ let desk : Desk = {
 fn desk_reset() -> Unit {
   desk.mutable_menus.clear()
   desk.menus.clear()
-  desk.askers.clear()
-  desk.next_askers.clear()
   desk.mutable_keys.clear()
   desk.keys.clear()
   desk.shown = 0
@@ -313,12 +306,6 @@ fn desk_frame_start() -> Unit {
     desk.menus.push(m)
   }
   desk.mutable_menus.clear()
-  // (what asked in the frame before: what was under a right click since was laid out by it)
-  desk.askers.clear()
-  for a in desk.next_askers {
-    desk.askers.push(a)
-  }
-  desk.next_askers.clear()
   desk.keys.clear()
   for k in desk.mutable_keys {
     desk.keys.push(k)
@@ -330,8 +317,6 @@ fn desk_frame_start() -> Unit {
 /// As the view is built (each time a frame builds it: frame_body): the shapes, drag areas and selections it says
 /// begin from none.
 fn desk_build_start() -> Unit {
-  // (what asks for a menu, as the frame's last build said it: Ctx::menu_asked)
-  desk.next_askers.clear()
   desk.next_mouse_drags.clear()
   desk.next_sels.clear()
   desk.selecting = false
@@ -412,7 +397,8 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 ///|
 /// A node's marks (Node's `marks`): it takes presses (Ctx::takes_presses, and what reads its click), a press on it drags
 /// the window (Ctx::window_drag), keeps what is picked (Ctx::keeps_selection), is what lies under it's when held
-/// (Ctx::holds_through); above them, the pointer's shape over it and one (Ctx::cursor), 0 where none is said.
+/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked); above them, the pointer's shape over it and one
+/// (Ctx::cursor), 0 where none is said.
 let mark_takes : Int = 1
 
 ///|
@@ -425,7 +411,10 @@ let mark_keeps : Int = 4
 let mark_holds : Int = 8
 
 ///|
-let mark_cursor_at : Int = 4
+let mark_asks : Int = 16
+
+///|
+let mark_cursor_at : Int = 5
 
 ///|
 /// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
@@ -536,15 +525,13 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 /// built after it), as a press goes to one target; a hold is already the target's held.
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
   hand_events_read()
-  if id != 0 {
-    desk.next_askers.push(id)
-  }
+  self.mark_id(id, mark_asks)
   let mut at : (Double, Double)? = None
   for m in desk.menus {
     if m.0.contains(id) {
       // (the first under it, topmost first, that asked for a menu as the frame it was laid out in was built: what
       // asks for the first time this frame goes by itself)
-      let innermost = match m.0.iter().find_first(fn(u) { desk.askers.contains(u) }) {
+      let innermost = match m.0.iter().find_first(fn(u) { (hit_marks(u) & mark_asks) != 0 }) {
         Some(u) => u
         None => id
       }

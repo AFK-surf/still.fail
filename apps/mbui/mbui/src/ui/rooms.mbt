@@ -49,18 +49,13 @@ pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
   }
   c.lit_all = true
   self.frame()
-  // (what asked for a menu as this frame was built: Ctx::menu_asked)
-  let askers : Set[Int] = Set::new()
-  for a in desk.next_askers {
-    askers.add(a)
-  }
   let out : Array[String] = []
   // (where each that asked stands: what a hold there opens is its menu, whatever node draws what lies over it, a row's
   // 归档 in a layer of its own)
   let held_at : Array[(Double, Double, Double, Double)] = []
   for k in 0..<c.count {
     let b = c.nodes[k]
-    if b.id != 0 && askers.contains(b.id) && b.fw > 0.0 && b.fh > 0.0 {
+    if b.id != 0 && (b.marks & mark_asks) != 0 && b.fw > 0.0 && b.fh > 0.0 {
       held_at.push((b.x, b.y, b.x + b.fw, b.y + b.fh))
     }
   }
