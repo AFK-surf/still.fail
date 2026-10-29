@@ -139,3 +139,39 @@ test "a code field: the next box edged, all red while wrong and empty, nothing t
   assert_eq(code_edges().map(fn(e) { e.1 }), [plain, plain, plain, plain, plain, plain])
   assert_eq(handed, ["123456"])
 }
+
+///|
+/// The code field's boxes (those edged), as (x, y, width), first to last.
+fn code_places() -> Array[(Double, Double, Double)] {
+  let out = []
+  for i in 0..<g().count {
+    let n = g().nodes[i]
+    if n.kind == kind_box && n.border_w > 0.0 {
+      out.push((n.x, n.y, n.fw))
+    }
+  }
+  out
+}
+
+///|
+test "a code field narrower than its row of boxes: drawn smaller in one row, then a row for each group, never past its room" {
+  // room for them all: as asked, in one row (6 × 42, 8 apart, 8 more between the groups: 300)
+  let wide = Tester::new(code_view([]), w=390.0)
+  wide.frame()
+  let all = code_places()
+  assert_eq(all.map(fn(p) { p.2 }), [42.0, 42.0, 42.0, 42.0, 42.0, 42.0])
+  assert_true(all.iter().all(fn(p) { p.1 == all[0].1 }))
+  // 270 wide (an iPhone Duo's outer screen): smaller, still in one row, inside it
+  let narrow = Tester::new(code_view([]), w=270.0)
+  narrow.frame()
+  let some = code_places()
+  assert_true(some.iter().all(fn(p) { p.1 == some[0].1 && p.2 < 42.0 && p.2 >= 42.0 * 0.8 }))
+  assert_true(some[0].0 >= 0.0 && some[5].0 + some[5].2 <= 270.01)
+  // 200 wide: 3 over 3, as large as the room lets them be
+  let tight = Tester::new(code_view([]), w=200.0)
+  tight.frame()
+  let rows = code_places()
+  assert_eq(rows.map(fn(p) { p.2 }), [42.0, 42.0, 42.0, 42.0, 42.0, 42.0])
+  assert_true(rows[0].1 == rows[2].1 && rows[3].1 > rows[0].1 && rows[3].1 == rows[5].1)
+  assert_true(rows[0].0 >= 0.0 && rows[2].0 + rows[2].2 <= 200.01)
+}

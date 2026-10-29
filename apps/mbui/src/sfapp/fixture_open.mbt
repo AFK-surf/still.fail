@@ -241,8 +241,9 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   // the search open over Home, words typed (search_fixture.mbt)
   @sfpages.open_search_mode(mode)
   // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
-  // waiting page in the chats' place), lock-security (its security page)
-  if mode == "lock-security" {
+  // waiting page in the chats' place), lock-security (its security page), lock-upgrade (in the lock without its key:
+  // the code typed on its security page)
+  if mode == "lock-security" || mode == "lock-upgrade" {
     open_setting(@settings.fixture_page("settings-security"))
   }
   // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)

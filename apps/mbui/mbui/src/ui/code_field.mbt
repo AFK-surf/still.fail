@@ -27,7 +27,8 @@ let code_clears : Array[String] = []
 /// `groups` (their sizes in order; what they leave out is one more group). Its digits in `font_size` and `weight`, the
 /// code face unless not `mono`, in `color` (`disabled_color` while not `enabled`, when typing changes nothing); its
 /// boxes edged in `edge`, the next one's in `next_edge` while it has the keys, all in `wrong_edge` while `wrong` and
-/// empty. It takes the keys as it first shows unless not `autofocus`. Some(code) on the frame a code is complete (once
+/// empty. Narrower than one row of boxes, they are drawn smaller (`min_scale` of their size at the least), then a row
+/// for each group. It takes the keys as it first shows unless not `autofocus`. Some(code) on the frame a code is complete (once
 /// a code: see the file's head); its editor is `key`'s (Ctx::editor_focused, Ctx::focus_editor).
 pub fn Ctx::code_field(
   self : Ctx,
@@ -39,6 +40,7 @@ pub fn Ctx::code_field(
   autofocus? : Bool = true,
   box_w? : Double = 42.0,
   box_h? : Double = 52.0,
+  min_scale? : Double = 0.8,
   radius? : Double = 12.0,
   gap? : Double = 8.0,
   group_gap? : Double = 8.0,
@@ -121,40 +123,100 @@ pub fn Ctx::code_field(
   let digits = st.value.to_array()
   let focused = self.has_focus(id)
   let next = if digits.length() < length - 1 { digits.length() } else { length - 1 }
-  self.box(align=ACenter, fn() {
-    self.box(dir=Row, gap~, align=ACenter, fn() {
-      for i in 0..<length {
-        if ends.contains(i) {
-          self.box(w=Px(group_gap), fn() {  }) |> ignore
+  // As wide as the room it is given (read back): the boxes, the room between them and the digits drawn smaller where
+  // one row of them is wider than that (an iPhone Duo's outer screen, a narrow pane), down to `min_scale`; narrower
+  // still, a row for each group (3 over 3), as large as that room lets them be, never larger than asked.
+  let room_id = self.id(key + "/room")
+  let room = match self.laid_size(room_id) {
+    Some((w, _)) => w
+    None => 0.0
+  }
+  let one_row = length.to_double() * box_w +
+    (length - 1 + ends.length()).to_double() * gap +
+    ends.length().to_double() * group_gap
+  let widest = {
+    let mut most = 0
+    let mut from = 0
+    for e in ends {
+      most = if e - from > most { e - from } else { most }
+      from = e
+    }
+    if length - from > most {
+      length - from
+    } else {
+      most
+    }
+  }
+  let group_row = widest.to_double() * box_w + (widest - 1).to_double() * gap
+  let fits = room <= 0.0 || one_row * min_scale <= room
+  let scale = if room <= 0.0 {
+    1.0
+  } else {
+    let s = room / (if fits { one_row } else { group_row })
+    if s < 1.0 {
+      s
+    } else {
+      1.0
+    }
+  }
+  let bw = box_w * scale
+  let bh = box_h * scale
+  let g = gap * scale
+  let digit = fn(i : Int) {
+    let edge_c = if wrong && st.value == "" {
+      wrong_edge
+    } else if enabled && focused && i == next {
+      next_edge
+    } else {
+      edge
+    }
+    self.box(
+      w=Px(bw),
+      h=Px(bh),
+      radius=radius * scale,
+      border=1.0,
+      border_color=edge_c,
+      align=ACenter,
+      justify=JCenter,
+      fn() {
+        if i < digits.length() {
+          self.rich(
+            [span(digits[i].to_string(), mono~)],
+            size=font_size * scale,
+            weight~,
+            color=if enabled { color } else { disabled_color },
+            wrap=false,
+          )
+          |> ignore
         }
-        let edge_c = if wrong && st.value == "" {
-          wrong_edge
-        } else if enabled && focused && i == next {
-          next_edge
-        } else {
-          edge
-        }
-        self.box(
-          w=Px(box_w),
-          h=Px(box_h),
-          radius~,
-          border=1.0,
-          border_color=edge_c,
-          align=ACenter,
-          justify=JCenter,
-          fn() {
-            if i < digits.length() {
-              self.rich(
-                [span(digits[i].to_string(), mono~)],
-                size=font_size,
-                weight~,
-                color=if enabled { color } else { disabled_color },
-                wrap=false,
-              )
-              |> ignore
+      },
+    )
+    |> ignore
+  }
+  // (one row, the groups apart; or a row a group, one over another)
+  let rows : Array[(Int, Int)] = []
+  if fits {
+    rows.push((0, length))
+  } else {
+    let mut from = 0
+    for e in ends {
+      rows.push((from, e))
+      from = e
+    }
+    rows.push((from, length))
+  }
+  self.box(style=code_room, id=room_id, fn() {
+    self.box(gap=g, align=ACenter, fn() {
+      for r in rows {
+        let (a, b) = r
+        self.box(dir=Row, gap=g, align=ACenter, fn() {
+          for i in a..<b {
+            if i > a && ends.contains(i) {
+              self.box(w=Px(group_gap * scale), fn() {  }) |> ignore
             }
-          },
-        )
+            digit(i)
+          }
+        })
         |> ignore
       }
     })
@@ -166,7 +228,7 @@ pub fn Ctx::code_field(
         font_size~,
         max_lines=1,
         plain=true,
-        line=box_h,
+        line=bh,
         color=0x00000000L,
         placeholder_color=0x00000000L,
         caret_color=0x00000000L,
@@ -179,6 +241,11 @@ pub fn Ctx::code_field(
   |> ignore
   out
 }
+
+///|
+/// The room a code field is given: as wide as what holds it (read back for its boxes' size), them in its middle.
+// kept across runs: a value (no field of it changes)
+let code_room : Style = css("w=Full align=ACenter")
 
 ///|
 /// Empties the code field `key` as it is next built, the code it handed forgotten (a code refused: typed again, it is

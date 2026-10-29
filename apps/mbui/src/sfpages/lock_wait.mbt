@@ -21,7 +21,8 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
 
 ///|
 /// Asking to be confirmed, and the code typed (PairSteps): on the waiting page and on 设置 › 安全. Typing (a trusted
-/// device shows a code): 输入… over the six boxes, then 正在核对 (turning) or how many tries are left in red; finding
+/// device shows a code): 输入… over the six boxes, then 正在核对 (turning), or how many tries are left in red, until when
+/// the code holds and 重新获取安全码; finding
 /// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it (`in_card`: last on
 /// a page's card, in its foot corner, concentric with it: @sf.foot_reach).
 pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false) -> Unit {
@@ -64,8 +65,23 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     }
     if checking {
       note(@sf.t("web-pages.security.pairChecking"), true)
-    } else if state == "wrong" {
-      c.text(@sf.t("web-pages.security.pairWrong", args=[("n", count(pair, "left").to_string())]), style=lock_failed)
+    } else {
+      if state == "wrong" {
+        c.text(@sf.t("web-pages.security.pairWrong", args=[("n", count(pair, "left").to_string())]), style=lock_failed)
+        |> ignore
+      }
+      // how long the code holds (14:05 前有效), and a new one asked for at any time: the code gone or not read in time,
+      // nothing to type before asking again (2026-10-30)
+      match text(pair, "untilText") {
+        "" => ()
+        until => note(until, false)
+      }
+      c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
+        if @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost) {
+          c.clear_code_field(key)
+          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
+        }
+      })
       |> ignore
     }
   } else if state == "finding" || asking {

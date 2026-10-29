@@ -1469,6 +1469,7 @@
   "web-pages.security.pairNote": "安全码只显示在此设备上，不会发送给任何人",
   "web-pages.security.pairDeny": "拒绝",
   "web-pages.security.pairEnter": "输入你的受信任设备上显示的安全码",
+  "web-pages.security.pairAgain": "重新获取安全码",
   "web-pages.security.pairChecking": "正在验证",
   "web-pages.security.pairFinding": "正在联系你的受信任设备",
   "web-pages.security.pairNone": "未找到在线的受信任设备：在你已获批的设备上打开 still.fail 后重试",

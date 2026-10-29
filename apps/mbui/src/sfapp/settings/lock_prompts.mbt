@@ -83,6 +83,11 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
       })
       |> ignore
       mono(c, spaced(text(shown, "code")), size=34.0, weight=600, line=44.0, center=true)
+      // until when it holds (gone from here then)
+      match text(shown, "untilText") {
+        "" => ()
+        until => c.text(until, style=pair_until) |> ignore
+      }
       note(c, tr("web-pages.security.pairNote"))
       c.box(style=pair_deny_room, fn() {
         if wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false) {
@@ -126,6 +131,11 @@ let pair_place_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 let pair_place_mark : Double = 20.0
+
+///|
+/// Until when the code holds, under it (13 muted, centred).
+// kept across runs: a value (no field of it changes)
+let pair_until : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
 /// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).

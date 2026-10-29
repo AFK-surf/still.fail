@@ -1586,6 +1586,8 @@ export const SHAPES: Record<string, Shape> = {
     ["workspaces", vec("LockPromptWorkspace"), { doc: "Where it asks to be let in and this device approves it." }],
     ["created_at", "i64", { client: "I54", doc: "When it asked." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words (`created_at`)." }],
+    ["until", "i64", { client: "I54", doc: "When the code is too old (ms): no longer shown then." }],
+    ["untilText", "String", { said: true, doc: "That, in words (14:05 前有效)." }],
   ], { doc: "A new device met face to face, showing a code of this one's to type there (views/pair.ts)." }),
   LockPromptsView: struct([
     ["pairing", vec("LockPairing"), { doc: "The new devices showing this one's code now, wherever the person is." }],
@@ -1595,6 +1597,8 @@ export const SHAPES: Record<string, Shape> = {
     ["devices", "u32", { doc: "How many trusted devices show a code now." }],
     ["left", opt("u32"), { doc: "Tries left, after a wrong code." }],
     ["error", opt("String"), { said: true }],
+    ["until", opt("i64"), { client: opt("I54"), doc: "While a code is typed: when the last trusted device's code is too old (ms)." }],
+    ["untilText", opt("String"), { said: true, doc: "That, in words (14:05 前有效)." }],
   ], { doc: "This device's try to be approved face to face (views/pair.ts)." }),
   LockDraftDevice: struct([
     ["id", "String"],

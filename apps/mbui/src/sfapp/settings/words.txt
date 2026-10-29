@@ -1345,6 +1345,7 @@ web-pages.security.openLead
 web-pages.security.openTitle
 web-pages.security.ownerOnly
 web-pages.security.pairBody
+web-pages.security.pairAgain
 web-pages.security.pairChecking
 web-pages.security.pairDeny
 web-pages.security.pairEnter

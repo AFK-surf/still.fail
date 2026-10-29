@@ -4657,6 +4657,10 @@ export interface LockPair {
 	/** Tries left, after a wrong code. */
 	left?: number;
 	error?: string;
+	/** While a code is typed: when the last trusted device's code is too old (ms). */
+	until?: number;
+	/** That, in words (14:05 前有效). */
+	untilText?: string;
 }
 
 /** This device in the workspace's lock. */
@@ -4710,6 +4714,10 @@ export interface LockPairing {
 	created_at: number;
 	/** Its times in words (`created_at`). */
 	time?: Record<string, Stamp>;
+	/** When the code is too old (ms): no longer shown then. */
+	until: number;
+	/** That, in words (14:05 前有效). */
+	untilText: string;
 }
 
 /** A member in the workspace's lock, with their devices by app. */

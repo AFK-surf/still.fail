@@ -1388,6 +1388,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("code", str("482915")),
                   ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
+                  ("untilText", str("14:05 前有效")),
                   ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
                 ]),
               ]
@@ -2136,19 +2137,23 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 /// lock-checking, lock-none, lock-failed, lock-refused, lock-nocode, lock-security, each also -dark: its waiting page
 /// asking, finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, the request
 /// refused, this device without its code yet; its security page): this device waiting (its own request among the
-/// workspace's), not a signer.
+/// workspace's), not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
+/// security page.
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
     "lock-finding" => obj([("state", str("finding"))])
-    "lock-code" => obj([("state", str("code")), ("left", Json::number(3.0))])
-    "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0))])
+    "lock-code" | "lock-upgrade" =>
+      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
+    "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
     "lock-none" => obj([("state", str("none"))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     _ => Json::null()
   }
   let failed = if mode == "lock-refused" { "station 不在线" } else { "" }
+  // in the lock, its key since lost (a phone moved to a new one): made one that signs on its security page
+  let upgrade = mode == "lock-upgrade"
   let code = if mode == "lock-nocode" { "" } else { "Q4K-7PM" }
   obj([
     ("available", Json::boolean(true)),
@@ -2168,9 +2173,10 @@ fn waiting_lock(mode : String) -> Json {
         ("device", str("d-me")),
         ("code", str(code)),
         ("kind", str("app")),
-        ("confirmed", Json::boolean(false)),
-        ("asked", Json::boolean(true)),
-        ("waiting", Json::boolean(true)),
+        ("confirmed", Json::boolean(upgrade)),
+        ("asked", Json::boolean(!upgrade)),
+        ("waiting", Json::boolean(!upgrade)),
+        ("unsigned", Json::boolean(upgrade)),
         ("failed", str(failed)),
         ("pair", pair),
       ]),
