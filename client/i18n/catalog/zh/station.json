@@ -21,7 +21,6 @@
   "station.agentEnv.tooLong": "第 {line} 行的值过长，上限 {most} 个字符",
   "station.agentEnv.tooMany": "变量过多，上限 {most} 个",
   "station.feishu.answerEmpty": "请先填写回答",
-  "station.feishu.answerPlaceholder": "写下你的回答",
   "station.feishu.answered": "{name} 回答：{answer}",
   "station.feishu.answeredBefore": "这个问题已经回答过了",
   "station.feishu.badAppId": "App ID 应形如 cli_xxx",
@@ -36,7 +35,6 @@
   "station.feishu.notRegistered": "没有这个扫码创建的应用，请重新扫码",
   "station.feishu.registerFailed": "无法开始扫码创建：{error}",
   "station.feishu.seconds": "{s} 秒",
-  "station.feishu.send": "发送",
   "station.feishu.sent": "已发送",
   "station.screen.notFound": "此 station 上已没有该画面",
   "station.screen.notClosed": "该画面不能在这里关闭",
@@ -322,7 +320,6 @@
   "station.session.noProfile": "没有可运行 {runtime} 的 Profile",
   "station.session.noProfileHere": "此 workspace 的对话没有可运行 {runtime} 的 Profile：请 station 所属 workspace 的管理员为某个 Profile 勾选此 workspace",
   "station.session.noProfileForModel": "没有可运行 {model} 的 {runtime} Profile：请先在某个 Profile 中启用",
-  "station.slack.answer": "回答",
   "station.slack.chooseFirst": "请先选一个选项",
   "station.slack.confirm": "确定",
   "station.slack.fileNotFetched": "[无法获取文件 {name}：{error}]",
@@ -536,5 +533,8 @@
   "station.outflow.window.cancel": "取消",
   "station.outflow.window.reason": "允许 {program} 读取你在 still.fail 的数据",
   "station.outflow.window.kind": "「{kind}」",
-  "station.outflow.window.signer": "签名"
+  "station.outflow.window.signer": "签名",
+  "station.card.asking": "✍️ 需要你回答",
+  "station.slack.replyHint": "在这个线程里回复作答",
+  "station.feishu.replyHint": "直接回复作答"
 }

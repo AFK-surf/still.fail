@@ -1,6 +1,7 @@
 // A question in Slack, as Block Kit (docs/operations.md「在 Slack 里使用」): the agent's words, then the options as radio
-// buttons with the recommended one last and chosen already, or a field, and a button that sends the answer. Pressed,
-// it comes over Socket Mode (an `interactive` envelope) and the message is changed to say who answered what.
+// buttons with the recommended one last and chosen already, and a button that sends the answer; or, for one to write,
+// the words marked as a question, answered by a reply in the thread. Pressed, a button comes over Socket Mode (an
+// `interactive` envelope) and the message is changed to say who answered what.
 import { type Lang, tr } from "../ops/i18n.ts";
 
 type Json = any;
@@ -27,8 +28,9 @@ const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").rep
 export const markdown = (text: string): Json => ({ type: "markdown", text });
 
 /// A question's blocks. Options: radio buttons, the recommended one last and chosen, each option's detail under it; a
-/// label or detail too long for an option is shown whole above them, the option keeping its start. Text: a field. Each
-/// with a button that sends the answer.
+/// label or detail too long for an option is shown whole above them, the option keeping its start; with a button that
+/// sends the answer. Text: the words under a heading that marks them as a question, and a line saying to reply in the
+/// thread (with its hint); no field, as a reply in the thread answers it.
 export function questionBlocks(text: string, question: Json, lang: Lang): Json[] {
   const blocks: Json[] = [];
   const said: string[] = text.trim() === "" ? [] : [text];
@@ -50,10 +52,10 @@ export function questionBlocks(text: string, question: Json, lang: Lang): Json[]
     blocks.push(markdownOf(said));
     blocks.push({ type: "actions", elements: [pick, { type: "button", action_id: SEND, text: plain(tr(lang, "station.slack.confirm")), style: "primary", value: JSON.stringify(sent) }] });
   } else if (question?.type === "text") {
+    blocks.push({ type: "header", text: plain(tr(lang, "station.card.asking")) });
     blocks.push(markdownOf(said));
-    const hint = typeof question.placeholder === "string" && question.placeholder !== "" ? question.placeholder : tr(lang, "station.feishu.answerPlaceholder");
-    blocks.push({ type: "input", block_id: FIELD, dispatch_action: false, label: plain(tr(lang, "station.slack.answer")), element: { type: "plain_text_input", action_id: FIELD, multiline: true, placeholder: plain(cut(hint, 150)) } });
-    blocks.push({ type: "actions", elements: [{ type: "button", action_id: SEND, text: plain(tr(lang, "station.feishu.send")), style: "primary", value: "{}" }] });
+    const hint = typeof question.placeholder === "string" && question.placeholder.trim() !== "" ? ` · ${question.placeholder.trim()}` : "";
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: escape(`${tr(lang, "station.slack.replyHint")}${hint}`) }] });
   }
   return blocks.filter((b) => b !== null);
 }
@@ -67,7 +69,8 @@ export function answeredBlocks(text: string, who: string, said: string, lang: La
   return [markdownOf(text.trim() === "" ? [] : [text]), answered].filter((b) => b !== null);
 }
 
-/// What a press of a card's send button answers: the option chosen (its label) or the words in the field, "" when
+/// What a press of a card's send button answers: the option chosen (its label) or the words in the field (a text card
+/// posted before they went without one), "" when
 /// nothing was chosen or written. Null for any other action (choosing an option before sending it).
 export function answerOf(payload: Json): { said: string; field: boolean } | null {
   const action = (Array.isArray(payload?.actions) ? payload.actions : []).find((a: Json) => a?.action_id === SEND);

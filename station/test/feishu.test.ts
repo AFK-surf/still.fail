@@ -71,9 +71,9 @@ test("cards: long text in several; a question's buttons with the recommended one
     ["合并", "primary_filled", { sf: "answer", t: "om_t", l: "合并" }],
   ]);
   const t = questionCard("写个名字", { type: "text", placeholder: "名字" }, "om_t", "zh");
-  const form = t.body.elements.find((e: Json) => e.tag === "form");
-  assert.equal(form.elements[0].placeholder.content, "名字");
-  assert.equal(form.elements[1].form_action_type, "submit");
+  // One to write: no form, an orange header marking it as a question, answered by a reply.
+  assert.deepEqual([t.header.title.content, t.header.template], ["✍️ 需要你回答", "orange"]);
+  assert.deepEqual(t.body.elements.map((e: Json) => e.content), ["写个名字", "<font color='grey'>直接回复作答 · 名字</font>"]);
   assert.equal(took(125_000, "zh"), "2 分 5 秒");
 });
 
