@@ -411,6 +411,12 @@ pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
+/// Chat `r`'s services and jobs put up (an agent's card's jobs pressed, sfpages): the screen's (sfapp's: the desktop's
+/// popover, the phone's panel).
+// kept across runs: what the app says once as it starts
+pub let chat_jobs_asked : Ref[(@ui.Ctx, Source, ChatRef) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
 /// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a
 /// folder or not; `drive` where it is in that station's drive), named by their path unless this chat takes files
 /// dragged in as files (the core's `composer.add`, nothing of them going up yet).

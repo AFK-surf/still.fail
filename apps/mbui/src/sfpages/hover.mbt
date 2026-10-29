@@ -28,6 +28,7 @@ pub fn hover(
     key,
     trigger,
     tap~,
+    held=hover_held(key),
     open_delay=hover_open_ms,
     close_delay=hover_close_ms,
     side~,
@@ -38,7 +39,16 @@ pub fn hover(
     look=fn(c, s, body) {
       c.box(style=if tile { hover_tile } else { hover_card }, fn() {
         @sf.small_panel(c, w=Fill(1.0), fn() {
-          @sf.within_room(c, s, body, inner=if padded { hover_inner } else { hover_bare })
+          @sf.within_room(
+            c,
+            s,
+            fn() {
+              hover_now.val = Some((key, s.panel))
+              body()
+              hover_now.val = None
+            },
+            inner=if padded { hover_inner } else { hover_bare },
+          )
         })
         |> ignore
       })
@@ -46,6 +56,66 @@ pub fn hover(
     },
     body,
   )
+}
+
+///|
+/// The card whose body is being built (its key, its panel's id); the cards kept open by what was pressed in them,
+/// by their keys: what that opened (@sf.last_presented), while it is drawn.
+let hover_now : Ref[(String, Int)?] = Ref(None)
+
+///|
+let hover_holds : Map[String, Int] = {}
+
+///|
+/// Whether card `key` is kept open by what was pressed in it.
+fn hover_held(key : String) -> Bool {
+  match hover_holds.get(key) {
+    Some(serial) if @sf.presented_drawn_of(serial) => true
+    Some(_) => {
+      hover_holds.remove(key)
+      false
+    }
+    None => false
+  }
+}
+
+///|
+/// Where what is pressed in the card being built opens (`id` pressed): beside the card, at its right, level with what
+/// was pressed, so that both show; the card then kept open while it is (hover_hold).
+fn hover_beside(c : @ui.Ctx, id : Int) -> @sf.Beside {
+  let row = c.rect_of(id)
+  let card = match hover_now.val {
+    Some((_, panel)) => c.rect_of(panel)
+    None => None
+  }
+  match (card, row) {
+    (Some((x, _, w, _)), Some((_, y, _, _))) => At(x + w + hover_offset, y, 0.0, 0.0)
+    (_, Some((x, y, w, h))) => At(x, y, w, h)
+    _ => Of(id)
+  }
+}
+
+///|
+/// The card being built, where it is drawn (its panel), for a panel opened from it to stand at its right, their tops
+/// level (what is pressed itself, where the card is not known).
+fn hover_card_rect(c : @ui.Ctx, id : Int) -> @sf.Anchor {
+  let card = match hover_now.val {
+    Some((_, panel)) => c.rect_of(panel)
+    None => None
+  }
+  match card {
+    Some((x, y, w, h)) => At(x, y, w, h)
+    None => Of(id)
+  }
+}
+
+///|
+/// The card being built kept open while what was just presented from it is.
+fn hover_hold() -> Unit {
+  match hover_now.val {
+    Some((key, _)) => hover_holds[key] = @sf.last_presented()
+    None => ()
+  }
 }
 
 ///|
@@ -87,11 +157,15 @@ let hover_bare : @ui.Style = @ui.css("w=Full")
 // ── an agent's card ──────────────────────────────────────────────────────
 
 ///|
-/// One of the chat's agents in brief (AgentCard.tsx), `a` as its chat's view has it, of station `station`: its mark
+/// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: its mark
 /// and label, a stop for it alone while it works; where it stands and for how long; its latest three lines; the
 /// figures that say most (UsageTiles); its account with what is left of it; the rest in a quiet line; its jobs and
 /// what is wrong. What the core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
-pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit {
+/// What it says leads to where it is seen to: its name and its lines to its execution history (at a line's entry),
+/// its context's figure to what can be done to it, its account (and an account that cannot run) to how it runs, its
+/// jobs to the chat's.
+pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
+  let station = r.station
   let t = @sf.theme()
   let av = Some(a)
   let s = field(av, "session")
@@ -99,10 +173,20 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
   let card = (src.topic)("agentCard", { "station": Json::string(station), "key": Json::string(key) }).value
   let status = text(av, "status")
   let working = status == "running" || status == "queued"
+  let history = fn(entry : Int?) { open_page(History(r, key, entry)) }
+  // how it runs, its picker beside what was pressed
+  let runs = fn(id : Int) {
+    open_triple_panel(src, station, "session:" + key, hover_card_rect(c, id), saved=@sf.t("web-pages.chat.pickSaved"), side=Right)
+    hover_hold()
+  }
   c.box(style=agent_card_box, fn() {
-    // its mark (28) and label, a stop while it works (in the card's top right corner)
+    // its mark (28) and label (its history, › after it), a stop while it works (in the card's top right corner)
     c.box(style=agent_card_head, fn() {
-      c.box(style=agent_card_who, fn() {
+      let who = c.id("agent-card/history")
+      if c.clicked(who) {
+        history(None)
+      }
+      let w = c.box(style=agent_card_who, id=who, fn() {
         agent_mark(
           c,
           text(field(s, "maker"), "id"),
@@ -116,8 +200,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
         )
         c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
         |> ignore
+        @sf.icon(c, "chevron-right", size=14.0, color=if c.lit(who) { t.p.text } else { t.p.muted }) |> ignore
       })
-      |> ignore
+      c.semantics(w, Button, id=who, label=@sf.t("web-pages.chat.historyOf", args=[("agent", text(s, "agentText"))]))
       if working {
         agent_card_stop(c, src, station, key)
       }
@@ -140,10 +225,24 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
     // its latest lines, what it does now in the words' colour, running on as they change
     let latest = items(card, "latest")
     if latest.length() > 0 {
-      agent_card_latest(c, latest)
+      agent_card_latest(c, latest, history)
     }
     if card is Some(Object(_)) {
-      usage_tiles(c, card)
+      let compacts = flag(s, "canCompact")
+      let entry : ContextEntry? = if compacts || flag(s, "canClear") {
+        let busy = core_doing(src, context_calls, [("station", station), ("key", key)])
+        Some({
+          open: fn() {
+            open_context_actions(src, station, key, s, hover_beside(c, context_tile_id(c)))
+            hover_hold()
+          },
+          busy,
+          compacts,
+        })
+      } else {
+        None
+      }
+      usage_tiles(c, card, entry?=entry)
     }
     // its account, what is left of it to its right
     let account = match field(av, "account") {
@@ -157,8 +256,19 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
     // (the card's last line: what is left of it, capsules, in the card's bottom right corner, concentric with it)
     let last = quiet.is_empty() && text(card, "jobs") == "" && attention.is_empty()
     if account is Some(_) || windows.length() > 0 {
+      // (its name to how it runs: the account it runs on is one of those)
+      let aid = if text(account, "name") != "" { c.id("agent-card/account") } else { 0 }
+      if aid != 0 && c.clicked(aid) {
+        runs(aid)
+      }
       c.box(style=if last && windows.length() > 0 { agent_card_account_last } else { agent_card_account }, fn() {
-        c.box(style=agent_card_name_room, fn() { c.text(text(account, "name"), style=agent_card_line) |> ignore })
+        c.box(style=agent_card_name_room, fn() {
+          if aid == 0 {
+            c.text(text(account, "name"), style=agent_card_line) |> ignore
+          } else {
+            agent_card_link(c, aid, text(account, "name"), agent_card_line)
+          }
+        })
         |> ignore
         // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
         if windows.length() > 0 {
@@ -174,18 +284,31 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
     if text(card, "jobs") != "" || attention.length() > 0 {
       c.box(style=agent_card_notes, fn() {
         if text(card, "jobs") != "" {
-          c.text(text(card, "jobs"), style=agent_card_line) |> ignore
+          let id = c.id("agent-card/jobs")
+          if c.clicked(id) {
+            (@sfbase.chat_jobs_asked.val)(c, src, r)
+          }
+          agent_card_link(c, id, text(card, "jobs"), agent_card_line)
         }
-        for x in attention {
+        for i, x in attention {
           let level = text(Some(x), "level")
-          c.text(text(Some(x), "text"), style=if level == "red" {
+          let style = if level == "red" {
             agent_card_red
           } else if level == "amber" {
             agent_card_amber
           } else {
             agent_card_line
-          })
-          |> ignore
+          }
+          // an account that cannot run: to how it runs, to move it to another
+          if text(Some(x), "kind") == "account" {
+            let id = c.id("agent-card/attention/" + i.to_string())
+            if c.clicked(id) {
+              runs(id)
+            }
+            agent_card_link(c, id, text(Some(x), "text"), style, hot=style)
+          } else {
+            c.text(text(Some(x), "text"), style~) |> ignore
+          }
         }
       })
       |> ignore
@@ -234,7 +357,7 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
 /// (useLinesMotion): none resized, nor the list; those that stay go from where they were to where they are, carrying
 /// on from wherever they had got to; a new one comes with them from beyond the edge, and one gone leaves with them, as
 /// a copy; with none staying, new and gone fade in place. As they are the first time the card shows them.
-fn agent_card_latest(c : @ui.Ctx, latest : Array[Json]) -> Unit {
+fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit) -> Unit {
   let keys = latest.map(fn(l) { text(Some(l), "key") })
   let frame = c.frame_number()
   let lid = c.id("agent-card/lines")
@@ -301,9 +424,14 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json]) -> Unit {
       let now = flag(Some(l), "now")
       ran.words[k] = (text(Some(l), "text"), now)
       let id = c.id("agent-card/line/" + k)
-      let n = c.box(style=agent_card_line_box, id~, taps=false, fn() {
-        c.text(text(Some(l), "text"), style=if now { agent_card_now } else { agent_card_line }) |> ignore
+      // each to where its history has it (what it does now: its newest), in the words' colour on hover
+      if c.clicked(id) {
+        history(line_entry(k))
+      }
+      let n = c.box(style=agent_card_line_box, id~, fn() {
+        c.text(text(Some(l), "text"), style=if now || c.lit(id) { agent_card_now } else { agent_card_line }) |> ignore
       })
+      c.semantics(n, Button, id~, label=text(Some(l), "text"))
       let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
       if y != 0.0 || f != 1.0 {
         c.look(n, @ui.look(dy=y, alpha=f))
@@ -355,6 +483,8 @@ let ran_lines : Map[Int, RanLines] = {}
 ///|
 fn hover_reset() -> Unit {
   ran_lines.clear()
+  hover_now.val = None
+  hover_holds.clear()
 }
 
 ///|
@@ -428,6 +558,76 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
     c.text(@sf.t("web-pages.chat.stopTurn"), style=agent_card_stop_words) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The transcript entry of one of its latest lines, by its key (AgentCardLine): none for what it does now.
+fn line_entry(key : String) -> Int? {
+  if key == "now" {
+    return None
+  }
+  let n = @string.parse_int(key[:]) catch { _ => return None }
+  Some(n)
+}
+
+///|
+/// Words of the card that lead somewhere (`id` pressed): in `style`, in `hot` on hover (muted ones the words' ink).
+fn agent_card_link(c : @ui.Ctx, id : Int, words : String, style : @ui.TextStyle, hot? : @ui.TextStyle = agent_card_now) -> Unit {
+  let b = c.box(style=agent_card_link_box, id~, fn() {
+    c.text(words, style=if c.lit(id) { hot } else { style }) |> ignore
+  })
+  c.semantics(b, Button, id~, label=words)
+}
+
+///|
+/// What is under way of what can be done to a context.
+// kept across runs: a value (no element of it changes)
+let context_calls : Array[String] = ["session.compact", "session.clear"]
+
+///|
+/// What can be done to agent `key`'s context on `station` (useContextActions; `s` its session as its chat's view has
+/// it), a menu beside `from`: 压缩上下文 at once, 清空上下文 (in red) asked first; neither while one is under way.
+pub fn open_context_actions(src : Source, station : String, key : String, s : Json?, from : @sf.Beside) -> Unit {
+  let params : Json = { "station": Json::string(station), "key": Json::string(key) }
+  let busy = core_doing(src, context_calls, [("station", station), ("key", key)])
+  let items : Array[@sf.MenuItem?] = []
+  if flag(s, "canCompact") {
+    items.push(
+      Some(
+        @sf.menu_item_of(
+          @sf.t("web-pages.chat.compact"),
+          fn() { act(src, @sf.t("web-pages.chat.compact"), "", "session.compact", params) },
+          icon="shrink",
+          disabled=busy,
+        ),
+      ),
+    )
+  }
+  if flag(s, "canClear") {
+    items.push(
+      Some(
+        @sf.menu_item_of(
+          @sf.t("web-pages.chat.clear"),
+          fn() {
+            // asked as the web asks it (ChatPage.tsx: Confirm)
+            @sf.confirm(
+              @sf.t("web-pages.chat.clearConfirm"),
+              @sf.t("web-pages.chat.clearBody"),
+              @sf.t("web-pages.chat.clear"),
+              danger=true,
+              fn() { act(src, @sf.t("web-pages.chat.clear"), "", "session.clear", params) },
+            )
+          },
+          icon="refresh",
+          danger=true,
+          disabled=busy,
+        ),
+      ),
+    )
+  }
+  if items.length() > 0 {
+    @sf.menu(items, from~)
+  }
 }
 
 ///|
@@ -677,6 +877,11 @@ let agent_card_account_last : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd"
 
 ///|
 let agent_card_chips_in : Double = @sf.capsule_in(@sf.r_menu, @sf.fill_chip_small_h) - @sf.panel_pad - @sf.text_in
+
+///|
+/// Words that lead somewhere: their whole line.
+// kept across runs: a value (no field of it changes)
+let agent_card_link_box : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

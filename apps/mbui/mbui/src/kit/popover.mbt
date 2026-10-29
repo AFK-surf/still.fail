@@ -121,7 +121,8 @@ pub let hover_card_close_ms : Double = 300.0
 /// `key`'s hover card (see the file's head) for the trigger `trigger` (its id): opened once a mouse has rested on the
 /// trigger `open_delay` ms, closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
 /// rests on nothing: it holds the trigger (long_press_ms) to open it, or with `tap` (a trigger that does nothing else
-/// when tapped) taps it, and it stays until a press outside or another tap on the trigger. Whether it is open.
+/// when tapped) taps it, and it stays until a press outside or another tap on the trigger. `held`: kept open by the app
+/// while it is (what was pressed in it opened something beside it, which the pointer goes on to). Whether it is open.
 pub fn hover_card(
   c : @ui.Ctx,
   key : String,
@@ -132,6 +133,7 @@ pub fn hover_card(
   along? : @ui.Along = Middle,
   offset? : Double = 6.0,
   tap? : Bool = false,
+  held? : Bool = false,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
@@ -155,11 +157,15 @@ pub fn hover_card(
       }
     }
   }
+  // (kept open by the app: the pointer on what was opened from it, not on it)
+  if held && was {
+    open = true
+  }
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
     let o = c.overlay(key, anchor=trigger, initial_focus=0, inert=!open, fn() {
       beside(c, key, trigger, side, along, offset, shows, Group, "", look, body)
     })
-    if o.dismissed is Some(_) {
+    if o.dismissed is Some(_) && !(held && was) {
       open = false
     }
   }
