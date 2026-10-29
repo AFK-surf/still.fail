@@ -201,7 +201,11 @@ priv enum Line {
 ///|
 /// A folder's entries as its station said them, and why it could not be read.
 pub fn drive_folder(src : Source, station : String, root : String, path : String) -> (Json?, String?) {
-  let t = (src.topic)("drive", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) })
+  let t = @sfbase.hold(src, @sfbase.drive_scope, "drive", {
+    "station": Json::string(station),
+    "root": Json::string(root),
+    "path": Json::string(path),
+  })
   (
     t.value,
     match t.error {

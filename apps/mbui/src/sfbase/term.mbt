@@ -103,7 +103,7 @@ pub fn job_output_lines(
     "job": Json::string(job),
     "lines": Json::number(lines),
   }
-  guard (src.topic)("jobLog", params).value is Some(Object(_)) else { return None }
+  guard hold(src, jobs_scope(station), "jobLog", params).value is Some(Object(_)) else { return None }
   job_ink.set(ink)
   job_dark.set(dark)
   Some(

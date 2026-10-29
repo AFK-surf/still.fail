@@ -1403,7 +1403,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
         }
       })
       |> ignore
-      let last = (src.topic)("jobLog", {
+      let last = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", {
         "station": Json::string(r.station),
         "job": Json::string(id),
         "lines": Json::number(1.0),

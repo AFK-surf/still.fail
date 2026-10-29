@@ -132,7 +132,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
   let on = [("station", station), ("key", key)]
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let card = (src.topic)("agentCard", params).value
-  let host = (src.topic)("host", { "station": Json::string(station) }).value
+  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).value
   let compacts = flag(s, "canCompact")
   let clears = flag(s, "canClear")
   // (what is under way and what failed a moment ago, as the core's `doing` says: useContextActions)
