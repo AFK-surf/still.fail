@@ -7,7 +7,7 @@
 
 | | 做法 |
 |---|---|
-| 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`），网络、mesh、cloud 都到不了 |
+| 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`，指向当前进程自己的 `outflow-<pid>-<n>.sock`：station 自更新时新旧进程并存，旧进程停下时只删自己的），网络、mesh、cloud 都到不了 |
 | 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程的审计令牌 → 它的代码签名（macOS 的 Team ID 和签名标识）和可执行文件路径 |
 | 怎么批准 | still.fail 直接弹出授权窗口：申请方是谁、要哪几类数据（可逐项去掉）；点允许后再出一次摘要，用 Touch ID 或系统密码二次确认 |
 | 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上、由同一个签名的程序拿来用才有效 |

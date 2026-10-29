@@ -247,3 +247,53 @@ test("v1 messages: the home workspace's chat's entries after one, oldest first; 
   assert.equal(outflowMessages(r, away.id, 0, 100), null, "another workspace's chat");
   assert.equal(outflowMessages(r, 99_999, 0, 100), null);
 });
+
+test("a station's update keeps the socket: the process before, stopping, leaves the next one's", async () => {
+  const data = tempdir();
+  const path = join(data, "o.sock");
+  const grants = new OutflowGrants(data, () => 1);
+  const make = (name: string) =>
+    new OutflowServer({ path, grants, lang: () => "en", identify: async () => COMMA, ask: null, reads: async () => JSON.stringify({ chats: [{ thread: name }] }) });
+  const before = make("before");
+  await before.listen();
+  const next = make("next");
+  await next.listen();
+  await before.close();
+  // what answers there now is the next process (it has no window: unsupported)
+  const answer = await new Promise<number>((resolve, reject) => {
+    const req = http({ socketPath: path, method: "POST", path: "/v1/request" }, (res) => (res.resume(), resolve(res.statusCode!)));
+    req.on("error", reject);
+    req.end(JSON.stringify({ scopes: ["usage"] }));
+  });
+  assert.equal(answer, 501);
+  assert.equal(statSync(path).mode & 0o777, 0o600);
+  await next.close();
+  assert.throws(() => statSync(path), "gone with the last");
+  // a socket left by a process that ended without closing goes as the next one starts
+  const { writeFileSync, readdirSync } = await import("node:fs");
+  writeFileSync(join(data, "o-999999-abcdef01.sock"), "");
+  const again = make("again");
+  await again.listen();
+  assert.ok(!readdirSync(data).includes("o-999999-abcdef01.sock"));
+  await again.close();
+});
+
+test("a process from before this one, stopping, removes the path itself: it is put back", async () => {
+  const data = tempdir();
+  const path = join(data, "o.sock");
+  const server = new OutflowServer({ path, grants: new OutflowGrants(data, () => 1), lang: () => "en", identify: async () => COMMA, ask: null, reads: async () => "{}" });
+  await server.listen();
+  const { existsSync, watch, rmSync } = await import("node:fs");
+  const back = new Promise<void>((resolve) => {
+    const w = watch(data, () => {
+      if (existsSync(path)) {
+        w.close();
+        resolve();
+      }
+    });
+  });
+  rmSync(path);
+  await back;
+  assert.equal(statSync(path).mode & 0o777, 0o600);
+  await server.close();
+});
