@@ -57,5 +57,18 @@ fn main {
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
   @sfapp.host_setup()
-  @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
+  // Preview a native action once its system bar exists, without desktop clicks.
+  let native_action = @ui.env("MBUI_NATIVE_ACTION")
+  let action_sent = Ref(false)
+  @ui.run("still.fail", fn(c) {
+    if !action_sent.val && native_action != "" {
+      for a in @sf.native_over.acts {
+        if a.0 == native_action {
+          action_sent.val = true
+          (a.3)()
+        }
+      }
+    }
+    @sfapp.view(c, src)
+  })
 }
