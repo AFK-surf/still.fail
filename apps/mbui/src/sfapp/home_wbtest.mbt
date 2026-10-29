@@ -662,7 +662,7 @@ test "a row swiped off and archived, then asked back with 撤销, is back where 
   let before = t.locate("=把旧的截图都换成新的")
   let (_, y) = before[0]
   t.drag(340.0, y, 120.0, y)
-  t.run_for(@sfpages.swipe_off_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   t.draw()
   assert_true(t.locate("=把旧的截图都换成新的").is_empty())

@@ -511,6 +511,7 @@ pub fn left(route : Route) -> Unit {
       kept.drive.set(0.0)
       kept.loose.set([])
       kept.asked.set(kept.asked.get() + 1)
+      kept_all.set(false)
     }
     BarSettings => bar_adding.val = false
     RunSettings(_, key) => {
@@ -591,6 +592,7 @@ pub fn reset() -> Unit {
   kept.loose.set([])
   kept.asked.set(0)
   kept.read.set(-1)
+  kept_all.set(false)
   run_opened.clear()
   run_list.clear()
   new_profiles.clear()

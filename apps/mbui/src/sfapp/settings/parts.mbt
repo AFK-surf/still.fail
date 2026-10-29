@@ -798,8 +798,9 @@ let list_ground : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list
 /// whether it is the card's first row, its last).
 fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  let row = fn(style) {
-    c.box(style~, id~, fn() {
+  let row = fn(style : @ui.Style) {
+    // (one that is tapped as high as a press's room at least, whatever it holds)
+    c.box(style=if id != 0 { style.then(@sf.row_least_h()) } else { style }, id~, fn() {
       body()
       // Parts.kt ListRow: clickable over its clip, Smooth(LIST_ROW_CORNER)
       if id != 0 {

@@ -367,3 +367,21 @@ test("a chat's file opened is kept with its chat: read again from the device, li
   assert.equal(asked(), 5);
   t.core.close();
 });
+
+test("the page of what the device keeps calls each chat as the chats' list does, the one keeping most first", async () => {
+  const t = await started();
+  const data = t.core.inner.data;
+  // named by its agent; of still.fail's own, never named; a Slack thread, by its first line
+  data.putThread(ST, { id: 1, surface: "ember", title: null, autoTitle: "ccvm 扩容", sessions: [{ session: "k1" }] });
+  data.putThread(ST, { id: 2, surface: "ember", title: null, sessions: [{ session: "k2" }] });
+  data.putThread(ST, { id: 3, surface: "slack:T1", channel: "C1", title: null, firstText: "<@U1> 看下构建", sessions: [{ session: "k3" }] });
+  data.putItems("entry", ST, "1", [[1, { text: "a" }]]);
+  data.putItems("entry", ST, "2", [[1, { text: "b".repeat(500) }]]);
+  data.putItems("entry", ST, "3", [[1, { text: "c".repeat(50) }]]);
+  const ui = t.core.connect();
+  call(t.core, ui, 1, "cache.usage", {});
+  await t.host.settle();
+  const usage = answers(t.host.takeEmitted(), 1)?.ok as { chats: { thread: number; title: string | null }[] };
+  assert.deepEqual(usage.chats.filter((c) => c.thread <= 3).map((c) => [c.thread, c.title]), [[2, "新对话"], [3, "看下构建"], [1, "ccvm 扩容"]]);
+  t.core.close();
+});

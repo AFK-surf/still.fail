@@ -12,6 +12,7 @@ import { chatKeptId, keptId, sentKeptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
+import { chatTitle } from "../views/views.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 import type { SpanContext } from "../trace.ts";
@@ -471,13 +472,14 @@ export function install(): void {
       return null;
     });
   };
-  // Each chat with the files of its sessions kept (`files`, the most lately read first); those of no chat known apart
-  // (`loose`: its sessions' chats let go, or never held here).
+  // Each chat, called as the chats' list calls it, with the files of its sessions kept (`files`, the most lately read
+  // first), the one keeping most first; those of no chat known apart (`loose`: its sessions' chats let go, or never
+  // held here).
   handlers.cacheUsage = (inner) =>
     Effect.gen(function* () {
       const drive = yield* inner.driveKept.usage();
       const kept = yield* inner.driveKept.chatFiles();
-      const chats = inner.data.cacheUsage().map((chat) => ({ ...chat, files: [] as unknown[] }));
+      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : chatTitle(view), files: [] as { bytes: number }[] }));
       const loose: unknown[] = [];
       for (const f of kept) {
         const shown = { key: f.key, name: f.name, size: f.size, bytes: f.bytes, opened: f.used };
@@ -485,6 +487,8 @@ export function install(): void {
         if (chat !== undefined) chat.files.push(shown);
         else loose.push({ station: f.station, ...shown });
       }
+      const all = (x: (typeof chats)[number]) => x.files.reduce((n, f) => n + f.bytes, x.bytes);
+      chats.sort((a, b) => all(b) - all(a));
       return { chats, drive, loose };
     });
   // A chat's files kept go with what is kept of its messages.
