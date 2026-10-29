@@ -86,6 +86,10 @@ struct Node {
   /// how its corner is worked out once laid out, where it is (corners.mbt): corner_inner (`Inner`), corner_inner_or
   /// (`InnerOr`), corner_around (`Around`); 0 as said
   mut corner_by : Int
+  /// what it is in the tree read out (Ctx::semantics: the last said of it), and whether it was made hidden from that
+  /// tree (Ctx::hidden_from_semantics)
+  mut sem : Sem?
+  mut sem_hid : Bool
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -341,6 +345,8 @@ fn Node::new() -> Node {
     marks: 0,
     focus: None,
     corner_by: 0,
+    sem: None,
+    sem_hid: false,
     parent: -1,
     first: -1,
     last: -1,
@@ -500,6 +506,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.marks = 0
   self.focus = None
   self.corner_by = 0
+  self.sem = None
+  self.sem_hid = false
   self.first = -1
   self.last = -1
   self.next = -1

@@ -305,6 +305,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       // (focus.mbt), the corners worked out once laid out (corners.mbt)
       c.focusables_found()
       c.corners_found()
+      c.sems_found()
       // what rows left out where they had not the room, drawn nowhere (readback.mbt)
       c.left_out_after_layout()
       // what covers an item, over it as laid out now (cover.mbt)
@@ -594,9 +595,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   picture_at.clear()
   c.layers.clear()
   c.focusables.clear()
-  c.sems.clear()
   c.sem_hide = 0
-  c.sem_hidden.clear()
   c.layer_cur = 0
   c.group_cur = 0
   c.count = 0

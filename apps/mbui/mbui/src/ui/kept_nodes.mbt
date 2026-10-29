@@ -54,13 +54,10 @@ priv struct RowNodes {
   mut theme : Theme?
   mut ok : Bool
   mut why : String
-  /// what its build said of the frame: said.mbt's build lists; what is read out of it, what is hidden from that; its
-  /// looks (draw.mbt's entries, as built); its words; what it marked used this frame; the cycles and the moments it
-  /// said come again (for what says why a frame is drawn)
+  /// what its build said of the frame: said.mbt's build lists; its looks (draw.mbt's entries, as built); its words;
+  /// what it marked used this frame; the cycles and the moments it said come again (for what says why a frame is drawn)
   said : Array[&SaidAgain]
   marks : Array[Int]
-  sems : Array[Sem]
-  hidden : Array[(Int, Int)]
   floating : Array[Int]
   /// what it holds near its list's top as it scrolls past (Ctx::stick); what scrolls in it (sideways.mbt: its id, its
   /// box and what that holds)
@@ -385,8 +382,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     why: "",
     said: [],
     marks: [],
-    sems: [],
-    hidden: [],
     floating: [],
     stuck: [],
     sideways: [],
@@ -546,8 +541,6 @@ fn Ctx::row_laid(
 /// taken from there as it is over (Ctx::nodes_end).
 priv struct NodesBegun {
   census : Array[Int]
-  sems : Int
-  hidden : Int
   floating : Int
   stuck : Int
   info : Int
@@ -572,8 +565,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.sideways.clear()
   {
     census,
-    sems: self.sems.length(),
-    hidden: self.sem_hidden.length(),
     floating: self.floating.length(),
     stuck: self.stuck.length(),
     info: self.info_reads.length(),
@@ -606,14 +597,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.reads_out = self.reads_out
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
-  rn.sems.clear()
-  for j in b.sems..<self.sems.length() {
-    rn.sems.push(self.sems[j])
-  }
-  rn.hidden.clear()
-  for j in b.hidden..<self.sem_hidden.length() {
-    rn.hidden.push(self.sem_hidden[j])
-  }
   rn.floating.clear()
   for j in b.floating..<self.floating.length() {
     rn.floating.push(self.floating[j])
@@ -782,12 +765,6 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
 fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   let by = rn.base - rn.said_base
   self.say_again(rn.said, { ..unmoved, by: by })
-  for s in rn.sems {
-    self.sems.push({ ..s, node: s.node + by })
-  }
-  for h in rn.hidden {
-    self.sem_hidden.push((h.0 + by, h.1 + by))
-  }
   for e in rn.drawn {
     let i = e.node + by
     while dr.at.length() <= i {
@@ -1166,7 +1143,6 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
     "sems " +
     self.sems.map(fn(s) { "\{s.node} \{s.id} \{s.label} \{s.value} \{s.hidden}" }).join("; "),
   )
-  out.push("hidden \{self.sem_hidden}")
   out.push("inners \{self.inners} \{self.inners_or} \{self.arounds}")
   let words = []
   words_kept.each(fn(k, w) { words.push("\{k}: \{w.text} \{w.pieces.map(fn(p) { (p.x, p.y, p.w, p.h) })}") })

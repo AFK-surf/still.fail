@@ -140,7 +140,11 @@ pub fn Ctx::semantics(
   range? : (Double, Double, Double),
   actions? : Array[Action] = [],
 ) -> Unit {
-  self.sems.push({
+  if node < 0 || node >= self.count {
+    return
+  }
+  // (held by its node, docs/retained.md the way there's 1: the frame's `sems` are found from the nodes, sems_found)
+  self.nodes[node].sem = Some({
     node,
     id,
     role,
@@ -163,11 +167,22 @@ pub fn Ctx::semantics(
 /// `body` built hidden from the tree (ARIA's aria-hidden): what only decorates, what an accessible icon's label
 /// stands for.
 pub fn Ctx::hidden_from_semantics(self : Ctx, body : () -> Unit) -> Unit {
-  let from = self.count
+  // (what is made in it is marked so: Node's `sem_hid`)
   self.sem_hide = self.sem_hide + 1
   body()
   self.sem_hide = self.sem_hide - 1
-  self.sem_hidden.push((from, self.count))
+}
+
+///|
+/// What the nodes say they are in the tree read out (Node's `sem`), in the order they were made: the frame's `sems`.
+fn Ctx::sems_found(self : Ctx) -> Unit {
+  self.sems.clear()
+  for i in 0..<self.count {
+    match self.nodes[i].sem {
+      Some(s) => self.sems.push({ ..s, node: i })
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -251,13 +266,6 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
       }
     }
   }
-  // the nodes built in hidden parts
-  let hidden_node = Array::make(count, false)
-  for r in self.sem_hidden {
-    for i in r.0..<imin(r.1, count) {
-      hidden_node[i] = true
-    }
-  }
   // a list's rows kept (kept_rows.mbt): what one built this frame says is taken for it (its node, its RowKept, the
   // depth what holds it is at), what one drawn again said is said again where it is now; by node, the row built it is
   // in (an index of `rows`, -1 none), and by what is said, the row it was said in
@@ -281,7 +289,7 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
     // (and what a page's bones are made of, wherever it was built: bones.mbt)
-    let parent_hid = (p >= 0 && hid[p]) || hidden_node[i] || left || n.bones != 0L
+    let parent_hid = (p >= 0 && hid[p]) || n.sem_hid || left || n.bones != 0L
     let parent_named = p >= 0 && named[p]
     if p >= 0 && in_modal[p] {
       in_modal[i] = true

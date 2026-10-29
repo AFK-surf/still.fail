@@ -545,11 +545,11 @@ pub struct Ctx {
   /// each of the window's corners as the system draws them (top left, then round it), window_corner the roundest
   window_corners : FixedArray[Double]
   mut direction : Direction
-  // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
-  // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
+  // what the widgets of the frame say they are (semantics.mbt: found from the nodes, sems_found), and how deep in a
+  // part hidden from it the view builds; the actions asked of them (by the host's accessibility, a test) for the next
+  // frame, and this frame's
   sems : Array[Sem]
   mut sem_hide : Int
-  sem_hidden : Array[(Int, Int)]
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
   // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
@@ -786,7 +786,6 @@ fn Ctx::new() -> Ctx {
     direction: Ltr,
     sems: [],
     sem_hide: 0,
-    sem_hidden: [],
     asked_actions: [],
     actions: [],
     a11y_sent: "",
@@ -912,6 +911,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int
   let n = self.nodes[i]
   n.kind = kind
   n.in_sideways = self.sideways_depth > 0
+  n.sem_hid = self.sem_hide > 0
   n.bones = self.bones
   n.parent = self.cur
   if self.cur >= 0 {
