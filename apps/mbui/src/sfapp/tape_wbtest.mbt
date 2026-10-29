@@ -598,7 +598,7 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   t.back_gesture(200.0, false)
   let (x, _, _, _) = t.rect_of("好的，我来处理。").unwrap()
   assert_true(x > rest_x + 150.0, msg="called off at \{x}, at rest at \{rest_x}")
-  t.run_for(app.nav.rest() - t.time())
+  t.run_for(@ui.nav_push_ms)
   assert_eq(app.nav.depth(), 3)
   // its side panel in use: back brings the page over first, the chat opened still over the other
   tap_said(t, "打开侧栏")

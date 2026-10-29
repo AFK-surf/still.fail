@@ -117,7 +117,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | Kind | Preset | Value | The web's |
 |---|---|---|---|
 | 1 | let go, small: a row, a card | spring 0.28 s, no bounce | `MOVE`, web/ui/src/motion.ts:26 |
-| 1 | let go, large: a sheet, the pictures' strip, a page swiped back (gone on or come back, from where the finger last had it at its time) | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
+| 1 | let go, large: a sheet, the pictures' strip | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
 | 2 | by its trigger: a menu, a popover, a picker, a select, the `@` menu, the switcher | in 140 ms ease-out, from 0.97 and clear, growing out of its trigger's side; out at once (`@kit.pop_in`, `pop_out`) | web/ui/src/styles/controls.css.ts:71 (`popKeyframes`) |
 | 2 | a hover's card: the pointer rested on, left | in 160 ms ease-out from 0.96 and clear; out 90 ms on `Leave` to 0.97 and clear | web/src/Hover.css.ts:10-22 |
 | 2 | a tip | in 120 ms ease-out, a fade; out at once (`@kit.tip_in`) | web/ui/src/parts.css.ts:336 |
@@ -141,7 +141,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
 | 4 | a picture into the viewer and back | a page's Move, 350 ms, each way | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
-| 5 | pushed, popped | a page's Move, 350 ms; swiped back and let go, kind 1's large let-go spring | web/src/mobile/app.css.ts:16, 22-30 |
+| 5 | pushed, popped | a page's Move, 350 ms; swiped back and let go, on at `Out` | web/src/mobile/app.css.ts:16, 22-30 |
 | 5 | risen | a page's Move, 350 ms | web/src/mobile/app.css.ts:32 |
 | 5 | another place on the bar | a page's Move from its side; in place, faded in on `Out` | web/src/mobile/app.css.ts:34 |
 | 6 | the glide | a share of what is left, τ 100 ms | `GLIDE_TAU`, web/ui/src/motion.ts:33 |

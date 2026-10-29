@@ -46,57 +46,6 @@ test "on Android the swipe from the edge is the system's: the finger taken from 
 }
 
 ///|
-test "on Android the page the system's back lets go goes on as fast as the finger went: no frame stands where it lifted" {
-  let nav = Nav::new(1)
-  let t = Tester::new(back_view(nav), platform=2)
-  nav.push(2)
-  t.run_for(nav_push_ms)
-  on_back(0, 0.0, 0.0, 0)
-  back_step(t)
-  for x in [20.0, 40.0, 60.0, 80.0, 100.0, 120.0] {
-    on_back(1, x, 0.0, 0)
-    back_step(t)
-  }
-  assert_eq(t.rect_of("title 2").unwrap().0, 120.0)
-  // the finger lifted, moving 20 points a step: the system says back a step after its last
-  on_back(2, 0.0, 1.0, 0)
-  back_step(t)
-  // gone on from where it lifted, at least as far as the finger would have taken it by now (two steps), and on
-  let first = t.rect_of("title 2").unwrap().0
-  assert_true(first >= 160.0)
-  back_step(t)
-  assert_true(t.rect_of("title 2").unwrap().0 > first + 10.0)
-  t.run_for(nav.rest() - t.time())
-  assert_eq(nav.depth(), 1)
-  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
-}
-
-///|
-test "on Android a page the system's back lets go after the finger held still sets out from rest, from where it was" {
-  let nav = Nav::new(1)
-  let t = Tester::new(back_view(nav), platform=2)
-  nav.push(2)
-  t.run_for(nav_push_ms)
-  on_back(0, 0.0, 0.0, 0)
-  back_step(t)
-  for x in [40.0, 80.0, 120.0] {
-    on_back(1, x, 0.0, 0)
-    back_step(t)
-  }
-  // held still a while (no step said), then lifted
-  for _ in 0..<10 {
-    back_step(t)
-  }
-  on_back(2, 0.0, 1.0, 0)
-  back_step(t)
-  let first = t.rect_of("title 2").unwrap().0
-  // (a moving finger's page is past 160 by then)
-  assert_true(first > 120.0 && first < 140.0)
-  t.run_for(nav.rest() - t.time())
-  assert_eq(nav.depth(), 1)
-}
-
-///|
 test "on Android a finger dragged from the edge is not a swipe back: the page stays where it is" {
   let nav = Nav::new(1)
   let t = Tester::new(back_view(nav), platform=2)
