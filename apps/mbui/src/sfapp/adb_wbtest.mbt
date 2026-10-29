@@ -57,7 +57,9 @@ test "共享调试: the phone asked of its host as the page shows; the first thi
   assert_true(t.find("打开开发者选项") is Some(_))
   assert_true(t.find("设置 › 关于手机，连点「版本号」7 次") is Some(_))
   assert_true(t.find("前往设置开启") is None)
-  assert_true(t.find("已连接") is Some(_))
+  // what the phone lacks, said; what is on with nothing to tap there (WLAN), not
+  assert_true(t.find("未打开") is Some(_))
+  assert_true(t.find("WLAN") is None)
   // Developer options on (said by the host as the app comes back): Wireless debugging next, the app not granted to
   // turn it on, so Settings at it
   t.post("native:adb.phone", adb_phone_of().stringify())
@@ -100,6 +102,8 @@ test "共享调试: granted, the app turns Wireless debugging on itself; the hos
   t.answer_native(again[0].0, adb_phone_of(wireless=true, can_switch=true))
   t.draw()
   assert_true(t.find("前往设置开启") is None)
+  // all it needs on, nothing to turn on: nothing said of the phone
+  assert_true(t.find("手机上") is None)
   // said by the host by itself: Wireless debugging off again (Android, as the Wi-Fi went)
   t.post("native:adb.phone", adb_phone_of(wifi=false).stringify())
   t.draw()
