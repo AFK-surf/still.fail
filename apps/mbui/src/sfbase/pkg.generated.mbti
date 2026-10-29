@@ -1315,6 +1315,8 @@ pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit)?]
 
 pub let share_over : @ref.Ref[Bool]
 
+pub fn share_turn_tool(@ui.Ctx, String, Int32, () -> Unit) -> Unit
+
 pub let shared_into : Map[String, Array[@hostapi.Picked]]
 
 pub fn sharing_go(String) -> Unit

@@ -99,6 +99,13 @@ test "wide: hovering a message offers 分享这一轮, which shares its turn as 
   t.frame()
   t.frame()
   assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
+  let button = t.get(Button, label="分享这一轮").rect
+  // Beside the author's name and time, above the words, rather than at their far end.
+  assert_true(button.1 + button.3 <= before.1)
+  assert_true(button.0 < before.0 + 200.0)
+  t.move(button.0 + button.2 / 2.0, button.1 + button.3 / 2.0)
+  t.frame()
+  assert_true(t.query(Button, label="分享这一轮") is Some(_))
   t.click(Button, label="分享这一轮")
   t.frame()
   let asked = named(calls, "chat.publishPreview")

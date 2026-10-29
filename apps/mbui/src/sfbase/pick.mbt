@@ -7,8 +7,7 @@
 // quoting it. How a finger picks is mbui's (@kit.Pick, over @ui.Ctx::words: a message's paragraphs as one text, where
 // each is, the passage drawn behind them); what is here is the chat's: which message, its handles', its bar's and its
 // pill's look. Where the words go is the frame's (`quote`). A message of a chat's list offers its turn shared as a
-// picture too (`share`): on the finger's bar, beside its words while hovered with a mouse, and in the menu a right
-// click on it opens (share_offered).
+// picture too (`share`): on the finger's bar, and in the menu a right click on it opens (share_offered).
 
 ///|
 /// What is picked in the chat: one passage of one message at a time (mbui's @kit.Pick), the message it is of, who
@@ -31,6 +30,29 @@ pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, sel: @kit.P
 /// A message right clicked with a mouse, and what shares its turn: the frame, where, and the share, for the window's
 /// right click menu to offer as 分享这一轮 with what else it has there (sfdesk's context_menu.mbt). None once taken.
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit)?] = Ref(None)
+
+///|
+/// The turn's sharing beside its author's name and time, while the message is hovered. Touch has the pick bar.
+pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, go : () -> Unit) -> Unit {
+  if @sf.more_held() { return }
+  match c.menu_asked(row) {
+    Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))
+    None => ()
+  }
+  // Keep the header's height and the words below it still as the pointer comes and goes.
+  c.box(style=share_turn_room, fn() {
+    c.hand_shown(c.hovered(row), fn() {
+      if @sf.icon_button(c, "external", key=key + "/share-turn", size=24.0, label=@sf.t("web-main.chat.shareTurn")) {
+        pick_clear()
+        go()
+      }
+    })
+  }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
 
 ///|
 /// Let go of what is picked.
@@ -92,24 +114,7 @@ pub fn pickable(
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
   let box = c.box(style=if fill { pick_fill } else { pick_own }, id~, fn() {
     marks(id)
-    match share {
-      Some(go) if !@sf.more_held() => {
-        c.box(style=if fill { pick_share_row } else { pick_share_own }, fn() {
-          c.box(style=if fill { pick_fill } else { pick_own }, body) |> ignore
-          // Its room stays put as the pointer comes and goes; no words move under a selection.
-          c.box(style=pick_share_room, fn() {
-            let button = key + "/share"
-            c.hand_shown(c.hovered(id) || c.hovered(c.id(button)), fn() {
-              if @sf.icon_button(c, "external", key=button, label=@sf.t("web-main.chat.shareTurn")) {
-                pick_clear()
-                go()
-              }
-            })
-          }) |> ignore
-        }) |> ignore
-      }
-      _ => body()
-    }
+    body()
   })
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
@@ -463,18 +468,6 @@ let pick_fill : @ui.Style = @ui.css("w=Full")
 ///|
 // kept across runs: a value (no field of it changes)
 let pick_own : @ui.Style = @ui.css("w=Hug")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_share_row : @ui.Style = @ui.css("row w=Full gap=S1 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_share_own : @ui.Style = @ui.css("row w=Hug gap=S1 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_share_room : @ui.Style = @ui.css("w=S8 h=S8")
 
 ///|
 /// What the pill, and a finger's handles and bar, are placed by: all of the layer (where it starts in the window).

@@ -370,7 +370,7 @@ pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
 pub fn open_xshare(@sfbase.Source, @sfbase.ChatRef, Double?, from~ : @sf.Anchor) -> Unit
 
-pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
+pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
 
 pub let page_move_ms : Double
 

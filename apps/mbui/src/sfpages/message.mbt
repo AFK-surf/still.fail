@@ -119,6 +119,9 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     "m:" + m.ts,
     m.time,
     emits=emits.map(fn(l) { (l.emits, l.rk, m.seq) }),
+    share=if here.list is Some(_) {
+      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(m.seq)) } })
+    } else { None },
     fn() { message_avatar(c, src, here, m, agent) },
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
@@ -196,12 +199,15 @@ pub fn others_message(
   key : String,
   time : Stamp?,
   emits? : (Emits, String, Double)? = None,
+  share? : (() -> Unit)? = None,
   avatar : () -> Unit,
   name : () -> Unit,
   route : (() -> Unit)?,
   body : () -> Unit,
 ) -> Unit {
-  c.box(style=msg_row, fn() {
+  let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
+  if row != 0 { c.cursor(row, Arrow) }
+  c.box(style=msg_row, id=row, fn() {
     let col = c.box(style=msg_main, fn() {
       c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
         name()
@@ -212,6 +218,10 @@ pub fn others_message(
           }
         }
         message_time(c, key, time)
+        match share {
+          Some(go) => @sfbase.share_turn_tool(c, key, row, go)
+          None => ()
+        }
       })
       |> ignore
       if inline {
