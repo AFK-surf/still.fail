@@ -159,14 +159,15 @@ pub fn state_line(
 ///|
 /// The lead's icon, 14 in its 10 wide column (standing 2 out of it each side): a bell, a check, the archive box (done and
 /// offered to archive: @sfbase.row_lead); waiting's arc with its three dots breathing one after another; watching's dot
-/// beating, its arcs lit after it. Each part that moves is drawn apart, over what stays (leadSlot's copies).
-fn lead_icon(c : @ui.Ctx, lead : String, ink : Int64) -> Unit {
+/// beating, its arcs lit after it. Each part that moves is drawn apart, over what stays (leadSlot's copies). `centred`:
+/// in the middle of a column at least as wide as it instead (an option's disc's: need_card).
+fn lead_icon(c : @ui.Ctx, lead : String, ink : Int64, centred? : Bool = false) -> Unit {
   let name = match lead {
     "need" => "bell"
     "done" => "check"
     _ => lead
   }
-  c.box(style=state_icon_at, tx=-state_icon_out, fn() {
+  c.box(style=state_icon_at, tx=if centred { 0.0 } else { -state_icon_out }, fn() {
     match lead {
       "wait" => {
         @sf.icon_parts(c, name, [0], size=state_icon, color=ink) |> ignore
