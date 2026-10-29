@@ -147,35 +147,27 @@ pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
 }
 
 ///|
-/// The ways the room has (`ways`: views_for's), side by side (ViewSwitch): icons in a quiet track, the one shown
-/// raised, each its tip.
+/// The ways the room has (`ways`: views_for's), side by side (ViewSwitch): a segmented choice of their icons among the
+/// bar's buttons, each its tip.
 pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (String) -> Unit, ways? : Array[String] = views_all) -> Unit {
-  let t = @sf.theme()
-  let b = c.box(style=views_track, fn() {
-    for w in view_icons {
-      let (v, icon) = w
-      if !ways.contains(v) {
-        continue
-      }
-      let label = @sf.t("web-pages.drive.view." + v)
-      let id = c.id(key + "/" + v)
-      let on = value == v
-      // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
-      if c.clicked(id) {
-        on_change(v)
-      }
-      let hot = c.lit(id)
-      // (as wide as makes each a press's room across with the track's 2 between them: rule 2, drawn smaller, its room is
-      // not)
-      let across = @ui.style(w=Fixed(dmax(view_side, @ui.room_least() - views_apart)))
-      let x = c.box(style=(if on { view_on } else { view_off }).then(across), id~, fn() {
-        @sf.icon(c, icon, size=view_icon, color=if on || hot { t.p.text } else { t.p.muted }) |> ignore
-      })
-      c.semantics(x, Radio, id~, label~, check=if on { On } else { Off })
-      @sf.tip(c, key + "/" + v + "/tip", id, label)
+  let shown = view_icons.filter(fn(w) { ways.contains(w.0) })
+  let at = shown.search_by(fn(w) { w.0 == value }).unwrap_or(0)
+  let k = @sf.segmented(
+    c,
+    key,
+    shown.map(fn(w) { @sf.t("web-pages.drive.view." + w.0) }),
+    at,
+    icons=shown.map(fn(w) { w.1 }),
+    bar=true,
+    said=@sf.t("web-pages.drive.view.label"),
+  )
+  // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
+  if k != at || c.clicked(@kit.part_id(c.id(key), at)) {
+    match shown.get(k) {
+      Some((v, _)) => on_change(v)
+      None => ()
     }
-  })
-  c.semantics(b, RadioGroup, label=@sf.t("web-pages.drive.view.label"))
+  }
 }
 
 ///|
@@ -636,9 +628,6 @@ let tree_step : Double = 18.0
 
 
 ///|
-let view_icon : Double = 16.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let tree_note : @ui.Style = @ui.css("row w=Full pt=S2 pb=S2 pr=S2_5")
 
@@ -653,27 +642,6 @@ let tree_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 ///|
 // kept across runs: a value (no field of it changes)
 let tree_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
-
-///|
-/// The ways' track (Drive.css.ts views): 2 in, 2 apart, round, on the words' colour at 6%.
-// kept across runs: a value (no field of it changes)
-let views_track : @ui.Style = @ui.css("row p=S0_5 gap=S0_5 radius=Full bg=Tint align=ACenter")
-
-///|
-/// A way (viewButton): 28 round; the one shown on the page's ground, a hairline and a shadow round it.
-// kept across runs: a value (no field of it changes)
-let view_off : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
-
-///|
-/// A way's side as drawn (view_off's S7), and the room between two in the track (views_track's S0_5).
-let view_side : Double = 28.0
-
-///|
-let views_apart : Double = 2.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let view_on : @ui.Style = view_off.then(@ui.css("bg=Bg border=B0_5 border_color=Line shadow=Sm"))
 
 ///|
 /// The columns side by side (Drive.css.ts columns), as tall as the list.

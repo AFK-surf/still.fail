@@ -183,70 +183,6 @@ fn tone_color(tone : String) -> Int64 {
 }
 
 ///|
-/// A choice of a few (Parts.kt Seg): mbui's toggle group (@kit.toggle_group: the arrows move along it, a screen reader
-/// reads its options) in Seg's look: a track of the ink at 6%, 10 round, the chosen one on a light ground with a
-/// hairline round it, its word in the ink (the others muted); `fill`, the options share the width. The one chosen,
-/// after a tap on another.
-fn seg(
-  c : @ui.Ctx,
-  key : String,
-  labels : Array[String],
-  chosen : Int,
-  height? : Double = 30.0,
-  fill? : Bool = false,
-) -> Int {
-  let t = @sf.theme()
-  let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
-  let now = @kit.toggle_group(
-    c,
-    key,
-    items,
-    [chosen.to_string()],
-    grow=fill,
-    look=fn(c, st) {
-      c.box(
-        w=if fill { Fill(1.0) } else { Auto },
-        h=Fill(1.0),
-        padx=if fill { 12.0 } else { 10.0 },
-        radius=8.0,
-        align=ACenter,
-        justify=JCenter,
-        bg=if st.on { if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL } } else { 0L },
-        border=if st.on { 0.5 } else { 0.0 },
-        border_color=t.p.line,
-        fn() {
-          c.text(
-            st.label,
-            size=if fill { 14.0 } else { 13.0 },
-            color=if st.on { t.p.text } else { t.p.muted },
-            wrap=false,
-          )
-          |> ignore
-        },
-      )
-      |> ignore
-    },
-    ground=fn(c, _, options) {
-      c.box(
-        dir=Row,
-        w=if fill { Fill(1.0) } else { Auto },
-        h=Px(height),
-        pad=2.0,
-        radius=10.0,
-        bg=@sf.alpha(t.p.text, 0.06),
-        options,
-      )
-      |> ignore
-    },
-  ).value
-  // the chosen one tapped again stays chosen
-  match now {
-    [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
-    _ => chosen
-  }
-}
-
-///|
 /// For how long it has stood where it does (AgentSheet.kt agentSince): at work since its turn began, waiting as long
 /// as it has (of at most), else when it was last at it.
 fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
@@ -1371,14 +1307,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       c.rich([@ui.span(command, mono=true)], size=t.t.caption, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
     }
     if !service {
-      dui.job_tab = seg(
-        c,
-        "job/tab",
-        [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")],
-        tab,
-        height=34.0,
-        fill=true,
-      )
+      dui.job_tab = @sf.segmented(c, "job/tab", [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")], tab)
     }
     if tab == 0 {
       let notices = items(j, "notices")

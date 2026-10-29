@@ -214,6 +214,10 @@ pub fn button_height() -> Double {
 }
 
 ///|
+/// An icon button's side (iconBtn's 32), with a finger too: what stands among a bar's icon buttons is as high.
+pub let icon_button_side : Double = 32.0
+
+///|
 /// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`corner`: the
 /// ladder's step where it stands, a card's text inset in its corner the small block's 10; `round`: a circle, where it
 /// stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons' at the
@@ -225,7 +229,7 @@ pub fn icon_button(
   c : @ui.Ctx,
   icon : String,
   key? : String = "",
-  size? : Double = 32.0,
+  size? : Double = icon_button_side,
   icon_size? : Double = 16.0,
   on? : Bool = false,
   lit? : Bool = false,
@@ -345,6 +349,14 @@ let segmented_pad : Double = 3.0
 let segmented_gap : Double = 2.0
 
 ///|
+/// In a bar (`bar`): its track 2 round its options, as a bar's other tracks (Seg's), and an option's words 10 in from
+/// its sides (seg_option's px=S2_5).
+let segmented_bar_pad : Double = @ui.Space::px(S0_5)
+
+///|
+let segmented_bar_in : Double = @ui.Space::px(S2_5)
+
+///|
 /// Its options in a line, 2 apart.
 // kept across runs: a value (no field of it changes)
 let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
@@ -356,7 +368,9 @@ let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 /// columns need more room than there is, the track takes what there is and its options share it as option_widths has
 /// them: as alike as their words let them, their sides narrower, else their words smaller alike (to the system's own
 /// size of words), else the chosen one alone in the track, the others in a pick (choice_pick). Always one line, each
-/// one's words whole: nothing wrapped, cut or scrolled. Returns the chosen index.
+/// one's words whole: nothing wrapped, cut or scrolled. `icons`: each option its icon in place of its words (its
+/// label its tip and what a screen reader says), as wide as a press's room. `bar`: among a bar's buttons, as high as
+/// they are and round as they are, on every page. `said`: what a screen reader calls it. Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -365,11 +379,14 @@ pub fn segmented(
   item_w? : Double = 0.0,
   ink? : Int64,
   thumb? : Int64,
+  icons? : Array[String] = [],
+  bar? : Bool = false,
+  said? : String = "",
 ) -> Int {
   // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt), but at a head's end
   // (head_end), as wide as its options beside the title; a wide page's: the web's Segmented, as wide as its options,
-  // its track round them alone)
-  if look() is Narrow {
+  // its track round them alone; in a bar or of icons, the wide page's, round as a bar's buttons)
+  if look() is Narrow && !bar && icons.is_empty() {
     if at_head_end() {
       // (as wide as its options where its line has the room, as narrow as the chosen one with the chevron where it has
       // less: filling what that leaves it)
@@ -388,46 +405,73 @@ pub fn segmented(
   let thumb = thumb.unwrap_or(c.theme().lifted)
   // its words as drawn (the system's size of words applied), in the chosen weight (as wide unchosen as chosen: no
   // column changes as the choice does)
-  let size = c.sp(t.t.ui)
-  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight=500) })
-  let widest = words.fold(init=0.0, fn(m, w) { dmax(m, w) })
-  let col = dmax(item_w, widest + 2.0 * segmented_in)
+  // (in a bar, as its buttons are: as high as they are, its track 2 round its options, the bar's smaller words, each
+  // option as wide as its own: a bar's room is short)
+  let words_size = if bar { t.t.meta } else { t.t.ui }
+  let size = c.sp(words_size)
+  let pad = if bar { segmented_bar_pad } else { segmented_pad }
+  let side = if bar { segmented_bar_in } else { segmented_in }
+  let high = if bar { icon_button_side - 2.0 * pad } else { segmented_h }
+  let corner = if bar { high / 2.0 } else { segmented_corner }
   let n = labels.length()
+  let cols = if icons.is_empty() {
+    let words = labels.map(fn(l) { choice_words_w(c, l, size, weight=500) + 2.0 * side })
+    if bar {
+      words.map(fn(w) { dmax(item_w, w) })
+    } else {
+      Array::make(n, dmax(item_w, words.fold(init=0.0, fn(m, w) { dmax(m, w) })))
+    }
+  } else {
+    // (an icon each: square, as wide as a press's room with the gap beside it)
+    Array::make(n, dmax(item_w, dmax(high, @ui.room_least() - segmented_gap)))
+  }
   let gaps = segmented_gap * (n - 1).to_double()
-  let whole = col * n.to_double() + gaps + 2.0 * segmented_pad
+  let whole = cols.fold(init=0.0, fn(s, w) { s + w }) + gaps + 2.0 * pad
   // the room the track had as last laid out (cut to where it is: read back, built again in the frame it is laid out
   // otherwise): less than its columns need, its options give way from them to what option_widths has them in it
   // (their columns as wide where the room is, the track then laid out as wide as they need)
   let track = c.id(key + "/track")
   let fit = match c.laid_size(track) {
-    Some((w, _)) if w < whole - 0.5 =>
-      Some(fitted(c, labels, w - 2.0 * segmented_pad - gaps, t.t.ui, 500, segmented_in, segmented_least))
+    // (in a bar, or of icons, never: a bar gives what it has not the room for to its ⋯, not squeezed)
+    Some((w, _)) if w < whole - 0.5 && !bar && icons.is_empty() =>
+      Some(fitted(c, labels, w - 2.0 * pad - gaps, words_size, 500, side, segmented_least))
     _ => None
   }
   // its track: round its options (as wide as they are, cut to where it is), or round the chosen one where they do not
   // fit side by side (as wide as where it is)
   let track_box = fn(wide : Bool, inner : () -> Unit) -> Int {
     c.box(
-      style=if wide { segmented_track_wide } else { segmented_track },
+      style=if wide {
+        segmented_track_wide
+      } else if bar || !icons.is_empty() {
+        segmented_track_whole
+      } else {
+        segmented_track
+      },
       id=track,
-      pad=segmented_pad,
+      pad~,
       bg=alpha(ink, 0.06),
-      radius=segmented_corner + segmented_pad,
+      radius=corner + pad,
       inner,
     )
   }
   // an option: its words in its middle, in the chosen weight and the ink where chosen (`on`), in the ink pointed at
   // (`lit`); short of room, their least in from its sides
+  // (with icons, its icon in their place)
   let option = fn(label : String, on : Bool, lit : Bool) {
-    c.box(h=Px(segmented_h), padx?=fit.map(fn(_) { segmented_least }), align=ACenter, justify=JCenter, fn() {
-      c.text(
-        label,
-        size=t.t.ui,
-        weight=if on { 500 } else { 400 },
-        color=if on || lit { ink } else { t.p.muted },
-        wrap=false,
-      )
-      |> ignore
+    c.box(h=Px(high), padx?=fit.map(fn(_) { segmented_least }), align=ACenter, justify=JCenter, fn() {
+      match labels.search(label).bind(fn(i) { icons.get(i) }) {
+        Some(name) => icon(c, name, color=if on || lit { ink } else { t.p.muted }) |> ignore
+        None =>
+          c.text(
+            label,
+            size=words_size,
+            weight=if on { 500 } else { 400 },
+            color=if on || lit { ink } else { t.p.muted },
+            wrap=false,
+          )
+          |> ignore
+      }
     })
     |> ignore
   }
@@ -457,9 +501,10 @@ pub fn segmented(
       items,
       [chosen.to_string()],
       slide=true,
+      label=said,
       widths=match fit {
-        Some(f) => f.widths.map(fn(w) { (col, w) })
-        None => Array::make(n, (col, col))
+        Some(f) => f.widths.mapi(fn(i, w) { (cols[i], w) })
+        None => cols.map(fn(w) { (w, w) })
       },
       look=fn(_, s) { option(s.label, s.on, s.hovered) },
       thumb=fn(c, w, h) {
@@ -467,7 +512,7 @@ pub fn segmented(
           w=Px(w),
           h=Px(h),
           bg=thumb,
-          radius=segmented_corner,
+          radius=corner,
           border=0.5,
           border_color=t.p.line,
           shadow=1.0,
@@ -480,6 +525,13 @@ pub fn segmented(
       ground=fn(c, _, items) { track_box(false, fn() { c.box(style=segmented_strip, items) |> ignore }) |> ignore },
     ).value
   })
+  // (icons: each one's words its tip)
+  if !icons.is_empty() {
+    let group = c.id(key)
+    for i, l in labels {
+      tip(c, key + "/" + i.to_string(), @kit.part_id(group, i), l)
+    }
+  }
   // the chosen one tapped again stays chosen
   match now {
     [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
@@ -506,6 +558,11 @@ let segmented_track : @ui.Style = @ui.css("row w=Cut")
 ///|
 // kept across runs: a value (no field of it changes)
 let segmented_track_wide : @ui.Style = @ui.css("row w=Full")
+
+///|
+/// In a bar, or of icons: as wide as its options, never cut (what has not the room goes into the bar's ⋯).
+// kept across runs: a value (no field of it changes)
+let segmented_track_whole : @ui.Style = @ui.css("row")
 
 ///|
 /// A segmented choice whose options do not fit side by side (choice_pick), in its track: the chosen one as its option

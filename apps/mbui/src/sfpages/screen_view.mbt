@@ -785,35 +785,10 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
 }
 
 ///|
-/// 只看 / 控制 (Parts.kt Seg, 32 high, its corner 16): the choice, as tapped.
+/// 只看 / 控制: a segmented choice among the bar's buttons, as tapped.
 fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
-  let items = [
-    @kit.item("look", label=@sf.t("android-misc.screen.look")),
-    @kit.item("drive", label=@sf.t("android-misc.screen.drive")),
-  ]
-  let now = @kit.toggle_group(
-    c,
-    key,
-    items,
-    [if controlling { "drive" } else { "look" }],
-    slide=true,
-    look=fn(c, st) {
-      c.box(style=seg_item, fn() {
-        c.text(st.label, style=if st.on { seg_on_words } else { seg_off_words }) |> ignore
-      })
-      |> ignore
-    },
-    thumb=fn(c, w, h) {
-      c.box(style=seg_thumb.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {  }) |> ignore
-    },
-    ground=fn(c, _, items) { c.box(style=seg_track, items) |> ignore },
-  ).value
-  match now {
-    ["drive"] => true
-    ["look"] => false
-    // the chosen one tapped again stays chosen
-    _ => controlling
-  }
+  let labels = [@sf.t("android-misc.screen.look"), @sf.t("android-misc.screen.drive")]
+  @sf.segmented(c, key, labels, if controlling { 1 } else { 0 }, bar=true) == 1
 }
 
 ///|
