@@ -112,7 +112,7 @@ export const OutflowLive = Layer.effectDiscard(
     yield* Effect.acquireRelease(
       Effect.promise(async () => {
         const server = new OutflowServer({
-          path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify, workspace, lang: stationLang, sleep: (ms) => wall.sleep(ms),
+          path: socketPath(data), grants, reads: (op, args, lang) => readers.read(op, args, lang), identify, workspace, lang: stationLang,
         });
         await server.listen().catch((e) => log.warn("outflow", "the outflow socket is not listened on", { error: (e as Error).message }));
         void previous.gone.then(() => server.previousGone());

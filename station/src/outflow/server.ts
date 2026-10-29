@@ -1,7 +1,7 @@
 // Data outflow's own socket (docs/data-outflow.md): <data>/run/outflow.sock, on this machine alone, HTTP. A program
 // here asks for some kinds of the station's data (POST /v1/request): the station says who it is by the other end of the
 // socket (never by what it says of itself), an admin of the workspace answers in still.fail, and the program gets a
-// token. With it, that program alone reads what it was granted (GET /v1/stations, /v1/usage, /v1/chats,
+// token. With it, it reads what it was granted (GET /v1/stations, /v1/usage, /v1/chats,
 // /v1/messages), of this station or, granted the workspace, of any station of it, in the shape of `/v1`.
 import { createHash } from "node:crypto";
 import { chmodSync, createReadStream, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
 import { log } from "../ops/log.ts";
 import type { Lang } from "../ops/i18n.ts";
-import { type Identity, type OutflowGrants, type Reach, SCOPES, type Scope, type Taken, identityKey } from "./grants.ts";
+import { type Identity, type OutflowGrants, type Reach, SCOPES, type Scope, type Taken } from "./grants.ts";
 
 /// A read of the station's (read/ops.ts), its answer as JSON text.
 export type Reads = (op: string, args: unknown, lang: Lang) => Promise<string>;
@@ -37,12 +37,8 @@ export type OutflowOptions = {
   identify: Identify;
   workspace: Workspace;
   lang: () => Lang;
-  /// The station's clock: how a request waits for its answer.
-  sleep: (ms: number) => Promise<void>;
 };
 
-/// How long a request waits for an admin's answer before it is told to ask again (`202`).
-export const ASK_MS = 10 * 60_000;
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 const BODY_MAX = 16 * 1024;
@@ -214,19 +210,18 @@ export class OutflowServer {
     const reach: Reach = given?.workspace === true ? "workspace" : "station";
     const caller = await this.#caller(req);
     const self = { name: said(given?.name), purpose: said(given?.purpose) };
-    const request = this.#o.grants.ask(caller, self, asked, reach);
+    const request = this.#o.grants.ask(caller, self, asked, reach, said(given?.key));
     // Gone while it waits: nothing is taken, and the request stays for when it asks again.
     const left = new AbortController();
     req.socket.once("close", () => left.abort());
     const taken = await this.#answered(request.id, left.signal);
-    if (left.signal.aborted) return;
-    if (taken === null) return send(res, 202, { request: request.id, state: "asking" });
+    if (taken === null) return;
     if (taken === "refused") throw new Refused(403, "refused");
     log.info("outflow", "granted", { grant: taken.grant.id, app: caller.app, team: caller.teamId, identifier: caller.identifier, scopes: taken.grant.scopes, reach: taken.grant.reach });
     send(res, 200, { token: taken.token, grant: taken.grant.id, scopes: taken.grant.scopes, reach: taken.grant.reach });
   }
 
-  /// Request `id`'s answer, taken as soon as an admin gave it; null when none came in ASK_MS, or the program left.
+  /// Request `id`'s answer, taken as soon as an admin gave it, however long that is; null when the program left first.
   #answered(id: string, left: AbortSignal): Promise<Taken | null> {
     const grants = this.#o.grants;
     return new Promise((resolve) => {
@@ -246,7 +241,6 @@ export class OutflowServer {
       };
       const stop = grants.listen(look);
       left.addEventListener("abort", gone, { once: true });
-      void this.#o.sleep(ASK_MS).then(() => end(null));
       look();
     });
   }
@@ -255,8 +249,6 @@ export class OutflowServer {
     const token = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? "")?.[1] ?? "";
     const grant = this.#o.grants.byToken(token);
     if (grant === null) throw new Refused(401, "revoked");
-    const caller = await this.#caller(req);
-    if (identityKey(caller) !== identityKey(grant.identity)) throw new Refused(401, "this token was given to another program");
     const whole = grant.reach === "workspace";
     if (url.pathname === "/v1/stations") {
       const here = this.#o.workspace.here();
