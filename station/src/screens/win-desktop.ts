@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import type { AudioFrame, Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -194,7 +194,7 @@ export class WindowsDesktop implements ScreenSource {
     await this.refresh();
     if (this.#status?.capture === false) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     const input = new WinInput();
-    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}) };
+    const ask = { codec, ...(options.audio === true && !options.peek ? { audio: true } : {}), maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}) };
     let first: HelperView;
     try {
       first = await this.#start(binary, ask, input);
@@ -207,10 +207,10 @@ export class WindowsDesktop implements ScreenSource {
   }
 
   /// One process for a view, answering (its info had); fails with what it said.
-  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number; bitrate?: number }, input: WinInput): Promise<HelperView> {
+  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number; bitrate?: number; audio?: boolean }, input: WinInput): Promise<HelperView> {
     const child = (this.#o.start ?? start)(binary, ["view"]);
     child.stdin!.write(`${JSON.stringify(ask)}\n`);
-    const view = new HelperView(ask.codec, childPipe(child), () => {}, input, "Windows.Graphics.Capture");
+    const view = new HelperView(ask.codec, childPipe(child), () => {}, input, "Windows.Graphics.Capture", ask.audio);
     try {
       await view.ready;
       return view;
@@ -264,6 +264,16 @@ export class LastingView implements ScreenView {
       const frame = await view.next();
       if (frame !== null || this.#closed) return frame;
       // Another `next` already started it again: this one asks the new process.
+      if (this.#view === view && !(await (this.#restarting ??= this.#restart().finally(() => (this.#restarting = null))))) return null;
+      if (this.#closed) return null;
+    }
+  }
+
+  async nextAudio(): Promise<AudioFrame | null> {
+    for (;;) {
+      const view = this.#view;
+      const audio = await view.nextAudio();
+      if (audio !== null || this.#closed || !view.hasAudio()) return audio;
       if (this.#view === view && !(await (this.#restarting ??= this.#restart().finally(() => (this.#restarting = null))))) return null;
       if (this.#closed) return null;
     }

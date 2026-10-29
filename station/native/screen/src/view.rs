@@ -75,6 +75,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
+    let audio = if request["audio"].as_bool() == Some(true) { Some(super::audio::Audio::start(out.clone())) } else { None };
     let options = Options {
         jpeg: request["codec"].as_str() == Some("jpeg"),
         hevc: request["codec"].as_str() == Some("h265"),
@@ -122,6 +123,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
                 }
             }
             5 => clipboard.watch(payload.first() == Some(&1)),
+            9 => { if let Some(a) = &audio { a.next(); } },
             6 => reveal(&String::from_utf8_lossy(&payload)),
             8 => {
                 if let Ok(b) = serde_json::from_slice::<Value>(&payload) {
@@ -240,7 +242,7 @@ impl View {
             made
         };
         let codec = if view.options.jpeg { "jpeg" } else if view.encoder_hevc == Some(true) { "h265" } else { "h264" };
-        out.json(1, json!({ "width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true }));
+        out.json(1, json!({ "width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true, "audio": true }));
         Ok(view)
     }
 

@@ -10,6 +10,8 @@ export const CONFIG = 1;
 export const VIDEO = 2;
 export const STATE = 3;
 export const CLIPBOARD = 4;
+export const AUDIO_CONFIG = 5;
+export const AUDIO = 6;
 export const INPUT = 16;
 export const ACK = 17;
 export const KEYFRAME = 18;
@@ -41,6 +43,8 @@ export type StationFrame =
   | { config: FrameConfig }
   | { video: { key: boolean; ts: number; data: Uint8Array } }
   | { state: J }
+  | { audioConfig: { codec: "pcm_s16le"; sampleRate: 48000; channels: 2 } }
+  | { audio: { ts: number; data: Uint8Array } }
   /// The screen's clipboard, changed: its type and its bytes (text in UTF-8).
   | { clipboard: { type: ClipType; data: Uint8Array } }
   /// A kind this client does not know (a later station's): passed over.
@@ -85,6 +89,17 @@ export class FrameReader {
         if (!isObject(c) || typeof c.codec !== "string") throw new Error("a config that says no codec");
         const description = typeof c.description === "string" && c.description !== "" ? fromBase64(c.description) : null;
         return { config: { codec: c.codec, width: whole(c.width), height: whole(c.height), description, region: regionOf(c.region) } };
+      }
+      case AUDIO_CONFIG: {
+        const c = json(this.#take(length));
+        if (!isObject(c) || c.codec !== "pcm_s16le" || c.sampleRate !== 48000 || c.channels !== 2) throw new Error("unsupported screen audio format");
+        return { audioConfig: { codec: "pcm_s16le", sampleRate: 48000, channels: 2 } };
+      }
+      case AUDIO: {
+        if (length !== 3848) { this.#skip(length); throw new Error("invalid screen audio packet"); }
+        const head = this.#take(8);
+        const view = new DataView(head.buffer);
+        return { audio: { ts: view.getUint32(0) * TWO_32 + view.getUint32(4), data: this.#take(length - 8) } };
       }
       case STATE:
         return { state: json(this.#take(length)) };

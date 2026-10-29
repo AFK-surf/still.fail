@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
+import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -195,7 +195,7 @@ type HelperError = Error & { code?: string };
 /// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
 /// pictures leave the pointer out), 7 region (JSON {region}: the part of the display the frames from the next on show,
 /// as it was framed; null the whole; said before the frame whose part is another than the last one's).
-export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8 } as const;
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8, audio: 9 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
 /// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
@@ -226,6 +226,8 @@ export class HelperView implements ScreenView {
   #carry: Buffer = Buffer.alloc(0);
   #waiting: ((frame: Frame | null) => void)[] = [];
   #config: FrameConfig | undefined;
+  #audio = false;
+  #audioWait: ((frame: AudioFrame | null) => void) | null = null;
   /// The latest config said (a frame of another part of the display goes with it again, its part said), the part the
   /// next frame shows as the helper said it (null: the whole), and whether its info said it frames parts.
   #lastConfig: FrameConfig | undefined;
@@ -249,7 +251,8 @@ export class HelperView implements ScreenView {
   readonly #capture: string;
   #encoder = "";
 
-  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput(), capture = "ScreenCaptureKit") {
+  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput(), capture = "ScreenCaptureKit", audio = false) {
+    this.#audio = audio;
     this.#codec = codec;
     this.#capture = capture;
     this.#socket = socket;
@@ -288,8 +291,28 @@ export class HelperView implements ScreenView {
           log.info("screens", "a view opened", { capture: this.#capture, width: info.width, height: info.height, encoder: info.encoder });
           if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
           this.#regions = info.regions === true;
+          this.#audio = this.#audio && info.audio === true;
           this.#settle.resolve({ width: info.width, height: info.height });
         }
+        return;
+      }
+      case 8: {
+        let config: any;
+        try { config = JSON.parse(payload.toString()); } catch { config = null; }
+        if (config?.codec !== "pcm_s16le" || config.sampleRate !== 48000 || config.channels !== 2) {
+          this.#audio = false;
+          const resolve = this.#audioWait;
+          this.#audioWait = null;
+          resolve?.(null);
+        }
+        return;
+      }
+      case 9: {
+        const resolve = this.#audioWait;
+        this.#audioWait = null;
+        if (!resolve) return;
+        if (payload.length !== 3848) { this.#audio = false; resolve(null); return; }
+        resolve({ ts: Number(payload.readBigUInt64BE(0)), data: new Uint8Array(payload.subarray(8)) });
         return;
       }
       case 2:
@@ -350,6 +373,17 @@ export class HelperView implements ScreenView {
     return new Promise((resolve) => {
       this.#waiting.push(resolve);
       this.#send(TO_HELPER.next);
+    });
+  }
+
+  hasAudio(): boolean { return this.#audio; }
+
+  nextAudio(): Promise<AudioFrame | null> {
+    if (this.#ended || !this.#audio) return Promise.resolve(null);
+    if (this.#audioWait) return Promise.reject(new Error("audio already pending"));
+    return new Promise((resolve) => {
+      this.#audioWait = resolve;
+      this.#send(TO_HELPER.audio);
     });
   }
 
@@ -414,6 +448,8 @@ export class HelperView implements ScreenView {
     this.#ended = true;
     this.#socket.destroy();
     for (const resolve of this.#waiting.splice(0)) resolve(null);
+    this.#audioWait?.(null);
+    this.#audioWait = null;
     this.#gone();
   }
 }

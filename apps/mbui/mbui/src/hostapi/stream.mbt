@@ -86,3 +86,12 @@ pub fn stream_feeds() -> Bool {
 pub fn stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
   st_codec(id, cmd, data)
 }
+
+///|
+/// Whether the host plays a stream's 48 kHz stereo PCM16 system audio.
+pub fn stream_audio_here() -> Bool { st_audio_here() != 0 }
+
+///|
+/// One 20 ms packet (3840 bytes, interleaved little-endian PCM16). Empty: stop and discard queued sound.
+/// Hosts bound queued audio and drop stale sound; closing the stream releases its player too.
+pub fn stream_audio(id : Int, data : Bytes) -> Unit { st_audio(id, data) }

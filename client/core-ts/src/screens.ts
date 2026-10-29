@@ -93,7 +93,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(fit ? { fit } : {}) },
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(fit ? { fit } : {}) },
         auto: !peek && typeof control !== "boolean",
       };
     }
@@ -641,6 +641,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                   tell();
                 }
                 progress({ frame: { key: frame.video.key, ts: frame.video.ts } }, frame.video.data);
+              } else if ("audioConfig" in frame) {
+                progress({ audioConfig: frame.audioConfig });
+              } else if ("audio" in frame) {
+                progress({ audio: { ts: frame.audio.ts } }, frame.audio.data);
               } else if ("clipboard" in frame) {
                 // A copy made on the screen, for the page to put on this device's clipboard (only while driving it).
                 if (!state.control) continue;

@@ -2,6 +2,7 @@
 // the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
 // browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
 //
+//   screen-audio                        live with system audio available (no sound emitted by the fixture)
 //   screen-connecting                   nothing said yet
 //   screen-live, -live-dark             live, driven, 李雷 also on it (the landscape one: the same, its window sideways)
 //   screen-trackpad, -trackpad-command  driven as a trackpad, the pointer moved right; ⌘ held on the keys row
@@ -110,6 +111,10 @@ pub fn screen_fixture_stream(
     done(Ok(Json::null()))
   }
   match m {
+    "screen-audio" => {
+      live(true, true, [], None, None, None, None, None, None)
+      on_value({ "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } }, None)
+    }
     "screen-connecting" => ()
     "screen-live" | "screen-full" | "screen-full-tools" =>
       live(true, true, if m == "screen-live" { ["李雷"] } else { [] }, None, None, None, None, None, None)

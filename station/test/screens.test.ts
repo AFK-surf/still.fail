@@ -1645,3 +1645,62 @@ test("no simulators where there is no helper, nor where simctl cannot be run", a
   assert.equal(hub.list().length, 0);
   failing.close();
 });
+
+test("system audio is pull driven, old helpers decline it, and close releases a pending packet", async () => {
+  const written: Buffer[] = [];
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = { write: (b: Buffer) => written.push(b), destroy: () => {}, on: (event: string, f: any) => { (listeners[event] ??= []).push(f); } };
+  const say = (kind: number, body: Buffer | object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body)))));
+  const view = new HelperView("h264", pipe, () => {}, new WinInput(), "Windows.Graphics.Capture", true);
+  say(1, { width: 64, height: 36, codec: "h264", audio: true });
+  await view.ready;
+  say(8, { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+  assert.equal(written.length, 0);
+  const packet = view.nextAudio();
+  assert.equal(written[0]![0], TO_HELPER.audio);
+  const payload = Buffer.alloc(3848, 1);
+  payload.writeBigUInt64BE(123456789n, 0);
+  say(9, payload);
+  assert.deepEqual(await packet, { ts: 123456789, data: new Uint8Array(payload.subarray(8)) });
+  const pending = view.nextAudio();
+  view.close();
+  assert.equal(await pending, null);
+  delete listeners.data;
+  const old = new HelperView("h264", pipe, () => {}, new WinInput(), "Windows.Graphics.Capture", true);
+  say(1, { width: 64, height: 36, codec: "h264" });
+  await old.ready;
+  assert.equal(await old.nextAudio(), null);
+  old.close();
+});
+
+test("negotiated system audio flows while the picture is still, and unrequested audio is never pulled", async () => {
+  class SoundView extends StillView {
+    audioAsked = 0;
+    async nextAudio() {
+      this.audioAsked++;
+      return this.audioAsked === 1 ? { ts: 43210, data: new Uint8Array(3840).fill(7) } : null;
+    }
+  }
+  for (const requested of [false, true]) {
+    const hub = new ScreenHub();
+    const source = new FakeSource();
+    const sound = new SoundView();
+    source.make = () => sound;
+    hub.add(source);
+    const v = await open(hub, member, { codecs: ["h264"], ...(requested ? { audio: "pcm_s16le" } : {}) });
+    if (requested) {
+      assert.equal(source.opened[0]!.audio, true);
+      assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+      const packet = await until(v.frames, KIND.audio);
+      assert.equal(packet.readBigUInt64BE(), 43210n);
+      assert.deepEqual(packet.subarray(8), Buffer.alloc(3840, 7));
+    } else {
+      await until(v.frames, KIND.video);
+      assert.equal(source.opened[0]!.audio, undefined);
+      assert.equal(sound.audioAsked, 0);
+    }
+    await v.stream.finish();
+    await v.served;
+    assert.equal(sound.closed, true);
+  }
+});

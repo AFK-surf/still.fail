@@ -174,6 +174,8 @@ pub(open) trait Host {
   nt_cancel(Self, String) -> Unit = _
   nt_state(Self, Int) -> Int = _
   nt_text(Self, Int) -> String = _
+  st_audio_here(Self) -> Int = _
+  st_audio(Self, Int, Bytes) -> Unit = _
   st_open(Self) -> Int = _
   st_h264(Self, Int, Bytes, Int, Int) -> Unit = _
   st_frame(Self, Int, Bytes, Int, Double) -> Unit = _
@@ -2600,3 +2602,15 @@ fn ncall_end(id : Int) -> Unit {
 pub fn render_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit {
   current.val.rn_dirty(x, y, w, h)
 }
+
+///|
+impl Host with st_audio_here(_) { 0 }
+
+///|
+impl Host with st_audio(_, _, _) { () }
+
+///|
+fn st_audio_here() -> Int { current.val.st_audio_here() }
+
+///|
+fn st_audio(id : Int, data : Bytes) -> Unit { current.val.st_audio(id, data) }

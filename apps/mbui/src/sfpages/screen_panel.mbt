@@ -438,6 +438,12 @@ fn center_panel(
       }
     })
   }
+  if s.audio_ready {
+    if @sf.menu_item(c, @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+        key="screen-sound", panel=true, icon=if s.audio_muted { "volume-x" } else { "volume" }) {
+      s.toggle_audio()
+    }
+  }
   let quality = screen_quality(src)
   @sf.panel_group(c, label=@sf.t("web-pages.screen.quality"), fn() {
     let now = screen_qualities.search_by(fn(q) { q.0 == quality }).unwrap_or(0)

@@ -78,3 +78,30 @@ test "a late system column refits the whole picture and its control panel opens 
   }
   assert_true(found)
 }
+
+///|
+test "screen system audio negotiates only on a capable host, mutes immediately and stops on pause" {
+  let r = screen_rig(w=951.0, h=669.0, platform=1)
+  r.t.set_stream_audio(true)
+  let s = screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  s.pause(s.src)
+  s.open(s.src)
+  assert_eq(text(Some(r.told("screen.view").last().unwrap()), "audio"), "pcm_s16le")
+  r.live()
+  r.say({ "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } })
+  let packet = Bytes::new(3840)
+  let st = s.stream.unwrap()
+  r.say({ "audio": { "ts": 1 } }, bytes=packet)
+  assert_true(r.t.stream_fed(st.id()).contains("audio bytes=3840"))
+  s.toggle_audio()
+  assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
+  let count = r.t.stream_fed(st.id()).length()
+  r.say({ "audio": { "ts": 2 } }, bytes=packet)
+  assert_eq(r.t.stream_fed(st.id()).length(), count)
+  s.toggle_audio()
+  r.say({ "audio": { "ts": 3 } }, bytes=packet)
+  assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=3840")
+  s.pause(s.src)
+  assert_false(s.audio_ready)
+  assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
+}

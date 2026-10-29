@@ -24,7 +24,7 @@ import { FrameLatency, Pacer, STILL_MS, START_RATE, Sharpener, Sizer, ownRate } 
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
-export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, input: 16, ack: 17, keyframe: 18, setClipboard: 19, look: 20 } as const;
+export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, audioConfig: 5, audio: 6, input: 16, ack: 17, keyframe: 18, setClipboard: 19, look: 20 } as const;
 /// A client's frame is an input event at most: one larger ends the view.
 export const MAX_IN = 64 * 1024;
 /// A client's `clipboard` frame is its flags, its type and a picture at most.
@@ -159,7 +159,7 @@ export function parseInput(v: any): ScreenInput | null {
 
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), and the
 /// phone it is laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it).
-export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; fit?: ViewFit } {
+export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; audio?: boolean; fit?: ViewFit } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
   // A preview (`peek`, a link's card in a chat) only looks.
@@ -168,7 +168,7 @@ export function asked(screen: any): { maxWidth: number; maxHeight: number; codec
   const f = screen.fit;
   const side = (v: unknown) => num(v) && v >= 200 && v <= 2000;
   const fit = control && f && side(f.width) && side(f.height) && num(f.scale) && f.scale >= 1 && f.scale <= 4 ? { width: Math.round(f.width), height: Math.round(f.height), scale: f.scale } : undefined;
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(fit ? { fit } : {}) };
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(screen.audio === "pcm_s16le" && !peek ? { audio: true } : {}), ...(fit ? { fit } : {}) };
 }
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
@@ -202,7 +202,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.audio ? { audio: true } : {}), bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -227,7 +227,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const pacer = new Pacer(now, START_RATE);
   const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
   const sleep = (ms: number) => Effect.runPromise(clock.sleep(Duration.millis(ms)));
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, now, sleep }).run();
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, audio: ask.audio, access, pacer, sizer, bounds: { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight }, now, sleep }).run();
 }
 
 /// One view while it lasts.
@@ -264,6 +264,7 @@ class ViewSession {
   readonly control: boolean;
   /// A preview's: not among those on the screen.
   readonly peek: boolean;
+  readonly audio: boolean;
   readonly access: AccessShown | undefined;
   readonly pacer: Pacer;
   readonly sizer: Sizer;
@@ -276,7 +277,7 @@ class ViewSession {
   readonly #own: { maxWidth: number; maxHeight: number };
   #region: Region | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; now: () => number; sleep: (ms: number) => Promise<void> }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; audio?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer; bounds: { maxWidth: number; maxHeight: number }; now: () => number; sleep: (ms: number) => Promise<void> }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -286,6 +287,7 @@ class ViewSession {
     this.name = o.name;
     this.control = o.control;
     this.peek = o.peek === true;
+    this.audio = o.audio === true && !this.peek;
     this.access = o.access;
     this.pacer = o.pacer;
     this.sizer = o.sizer;
@@ -384,8 +386,30 @@ class ViewSession {
       () => this.#stop(null),
     );
     void this.#read();
+    if (this.audio && this.view.nextAudio) void this.#audio();
     await this.#pump();
     await this.#over;
+  }
+
+  /// One audio packet in flight: network backpressure never builds an audio queue behind video.
+  async #audio(): Promise<void> {
+    let configured = false;
+    try {
+      while (!this.#closed) {
+        const next = await this.view.nextAudio!();
+        if (this.#closed || next === null) break;
+        if (!configured) {
+          await this.#send(KIND.audioConfig, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 })));
+          configured = true;
+        }
+        const payload = Buffer.alloc(8 + next.data.length);
+        payload.writeBigUInt64BE(BigInt(Math.round(next.ts)), 0);
+        payload.set(next.data, 8);
+        await this.#send(KIND.audio, payload);
+      }
+    } catch (error) {
+      log.info("screens", "system audio ended", { error: String(error) });
+    }
   }
 
   /// The source asked for the bit rate the link carries, when it changed by more than a little; and for as small a
