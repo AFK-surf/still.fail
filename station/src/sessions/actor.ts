@@ -61,6 +61,7 @@ export type SessionStore = {
   setToldNotes(key: string, n: number): void;
   startTurnFor(id: string, key: string, kind: string, by: TurnFor): void;
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, wait: number | null): void;
+  declareTurn(id: string, declared: string, wait: number | null): void;
   setRunning(key: string, running: boolean): void;
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
@@ -395,10 +396,13 @@ export class SessionActor {
     });
   }
 
-  /// What a tool says of the running turn, recorded in turn order (the tool answers once this resolves).
+  /// What a tool says of the running turn, recorded in turn order (the tool answers once this resolves), and on record at
+  /// once: a station that dies before the turn ends would take it along.
   declare(state: DeclaredState): Promise<void> {
     return this.enqueue(async () => {
-      if (this.turn) this.turn.declared = state;
+      if (!this.turn) return;
+      this.turn.declared = state;
+      this.deps.store.declareTurn(this.turn.id, state.kind, state.kind === "waiting" ? state.seconds : null);
     });
   }
 

@@ -1513,6 +1513,12 @@ export class Store {
     this.#run("UPDATE turns SET need = ? WHERE id = ?", what, id);
   }
 
+  /// What a running turn says it ends in (`declared`, `waitSeconds` as `endTurn` takes them), on record as it is said: a
+  /// station that dies before the turn ends (killed while handing over) leaves it for the next one to end the turn in.
+  declareTurn(id: string, declared: string, waitSeconds: number | null): void {
+    this.#run("UPDATE turns SET declared = ?, wait_seconds = ? WHERE id = ? AND ended_at IS NULL", declared, waitSeconds, id);
+  }
+
   /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most.
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, waitSeconds: number | null): void {
     this.#with((changes) => {
