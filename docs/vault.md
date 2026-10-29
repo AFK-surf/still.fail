@@ -116,6 +116,7 @@ sequenceDiagram
 | 环境变量 | `secret_run {grant, command}`：station 用这个值作为环境变量启动这一个进程，stdout/stderr 经过 station 返回给 agent，原值和它的 base64、URL 编码写法逐字换成 `[已隐藏]` | 子进程看得到；agent 只能从输出里拿到，而输出已经遮掉了 | 只认环境变量、不走 HTTP 的工具（数据库客户端之类） |
 | 文件 | `secret_run {grant, command}`：station 把文件写进一个只有本用户能读的临时目录（目录 0700、文件 0600，用条目的文件名），路径放进 `STILLFAIL_SECRET` 和条目的变量（`KUBECONFIG`），命令结束就删掉；输出里文件的全文和它的 base64 换成 `[已隐藏]` | 子进程看得到，和环境变量一样 | 只认文件路径的工具：kubeconfig、服务账号 JSON、证书 |
 
+- 登录条目的账号不算机密（存的卡片上本来就显示）：授权时告诉 agent，`secret_list` 的授权里带 `username`，每种方式的命令都拿到 `STILLFAIL_USERNAME`，输出里不遮。没有它，agent 只拿到密码，人在卡片上填的账号用不上，得在聊天里再问一次。
 - 环境变量方式的输出遮挡是按**确切的值**遮，比 `redact.ts` 按长相猜靠谱得多。但它防不住命令自己把值发出去，所以界面上把这一档标成「agent 能拿到」，条目默认不开这一档。
 - 代理只拦 HTTPS，并且只换占位符：agent 发出的其他请求原样通过，不影响它干别的事。
 

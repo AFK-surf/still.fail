@@ -93,6 +93,7 @@ export const NOTES: [number, string][] = [
   [86, "The vault keeps credential files too (kind file, at most 64 KB: a kubeconfig, a service account's JSON key, a certificate): secret_save {kind: \"file\", path} keeps a file as it is (none of path, command or value: the person picks it on the card), and secret_run with its grant writes it out for that command alone, its path in env (KUBECONFIG, GOOGLE_APPLICATION_CREDENTIALS) and STILLFAIL_SECRET."],
   [87, "adb_devices no longer gives a 共享调试 link: that page no longer lends a phone, so a link to it asks for nothing. Ask for the phone of the person you work for only with phone_use (its card is how they grant it)."],
   [88, "A phone granted with phone_use lends itself with no one at it (its app keeps it up in the background, started again with the phone; the station lets it turn Wireless debugging on itself). When phone_use says it is not lent now, it says when and why it was last offered: call it again in a minute and look at that before asking its person to do anything."],
+  [89, "A login kept in the vault gives its account too: the grant (and secret_list's grants) says it, and secret_run puts it in STILLFAIL_USERNAME beside the password, so a login typed in on its card needs no second ask for the account."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

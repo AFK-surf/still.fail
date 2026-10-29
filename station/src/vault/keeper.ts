@@ -36,6 +36,12 @@ export function valueOf(secret: Secret): string | null {
   return typeof v === "string" && v !== "" ? v : null;
 }
 
+/// A login's account (not secret: its card shows it), given to commands beside the password; null for any other kind.
+export function accountOf(secret: Secret): string | null {
+  const u = secret.kind === "login" ? secret.fields?.username : undefined;
+  return typeof u === "string" && u !== "" ? u : null;
+}
+
 export class Keeper {
   readonly #boxes = new Map<string, Uint8Array>();
   readonly #held = new Map<string, Held>();
