@@ -1169,12 +1169,7 @@ export class Mesh {
     return Effect.suspend(() => {
       this.#exploredAt.set(addr, this.now());
       const relays = this.relaysFor(addr);
-      // On the main endpoint, one connection: a path through every relay the station is on (the endpoint is home on
-      // all of them), to the addresses it said it is reached straight at, and those iroh punches through; iroh moves
-      // its packets between them, and nothing on it ends as they change. The other endpoints only while its workspace
-      // turned the main endpoint's ways off (`#mainOn`).
-      if (this.#mainOn(addr)) return open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx, this.#straightAt(addr));
-      const main: Effect.Effect<Link, CoreError>[] = [];
+      const main = this.#mainOn(addr) ? [open(this.#env, endpoint, relays, stationId(addr), credentials, fresh, null, ctx)] : [];
       const pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
       // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not after
       // one of them brought its answer again.
@@ -1200,11 +1195,6 @@ export class Mesh {
       );
       return Deferred.await(won);
     });
-  }
-
-  /// Where the station last said a device dials it straight (its LAN, its tailnet), but the kinds its workspace turned off.
-  #straightAt(addr: string): string[] {
-    return AT_ADDRESSES.flatMap((kind) => (this.#isOff(addr, kind) ? [] : (this.#said[addr]?.[kind] ?? [])));
   }
 
   /// The ways a station is dialled on each on an endpoint of its own: every relay and entry but still.fail's own relay
@@ -1242,12 +1232,6 @@ export class Mesh {
       if (said.lan.length > 0 || said.tailnet.length > 0) this.#said[addr] = said;
       else delete this.#said[addr];
       this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SAID_KEY, toJsonBytes(this.#said))));
-    }
-    // On the main endpoint the addresses are iroh's to try on the connection open (paths of it), not dialled apart.
-    if (this.#mainOn(addr)) {
-      const ips = this.#straightAt(addr);
-      if (ips.length > 0) this.#endpoint.addAddr({ id: stationId(addr), relays: this.relaysFor(addr), ips });
-      return;
     }
     for (const kind of AT_ADDRESSES) this.#dialAtIf(addr, kind, link.credentials);
   }
@@ -1396,11 +1380,7 @@ export class Mesh {
   }
 
   /// Pings a way: its credential presented again on it, answered by the station. Not answered within PING_TIMEOUT_MS,
-  /// it counts as that long, and as missed; one still not answered is not sent again over it meanwhile. One answered
-  /// later still is an answer: the way is not missing (only slow), and what it took is noted. A way whose round trip
-  /// passes PING_TIMEOUT_MS missed every ping else, and its one connection was let go as dead at the third and dialled
-  /// anew, again and again, each dial not done in CONNECT_TIMEOUT_MS (2026-10-29: a station 2–3 s away through every
-  /// relay, unreached).
+  /// it counts as that long, and as missed; one still not answered is not sent again over it meanwhile.
   #ping(way: Way): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (way.pinging) {
@@ -1411,23 +1391,17 @@ export class Mesh {
       way.pinging = true;
       const link = way.link;
       const answered = Deferred.makeUnsafe<number | null>();
-      let late = false;
       this.#env.runner.fork(
         Effect.gen(function* () {
           const started = yield* Clock.currentTimeMillis;
           const r = yield* Effect.result(link.controlled((c) => c.exchange(link.credential)));
           const took = (yield* Clock.currentTimeMillis) - started;
           way.pinging = false;
-          if (late && r._tag === "Success") {
-            way.missed = 0;
-            way.note(took);
-          }
           Deferred.doneUnsafe(answered, Effect.succeed(r._tag === "Success" ? took : null));
         }),
       );
       return Effect.map(Effect.raceFirst(Deferred.await(answered), Effect.as(Effect.sleep(PING_TIMEOUT_MS), null)), (ms) => {
         if (ms === null) {
-          late = true;
           way.missed++;
           way.note(PING_TIMEOUT_MS);
         } else {
@@ -1456,13 +1430,6 @@ export class Mesh {
     if (cur === null || !cur.usable() || mine === undefined || mine.missed >= DEAD_PINGS) {
       const best = this.#best(addr, this.#takeable(addr, up.filter((w) => w.link !== cur)));
       if (best !== null) this.#promote(addr, best, "lost");
-      else if (cur !== null && mine !== undefined && mine.missed >= DEAD_PINGS && this.#mainOn(addr)) {
-        // Its one connection: the station has not answered on it DEAD_PINGS times (iroh keeps the connection up across
-        // its paths, so this is the station, not the way): let go, and the station dialled anew.
-        const credentials = cur.credentials;
-        this.dropLink(addr);
-        this.#env.runner.fork(Effect.ignore(this.link(addr, credentials)));
-      }
       return;
     }
     const held = this.#directHeld(addr);
@@ -1630,8 +1597,7 @@ export class Mesh {
         if (live.some((w) => w.link.pinned === LAN && w.missed === 0 && w.samples > 0)) this.#lanAt.set(addr, this.now());
         if (live.some((w) => w.link.pinned === TAILNET && w.missed === 0 && w.samples > 0)) this.#tailnetAnswered.add(addr);
         const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
-        // One connection on the main endpoint: no other ways to dial, compare or move to (iroh moves its packets).
-        if (credentials === undefined || this.#mainOn(addr)) continue;
+        if (credentials === undefined) continue;
         for (const kind of AT_ADDRESSES) this.#dialAtIf(addr, kind, credentials);
         if (this.now() - (this.#exploredAt.get(addr) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(addr, credentials));
         else if (
