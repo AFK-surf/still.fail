@@ -108,51 +108,30 @@ fn options_tall(t : @ui.Tester) -> Double {
 }
 
 ///|
-test "an option answered on screen: the card stays as it is, none pressed again; out of sight, how it went in its place" {
+test "an option answered on screen: its options close at once, how it went in their place, none answered again" {
   let calls : Array[Made] = []
   let t = cards_core(calls)
   scroll_to_words(t, "把首页和聊天页的截图都更新")
-  let tall = options_tall(t)
   tap_now(t, "把首页和聊天页的截图都更新")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // all that comes of it come: the options still there as they were, the one picked marked, 忽略 faded in its place;
-  // the line that said who decides faded where it is, nothing said in its place (the user, 2026-10-29: 有个勾不就行了吗)
-  t.run_for(turn_most_ms)
-  assert_eq(options_tall(t), tall)
-  assert_true(t.find("你 选择了「一起换」") is None)
-  assert_true(faded(t, "等 林 决定"))
-  assert_true(faded(t, "忽略"))
-  // (none of them answers again)
+  // (none of them answers again, closing as they are)
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  t.assert_idle()
-  // out of sight, it is how it went, at once
-  out_of_sight(t)
-  scroll_to_words(t, "你 选择了「一起换」")
-  assert_true(t.find("你 选择了「一起换」") is Some(_))
+  // on screen as out of sight: its room closed with what came of it, one move (docs/list-motion.md)
+  t.run_for(turn_most_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
-  assert_true(t.rest_of("under/") < 0.0)
+  assert_true(t.find("你 选择了「一起换」") is Some(_))
   t.assert_idle()
 }
 
 ///|
-test "忽略 on screen: let go at once (decision.dismiss), faded where it is, the card as it was; out of sight, gone" {
+test "忽略 on screen: let go at once (decision.dismiss), the card's options and 忽略 closing" {
   let calls : Array[Made] = []
   let t = cards_core(calls)
   scroll_to_words(t, "忽略")
-  let tall = options_tall(t)
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  // faded where it is (only drawn: not tapped), its room kept
-  let (x, y) = t.find("忽略").unwrap()
   t.run_for(turn_most_ms)
-  assert_true(faded(t, "忽略"))
-  assert_eq(options_tall(t), tall)
-  t.press_at(x, y)
-  t.release(x, y)
-  assert_eq(named(calls, "decision.dismiss").length(), 1)
-  t.assert_idle()
-  out_of_sight(t)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("忽略") is None)
   t.assert_idle()

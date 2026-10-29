@@ -60,8 +60,7 @@ pub fn chat_list(
   let lit = (rd.flash, flash_of(c, rd, rd.flash))
   flashing_now.val = lit
   // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
-  act_rooms(c, rd, key, keys)
-  let floor = floor_of(c, rd, key, keys)
+
   // while something waits to be decided its bell may float over the list's end (to_ask): the end keeps clear of it,
   // its last row as far over the bell as it is over the composer's room without it, not under it (the time, 正在发送
   // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
@@ -92,17 +91,33 @@ pub fn chat_list(
           list_gap
         }
         let mk = key + "\u{1}" + keys[i]
+        // what changed its height and when (docs/list-motion.md): it came while the list showed, or it goes
+        match rd.going.get(keys[i]) {
+          Some(g) => c.row_size(keys[i], Goes(g.at))
+          None =>
+            match (rd.came_at.get(keys[i]), rd.changed_at.get(keys[i])) {
+              (Some(t), Some(u)) if u > t => c.row_size(keys[i], Changed(u))
+              (None, Some(u)) => c.row_size(keys[i], Changed(u))
+              // (words sent flying to it: its room opens as long as their way, the rows over it going up with them)
+              (Some(t), _) =>
+                match flight {
+                  Some(f) if flight_takes(draft, keys[i]) => c.row_size(keys[i], Comes(t), ms=@sfbase.flight_len(f.desk || f.carried))
+                  _ => c.row_size(keys[i], Comes(t))
+                }
+              (None, None) => ()
+            }
+        }
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(room + foot + floor + ask_clear)), fn() {  }) |> ignore
+          Foot => c.box(style=@ui.style(h=Fixed(room + foot + ask_clear)), fn() {  }) |> ignore
           Working(a) => {
-            // coming in, its room opens (220 ms, the ease out) as it fades in and grows from its picture; its turn
-            // over, it stays a moment and fades (Activity)
+            // coming in, it fades in and grows from its picture as its room opens (the list's rows' heights:
+            // Ctx::row_size); its turn over, it stays a moment and fades (Activity), then its room closes (going)
             let open = @motion.anim(c, "open/" + mk, 1.0, global=true)
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
               open.snap(0.0)
-              let at = turns.started_at(keys[i])
+              let at = rd.came_at.get(keys[i]).unwrap_or(-1.0)
               open.animate(1.0, @motion.tween(working_turn_ms, ease=Out), start_at?=if at >= 0.0 { Some(at) } else { None })
             }
             let leaving = match rd.linger.get(a.key) {
@@ -111,23 +126,14 @@ pub fn chat_list(
             }
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms, ease=Leave))
             let p = open.get()
-            // (its room whole once its opening is at its end: a tween's, 1 only there)
-            rd.act_whole[keys[i]] = p >= 1.0
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
-            @motion.reveal(c, mk, p, fn() {
-              let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
-              let way = makes_way(lf, keys[i])
-              @motion.keyed(c, ri, mk, exit=@sf.leave, by=way)
-              // moved where it shows by a row that came in over it (its cause: the newest that came over it), it
-              // glides there (followed at its end, it stays where it shows: the rows over it go up instead); what else
-              // moves it (the page before come in above, words sent flying in, its own message out of its avatar,
-              // which comes back to where it now is) puts it there at once
-              @motion.layout(c, ri, mk, spec=@sf.move_spring, by=way, screen=true)
-              // (growing from its picture's middle: where the messages' pictures are, at the row's start narrow, out
-              // in the margin before the words wider)
-              let face = side + (if narrow { 0.0 } else { -@sf.columns.avatar }) + avatar_side / 2.0
-              c.look(ri, @ui.look(alpha=p * fade, scale=0.5 + 0.5 * p, ox=face / c.width, oy=0.5))
-            })
+            let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
+            @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
+            // (growing from its picture's middle: where the messages' pictures are, at the row's start narrow, out
+            // in the margin before the words wider)
+            let face = side + (if narrow { 0.0 } else { -@sf.columns.avatar }) + avatar_side / 2.0
+            c.look(ri, @ui.look(alpha=p * fade * gone_alpha(c, rd, mk, keys[i]), scale=0.5 + 0.5 * p, ox=face / c.width, oy=0.5))
+            @motion.leaving(c, ri, !rd.going.contains(keys[i]))
           }
           _ => {
             // the row words sent go to: its bubble flies there from the composer
@@ -164,22 +170,12 @@ pub fn chat_list(
                 rd.known[keys[i]] = true
                 rd.fresh.remove(keys[i]) |> ignore
               }
-              // the rows above go up with the words
-              Some(f) if f.placed =>
-                @motion.layout(c, ri, mk, screen=true, drive=flight_up(flight_p(c, f), f.desk))
-              // moved where it shows by a row that came in (what was sent from here not in the chat yet, pushed down by
-              // one over it; followed at its end, the rows over one that came in over the end going up for it): it
-              // glides there, as an agent's activity does
-              _ => @motion.layout(c, ri, mk, spec=@sf.move_spring, by=cause, screen=true)
+              _ => ()
             }
-            // what leaves the chat from the outbox goes as what leaves a list does, not what was sent from here and is
-            // now the core's; so does where it stands (gone as an agent takes it up) and the line over what was new
-            // (gone once it is read), each a row of the list, not its words going at once
-            match e {
-              State(_, _, _) | Line => @motion.keyed(c, ri, mk, exit=@sf.leave, by=cause)
-              Out(o) if !local_sent(o) => @motion.keyed(c, ri, mk, exit=@sf.leave, by=cause)
-              _ => @motion.keyed(c, ri, mk, by=cause)
-            }
+            // where it is is where the rows before it end, as tall as each is now (Ctx::row_size): nothing of its own
+            // moves it; what leaves the list stays in it while its room closes (Reading's `going`), fading
+            @motion.keyed(c, ri, mk, by=cause)
+            @motion.leaving(c, ri, !rd.going.contains(keys[i]))
             // what is new to the list while it is followed eases in ([data-enter]: 220 ms from 6 under), not one out of
             // a picture
             let emitted = match e {
@@ -190,7 +186,7 @@ pub fn chat_list(
               rd.fresh.remove(keys[i])
               if !emitted {
                 let a = @motion.Anim::new(0.0)
-                let at = turns.started_at(keys[i])
+                let at = rd.came_at.get(keys[i]).unwrap_or(-1.0)
                 a.animate(1.0, @motion.tween(@sf.enter_ms, ease=@sf.ease_out), start_at?=if at >= 0.0 { Some(at) } else { None })
                 rd.rises[keys[i]] = a
               }
@@ -202,10 +198,10 @@ pub fn chat_list(
                 if p >= 1.0 {
                   rd.rises.remove(keys[i]) |> ignore
                 } else {
-                  c.look(ri, @ui.look(alpha=p, dy=@sf.enter_rise * (1.0 - p)))
+                  c.look(ri, @ui.look(alpha=p * gone_alpha(c, rd, mk, keys[i])))
                 }
               }
-              None => ()
+              None => if rd.going.contains(keys[i]) { c.look(ri, @ui.look(alpha=gone_alpha(c, rd, mk, keys[i]))) }
             }
             // where it stands: its room what it leaves as a floor when it goes, as an agent's line's (act_rooms)
             if e is State(_, _, _) {
@@ -218,7 +214,9 @@ pub fn chat_list(
       // what comes at the end while it follows is glided after, half a second after it was put in place, not while
       // words sent fly (they put the list in place), nor what came in over the rows at its end (at its end at once,
       // what is at the end staying where it shows: row_keys's `over`)
-      glide_on_growth=lf.glides && flight is None,
+      // (what comes at its end while it is held there opens its room under what is in view, which goes up with it:
+      // nothing to glide after)
+      glide_on_growth=false,
     )
     |> ignore
     let la = list_after(
@@ -776,4 +774,24 @@ fn makes_way(lf : @sfbase.ListFrame, k : String) -> String {
 /// it shows and the rows over the one that came go up for it, from where they showed.
 fn came_over(lf : @sfbase.ListFrame) -> String {
   "over " + lf.rd.over
+}
+
+
+///|
+/// How much of row `k` (its motion key `mk`) shows as it goes from the list (Reading's `going`): faded out on `Leave`
+/// as its room closes; 1 for one not going.
+fn gone_alpha(c : @ui.Ctx, rd : @sfbase.Reading, mk : String, k : String) -> Double {
+  match rd.going.get(k) {
+    // (gone by now: nothing to fade)
+    Some(g) if c.moment() >= g.at + @sf.leave_ms => 0.0
+    Some(g) => {
+      // (its own for this going: one that comes again, an agent's line its next turn, shows whole)
+      let a = @motion.anim(c, "gone/" + mk + "/" + g.at.to_string(), 1.0, global=true)
+      if a.target() != 0.0 {
+        a.animate(0.0, @motion.tween(@sf.leave_ms, ease=Leave), start_at=g.at)
+      }
+      a.get()
+    }
+    None => 1.0
+  }
 }

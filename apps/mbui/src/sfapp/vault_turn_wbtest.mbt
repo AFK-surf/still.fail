@@ -108,7 +108,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
 }
 
 ///|
-test "a request decided in its chat: its card stays on screen, how it went in its answer's place; out of sight, only that" {
+test "a request decided in its chat: its card closes on screen to how it went, nothing of it pressed any more" {
   reset()
   let vc : VaultChat = { status: "", version: 1, vaults_asked: false }
   let calls : Array[String] = []
@@ -121,20 +121,17 @@ test "a request decided in its chat: its card stays on screen, how it went in it
   for words in ["存入密码「UniFi UX7」", "存入", "不存"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
-  let (_, top, _, _) = t.rect_of("存入密码「UniFi UX7」").unwrap()
   let (nx, ny) = t.find("不存").unwrap()
   tap_now(t, "不存")
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
-  // decided: the card where it was, how it went in its answer's place, none of it pressed any more
+  // decided: how it went in its place, the room going to it as what else changes does (docs/list-motion.md)
   t.run_for(turn_most_ms)
-  let (_, now, _, _) = t.rect_of("存入密码「UniFi UX7」").unwrap()
-  assert_eq(now, top)
   assert_true(t.find("未存入「UniFi UX7」") is Some(_))
   t.press_at(nx, ny)
   t.release(nx, ny)
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
   t.assert_idle()
-  // out of sight: how it went in its place, at once
+  // the chat opened again: the same, at once
   t.back()
   t.run_for(@ui.nav_push_ms)
   open_chat(r)
@@ -142,6 +139,5 @@ test "a request decided in its chat: its card stays on screen, how it went in it
   assert_true(t.find("存入密码「UniFi UX7」") is None)
   assert_true(t.find("未存入「UniFi UX7」") is Some(_))
   assert_true(!vc.vaults_asked, msg="the card asked the vaults topic")
-  // (nothing under the post moving into it: there at once)
   assert_true(t.rest_of("under/") < 0.0)
 }

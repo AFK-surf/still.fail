@@ -137,34 +137,13 @@ pub fn Turns::moment(self : Turns, c : @ui.Ctx) -> Double {
 ///|
 /// The row `key` comes into the list in its turn, its own motion taking `ms` (`after`: see TurnAsk).
 pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : Bool = false) -> Unit {
-  if self.waiting.contains(key) {
-    return
+  ignore(ms)
+  ignore(after)
+  // (in the list at once, its room opening from now: the list's rows' heights, Ctx::row_size)
+  if !self.started.contains(key) || self.waiting.contains(key) {
+    self.waiting.remove(key) |> ignore
+    self.started[key] = self.moment(c)
   }
-  // the turn kept for the viewer's row (Turns::keep_turn), not an agent's line going after the others: it comes in that
-  // turn, waiting for it meanwhile, or at once, it being under way
-  if !after {
-    match self.asks.search_by(fn(a) { a.what == Kept }) {
-      Some(i) => {
-        self.asks[i] = { ..self.asks[i], what: Admit(key), ms }
-        self.waiting[key] = true
-        return
-      }
-      None => ()
-    }
-    if self.on == Some(Kept) && self.open {
-      let at = self.moment(c)
-      if at < self.until {
-        self.on = Some(Admit(key))
-        self.open = false
-        self.until = at + ms + turn_calm_ms
-        self.started[key] = at
-        self.list_rest = @double.infinity
-        return
-      }
-    }
-  }
-  self.waiting[key] = true
-  self.ask(c, Admit(key), ms, after~)
 }
 
 ///|
@@ -198,6 +177,8 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 /// room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the list
 /// changing only for what comes). The first time it is asked, as it is.
 pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double, seen~ : Bool) -> Bool {
+  ignore(ms)
+  ignore(seen)
   match self.shown.get(key) {
     None => {
       self.shown[key] = target
@@ -205,22 +186,12 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
     }
     Some(shown) => {
       self.wants[key] = target
-      if shown == target {
-        return shown
-      }
-      if !seen {
-        match self.asks.search_by(fn(a) { a.what == Change(key) }) {
-          Some(i) => self.asks.remove(i) |> ignore
-          None => ()
-        }
+      if shown != target {
+        // (changed now, on screen or not: its room goes to its new height from now, with whatever else changes)
         self.shown[key] = target
-        self.started[key] = unseen_at
-        return target
+        self.started[key] = self.moment(c)
       }
-      if target && !self.asks.iter().any(fn(a) { a.what == Change(key) }) {
-        self.ask(c, Change(key), ms)
-      }
-      shown
+      target
     }
   }
 }
@@ -235,10 +206,8 @@ pub let unseen_at : Double = -1.0e9
 /// (web/src/listQueue.ts reserveRow), the options staying as they are, none pressed. No row by
 /// turn_most_ms (an option that closes the card without one), the turn goes.
 pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
-  if self.asks.iter().any(fn(a) { a.what == Kept }) {
-    return
-  }
-  self.ask(c, Kept, @double.infinity)
+  ignore(self)
+  ignore(c)
 }
 
 ///|
@@ -301,7 +270,8 @@ pub fn Turns::next_ask(self : Turns) -> Int? {
 /// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
 /// list at rest, and it asked.
 pub fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
-  dmax(dmax(dmax(self.until, self.list_rest), a.at), self.after_sent(a))
+  // (nothing waits for another: docs/list-motion.md)
+  a.at
 }
 
 ///|
@@ -423,7 +393,8 @@ pub fn Turns::start_of(self : Turns, key : String) -> Double {
   })
   let mut end = if self.open { @double.infinity } else { self.until }
   for a in order {
-    let start = dmax(dmax(dmax(end, self.list_rest), a.at), self.after_sent(a))
+    ignore(end)
+    let start = a.at
     if a.what == Admit(key) || a.what == Change(key) {
       return start
     }

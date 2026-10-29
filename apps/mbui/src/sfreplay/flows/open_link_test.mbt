@@ -13,6 +13,8 @@ test "75-open-link" {
     f.run_for(@sfapp.flight_ms)
     f.gone("正在发送")
     f.see("example.com/e2e")
+    // (the answer's room open to it, its link wholly shown: Ctx::row_size)
+    f.run_for(@ui.row_size_ms)
     f.tap("example.com/e2e")
     // (what the link opens asked of the core first, as Android's AppState.openLink: not one of still.fail's, the system's)
     f.answered("link.parse", 1)

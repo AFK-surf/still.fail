@@ -23,6 +23,12 @@ test "74-markdown" {
     if rest > f.t.time() {
       f.run_to(rest)
     }
+    // (and the agent's line gone, its room closed: Reading's going, in every timing)
+    f.gone("处理中")
+    let closed = f.t.rest_of("a list's rows' heights")
+    if closed > f.t.time() {
+      f.run_to(closed)
+    }
     let x0 = f.t.locate("placeRows")[0].0
     let y0 = f.t.locate("聊天页的列表和输入框")[0].1
     let field0 = f.t.get(@ui.Role::TextField)

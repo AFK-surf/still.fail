@@ -18,11 +18,8 @@ test "70-card-motion" {
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
     f.answered("decision.answer", 1)
-    // answered on screen (decision.answer): the options stay as they are, the one picked marked, none pressed any
-    // more; nothing under the post goes or comes (how it went is its line once out of sight: cards_wbtest.mbt)
-    f.see("=灰色 083209")
-    f.check(@sfapp.under_turn("ask/") < 0.0, "the options asked a turn to change at \{@sfapp.under_turn("ask/")}")
-    f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
+    // answered on screen (decision.answer): its options close as the answer comes in, one move (docs/list-motion.md)
+    f.gone("=灰色 083209")
     f.tap("发消息")
     f.type_text("再选一个 083209 card:先做哪一页 083209|首页 083209|设置页 083209")
     // the words in the field long enough to be kept as the chat's draft, as the run's were (draft.put)
@@ -39,11 +36,14 @@ test "70-card-motion" {
     f.see("=忽略")
     f.tap_now("=忽略") |> ignore
     f.answered("decision.dismiss", 1)
-    // let go on screen (decision.dismiss): 忽略 fades where it is (ArchiveEase's 280 ms), its room kept, the card's
-    // options as they were (decision.mbt ask_dismiss)
+    // let go on screen (decision.dismiss): 忽略 and the card's options close (docs/list-motion.md)
     f.run_for(@sfapp.archive_ms)
     f.gone("=忽略")
-    f.see("=设置页 083209")
+    f.gone("=设置页 083209")
+    let closing = @sfapp.under_rest()
+    if closing > f.t.time() {
+      f.run_to(closing)
+    }
     f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
     f.end()
   })

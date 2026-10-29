@@ -1,7 +1,7 @@
 // 22-answer-option (e2e/traces/answer-option.trace: Studio against the local still.fail): the agent asks with an
 // options card (e2e/fake/claude.mjs `card:`), its options under its words, the recommended one marked; one tapped
-// answers it (decision.answer: the viewer's message quoting the post), the card staying as it is on screen, the one
-// picked marked, none pressed any more (how it went is its line once out of sight: cards_wbtest.mbt).
+// answers it (decision.answer: the viewer's message quoting the post), its options closing on screen to how it went
+// as the answer comes in (cards_wbtest.mbt).
 
 ///|
 test "22-answer-option" {
@@ -23,8 +23,14 @@ test "22-answer-option" {
     // the answer handed to the agent, its turn on it to its end (the fake's own posts nothing: the station says so),
     // the chat's mark at work gone with it
     f.see("本轮 agent 未在对话中回复")
-    // the card decided long since: its options there as they were, nothing under the post going or coming
-    f.see("=先不换 083209")
+    // the card decided long since: its options closed as the answer came (docs/list-motion.md), nothing under the
+    // post going or coming
+    f.gone("=先不换 083209")
+    // (closed as the core said it decided: to its end)
+    let closing = @sfapp.under_rest()
+    if closing > f.t.time() {
+      f.run_to(closing)
+    }
     f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })

@@ -359,9 +359,13 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   clock.val = clock.val + fix_deliver_ms
   t.draw()
   assert_true(t.find("未发送") is Some(_))
+  // (its 重试 shown as its room opens to it: Ctx::row_size)
+  t.run_for(@ui.row_size_ms)
   t.tap_text("重试")
   clock.val = clock.val + fix_deliver_ms
   t.draw()
+  // (what failed leaves the list as its room closes)
+  t.run_for(@ui.row_size_ms)
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
   // one that fails again: why, said once (无法重新发送：…)
@@ -370,6 +374,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   tap_send(t)
   clock.val = clock.val + fix_deliver_ms
   t.draw()
+  t.run_for(@ui.row_size_ms)
   t.tap_text("重试")
   t.draw()
   assert_eq(app.toast.get(), "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
@@ -589,8 +594,8 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
-  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes and the list
-  // glides to it, end:true once it is there; at its end as it rests
+  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes, its room
+  // opening, end:true once it is open; at its end as it rests
   assert_true(ends.contains(false))
   assert_eq(ends[ends.length() - 1], true)
   // words sent, then the agent's answer (in over the agent's line, what is at the end: the list at its end at once, the
