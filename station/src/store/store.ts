@@ -18,7 +18,6 @@ import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlit
 import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
-import type { QuotaReading } from "../accounts/spent.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
@@ -73,8 +72,6 @@ const JOB_NOTICES = 50;
 /// How long a task another station's chat ran here is remembered (remote_runs): past the card's week and the usage
 /// page's month.
 const REMOTE_RUNS_MS = 90 * 24 * 3600 * 1000;
-/// How long how full a profile's allowance read is kept (quota_readings): past the card's week.
-const QUOTA_READINGS_MS = 8 * 24 * 3600 * 1000;
 /// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
 const USED_NOTE_MS = 60_000;
 
@@ -1615,49 +1612,13 @@ export class Store {
     );
   }
 
-  /// Keeps a profile's quota (its `checkedAt` says when), and how full each of its windows read where that is not what
-  /// it read last (quota_readings), those older than QUOTA_READINGS_MS let go but the last of them.
+  /// Keeps a profile's quota (its `checkedAt` says when).
   setProfileQuota(profile: string, quota: Json): void {
-    const at = checkedAt(quota);
-    this.#tx(() => {
-      this.#run(
-        `INSERT INTO profile_status (profile, quota_json, quota_at) VALUES (?, ?, ?)
-         ON CONFLICT (profile) DO UPDATE SET quota_json = excluded.quota_json, quota_at = excluded.quota_at`,
-        profile, JSON.stringify(quota), at,
-      );
-      if (at === null || quota?.state !== "ok" || !Array.isArray(quota.windows)) return;
-      for (const w of quota.windows) {
-        if (typeof w?.label !== "string" || typeof w.usedPercent !== "number") continue;
-        const ends = typeof w.resetsAt === "number" ? w.resetsAt : null;
-        const minutes = typeof w.minutes === "number" ? w.minutes : null;
-        const last = this.#one("SELECT at, used, ends FROM quota_readings WHERE profile = ? AND label = ? ORDER BY at DESC LIMIT 1", profile, w.label);
-        if (last !== undefined && (last.at >= at || (last.used === w.usedPercent && last.ends === ends))) continue;
-        this.#run("INSERT INTO quota_readings (profile, label, at, used, ends, minutes) VALUES (?, ?, ?, ?, ?, ?)", profile, w.label, at, w.usedPercent, ends, minutes);
-      }
-      const old = at - QUOTA_READINGS_MS;
-      this.#run(
-        `DELETE FROM quota_readings WHERE profile = ? AND at < ?
-         AND at < (SELECT MAX(q.at) FROM quota_readings q WHERE q.profile = quota_readings.profile AND q.label = quota_readings.label AND q.at < ?)`,
-        profile, old, old,
-      );
-    });
-  }
-
-  /// How full each window of a profile's allowance read after `since`, and the last time before it, by window, in order.
-  quotaReadings(profile: string, since: number): Map<string, QuotaReading[]> {
-    const rows = this.#all(
-      `SELECT label, at, used, ends, minutes FROM quota_readings r WHERE profile = ?
-       AND at >= COALESCE((SELECT MAX(q.at) FROM quota_readings q WHERE q.profile = r.profile AND q.label = r.label AND q.at <= ?), 0)
-       ORDER BY label, at`,
-      profile, since,
+    this.#run(
+      `INSERT INTO profile_status (profile, quota_json, quota_at) VALUES (?, ?, ?)
+       ON CONFLICT (profile) DO UPDATE SET quota_json = excluded.quota_json, quota_at = excluded.quota_at`,
+      profile, JSON.stringify(quota), checkedAt(quota),
     );
-    const by = new Map<string, QuotaReading[]>();
-    for (const r of rows) {
-      const list = by.get(r.label) ?? [];
-      list.push({ at: r.at, used: r.used, ends: r.ends, minutes: r.minutes });
-      by.set(r.label, list);
-    }
-    return by;
   }
 
   // ── runtime process groups ──

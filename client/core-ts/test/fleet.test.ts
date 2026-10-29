@@ -10,10 +10,9 @@ const agent = (running: boolean): J => ({ key: "a", runtime: "claude", model: "c
 const row = (id: string, ...agents: J[]): J => ({ id, session: `s-${id}`, agents });
 // a chat at rest, its last letter written `at`
 const quiet = (id: string, at: number): J => ({ ...row(id, agent(false)), lastActiveAt: at });
-// what its week used over the last 7 days (`spentWeek`), whatever its week reads now
 const account = (group: string, week: number | null, state = "ok"): J => ({
   group,
-  profile: { quota: { state, windows: [{ label: "5 小时", usedPercent: 10, spentWeek: 300 }, ...(week === null ? [] : [{ label: "每周", usedPercent: 100 - week, spentWeek: week }])] } },
+  profile: { quota: { state, windows: [{ label: "5 小时", usedPercent: 10 }, ...(week === null ? [] : [{ label: "每周", usedPercent: week }])] } },
 });
 
 test("the card shared says how much of a week's quota each kind of subscription used, its accounts' added up (past 100% with two), its ring that of all their weeks; a kind that used none not said", () => {
@@ -27,8 +26,6 @@ test("the card shared says how much of a week's quota each kind of subscription 
     account("grok", null),
     account("opencode", 0),
     account("opencode", 0.2),
-    // a station from before says how full its week is, not what it used over them: nothing said of it
-    { group: "chatgpt", profile: { quota: { state: "ok", windows: [{ label: "每周", usedPercent: 70 }] } } },
   ]);
   // said round its share: 用 2 个 Claude 订阅账号消耗了 170% 的周额度; as its ring's key: Claude 订阅 · 2 个账号 … 170%
   assert.deepEqual(q.map((x: J) => [x.kind, x.accounts, x.used, x.usedText, x.share, x.lead, x.of]), [

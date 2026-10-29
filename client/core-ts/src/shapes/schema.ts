@@ -556,7 +556,6 @@ export const SHAPES: Record<string, Shape> = {
   QuotaWindow: struct([
     ["label", "String"],
     ["usedPercent", "f64"],
-    ["spentWeek", opt("f64"), { doc: "What it used over the last 7 days, in percent of its allowance (past 100 where it reset in them); absent on older stations." }],
     ["resetsAt", opt("i64"), { client: opt("I54") }],
     ["mark", "String"],
     ["left", "i64", { client: "I54" }],

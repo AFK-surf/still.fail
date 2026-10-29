@@ -35,8 +35,7 @@ export type ProfileCheck = {
 };
 
 /// `minutes`: how long the window is, where known (the pool weighs what is left by how soon it is lost).
-/// `spentWeek`: what it used over the last 7 days (accounts/spent.ts), as a station's profiles view tells it.
-export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null; spentWeek?: number };
+export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
 /// How much of a profile's allowance is used, where the provider says (profiles.rs ProfileQuota).
