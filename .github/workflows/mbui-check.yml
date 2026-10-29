@@ -106,6 +106,7 @@ jobs:
           cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
           echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l))"
       - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }})
+        id: tests
         run: |
           set -o pipefail
           touch "$RUNNER_TEMP/start"
@@ -129,12 +130,15 @@ jobs:
           grep -E ' compiled \(|^mbc: linked' "$RUNNER_TEMP/mbc.log" | cut -c1-220 || true
       # (the units this run used, older ones gone, kept under a key by what they are: main's, and a branch's for its next
       # push, which restores its own with main's: without, each push compiled all the branch had changed again, 125 of
-      # 282 units of sfapp's tests for a branch on it, 108 s of the app part's 151, 2026-10-23)
+      # 282 units of sfapp's tests for a branch on it, 108 s of the app part's 151, 2026-10-23. Older ones go only after
+      # a run that went through: one stopped early used few or none, and kept so its store was empty, main's restored by
+      # every branch after it, which then compiled all again, d610a8c0's 5 KB, 2026-10-30)
       - name: The units kept
         if: always()
         run: |
           S=$MBC_STORE
-          [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +; }
+          [ ! -d $S ] || find $S -name '*.lock' -delete
+          [ ! -d $S ] || [ "${{ steps.tests.outcome }}" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
