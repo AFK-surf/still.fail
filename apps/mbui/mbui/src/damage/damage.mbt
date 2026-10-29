@@ -1,6 +1,6 @@
 // What of a frame differs from the one presented before it (docs/partial-redraw.md): the parts a renderer that keeps
 // its last picture (a canvas of its own, the window's size) draws again, the rest left as it drew it. Worked out here
-// once, from the instances (src/ui/scene.mbt's 52 numbers), for every host: each renderer is told the rects
+// once, from the instances (src/ui/scene.mbt's 56 numbers), for every host: each renderer is told the rects
 // (@hostapi.render_dirty) and only cuts its drawing to them. Parts near each other are one, and there are at most
 // four (a spinner in a list and another in the chat beside it: two small ones, not the rect round both).
 //
@@ -17,7 +17,7 @@
 
 ///|
 /// The numbers of an instance (src/ui/scene.mbt).
-let inst_size = 52
+let inst_size = 56
 
 ///|
 /// What an instance's image (slot 20) is from here on, below `view_tex_base`: a stream's picture

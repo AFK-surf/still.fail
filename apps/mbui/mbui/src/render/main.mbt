@@ -21,7 +21,7 @@
 
 ///|
 /// The numbers of an instance (src/ui/scene.mbt).
-let inst_size = 52
+let inst_size = 56
 
 ///|
 priv struct Dl {
@@ -35,7 +35,7 @@ priv struct Dl {
   images : Map[Int, (Int, String, Int)]
   carried : Map[Int, String]
   inst : Array[Array[String]]
-  /// the format's version (the head's): this renderer draws mbui-dl 7 (and 6, no outer clip; 5, a box's corners one; 4, nothing turned;
+  /// the format's version (the head's): this renderer draws mbui-dl 8 (and 7, nothing fading towards a cut; 6, no outer clip; 5, a box's corners one; 4, nothing turned;
   /// 3, its clips round)
   mut version : Int
 }
@@ -111,9 +111,10 @@ fn parse(text : String) -> Dl {
       }
       "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
       "mbui-dl" if t.length() >= 2 => dl.version = num(t[1]).to_int()
-      // i N0 … N51 (mbui-dl 6: N0 … N39, no outer clip; 5: N0 … N35, a box's corners one; 4: N0 … N31, nothing
+      // i N0 … N55 (mbui-dl 7: N0 … N51, nothing fading; 6: N0 … N39, no outer clip; 5: N0 … N35, a box's corners one; 4: N0 … N31, nothing
       // turned; 3: N0 … N27, its clip's corners round)
       "i" if t.length() == inst_size + 1 ||
+        t.length() == 53 ||
         t.length() == 41 ||
         t.length() == 37 ||
         t.length() == 33 ||
@@ -246,8 +247,8 @@ fn tell_parts(parts : Array[(Double, Double, Double, Double)]) -> Unit {
 ///|
 /// Whether a list can be drawn here, said where not.
 fn drawable(dl : Dl, path : String) -> Bool {
-  if dl.version < 3 || dl.version > 7 {
-    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 to 7 (scene.mbt's instances, \{inst_size} numbers each)")
+  if dl.version < 3 || dl.version > 8 {
+    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 to 8 (scene.mbt's instances, \{inst_size} numbers each)")
     return false
   }
   if dl.w <= 0.0 || dl.inst.is_empty() {
@@ -338,7 +339,7 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
   let mut resized = 0
   for k, t in dl.inst {
     // (3's 28: how smooth its clip's corners are, 28-31, left 0: round; 4's 32: not turned, 32-35 left 0; 5's 36: a
-    // box's corners all its radius, 4; 6's 40: no outer clip, 40-51 left 0)
+    // box's corners all its radius, 4; 6's 40: no outer clip, 40-51 left 0; 7's 52: nothing fading, 52-55 left 0)
     for j in 0..<(t.length() - 1) {
       inst[k * inst_size + j] = num(t[j + 1])
     }

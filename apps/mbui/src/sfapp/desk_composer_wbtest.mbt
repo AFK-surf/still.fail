@@ -822,6 +822,50 @@ test "a composer growing a line as it is typed in fades none of its words on its
 }
 
 ///|
+test "the line a composer grows by comes out fading to its foot pixel by pixel, what showed before untouched on its way, nothing fading once it is there (the user, 2026-10-30: 「带渐隐，但不是整行渐隐」)" {
+  for screen in [(@ui.Pointing::Finger, 2), (@ui.Pointing::Mouse, 0)] {
+    let (pointing, platform) = screen
+    let calls : Array[Made] = []
+    let (t, _) = desk_composer_tester(calls, pointing~, platform~)
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    t.type_text("先看第三项")
+    t.run_for(2.0 * @sfpages.morph_ms)
+    t.draw()
+    // (its glyphs: in its field, as laid out, to a line under its foot; each its top, height and how it fades to its
+    // foot: where 0, over how far)
+    let glyphs = fn() {
+      let (_, ey, _, eh) = t.focused().unwrap().rect
+      let line = @sf.theme().round.side
+      t
+      .drawn_fades()
+      .filter(fn(d) { d.0 == 1 && d.1 + d.2 / 2.0 >= ey - 1.0 && d.1 <= ey + eh + line })
+      .map(fn(d) { (d.1, d.2, d.5, d.6) })
+    }
+    // (none of the lines over the lowest, the new one, touched by its fading: each wholly above where it starts)
+    let untouched = fn(at : String) raise {
+      let gs = glyphs()
+      let lowest = gs.fold(init=-1.0e9, fn(m, g) { if g.0 > m { g.0 } else { m } })
+      for g in gs {
+        if g.0 < lowest - 1.0 {
+          assert_true(g.3 <= 0.0 || g.0 + g.1 <= g.2 - g.3 + 0.001, msg="\{at}: a line that showed faded \{g}, platform \{platform}")
+        }
+      }
+      gs.iter().any(fn(g) { g.0 == lowest && g.3 > 0.0 })
+    }
+    t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
+    t.frame()
+    untouched("as it sets off") |> ignore
+    t.run_for(@sfpages.morph_ms / 4.0)
+    assert_true(untouched("a quarter of the way"), msg="the new line not fading on its way, platform \{platform}")
+    t.run_for(@sfpages.morph_ms / 2.0)
+    untouched("three quarters of the way") |> ignore
+    t.run_for(2.0 * @sfpages.morph_ms)
+    assert_eq(glyphs().filter(fn(g) { g.3 > 0.0 }).length(), 0, msg="once it is there, platform \{platform}")
+  }
+}
+
+///|
 test "on a phone a finger 3 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
   for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
     let calls : Array[Made] = []

@@ -2273,6 +2273,7 @@ pub fn Tester::drawlist(Self, bytes? : Bool) -> String
 pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
 pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]
+pub fn Tester::drawn_fades(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
 pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]

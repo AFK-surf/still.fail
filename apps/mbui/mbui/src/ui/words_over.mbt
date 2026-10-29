@@ -87,6 +87,7 @@ fn Ctx::words_over_words(self : Ctx, i : Int) -> String {
 fn words_over_hides(a : FixedArray[Double], j : Int, px : Double, py : Double) -> Bool {
   let (kind, o) = ground_kind(a, j, px, py)
   let b = j * inst_size
+  let o = o * inst_fade_at(a, b, py)
   kind == 2 || (kind == 1 && o >= 0.9) || ((a[b + 5] == 5.0 || a[b + 5] == 6.0) && in_inst(a, b, px, py))
 }
 
@@ -122,10 +123,14 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
     // its ink, a little inside its picture and within its own cell across (a picture is made with room round its
     // ink: a full stop's spills well past its advance), cut by its clip
     let (l, r) = inst_cell_of(k)
+    // (and where it fades out towards a cut, scene.mbt 52-55, no more of it than is seen)
+    let least = words_over_seen_least / a[b + 11]
     let x0 = dmax(dmax(a[b] + 0.75, a[b] + a[b + 2] * l), a[b + 16])
     let y0 = dmax(a[b + 1] + 0.75, a[b + 17])
+    let y0 = if a[b + 53] > 0.0 { dmax(y0, a[b + 52] + a[b + 53] * least) } else { y0 }
     let x1 = dmin(dmin(a[b] + a[b + 2] - 0.75, a[b] + a[b + 2] * r), a[b + 18])
     let y1 = dmin(a[b + 1] + a[b + 3] - 0.75, a[b + 19])
+    let y1 = if a[b + 55] > 0.0 { dmin(y1, a[b + 54] - a[b + 55] * least) } else { y1 }
     if x1 > x0 && y1 > y0 {
       ks.push(k)
       rs.push((x0, y0, x1, y1))

@@ -99,4 +99,4 @@ test "words scrolled through, more than the atlas holds: what stays on the scree
 
 ///|
 /// The numbers of an instance (scene.mbt).
-let glyphs_inst = 52
+let glyphs_inst = 56

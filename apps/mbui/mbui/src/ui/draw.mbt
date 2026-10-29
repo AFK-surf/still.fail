@@ -853,47 +853,22 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
     }
   }
-  // cut softly: what it draws fading out to where it is cut, each by where it now stands; glyphs by their line (those
-  // whose height overlaps, by the foot of the lowest), so that a line of words fades as one, not a full stop before
-  // the characters beside it
+  // cut softly: what it draws fading out towards where it is cut, each pixel by where it is (the renderers: 52-55), so
+  // that a line of words half out shows its half, fading to the cut, not the whole line fainter (2026-10-30: 「带渐隐，
+  // 但不是整行渐隐」)
   if cutting && e.cut_soft > 0.0 {
     let a = self.inst
-    let below = if e.top >= 0.0 && e.top < n.fh { n.y + e.top + dy } else { @double.infinity }
-    let above = if e.bottom >= 0.0 && e.bottom < n.fh { n.y + n.fh - e.bottom + dy } else { -@double.infinity }
-    let soft = e.cut_soft
-    let fade = fn(k : Int, at : Double) {
-      let b = k * inst_size
-      let f = dclamp(dmin(below - at, at - above) / soft, 0.0, 1.0)
-      if f < 1.0 {
-        a[b + 11] = a[b + 11] * f
-        // (a rect's border fades with it)
-        if a[b + 5] == 0.0 {
-          a[b + 15] = a[b + 15] * f
-        }
-      }
-    }
-    let glyphs : Array[Int] = []
+    let top = e.bottom >= 0.0 && e.bottom < n.fh
+    let foot = e.top >= 0.0 && e.top < n.fh
     for k in i0..<self.ninst {
-      let kind = a[k * inst_size + 5]
-      if kind == 1.0 || kind == 3.0 || kind == 7.0 {
-        glyphs.push(k)
-      } else {
-        fade(k, a[k * inst_size + 1] + a[k * inst_size + 3] / 2.0)
-      }
-    }
-    glyphs.sort_by_key(fn(k) { a[k * inst_size + 1] })
-    let mut q = 0
-    while q < glyphs.length() {
-      let mut foot = a[glyphs[q] * inst_size + 1] + a[glyphs[q] * inst_size + 3]
-      let mut end = q + 1
-      while end < glyphs.length() && a[glyphs[end] * inst_size + 1] < foot {
-        foot = dmax(foot, a[glyphs[end] * inst_size + 1] + a[glyphs[end] * inst_size + 3])
-        end += 1
-      }
-      for r in q..<end {
-        fade(glyphs[r], foot)
-      }
-      q = end
+      inst_fade(
+        a,
+        k * inst_size,
+        n.y + n.fh - e.bottom + dy,
+        if top { e.cut_soft } else { 0.0 },
+        n.y + e.top + dy,
+        if foot { e.cut_soft } else { 0.0 },
+      )
     }
   }
   match e.keep {
@@ -926,6 +901,13 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         d.insts[q + 17] = d.insts[q + 17] - l.y
         d.insts[q + 18] = d.insts[q + 18] - l.x
         d.insts[q + 19] = d.insts[q + 19] - l.y
+        // (what it fades towards, where it fades)
+        if d.insts[q + 53] > 0.0 {
+          d.insts[q + 52] = d.insts[q + 52] - l.y
+        }
+        if d.insts[q + 55] > 0.0 {
+          d.insts[q + 54] = d.insts[q + 54] - l.y
+        }
         // where it turns about, as its rect is
         if d.insts[q + 32] != 0.0 {
           d.insts[q + 33] = d.insts[q + 33] - l.x
@@ -986,6 +968,8 @@ fn Ctx::transform_insts(
     }
     a[b] = ox + (a[b] - ox) * sx + dx
     a[b + 1] = oy + (a[b + 1] - oy) * sy + dy
+    // what it fades towards, cut in its subtree: moved with it
+    inst_fade_moved(a, b, oy, sy, dy)
     // turned already (a look inside this one's): where it turns about moves as its rect does
     if a[b + 32] != 0.0 {
       a[b + 33] = ox + (a[b + 33] - ox) * sx + dx
@@ -1101,6 +1085,7 @@ fn turn_insts(
         a[b + 17] = a[b + 17] + ty
         a[b + 18] = a[b + 18] + tx
         a[b + 19] = a[b + 19] + ty
+        inst_fade_moved(a, b, 0.0, 1.0, ty)
       }
       a[b + 32] = 0.0
       a[b + 33] = 0.0
@@ -1292,6 +1277,7 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look, apart?
     }
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
+    inst_fade_moved(a, b, 0.0, 1.0, n.y)
     // (its outer clip the one painted in now's, as what it was cut to is what cuts it now: transform_insts)
     inst_outer_from(a, b, clip_top() + 12)
     clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)

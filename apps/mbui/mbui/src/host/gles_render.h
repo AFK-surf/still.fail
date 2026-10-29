@@ -14,7 +14,7 @@
 // surface's in pixels (fb_w, fb_h), the framebuffer drawn into (target_fb); gl_setup once its context is current.
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 52
+#define MB_INST 56
 // the glyphs' atlases, square, what goes where in them MoonBit's (hostapi's atlas.mbt): the words' (a byte a texel,
 // how much of it the glyph covers: drawn in the text's colour; as many bytes as one RGBA atlas half as wide) and colour
 // glyphs' (RGBA: an emoji's own). A colour glyph's place across is MB_ATLAS_COLOR_U past its place in its atlas (what
@@ -38,11 +38,13 @@ static const char *VS =
     "layout(location=10) in vec4 a_oclip;\n"
     "layout(location=11) in vec4 a_orc;\n"
     "layout(location=12) in vec4 a_ors;\n"
+    "layout(location=13) in vec4 a_fade;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
     "out vec2 v_pos; out vec2 v_cpos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
     "flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr; flat out vec4 v_oclip; flat out vec4 v_orc; flat out vec4 v_ors;\n"
+    "flat out vec4 v_fade;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
@@ -58,7 +60,7 @@ static const char *VS =
     "  if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);\n"
     "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;\n"
-    "  v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;\n"
+    "  v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors; v_fade = a_fade;\n"
     "}\n";
 
 static const char *FS =
@@ -67,6 +69,7 @@ static const char *FS =
     "in vec2 v_pos; in vec2 v_cpos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
     "flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;\n"
+    "flat in vec4 v_fade;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
     "uniform sampler2D u_catlas;\n"
@@ -79,8 +82,8 @@ static const char *FS =
     "uniform vec4 u_shape[8];\n"
     "uniform vec4 u_rad[2];\n"
     "uniform int u_n;\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2041 fours\n"
-    "// (157 instances) a row\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2044 fours\n"
+    "// (146 instances) a row\n"
     "uniform highp sampler2D u_segs;\n"
     "out vec4 o;\n"
     "#define float2 vec2\n"
@@ -139,11 +142,11 @@ static const char *FS =
     "    float a;\n"
     "    if (v_p.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p)); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 14 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2044, t / 2044), 0), v_rect, p)); }\n"
     "      a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);\n"
     "    } else {\n"
     "      vec4 w = vec4(0.0);\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p, u_scale); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 14 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2044, t / 2044), 0), v_rect, p, u_scale); }\n"
     "      a = mb_path_cover(w, v_c2.z);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -275,6 +278,10 @@ static const char *FS =
     "    cover *= clip_cover(cp, v_oclip, v_orc, v_ors, u_scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  }\n"
+    "  // and faded out towards a cut, each pixel by where it is (scene.mbt 52-55)\n"
+    "  if (v_fade.y > 0.0) cover *= clamp((cp.y - v_fade.x) / v_fade.y, 0.0, 1.0);\n"
+    "  if (v_fade.w > 0.0) cover *= clamp((v_fade.z - cp.y) / v_fade.w, 0.0, 1.0);\n"
+    "  if (cover <= 0.0) discard;\n"
     "  shade(p);\n"
     "  o *= cover;\n"
     "}\n";
@@ -330,8 +337,8 @@ static GLuint prog, vao, vbo, atlas, catlas, post;
 static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
-// to read (u_segs): a float texture of SEGS_ROW fours a row (157 instances' 13), as many rows as they take
-#define SEGS_ROW 2041
+// to read (u_segs): a float texture of SEGS_ROW fours a row (146 instances' 14), as many rows as they take
+#define SEGS_ROW 2044
 static GLint u_segs;
 static GLuint segs_tex;
 static int segs_rows;

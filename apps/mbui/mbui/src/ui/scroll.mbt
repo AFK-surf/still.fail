@@ -712,6 +712,17 @@ fn Ctx::stretch_rows(
     if a[b + 19] < c1 - 0.001 {
       a[b + 19] = dclamp(map(a[b + 19]), c0, c1)
     }
+    // (and what it fades towards)
+    if a[b + 53] > 0.0 {
+      let (f0, f1) = (map(a[b + 52]), map(a[b + 52] + a[b + 53]))
+      a[b + 52] = f0
+      a[b + 53] = f1 - f0
+    }
+    if a[b + 55] > 0.0 {
+      let (f0, f1) = (map(a[b + 54] - a[b + 55]), map(a[b + 54]))
+      a[b + 54] = f1
+      a[b + 55] = f1 - f0
+    }
   }
 }
 
