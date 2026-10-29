@@ -217,7 +217,11 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   // the chat pushed and put in place, then gone to: its flash in, held (the middle of its hold), then gone
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  t.run_for((flash_in_ms + flash_held_ms) / 2.0)
+  // (the middle of its hold, from when it began: its end less its length; now, where that is gone by)
+  let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
+  if held > t.time() {
+    t.run_for(held - t.time())
+  }
   assert_eq(@sfpages.flashing_now.val.0, "ts2")
   assert_true(@sfpages.flashing_now.val.1 > 0.99)
   t.run_for(flash_ms)

@@ -5,7 +5,7 @@ import { useFrameDraw } from "./gesture.ts";
 import { StationMark } from "../StationMark.tsx";
 import { Activity, memo, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
-import { animate, MOVE, motionMs, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE, MOVE_EASE_CSS, MOVE_PAGE_MS, motionMs, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { archiveSaid, stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage, SearchItem } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
@@ -190,7 +190,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
     ];
   };
   useLayoutEffect(() => {
-    const timing = { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" };
+    const timing = { duration: MOVE_PAGE_MS, easing: MOVE_EASE_CSS };
     play(field.current, frames(), timing);
     play(cancel.current, [{ opacity: 0 }, { opacity: 1 }], timing);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -199,7 +199,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
     leaving.current = true;
     onLeave();
     page.current?.setAttribute("data-leaving", "");
-    play(field.current, frames().reverse(), { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" })?.finished.then(onClose, onClose);
+    play(field.current, frames().reverse(), { duration: MOVE_PAGE_MS, easing: MOVE_EASE_CSS, fill: "forwards" })?.finished.then(onClose, onClose);
   };
   const more = (k: string) => <button type="button" className={css.mFoundMore} onClick={() => setKind(k)}>{t("web-mobile.home.searchMore")}<ChevronRight size={16} /></button>;
   return (

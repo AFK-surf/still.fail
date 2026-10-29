@@ -145,7 +145,7 @@ fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
 ///|
 /// How the chip fills (500 ms).
 // kept across runs: a value (no field of it changes)
-let chip_fill : @motion.Spec = @motion.tween(chip_fill_ms)
+let chip_fill : @motion.Spec = @motion.tween(chip_fill_ms, ease=Out)
 
 ///|
 let chip_fill_ms : Double = 500.0

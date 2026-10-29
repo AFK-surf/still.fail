@@ -1031,7 +1031,12 @@ pub fn drive_row(
         if held_more {
           return
         }
-        let row_h = dmax(@sf.row_least(), if compact { items.least - compact_less } else { items.least })
+        // (a row stacked is as high as its two lines: as it is laid out, read back)
+        let least_h = dmax(@sf.row_least(), if compact { items.least - compact_less } else { items.least })
+        let row_h = match c.laid_size(id) {
+          Some((_, h)) if stacked && h > least_h => h
+          _ => least_h
+        }
         c.box(style=more_place_at(row_h, if compact { more_compact } else { more_size }), fn() {
           let shown = over || open
           if busy && !stacked {

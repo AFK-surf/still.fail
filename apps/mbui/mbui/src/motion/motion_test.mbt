@@ -12,11 +12,8 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
   let ts = [0.1, 0.25, 0.5, 0.75, 0.9]
   // worked out by bisection on the curves' own polynomials
   let want = [
-    (@ui.Standard, [0.025863015, 0.23658736, 0.775561311, 0.959367737, 0.994353929]),
-    (@ui.Arrive, [0.396693549, 0.767284301, 0.946079462, 0.991108187, 0.998830259]),
     (@ui.Out, [0.359122765, 0.727373396, 0.929578821, 0.987468037, 0.998286622]),
     (@ui.Flight, [0.010913674, 0.095832729, 0.70468533, 0.956226683, 0.994219017]),
-    (@ui.Css, [0.094796306, 0.408510591, 0.802403388, 0.960458978, 0.994316477]),
   ]
   for w in want {
     let (curve, ys) = w
@@ -24,8 +21,26 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
       assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{curve} at \{t}: \{curve.at(t)} not \{ys[i]}")
     }
   }
-  assert_eq(@ui.Standard.at(0.0), 0.0)
-  assert_eq(@ui.Standard.at(1.0), 1.0)
+  assert_eq(@ui.Out.at(0.0), 0.0)
+  assert_eq(@ui.Out.at(1.0), 1.0)
+}
+
+///|
+test "a Move is a critically damped spring's way from rest, ending at 1" {
+  // a critically damped spring at rest (within 0.2%) at the page's length: ωT = 8.5
+  let len = @ui.move_page_ms / 1000.0
+  let w = 8.5 / len
+  let (rest, _) = @motion.spring_at(1.0, w * w, 1.0, 0.0, len)
+  for t in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9] {
+    let (left, _) = @motion.spring_at(1.0, w * w, 1.0, 0.0, t * len)
+    let want = (1.0 - left) / (1.0 - rest)
+    assert_true(near(@ui.Move.at(t), want, 1.0e-3), msg="at \{t}: \{@ui.Move.at(t)} not \{want}")
+  }
+  assert_eq(@ui.Move.at(0.0), 0.0)
+  assert_eq(@ui.Move.at(1.0), 1.0)
+  // no step in its first frame (120 Hz): under 1% of the way
+  assert_true(@ui.Move.at(8.4 / @ui.move_far_ms) < 0.01)
+  assert_eq((@ui.move_near_ms, @ui.move_page_ms, @ui.move_far_ms), (450.0, 500.0, 600.0))
 }
 
 ///|
@@ -38,7 +53,7 @@ test "springs are Compose's SpringSimulation, in closed form" {
     assert_true(near(x, want, 1.0e-12))
   }
   // under-damped: Sheet.kt's menu spring, motionSpring(.24, bounce .08)
-  match @motion.menu_spring {
+  match @motion.motion_spring(0.24, bounce=0.08, threshold=0.001) {
     Spring(ratio, k, _, _) => {
       assert_true(near(ratio, 0.92, 1.0e-12))
       assert_true(near(k, 475.9647184167322, 1.0e-9))
@@ -74,8 +89,8 @@ test "springs end as Compose reckons their duration" {
     }
     _ => fail("a spring")
   }
-  // under-damped, by its envelope: the menu from .9 to 1
-  match @motion.menu_spring {
+  // under-damped, by its envelope: Sheet.kt's menu from .9 to 1
+  match @motion.motion_spring(0.24, bounce=0.08, threshold=0.001) {
     Spring(ratio, k, thr, _) =>
       assert_eq(@motion.spring_duration(ratio, k, -0.1, 0.0, thr), 276.0)
     _ => fail("a spring")
@@ -90,13 +105,13 @@ test "springs end as Compose reckons their duration" {
 
 ///|
 test "a tween goes by whole milliseconds on its curve, after its delay" {
-  let s = @motion.tween(300.0, ease=Standard, delay=100.0)
+  let s = @motion.tween(300.0, ease=Out, delay=100.0)
   let dur = s.duration(0.0, 10.0, 0.0)
   assert_eq(dur, 400.0)
   let (x0, _) = s.value_at(50.0, dur, 0.0, 10.0, 0.0)
   assert_eq(x0, 0.0)
   let (x1, _) = s.value_at(250.9, dur, 0.0, 10.0, 0.0)
-  assert_true(near(x1, 10.0 * @ui.Standard.at(150.0 / 300.0), 1.0e-9))
+  assert_true(near(x1, 10.0 * @ui.Out.at(150.0 / 300.0), 1.0e-9))
   let (x2, v2) = s.value_at(400.0, dur, 0.0, 10.0, 0.0)
   assert_eq((x2, v2), (10.0, 0.0))
 }
@@ -350,8 +365,8 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
 test "shown and hidden: in by its enter, out by its exit, then gone" {
   let shown = Ref::new(false)
   let looks : Array[@ui.Look?] = []
-  let enter = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css))
-  let exit = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css))
+  let enter = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0, ease=Out), fade_spec=@motion.tween(180.0, ease=Out))
+  let exit = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0, ease=Out), fade_spec=@motion.tween(150.0, ease=Out))
   let t = @ui.Tester::new(fn(c) { looks.push(@motion.presence(c, "pill", shown.val, enter~, exit~)) })
   assert_eq(looks[looks.length() - 1], None)
   shown.val = true
@@ -408,7 +423,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
           n,
           "row/" + k,
           enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out, delay=100.0)),
-          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=Leave)),
         )
       })
       |> ignore
@@ -471,7 +486,7 @@ test "a list's rows alike at its start and its end are none of its change: only 
           n,
           "row/" + k,
           enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out)),
-          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
+          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=Leave)),
         )
       })
       |> ignore
@@ -550,7 +565,7 @@ test "springs match Compose's own FloatSpringSpec, frame for frame" {
     (@motion.spring(), 0.0, 1.0, 0.0, 171.0, [0.0, 0.12842241, 0.3653931, 0.57653147, 0.8986603, 0.9795784, 1.0, 1.0]),
     (@motion.row_spring, 100.0, 0.0, 0.0, 354.0, [100.0, 96.32119, 87.23453, 75.95016, 44.20961, 23.001738, 11.24473, 2.414866]),
     (@motion.Spring(1.0, move * move, 0.5, 0.0), 66.0, 0.0, 0.0, 372.0, [66.0, 63.573936, 57.58083, 50.137196, 29.194187, 15.195139, 7.4312854, 1.597196]),
-    (@motion.menu_spring, 0.9, 1.0, 0.0, 276.0, [0.9, 0.9049251, 0.9167734, 0.9309648, 0.9673801, 0.98751396, 0.9960531, 1.0]),
+    (@motion.motion_spring(0.24, bounce=0.08, threshold=0.001), 0.9, 1.0, 0.0, 276.0, [0.9, 0.9049251, 0.9167734, 0.9309648, 0.9673801, 0.98751396, 0.9960531, 1.0]),
     (@motion.Spring(1.0, sheet * sheet, 0.5, 0.0), 600.0, 0.0, 0.0, 576.0, [600.0, 582.698, 538.4667, 481.358, 307.9814, 178.07419, 97.186775, 26.170254]),
     (@motion.Spring(1.0, sheet * sheet, 0.5, 0.0), 300.0, 600.0, 3000.0, 476.0, [300.0, 345.59494, 388.46097, 425.50986, 504.42215, 549.62573, 574.1537, 593.5585]),
     (@motion.Spring(1.5, 400.0, 0.01, 0.0), 1.0, 0.0, 0.0, 623.0, [1.0, 0.9622028, 0.8795778, 0.7866456, 0.54449564, 0.3721823, 0.25406164, 0.118352056]),
@@ -583,9 +598,7 @@ fn dmax2(a : Double, b : Double) -> Double {
 test "tweens match Compose's own FloatTweenSpec, frame for frame" {
   // printed by Compose's animation-core 1.10.1 itself (scripts/compose_ref.sh)
   let cases : Array[(@motion.Spec, Array[Double])] = [
-    (@motion.tween(300.0), [0.0, 0.0066127195, 0.08510549, 0.4572519, 0.7755618, 0.92077625, 0.9833588, 1.0, 1.0]),
     (@motion.tween(240.0, ease=Out, delay=100.0), [0.0, 0.0, 0.0, 0.0, 0.6550595, 0.888813, 0.9670928, 0.9949123, 1.0]),
-    (@motion.tween(180.0, ease=Css), [0.0, 0.07842861, 0.46823442, 0.852283, 0.9834744, 1.0, 1.0, 1.0, 1.0]),
     (@motion.tween(600.0, ease=Flight), [0.0, 6.85673e-4, 0.0073552486, 0.034629226, 0.09583283, 0.22449233, 0.47193307, 0.7046854, 0.91095346]),
     (@motion.tween(160.0, ease=Linear), [0.0, 0.1, 0.3125, 0.625, 0.9375, 1.0, 1.0, 1.0, 1.0]),
   ]
@@ -664,7 +677,7 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
       over.val = over.val + 1
     }
     c.box(w=Px(200.0), h=Px(100.0), bg=0x112233FFL, id=u, fn() {  }) |> ignore
-    match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms))) {
+    match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms, ease=Out))) {
       Some(look) => {
         let l = c.layer(fn() {
           let b = c.box(w=Px(200.0), h=Px(100.0), bg=0x445566FFL, id=o, fn() {  })
@@ -770,7 +783,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
     let v = @motion.anim(c, "a", 0.0)
     if go.val {
       go.val = false
-      v.animate(100.0, @motion.tween(fade_ms))
+      v.animate(100.0, @motion.tween(fade_ms, ease=Out))
       kept.val = Some(v)
       if ask {
         // started here, at this frame's time: its end said at once
@@ -866,7 +879,7 @@ test "layout_rest: a list's row gone, when its copy has left; its copy said to m
         let n = c.box(w=Fill(1.0), h=Px(40.0), bg=0x202020FFL, id=c.id("row/" + k), fn() {
           c.text(k) |> ignore
         })
-        @motion.layout(c, n, "row/" + k, exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)))
+        @motion.layout(c, n, "row/" + k, exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=Leave)))
       })
       |> ignore
     },
@@ -905,7 +918,7 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
     }
     // (a toast's deadline: it goes once shown that long, from the first frame)
     if c.now() >= begun.val + shown && a.target() != 0.0 {
-      a.animate(0.0, @motion.tween(200.0))
+      a.animate(0.0, @motion.tween(200.0, ease=Out))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })

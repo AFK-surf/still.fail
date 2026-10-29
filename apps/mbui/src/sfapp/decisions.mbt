@@ -282,7 +282,7 @@ let card_off_ms : Double = 260.0
 let card_up_ms : Double = 360.0
 
 ///|
-let card_back_ms : Double = 250.0
+let card_back_ms : Double = @ui.move_near_ms
 
 ///|
 let card_arrive_ms : Double = 260.0
@@ -361,9 +361,9 @@ fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit 
   dui.out_dir = dir
   dui.out_from = dui.drag
   if dir == 2 {
-    card_go(card_out(c), card_up_ms, Bezier(0.55, 0.0, 0.85, 0.35))
+    card_go(card_out(c), card_up_ms, Leave)
   } else {
-    card_go(card_out(c), card_off_ms, Bezier(0.2, 0.0, 0.0, 1.0))
+    card_go(card_out(c), card_off_ms, Leave)
   }
   dui.drag = 0.0
   dui.going = 0
@@ -473,7 +473,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
             // back where it rests
             dui.going = 3
             dui.going_from = at
-            card_go(card_back(c), card_back_ms, Bezier(0.2, 0.0, 0.0, 1.0))
+            card_go(card_back(c), card_back_ms, Move)
           }
         }
       }

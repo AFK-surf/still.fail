@@ -11,7 +11,8 @@ import { StationContext, type Station } from "./station.tsx";
 import { pageChanging, transitionTo } from "./ui.tsx";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
-import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
+import { MOVE_PAGE_MS } from "@stillfail/ui/motion.ts";
+import { easeMove, morph, shapeOf, stop, type Shape } from "./morph.ts";
 import { whenRowIn } from "./madeChat.ts";
 
 export interface ComposerSpec extends ComposerProps {
@@ -196,7 +197,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
         // A new chat's box holds a least height (dock.css.ts): not while it grows to it from a capsule.
         { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${y}px)`, width: `${from.rect.width}px`, height: `${from.rect.height}px`, minHeight: "0px" },
         { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`, minHeight: "0px" },
-      ], { duration: 340, easing: easeOut() });
+      ], { duration: MOVE_PAGE_MS, easing: easeMove() });
       moving.current = true;
       void all[0]!.finished.then(() => {
         moving.current = false;

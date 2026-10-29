@@ -24,7 +24,7 @@ export const mSwitch = style({
     "&::after": {
       content: "\"\"", position: "absolute", top: "3px", left: "3px", width: "20px", height: "20px",
       borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0, 0, 0, .2)",
-      transition: "transform 160ms var(--m-standard)",
+      transition: "transform 160ms var(--ease-out)",
     },
     "&[data-on]": { background: "var(--m-green)" },
     "&[data-on]::after": { transform: "translateX(18px)" },

@@ -210,10 +210,7 @@ pub fn toggle_group(
           }
           let held = match glass {
             Some(_) =>
-              animate(c, key + "/held", if fingered >= 0 { 1.0 } else { 0.0 }, transition=@motion.motion_spring(
-                0.3,
-                bounce=0.3,
-              ))
+              animate(c, key + "/held", if fingered >= 0 { 1.0 } else { 0.0 }, transition=@motion.lift_spring)
             None => 0.0
           }
           let chosen = items.search_by(fn(it) { now.contains(it.value) })

@@ -6,7 +6,7 @@ import { reload } from "../reloads.ts";
 
 const PULL_READY_PX = 80;
 const MOST_PX = 64;
-const BACK = "transform 240ms var(--m-standard), translate 200ms var(--m-ease)";
+const BACK = "transform 240ms var(--ease-out), translate 200ms var(--ease-out)";
 
 type Pull = { x: number; y: number; list: HTMLElement; down: number; transition: string; translate: string };
 
@@ -63,7 +63,7 @@ export function usePullToReload(pane: string) {
       const touch = event.touches[0];
       if (!list || !touch || event.touches.length !== 1 || list.scrollTop > 0) return;
       pull.current = { x: touch.clientX, y: touch.clientY, list, down: 0, transition: list.style.transition, translate: list.style.translate };
-      list.style.transition = "transform 240ms var(--m-standard)";
+      list.style.transition = "transform 240ms var(--ease-out)";
       mark.current?.setAttribute("data-pulling", "");
     },
     onTouchMove: (event: TouchEvent) => {

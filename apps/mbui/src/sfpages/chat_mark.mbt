@@ -47,7 +47,7 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
       marks_seen[key] = tone
       if tone != "" && !@ui.reduced_motion() {
         pop.snap(0.0)
-        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=CssOut))
+        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     }
     None => marks_seen[key] = tone
@@ -257,7 +257,7 @@ let breathe_stops : Array[(Double, Double)] = [(0.0, 0.35), (0.23, 1.0), (0.52, 
 ///|
 /// Watching's dot (leadBeat, ease-out): its size 1, 1.35 at 8%, 1 from 22% on.
 fn lead_beat(f : Double) -> Double {
-  keyframes(f, beat_stops, CssOut)
+  keyframes(f, beat_stops, Out)
 }
 
 ///|
@@ -267,7 +267,7 @@ let beat_stops : Array[(Double, Double)] = [(0.0, 1.0), (0.08, 1.35), (0.22, 1.0
 ///|
 /// Watching's arcs (leadLit, ease-out): .3, 1 at 10%, .3 from 32% on.
 fn lead_lit(f : Double) -> Double {
-  keyframes(f, lit_stops, CssOut)
+  keyframes(f, lit_stops, Out)
 }
 
 ///|

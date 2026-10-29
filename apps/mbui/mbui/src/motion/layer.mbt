@@ -43,7 +43,7 @@ pub fn trans(
   oy? : Double = 0.5,
   dx? : Double = 0.0,
   dy? : Double = 0.0,
-  spec? : Spec = tween(300.0),
+  spec? : Spec = tween(300.0, ease=Out),
   fade_spec? : Spec,
 ) -> Trans {
   {

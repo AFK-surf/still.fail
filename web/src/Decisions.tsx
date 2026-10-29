@@ -19,7 +19,7 @@ import { CoreError, useApi, useStationViews } from "./api.ts";
 import { scopeOf, StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { ENTER, motionMs, play } from "@stillfail/ui/motion.ts";
+import { ENTER, LEAVE_EASE_CSS, MOVE_EASE_CSS, MOVE_NEAR_MS, motionMs, play } from "@stillfail/ui/motion.ts";
 import { listPaneOf, reserveRow } from "./listQueue.ts";
 import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
@@ -273,7 +273,7 @@ export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right"
   ] : [{ transform: start }, { transform: end }];
   if (to === "up") ghost.style.transformOrigin = "50% 0%";
   const finish = () => ghost.remove();
-  void play(ghost, frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+  void play(ghost, frames, { duration: to === "up" ? 360 : 260, easing: LEAVE_EASE_CSS, fill: "forwards" })
     .finished.then(finish, finish);
 }
 
@@ -488,7 +488,7 @@ function useSwipe(card: React.RefObject<HTMLDivElement | null>, under: React.Ref
     delete el.dataset.dragging;
     if (under.current) delete under.current.dataset.side;
     if (from) {
-      const back = play(el, [{ transform: from }, { transform: "translateX(0px)" }], { duration: 320, easing: "cubic-bezier(.3, 1.25, .5, 1)" });
+      const back = play(el, [{ transform: from }, { transform: "translateX(0px)" }], { duration: MOVE_NEAR_MS, easing: MOVE_EASE_CSS });
       // What it uncovered stays until it is covered again.
       if (under.current) { const u = under.current; u.dataset.side = dx > 0 ? "right" : "left"; void back.finished.finally(() => { if (!go.current) delete u.dataset.side; }); }
     }

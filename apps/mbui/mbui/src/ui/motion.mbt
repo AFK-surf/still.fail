@@ -1,6 +1,6 @@
-// Curves as CSS has them (cubic-bezier), played as Compose's CubicBezierEasing plays them, for motion timed rather
-// than sprung: still.fail's (its Android app's ui/Motion.kt and the web's styles) are named here. The one set of
-// them: a page pushed (nav), a state moved (move_state), a scrollbar's fade, and @motion's tweens.
+// The curves of motion timed rather than sprung, one for each thing a motion can be (Ease): a page pushed (nav), a
+// state moved (move_state), a scrollbar's fade, and @motion's tweens. Those that are CSS's cubic-beziers are played as
+// Compose's CubicBezierEasing plays them.
 
 ///|
 /// CSS's cubic-bezier(x1, y1, x2, y2) at `t` (0-1 of the time), as Compose's CubicBezierEasing finds it: how far
@@ -56,56 +56,79 @@ fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> 
 }
 
 ///|
-/// A curve by name, for what is timed (Motion.kt Ease, Compose's own; Motion's `ease`).
+/// What a timed motion's curve says it is (still.fail's docs/motion.md, Curves): one curve for each, so what moves the
+/// same way moves alike everywhere. No other: what is sprung is @motion's (its springs: rows making way, a sheet, a
+/// thing let go with the hand's speed, a thing lifted).
 pub(all) enum Ease {
-  /// (.4, 0, .2, 1), Compose's FastOutSlowIn, Ease.Standard, the web's
-  /// --m-standard: pages pushed and popped, the jump button's growing
-  Standard
-  /// (.2, .8, .2, 1), Ease.Arrive, --m-ease: sheets, pages rising
-  Arrive
-  /// (.2, .7, .2, 1), Ease.Out, --ease-out: a list's rows coming in, folding
+  /// A thing seen where it was and where it goes, going there: a page pushed or risen, the tape, the sidebar, a side
+  /// panel, the composer's shape, a picture flown open, the search rising. A critically damped spring's way from rest
+  /// (Motion's spring, no bounce): no step in its first frame (a curve fast from its start puts a fifth of a long way
+  /// there at once, then creeps), its speed at its most a tenth of the way in, under twice its mean. Its length is
+  /// one of the three `move_*_ms`, by how far it goes.
+  Move
+  /// (.2, .7, .2, 1), the web's --ease-out: what comes (faded in, grown from a little smaller, up from a line below),
+  /// a control answering (pointed at, pressed, a switch's knob, a fill), and what goes on from the hand's let go where
+  /// no spring takes its speed (a page swiped back)
   Out
-  /// (.25, .46, .45, .94), easeOutQuad: what goes on from where a finger
-  /// let it go (a page swiped back)
-  LetGo
-  Linear
-  /// (.6, 0, .2, 1), Ease.Flight: words sent on their way to their row
-  Flight
-  /// (0, 0, .58, 1), CSS's keyword ease-out (Ease.CssOut)
-  CssOut
-  /// (.25, .1, .25, 1), CSS's keyword ease (Ease.Css): a scrim, a toast
-  Css
-  /// (0, 0, .2, 1), Compose's LinearOutSlowIn (Ease.Decel)
-  Decel
-  /// (.3, 0, .5, 1), Ease.LeaveFade: what leaves by fading
-  LeaveFade
-  /// (.42, 0, .58, 1), Compose's EaseInOut, CSS's ease-in-out
+  /// (.4, 0, 1, 1): what goes (faded out, shrinking, off the screen), gone the faster the further it is
+  Leave
+  /// (.42, 0, .58, 1), CSS's ease-in-out: each way of a loop (a breath), a stroke drawn
   InOut
-  /// (.16, 1, .3, 1), Chat.kt ArchiveEase: a quick start, a soft landing
-  Soft
-  /// (.4, 0, 1, 1), Compose's FastOutLinearIn
-  Accelerate
-  /// any other cubic-bezier
-  Bezier(Double, Double, Double, Double)
+  /// progress, as it is: handed to another curve (a flight's way), or a cycle's turn
+  Linear
+  /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt; the web's madeChat.ts)
+  Flight
 } derive(Eq, Show)
+
+///|
+/// Move's spring: ω·T where it rests (its way within 0.2% of its end: under a point and a half over the window's
+/// width, landing at 1.5% of its mean speed), and how far it has got there, so that the curve ends at 1. A spring of visual duration v (Motion's, ω = 2π / 1.2v)
+/// rests at T = move_k · 1.2v / 2π.
+let move_k : Double = 8.5
+
+///|
+let move_end : Double = 1.0 - (1.0 + move_k) * @dmath.exp(-move_k)
+
+///|
+/// How long a Move takes, by how far it goes: near (a row, the composer, a card: Motion's 0.28 s, the web's MOVE),
+/// a page (pushed, risen, a sheet, a picture, the search: 0.32 s, a sheet's spring), far (across the window: the
+/// tape, the sidebar: 0.38 s, the web's moveState); each to whole frames (450, 500, 600 ms).
+pub let move_near_ms : Double = spring_move_ms(0.28)
+
+///|
+pub let move_page_ms : Double = spring_move_ms(0.32)
+
+///|
+pub let move_far_ms : Double = spring_move_ms(0.38)
+
+///|
+fn spring_move_ms(visual : Double) -> Double {
+  let ms = move_k * 1.2 * visual / (2.0 * 3.141592653589793) * 1000.0
+  (ms / whole_frames_ms).round() * whole_frames_ms
+}
+
+///|
+/// What a Move's length is a whole number of: three frames at 60 Hz, six at 120, so that it ends on a frame there (as
+/// a page's 300 ms did), not between two.
+let whole_frames_ms : Double = 50.0
 
 ///|
 /// The curve at `t` (0-1 of the time).
 pub fn Ease::at(self : Ease, t : Double) -> Double {
   match self {
-    Standard => bezier_at(0.4, 0.0, 0.2, 1.0, t)
-    Arrive => bezier_at(0.2, 0.8, 0.2, 1.0, t)
+    Move =>
+      if t <= 0.0 {
+        0.0
+      } else if t >= 1.0 {
+        1.0
+      } else {
+        let x = move_k * t
+        (1.0 - (1.0 + x) * @dmath.exp(-x)) / move_end
+      }
     Out => bezier_at(0.2, 0.7, 0.2, 1.0, t)
-    LetGo => bezier_at(0.25, 0.46, 0.45, 0.94, t)
+    Leave => bezier_at(0.4, 0.0, 1.0, 1.0, t)
+    InOut => bezier_at(0.42, 0.0, 0.58, 1.0, t)
     Linear => dclamp(t, 0.0, 1.0)
     Flight => bezier_at(0.6, 0.0, 0.2, 1.0, t)
-    CssOut => bezier_at(0.0, 0.0, 0.58, 1.0, t)
-    Css => bezier_at(0.25, 0.1, 0.25, 1.0, t)
-    Decel => bezier_at(0.0, 0.0, 0.2, 1.0, t)
-    LeaveFade => bezier_at(0.3, 0.0, 0.5, 1.0, t)
-    InOut => bezier_at(0.42, 0.0, 0.58, 1.0, t)
-    Soft => bezier_at(0.16, 1.0, 0.3, 1.0, t)
-    Accelerate => bezier_at(0.4, 0.0, 1.0, 1.0, t)
-    Bezier(a, b, c, d) => bezier_at(a, b, c, d, t)
   }
 }

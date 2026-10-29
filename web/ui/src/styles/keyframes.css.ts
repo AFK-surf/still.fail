@@ -26,20 +26,20 @@ const flashGround = (c: string) => `0 0 0 8px ${c}, calc(-1 * var(--flash-reach,
 const msgFlashPeak = { background: vars.accentBg, boxShadow: flashGround(vars.accentBg) };
 export const msgFlashKeyframes = keyframes({
   "0%": { background: "transparent", boxShadow: flashGround("transparent"), animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "9.4%, 53%": { ...msgFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
+  "9.4%, 53%": { ...msgFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, 1, 1)" },
   "100%": { background: "transparent", boxShadow: flashGround("transparent") },
 });
 /** Your words a jump led to: their bubble takes the accent's tint instead, in the same time. */
 const bubbleFlashPeak = { background: `color-mix(in srgb, ${vars.accent} 20%, ${vars.neutralBg})` };
 export const bubbleFlashKeyframes = keyframes({
   "0%": { animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "9.4%, 53%": { ...bubbleFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
+  "9.4%, 53%": { ...bubbleFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, 1, 1)" },
 });
 /** A quote's passage marked where it was said (global.css.ts [data-passage-marks]): in over 160ms, held until 1400ms,
  *  faded out until 2400ms. */
 export const passageFlashKeyframes = keyframes({
   "0%": { opacity: "0", animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "6.7%, 58%": { opacity: "1", animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
+  "6.7%, 58%": { opacity: "1", animationTimingFunction: "cubic-bezier(.4, 0, 1, 1)" },
   "100%": { opacity: "0" },
 });
 /** The flashes above with motion reduced (still.ts stillFlash): their peak alone, held for their time, then gone. */

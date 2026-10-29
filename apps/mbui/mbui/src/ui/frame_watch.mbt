@@ -682,6 +682,11 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   looks_drawn.val = true
   painted_alone.val = false
   looks_frames.val = looks_frames.val + 1
+  // (a frame as any: told at its end, as frame_paint tells the others)
+  match frame_hook.val {
+    Some(f) if !looks_rebuilt.val => f()
+    _ => ()
+  }
   t0
 }
 

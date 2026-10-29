@@ -64,7 +64,7 @@ let hover_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.96, spec=@motion.
 
 ///|
 // kept across runs: a value (no field of it changes)
-let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(90.0, ease=Bezier(0.42, 0.0, 1.0, 1.0)))
+let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(90.0, ease=Leave))
 
 ///|
 /// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most (Hover.css.ts cardTile).

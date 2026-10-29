@@ -93,7 +93,7 @@ pub let knob_lens_grow : Double = 1.25
 ///|
 /// How a thing a finger moves follows it (the bar's ball: 300, damped as the web's, ZETA 0.635).
 // kept across runs: a value (no field of it changes)
-pub let follow_spring : @motion.Spec = @motion.spring(ratio=0.635, stiffness=300.0, threshold=0.01)
+pub let follow_spring : @motion.Spec = @motion.lift_spring
 
 ///|
 /// How much longer a thing a finger moves is drawn toward where it goes, and how much lower, by `v` (its way a frame

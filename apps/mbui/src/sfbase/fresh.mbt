@@ -67,10 +67,10 @@ pub fn became_starts(wide~ : Bool) -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
   leave.snap(0.0)
-  leave.animate(1.0, @motion.tween(new_leave_ms, ease=Arrive))
+  leave.animate(1.0, @motion.tween(new_leave_ms, ease=Leave))
   let fade = new_fade(c)
   fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(new_fade_ms, ease=if wide { Arrive } else { LeaveFade }))
+  fade.animate(1.0, @motion.tween(new_fade_ms, ease=Leave))
 }
 
 ///|

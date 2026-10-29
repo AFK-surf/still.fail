@@ -528,7 +528,7 @@ fn composer_hold(chat : String, room : Double, ms : Double) -> Unit {
   @motion.anim(c, "composer/held/" + chat, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + chat, 0.0, global=true)
   a.snap(1.0)
-  a.animate(0.0, @motion.tween(composer_morph_ms, ease=Out, delay=ms))
+  a.animate(0.0, @motion.tween(composer_morph_ms, ease=Move, delay=ms))
 }
 
 ///|
@@ -1174,7 +1174,7 @@ fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
     Some(h) => {
       // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
       let a = @motion.anim(c, "composer/morph", h, global=true)
-      a.follow(h, @motion.tween(composer_morph_ms, ease=Out))
+      a.follow(h, @motion.tween(composer_morph_ms, ease=Move))
       let m = a.get()
       let (room, share) = composer_held(c, chat)
       Some(if room > m && share > 0.0 { m + (room - m) * share } else { m })
@@ -1845,7 +1845,7 @@ fn composer_bar(
   // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
   let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}|" + d.field.text()
   let part = fn(i : Int, name : String) {
-    @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Out), by=holds)
+    @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Move), by=holds)
   }
   let k = ct()
   // its ground under a resting pointer (@sf.pointer_rests), its tip (with its keys where there are keys: the tip's own,
@@ -1933,7 +1933,7 @@ fn composer_bar(
         if away {
           hint.snap(0.0)
         } else {
-          hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
+          hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
         }
         // what the input did since the last frame: a mark backspaced whole, a chat's link pasted (chat_refs.mbt)
         @sfbase.refs_edits(c, src, d.key, d.field, r.station, locked)

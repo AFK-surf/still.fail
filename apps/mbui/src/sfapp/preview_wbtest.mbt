@@ -379,8 +379,9 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
   assert_true(viewer.val is None && pv_leaving.val is None)
   assert_true(t.views().contains("close 1"))
   assert_eq(pv_hidden.val, "")
-  // opened again: on from where it was left, played once its player says how long it is (not left at its end)
-  t.tap_text("演示录屏.mp4")
+  // opened again: on from where it was left, played once its player says how long it is (not left at its end); the
+  // video itself pressed (its name's tip shows under it now, the pointer rested on it as it landed)
+  t.click(Button, label=@sf.t("web-main.file.play", args=[("name", "演示录屏.mp4")]))
   t.draw()
   let log = t.views()
   let seek = log.search("control 2 3 4000")

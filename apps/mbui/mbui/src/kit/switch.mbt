@@ -144,7 +144,7 @@ pub fn switch_knob(c : @ui.Ctx, key : String, on : Bool) -> Double {
 /// as `switch`'s is, by what is pressed there.
 pub fn switch_held(c : @ui.Ctx, key : String, pressed : Bool) -> Double {
   let on = pressed && @ui.pointing() is Finger
-  animate(c, key + "/held", if on { 1.0 } else { 0.0 }, transition=@motion.motion_spring(0.3, bounce=0.3))
+  animate(c, key + "/held", if on { 1.0 } else { 0.0 }, transition=@motion.lift_spring)
 }
 
 ///|

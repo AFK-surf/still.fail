@@ -14,25 +14,25 @@ export const mPage = style({
     "&[data-role=\"out\"]": { pointerEvents: "none" },
     // Swiped back with a finger: the page follows it, the one under it shows a little behind.
     "&[data-role=\"peek\"]": { pointerEvents: "none" },
-    "&[data-role=\"top\"]:not([data-swiping])": { transition: "transform 200ms var(--m-standard)" },
+    "&[data-role=\"top\"]:not([data-swiping])": { transition: "transform 200ms var(--ease-out)" },
     "&[data-swiping]": { boxShadow: "-8px 0 24px rgba(0, 0, 0, .12)" },
     // Moved by the finger (a transform set at each move, not an animation): each its own layer, only moved, not drawn
     // anew at every move (with the frosted glass on it).
     "&[data-swiping], &[data-role=\"peek\"]": { willChange: "transform" },
     // Side by side: the new page pushes in whole from the right, the old goes out whole to the left (and back the other way).
-    "&[data-way=\"side\"][data-forward][data-role=\"in\"]": { animation: `${mFromRightKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"side\"][data-forward][data-role=\"out\"]": { animation: `${mToLeftKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"side\"]:not([data-forward])[data-role=\"in\"]": { animation: `${mFromLeftKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"side\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mToRightKeyframes} 300ms var(--m-standard) both` },
+    "&[data-way=\"side\"][data-forward][data-role=\"in\"]": { animation: `${mFromRightKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"side\"][data-forward][data-role=\"out\"]": { animation: `${mToLeftKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"side\"]:not([data-forward])[data-role=\"in\"]": { animation: `${mFromLeftKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"side\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mToRightKeyframes} 500ms var(--m-standard) both` },
     // The viewer's own page is to the left of the list (its avatar is at the list's left): it comes and goes that way.
-    "&[data-way=\"left\"][data-forward][data-role=\"in\"]": { animation: `${mFromLeftKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"left\"][data-forward][data-role=\"out\"]": { animation: `${mToRightKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"left\"]:not([data-forward])[data-role=\"in\"]": { animation: `${mFromRightKeyframes} 300ms var(--m-standard) both` },
-    "&[data-way=\"left\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mToLeftKeyframes} 300ms var(--m-standard) both` },
+    "&[data-way=\"left\"][data-forward][data-role=\"in\"]": { animation: `${mFromLeftKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"left\"][data-forward][data-role=\"out\"]": { animation: `${mToRightKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"left\"]:not([data-forward])[data-role=\"in\"]": { animation: `${mFromRightKeyframes} 500ms var(--m-standard) both` },
+    "&[data-way=\"left\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mToLeftKeyframes} 500ms var(--m-standard) both` },
     // A new chat rises from the bottom, over the page it leaves in place; closed, it goes down the way it came.
-    "&[data-way=\"rise\"][data-forward][data-role=\"in\"]": { animation: `${mRiseInKeyframes} 380ms var(--m-ease) both` },
-    "&[data-way=\"rise\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mRiseOutKeyframes} 380ms var(--m-ease) both` },
-    "&[data-place-in]": { animation: `${placeIn} 220ms var(--m-ease) both` },
+    "&[data-way=\"rise\"][data-forward][data-role=\"in\"]": { animation: `${mRiseInKeyframes} 500ms var(--m-ease) both` },
+    "&[data-way=\"rise\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mRiseOutKeyframes} 500ms var(--m-ease) both` },
+    "&[data-place-in]": { animation: `${placeIn} 500ms var(--m-ease) both` },
   },
 });
 // As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
@@ -75,9 +75,9 @@ export const mRecent = style({
   background: "color-mix(in srgb, var(--m-surface) 88%, transparent)",
   backdropFilter: "blur(24px)", boxShadow: "0 14px 44px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .06)",
   transformOrigin: "26px calc(100% + 36px)", opacity: "0", transform: "scale(.6)",
-  transition: "opacity 160ms, transform 200ms var(--m-ease)",
+  transition: "opacity 160ms, transform 200ms var(--ease-out)",
   selectors: {
-    [`${mRecentLayer}[data-open] &`]: { opacity: "1", transform: "none", transition: "opacity 180ms, transform 280ms var(--m-ease)" },
+    [`${mRecentLayer}[data-open] &`]: { opacity: "1", transform: "none", transition: "opacity 180ms, transform 280ms var(--ease-out)" },
   },
 });
 export const mScrim = style({
@@ -93,9 +93,9 @@ export const mSheet = style({
   background: "color-mix(in srgb, var(--m-surface) 80%, transparent)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
   // Its height is moved from script (app.tsx SheetHost): on from where a finger lets go of it, at that speed.
-  transition: "transform 300ms var(--m-ease)",
+  transition: "transform 500ms var(--m-ease)",
   selectors: {
-    "&[data-open]": { transform: "none", transition: "transform 380ms var(--m-ease)" },
+    "&[data-open]": { transform: "none", transition: "transform 500ms var(--m-ease)" },
     "&[data-dragging]": { transition: "none" },
   },
 });
@@ -128,7 +128,7 @@ export const mToast = style({
 });
 export const mReader = style({
   position: "fixed", inset: "0", zIndex: "60", display: "flex", flexDirection: "column", background: "var(--m-bg)",
-  transform: "translateX(100%)", transition: "transform 300ms var(--m-standard)",
+  transform: "translateX(100%)", transition: "transform 500ms var(--m-standard)",
   selectors: {
     "&[data-open]": { transform: "none" },
   },

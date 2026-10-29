@@ -6,7 +6,7 @@
 // (`useMorph`).
 
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { play } from "@stillfail/ui/motion.ts";
+import { MOVE_NEAR_MS, play } from "@stillfail/ui/motion.ts";
 
 /** What moves with the box: its text and its buttons (not the text's unseen measure, Chat.tsx). */
 const PARTS = "textarea:not([aria-hidden]), button";
@@ -139,6 +139,11 @@ export function easeOut(): string {
   return getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
 }
 
+/** The pages' curve for a move (--ease-move: a shape changed, the composer going to another page). */
+export function easeMove(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue("--ease-move").trim() || "ease-out";
+}
+
 /**
  * `box` going to its new shape whenever what it is laid out by (`laidOut`: its text, files…) changes, in one motion: how
  * it shows is read in the render that changes it (the page still shows what was), and it goes from there once that is
@@ -159,6 +164,6 @@ export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, pa
     const height = el.getBoundingClientRect().height;
     // Its size unchanged (a letter more on the same line), nothing moves.
     if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
-    grow(el, "text", was, { duration: 260, easing: easeOut() });
+    grow(el, "text", was, { duration: MOVE_NEAR_MS, easing: easeMove() });
   }, [laidOut, page]); // eslint-disable-line react-hooks/exhaustive-deps
 }

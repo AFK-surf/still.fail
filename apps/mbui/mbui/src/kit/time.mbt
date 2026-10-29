@@ -145,7 +145,7 @@ pub fn presence(
   key : String,
   shown : Bool,
   enter? : @motion.Spec = @motion.tween(presence_in_ms, ease=Out),
-  exit? : @motion.Spec = @motion.tween(presence_out_ms, ease=LeaveFade),
+  exit? : @motion.Spec = @motion.tween(presence_out_ms, ease=Leave),
   initial? : Bool = true,
   loc~ : SourceLoc,
 ) -> Presence {

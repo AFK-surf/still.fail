@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Tabs } from "radix-ui";
 import { Close, Folder } from "@stillfail/ui/icons.tsx";
-import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE_PAGE_MS, moveEase, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { scopeOf } from "../station.tsx";
 import { useTopicSelect } from "../core/react.ts";
 import type { StationView } from "../core/shapes.ts";
@@ -109,7 +109,7 @@ export function useSidePanel(open: string[], shown: string | null) {
     const now: { value: number; run?: AnimationPlaybackControls } = { value: start };
     slide.current = now;
     now.run = animate(start, goal, {
-      duration: sliding === "in" ? 0.28 : 0.24, ease: EASE_OUT,
+      duration: MOVE_PAGE_MS / 1000, ease: moveEase,
       onUpdate: (v) => { if (slide.current !== now) return; now.value = v; draw(v); },
       onComplete: () => {
         if (slide.current !== now) return;

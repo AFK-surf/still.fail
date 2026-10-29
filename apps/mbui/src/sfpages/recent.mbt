@@ -239,7 +239,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
       if d.take_end() {
         let to = a.get() + d.vx * 325.0
         let to = if to > 0.0 { 0.0 } else if to < least { least } else { to }
-        a.animate(to, @motion.tween(500.0, ease=Decel))
+        a.animate(to, @motion.sheet_spring, velocity=d.vx * 1000.0)
       }
       if d.take_tap() {
         let (x0, y0) = match c.rect_of(id) {

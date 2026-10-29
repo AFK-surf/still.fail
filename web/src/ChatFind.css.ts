@@ -44,5 +44,5 @@ globalStyle("::highlight(find-current)", { color: vars.text, textShadow: "0.5px 
 globalStyle("[data-search-marks][data-find] path", { animation: "none", strokeDashoffset: "0", strokeWidth: "2.5", opacity: ".45" });
 globalStyle("[data-search-marks][data-find] svg[data-current] path", { strokeWidth: "4.5", opacity: "1" });
 globalStyle("[data-search-marks][data-find] svg[data-current][data-fresh] path", {
-  strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 320ms cubic-bezier(.4, 0, .2, 1) forwards`, animationDelay: "0ms !important",
+  strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 320ms ease-in-out forwards`, animationDelay: "0ms !important",
 });

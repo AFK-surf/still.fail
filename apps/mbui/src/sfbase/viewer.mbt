@@ -530,7 +530,7 @@ let lift_gap : Double = 12.0
 
 ///|
 /// How long a thumbnail takes going out from under the bar or the composer before it grows (the way back after it has
-/// shrunk), on Standard: a thing moved (docs/motion.md).
+/// shrunk), on Move: a thing moved (docs/motion.md).
 pub let fly_lift_ms : Double = 240.0
 
 ///|
@@ -545,12 +545,11 @@ fn lift_share(t : Thumb, grow_ms : Double) -> Double {
 }
 
 ///|
-/// The viewer grows from the thumbnail this long, and shrinks back into it, on (.2, .8, .2, 1) (FilePreview.kt
-/// OPEN_MS, CLOSE_MS, Ease.Arrive).
-pub let fly_open_ms : Double = 320.0
+/// The viewer grows from the thumbnail this long, and shrinks back into it, on Move (a page's).
+pub let fly_open_ms : Double = @ui.move_page_ms
 
 ///|
-pub let fly_close_ms : Double = 280.0
+pub let fly_close_ms : Double = @ui.move_page_ms
 
 ///|
 /// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
@@ -1483,7 +1482,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
       // ground and the picture stay nearly whole at first, then go
-      _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Bezier(0.8, 0.0, 0.8, 0.3))))
+      _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Leave)))
     }
     // the views under the canvas go at once (they cannot fade)
     match self.view() {
@@ -1862,7 +1861,7 @@ pub fn Viewer::cancel_download(self : Viewer, c : @ui.Ctx, src : Source, dl : Js
 // ── an image ───────────────────────────────────────────────────────────
 
 ///|
-/// How far its flight has got (0 the thumbnail, 1 the stage), on (.2, .8, .2, 1); 1 when it is not flying.
+/// How far its flight has got (0 the thumbnail, 1 the stage), on Move (a thing moved); 1 when it is not flying.
 pub fn Viewer::flying(self : Viewer) -> Double {
   if !self.flies {
     return 1.0
@@ -1871,18 +1870,18 @@ pub fn Viewer::flying(self : Viewer) -> Double {
   if q <= self.fly_lift {
     0.0
   } else {
-    @ui.Ease::Arrive.at((q - self.fly_lift) / (1.0 - self.fly_lift))
+    @ui.Ease::Move.at((q - self.fly_lift) / (1.0 - self.fly_lift))
   }
 }
 
 ///|
 /// How far its thumbnail has gone out from under the bar or the composer (0 where the chat lays it out, 1 clear of
-/// them), on Standard; 1 when nothing hid it.
+/// them), on Move; 1 when nothing hid it.
 pub fn Viewer::lifted(self : Viewer) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     return 1.0
   }
-  @ui.Ease::Standard.at(self.fly.get() / self.fly_lift)
+  @ui.Ease::Move.at(self.fly.get() / self.fly_lift)
 }
 
 ///|
@@ -2359,7 +2358,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
   let (before, after) = self.near(src)
   let to = if dir < 0 { before } else { after }
   match to {
-    None => strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity~)
+    None => strip.animate(0.0, @motion.sheet_spring, velocity~)
     Some(n) => {
       let width = c.width + slide_gap
       let from = strip.get()
@@ -2378,7 +2377,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       viewer.val = Some(n)
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
-      strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity~)
+      strip.animate(0.0, @motion.sheet_spring, velocity~)
       // the frame built again from the one it stepped to: a swipe let go steps in the middle of the stage's build,
       // which would go on to draw this one's picture where the strip now puts the next one (a frame of this one in its
       // place, or of nothing where the one before comes)
@@ -2422,7 +2421,7 @@ pub fn Viewer::gestures(
       // a second finger as one swipes: the strip goes back (FilePreview.kt), not left between two pictures
       if v.swiping {
         v.swiping = false
-        strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0))
+        strip.animate(0.0, @motion.sheet_spring)
       }
       // one finger again after it: followed from where it is then
       v.held = false
@@ -2523,7 +2522,7 @@ pub fn Viewer::gestures(
       } else if to > 0 {
         v.go(c, src, 1, vx * 1000.0)
       } else {
-        strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity=vx * 1000.0)
+        strip.animate(0.0, @motion.sheet_spring, velocity=vx * 1000.0)
       }
     } else if v.held && z.zoomed() && (v.moved > 8.0 || v.pinched) {
       // zoomed in, let go moving: on at the finger's speed, slowing, to a stop or its edge

@@ -326,7 +326,7 @@ pub fn composer(
   let shape = if moved && flight_carried(spec.draft) {
     @motion.tween(flight_desk_ms, ease=Flight)
   } else {
-    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
+    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Move)
   }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
   composing.shaped = Some((c.build_number(), holds, shape))
@@ -552,7 +552,7 @@ fn composer_text(
   if away {
     hint_in.snap(0.0)
   } else {
-    hint_in.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Arrive))
+    hint_in.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
   }
   let no_files = spec.locked || spec.offline
   // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
@@ -1651,7 +1651,7 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
   @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
   a.snap(1.0)
-  a.animate(0.0, @motion.tween(morph_ms, ease=Out, delay=ms))
+  a.animate(0.0, @motion.tween(morph_ms, ease=Move, delay=ms))
   let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
   b.snap(box)
   b.animate(0.0, @motion.Snap(ms))

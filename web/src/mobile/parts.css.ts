@@ -72,7 +72,7 @@ export const mSegThumb = style({
     [`${mSeg}[data-smooth] &`]: { cornerShape: vars.cornerShape },
     [`:root[data-theme="dark"] ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
     "&[data-moved]": {
-      transition: "transform 240ms cubic-bezier(0, 0, .2, 1), width 240ms cubic-bezier(0, 0, .2, 1)",
+      transition: `transform 240ms ${vars.easeOut}, width 240ms ${vars.easeOut}`,
     },
   },
   "@media": {

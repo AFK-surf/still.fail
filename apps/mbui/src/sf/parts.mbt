@@ -3321,7 +3321,7 @@ pub fn edge_look(
   let hairline = key + "/line"
   match edges_shown.get(key) {
     Some(was) if was != now => {
-      c.move_state([(bar, ["height", "opacity"])], duration=edge_bar_ms, ease=Soft)
+      c.move_state([(bar, ["height", "opacity"])], duration=edge_bar_ms, ease=Out)
       c.move_state([(bar, ["background-color"])], duration=edge_ink_ms, ease=Out)
       c.move_state([(hairline, ["opacity"])], duration=edge_line_ms, ease=Out)
     }
@@ -3995,7 +3995,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   if !ticked {
     @kit.after(c, key + "/done", false, sync_done_ms) |> ignore
   }
-  let p = @kit.presence(c, key, on || held, exit=@motion.tween(sync_out_ms, ease=LeaveFade))
+  let p = @kit.presence(c, key, on || held, exit=@motion.tween(sync_out_ms, ease=Leave))
   if !p.built {
     sync_said.remove(key)
     sync_seen.remove(key)
@@ -4006,14 +4006,14 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   // how far on to rest it has gone (0 to 1, as SyncRest::ease)
   let resting = @kit.animate(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, transition=match rest {
     Some(r) => @motion.tween_to(duration=r.ms, ease=fn(s) { r.ease(s) })
-    None => @motion.tween(0.0)
+    None => @motion.tween(0.0, ease=Out)
   })
   // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest
   let back = @kit.animate(
     c,
     key + "/back",
     if ticked { 1.0 } else { 0.0 },
-    transition=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=Standard, delay=settle),
+    transition=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=InOut, delay=settle),
   )
   let drawn = @kit.animate(
     c,

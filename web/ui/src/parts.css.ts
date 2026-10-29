@@ -243,7 +243,7 @@ export const resizeHandle = style({
       // Odd widths on whole pixels: the bar's middle is the line's (the line left 3, 1 wide; the bar left 1, 5 wide).
       content: "\"\"", position: "absolute", top: "50%", left: "1px", width: "5px", height: "24px", borderRadius: "999px",
       background: vars.lineStrong, opacity: 0, transform: "translateY(-50%)", zIndex: 1,
-      transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
+      transition: `height 180ms ${vars.easeOut}, opacity 180ms ${vars.easeOut}, background-color 150ms ${vars.easeOut}`,
     },
     "&:hover::before, &:focus-visible::before, &[data-active]::before": { height: "48px", opacity: 1 },
     "&:active::before, &[data-active]::before": { background: vars.fieldHover },

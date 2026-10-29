@@ -206,7 +206,7 @@ test "a stroke is drawn in over 520 ms, the next 180 ms after" {
   assert_eq(@sf.stroke_part(0.0, 0), 0.0)
   assert_eq(@sf.stroke_part(@sf.stroke_ms, 0), 1.0)
   assert_eq(@sf.stroke_part(@sf.stroke_gap_ms, 1), 0.0)
-  assert_true(@sf.stroke_part(@sf.stroke_gap_ms + @sf.stroke_ms / 2.0, 1) > 0.5)
+  assert_eq(@sf.stroke_part(@sf.stroke_gap_ms + @sf.stroke_ms / 2.0, 1), @ui.InOut.at(0.5))
   assert_eq(@sf.strokes_ms(2), 520.0 + 360.0)
 }
 

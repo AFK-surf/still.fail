@@ -251,7 +251,7 @@ fn decision_under(
     enter=@motion.trans(
       fade=0.0,
       spec=@motion.Snap(0.0),
-      fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+      fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
     ),
     open=close_gap,
     exit=@motion.trans(spec=@motion.Snap(0.0)),

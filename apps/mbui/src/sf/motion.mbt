@@ -26,7 +26,7 @@ pub let leave_scale : Double = 0.9
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let leave : @motion.Trans = @motion.trans(fade=0.0, scale=leave_scale, spec=@motion.tween(leave_ms, ease=CssOut))
+pub let leave : @motion.Trans = @motion.trans(fade=0.0, scale=leave_scale, spec=@motion.tween(leave_ms, ease=Leave))
 
 ///|
 /// What is put in the composer to go with the message, a file's card, a picture's tile, a quote's card (Chat.css.ts
@@ -54,11 +54,11 @@ pub let row_grown_in : @motion.Trans = @motion.trans(
 ///|
 /// A shape changed for what it holds (morph.ts useMorph: the composer, a card): from the shape it had to its new one
 /// over 260 ms on the ease-out.
-pub let shape_ms : Double = 260.0
+pub let shape_ms : Double = @ui.move_near_ms
 
 ///|
 /// The composer going with its page to another (dock.tsx, the view transition): 340 ms on the ease-out.
-pub let composer_page_ms : Double = 340.0
+pub let composer_page_ms : Double = @ui.move_page_ms
 
 ///|
 /// The composer's hint, gone at once as words sent leave its field, back once they are out of it (madeChat.css.ts:
@@ -86,7 +86,7 @@ pub let local_ms : Double = 100.0
 
 ///|
 /// moveState's run (motion.ts moveState's default transition: 380 ms on the ease-out), Ctx::move_state's default.
-pub let move_state_ms : Double = 380.0
+pub let move_state_ms : Double = @ui.move_far_ms
 
 ///|
 /// A control answering the hand (--dur, global.css.ts): pointed at, pressed, a switch turned, over this long on the

@@ -22,7 +22,7 @@ const pin = style({
  */
 export const mNoteBox = style({
   boxShadow: "0 1px 3px rgb(0 0 0 / .06)", display: "flex", flexDirection: "column", gap: "6px", padding: "10px 8px 8px",
-  borderRadius: surfaceCorner(8, 18), animation: `${popKeyframes} 140ms var(--m-ease)`,
+  borderRadius: surfaceCorner(8, 18), animation: `${popKeyframes} 140ms var(--ease-out)`,
 });
 export const mNoteQuote = style({
   display: "flex", alignItems: "center", gap: "6px", minWidth: "0", padding: "0 8px", color: "var(--m-muted)", fontSize: vars.textMeta,

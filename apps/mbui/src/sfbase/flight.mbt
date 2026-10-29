@@ -194,7 +194,7 @@ pub fn flight_start(
 /// What leaves as what was sent sets out (SendFlight's `gone`), set off now.
 fn leaving() -> @motion.Anim {
   let a = @motion.Anim::new(0.0)
-  a.animate(1.0, @motion.tween(@sf.leave_ms, ease=CssOut))
+  a.animate(1.0, @motion.tween(@sf.leave_ms, ease=Leave))
   a
 }
 
@@ -435,7 +435,7 @@ pub fn flight_settled(p : Double, desk : Bool) -> Double {
   if desk {
     return flight_across(p, desk)
   }
-  @ui.Arrive.at(dclamp((p - flight_settle) / (1.0 - flight_settle), 0.0, 1.0))
+  @ui.Out.at(dclamp((p - flight_settle) / (1.0 - flight_settle), 0.0, 1.0))
 }
 
 ///|
