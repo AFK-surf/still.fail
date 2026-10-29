@@ -373,9 +373,10 @@ test "a page that said its height stays covered till its host has drawn it (its 
   t.frame()
   assert_eq(view_rect(t, page).unwrap().3, 232.0)
   assert_true(view_covered(t, page))
-  // drawn: shown
+  // drawn: brought in, as an image is (viz_reveal), then shown as it is
   t.finish(2, page)
   t.frame()
+  t.run_for(@sfbase.viz_reveal_ms + 1.0)
   assert_false(view_covered(t, page))
 }
 
@@ -449,6 +450,14 @@ test "an inline page not drawn yet holds its place with a placeholder, gone once
   assert_true(placeholder())
   t.finish(2, page)
   t.frame()
+  let began = t.time()
+  // half way: what it waited under brushed off it in strips (an image's way in), each its own layer
+  t.run_for(@sfbase.viz_reveal_ms / 2.0)
+  let greys = fn() { t.drawn_rects().filter(fn(r) { r.4 >> 8 == line }).length() }
+  let half = greys()
+  // in: nothing over it (the chat's other lines alone)
+  t.run_for(began + @sfbase.viz_reveal_ms + 1.0 - t.time())
+  assert_true(half > greys() + 1, msg="\{half} \{greys()}")
   assert_false(placeholder())
   assert_false(view_covered(t, page))
 }

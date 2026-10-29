@@ -1653,6 +1653,8 @@ pub let viz_paper_cover : @ui.Style
 
 pub let viz_relay : String
 
+pub let viz_reveal_ms : Double
+
 pub let viz_runaway : Int32
 
 pub fn viz_said(VizFrame, VizHears, String) -> Unit
@@ -3222,6 +3224,7 @@ pub(all) struct VizFrame {
   mut font_scale : Double
   mut ground : Int64
   mut faces : String
+  mut reveal : @motion.Anim?
 }
 
 pub(all) struct VizFull {

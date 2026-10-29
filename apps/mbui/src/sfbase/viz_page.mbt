@@ -30,6 +30,8 @@ pub(all) struct VizFrame {
   mut ground : Int64
   /// the faces it was told (viz_faces_key)
   mut faces : String
+  /// its way in once it has drawn itself (viz_reveal); None once it is in
+  mut reveal : @motion.Anim?
 }
 
 ///|
@@ -163,6 +165,7 @@ pub fn viz_frame(
         font_scale: @ui.font_scale(),
         ground,
         faces: viz_faces_key(),
+        reveal: Some(@motion.Anim::new(0.0)),
       }
       cell.val = Some(f)
       viz_frames[key] = f
@@ -221,6 +224,9 @@ pub fn viz_frame(
     c.box(style=viz_page_frame.then(@ui.style(h=Fixed(h))), id=box, taps=false, fn() {
       c.native(f.view) |> ignore
       cover(viz_paper_cover)
+      viz_reveal(c, f, w, h, fn(w, h) {
+        c.box(style=viz_paper_cover.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {  })
+      })
     })
     |> ignore
   } else {
@@ -229,8 +235,20 @@ pub fn viz_frame(
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
     let waiting = !f.shown || !f.view.host_done()
     let frame = @ui.style(w=Full, h=Fixed(h.to_double()))
-    c.box(style=frame, fn() {
-      c.native(f.view, radius=if waiting { c.theme().corner(Xl) } else { 0.0 }) |> ignore
+    let box = c.id("viz/box/" + key)
+    let w = match c.laid_size(box) {
+      Some((w, _)) => w
+      None => c.width
+    }
+    c.box(style=frame, id=box, fn() {
+      // (its corners the placeholder's till what it waited on has gone from over it)
+      let rounded = waiting || f.reveal is Some(_)
+      c.native(f.view, radius=if rounded { c.theme().corner(Xl) } else { 0.0 }) |> ignore
+      viz_reveal(c, f, w, h.to_double(), fn(w, h) {
+        c.box(style=viz_wait_ground.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {
+          c.box(style=viz_wait_fill, fn() {  }) |> ignore
+        })
+      })
       if waiting {
         c.layer(fn() {
           c.box(style=viz_wait_ground, fn() {
@@ -245,6 +263,76 @@ pub fn viz_frame(
     |> ignore
   }
 }
+
+///|
+/// A page come in once it has drawn itself, as a message's image once decoded (sfpages image_reveal, the web's
+/// msgImageReveal; the user, 2026-10-29: inline html 的渲染显示要参考图片的展示逻辑): what it waited under (`waited`,
+/// `w` by `h`) brushed off from its top, an edge half its height deep going down it over 1100 ms (the ease out), and
+/// fading out from 800 ms (300 ms). A view drawn by its host is neither blurred nor scaled, as the image is: the
+/// edge alone brings it in. One drawn already as it is first shown again (its chat kept) comes as it is.
+fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Double, Double) -> Int) -> Unit {
+  let a = match f.reveal {
+    Some(a) => a
+    None => return
+  }
+  if !f.shown || !f.view.host_done() {
+    return
+  }
+  if a.target() == 0.0 {
+    a.animate(1.0, @motion.tween(viz_reveal_ms, ease=Linear))
+  }
+  let p = a.get()
+  if p >= 1.0 {
+    f.reveal = None
+    return
+  }
+  let e = @ui.Out.at(p)
+  let gone = 1.0 - dmin(1.0, dmax(0.0, (p * viz_reveal_ms - viz_reveal_wait_after_ms) / viz_reveal_wait_out_ms))
+  if gone <= 0.0 {
+    return
+  }
+  // (each step on the screen's pixels: one meets the next with no seam)
+  let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
+  let strip = fn(y0 : Double, y1 : Double, alpha : Double) {
+    let y0 = px_of(dmax(0.0, y0))
+    let y1 = px_of(dmin(h, y1))
+    if y1 <= y0 || alpha <= 0.0 {
+      return
+    }
+    // (each laid out from the page's top, as a layer is: not under the one before)
+    c.layer(fn() {
+      if y0 > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(y0)), fn() {  }) |> ignore
+      }
+      let s = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
+        c.look(waited(w, h), @ui.look(dy=-y0))
+      })
+      c.look(s, @ui.look(alpha=alpha * gone))
+    })
+    |> ignore
+  }
+  let band = h * 0.5
+  let top = -band + (h + band) * e
+  let step = band / viz_reveal_steps.to_double()
+  for k in 0..<viz_reveal_steps {
+    let y = top + k.to_double() * step
+    strip(y, y + step, (k.to_double() + 0.5) / viz_reveal_steps.to_double())
+  }
+  strip(top + band, h, 1.0)
+}
+
+///|
+/// How long a page comes in, when and how fast what it waited under goes, its edge's steps (image_reveal's).
+pub let viz_reveal_ms : Double = 1100.0
+
+///|
+let viz_reveal_wait_after_ms : Double = 800.0
+
+///|
+let viz_reveal_wait_out_ms : Double = 300.0
+
+///|
+let viz_reveal_steps : Int = 16
 
 ///|
 /// The faces a page is set in, as one string: told again when it changes.
