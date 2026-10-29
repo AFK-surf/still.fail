@@ -1081,12 +1081,17 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         let base = top + lay.line_base[l]
         let a = lay.run_a[k]
         let d = lay.run_d[k]
+        // a ground carried on to the next line, or from the last, runs to the paragraph's edge there and is cut
+        // square (CSS's box-decoration-break: slice), so its pieces read as one going on
+        let from = lay.line_of[lay.run_c0[k]] != l
+        let on = lay.line_of[lay.run_c1[k] - 1] != l
         let (bx0, bx1) = if pressed && r.run_bg(run) == 0L {
           (x0 - 2.0, x1 + 2.0)
-        } else if c1 == lay.run_c1[k] {
-          (x0, x1 - r.run_room(run, lay.run_size[k]).1)
+        } else if on {
+          (if from { ox } else { x0 }, dmax(x1, ox + dmax(n.fw - n.pad_l - n.pad_r, 0.0)))
         } else {
-          (x0, x1)
+          let end = if c1 == lay.run_c1[k] { x1 - r.run_room(run, lay.run_size[k]).1 } else { x1 }
+          (if from { ox } else { x0 }, end)
         }
         // a code run's: its ink and a pixel either way; a label's centred on its ink
         let (by, bh, corner) = match run.ground {
@@ -1107,10 +1112,6 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
           0L,
           alpha,
         )
-        // a ground carried on to the next line, or from the last, is cut square there (CSS's box-decoration-break:
-        // slice), so its pieces read as one
-        let from = lay.line_of[lay.run_c0[k]] != l
-        let on = lay.line_of[lay.run_c1[k] - 1] != l
         if from || on {
           let lc = if from { 0.0 } else { corner }
           let rc = if on { 0.0 } else { corner }

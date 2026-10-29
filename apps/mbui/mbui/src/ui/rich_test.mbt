@@ -375,4 +375,10 @@ test "a label wider than a line breaks within it, its ground cut square where it
   assert_eq(t.lines_of("aaaa"), ["aaaa ", "bbbb ", "cccc"])
   let grounds = t.drawn_rect_corners().filter(fn(r) { r.4 == 0x11111111L })
   assert_eq(grounds.map(fn(r) { r.5 }), [(5.0, 0.0, 0.0, 5.0), (0.0, 0.0, 0.0, 0.0), (0.0, 5.0, 5.0, 0.0)])
+  // where it goes on, its ground runs to the paragraph's edge: out to the right of the first line, across the
+  // second, in from the left of the last
+  let (x1, _, w1, _, _, _) = grounds[1]
+  assert_eq(w1, 50.0)
+  assert_eq(grounds[0].0 + grounds[0].2, x1 + 50.0)
+  assert_eq(grounds[2].0, x1)
 }
