@@ -167,10 +167,11 @@ test "the answer coming in does not end its own motion: float, spit and return e
       None => ()
     }
   }
-  // 16 ms frames: Float 440 ms, Spit 380, Return 320 (ChatMotion.kt), each to its end
+  // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
+  // row or two, a Move's least over none), each to its end
   assert_true(frames.get("Float").unwrap_or(0) >= 26)
   assert_true(frames.get("Spit").unwrap_or(0) >= 22)
-  assert_true(frames.get("Return").unwrap_or(0) >= 18)
+  assert_true(frames.get("Return").unwrap_or(0) >= 13)
   assert_true(em.current is None)
   emit_restore()
 }

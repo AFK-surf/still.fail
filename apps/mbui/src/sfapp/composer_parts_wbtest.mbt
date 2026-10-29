@@ -343,7 +343,7 @@ test "files sent fly from their tiles to their places in the message, then are i
     Some((_, _, w, _)) => assert_true(w > 56.0)
     None => fail("the message's picture is not where the flight can see it")
   }
-  t.run_for(flight_ms)
+  t.run_for(@sfbase.flight_most_ms)
   assert_true(send_flight.get() is None)
   fix_clock.val = None
 }

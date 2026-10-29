@@ -65,6 +65,8 @@ pub(all) struct Emits {
   mut aimed : (Double, Double)?
   mut aimed_at : Double
   mut landed : (Double, Double)?
+  /// where the flying avatar's activity's avatar was last drawn: where it goes home to (Return)
+  mut home : (Double, Double)?
   /// whether what comes in is watched (the page in front, the reader at its end), as last drawn
   mut watched : Bool
   /// the agent whose avatar the flying copy shows as (its activity's own hidden), "" none
@@ -115,6 +117,7 @@ pub fn emits_of(key : String) -> Emits {
         aimed: None,
         aimed_at: -1.0,
         landed: None,
+        home: None,
         watched: false,
         copied: "",
         trace: (0.0, 0.0, 0.0),
@@ -286,6 +289,25 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
 }
 
 ///|
+/// How long the avatar takes home (Return) from where it let the message out to its activity's avatar: as Return's
+/// over its usual way (emit_way_points, a row or two), longer or shorter as a Move of it is (@ui.move_ms: the further the
+/// longer, not in proportion). The hop (Float) is a hop's, over its own height above the higher of its ends; the drop
+/// and the folding, a row's.
+fn return_ms(e : Emits) -> Double {
+  match (e.landed, e.home) {
+    (Some(l), Some(h)) => {
+      let far = dmax((h.0 - l.0).abs(), (h.1 - l.1).abs())
+      (Return.ms() * @ui.move_ms(far) / @ui.move_ms(emit_way_points)).round()
+    }
+    _ => Return.ms()
+  }
+}
+
+///|
+/// The avatar's usual way home (points): what Return's length is of.
+let emit_way_points : Double = 100.0
+
+///|
 /// How long a pose takes (Float on from the message before: only the drop).
 pub fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
   match pose {
@@ -389,7 +411,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
               clock: pose_clock(emit_drop_ms, Some(at)),
             })
           }
-          _ => e.current = Some({ ..t, pose: Return, clock: pose_clock(Return.ms(), Some(at)) })
+          _ => e.current = Some({ ..t, pose: Return, clock: pose_clock(return_ms(e), Some(at)) })
         }
       Return => {
         e.done[seq_s(t.seq)] = true
@@ -454,6 +476,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(r) => (r.0, r.1)
     None => return None
   }
+  e.home = Some(avatar)
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
   // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
   // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was

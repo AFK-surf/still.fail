@@ -82,6 +82,12 @@ pub(all) struct SendFlight {
   /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
   from_top : Double
+  /// how long their way takes (flight_way_ms: as long as it is far, from where they were typed to where their row has
+  /// them), said as they set out and again once their row is laid out (`timed`); when they set out, after how long
+  mut ms : Double
+  mut timed : Bool
+  mut set_out : Double
+  mut after : Double
 }
 
 ///|
@@ -180,6 +186,10 @@ pub fn flight_start(
         gone: leaving(),
         carried: false,
         from_top: y - 8.0,
+        ms: flight_len(desk),
+        timed: false,
+        set_out: -1.0,
+        after: 0.0,
       }))
       hold(flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
@@ -250,6 +260,10 @@ pub fn flight_carry_start(
         way: @motion.Anim::new(0.0),
         gone: leaving(),
         carried: true,
+        ms: flight_carry_ms,
+        timed: false,
+        set_out: -1.0,
+        after: 0.0,
         from_top,
       }))
       hold(flight_wait_ms)
@@ -458,6 +472,7 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) => {
       let turns = turns_of(f.turns)
+      flight_timed(c, f)
       let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
       // (landed: their way at the end it declared as it set out)
       let landed = f.placed && f.way.over()
@@ -491,18 +506,75 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
     // for (`said`), not the words' way there
     c.say("sent row in the list \{f.key}")
     f.placed_frame = c.frame_number()
+    f.set_out = c.moment()
     if f.carried {
       // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
       // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
-      let after = if f.desk { 0.0 } else { flight_carry_after_ms }
-      f.way.animate(1.0, @motion.tween(flight_carry_ms, ease=Linear, delay=after))
+      f.after = if f.desk { 0.0 } else { flight_carry_after_ms }
+      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
       // (the composer let go as they set out: their ground comes in round them from there)
-      (f.hold)(after)
+      (f.hold)(f.after)
     } else {
-      f.way.animate(1.0, @motion.tween(flight_len(f.desk), ease=Linear))
-      (f.hold)(flight_settle * flight_len(f.desk))
+      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear))
+      (f.hold)(flight_settle * f.ms)
     }
   }
+}
+
+///|
+/// Once their row is laid out (the frame after it was placed), their way timed as long as it is far: from where they
+/// were typed to where their row has them (their words' box, or the first file's place), the furthest of across and
+/// up. Told again from when they set out, its row's room and the composer's letting go with it.
+fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
+  // (a new chat's first words go with their page's change, the composer going to the chat's foot on their clock,
+  // told as the page changed: as long as any, flight_carry_ms)
+  if !f.placed || f.timed || f.carried || c.frame_number() <= f.placed_frame {
+    return
+  }
+  let to = if f.text != "" {
+    flight_words_key
+  } else if f.files.length() > 0 {
+    "flight/to/" + f.files[0].key
+  } else {
+    ""
+  }
+  f.timed = true
+  match @motion.measured_rect(c, to) {
+    Some((x, y, _, _)) => {
+      let ms = flight_way_ms(flies_desk(f), dmax((x - f.from_x).abs(), (y - f.from_y).abs()))
+      if ms != f.ms {
+        f.ms = ms
+        f.way.animate(1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
+        if !f.carried {
+          (f.hold)(dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
+        }
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// How long words sent take over a way `points` far: as their flight takes over a sent message's usual way
+/// (flight_len, 200 points: from a phone's field across to its bubble), longer or shorter as a Move of it is
+/// (@ui.move_ms: the further the longer, not in proportion).
+pub fn flight_way_ms(desk : Bool, points : Double) -> Double {
+  (flight_len(desk) * @ui.move_ms(points) / @ui.move_ms(flight_way_points)).round()
+}
+
+///|
+/// The longest words sent take to their place, however far (a phone's flight over a Move's longest way): any flight is
+/// over by then.
+pub let flight_most_ms : Double = (flight_ms * @ui.move_most_ms / @ui.move_ms(flight_way_points)).round()
+
+///|
+/// A sent message's usual way from where it was typed to its bubble (points): what flight_len is the length of.
+let flight_way_points : Double = 200.0
+
+///|
+/// How long words sent `f` take to their place, as it is told now (flight_timed).
+pub fn flight_ms_of(f : SendFlight) -> Double {
+  f.ms
 }
 
 ///|

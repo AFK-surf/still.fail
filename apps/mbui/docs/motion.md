@@ -107,7 +107,7 @@ length too (Lengths, below).
 | What goes (faded out, shrinking, off the screen) | `Leave` (.4, 0, 1, 1) | shorter than its coming |
 | What the hand holds or lifts: a switch's knob held, a ripple's sink, a card lifted, the long-press menu, the loupe | `lift_spring`, the one with a bounce | the spring's own |
 | A loop's each way, a stroke drawn | `InOut` | its own |
-| Words sent | `Flight` (.6, 0, .2, 1), from rest as a move is | 520 ms |
+| Words sent | `Flight` (.6, 0, .2, 1), from rest as a move is | 520 ms over a sent message's usual way (200 points), longer or shorter as a Move of its way is (`flight_way_ms`) |
 | Progress handed to another curve, a cycle's turn | `Linear` | |
 
 ### Lengths
@@ -128,8 +128,10 @@ first frames in a leap; and a move told again with a little left of its way took
   is left of its way is far (`@ui.move_path`; @motion.move takes the velocity an Anim has).
 - What the hand lets go of on its way somewhere sets out as fast as the hand went.
 - What is not a move keeps a length of its own: what comes and goes by fading, a few points' rise or a 0.97 scale
-  (kind 2), a control answering (kind 7), what waits and what is lit (kinds 8, 9), words sent flying (kind 4: their
-  own curve). detlint's `motion-length` stops a tween on Move.
+  (kind 2), a control answering (kind 7), what waits and what is lit (kinds 8, 9). Words sent flying (kind 4) keep
+  their own curve, their length as a Move's of their way scales (`flight_way_ms`); a message's avatar going home to
+  its activity likewise (emit.mbt `return_ms`), its hop a hop's (its time its height's, over the higher of its ends).
+  detlint's `motion-length` stops a tween on Move.
 - A test waits for a move's end by `@ui.move_most_ms` (any move is over by then), or by `move_ms` of the way it set.
 
 Why a move is a spring's way and not an ease-out. A curve fast from its start puts much of a long way there in its
@@ -171,7 +173,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | 3 | the composer to another page | a Move as long as it goes | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
 | 3 | a layout switched: the sidebar, the tape, a side panel | a Move as long as the furthest of it goes (`Ctx::move_state`) | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
-| 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1), set alike and broken into lines alike in the field and in the message (the theme's `words`, the composer's width), so moved, in pieces: what is on one line in both, each from where it was typed to where the message has it | web/src/madeChat.ts:329-331 (sfbase/flight.mbt); ChatHost.kt `pieces`, SendText.kt |
+| 4 | words sent | 520 ms (a phone's 600) over their usual way, as long as their way is far once their row is laid out (from where they were typed to where their message has them, the furthest of across and up; a new chat's first words as long as their page's change), on the flight's curve (0.6, 0, 0.2, 1), set alike and broken into lines alike in the field and in the message (the theme's `words`, the composer's width), so moved, in pieces: what is on one line in both, each from where it was typed to where the message has it | web/src/madeChat.ts:329-331 (sfbase/flight.mbt); ChatHost.kt `pieces`, SendText.kt |
 | 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
 | 4 | a picture into the viewer and back | a Move as long as its corners go, each way | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
