@@ -77,6 +77,25 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
 }
 
 ///|
+test "a wide picture covering a square tile is decoded as tall as the tile, not as wide" {
+  let t = @ui.Tester::new(
+    fn(c) { c.image("shot.png", w=Px(56.0), h=Px(56.0)) |> ignore },
+    w=200.0,
+    h=200.0,
+    images=[("shot.png", 1326, 344)],
+  )
+  t.draw()
+  // the tile shows the middle of it as tall as the tile: 56 points at 2x is 112 pixels of its 344, so its long side
+  // 1326 × 112 / 344 ≈ 432 pixels, decoded at 512 (at the tile's side, 128, it would be 33 pixels tall, stretched)
+  assert_eq(t.image_loads(), [("shot.png", 128), ("shot.png", 512)])
+  t.run_for(@ui.image_fade_ms)
+  let im = t.drawn_images()[0]
+  assert_eq((im[0], im[1], im[2], im[3]), (0.0, 0.0, 56.0, 56.0))
+  assert_eq(im[8], 1.0)
+  t.assert_idle()
+}
+
+///|
 test "contain letterboxes; a missing image draws only its background" {
   let t = @ui.Tester::new(
     fn(c) {

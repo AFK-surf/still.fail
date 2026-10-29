@@ -229,6 +229,19 @@ fn image_size(src : String) -> (Double, Double)? {
 }
 
 ///|
+/// How many pixels on its long side `src` is decoded at to be shown in a box `bw` × `bh` at `fit`: the box's long
+/// side, unless the picture covers the box and its proportions are known: then its own long side as it is drawn,
+/// cropped. (A wide screenshot covering a square tile is as tall as the tile and several times as wide: decoded at the
+/// tile's side it would be stretched several times over, blurred.)
+fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> Double {
+  match (fit, image_size(src)) {
+    (FitCover, Some((ow, oh))) if ow > 0.0 && oh > 0.0 && bw > 0.0 && bh > 0.0 =>
+      dmax(ow, oh) * dmax(bw / ow, bh / oh) * self.scale
+    _ => dmax(bw, bh) * self.scale
+  }
+}
+
+///|
 /// Drops images not drawn this frame, least recently drawn first, until
 /// what is kept fits the budget.
 fn Ctx::trim_images(self : Ctx) -> Unit {
@@ -401,7 +414,7 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
   match moving_images.get(n.text) {
     Some(m) if !n.still => {
-      let px = dmax(n.fw, n.fh) * self.scale
+      let px = self.image_px(m.keys[0], n.fw, n.fh, n.fit)
       let px = if px <= 0.0 { 256.0 } else { px }
       let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
       let length = m.ends[m.ends.length() - 1]
@@ -445,7 +458,7 @@ fn Ctx::draw_image(
   let grounded = (ground & 0xFFL) != 0L && bw > 0.0 && bh > 0.0
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
-  let px = dmin(dmax(bw, bh) * self.scale, max_px.to_double())
+  let px = dmin(self.image_px(src, bw, bh, fit), max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
   let e = match self.image_for(src, px) {
     Some(e) => e
