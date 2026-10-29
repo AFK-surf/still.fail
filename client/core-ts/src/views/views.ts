@@ -1091,6 +1091,7 @@ export class Views implements Owner {
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
     if (v.offline === true) {
       v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
+      if (get(v.link, "cause") === "updating") v.updating = true;
       if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
     }
     // Its agent's prompt cache over: said over the composer, computed again as the next one's is over.
@@ -1593,9 +1594,12 @@ export class Views implements Owner {
     }
     // Gone for its update: said on its second line, in place of where its agents were as it went (what one needs of the
     // viewer kept), as it is back by itself in a while (2026-10-29: only its unplugged mark said it was away, not why).
-    if (!s.online && get(this.link(s.address), "cause") === "updating" && row.stateLead !== "need") {
-      row.stateText = row.offline;
-      for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete row[k];
+    if (!s.online && get(this.link(s.address), "cause") === "updating") {
+      row.updating = true;
+      if (row.stateLead !== "need") {
+        row.stateText = row.offline;
+        for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete row[k];
+      }
     }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;

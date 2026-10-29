@@ -473,7 +473,7 @@ test("a_station_its_update_takes_down_is_said_updating_until_it_has_been_down_lo
     subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
     await s.host.time.pass(1000, 250);
     const chat = () => values.get(1) as Shown;
-    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1") as { offline?: string; stateText?: string } | undefined;
+    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1") as { offline?: string; stateText?: string; updating?: boolean } | undefined;
     // Gone: said so at once, while its link is still coming back, not only once it is taken for offline.
     stationLater(s.host, (req) => (req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
     s.gate.stream = "fail";
@@ -485,8 +485,10 @@ test("a_station_its_update_takes_down_is_said_updating_until_it_has_been_down_lo
     assert.equal(chat().offline, true);
     assert.equal(chat().offlineNote, t("core-logic.looks.offline.updating", { name: "studio" }));
     assert.equal(row()?.offline, t("core-views.station.updating", { name: "studio" }));
-    // Its row says so on its second line.
+    // Its row says so on its second line; the row and the chat are marked with the update's mark.
     assert.equal(row()?.stateText, t("core-views.station.updating", { name: "studio" }));
+    assert.equal(row()?.updating, true);
+    assert.equal((chat() as Shown & { updating?: boolean }).updating, true);
     await s.host.time.pass(60_000, 1000);
     apply(s.host, values);
     assert.equal((s.core.inner.stations.link(ST)?.state as { state?: string }).state, "offline");

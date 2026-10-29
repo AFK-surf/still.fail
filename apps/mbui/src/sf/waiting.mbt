@@ -181,6 +181,52 @@ pub fn spinner(
 }
 
 ///|
+/// A station gone for its update (a chat's row, the line over its composer): a circular arrow, three quarters of a
+/// ring with its head at the end, turning the way it points, once in `updating_turn_ms`, drawn in an icon's place
+/// (`size`, the box the icons beside it are drawn in, in `color`, a line as wide as theirs; the ring where check-circle
+/// draws its circle, 3.5 to 20.5 of their 24 grid). Turned by the clock as each frame is drawn (Ctx::cycle_look),
+/// smoothly, at the frame rate: an update is over in a little while, no mark that stays for hours.
+pub fn updating_mark(c : @ui.Ctx, size : Double, color : Int64) -> Int {
+  let pi = 3.141592653589793
+  let k = size / 24.0
+  let stroke = 1.75 * k
+  let mid = size / 2.0
+  let r = 8.5 * k
+  // the ring from its top, round three quarters of it the way it turns; its head on the end, its two strokes 3.5
+  // back along it, either side of it
+  let from = -0.5 * pi
+  let sweep = 1.5 * pi
+  let end = from + sweep
+  let (ex, ey) = (mid + r * @dmath.cos(end), mid + r * @dmath.sin(end))
+  let (tx, ty) = (-@dmath.sin(end), @dmath.cos(end))
+  let (nx, ny) = (@dmath.cos(end), @dmath.sin(end))
+  let back = 3.5 * k
+  let side = 3.0 * k
+  let node = c.lines(
+    [
+      @ui.line(@ui.arc(mid, mid, r, from~, sweep~), width=stroke, color~),
+      @ui.line(
+        [
+          (ex - back * tx + side * nx, ey - back * ty + side * ny),
+          (ex, ey),
+          (ex - back * tx - side * nx, ey - back * ty - side * ny),
+        ],
+        width=stroke,
+        color~,
+      ),
+    ],
+    w=Px(size),
+    h=Px(size),
+  )
+  c.cycle_look(node, updating_turn_ms, fn(f) { @ui.look(rot=f * 2.0 * pi) })
+  node
+}
+
+///|
+/// How long the update's mark takes to turn once (updating_mark).
+pub let updating_turn_ms : Double = 1200.0
+
+///|
 /// The spinner, or how far what it waits on has come once that is known (docs/ui-panels.md 等待: a transfer in a
 /// spinner's place, a message's files going up, a picture going up, an update round its key's mark): the same ring,
 /// the accent from its top as far round as it has come (`coming`, 0 to 1), going to a part told anew as a progress

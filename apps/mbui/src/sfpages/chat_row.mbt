@@ -284,7 +284,12 @@ pub fn chat_row(
             match (item.offline, item.reconnecting) {
               (Some(why), _) | (None, Some(why)) => {
                 let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
-                  @sf.icon(c, "unplug", size=kind_glyph, color=t.p.subtle) |> ignore
+                  // (gone for its update: the update's mark, turning for the short while it takes)
+                  if item.updating {
+                    @sf.updating_mark(c, kind_glyph, t.p.subtle) |> ignore
+                  } else {
+                    @sf.icon(c, "unplug", size=kind_glyph, color=t.p.subtle) |> ignore
+                  }
                 })
                 c.semantics(b, Image, id=away, label=why)
                 @sf.tip(c, "row/away-tip/" + key, away, why)

@@ -103,6 +103,8 @@ pub(all) struct ChatItem {
   decision_text : String?
   last : String?
   offline : String?
+  /// its station gone for its update: the update's mark in place of the unplugged one
+  updating : Bool
   reconnecting : String?
   connect : Bool
   origin_text : String
@@ -201,6 +203,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     decision_text: opt_text(field(s, "decision"), "text"),
     last: opt_text(field(s, "last"), "preview"),
     offline: opt_text(s, "offline"),
+    updating: flag(s, "updating"),
     reconnecting: opt_text(s, "reconnecting"),
     connect: field(s, "connect") is Some(String(_)),
     origin_text: text(s, "originText"),

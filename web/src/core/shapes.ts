@@ -1745,6 +1745,8 @@ export interface ChatItem {
 	originKind?: string;
 	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
+	/** Its station gone for its update: marked with the update's mark in place of the unplugged one. Absent otherwise. */
+	updating?: boolean;
 	/**
 	 * Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
 	 * turning ring. Absent while linked (and while offline).
@@ -2525,6 +2527,11 @@ export interface ChatView {
 	 * reached (the composer stays open). Absent otherwise, and from a core before it.
 	 */
 	offlineNote?: string;
+	/**
+	 * Its station gone for its update: the line over the composer marked with the update's mark in place of the
+	 * unplugged one. Absent otherwise.
+	 */
+	updating?: boolean;
 	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
 	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
