@@ -1544,6 +1544,7 @@
   "web-pages.security.pairNote": "The security code shows only on this device and is never sent",
   "web-pages.security.pairDeny": "Deny",
   "web-pages.security.pairEnter": "Enter the security code shown on your trusted device",
+  "web-pages.security.pairAgain": "Get a new code",
   "web-pages.security.pairChecking": "Verifying",
   "web-pages.security.pairFinding": "Reaching your trusted devices",
   "web-pages.security.pairNone": "No trusted device answered. Open still.fail on a device that's already approved, then try again.",

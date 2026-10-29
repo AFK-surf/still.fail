@@ -223,6 +223,7 @@
   "core-misc.lock.pairTries": "Too many wrong security codes; request approval again",
   "core-misc.lock.pairDenied": "The device showing the code denied this request; request approval again",
   "core-misc.lock.pairLate": "The security code expired; request approval again",
+  "core-misc.lock.pairUntil": "Valid until {time}",
   "core-misc.lock.pairGone": "Couldn't reach the device showing the code; request approval again",
   "core-misc.lock.pairUnsigned": "The device showing the code couldn't approve this one: {error}",
   "core-misc.lock.keyNotKept": "Couldn't keep this device's key in the system keychain: {error}",

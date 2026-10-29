@@ -764,6 +764,7 @@ pub let said_paths : Map[String, Array[String]] = {
   "lock": [
     "me.failed",
     "me.pair.error",
+    "me.pair.untilText",
     "members.*.email",
     "members.*.name",
     "members.*.nameText",
@@ -796,6 +797,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "pairing.*.label",
     "pairing.*.deviceText",
     "pairing.*.workspaces.*.name",
+    "pairing.*.untilText",
   ],
   "longJobs": [
     "groups.*.jobs.*.name",

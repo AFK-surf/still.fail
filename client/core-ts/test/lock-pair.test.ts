@@ -3,7 +3,9 @@
 // wrong, it says how many tries are left, and after PAIR_TRIES it signs nothing; turned away, nothing; its prompt
 // closed, the code still signs it in; ended there, the new device is told why (not that it typed wrong); a credential
 // for another device, nothing; a new device that dialled someone else (its idea of the other end not the trusted one's)
-// cannot prove even the right code. On the test clock, the trusted core's lock at a cloud that keeps chains.
+// cannot prove even the right code. The code is good for PAIR_WAIT_MS from when it is shown, wrong ones not putting it
+// off; the new device hears its trusted devices end it while nothing is typed (turned away, too old, gone, silent past
+// its time) and says why at once. On the test clock, the trusted core's lock at a cloud that keeps chains.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
@@ -13,7 +15,9 @@ import { HostError } from "../src/error.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
-import { type Duplex, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, tryOne } from "../src/views/pair.ts";
+import { t } from "../src/i18n.ts";
+import { pairs } from "../src/views/lock.ts";
+import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
 import { ME, PHONE, genesis, rig } from "./lock-rig.ts";
 
@@ -163,6 +167,68 @@ test("ended on the trusted device, the new device is told why: turned away there
   assert.deepEqual((await late.prompts()).pairing, [], "no longer shown");
   assert.equal(why(await late.prove(old)), "pair_late");
   assert.deepEqual([denied.cloud.posted, tried.cloud.posted, late.cloud.posted], [[], [], []]);
+});
+
+test("the code is good until a set time, said where it is shown; wrong codes typed do not put it off", async () => {
+  const m = await met();
+  const start = m.host.nowMs();
+  await m.hello();
+  const shown = (await m.prompts()).pairing[0];
+  assert.ok(shown.until >= start + PAIR_WAIT_MS && shown.until <= start + PAIR_WAIT_MS + 1_000, String(shown.until - start));
+  assert.match(shown.untilText, /\d\d:\d\d/);
+  const bad = shown.code === "222222" ? "333333" : "222222";
+  await m.host.time.pass(PAIR_WAIT_MS - 60_000);
+  assert.deepEqual(await m.prove(bad), { ok: { left: PAIR_TRIES - 1 } });
+  await m.host.time.pass(61_000);
+  assert.deepEqual((await m.prompts()).pairing, [], "too old, a wrong code typed a minute before or not");
+  assert.equal("err" in (await m.prove(shown.code)) ? "ended" : "approved", "ended");
+  assert.deepEqual(m.cloud.posted, []);
+});
+
+test("the new device hears its trusted device end it while nothing is typed, and says why at once", async () => {
+  const mine = (m: { core: { inner: any } }) => pairs.mine(m.core.inner, "ws");
+  // turned away there
+  const denied = await met();
+  await denied.hello();
+  const y = trying(denied.core.inner, ["ws"]);
+  keep(denied.core.inner, y, ME, denied.phone, ["ws"]);
+  assert.equal(mine(denied).state, "code");
+  assert.match(mine(denied).untilText, /\d\d:\d\d/);
+  await denied.ask("lockPrompt.deny", { device: PHONE });
+  await denied.host.time.pass(10);
+  assert.deepEqual([mine(denied).state, mine(denied).error], ["failed", t("core-misc.lock.pairDenied")]);
+
+  // its code too old
+  const late = await met();
+  await late.hello();
+  keep(late.core.inner, trying(late.core.inner, ["ws"]), ME, late.phone, ["ws"]);
+  await late.host.time.pass(PAIR_WAIT_MS + 1_000);
+  assert.deepEqual([mine(late).state, mine(late).error], ["failed", t("core-misc.lock.pairLate")]);
+
+  // gone without a word; silent past its time (the connection lost, the app put away)
+  const r = await met();
+  const [gone, goneHere] = await pipe();
+  const [, silentHere] = await pipe();
+  const two = trying(r.core.inner, ["ws"]);
+  keep(r.core.inner, two, "aa".repeat(32), goneHere, ["ws"]);
+  keep(r.core.inner, two, "bb".repeat(32), silentHere, ["ws"]);
+  gone.close();
+  await r.host.time.pass(10);
+  assert.deepEqual([mine(r).state, mine(r).devices], ["code", 1], "one still shows a code");
+  await r.host.time.pass(PAIR_WAIT_MS + PAIR_GRACE_MS);
+  assert.deepEqual([mine(r).state, mine(r).error], ["failed", t("core-misc.lock.pairLate")]);
+  assert.equal(mine(r).untilText, undefined);
+});
+
+test("a trusted device kept by the new device: the code typed through it still signs it in, a wrong one says what is left", async () => {
+  const m = await met();
+  await m.hello();
+  const code = (await m.prompts()).pairing[0].code;
+  const kept = keep(m.core.inner, trying(m.core.inner, ["ws"]), ME, m.phone, ["ws"]);
+  const bad = code === "222222" ? "333333" : "222222";
+  assert.deepEqual(await m.run(tryOne(m.core.inner, kept, PHONE, bad)), { ok: { left: PAIR_TRIES - 1 } });
+  const done = await m.run(tryOne(m.core.inner, kept, PHONE, code));
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
 });
 
 test("approved but signed in nowhere (the trusted device's key not read back): no approval, and the new device is told why", async () => {

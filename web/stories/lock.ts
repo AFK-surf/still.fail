@@ -14,8 +14,8 @@ const STATIONS: LockStation[] = [
 
 const PAIR: Partial<Record<LockStory, LockPair>> = {
   finding: { state: "finding", devices: 0 },
-  code: { state: "code", devices: 1 },
-  wrong: { state: "wrong", devices: 1, left: 2 },
+  code: { state: "code", devices: 1, untilText: "14:05 前有效" },
+  wrong: { state: "wrong", devices: 1, left: 2, untilText: "14:05 前有效" },
   none: { state: "none", devices: 0 },
 };
 
@@ -67,7 +67,7 @@ function prompts(story: LockStory): LockPromptsView {
   return {
     pairing: [{
       device: "d_phone", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "482913", deviceText: "still.fail 安卓版 · Pixel 8",
-      created_at: 1_760_000_000, workspaces: [{ id: "w_acme", name: "Acme" }, { id: "w_daily", name: "日常", emoji: "☀️" }],
+      created_at: 1_760_000_000, until: 1_760_000_300_000, untilText: "14:05 前有效", workspaces: [{ id: "w_acme", name: "Acme" }, { id: "w_daily", name: "日常", emoji: "☀️" }],
     }],
   };
 }

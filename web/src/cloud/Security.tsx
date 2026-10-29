@@ -259,6 +259,7 @@ export function SecurityPrompt() {
       {r && <>
         <PromptPlaces r={r} />
         <div className={css.bigCode}>{spacedCode(r.code)}</div>
+        {r.untilText && <p className={css.note} style={{ textAlign: "center" }}>{r.untilText}</p>}
         <p className={css.note} style={{ textAlign: "center" }}>{t("web-pages.security.pairNote")}</p>
       </>}
     </Dialog>
@@ -407,7 +408,7 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const checking = useDoing("lock.pairCode", { workspace: entry.id });
   const [code, setCode] = useState("");
   const pair = lock.me?.pair ?? null;
-  const ask = () => act(call("lock.pair", { workspace: entry.id }), t("web-pages.security.request"));
+  const ask = (words = t("web-pages.security.request")) => act(call("lock.pair", { workspace: entry.id }), words);
   // Typed wrong: the boxes empty again for the next try, the page says how many are left.
   const prove = (typed: string) => void call("lock.pairCode", { workspace: entry.id, code: typed }).catch(() => setCode(""));
   const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
@@ -415,12 +416,17 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
     <div className={css.waitingNote}>{t("web-pages.security.pairEnter")}</div>
     <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
     {checking || pair.state === "checking" ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairChecking")}</div>
-      : pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
+      : <>
+        {pair.state === "wrong" && <div className={css.waitingFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</div>}
+        {/* how long the code holds, and a new one asked for at any time (2026-10-30) */}
+        {pair.untilText && <div className={css.waitingNote}>{pair.untilText}</div>}
+        <div className={css.actions}><Button variant="ghost" onClick={() => { setCode(""); ask(t("web-pages.security.pairAgain")); }}>{t("web-pages.security.pairAgain")}</Button></div>
+      </>}
   </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
     : <>
       <div className={pair?.state === "failed" || lock.me?.failed ? css.waitingFailed : css.waitingNote}>
         {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
       </div>
-      <div className={css.actions}><Button variant="primary" onClick={ask}>{t("web-pages.security.request")}</Button></div>
+      <div className={css.actions}><Button variant="primary" onClick={() => ask()}>{t("web-pages.security.request")}</Button></div>
     </>;
 }

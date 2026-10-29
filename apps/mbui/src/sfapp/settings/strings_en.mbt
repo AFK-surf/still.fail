@@ -1382,6 +1382,7 @@ let en : Map[String, String] = {
   "web-pages.security.openTitle": "Turn on security mode",
   "web-pages.security.ownerOnly": "Only the owner can turn it on",
   "web-pages.security.pairBody": "{device}. Type the security code below on the new device to approve it. If you didn't start this, deny it.",
+  "web-pages.security.pairAgain": "Get a new code",
   "web-pages.security.pairChecking": "Verifying",
   "web-pages.security.pairDeny": "Deny",
   "web-pages.security.pairEnter": "Enter the security code shown on your trusted device",

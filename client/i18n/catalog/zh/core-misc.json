@@ -223,6 +223,7 @@
   "core-misc.lock.pairTries": "安全码错误次数过多，请重新发送批准请求",
   "core-misc.lock.pairDenied": "显示安全码的设备已拒绝此请求，请重新发送批准请求",
   "core-misc.lock.pairLate": "安全码已过期，请重新发送批准请求",
+  "core-misc.lock.pairUntil": "{time} 前有效",
   "core-misc.lock.pairGone": "无法连接显示安全码的设备，请重新发送批准请求",
   "core-misc.lock.pairUnsigned": "显示安全码的设备没能批准此设备：{error}",
   "core-misc.lock.keyNotKept": "无法在系统钥匙串中保存此设备的密钥：{error}",

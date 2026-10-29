@@ -222,6 +222,7 @@ function PairSheet({ r }: { r: LockPairing }) {
         {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}><WorkspaceBadge w={w} size={16} />{w.name}</span>)}
       </div>
       <div className={css.mBigCode}>{spacedCode(r.code)}</div>
+      {r.untilText && <span className={css.mNote}>{r.untilText}</span>}
       <span className={css.mNote}>{t("web-pages.security.pairNote")}</span>
       <div className={`${css.mPair} ${css.mStack}`}>
         <Button primary={false} label={t("web-pages.security.pairDeny")} onClick={() => { app.sheet(null); void call("lockPrompt.deny", { device: r.device }); }} />
@@ -333,7 +334,12 @@ function PairSteps({ lock }: { lock: LockView }) {
     <span className={css.mNote}>{t("web-pages.security.pairEnter")}</span>
     <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
     {checking || pair.state === "checking" ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairChecking")}</span>
-      : pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
+      : <>
+        {pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
+        {/* how long the code holds, and a new one asked for at any time (2026-10-30) */}
+        {pair.untilText && <span className={css.mNote}>{pair.untilText}</span>}
+        <Button primary={false} label={t("web-pages.security.pairAgain")} onClick={() => { setCode(""); void run("lock.pair", { workspace: ws }, t("web-pages.security.pairAgain")); }} />
+      </>}
   </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
     : <>
       <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>

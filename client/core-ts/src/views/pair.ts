@@ -6,11 +6,14 @@
 // checks what it is asked (each workspace's member credential, with the cloud keys of the lock as checked here; that
 // this device approves there, for that person), shows the code (`lockPrompts` `pairing`, wherever the person is) and
 // signs a `device` entry in each of those workspaces once the new device proves it typed it; turned away (`lockPrompt.
-// deny`), after PAIR_TRIES wrong codes, or PAIR_WAIT_MS, it signs nothing. Its prompt closed (`lockPrompt.hide`), it
-// is no longer shown and the code still holds: a person closes it once they have read the code.
+// deny`), after PAIR_TRIES wrong codes, or PAIR_WAIT_MS after it showed the code (wrong ones do not put it off), it signs
+// nothing. Its prompt closed (`lockPrompt.hide`), it is no longer shown and the code still holds: a person closes it
+// once they have read the code.
 //
 // A new device (`lock.pair`, its waiting page): dials them all, and once one or more show a code, proves the code typed
-// (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got.
+// (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got. A trusted device that
+// ends it while nothing is typed (turned away, the code too old, gone) is heard at once, not once a code is typed: the
+// page says why and asks again (2026-10-30: the boxes stayed after the code was gone).
 //
 // The wire, a line of JSON each way at a time on one stream: new → `hello {workspaces: [{ws, credential}], kind, label,
 // sign_key}`; trusted → `code {workspaces}` (the ones it approves) or `no {error}`; new → `pake {y}`; trusted → `pake
@@ -19,7 +22,7 @@
 // code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word. An `approved`
 // that signed it in nowhere (each workspace in `failed`, with why) is no approval: the new device says why.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
 import { CoreError } from "../error.ts";
@@ -28,6 +31,7 @@ import type { IrohConnection, IrohStream } from "../iroh.ts";
 import { Signer, WEB_DEVICE_SECS } from "../lock.ts";
 import { Lines } from "../mesh.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../pair.ts";
+import * as format from "../format.ts";
 import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
@@ -42,6 +46,9 @@ const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.mat
 
 /// How long a code waits to be typed, on the trusted device.
 export const PAIR_WAIT_MS = 5 * 60_000;
+/// How long the new device waits past PAIR_WAIT_MS before it takes a code for gone though its trusted device said
+/// nothing (the connection lost without a word, an app put away).
+export const PAIR_GRACE_MS = 10_000;
 /// How long the new device tries to reach each trusted one.
 export const PAIR_DIAL_MS = 20_000;
 /// Who signs member credentials, and what kind they are (station/src/cloud/provider.ts STILLFAIL `credential`).
@@ -82,8 +89,8 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 // ── the trusted device ──
 
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
-/// `hidden`: its prompt closed here, the code still good.
-type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
+/// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
+type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -161,7 +168,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     const asking: Asking = {
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
-      at: Math.floor(inner.host.nowMs() / 1000), places, hidden: false, away: Deferred.makeUnsafe<void>(),
+      at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
     };
     all.set(peer, asking);
     told(inner);
@@ -176,7 +183,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
           const next = yield* Effect.raceAllFirst([
             Effect.map(d.next(), (m) => ({ m }) as const),
             Effect.as(Deferred.await(asking.away), { away: true } as const),
-            Effect.as(Effect.sleep(PAIR_WAIT_MS), { late: true } as const),
+            Effect.as(Effect.sleep(Math.max(0, asking.until - inner.host.nowMs())), { late: true } as const),
           ]);
           if ("away" in next) return yield* d.send({ t: "no", error: "denied" });
           if ("late" in next) return yield* d.send({ t: "no", error: "late" });
@@ -234,13 +241,16 @@ function shown(inner: Inner): J[] {
     .sort((a, b) => a.at - b.at)
     .map((a) => ({
       device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
-      deviceText: deviceText(a),
+      deviceText: deviceText(a), until: a.until, untilText: untilText(inner, a.until),
       workspaces: a.places.map((p) => {
         const v = view(inner, p.ws);
         return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
       }),
     }));
 }
+
+/// 14:05 前有效: when a code is too old, as the clock says it here.
+const untilText = (inner: Inner, until: number) => t("core-misc.lock.pairUntil", { time: format.clock(until, inner.host.utcOffsetMin(until)) });
 
 function deny(inner: Inner, device: string): void {
   const a = askingsOf(inner).get(device);
@@ -258,10 +268,11 @@ function hide(inner: Inner, device: string): void {
 
 // ── the new device ──
 
-/// A trusted device that showed a code, and the workspaces it approves this one in.
-export type Met = { id: string; d: Duplex; workspaces: string[] };
+/// A trusted device that showed a code, and the workspaces it approves this one in; `until`, when its code is too old
+/// (ms, as this device saw it come).
+export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
 /// This device's try: how far it got, the trusted devices showing a code.
-type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; workspaces: string[]; met: Map<string, Met>; run: number };
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; workspaces: string[]; met: Map<string, Met>; run: number };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -269,7 +280,12 @@ let runs = 0;
 function mine(inner: Inner, ws: string): J | null {
   const y = tryings.get(inner);
   if (!y || !y.workspaces.includes(ws)) return null;
-  return { state: y.state, devices: y.met.size, ...(y.left !== undefined ? { left: y.left } : {}), ...(y.error !== undefined ? { error: y.error } : {}) };
+  const until = Math.max(0, ...[...y.met.values()].map((m) => m.until ?? 0));
+  const typing = y.state === "code" || y.state === "wrong";
+  return {
+    state: y.state, devices: y.met.size, ...(y.left !== undefined ? { left: y.left } : {}), ...(y.error !== undefined ? { error: y.error } : {}),
+    ...(typing && until > 0 ? { until, untilText: untilText(inner, until) } : {}),
+  };
 }
 
 const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
@@ -310,9 +326,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     if (before) drop(before);
     const { workspaces, trusted } = waitingIn(inner, base);
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
-    const y: Trying = { state: "finding", workspaces, met: new Map(), run: ++runs };
-    tryings.set(inner, y);
-    changed(inner, y);
+    const y = trying(inner, workspaces);
     // What it says of itself, in each workspace: a credential for its main endpoint; an app's signing key.
     const credentials: J[] = [];
     for (const ws of workspaces) {
@@ -345,10 +359,72 @@ function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): 
     yield* d.send(hello);
     const answer = yield* d.next();
     if (tryings.get(inner) !== y || !isObject(answer) || answer.t !== "code") return d.close();
-    y.met.set(id, { id, d, workspaces: arr(answer.workspaces).filter((w): w is string => typeof w === "string") });
-    if (y.state === "finding" || y.state === "none") y.state = "code";
-    changed(inner, y);
+    keep(inner, y, id, d, arr(answer.workspaces).filter((w): w is string => typeof w === "string"));
   });
+}
+
+/// This device's try begun, in `workspaces`: what came of one before forgotten.
+export function trying(inner: Inner, workspaces: string[]): Trying {
+  const y: Trying = { state: "finding", workspaces, met: new Map(), run: ++runs };
+  tryings.set(inner, y);
+  changed(inner, y);
+  return y;
+}
+
+/// A trusted device that shows a code, kept: what it says while no code is being checked (`no`: turned away, the code
+/// too old; its end), and its code's time up with no word from it (PAIR_WAIT_MS and PAIR_GRACE_MS since it came), end
+/// it here at once, and the last one ended says why (`endedText`), so the page asks again; what it answers a code
+/// typed is `tryOne`'s.
+export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspaces: string[]): Met {
+  const heard = Effect.runSync(Queue.unbounded<J | null>());
+  const closed = Deferred.makeUnsafe<void>();
+  const d: Duplex = {
+    send: raw.send,
+    next: () => Queue.take(heard),
+    close: () => {
+      Deferred.doneUnsafe(closed, Effect.void);
+      raw.close();
+    },
+  };
+  const m: Met = { id, d, workspaces, until: inner.host.nowMs() + PAIR_WAIT_MS };
+  // Whether it is still one of this try's, nothing being checked with it now: what it says then is said to nobody.
+  const idle = () => tryings.get(inner) === y && y.met.get(id) === m && y.state !== "checking";
+  const end = (why: CoreError) => {
+    d.close();
+    y.met.delete(id);
+    if (y.met.size === 0) {
+      y.state = "failed";
+      y.error = endedText([why]);
+      delete y.left;
+    }
+    changed(inner, y);
+  };
+  y.met.set(id, m);
+  if (y.state === "finding" || y.state === "none") y.state = "code";
+  changed(inner, y);
+  inner.runner.fork(
+    Effect.gen(function* () {
+      for (;;) {
+        const next = yield* Effect.raceFirst(
+          Effect.map(Effect.orElseSucceed(raw.next(), () => null), (msg) => ({ msg }) as const),
+          Effect.as(Deferred.await(closed), { closed: true } as const),
+        );
+        if ("closed" in next) return;
+        const msg = next.msg;
+        if ((msg === null || (isObject(msg) && msg.t === "no")) && idle()) return end(ended(msg));
+        Queue.offerUnsafe(heard, msg);
+        if (msg === null) return;
+      }
+    }),
+  );
+  // (being checked then: its answer, or its end, is `tryOne`'s)
+  inner.runner.fork(
+    Effect.raceFirst(
+      Effect.andThen(Effect.sleep(PAIR_WAIT_MS + PAIR_GRACE_MS), Effect.sync(() => idle() && end(new CoreError("pair_late", "the trusted device's code is too old")))),
+      Deferred.await(closed),
+    ),
+  );
+  return m;
 }
 
 /// `lock.pairCode`: the code typed proved to each trusted device showing one; the one it was signs this device in.
@@ -356,6 +432,7 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     const y = tryings.get(inner);
     const code = typedCode(typed);
+    if (y?.state === "failed") return yield* Effect.fail(new CoreError("pair_ended", y.error ?? ""));
     if (!y || y.met.size === 0) return yield* Effect.fail(CoreError.invalid("no trusted device shows a code"));
     if (code === null) return yield* Effect.fail(new CoreError("pair_code", t("core-misc.lock.pairBadCode")));
     const base = (yield* inner.mesh()).deviceId();
