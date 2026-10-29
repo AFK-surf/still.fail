@@ -297,6 +297,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
         c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
         late = late + 1
       }
+      // what floats over what scrolls, all of it made now (a list's rows as it was laid out), for the parts drawn again
+      // to read where they are (scroll_bar.mbt)
+      c.floating_found()
       // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where
       // its box is, or built there where it cannot be (kept_part.mbt)
       c.parts_rows_left()
@@ -600,9 +603,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.group_cur = 0
   c.count = 0
   c.cur = -1
-  c.stuck.clear()
   c.press_owners.clear()
-  c.floating.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)

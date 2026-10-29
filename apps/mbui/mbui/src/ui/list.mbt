@@ -687,8 +687,6 @@ fn Ctx::place_list(
   let nan = 0.0 / 0.0
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
-  // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
-  let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
     // (kept as its nodes where nothing it shows changed: kept_nodes.mbt; as its last build drew it where parts are
     // kept so: kept_rows.mbt)
@@ -951,7 +949,7 @@ fn Ctx::place_list(
     }
     n.last = prev
   }
-  self.stick_in(li, stuck_from, iy)
+  self.stick_in(li, order, iy)
   // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
   st.moving_said.set(st.held || st.moving() || st.glide)
 }
@@ -1025,18 +1023,35 @@ pub fn Ctx::stick(self : Ctx, i : Int, top : Double) -> Unit {
     return
   }
   self.nodes[i].stick = top
-  self.stuck.push(i)
 }
 
 ///|
-/// What the rows of list `li` just placed hold near its top (`stuck` from `from`; a list in a row holds its own), its
-/// content starting at `top`: each where its parent lays it, then down to `top` and its own distance, as far as its
-/// parent's foot lets it.
-fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
-  for j in from..<self.stuck.length() {
-    let s = self.stuck[j]
+/// What the rows of list `li` just placed (`rows`) hold near its top (Node's `stick`: Ctx::stick; a list in a row holds
+/// its own), its content starting at `top`: each where its parent lays it, then down to `top` and its own distance, as
+/// far as its parent's foot lets it.
+fn Ctx::stick_in(self : Ctx, li : Int, rows : Array[Int], top : Double) -> Unit {
+  let stuck : Array[Int] = []
+  let walk : Array[Int] = []
+  for r in rows {
+    walk.push(r)
+    while walk.pop() is Some(i) {
+      let n = self.nodes[i]
+      if n.stick == n.stick {
+        stuck.push(i)
+      }
+      if n.kind == kind_list && i != li {
+        continue
+      }
+      let mut ch = n.first
+      while ch >= 0 {
+        walk.push(ch)
+        ch = self.nodes[ch].next
+      }
+    }
+  }
+  for s in stuck {
     let n = self.nodes[s]
-    if n.parent < 0 || n.stick != n.stick || self.list_of(s) != li {
+    if n.parent < 0 {
       continue
     }
     let p = self.nodes[n.parent]

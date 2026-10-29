@@ -90,6 +90,8 @@ struct Node {
   /// tree (Ctx::hidden_from_semantics)
   mut sem : Sem?
   mut sem_hid : Bool
+  /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
+  mut floats : Bool
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -347,6 +349,7 @@ fn Node::new() -> Node {
     corner_by: 0,
     sem: None,
     sem_hid: false,
+    floats: false,
     parent: -1,
     first: -1,
     last: -1,
@@ -508,6 +511,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.corner_by = 0
   self.sem = None
   self.sem_hid = false
+  self.floats = false
   self.first = -1
   self.last = -1
   self.next = -1

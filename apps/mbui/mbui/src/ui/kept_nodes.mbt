@@ -58,10 +58,7 @@ priv struct RowNodes {
   /// what it marked used this frame; the cycles and the moments it said come again (for what says why a frame is drawn)
   said : Array[&SaidAgain]
   marks : Array[Int]
-  floating : Array[Int]
-  /// what it holds near its list's top as it scrolls past (Ctx::stick); what scrolls in it (sideways.mbt: its id, its
-  /// box and what that holds)
-  stuck : Array[Int]
+  /// what scrolls in it (sideways.mbt: its id, its box and what that holds)
   sideways : Array[(Int, Int, Int)]
   /// what it showed of the boxes named to be moved (move_state.mbt), the names built, and what it read of how lists
   /// stand (Ctx::list_info_as, read back)
@@ -382,8 +379,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     why: "",
     said: [],
     marks: [],
-    floating: [],
-    stuck: [],
     sideways: [],
     moves_shown: [],
     moves_seen: [],
@@ -541,8 +536,6 @@ fn Ctx::row_laid(
 /// taken from there as it is over (Ctx::nodes_end).
 priv struct NodesBegun {
   census : Array[Int]
-  floating : Int
-  stuck : Int
   info : Int
   drawn : Int
   words : Int
@@ -565,8 +558,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.sideways.clear()
   {
     census,
-    floating: self.floating.length(),
-    stuck: self.stuck.length(),
     info: self.info_reads.length(),
     drawn: dr.entries.length(),
     words: words_marks.length(),
@@ -597,14 +588,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.reads_out = self.reads_out
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
-  rn.floating.clear()
-  for j in b.floating..<self.floating.length() {
-    rn.floating.push(self.floating[j])
-  }
-  rn.stuck.clear()
-  for j in b.stuck..<self.stuck.length() {
-    rn.stuck.push(self.stuck[j])
-  }
   rn.info.clear()
   for j in b.info..<self.info_reads.length() {
     rn.info.push(self.info_reads[j])
@@ -798,12 +781,6 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
       }
       None => ()
     }
-  }
-  for i in rn.floating {
-    self.floating.push(i + by)
-  }
-  for i in rn.stuck {
-    self.stuck.push(i + by)
   }
   for s in rn.sideways {
     match sideways.get(s.0) {

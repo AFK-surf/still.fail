@@ -281,8 +281,6 @@ pub struct Ctx {
   /// a stack's page in the hand this frame (Ctx::nav: swiped back, a finger's or the system's gesture), between where it
   /// rests and where it goes: what is drawn on it stands anywhere, as in a motion (Tester::hold_corners)
   mut page_in_hand : Bool
-  /// what is held near the top of a list as its row scrolls past (Ctx::stick), in the order built this frame
-  stuck : Array[Int]
   // hit targets of the last frame, in paint order, and those being collected
   mut hit_ids : Array[Int]
   mut hit_rects : Array[Double]
@@ -634,7 +632,6 @@ fn Ctx::new() -> Ctx {
     frame_by: None,
     wake_by: None,
     page_in_hand: false,
-    stuck: [],
     hit_ids: [],
     hit_rects: [],
     next_hit_ids: [],
