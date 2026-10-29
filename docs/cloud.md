@@ -110,6 +110,8 @@ The wire contract shared with Comma is "Station ↔ Comma control-plane contract
 
 relay 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`stillfail-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket。总量限制（RelayBudget）只在建连接时放行，不在帧的路径上：流量按 iroh-relay 自己的 metrics 每分钟读一次，当天超额就重启容器、拒绝新连接；单个客户端的速率由 iroh-relay 自己限。以前每一帧都经过 RelayBudget，它被连接一直占着、每条消息多算一次 DO 请求（2026-09-30 改掉）。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 still.fail 的 relay 为家（浏览器只认它）；still.fail 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
 
+relay 转发的是包，不替收方攒：一个包在发给某个客户端的队列里等了 200 ms 还没发出去就丢掉，系统层发送缓冲里没发的最多 16 KB（Linux 上的 `TCP_NOTSENT_LOWAT`；zzj3720/iroh 的 `iroh-relay/src/server/client.rs` `MAX_PACKET_WAIT`）。发送方在 relay 的 TCP 上看不到丢包，不丢就一直发：2026-10-30 一台 Mac 在丢包的移动网络上（它到北京 relay 的 TCP 一秒只送得出 20 KB）下附件，包在北京 relay 里排了 15.7 秒，iroh 就把连接搬去了更远的 relay。丢掉了，发送方的拥塞控制才会降到收方收得下的速度。
+
 station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 - **局域网**：mDNS（服务名 `stillfail`，兼容期内也查旧名 `ember`；见 `station/native/mesh/src/lib.rs` 的 `MDNS_SERVICE`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。

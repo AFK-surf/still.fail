@@ -29,5 +29,5 @@ codegen-units = 1
 swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../vendor/noq-udp" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "43a6892ffe0689de0cf2545e3a8f3d567146b408" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "43a6892ffe0689de0cf2545e3a8f3d567146b408" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "a091b3326b7859ea0338240f57896f7b93406079" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "a091b3326b7859ea0338240f57896f7b93406079" }
