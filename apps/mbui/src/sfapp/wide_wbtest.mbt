@@ -2119,7 +2119,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_eq(word("Claude · Opus 5.5").length(), 0)
   t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
+  // its label and its account under it, where it stands, its latest lines, the figures side by side, the quiet line
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
   let lines = word("读了 src/ui/list.mbt")
@@ -2149,13 +2149,15 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   // the figures side by side on one line; each part under the one before
   assert_eq(cost[0].2, cache[0].2)
   assert_true(cache[0].1 > cost[0].1)
+  // (its account under its label, what it runs as one thing, before where it stands)
   assert_true(
-    label[0].2 < status[0].2 &&
+    label[0].2 < account[0].2 &&
+    account[0].2 < status[0].2 &&
     status[0].2 < lines[0].2 &&
     lines[0].2 < cost[0].2 &&
-    cost[0].2 < account[0].2 &&
-    account[0].2 < quiet[0].2,
+    cost[0].2 < quiet[0].2,
   )
+  assert_eq(account[0].1, label[0].1)
   // in the window, by the picture: over it (no room under it), its start where the picture's is
   assert_true(quiet[0].2 + quiet[0].4 < last.2, msg="over the picture")
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
@@ -2314,7 +2316,7 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
 }
 
 ///|
-test "wide: a working agent's card has its stop in its top right corner, concentric with it (the corner rule sees it)" {
+test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
   reset()
   let base = fixture("chat-agent-card")
   // (its agents at work, as a turn under way has them: chat_fixture.mbt)
@@ -2355,11 +2357,12 @@ test "wide: a working agent's card has its stop in its top right corner, concent
   guard last is Some(name) else { fail("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // its stop shown, level with its label; nothing in the card's corners (nor anywhere) breaks the rule
+  // its stop shown on the line under its label's, not beside it (the label's line its own); nothing in the card's
+  // corners (nor anywhere) breaks the rule
   let stop = word("停止当前任务")
   let label = word("Claude · Opus 5.5")
   assert_true(stop.length() == 1 && label.length() == 1, msg="\{(stop, label)}")
-  assert_true(stop[0].1 > label[0].1 + label[0].3, msg="its stop after its label")
+  assert_true(stop[0].2 >= label[0].2 + label[0].4, msg="its stop under its label: \{(stop, label)}")
   assert_eq(t.corner_faults(), [])
 }
 

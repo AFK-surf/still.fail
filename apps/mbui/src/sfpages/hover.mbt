@@ -161,14 +161,16 @@ let hover_bare : @ui.Style = @ui.css("w=Full")
 // ── an agent's card ──────────────────────────────────────────────────────
 
 ///|
-/// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: its mark
-/// and label, a stop for it alone while it works; where it stands and for how long; its latest three lines; what it
-/// has going in the background and its checklist in a line (agent_work_line); the figures that say most (UsageTiles); its account with what is left of it; the rest in a quiet line; its jobs and
-/// what is wrong. What the core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
-/// What it says leads to where it is seen to: its name and its lines to its execution history (at a line's entry),
-/// its context's figure to what can be done to it, its account (and an account that cannot run) to how it runs, its
-/// jobs to the chat's.
-pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
+/// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: what it runs as, one thing (its
+/// mark, its label, the account it runs on with what is left of it); where it stands and for how long, a stop for it
+/// alone at its end while it works; its latest three lines; what it has going in the background and its checklist in a
+/// line (agent_work_line); the figures that say most (UsageTiles); the rest in a quiet line; its jobs and what is
+/// wrong. What the core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
+/// What it says leads to where it is seen to: what it runs as (and an account that cannot run) to how it runs, its
+/// lines to its execution history (at a line's entry), its context's figure to what can be done to it, its jobs to
+/// the chat's. `across`: as wide as what holds it (with its station's card in a tile's, as wide as the wider), not its own
+/// 288.
+pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bool = false) -> Unit {
   let station = r.station
   let t = @sf.theme()
   let av = Some(a)
@@ -183,47 +185,70 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
     open_triple_panel(src, station, "session:" + key, hover_card_rect(c, id), saved=@sf.t("web-pages.chat.pickSaved"), side=Right)
     hover_hold()
   }
-  c.box(style=agent_card_box, fn() {
-    // its mark (28) and label (its history, › after it), a stop while it works (in the card's top right corner)
-    c.box(style=agent_card_head, fn() {
-      let who = c.id("agent-card/history")
-      if c.clicked(who) {
-        history(None)
-      }
-      let w = c.box(style=agent_card_who, id=who, fn() {
-        agent_mark(
-          c,
-          text(field(s, "maker"), "id"),
-          text(s, "runtime"),
-          text(av, "badge"),
-          side=agent_card_mark,
-          said=text(s, "badgeText"),
-          ground=@sf.panel_ground(),
-          // (in the card's top left corner on its words' line, 16 in: concentric with its 23 there)
-          corner=@sf.small_radius,
-        )
-        c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
-        |> ignore
-        @sf.icon(c, "chevron-right", size=14.0, color=if c.lit(who) { t.p.text } else { t.p.muted }) |> ignore
+  // its account, what is left of it
+  let account = match field(av, "account") {
+    Some(Object(_)) as x => x
+    _ => field(av, "profile")
+  }
+  let quota = field(field(av, "account"), "quota")
+  let windows = if text(quota, "state") == "ok" { items(quota, "windows") } else { [] }
+  c.box(style=if across { agent_card_across } else { agent_card_box }, fn() {
+    // what it runs as, one thing: its mark (28), its label (its model) on its line and under it the account it runs
+    // on, what is left of it at that line's end; to how it runs (its model and its account are of that)
+    let who = c.id("agent-card/runs")
+    if c.clicked(who) {
+      runs(who)
+    }
+    let w = c.box(style=agent_card_head, id=who, fn() {
+      agent_mark(
+        c,
+        text(field(s, "maker"), "id"),
+        text(s, "runtime"),
+        text(av, "badge"),
+        side=agent_card_mark,
+        said=text(s, "badgeText"),
+        ground=@sf.panel_ground(),
+        // (in its ground's top left corner, 10 in: concentric with it there)
+        corner=InnerOr(@sf.small_radius),
+      )
+      c.box(style=agent_card_who, fn() {
+        c.text(text(s, "agentText"), style=agent_card_label) |> ignore
+        if account is Some(_) || windows.length() > 0 {
+          c.box(style=agent_card_account, fn() {
+            c.box(style=agent_card_name_room, fn() {
+              c.text(text(account, "name"), style=agent_card_line) |> ignore
+            })
+            |> ignore
+            // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
+            if windows.length() > 0 {
+              @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key="agent-card/quota")
+            }
+          })
+          |> ignore
+        }
       })
-      c.semantics(w, Button, id=who, label=@sf.t("web-pages.chat.historyOf", args=[("agent", text(s, "agentText"))]))
+      |> ignore
+    })
+    c.semantics(w, Button, id=who, label=text(s, "agentText"))
+    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its end while it
+    // works, what stopping is of (its working said short then: 进行中, 排队中)
+    c.box(style=agent_card_stands, fn() {
+      c.box(style=agent_card_status, fn() {
+        c.box(style=agent_card_dot_room, fn() {
+          c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
+        })
+        |> ignore
+        let since = agent_waited(c, src, av)
+        let runs = [@ui.span(text(s, "statusText"))]
+        if since != "" {
+          runs.push(@ui.span(" · " + since, color=t.p.muted))
+        }
+        c.rich(runs, style=agent_card_words) |> ignore
+      })
+      |> ignore
       if working {
         agent_card_stop(c, src, station, key)
       }
-    })
-    |> ignore
-    // where it stands, after a dot in its tone, and for how long (three lines at most)
-    c.box(style=agent_card_status, fn() {
-      c.box(style=agent_card_dot_room, fn() {
-        c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
-      })
-      |> ignore
-      let since = agent_waited(c, src, av)
-      let runs = [@ui.span(text(s, "statusText"))]
-      if since != "" {
-        runs.push(@ui.span(" · " + since, color=t.p.muted))
-      }
-      c.rich(runs, style=agent_card_words) |> ignore
     })
     |> ignore
     // its latest lines, what it does now in the words' colour, running on as they change
@@ -254,39 +279,8 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
       }
       usage_tiles(c, card, entry?=entry)
     }
-    // its account, what is left of it to its right
-    let account = match field(av, "account") {
-      Some(Object(_)) as x => x
-      _ => field(av, "profile")
-    }
-    let quota = field(field(av, "account"), "quota")
-    let windows = if text(quota, "state") == "ok" { items(quota, "windows") } else { [] }
     let quiet = [text(card, "work"), text(card, "tokens")].filter(fn(x) { x != "" })
     let attention = items(card, "attention")
-    // (the card's last line: what is left of it, capsules, in the card's bottom right corner, concentric with it)
-    let last = quiet.is_empty() && text(card, "jobs") == "" && attention.is_empty()
-    if account is Some(_) || windows.length() > 0 {
-      // (its name to how it runs: the account it runs on is one of those)
-      let aid = if text(account, "name") != "" { c.id("agent-card/account") } else { 0 }
-      if aid != 0 && c.clicked(aid) {
-        runs(aid)
-      }
-      c.box(style=if last && windows.length() > 0 { agent_card_account_last } else { agent_card_account }, fn() {
-        c.box(style=agent_card_name_room, fn() {
-          if aid == 0 {
-            c.text(text(account, "name"), style=agent_card_line) |> ignore
-          } else {
-            agent_card_link(c, aid, text(account, "name"), agent_card_line)
-          }
-        })
-        |> ignore
-        // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
-        if windows.length() > 0 {
-          @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key="agent-card/quota")
-        }
-      })
-      |> ignore
-    }
     // the rest: a quiet line; its jobs and what is wrong
     if quiet.length() > 0 {
       c.text(quiet.join(" · "), style=agent_card_quiet) |> ignore
@@ -758,12 +752,30 @@ let agent_card_box : @ui.Style = @ui.style(w=@sf.agent_card_w, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
+let agent_card_across : @ui.Style = @ui.style(w=Full, min_w=@sf.agent_card_w, gap=S2)
 
 ///|
-/// Its mark and name, level with each other: what the stop leaves of the head.
+/// Its head: a small panel's row (presenters' small_panel_row_in), its ground under the hand, concentric with the
+/// card's corners.
 // kept across runs: a value (no field of it changes)
-let agent_card_who : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=ACenter)
+let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart p=S2_5 radius=Inner hovered{bg=Hover}")
+  .then(@ui.style(mt=@sf.room_of(-agent_card_head_out), mx=@sf.room_of(-agent_card_head_out)))
+
+///|
+/// How far its head reaches out past the card's words (hover_inner's 10) to be a small panel's row, its ground under
+/// the hand at the panel's padding (6 from its edges), its words text_in in from it, where they were.
+let agent_card_head_out : Double = @sf.text_in
+
+///|
+/// Its label and its account's line under it: what its mark leaves of the head.
+// kept across runs: a value (no field of it changes)
+let agent_card_who : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// Its label on its mark's line, 28 (L7: its mark's side; the mark in the card's corner, by its first line as a
+/// two-line item's).
+// kept across runs: a value (no field of it changes)
+let agent_card_label : @ui.TextStyle = agent_card_name.then(@ui.text_style(leading=L7))
 
 ///|
 /// Its name and its account's room: what is left of the row.
@@ -776,9 +788,14 @@ let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 let agent_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
+/// Where it stands and its stop, on one line: its words what the stop leaves.
+// kept across runs: a value (no field of it changes)
+let agent_card_stands : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
 /// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
 // kept across runs: a value (no field of it changes)
-let agent_card_status : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart pl=S0_5")
+let agent_card_status : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart, pl=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -873,20 +890,16 @@ let agent_card_tile_name : @ui.TextStyle = @ui.text_style(size=Caption, color=Mu
 let agent_card_chips_gap : @ui.Space = S1
 
 ///|
-/// Its account (12), what is left of it to its right, 8 apart; the card's last line, what is left (capsules) in its
-/// bottom right corner as far from both its edges as makes them concentric with it (@sf.capsule_in), out past the
-/// panel's padding and the card's words' (hover_inner's 10) to there, its words on their foot.
+/// Its account (12) under its label, what is left of it at that line's end, 8 apart: the head's last line, what is
+/// left (capsules) in its ground's bottom right corner as far from both its edges as makes them concentric with it
+/// (@sf.capsule_in), out past the head's padding (text_in) to there, its words on their foot.
 // kept across runs: a value (no field of it changes)
-let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let agent_card_account_last : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").then(
+let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").then(
   @ui.style(mb=@sf.room_of(agent_card_chips_in), mr=@sf.room_of(agent_card_chips_in)),
 )
 
 ///|
-let agent_card_chips_in : Double = @sf.capsule_in(@sf.r_menu, @sf.fill_chip_small_h) - @sf.panel_pad - @sf.text_in
+let agent_card_chips_in : Double = @sf.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - @sf.text_in
 
 ///|
 /// Words that lead somewhere: their whole line.
@@ -902,16 +915,11 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=
 let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground; in the card's top right corner
-/// as far from both its edges as makes it concentric with it (a small panel's corner: @sf.capsule_in), out past the
-/// panel's padding and the card's words' (hover_inner's 10) to there.
+/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
 // kept across runs: a value (no field of it changes)
 let agent_card_stop_pill : @ui.Style = @ui.css(
   #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=Hover}
-).then(@ui.style(mt=@sf.room_of(agent_card_stop_in), mr=@sf.room_of(agent_card_stop_in)))
-
-///|
-let agent_card_stop_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - 10.0
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

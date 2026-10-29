@@ -568,7 +568,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
     Some(_) if @sf.tile_whole() =>
       hover(c, "agent-hover/" + a.key, id, tile=true, padded=false, fn() {
         match aj {
-          Some(j) => c.box(style=tile_card_agent, fn() { agent_card(c, src, r, j) }) |> ignore
+          Some(j) => c.box(style=tile_card_agent, fn() { agent_card(c, src, r, j, across=true) }) |> ignore
           None => ()
         }
         // (its head as the agent's: the two start alike)
