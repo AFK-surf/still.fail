@@ -355,3 +355,24 @@ test "a label's ground: its own room, height and corner, and room after it off t
   let (_, py, _, ph, _) = t.drawn_rects().filter(fn(r) { r.4 == 0x22222222L })[0]
   assert_true((gy + gh / 2.0 - (py + ph / 2.0)).abs() < 0.001)
 }
+
+///|
+test "a label is one thing: a line breaks before it, not within it, where it fits on a line" {
+  let label : @ui.Ground = { room: 0.6, height: 2.0, corner: 0.5, after: 0.0 }
+  // "aaaa " 25, the label 25 and 6 of room either side: 62 in 50
+  let t = rich_view([@ui.plain("aaaa "), @ui.span("bb cc", bg=0x11111111L, ground=Some(label))], 50.0)
+  assert_eq(t.lines_of("aaaa"), ["aaaa ", "bb cc"])
+  let grounds = t.drawn_rect_corners().filter(fn(r) { r.4 == 0x11111111L })
+  assert_eq(grounds.length(), 1)
+  assert_eq(grounds[0].5, (5.0, 5.0, 5.0, 5.0))
+}
+
+///|
+test "a label wider than a line breaks within it, its ground cut square where it goes on" {
+  let label : @ui.Ground = { room: 0.6, height: 2.0, corner: 0.5, after: 0.0 }
+  let t = rich_view([@ui.span("aaaa bbbb cccc", bg=0x11111111L, ground=Some(label))], 50.0)
+  // 6 of room and "aaaa bbbb" is 51: on three lines, round only at its two ends
+  assert_eq(t.lines_of("aaaa"), ["aaaa ", "bbbb ", "cccc"])
+  let grounds = t.drawn_rect_corners().filter(fn(r) { r.4 == 0x11111111L })
+  assert_eq(grounds.map(fn(r) { r.5 }), [(5.0, 0.0, 0.0, 5.0), (0.0, 0.0, 0.0, 0.0), (0.0, 5.0, 5.0, 0.0)])
+}

@@ -382,6 +382,27 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
       brk[i] = b[starts[i]]
     }
   }
+  // a label (a run on a ground of its own shape) is one thing, as CSS's inline-block is: a line breaks before it
+  // rather than within it, unless it is wider than a whole line; each cluster in one kept whole: where it starts
+  let whole = Array::make(n, -1)
+  if r.wrap {
+    for k, run in r.runs {
+      let c0 = run_c0[k]
+      let c1 = run_c1[k]
+      if run.ground is None || r.run_bg(run) == 0L || c1 - c0 < 2 {
+        continue
+      }
+      let mut w = 0.0
+      for c in c0..<c1 {
+        w = w + adv[c]
+      }
+      if w <= max_w + 0.01 {
+        for c in (c0 + 1)..<c1 {
+          whole[c] = c0
+        }
+      }
+    }
+  }
   let xs = Array::make(n, 0.0)
   let line_of = Array::make(n, 0)
   let line_start = []
@@ -457,6 +478,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     let a = adv[i]
     if r.wrap && x + a > max_w + 0.01 && i > ls && c != 32 {
       let b = if last_break > ls { last_break } else { i }
+      let b = if whole[b] > ls { whole[b] } else { b }
       finish(ls, b)
       ls = b
       i = b
@@ -1085,6 +1107,15 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
           0L,
           alpha,
         )
+        // a ground carried on to the next line, or from the last, is cut square there (CSS's box-decoration-break:
+        // slice), so its pieces read as one
+        let from = lay.line_of[lay.run_c0[k]] != l
+        let on = lay.line_of[lay.run_c1[k] - 1] != l
+        if from || on {
+          let lc = if from { 0.0 } else { corner }
+          let rc = if on { 0.0 } else { corner }
+          self.corners_last_each(lc, rc, rc, lc)
+        }
       }
       if id != 0 {
         self.push_hit(id, dmax(x0, cx0), dmax(top, cy0), dmin(x1, cx1), dmin(top + lay.line_h[l], cy1)) |> ignore
