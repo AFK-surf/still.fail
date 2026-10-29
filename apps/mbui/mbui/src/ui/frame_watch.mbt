@@ -522,66 +522,71 @@ fn laid_kept(c : Ctx, root : Int) -> Unit {
 /// order, whether it is only drawn, cut, kept, or has a look worked out as it is painted or by the clock.
 fn tree_sig(c : Ctx) -> Int64 {
   let mut h = -3750763034362895579L
-  let num = fn(x : Double) { h = hash_mix(h, (x * 64.0).round().to_int64()) }
-  let int = fn(x : Int) { h = hash_mix(h, x.to_int64()) }
+  // (folded in place, no closure over `h`: a node's dozen and more numbers, for every node of every build)
   let moves = c.nodes.iter().take(c.count).any(fn(n) { n.moved_by is Some(_) })
-  int(c.count)
+  h = hash_mix(h, c.count.to_int64())
   for i in 0..<c.count {
     let n = c.nodes[i]
-    int(n.kind)
-    int(n.id)
-    int(n.parent)
+    h = hash_mix(h, n.kind.to_int64())
+    h = hash_mix(h, n.id.to_int64())
+    h = hash_mix(h, n.parent.to_int64())
     let (mx, my) = if moves { moved_over(c, i) } else { (0.0, 0.0) }
-    num(n.x - mx)
-    num(n.y - my)
-    num(n.fw)
-    num(n.fh)
+    h = sig_num(h, n.x - mx)
+    h = sig_num(h, n.y - my)
+    h = sig_num(h, n.fw)
+    h = sig_num(h, n.fh)
     h = hash_mix(h, n.bg)
     h = hash_mix(h, n.color)
     h = hash_mix(h, n.border_c)
     h = hash_mix(h, n.shadow_c)
-    num(n.radius)
-    num(n.border_w)
-    num(n.shadow)
-    num(n.opacity)
-    num(n.tx)
-    num(n.ty)
-    num(n.font_size)
-    int(n.weight)
-    int(if n.clip { 1 } else { 0 })
+    h = sig_num(h, n.radius)
+    h = sig_num(h, n.border_w)
+    h = sig_num(h, n.shadow)
+    h = sig_num(h, n.opacity)
+    h = sig_num(h, n.tx)
+    h = sig_num(h, n.ty)
+    h = sig_num(h, n.font_size)
+    h = hash_mix(h, n.weight.to_int64())
+    h = hash_mix(h, (if n.clip { 1 } else { 0 }).to_int64())
     h = hash_mix(h, n.bones)
     if n.text != "" {
-      h = hash_mix(h, stable_hash(n.text))
+      h = hash_mix(h, n.text_said())
     }
   }
   for e in dr.entries {
-    int(e.node)
+    h = hash_mix(h, e.node.to_int64())
     let l = e.look
-    num(l.alpha)
-    num(l.dx)
-    num(l.dy)
-    num(l.sx)
-    num(l.sy)
-    num(l.rot)
-    num(l.circle)
-    num(l.words)
-    int(e.z)
-    int(if e.only { 1 } else { 0 })
-    int(if e.look_by is Some(_) { 1 } else { 0 })
-    int(if e.cycle is Some(_) { 1 } else { 0 })
-    int(if e.keep is Some(_) { 1 } else { 0 })
-    num(e.bottom)
-    num(e.top)
-    num(e.right)
-    num(e.left)
-    num(e.cut_soft)
-    int(e.fade_of)
-    num(e.fades.0)
-    num(e.fades.1)
-    num(e.fades.2)
-    num(e.fades.3)
+    h = sig_num(h, l.alpha)
+    h = sig_num(h, l.dx)
+    h = sig_num(h, l.dy)
+    h = sig_num(h, l.sx)
+    h = sig_num(h, l.sy)
+    h = sig_num(h, l.rot)
+    h = sig_num(h, l.circle)
+    h = sig_num(h, l.words)
+    h = hash_mix(h, e.z.to_int64())
+    h = hash_mix(h, (if e.only { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.look_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.cycle is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.keep is Some(_) { 1 } else { 0 }).to_int64())
+    h = sig_num(h, e.bottom)
+    h = sig_num(h, e.top)
+    h = sig_num(h, e.right)
+    h = sig_num(h, e.left)
+    h = sig_num(h, e.cut_soft)
+    h = hash_mix(h, e.fade_of.to_int64())
+    h = sig_num(h, e.fades.0)
+    h = sig_num(h, e.fades.1)
+    h = sig_num(h, e.fades.2)
+    h = sig_num(h, e.fades.3)
   }
   h
+}
+
+///|
+/// `x` folded into `h` as tree_sig folds a length: to 1/64 of a point.
+fn sig_num(h : Int64, x : Double) -> Int64 {
+  hash_mix(h, (x * 64.0).round().to_int64())
 }
 
 ///|

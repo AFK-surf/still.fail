@@ -170,6 +170,9 @@ struct Node {
   mut notch_f : Double
   // text
   mut text : String
+  // its words' stable_hash, and the words it is of (Node::text_said): worked out again only as other words come
+  mut said_of : String
+  mut said_hash : Int64
   // other ways to say its words on one line where they have less room, each shorter than the one before (Ctx::text,
   // Ctx::editor's placeholder: `shorter`)
   mut shorter : Array[String]
@@ -468,6 +471,8 @@ fn Node::new() -> Node {
     full_max: 0.0,
     rich: None,
     lines: [],
+    said_of: "",
+    said_hash: stable_hash(""),
     shapes: [],
     shape_bands: None,
     rcut: None,
@@ -569,6 +574,17 @@ fn Node::reset_rest(self : Node) -> Unit {
   // (its cut runs go with its layout, kept with it: rl, rl_for, rl_whole)
   self.item = -1
   self.stick = 0.0 / 0.0
+}
+
+///|
+/// Its words' stable_hash (tree_sig): kept with the words it was worked out of, worked out again only where they are
+/// other words (the same string, as a row built again from the same data has it, not read again).
+fn Node::text_said(self : Node) -> Int64 {
+  if !physical_equal(self.said_of, self.text) && self.said_of != self.text {
+    self.said_of = self.text
+    self.said_hash = stable_hash(self.text)
+  }
+  self.said_hash
 }
 
 ///|
