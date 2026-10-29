@@ -52,14 +52,18 @@ export const unread = style({ margin: "0", padding: "4px 8px", fontSize: vars.te
 export const empty = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.muted });
 export const noteField = style({ display: "grid", gap: "6px" });
 export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
-/** Which bot the agent speaks through there, under the place picked: in line with the place's name (the row's 10 in,
- * its mark's 16 and the 8 after it). */
-export const via = style({ display: "flex", alignItems: "center", flexWrap: "wrap", margin: "0", padding: "2px 10px 0 34px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
+/** Which bot the agent speaks through there, under the place picked: at its right, its end in line with the place's
+ * note's (the row's 10 in). */
+export const via = style({ display: "flex", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", margin: "0", padding: "2px 10px 0", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
 /** The bot: its picture before its name. */
 export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text });
-/** A person the note can mention: their picture (their initial till it is here), a place's mark's size. */
+/** A person the note can mention: their picture (their initial till it is here), in the row's 16 for a mark. */
 export const person = style({
-  flex: "none", display: "inline-grid", placeItems: "center", width: "18px", height: "18px", borderRadius: "999px",
-  overflow: "hidden", background: vars.hover, color: vars.muted, fontSize: vars.textCaption,
+  flex: "none", display: "inline-grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "999px",
+  overflow: "hidden", background: vars.hover, color: vars.text, fontSize: vars.textCaption,
 });
 export const personImage = style({ width: "100%", height: "100%", objectFit: "cover" });
+/** The people the note can mention: a popover under it, as wide as it (the composer's `@` menu's rows: ChatRef.css.ts). */
+export const mentions = style({ width: "var(--radix-popover-trigger-width)", maxHeight: "320px", overflowY: "auto" });
+/** Their full name at a row's end, where it says more than their name. */
+export const mentionAka = style({ fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });

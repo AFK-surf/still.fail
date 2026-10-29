@@ -1118,6 +1118,7 @@ let zh : Map[String, String] = {
   "web-main.relay.noPlaces": "机器人还没加入任何频道或群",
   "web-main.relay.note": "开头附一句（可选）",
   "web-main.relay.notePlaceholder": "例如：@某人 帮看下这个方案",
+  "web-main.relay.people": "可以 @ 的人",
   "web-main.relay.places": "可以接力到的频道和群",
   "web-main.relay.reading": "正在读取频道…",
   "web-main.relay.recent": "最近接力过",

@@ -7,7 +7,8 @@
 // toast saying where. A Slack message's link typed (pasted) into the search offers that message's thread instead. What
 // it offers, and in what order, is the core's (sfbase relay.mbt, relay-pick.ts). The search takes the focus as it opens
 // with keyboard and mouse, not with touch (where that would bring the keyboard up over the list: useRelay's `focus`).
-// An `@` typed in the note offers the people there under it; one picked has their name written in its place.
+// An `@` typed in the note offers the people there in a popover at it, as the composer's `@` menu (chat_ref.mbt): ↑ / ↓
+// choose, Enter or Tab put the one chosen in (its name in place of what was typed), Escape closes it for that `@`.
 
 ///|
 /// The editor to be given the focus as it is next drawn (the search as it opens, the note once a place is picked:
@@ -124,27 +125,12 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
     if picked is Some(_) || link is Some(_) {
       c.box(style=relay_note_field, fn() {
         c.text(@sf.t("web-main.relay.note"), style=relay_note_label) |> ignore
-        let typed = @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), field=relaying.note)
-        relay_focused(c, "relay/note")
+        // (the menu open: ↑ / ↓ choose in it, Enter and Tab pick)
         let mentions = relay_mentions(c, src, view)
-        // (Enter picks the first, as a click on it would)
-        let mut chosen = if typed.submitted { mentions.get(0) } else { None }
-        if mentions.length() > 0 {
-          relay_list(c, fn() {
-            for p in mentions {
-              if relay_person(c, src, p) {
-                chosen = Some(p)
-              }
-            }
-          })
-        }
-        match chosen {
-          Some(p) => {
-            relaying.note.set(text(Some(p), "note"))
-            relay_focus.val = "relay/note"
-          }
-          None => ()
-        }
+        let leaves = if mentions.length() > 0 { ref_keys } else { [] }
+        @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), leaves~, field=relaying.note) |> ignore
+        relay_focused(c, "relay/note")
+        relay_mention_menu(c, src, mentions, c.editor_focused("relay/note"))
       })
       |> ignore
     }
@@ -234,23 +220,95 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
 }
 
 ///|
-/// A person the note can mention (Relay.tsx's place-like row): their picture, their name, their other name at its end.
-/// True on the frame after a press.
-fn relay_person(c : @ui.Ctx, src : Source, p : Json) -> Bool {
+/// The people the note can mention (Relay.tsx's popover, the composer's `@` menu's look: ref_menu) while it is
+/// focused and offers some, under it and as wide: its head (可以 @ 的人 and the words typed), then each person, the
+/// one chosen on the hover's ground. ↑ / ↓ choose (round), Enter or Tab (the field leaves them to it) or a press puts
+/// the one chosen in; Escape (or a press away) closes it for this `@`.
+fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused : Bool) -> Unit {
+  let key = "relay/mentions"
+  let n = mentions.length()
+  let open = focused && n > 0
+  let pick = fn(p : Json) {
+    relaying.note.set(text(Some(p), "note"))
+    relay_focus.val = "relay/note"
+  }
+  if open {
+    if c.key_pressed(@ui.key_code_down, in_field=true) {
+      relay_mention_active(n, by=1) |> ignore
+    } else if c.key_pressed(@ui.key_code_up, in_field=true) {
+      relay_mention_active(n, by=-1) |> ignore
+    }
+    if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
+      pick(mentions[relay_mention_active(n)])
+    }
+  }
+  let anchor = c.id("relay/note/field")
+  let shown = @kit.popover(
+    c,
+    key,
+    open,
+    anchor,
+    side=Bottom,
+    along=Start,
+    label=@sf.t("web-main.relay.people"),
+    focus=false,
+    look=fn(c, s, body) {
+      let width = match c.rect_of(anchor) {
+        Some((_, _, w, _)) => w
+        None => ref_menu_least
+      }
+      c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+        @kit.in_room(c, s, key="relay/mention-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
+      })
+      |> ignore
+    },
+    fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=ref_head, fn() {
+          c.text(@sf.t("web-main.relay.people"), style=ref_head_words) |> ignore
+          let typed = text(relaying.mentions.get(), "query")
+          if typed != "" {
+            c.text(typed, style=ref_query) |> ignore
+          }
+        })
+        |> ignore
+        let active = relay_mention_active(n)
+        for i, p in mentions {
+          if relay_person(c, src, p, i == active) {
+            pick(p)
+          }
+          // (the pointer moving over one chooses it, as the keys do)
+          if c.hand_on(c.id("relay/person/" + text(Some(p), "id"))) && i != active {
+            relay_mention_active(n, to=i) |> ignore
+          }
+        }
+      })
+      |> ignore
+    },
+  )
+  // Escape (or a press away): closed for this `@`
+  if open && !shown.value {
+    relay_mentions_close()
+  }
+}
+
+///|
+/// A person the note can mention (the composer's `@` menu's row: ref_item): their picture, their name, their full name
+/// at its end where it says more; `on`, the one chosen. True on the frame after a press.
+fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool) -> Bool {
   let id = c.id("relay/person/" + text(Some(p), "id"))
   let name = text(Some(p), "name")
-  let b = c.box(style=relay_place_box, id~, fn() {
+  let b = c.box(style=(if on { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {
     let picture = text(Some(p), "picture")
     let picture = if picture == "" { "" } else { (src.picture)(picture, c.page_stint()) }
-    @sf.avatar(c, text(Some(p), "id"), name, picture, relay_person_size)
-    c.text(name, style=relay_place_name) |> ignore
-    c.box(style=relay_grow, fn() {  }) |> ignore
+    c.box(style=ref_logo, fn() { @sf.avatar(c, text(Some(p), "id"), name, picture, relay_person_size) }) |> ignore
+    c.box(style=ref_title_cell, fn() { c.text(name, style=ref_title) |> ignore }) |> ignore
     match opt_text(Some(p), "aka") {
-      Some(aka) => c.text(aka, style=relay_place_note) |> ignore
+      Some(aka) => c.text(aka, style=ref_time) |> ignore
       None => ()
     }
   })
-  c.semantics(b, Button, id~, label=name)
+  c.semantics(b, Button, id~, label=name, selected=on)
   c.clicked(id)
 }
 
@@ -299,8 +357,8 @@ fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Boo
 }
 
 ///|
-/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, in line
-/// with the place's name.
+/// Which bot the agent speaks through there, under the place picked (Via): 「那里由 [picture] Claude 回复」, at its
+/// right, its end in line with the place's note's.
 fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   let conn = match relay_connect(bot) {
     Some(conn) => conn
@@ -309,8 +367,10 @@ fn relay_via(c : @ui.Ctx, src : Source, bot : String) -> Unit {
   let words = @sf.t("web-main.relay.via", args=[("bot", "\u{E000}")])
   let split : Array[String] = words.split("\u{E000}").map(fn(w) { w.to_owned() }).collect()
   c.box(style=relay_via_box, fn() {
-    c.box(style=relay_via_indent, fn() {  }) |> ignore
-    c.text(split[0], style=relay_via_words) |> ignore
+    c.box(style=relay_grow, fn() {  }) |> ignore
+    if split[0] != "" {
+      c.text(split[0], style=relay_via_words) |> ignore
+    }
     c.box(style=relay_via_bot, fn() {
       relay_avatar(c, src, conn)
       c.text(text(Some(conn), "name"), style=relay_via_name) |> ignore
@@ -335,8 +395,8 @@ let relay_mark_size : Double = 16.0
 let relay_kind_size : Double = 10.0
 
 ///|
-/// A person's picture (Relay.css.ts person: 18).
-let relay_person_size : Double = 18.0
+/// A person's picture (Relay.css.ts person: 16, a menu row's mark).
+let relay_person_size : Double = 16.0
 
 ///|
 /// A bot's chip's height (scope: 26), a place's least (place: 34).
@@ -469,15 +529,10 @@ let relay_note_field : @ui.Style = @ui.css("w=Full gap=S1_5")
 let relay_note_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// Via: in line with the place's name (2 down, the row's 10 in, its mark's 16 and the 8 after it: 34), the meta's
+/// Via: under the place picked, at its right (2 down, its end the row's 10 in, as the place's note's), the meta's
 /// size, muted; the bot (viaBot) its picture 4 before its name, in the text's colour.
 // kept across runs: a value (no field of it changes)
 let relay_via_box : @ui.Style = @ui.css("row w=Full pt=S0_5 px=S2_5 align=ACenter")
-
-///|
-/// As wide as a place's mark and the 8 after it.
-// kept across runs: a value (no field of it changes)
-let relay_via_indent : @ui.Style = @ui.css("w=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -486,6 +541,7 @@ let relay_via_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 ///|
 // kept across runs: a value (no field of it changes)
 let relay_via_bot : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
 
 ///|
 // kept across runs: a value (no field of it changes)

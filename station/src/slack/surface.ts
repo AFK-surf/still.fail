@@ -479,7 +479,9 @@ export class SlackSurface extends ConnectedSurface {
         const { name: shown, picture } = personOf({ user: u });
         const name = shown || full;
         if (name === "") continue;
-        people.set(id, { id, name, ...(full !== "" && full !== name ? { aka: full } : {}), ...(picture ? { picture } : {}) });
+        // (their full name beside it only where it says more than the name: not the same but for case or spaces)
+        const same = (a: string, b: string) => a.replace(/\s+/g, "").toLowerCase() === b.replace(/\s+/g, "").toLowerCase();
+        people.set(id, { id, name, ...(full !== "" && !same(full, name) ? { aka: full } : {}), ...(picture ? { picture } : {}) });
       }
       cursor = text(d?.response_metadata?.next_cursor);
       if (cursor === "") break;

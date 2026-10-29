@@ -869,6 +869,9 @@ export const stories: Story[] = [
   { id: "app-chat-cc-menu", group: "应用", title: "对话 · 抄送 · 选到哪", app: true, demo: ccDemo([21]), steps: [{ click: "textarea" }, { click: "text=抄送" }] },
   { id: "phone-chat-cc-on", group: "手机", title: "对话 · 抄送 · 勾了一个", app: true, phone: true, demo: ccDemo([21]) },
   { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
+  // The note's `@`: the people of the place picked in a popover under it, the first chosen; ↓ the next.
+  { id: "app-chat-relay-mention", group: "应用", title: "对话 · 接力到频道 · 附言里 @", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }, { key: "@" }] },
+  { id: "app-chat-relay-mention-down", group: "应用", title: "对话 · 接力到频道 · 附言里 @ · ↓", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }, { key: "@" }, { key: "j" }, { key: "ArrowDown" }] },
   { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },
   { id: "app-chat-relay-bot", group: "应用", title: "对话 · 接力到频道 · 换一个 bot", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="用哪个 bot"] button:nth-child(2)' }] },
   { id: "app-chat-relay-search", group: "应用", title: "对话 · 接力到频道 · 搜索", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="搜索频道或群"]' }, { key: "d" }] },

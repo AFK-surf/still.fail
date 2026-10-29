@@ -1140,6 +1140,7 @@ let en : Map[String, String] = {
   "web-main.relay.noPlaces": "The bot is in no channel or group yet",
   "web-main.relay.note": "Opening note (optional)",
   "web-main.relay.notePlaceholder": "e.g. @someone could you look at this plan",
+  "web-main.relay.people": "People to mention",
   "web-main.relay.places": "Channels and groups to relay to",
   "web-main.relay.reading": "Reading channels…",
   "web-main.relay.recent": "Relayed to before",

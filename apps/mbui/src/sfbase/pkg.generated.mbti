@@ -1193,7 +1193,11 @@ pub fn relay_connect(String) -> Json?
 
 pub fn relay_go(Source, Json?, done? : () -> Unit) -> Unit
 
+pub fn relay_mention_active(Int32, by? : Int32, to? : Int32) -> Int32
+
 pub fn relay_mentions(@ui.Ctx, Source, Json?) -> Array[Json]
+
+pub fn relay_mentions_close() -> Unit
 
 pub fn relay_open(Source, String, Double) -> Unit
 
@@ -2731,6 +2735,9 @@ pub(all) struct Relaying {
   people_of : @signals.Signal[String]
   mentions : @signals.Signal[Json?]
   mentions_asked : @signals.Signal[String]
+  mention_active : @signals.Signal[Int32]
+  mention_for : @signals.Signal[String]
+  mention_closed : @signals.Signal[Int32]
   query : @ui.Field
   note : @ui.Field
 }

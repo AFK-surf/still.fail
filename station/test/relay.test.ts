@@ -285,22 +285,23 @@ test("Slack: the people in a channel, named as users.list names them, bots and d
   try {
     const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), clock: time.clock });
     fake.answer("conversations.members", (seen: { params: Record<string, string> }) =>
-      seen.params.cursor === "m2" ? { ok: true, members: ["UBOT", "UOLD"], response_metadata: { next_cursor: "" } } : { ok: true, members: ["UANN", "UBO"], response_metadata: { next_cursor: "m2" } },
+      seen.params.cursor === "m2" ? { ok: true, members: ["UBOT", "UOLD", "UZW"], response_metadata: { next_cursor: "" } } : { ok: true, members: ["UANN", "UBO"], response_metadata: { next_cursor: "m2" } },
     );
     fake.answer("users.list", (seen: { params: Record<string, string> }) =>
       seen.params.cursor === "u2"
         ? { ok: true, members: [{ id: "UBO", real_name: "Bo", profile: { display_name: "", real_name: "Bo" } }, { id: "UBOT", is_bot: true, profile: { real_name: "Bot" } }, { id: "UOLD", deleted: true, profile: { real_name: "Old" } }], response_metadata: { next_cursor: "" } }
-        : { ok: true, members: [{ id: "UANN", profile: { display_name: "ann", real_name: "Ann Lee", image_72: "https://img/ann.png" } }, { id: "UOUT", profile: { real_name: "Not there" } }], response_metadata: { next_cursor: "u2" } },
+        : { ok: true, members: [{ id: "UANN", profile: { display_name: "ann", real_name: "Ann Lee", image_72: "https://img/ann.png" } }, { id: "UZW", profile: { display_name: "zanwei.guo", real_name: "Zanwei.Guo " } }, { id: "UOUT", profile: { real_name: "Not there" } }], response_metadata: { next_cursor: "u2" } },
     );
     assert.deepEqual(await surface.peopleIn("C1"), [
       { id: "UANN", name: "ann", aka: "Ann Lee", picture: "https://img/ann.png" },
       { id: "UBO", name: "Bo" },
+      { id: "UZW", name: "zanwei.guo" },
     ]);
     assert.deepEqual(fake.calls("conversations.members").map((c) => [c.params.channel, c.params.cursor ?? null]), [["C1", null], ["C1", "m2"]]);
     const asked = () => [fake.calls("conversations.members").length, fake.calls("users.list").length];
     assert.deepEqual(asked(), [2, 2]);
     // Asked again soon (the note's @, then relaying): nothing asked of Slack.
-    assert.equal((await surface.peopleIn("C1")).length, 2);
+    assert.equal((await surface.peopleIn("C1")).length, 3);
     assert.deepEqual(asked(), [2, 2]);
     // Who is in the channel, read again after a minute; the workspace's people kept.
     await time.adjust(MEMBERS_MS);
