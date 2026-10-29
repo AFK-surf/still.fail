@@ -705,7 +705,9 @@ export class SessionActor {
     };
     this.phase = this.turn ? "running" : "idle";
     this.workingFor = snap.workingFor;
-    this.notices = snap.notices;
+    // Those given here before it was taken up (a task followed from here told ended while this station started) after
+    // those the previous one had not given.
+    this.notices = [...snap.notices, ...this.notices];
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
     this.stale = snap.stale ?? false;

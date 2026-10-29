@@ -757,6 +757,36 @@ test("handed over to the next station, a running turn goes on and what came mean
   await first.close();
 });
 
+test("a job's notice given to a session while the next station starts, before it takes the session up, reaches its agent", async () => {
+  const first = new Rig();
+  const m = message();
+  await first.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const old = first.claude.last();
+  old.complete();
+  await settle();
+  await first.call(key, "chat_state", { kind: "waiting", for: "a task on another station", seconds: 900 });
+  old.complete();
+  await settle();
+  await first.hub.handOver();
+  // The next station, held while it starts (agents.ts): a task followed from here is told ended (Remote.resume, once
+  // the peers' bus is there) before the hub takes the sessions up (2026-10-30 ccvm, a Studio task's end lost so).
+  const claude = new FakeDriver("claude");
+  const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  hub.hold("starting");
+  hub.notify(key, "Remote task k1 on B: ended");
+  await hub.takeUp();
+  hub.release("starting");
+  hub.recover();
+  await settle();
+  const taken = claude.last();
+  assert.equal(taken.sessionId, old.sessionId);
+  assert.ok(taken.prompts.some((p) => typeof p === "string" && p.includes("Remote task k1 on B: ended")), JSON.stringify(taken.prompts));
+  await hub.shutdown();
+  await first.close();
+});
+
 test("a state said while a turn runs outlives a station killed before it handed over: the turn ends in it", async () => {
   const first = new Rig();
   const m = message();
