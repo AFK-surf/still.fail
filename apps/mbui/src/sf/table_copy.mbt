@@ -49,8 +49,8 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
   let c = self.c
   let id = c.id(key + "/copy")
   let y = match @motion.measured(c, key + "/head") {
-    // (the head's row 1 in: the frame's line)
-    Some(hh) => dmax(0.0, 1.0 + (hh - table_key_size) / 2.0)
+    // (the head's row table_in_y in: the card's room over it)
+    Some(hh) => dmax(0.0, table_in_y + (hh - table_key_size) / 2.0)
     None => 0.0
   }
   let copied = c.within(id, copied_ms)

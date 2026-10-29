@@ -457,8 +457,8 @@ test "a table wider than the message on a phone: at rest in line with the words,
   let t = chat_tester("chat-md")
   let cell = "只排可见的行"
   let (x, y) = t.drawn_of(cell).unwrap()
-  // at rest in line with the words (the list's 16 in), past the frame's line and the cell's 12
-  assert_eq(x, 16.0 + 1.0 + 12.0)
+  // at rest in line with the words (the list's 16 in), past the card's room before its cells (4) and the cell's 12
+  assert_eq(x, 16.0 + 4.0 + 12.0)
   // slid to its end, held still before it is let go (no fling)
   t.press_at(360.0, y)
   for step in 1..=8 {
@@ -481,8 +481,8 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   t.run_for(@ui.nav_push_ms)
   let cell = "只排可见的行"
   let (x, y) = t.drawn_of(cell).unwrap()
-  // the words' column: the frame's line and the cell's 12 before the cell
-  let column = x - 1.0 - 12.0
+  // the words' column: the card's room before its cells (4) and the cell's 12 before the cell
+  let column = x - 4.0 - 12.0
   t.press_at(x + 300.0, y)
   for step in 1..=8 {
     t.move(x + 300.0 - step.to_double() * 40.0, y)
