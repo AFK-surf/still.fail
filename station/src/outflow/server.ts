@@ -37,12 +37,8 @@ export type OutflowOptions = {
   identify: Identify;
   workspace: Workspace;
   lang: () => Lang;
-  /// The station's clock: how a request waits for its answer.
-  sleep: (ms: number) => Promise<void>;
 };
 
-/// How long a request waits for an admin's answer before it is told to ask again (`202`).
-export const ASK_MS = 10 * 60_000;
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 const BODY_MAX = 16 * 1024;
@@ -219,14 +215,13 @@ export class OutflowServer {
     const left = new AbortController();
     req.socket.once("close", () => left.abort());
     const taken = await this.#answered(request.id, left.signal);
-    if (left.signal.aborted) return;
-    if (taken === null) return send(res, 202, { request: request.id, state: "asking" });
+    if (taken === null) return;
     if (taken === "refused") throw new Refused(403, "refused");
     log.info("outflow", "granted", { grant: taken.grant.id, app: caller.app, team: caller.teamId, identifier: caller.identifier, scopes: taken.grant.scopes, reach: taken.grant.reach });
     send(res, 200, { token: taken.token, grant: taken.grant.id, scopes: taken.grant.scopes, reach: taken.grant.reach });
   }
 
-  /// Request `id`'s answer, taken as soon as an admin gave it; null when none came in ASK_MS, or the program left.
+  /// Request `id`'s answer, taken as soon as an admin gave it, however long that is; null when the program left first.
   #answered(id: string, left: AbortSignal): Promise<Taken | null> {
     const grants = this.#o.grants;
     return new Promise((resolve) => {
@@ -246,7 +241,6 @@ export class OutflowServer {
       };
       const stop = grants.listen(look);
       left.addEventListener("abort", gone, { once: true });
-      void this.#o.sleep(ASK_MS).then(() => end(null));
       look();
     });
   }

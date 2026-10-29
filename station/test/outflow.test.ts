@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { type Identity, OutflowGrants, REQUEST_KEPT_MS } from "../src/outflow/grants.ts";
-import { ASK_MS, OutflowServer, type Workspace } from "../src/outflow/server.ts";
+import { OutflowServer, type Workspace } from "../src/outflow/server.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import * as read from "../src/read/store.ts";
@@ -37,8 +37,8 @@ const THERE = { id: "st-there", name: "Ann's Mac", here: false };
 
 type Rig = {
   server: OutflowServer; grants: OutflowGrants; path: string; data: string; caller: { now: Identity | null }; reads: [string, any][]; remote: [string, string, any][];
-  /// The requests' waits for an admin, each ended (as ASK_MS passing would) by calling it.
-  waits: (() => void)[]; waited: { count: number }; clock: { now: number };
+  /// How many requests were asked (each waits for an admin from then on).
+  waited: { count: number }; clock: { now: number };
   /// The connections the station was asked who is at the other end of.
   sockets: Socket[];
 };
@@ -59,14 +59,12 @@ async function rig(): Promise<Rig> {
   const caller = { now: COMMA as Identity | null };
   const reads: [string, any][] = [];
   const remote: [string, string, any][] = [];
-  const waits: (() => void)[] = [];
   const waited = { count: 0 };
   const sockets: Socket[] = [];
   const server = new OutflowServer({
     path, grants, lang: () => "en",
     identify: async (socket) => (sockets.push(socket), caller.now),
     workspace: station({ reads, remote }),
-    sleep: (ms) => (assert.equal(ms, ASK_MS), waited.count++, new Promise<void>((resolve) => waits.push(resolve))),
     reads: async (op, args) => {
       reads.push([op, args]);
       const a = args as { thread?: number };
@@ -76,7 +74,9 @@ async function rig(): Promise<Rig> {
   });
   await server.listen();
   after(() => server.close());
-  return { server, grants, path, data, caller, reads, remote, waits, waited, clock, sockets };
+  const ask = grants.ask.bind(grants);
+  grants.ask = (...args) => (waited.count++, ask(...args));
+  return { server, grants, path, data, caller, reads, remote, waited, clock, sockets };
 }
 
 function call(r: Rig, method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; body: any }> {
@@ -102,8 +102,18 @@ async function asked(r: Rig, scopes?: string[], more?: object) {
   return { answer };
 }
 
-/// ASK_MS passes for the requests waiting.
-const pass = (r: Rig) => r.waits.splice(0).forEach((f) => f());
+/// A request asked, and its program gone before an answer, once the station heard it go.
+async function askAndLeave(r: Rig, scopes: string[] = ["usage", "chats"], more: object = {}) {
+  const want = r.waited.count + 1;
+  const req = http({ socketPath: r.path, method: "POST", path: "/v1/request" });
+  req.on("error", () => {});
+  req.end(JSON.stringify({ name: "Comma", purpose: "ROI for your team", scopes, ...more }));
+  while (r.waited.count < want) await new Promise((resolve) => setImmediate(resolve));
+  req.destroy();
+  const socket = r.sockets.at(-1)!;
+  if (!socket.destroyed) await new Promise((resolve) => socket.once("close", resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+}
 
 const ADMIN = { home: true, role: "admin", email: "boss@x" } as never;
 const MEMBER = { home: true, role: "member", email: "ann@x" } as never;
@@ -171,7 +181,7 @@ test("a program asks, an admin allows what they leave in still.fail, and the pro
   assert.equal(await m.revoke(grant!.id), 404);
 });
 
-test("no answer yet: told to ask again, the same request kept; answered meanwhile, the next ask takes it; refused", async () => {
+test("a request waits as long as no admin answers; asked again, it is the same one; answered meanwhile, the next ask takes it; refused", async () => {
   const r = await rig();
   const m = members(r);
   assert.equal((await ask(r, ["files"])).status, 400, "only the kinds there are");
@@ -181,19 +191,14 @@ test("no answer yet: told to ask again, the same request kept; answered meanwhil
   r.caller.now = COMMA;
   assert.equal(r.grants.asking().length, 0);
 
-  const first = (await asked(r)).answer;
-  pass(r);
-  const told = await first;
-  assert.equal(told.status, 202);
-  assert.equal(told.body.state, "asking");
-  // Asked again (now for the workspace): the same request, as it asks now.
-  const again = (await asked(r, ["usage", "chats", "messages"], { workspace: true })).answer;
-  assert.deepEqual(r.grants.asking().map((q) => [q.id, q.scopes, q.reach]), [[told.body.request, ["usage", "chats", "messages"], "workspace"]]);
-  pass(r);
-  assert.equal((await again).status, 202);
+  // The program goes (its station restarts) while it waits; asked again (now for the workspace), the same request.
+  await askAndLeave(r);
+  const [first] = r.grants.asking();
+  await askAndLeave(r, ["usage", "chats", "messages"], { workspace: true });
+  assert.deepEqual(r.grants.asking().map((q) => [q.id, q.scopes, q.reach]), [[first!.id, ["usage", "chats", "messages"], "workspace"]]);
   // An admin allows it while the program is away; its next ask is given the token at once.
-  assert.equal(await m.answer(told.body.request, { allow: true, scopes: ["usage", "chats"], workspace: true }), 200);
-  assert.equal(await m.answer(told.body.request, { allow: false }), 404, "answered once");
+  assert.equal(await m.answer(first!.id, { allow: true, scopes: ["usage", "chats"], workspace: true }), 200);
+  assert.equal(await m.answer(first!.id, { allow: false }), 404, "answered once");
   const granted = await ask(r, ["usage", "chats", "messages"], { workspace: true });
   assert.deepEqual([granted.status, granted.body.scopes, granted.body.reach], [200, ["usage", "chats"], "workspace"]);
 
@@ -223,15 +228,7 @@ test("no answer yet: told to ask again, the same request kept; answered meanwhil
 test("a program that left before it was answered takes nothing; its request waits for it, and goes after a week", async () => {
   const r = await rig();
   const m = members(r);
-  const req = http({ socketPath: r.path, method: "POST", path: "/v1/request" });
-  req.on("error", () => {});
-  req.end(JSON.stringify({ scopes: ["usage"] }));
-  while (r.waited.count < 1) await new Promise((resolve) => setImmediate(resolve));
-  req.destroy();
-  // The station heard it go.
-  const socket = r.sockets.at(-1)!;
-  if (!socket.destroyed) await new Promise((resolve) => socket.once("close", resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  await askAndLeave(r, ["usage"]);
   const id = r.grants.asking()[0]!.id;
   assert.equal(await m.answer(id, { allow: true, scopes: ["usage"] }), 200);
   assert.equal(r.grants.list().length, 0, "nothing taken while nobody asks");
@@ -239,9 +236,8 @@ test("a program that left before it was answered takes nothing; its request wait
   assert.equal(r.grants.list().length, 1);
 
   // No admin answers in a week: the request goes.
-  const late = (await asked(r, ["chats"])).answer;
-  pass(r);
-  assert.equal((await late).status, 202);
+  await askAndLeave(r, ["chats"]);
+  assert.equal(r.grants.asking().length, 1);
   r.clock.now += REQUEST_KEPT_MS + 1;
   assert.deepEqual((await m.list()).requests, []);
 });
@@ -376,7 +372,7 @@ test("a station's update keeps the socket: the process before, stopping, leaves 
   const path = join(data, "o.sock");
   const grants = new OutflowGrants(data, () => 1);
   const make = (name: string) =>
-    new OutflowServer({ path, grants, lang: () => "en", identify: async () => (name === "next" ? null : COMMA), workspace: station({ reads: [], remote: [] }), sleep: async () => {}, reads: async () => "{}" });
+    new OutflowServer({ path, grants, lang: () => "en", identify: async () => (name === "next" ? null : COMMA), workspace: station({ reads: [], remote: [] }), reads: async () => "{}" });
   const before = make("before");
   await before.listen();
   const next = make("next");
@@ -404,7 +400,7 @@ test("a station's update keeps the socket: the process before, stopping, leaves 
 test("a process from before this one, stopping, removes the path itself: it is put back once it is gone", async () => {
   const data = tempdir();
   const path = join(data, "o.sock");
-  const server = new OutflowServer({ path, grants: new OutflowGrants(data, () => 1), lang: () => "en", identify: async () => COMMA, workspace: station({ reads: [], remote: [] }), sleep: async () => {}, reads: async () => "{}" });
+  const server = new OutflowServer({ path, grants: new OutflowGrants(data, () => 1), lang: () => "en", identify: async () => COMMA, workspace: station({ reads: [], remote: [] }), reads: async () => "{}" });
   await server.listen();
   const { existsSync, rmSync } = await import("node:fs");
   rmSync(path);
