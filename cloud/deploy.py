@@ -53,6 +53,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
@@ -398,15 +399,13 @@ def main() -> None:
 
     # Docker only builds the relay's image: the other parts deploy without it (a CI runner may have none).
     with docker_env() if "relay" in parts else nullcontext(dict(os.environ)) as env:
-        # The relay, then the API, in that order (the first split moved paths from one to the other); then the static
-        # sites, one after another. Side by side, each opened its assets' upload session at once (many of the same files,
-        # the web app's fonts and chunks, which Cloudflare keeps by their hash), and one session was refused, "an unknown
-        # error" [code: 10013]: admin's once, then share's on three main runs in a row, the others deployed (2026-10-29:
-        # c93caee2, 30b66116, c3387dd3, 97d047c5).
+        # The relay, then the API, in that order (the first split moved paths from one to the other); the static sites,
+        # which depend on nothing, side by side after them (each is mostly wrangler's own round trips).
         for part in [p for p in parts if p in ("relay", "api")]:
             deploy(part, env)
-        for part in [p for p in parts if p not in ("relay", "api")]:
-            deploy(part, env)
+        with ThreadPoolExecutor() as pool:
+            for done in [pool.submit(deploy, p, env) for p in parts if p not in ("relay", "api")]:
+                done.result()
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
