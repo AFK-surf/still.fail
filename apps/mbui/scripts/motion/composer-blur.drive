@@ -1,0 +1,12 @@
+# A chat on a computer: its composer clicked (a box), then a click on the messages (let go: a capsule again a moment
+# later). MBUI_FIXTURE=webdemo MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0.
+timeout 20000
+until 新建对话
+wait 600
+tap 把那个弄一下
+wait 900
+tap 发消息
+wait 900
+tapxy 700 200
+wait 1200
+exit
