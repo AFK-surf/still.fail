@@ -464,6 +464,10 @@ pub fn fill(String, Array[(String, String)]) -> String
 
 pub fn filter_of(Source, String) -> String
 
+pub fn finder_by_station() -> Bool
+
+pub fn finder_dragged(Source, Array[@ui.DroppedPath]) -> Array[Dragged]
+
 pub fn first_frame(@ui.Ctx, Source, String, String, Attachment, String) -> String
 
 pub fn first_line(String) -> String

@@ -379,7 +379,7 @@ test "wide: words dragged in from another app and let go anywhere on the chat go
 }
 
 ///|
-test "wide: files from the Finder let go on the chat go into its composer as their paths, a line each, not as files" {
+test "wide: where this machine is no station, files from the Finder let go on the chat go into its composer as their paths, a line each, not as files" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   let (x, y) = t.find("做完了：").unwrap()
@@ -390,6 +390,47 @@ test "wide: files from the Finder let go on the chat go into its composer as the
   assert_eq(t.ime().1, "/Users/lin/报告.pdf\n/Users/lin/截图")
   // (nothing went up: they were not taken as files)
   assert_eq(named(calls, "composer.add").length(), 0)
+}
+
+///|
+test "wide: where this machine is a station, files from the Finder let go on the chat or its field go into its draft by that station and path, not as words" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sfbase.machine_here.val = Some("ws1/st1")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([]) }
+  // on a message: each by where it is on this machine's station (named by its path: the chat's default)
+  let (x, y) = t.find("做完了：").unwrap()
+  t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
+  t.frame()
+  t.frame()
+  assert_eq(refs().length(), 2)
+  assert_eq(text(field(refs().get(0), "ref"), "station"), "ws1/st1")
+  assert_eq(text(field(refs().get(0), "ref"), "stationName"), "Studio")
+  assert_eq(text(field(refs().get(0), "ref"), "path"), "/Users/lin/报告.pdf")
+  assert_eq(text(field(refs().get(0), "ref"), "mode"), "path")
+  // (where the station reads it from, should it go as a file: its folder, its name there)
+  let added = named(calls, "composer.add")
+  assert_eq(added.length(), 1)
+  let handed = match field(Some(added[0].params), "files") {
+    Some(Array([one, ..])) => Some(one)
+    _ => None
+  }
+  assert_eq(text(field(handed, "drive"), "station"), "ws1/st1")
+  assert_eq(text(field(handed, "drive"), "root"), "/Users/lin")
+  assert_eq(text(field(handed, "drive"), "path"), "报告.pdf")
+  assert_true(flag(field(refs().get(1), "ref"), "dir"))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text.get() }), Some(""))
+  // on the composer's field itself: the same, its words untouched
+  let (fx, fy) = t.find("发消息").unwrap()
+  t.drop_files(fx, fy, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(refs().length(), 3)
+  assert_eq(text(field(refs().get(2), "ref"), "path"), "/Users/lin/a.txt")
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text.get() }), Some(""))
+  // (none was read: they go as the station has them)
+  assert_true(named(calls, "composer.add").iter().all(fn(m) { m.bytes is None }))
 }
 
 ///|

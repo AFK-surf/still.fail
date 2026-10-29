@@ -134,14 +134,14 @@ static void window_shown_now(void);
 #include "apple_device.h"
 
 static int32_t drop_pick(NSArray<NSURL *> *urls);
-static void bring_back(void);
 
 // Files dragged in from outside (Finder) and let go on the window (ui/drop.mbt): where they are held, posted on
-// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, with their paths and the pick
-// their reading is, read once the app takes them as files ({"type":"drop","x","y","pick","paths"}: a field takes their
-// paths). Words dragged in (another app's text, a browser page's) are said only as they are let go, with what they say
-// ({"type":"words","x","y","text"}): a field there takes them. Either let go here, the window comes to the front and
-// has the keys, as a click on it would give them: what was let go into a field is typed on at once.
+// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, with where each is and the pick
+// their reading is, read once the app takes them as files ({"type":"drop","x","y","pick","paths":[{"path","dir",
+// "size"}]}: a field, or a chat as this station's files, takes them by their paths, unread). Words dragged in (another
+// app's text, a browser page's) are said only as they are let go, with what they say ({"type":"words","x","y","text"}):
+// a field there takes them. Either let go here, the window comes to the front and has the keys, as a click on it would
+// give them: what was let go into a field is typed on at once.
 static void drop_post(NSString *json) {
   NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
   mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
@@ -200,10 +200,16 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
     NSString *s = [info.draggingPasteboard stringForType:NSPasteboardTypeString];
     m = s.length ? @{@"type" : @"words", @"x" : @(p.x), @"y" : @(p.y), @"text" : s} : nil;
   } else {
-    // files: their paths, and the pick their reading is (begun as the app takes them as files)
+    // files: where each is (a folder or not, its bytes), and the pick their reading is (begun as the app takes them as
+    // files)
     NSMutableArray *paths = [NSMutableArray new];
-    for (NSURL *u in urls)
-      if (u.path.length) [paths addObject:u.path];
+    for (NSURL *u in urls) {
+      if (!u.path.length) continue;
+      NSNumber *dir = nil, *size = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (!dir.boolValue) [u getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+      [paths addObject:@{@"path" : u.path, @"dir" : @(dir.boolValue), @"size" : @(size.longLongValue)}];
+    }
     m = @{@"type" : @"drop", @"x" : @(p.x), @"y" : @(p.y), @"pick" : @(drop_pick(urls)), @"paths" : paths};
   }
   NSData *json = m ? [NSJSONSerialization dataWithJSONObject:m options:0 error:nil] : nil;

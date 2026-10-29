@@ -723,6 +723,55 @@ pub fn files_taken(chat : String) -> Array[Dragged] {
 }
 
 ///|
+/// Whether files from this machine's Finder let go on a chat are taken by where they are (finder_dragged): where this
+/// machine is a station. Elsewhere a field takes them as their paths, words.
+pub fn finder_by_station() -> Bool {
+  this_machine() != ""
+}
+
+///|
+/// Files from this machine's Finder let go on a chat (@ui.Ctx::paths_into), as a 文件 row of this machine's station
+/// carries them: each by its station and path, for the chat's message to name so or send as a file as it takes what is
+/// dragged in (prefs `dropFiles`, `dropAs`), the station reading it from where it is. None where this machine is no
+/// station (finder_by_station).
+pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dragged] {
+  let station = this_machine()
+  if station == "" {
+    return []
+  }
+  let station_name = match dv_stations(src, workspace_of(station)).0 {
+    Some(list) =>
+      match list.iter().find_first(fn(s) { s.station == station }) {
+        Some(s) => s.name
+        None => ""
+      }
+    None => ""
+  }
+  let station_name = if station_name != "" {
+    station_name
+  } else {
+    match station.rev_find("/") {
+      Some(i) => station.view(start_offset=i + 1).to_owned()
+      None => station
+    }
+  }
+  paths.map(fn(p) {
+    let abs = if p.path.length() > 1 && p.path.has_suffix("/") {
+      p.path.view(end_offset=p.path.length() - 1).to_owned()
+    } else {
+      p.path
+    }
+    // (its folder the root it is asked from: the station's own reach any folder of it, drive.ts `anywhere`)
+    let (root, name) = match abs.rev_find("/") {
+      Some(0) => ("/", abs.view(start_offset=1).to_owned())
+      Some(i) => (abs.view(end_offset=i).to_owned(), abs.view(start_offset=i + 1).to_owned())
+      None => ("", abs)
+    }
+    { station, station_name, root, path: name, abs, name, size: p.size, dir: p.dir }
+  })
+}
+
+///|
 // kept across runs: put back by writings_reset (sfbase's reset)
 let files_put : Array[(String, Dragged)] = []
 

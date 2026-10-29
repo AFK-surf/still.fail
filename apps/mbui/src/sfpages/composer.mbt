@@ -243,6 +243,15 @@ pub fn composer(
   }
   // words dragged in from another app and let go on it beside its field (its ＋, send, its edge: on the field they go
   // where they were let go): into its field at its caret, as a paste's
+  // files from this machine's Finder let go on it (or on its field) where it is a station: by its station and path,
+  // named so or sent as files as the chat takes what is dragged in; elsewhere into its field as their paths, as words
+  if !no_files && @sfbase.finder_by_station() {
+    match c.paths_into(cap, composer_field_key) {
+      Some(paths) =>
+        writing_drop(src, w, spec.station, @sfbase.finder_dragged(src, paths).map(dropped_of), drops_as_files(src, w.key))
+      None => ()
+    }
+  }
   if !spec.locked {
     c.words_into(cap, composer_field_key)
   }
