@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/signals"
+
+// Values
+pub const DIRTY : Int32 = 16
+
+pub const MUTABLE : Int32 = 1
+
+pub const NONE : Int32 = 0
+
+pub const PENDING : Int32 = 32
+
+pub const RECURSED : Int32 = 8
+
+pub const RECURSED_CHECK : Int32 = 4
+
+pub const WATCHING : Int32 = 2
+
+pub fn active_sub() -> ReactiveNode?
+
+pub fn batch_depth() -> Int32
+
+pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
+
+pub fn effect(() -> Unit) -> () -> Unit
+
+pub fn effect_cleanup(() -> () -> Unit) -> () -> Unit
+
+pub fn effect_scope(() -> Unit) -> () -> Unit
+
+pub fn end_batch() -> Unit
+
+pub fn[K : Hash + Eq] keyed() -> Keyed[K]
+
+pub fn last_set_at() -> String
+
+pub fn set_active_sub(ReactiveNode?) -> ReactiveNode?
+
+pub fn[T] signal(T, same? : (T, T) -> Bool) -> Signal[T]
+
+pub fn start_batch() -> Unit
+
+pub fn trigger(() -> Unit) -> Unit
+
+pub fn[T] untracked(() -> T) -> T
+
+pub fn watch(() -> Unit) -> Watch
+
+// Errors
+
+// Types and methods
+type Computed[T]
+pub fn[T] Computed::dispose(Self[T]) -> Unit
+pub fn[T] Computed::get(Self[T]) -> T
+pub fn[T] Computed::invalidate(Self[T]) -> Unit
+pub fn[T, U] Computed::lend(Self[T], Self[U]) -> Unit
+pub fn[T] Computed::peek(Self[T]) -> T?
+pub fn[T, U] Computed::reading(Self[T], () -> U) -> U
+pub fn[T] Computed::watched(Self[T]) -> Bool
+
+pub struct Keyed[K] {
+  // private fields
+}
+pub fn[K : Hash + Eq] Keyed::has(Self[K], K) -> Bool
+pub fn[K : Hash + Eq] Keyed::peek(Self[K], K) -> Bool
+pub fn[K : Hash + Eq] Keyed::set(Self[K], Array[K]) -> Unit
+
+type Link
+
+type NodeKind
+
+pub struct ReactiveNode {
+  // private fields
+}
+
+type Signal[T]
+pub fn[T] Signal::get(Self[T]) -> T
+#callsite(autofill(loc))
+pub fn[T] Signal::set(Self[T], T, loc~ : SourceLoc) -> Unit
+pub fn[T] Signal::watched(Self[T]) -> Bool
+
+pub struct Watch {
+  // private fields
+}
+pub fn Watch::changed_as_read(Self) -> Bool
+pub fn Watch::is_stale(Self) -> Bool
+pub fn[T] Watch::read(Self, () -> T) -> T
+pub fn Watch::set_as_read(Self) -> Array[String]
+pub fn Watch::stop(Self) -> Unit
+pub fn Watch::touch(Self) -> Unit
+
+// Type aliases
+
+// Traits

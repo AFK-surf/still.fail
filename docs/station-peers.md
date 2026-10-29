@@ -64,6 +64,10 @@ Any station of the workspace may read another's chats and write to its sessions;
 
 A station from before these methods takes them for tasks and refuses them; the reader then gets the text and is told the files were left there, and a message with files is not sent.
 
+## Data outflow of the workspace
+
+A program on one station's machine granted the whole workspace's data there ([data-outflow.md](data-outflow.md)) reads another station's through that station (`outflow.read`: `{op, args}`, `op` one of `outflowUsage`, `outflowChats`, `outflowMessages`). The station asked answers the chats of the workspace the request names, as its own program would read them (a span of usage of 31 days at most, a page of messages of 500 at most), the answer's JSON as the bytes after its head (`stillfail/station/2` only: a station from before has no such method and refuses it). As with chats, workspace membership is enough; the grant and its admin's answer are the asking station's.
+
 ## Shares
 
 Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares).

@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/dmath"
+
+// Values
+pub fn acos(Double) -> Double
+
+pub fn asin(Double) -> Double
+
+pub fn atan(Double) -> Double
+
+pub fn atan2(Double, Double) -> Double
+
+pub fn cos(Double) -> Double
+
+pub fn exp(Double) -> Double
+
+pub fn expm1(Double) -> Double
+
+pub fn ln(Double) -> Double
+
+pub fn ln_1p(Double) -> Double
+
+pub fn log10(Double) -> Double
+
+pub fn log2(Double) -> Double
+
+pub fn pow(Double, Double) -> Double
+
+pub fn scalbn(Double, Int32) -> Double
+
+pub fn sin(Double) -> Double
+
+pub fn tan(Double) -> Double
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

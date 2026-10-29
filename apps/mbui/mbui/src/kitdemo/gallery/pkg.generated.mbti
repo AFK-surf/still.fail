@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/kitdemo/gallery"
+
+import {
+  "mbui/ui",
+}
+
+// Values
+pub fn a11y_check_run(@ui.Ctx) -> Unit
+
+pub fn badge_check_run(@ui.Ctx, String) -> Unit
+
+pub fn font_scale_check_run(@ui.Ctx) -> Unit
+
+pub fn gallery(@ui.Ctx, String) -> Unit
+
+pub fn link_check_run(@ui.Ctx) -> Unit
+
+pub fn link_check_said(String) -> Unit
+
+pub fn marks_run(@ui.Ctx, String, String) -> Unit
+
+pub fn notice_check_run(@ui.Ctx) -> Unit
+
+pub fn pdf_check_run(@ui.Ctx, String) -> Unit
+
+pub fn play_check_run(@ui.Ctx, String) -> Unit
+
+pub fn secret_check_run(@ui.Ctx, String) -> Unit
+
+pub fn site_check_run(@ui.Ctx) -> Unit
+
+pub fn station_check_run(@ui.Ctx, String) -> Unit
+
+pub fn text_check_run(@ui.Ctx, String) -> Unit
+
+pub fn update_check_run(@ui.Ctx, String) -> Unit
+
+pub fn view_check_run(@ui.Ctx) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

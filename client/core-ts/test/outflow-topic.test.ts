@@ -62,3 +62,34 @@ test("an_unsigned_program_is_shown_as_unsigned", async () => {
   assert.equal(g.program, "node");
   first.core.close();
 });
+
+test("a_request_waiting_for_an_admin_is_shown_with_what_it_asks_and_answering_it_reads_them_again", async () => {
+  const asking = { ...grant(["usage", "chats"]), id: "q1", reach: "workspace", askedAt: 4_000, answer: null };
+  const said: Record<string, unknown> = { ...base(), "GET /outflow/grants": { grants: [], requests: [asking] }, "POST /outflow/requests/q1": { answered: true } };
+  const { host, core } = await started(said);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "outflowGrants", station: S });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const [q] = v(values, 1).requests;
+  assert.equal(q.program, "Comma");
+  assert.equal(q.said, "Comma — ROI");
+  assert.equal(q.reach, "workspace");
+  assert.deepEqual(q.scopes.map((s: { id: string }) => s.id), ["usage", "chats"]);
+  assert.ok(q.scopes.every((s: { why: string }) => s.why.length > 0), "what each kind gives away");
+  assert.ok(q.askedText.length > 0 && q.reachText.length > 0);
+
+  said["GET /outflow/grants"] = { grants: [{ ...grant(["usage"]), reach: "station", allowedBy: "boss@x" }], requests: [] };
+  call(core, ui, 2, "outflow.answer", { station: S, id: "q1", allow: true, scopes: ["usage"], workspace: false });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const answered = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/outflow/requests/q1"));
+  assert.ok(answered?.body, "answered on the station");
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(answered.body)), { allow: true, scopes: ["usage"], workspace: false }, "with what the admin left");
+  assert.deepEqual(v(values, 1).requests, []);
+  const [g] = v(values, 1).grants;
+  assert.equal(g.reach, "station");
+  assert.match(g.grantedText, /boss@x/);
+  core.close();
+});

@@ -8,15 +8,18 @@
 | | 做法 |
 |---|---|
 | 谁能申请 | 只有和 station 同一台机器上的程序：station 的本机 socket（`<data>/run/outflow.sock`，指向当前进程自己的 `outflow-<pid>-<n>.sock`：station 自更新时新旧进程并存，旧进程停下时只删自己的），网络、mesh、cloud 都到不了 |
-| 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程的审计令牌 → 它的代码签名（macOS 的 Team ID 和签名标识）和可执行文件路径 |
-| 怎么批准 | still.fail 直接弹出授权窗口：申请方是谁、要哪几类数据（可逐项去掉）；点允许后再出一次摘要，用 Touch ID 或系统密码二次确认 |
-| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上、由同一个签名的程序拿来用才有效 |
-| 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，窗口里单独一项，写明对方能读到对话内容） |
-| 怎么收回 | still.fail 的「数据外流」页列出每份授权、申请方、最近读了什么；取消后立即失效 |
+| 申请方是谁 | station 自己核实，不信申请里自报的名字：socket 对端进程 → macOS 上是它的代码签名（Team ID 和签名标识）和可执行文件路径，Linux 上是可执行文件路径和它的 SHA-256 |
+| 怎么批准 | 申请出现在 still.fail app 里这台 station 的设置页「数据外流」，只有 home workspace 的 owner / admin 能答：逐项勾掉不给的数据和「整个 workspace」，点允许后再出一次摘要确认 |
+| 拿到什么 | 一个专用 token（`sfo_…`），不设有效期，只在这台机器的本机 socket 上、由同一个程序拿来用才有效 |
+| 能读什么 | 授权里勾了的几类：`usage`（token 用量和按价目的金额）、`chats`（chat 的标题、状态、创建人、时间）、`messages`（chat 里的消息原文，单独一项，写明对方能读到对话内容）；范围是这台 station，或整个 workspace 的所有 station |
+| 怎么收回 | 「数据外流」页列出每份授权、申请方、谁批准的、最近读了什么；取消后立即失效 |
+
+申请方不必在批准的人旁边：给每个客户一台默认设备（可能是没人守着的虚拟机），上面的程序申请，管理员在自己的设备上批准；授权「整个
+workspace」时，这台 station 经站间通道去读同一 workspace 的其他 station，员工的电脑上什么都不用装。
 
 ## 不知道使用者
 
-still.fail 这边没有任何为某个使用者写的东西：谁来申请都走同一个窗口、同一个接口，窗口里写的是系统核实的程序身份，程序自述的
+still.fail 这边没有任何为某个使用者写的东西：谁来申请都走同一个批准页、同一个接口，页上写的是系统核实的程序身份，程序自述的
 名字和用途只当它自己的话显示。拿到 token 之后怎么存、怎么用、数据拿去做什么，是使用者自己的事。
 
 ## 为什么是接口，不是读库
@@ -26,7 +29,7 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 
 ## 防谁、不防谁
 
-- 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据；一个程序冒充另一个程序（窗口里写的是系统核实的签名，不是申请方自报
+- 防的是：别的机器、cloud、mesh 上的成员和 agent 拿到这些数据；一个程序冒充另一个程序（批准页上写的是系统核实的签名，不是申请方自报
   的名字）；token 被抄走后换个程序或换台机器来用。
 - 不防的是：同一系统用户下存心要拿数据的程序。它本来就能直接读 `stillfail.db`（agent 也是同一个用户，docs/vault.md 说过同样的事）。
   这里做的是一条经过人同意、看得见、能收回、格式稳定的正式通道，让外面的程序不用去读 station 的库。
@@ -35,31 +38,44 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 
 本机 socket 上是 HTTP（每个连接一次请求）：
 
-- `POST /v1/request`：`{ name, purpose, scopes: ["usage", "chats"] }`。`name`、`purpose` 只当说明显示，标明是申请方自己说的。
-  请求一直挂着，直到人在窗口里答了（或关了窗口、或 10 分钟没答）：
-  - 允许：`200 { token, grant, scopes }`，`scopes` 是人最后留下的那几类；
-  - 不允许、关了窗口、超时：`403 { error: "refused" }`；
-  - 同一个申请方已有一份还在的授权：照常弹窗（可能要改范围），批准后旧的那份作废。
+- `POST /v1/request`：`{ name, purpose, scopes: ["usage", "chats"], workspace: true }`。`name`、`purpose` 只当说明显示，标明是申请方
+  自己说的；`workspace: true` 申请整个 workspace（不写就是这台 station）。申请记下来，等管理员答，请求最多挂 10 分钟：
+  - 允许：`200 { token, grant, scopes, reach }`，`scopes` 是管理员最后留下的那几类，`reach` 是 `station` 或 `workspace`；
+  - 不允许：`403 { error: "refused" }`，这份申请随之作废，再申请就是新的一份；
+  - 10 分钟里还没人答：`202 { request, state: "asking" }`。程序过一会儿再 `POST /v1/request`，还是同一份申请（按它这次说的范围更新），
+    管理员在这期间答了的话立刻拿到结果。程序挂断也一样：申请留着，答案等它下次来取。
+  - 一份申请，没人答过一周，或答了允许、程序一周没来取，就作废。
+  - 同一个申请方已有一份授权：照常申请，批准后旧的那份作废。
 - 申请方核实（station 一侧）：
   - 对端进程：macOS 用 `LOCAL_PEERTOKEN` 取审计令牌（防 PID 复用），Linux 用 `SO_PEERCRED`（mesh 插件 `peerProcess(fd)`）；
-  - 签名：macOS 由 still.fail Helper 按审计令牌取 `SecCode`，查签名有效，取 Team ID、签名标识、可执行文件路径。
-    没签名或签名无效的程序在窗口里明确标成「未签名」；
+  - macOS：still.fail Helper 按审计令牌取 `SecCode`，查签名有效，取 Team ID、签名标识、可执行文件路径；没签名或签名无效的程序
+    在页上标成「未签名的程序」；
+  - Linux：`/proc/<pid>/exe` 的路径和这个文件的 SHA-256（Linux 没有代码签名可查），页上同样是「未签名的程序」；
   - 授权记在签名上（Team ID + 签名标识）；没签名的记在可执行文件路径和它的 SHA-256 上。
+  - 说不出对端是谁（Windows，或 macOS 上没有 Helper）：`403`。
 
-## 授权窗口（macOS：still.fail Helper）
+## 批准（still.fail app）
 
-station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权限的窗口同一套：
+申请经 `outflow-grants` 事件和 `GET /outflow/grants` 的 `requests` 到达 app，显示在这台 station 设置页的「数据外流」里：
 
-1. 第一步：「〈签名的名字〉想读取你在 still.fail 的数据」。写明系统核实的身份（Team ID、签名标识、路径；未签名就标红）、申请方自己
-   写的名字和用途（标明「对方自述」），以及要的每一类数据，各带一个勾，可以去掉。按钮：不允许 / 允许。
-2. 第二步：一句话摘要（「把这台 station 上所有 chat 的 token 用量和金额给 Example Inc. (ABCDE12345) 的 com.example.reader，
-   直到你取消」），用 Touch ID 或系统密码确认（LocalAuthentication）。
+1. 第一步：程序名、系统核实的签名（未签名就标出来）、申请方自述的名字和用途（标明是它自己说的）、什么时候申请的；要的每一类数据
+   各一个勾，带说明这类会给出什么；申请了整个 workspace 的再有一个「这个 workspace 的所有 station」的勾。按钮：不允许 / 允许。
+2. 第二步：一句话摘要（「把这个 workspace 所有 station 上 chat 的「token 用量和金额」给 Comma（签名：…），直到在这里取消授权」），
+   点允许才给。
 
-窗口只在这台机器上出现：申请来自这台机器，批准的人也得在这台机器前。
+只有 home workspace 的 owner / admin 能答（`POST /outflow/requests/:id`，`{ allow, scopes, workspace }`，别人 `403`）；其他成员看得到
+这份申请，标着「等这个 workspace 的管理员批准」。管理员给的只会比申请的少，不会多。
 
 ## 读数据
 
 带 `Authorization: Bearer sfo_…`，在同一个本机 socket 上，对端必须和授权记的签名一样，否则 `401`（token 对、程序不对也是 `401`）：
+
+- `GET /v1/stations`：能读的 station，`{ stations: [{ id, name, here }] }`，这台在最前（`here: true`）。授权只到这台 station 的，就只有
+  这一台。
+- 下面三个都可以带 `station=<id>`：读 workspace 里另一台 station 的（要授权到整个 workspace，否则 `403`；不在 workspace 里 `404`；
+  那台连不上 `502`；workspace 的 station 名单此刻不可知 `503`）。不带就是这台。另一台的数据由这台 station 经站间通道
+  （`outflow.read`，docs/station-peers.md）向它要，回答的格式和这台的一样；`thread` 是那台 station 自己的编号，和 `station` 一起才
+  唯一。
 
 - `GET /v1/usage?from&to&tz`（`usage`）：和用量页同一份明细，按天、chat、人、账号、模型相加：`calls`、`input`、`cacheRead`、
   `cacheWrite`、`output`、`cost`（按价目的美元，没价目为 null），以及各行的 `thread`；`people` 是各人的 email（知道的话）。
@@ -72,23 +88,25 @@ station 让 Helper 弹出原生窗口（`outflow.ask`），和它申请系统权
   消息不加工：chat 是干什么的（标签、摘要），由使用者自己从消息里算，still.fail 不为此多花 token。
 - 授权取消或换过：`401 { error: "revoked" }`。
 
-授权覆盖这台 station 上 home workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。
+授权覆盖这台 station（或 workspace 的每台 station）上这个 workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。
 
 ## 收回和记录
 
-- 管理 API（成员可用）：`GET /outflow/grants` 列出授权（申请方身份、范围、批准时间和批准人、最近一次读取）；
-  `DELETE /outflow/grants/:id` 取消。core 的 `outflowGrants` 话题和 `outflow.revoke` 调用，各客户端设置里的「数据外流」页都用它。
-- 每次读取记一笔（哪份授权、什么时候、读了哪类、多少行），每份授权留最近 100 笔，在「数据外流」页能看到。
+- 管理 API（成员可用）：`GET /outflow/grants` 列出授权（申请方身份、范围、批准时间和批准人、最近一次读取）和等着答的申请；
+  `DELETE /outflow/grants/:id` 取消；`POST /outflow/requests/:id` 答申请（管理员）。core 的 `outflowGrants` 话题和
+  `outflow.revoke`、`outflow.answer` 调用，各客户端设置里的「数据外流」页都用它。
+- 每次读取记一笔（哪份授权、什么时候、读了哪类、多少行、读的哪台 station），每份授权留最近 100 笔，在「数据外流」页能看到。
 - station 只存 token 的 SHA-256。
 
 ## 做了什么、还没做的
 
-做了（still.fail）：本机 socket、申请方核实（mesh 插件 `peerProcess` 取对端审计令牌、Helper 查签名；macOS 自己的程序没有 Team ID，
-按 Apple 的锚点记作 `Apple`）、Helper 的授权窗口（still.fail 的样子：白底圆角面板、墨色主按钮）、授权和 token 的存储、两个读取接口、
-管理 API、core 的 `outflowGrants` 话题和 `outflow.revoke`、app 里 station 设置页的「数据外流」一节（列出、取消前先问）。
-申请方等着的时候断开，窗口关掉，什么也不给。
+做了（still.fail）：本机 socket、申请方核实（mesh 插件 `peerProcess` 取对端进程；macOS 由 Helper 查签名，macOS 自己的程序没有
+Team ID，按 Apple 的锚点记作 `Apple`；Linux 按可执行文件）、申请和授权的存储（`<data>/outflow.json`）、app 里 station 设置页「数据外流」
+一节（申请：逐项勾选、两步确认，只有管理员能答；授权：列出、取消前先问）、整个 workspace 的范围（`/v1/stations`、`station=`，经
+`outflow.read` 读其他 station）、管理 API、core 的 `outflowGrants` 话题和 `outflow.revoke`、`outflow.answer`。
 
 还没做：
 
-- 网页版的「数据外流」页（网页不在那台机器上，取消授权先在 app 里做）。
-- Windows 和 Linux 上的授权窗口（Helper 只有 macOS）：那里申请回 `501 unsupported`。
+- 网页版的「数据外流」页（申请和授权先在 app 里看、答、取消）。
+- 有新申请时推送给管理员：现在要管理员自己打开那台 station 的设置页才看得到。
+- Windows 上核实申请方（那里申请回 `403`）。

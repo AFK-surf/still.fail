@@ -633,5 +633,12 @@
   "core-views.outflow.grantedAt": "Granted {when}",
   "core-views.outflow.lastRead": "Last read {when}",
   "core-views.outflow.neverRead": "Not read yet",
-  "core-views.outflow.scope.messages": "Messages in chats"
+  "core-views.outflow.scope.messages": "Messages in chats",
+  "core-views.outflow.scope.usageWhy": "Every model call of the chats, added up by day, chat, person, account and model, with its cost at list prices. No messages.",
+  "core-views.outflow.scope.chatsWhy": "Each chat's title, whether it is working, done or waiting on someone, who started it and when, and its agents' models. No messages.",
+  "core-views.outflow.scope.messagesWhy": "What people and agents said in each chat, word for word. With this, the program reads your conversations.",
+  "core-views.outflow.reach.station": "This station",
+  "core-views.outflow.reach.workspace": "Every station of the workspace",
+  "core-views.outflow.askedAt": "Asked {when}",
+  "core-views.outflow.allowedBy": "Allowed by {who} {when}"
 }

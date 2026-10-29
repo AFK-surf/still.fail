@@ -1,0 +1,384 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/motion"
+
+import {
+  "mbui/effect",
+  "mbui/ui",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn anim(@ui.Ctx, String, Double, global? : Bool) -> Anim
+
+#callsite(autofill(loc))
+pub fn animate(@ui.Ctx, String, Double, spec? : Spec, from? : Double, loc~ : SourceLoc) -> Double
+
+pub fn animate_layout(@ui.Ctx, Int32, String, spec? : Spec, by? : String) -> Unit
+
+pub fn animate_presence(@ui.Ctx, String, Bool, enter? : async () -> Unit, exit? : async () -> Unit, () -> Unit) -> Bool
+
+pub fn anticipate(Double) -> Double
+
+pub fn apply_axis_delta(Axis, Double, Double, Double, box_scale? : Double) -> Unit
+
+pub fn apply_box_delta(Box, Delta) -> Unit
+
+pub fn apply_point_delta(Double, Double, Double, Double, box_scale? : Double) -> Double
+
+pub fn back_in(Double) -> Double
+
+pub fn back_in_out(Double) -> Double
+
+pub fn back_out(Double) -> Double
+
+pub fn bounce_to_damping_ratio(Double) -> Double
+
+pub fn box_of_edges(top~ : Double, right~ : Double, bottom~ : Double, left~ : Double) -> Box
+
+pub fn calc_axis_delta(AxisDelta, Axis, Axis, origin? : Double) -> Unit
+
+pub fn calc_box_delta(Delta, Box, Box, origin_x? : Double, origin_y? : Double) -> Unit
+
+pub fn calc_generator_duration(Generator, time_step? : Double, max_duration? : Double, keyframes? : Array[Double]) -> Double
+
+pub fn calc_length(Axis) -> Double
+
+pub fn calc_relative_axis(Axis, Axis, Axis, anchor? : Double) -> Unit
+
+pub fn calc_relative_axis_position(Axis, Axis, Axis, anchor? : Double) -> Unit
+
+pub fn calc_relative_box(Box, Box, Box, anchor? : (Double, Double)) -> Unit
+
+pub fn calc_relative_position(Box, Box, Box, anchor? : (Double, Double)) -> Unit
+
+pub fn circ_in(Double) -> Double
+
+pub fn circ_in_out(Double) -> Double
+
+pub fn circ_out(Double) -> Double
+
+pub fn clamp(Double, Double, Double) -> Double
+
+pub fn compose_to_motion(Double, Double) -> (Double, Double, Double)
+
+pub fn copy_box_into(Box, Box) -> Unit
+
+pub fn create_axis() -> Axis
+
+pub fn create_axis_delta() -> AxisDelta
+
+pub fn create_box() -> Box
+
+pub fn create_delta() -> Delta
+
+pub fn cubic_bezier(Double, Double, Double, Double) -> (Double) -> Double
+
+pub fn default_easing(Int32, easing? : (Double) -> Double) -> Array[(Double) -> Double]
+
+pub fn default_offset(Int32) -> Array[Double]
+
+pub fn drag_value(@ui.Ctx, Int32, Value, vertical? : Bool, min? : Double, max? : Double, elastic? : Double, release? : Spec) -> Unit
+
+pub fn ease_in(Double) -> Double
+
+pub fn ease_in_out(Double) -> Double
+
+pub fn ease_out(Double) -> Double
+
+pub fn easing_named(String) -> ((Double) -> Double)?
+
+pub fn entering(@ui.Ctx, Int32, String, Trans) -> Unit
+
+pub fn fill_offset(Array[Double], Int32) -> Unit
+
+pub fn find_spring(Double, Double) -> (Double, Double, Double)
+
+pub fn fly(@ui.Ctx, Int32, Double, Double, scale? : Double, px~ : Double, py~ : Double, ps? : Double) -> Unit
+
+pub fn generator_duration(Generator) -> Double
+
+pub fn generator_easing((Double, Double, Double) -> Generator, Double, Double, velocity? : Double, scale? : Double) -> ((Double) -> Double, Double)
+
+pub fn inertia_generator(Double, velocity? : Double, power? : Double, time_constant? : Double, bounce_damping? : Double, bounce_stiffness? : Double, modify_target? : (Double) -> Double, min? : Double, max? : Double, rest_delta? : Double, rest_speed? : Double) -> Generator
+
+pub fn inertia_to(power? : Double, time_constant? : Double, bounce_damping? : Double, bounce_stiffness? : Double, modify_target? : (Double) -> Double, min? : Double, max? : Double, rest_delta? : Double, rest_speed? : Double, delay? : Double) -> Spec
+
+pub fn interpolate(Array[Double], Array[Double], clamp? : Bool, ease? : (Double) -> Double, eases? : Array[(Double) -> Double], mixer? : (Double, Double) -> (Double) -> Double) -> (Double) -> Double
+
+pub fn is_near(Double, Double, Double) -> Bool
+
+pub fn keyed(@ui.Ctx, Int32, String, exit? : Trans, by? : String) -> Unit
+
+pub fn keyframes_generator(Array[Double], duration? : Double, times? : Array[Double], ease? : (Double) -> Double, eases? : Array[(Double) -> Double]) -> Generator
+
+pub fn keyframes_to(Array[Double], duration? : Double, times? : Array[Double], ease? : (Double) -> Double, eases? : Array[(Double) -> Double], delay? : Double) -> Spec
+
+pub fn layout(@ui.Ctx, Int32, String, spec? : Spec, by? : String, enter? : Trans, exit? : Trans, drive? : Double, screen? : Bool) -> Unit
+
+pub fn layout_rest(String) -> Double
+
+pub fn leaving(@ui.Ctx, Int32, Bool) -> Unit
+
+pub let lift_ms : Double
+
+pub let lift_spring : Spec
+
+pub fn lifted(@ui.Ctx, Int32, String) -> Double
+
+pub fn linear(Double) -> Double
+
+pub fn linear_easing((Double) -> Double, Double, resolution? : Double) -> String
+
+pub fn list_keys(@ui.Ctx, String, Array[String], liftable? : (String) -> Bool) -> Int32
+
+pub fn list_unghost(@ui.Ctx, Int32, String, off? : Bool) -> Unit
+
+pub fn log_frame(@ui.Ctx, String, String) -> Unit
+
+pub let max_generator_duration : Double
+
+pub fn measure(@ui.Ctx, Int32, String) -> Unit
+
+pub fn measured(@ui.Ctx, String) -> Double?
+
+pub fn measured_rect(@ui.Ctx, String) -> (Double, Double, Double, Double)?
+
+pub fn measured_size(@ui.Ctx, String) -> (Double, Double)?
+
+pub let menu_spring : Spec
+
+pub fn mirror_easing((Double) -> Double) -> (Double) -> Double
+
+pub fn mix(Double, Double, Double) -> Double
+
+pub fn motion_spring(Double, bounce? : Double, threshold? : Double, delay? : Double) -> Spec
+
+pub fn motion_to_compose(Double, Double, Double) -> (Double, Double)
+
+pub let move_spring : Spec
+
+pub fn ms_to_seconds(Double) -> Double
+
+pub fn offsets_to_times(Array[Double], Double) -> Array[Double]
+
+pub fn pipe(Array[(Double) -> Double]) -> (Double) -> Double
+
+pub fn placed(@ui.Ctx, Int32, () -> @ui.Look) -> Unit
+
+pub fn pregenerate_keyframes(Generator) -> (Array[Double], Double)
+
+pub fn presence(@ui.Ctx, String, Bool, enter? : Trans, exit? : Trans, initial? : Bool, start_at? : Double) -> @ui.Look?
+
+pub let press_sink : Double
+
+pub fn pressing(@ui.Ctx, Int32) -> Double
+
+pub fn progress(Double, Double, Double) -> Double
+
+pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool) -> Unit
+
+pub fn reshaped_over(@ui.Ctx, String) -> Double
+
+pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, align? : @ui.Align, () -> Unit) -> Unit
+
+pub fn reverse_easing((Double) -> Double) -> (Double) -> Double
+
+pub fn ripple(@ui.Ctx, Int32, Double, ink? : Int64, out_x? : Double, out_y? : Double, out_top? : Double, out_bottom? : Double) -> Unit
+
+pub let ripple_enter_ms : Double
+
+pub let ripple_exit_ms : Double
+
+pub let ripple_ink : Int64
+
+pub let ripple_tap_ms : Double
+
+pub let row_spring : Spec
+
+pub fn scale_point(Double, Double, Double) -> Double
+
+pub fn scope(@ui.Ctx, Int32, bottom? : Bool) -> Unit
+
+pub fn seconds_to_ms(Double) -> Double
+
+pub let sheet_spring : Spec
+
+pub fn spring(ratio? : Double, stiffness? : Double, threshold? : Double, delay? : Double) -> Spec
+
+pub fn spring_at(Double, Double, Double, Double, Double) -> (Double, Double)
+
+pub fn spring_duration(Double, Double, Double, Double, Double) -> Double
+
+pub fn spring_generator(Double, Double, stiffness? : Double, damping? : Double, mass? : Double, velocity? : Double, duration? : Double, bounce? : Double, visual_duration? : Double, rest_speed? : Double, rest_delta? : Double) -> Generator
+
+pub fn spring_to(stiffness? : Double, damping? : Double, mass? : Double, duration? : Double, bounce? : Double, visual_duration? : Double, rest_speed? : Double, rest_delta? : Double, delay? : Double) -> Spec
+
+pub fn spring_visual(visual_duration? : Double, bounce? : Double) -> Generator
+
+pub async fn stagger(Int32, Int32, from? : StaggerFrom, async (Int32) -> Unit) -> Unit
+
+pub fn steps(Int32, direction? : StepsAt) -> (Double) -> Double
+
+pub fn trans(fade? : Double, scale? : Double, ox? : Double, oy? : Double, dx? : Double, dy? : Double, spec? : Spec, fade_spec? : Spec) -> Trans
+
+pub fn transform_axis(Axis, translate? : Double, scale? : Double, box_scale? : Double, origin? : Double) -> Unit
+
+pub fn transform_box(Box, x? : Offset, y? : Offset, scale_x? : Double, scale_y? : Double, scale? : Double, origin_x? : Double, origin_y? : Double, source? : Box) -> Unit
+
+pub fn translate_axis(Axis, Double) -> Unit
+
+pub fn tween(Double, ease~ : @ui.Ease, delay? : Double) -> Spec
+
+pub fn tween_to(duration? : Double, ease? : (Double) -> Double, delay? : Double) -> Spec
+
+pub fn value(@ui.Ctx, String, Double, global? : Bool) -> Value
+
+pub fn velocity_per_second(Double, Double) -> Double
+
+pub fn visual_to_compose(Double, Double) -> (Double, Double)
+
+pub fn while_hover(@ui.Ctx, Int32, Value, rest~ : Double, to~ : Double, spec? : Spec) -> Unit
+
+pub fn while_press(@ui.Ctx, Int32, Value, rest~ : Double, to~ : Double, spec? : Spec) -> Unit
+
+pub fn wrap(Double, Double, Double) -> Double
+
+// Errors
+
+// Types and methods
+pub struct Anim {
+  mut velocity : Double
+  mut target : Double
+  mut end : Double
+  mut spec : Spec
+  mut gen : Generator?
+  mut from : Double
+  mut v0 : Double
+  mut start : Double
+  mut asked : Int32
+  mut dur : Double
+  mut stepped : Int32
+  mut stepped_at : Double
+  mut used : Int32
+  id : @ui.Mover
+  mut name : String
+  mut told : String
+  // private fields
+}
+#callsite(autofill(loc))
+pub fn Anim::animate(Self, Double, Spec, velocity? : Double, start_at? : Double, loc~ : SourceLoc) -> Unit
+pub fn Anim::ends(Self) -> Double
+pub fn Anim::ends_at(Self) -> Double
+#callsite(autofill(loc))
+pub fn Anim::follow(Self, Double, Spec, loc~ : SourceLoc) -> Unit
+pub fn Anim::get(Self) -> Double
+pub fn Anim::moving(Self) -> Bool
+pub fn Anim::new(Double) -> Self
+pub fn Anim::over(Self) -> Bool
+pub fn Anim::snap(Self, Double) -> Unit
+pub fn Anim::target(Self) -> Double
+pub impl @ui.Moving for Anim
+
+pub(all) struct Axis {
+  mut min : Double
+  mut max : Double
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) struct AxisDelta {
+  mut translate : Double
+  mut scale : Double
+  mut origin : Double
+  mut origin_point : Double
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) struct Box {
+  x : Axis
+  y : Axis
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) struct Delta {
+  x : AxisDelta
+  y : AxisDelta
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) struct GenState {
+  done : Bool
+  value : Double
+} derive(Eq, Show, @debug.Debug)
+
+pub struct Generator {
+  // private fields
+}
+pub fn Generator::calculated_duration(Self) -> Double?
+pub fn Generator::can_retarget(Self) -> Bool
+pub fn Generator::next(Self, Double) -> GenState
+pub fn Generator::retarget(Self, Double, Double, Double) -> Unit
+pub fn Generator::to_css(Self) -> String
+pub fn Generator::velocity(Self, Double, initial? : Double) -> Double
+
+pub(all) enum Offset {
+  Pixels(Double)
+  Percent(Double)
+} derive(Eq, Show)
+
+pub(all) enum Spec {
+  Spring(Double, Double, Double, Double)
+  Tween(Double, @ui.Ease, Double)
+  Snap(Double)
+  Motion(Transition)
+} derive(Eq, Show)
+pub fn Spec::duration(Self, Double, Double, Double) -> Double
+pub fn Spec::value_at(Self, Double, Double, Double, Double, Double) -> (Double, Double)
+
+pub(all) enum StaggerFrom {
+  First
+  Last
+  Center
+  Index(Int32)
+}
+
+pub(all) enum StepsAt {
+  End
+  Start
+} derive(Eq, Show)
+
+pub(all) struct Trans {
+  fade : Double
+  scale : Double
+  ox : Double
+  oy : Double
+  dx : Double
+  dy : Double
+  fade_spec : Spec
+  spec : Spec
+} derive(Eq, Show)
+pub fn Trans::at(Self, Double, Double) -> @ui.Look
+
+pub struct Transition {
+  kind : String
+  delay : Double
+  make : (Double, Double, Double) -> Generator
+}
+pub fn Transition::delayed(Self, Double) -> Self
+pub fn Transition::generator(Self, Double, Double, Double) -> Generator
+pub impl Eq for Transition
+pub impl Show for Transition
+
+pub struct Value {
+  // private fields
+}
+pub async fn Value::animate(Self, Double, Spec, velocity? : Double) -> Bool
+pub fn Value::ends_at(Self) -> Double
+pub fn Value::follow(Self, Double, Spec) -> Unit
+pub fn Value::get(Self) -> Double
+pub fn Value::is_animating(Self) -> Bool
+pub fn Value::new(Double) -> Self
+pub fn Value::set(Self, Double) -> Unit
+pub fn Value::start(Self, Double, Spec, velocity? : Double) -> @effect.Fiber[Bool]
+pub fn Value::stop(Self) -> Unit
+pub fn Value::target(Self) -> Double
+pub fn Value::velocity(Self) -> Double
+
+// Type aliases
+
+// Traits

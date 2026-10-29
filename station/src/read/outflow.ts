@@ -1,6 +1,7 @@
 // What a program granted data outflow reads (docs/data-outflow.md), in the shape of its version (`/v1`): written out
 // field by field here, so that what the station keeps changing never changes what such a program is answered. The
-// station's home workspace's chats only, never a message.
+// chats of one workspace of the station's (its home one, unless another station of a workspace it joined asks),
+// a message only when asked for.
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
@@ -9,8 +10,11 @@ import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
 import type { Lang } from "../ops/i18n.ts";
 
-/// The home workspace, as `sees` takes a viewer: its chats are those of no other workspace.
-const HOME = { workspace: "\u0000home", home: true };
+/// Which workspace's chats are read, as `sees` takes a viewer.
+export type Of = { workspace: string; home: boolean };
+
+/// The home workspace: its chats are those of no other workspace.
+export const HOME: Of = { workspace: "\u0000home", home: true };
 
 /// Who a person reference is, as far as known: their email.
 function person(s: Store, ref: string): Json {
@@ -22,8 +26,8 @@ function person(s: Store, ref: string): Json {
 
 /// v1 `usage`: the model calls from `from` until `to` (ms), added up by day in UTC+`tz` minutes, chat, session, person,
 /// account and model, with what they cost at list prices (null for a model without one); `people` the rows' persons.
-export function outflowUsage(s: Store, lang: Lang, from: number, to: number, tz: number): Json {
-  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, HOME) as Json;
+export function outflowUsage(s: Store, lang: Lang, from: number, to: number, tz: number, of: Of = HOME): Json {
+  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, of) as Json;
   const rows = (read.rows as Json[]).map((r) => ({
     day: r.day, thread: r.thread, session: r.session, person: r.person, account: r.profile, runtime: r.runtime, model: r.model,
     calls: r.calls, input: r.input, cacheRead: r.cacheRead, cacheWrite: r.cacheWrite, output: r.output, cost: r.cost,
@@ -46,8 +50,8 @@ function state(turn: Json | null): string | null {
 /// v1 `chats`: the chats with something new since `since` (ms): each one's thread (what `usage` rows name), where it
 /// is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its latest activity, whether it is
 /// archived, and its agents' runtimes and models.
-export function outflowChats(s: Store, since: number): Json {
-  const sessions = new Map(store.listSessions(s).filter((x) => sees(HOME, x.ws ?? null)).map((x) => [x.key, x]));
+export function outflowChats(s: Store, since: number, of: Of = HOME): Json {
+  const sessions = new Map(store.listSessions(s).filter((x) => sees(of, x.ws ?? null)).map((x) => [x.key, x]));
   const stats = store.sessionStats(s, [...sessions.keys()]);
   const chats: Json[] = [];
   for (const t of store.listThreads(s, "", null, null)) {
@@ -77,9 +81,9 @@ export function outflowChats(s: Store, since: number): Json {
 /// v1 `messages`: a chat's messages after its message `after` (its `n`), at most `limit`, oldest first: each one's
 /// `n`, what it is (`message`, `edit`: a later wording of message `target`), who wrote it (`person`, `agent`, and
 /// their reference), its words and when; `last`, the chat's latest `n`, and `more` when there are more after these.
-/// Null for a chat that is not the home workspace's.
-export function outflowMessages(s: Store, thread: number, after: number, limit: number): Json {
-  if (store.getThread(s, thread) === null || !store.seesThread(s, HOME, thread)) return null;
+/// Null for a chat that is not the workspace's.
+export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
+  if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
   const entries = store.entriesAfter(s, thread, BigInt(after));
   const page = entries.slice(0, limit);
   return {

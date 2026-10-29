@@ -124,24 +124,6 @@ final class Daemon {
     case "outflow.identify":
       // Who a program at the other end of the station's outflow socket is (docs/data-outflow.md).
       channel.line(Outflow.identify(request["auditToken"] as? String ?? ""))
-    case "outflow.ask":
-      // The window asks the person here; the answer comes once they gave it (or closed it, or it timed out).
-      let answered = DispatchSemaphore(value: 0)
-      var answer: [String: Any] = ["answer": "refuse"]
-      DispatchQueue.main.async {
-        MainActor.assumeIsolated {
-          OutflowWindow.shared.ask(request) { given in
-            answer = given
-            answered.signal()
-          }
-        }
-      }
-      answered.wait()
-      channel.line(answer)
-    case "outflow.cancel":
-      // The program that asked hung up: its window goes, refused.
-      DispatchQueue.main.async { MainActor.assumeIsolated { OutflowWindow.shared.cancel() } }
-      channel.line(["ok": true])
     case "screen.view":
       // Granted since this process started: it starts again to have it (the station asks again once it is back).
       if !CGPreflightScreenCaptureAccess() && request["synthetic"] == nil {

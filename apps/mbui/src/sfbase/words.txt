@@ -1962,3 +1962,15 @@ web-main.outflow.revoke
 web-main.outflow.revokeConfirm
 web-main.outflow.revokeBody
 web-main.outflow.revoked
+web-main.outflow.waitingAdmin
+web-main.outflow.wholeWorkspace
+web-main.outflow.wholeWorkspaceNote
+web-main.outflow.refuse
+web-main.outflow.allow
+web-main.outflow.allowConfirm
+web-main.outflow.allowBody
+web-main.outflow.whereWorkspace
+web-main.outflow.whereStation
+web-main.outflow.kind
+web-main.outflow.allowed
+web-main.outflow.refused

@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/text"
+
+// Values
+pub fn break_opportunities(String) -> Array[(Int32, Bool)]
+
+pub fn graphemes(String) -> Array[Int32]
+
+pub fn line_breaks(String) -> FixedArray[Int32]
+
+pub fn mirror(Int32) -> Int32
+
+pub fn next_grapheme(String, Int32) -> Int32
+
+pub fn prev_grapheme(String, Int32) -> Int32
+
+pub let unicode_version : String
+
+pub fn visual_order(ArrayView[Int32]) -> Array[Int32]
+
+// Errors
+
+// Types and methods
+pub struct Bidi {
+  levels : FixedArray[Int32]
+  classes : FixedArray[Int32]
+  para : FixedArray[Int32]
+  mixed : Bool
+}
+pub fn Bidi::is_mixed(Self) -> Bool
+pub fn Bidi::line_levels(Self, Int32, Int32) -> FixedArray[Int32]
+pub fn Bidi::new(String, dir? : Int32) -> Self
+pub fn Bidi::paragraph_level(Self, Int32) -> Int32
+
+// Type aliases
+
+// Traits
