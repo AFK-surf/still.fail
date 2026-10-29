@@ -913,8 +913,10 @@ fn item_key(k : Int) -> Int {
 }
 
 ///|
-/// Who each node of the last pass of a build was, for the next to find it by (Ctx::node_known).
-// kept across runs: taken anew as each pass of a build begins (Ctx::nodes_known), from the nodes it made
+/// Who each node of the frame's is, for a pass of a build to find it by (Ctx::node_known): those the last pass made,
+/// and those made before and not since (a page covered a while, its nodes kept at the end of the frame's), until
+/// their node is someone else's.
+// kept across runs: let go of as a run begins (nodes_forget)
 let known_nodes : Map[Int, Node] = {}
 
 ///|
@@ -933,17 +935,15 @@ let known_pass : Ref[Int] = { val: 0 }
 
 ///|
 /// As a pass of a build begins, before the frame's nodes are made again: who each node the last one made is (its
-/// `ident`), and where it is, for each made now to be put where that one of before is (Ctx::node_known).
+/// `ident`), and where it is, for each made now to be put where that one of before is (Ctx::node_known); those made
+/// before it and not since still known where they are.
 fn Ctx::nodes_known(self : Ctx) -> Unit {
-  known_nodes.clear()
   known_pass.val = known_pass.val + 1
   known_made.val = self.count
   for k in 0..<self.count {
     let n = self.nodes[k]
     n.slot = k
-    if !known_nodes.contains(n.ident) {
-      known_nodes[n.ident] = n
-    }
+    known_nodes[n.ident] = n
   }
 }
 
@@ -1010,6 +1010,14 @@ fn Ctx::node_known(self : Ctx, i : Int, kind : Int, key : Int) -> Unit {
     }
   }
   let n = self.nodes[i]
+  // (who it was of before let go of, where it is someone else now; who it is now known by it)
+  if n.ident != ident {
+    match known_nodes.get(n.ident) {
+      Some(o) if physical_equal(o, n) => known_nodes.remove(n.ident)
+      _ => ()
+    }
+  }
+  known_nodes[ident] = n
   n.ident = ident
   n.keyless = key == 0 && self.cur >= 0
   n.seed = self.id_seed
