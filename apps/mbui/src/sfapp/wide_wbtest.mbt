@@ -2119,7 +2119,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_eq(word("Claude · Opus 5.5").length(), 0)
   t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
+  // its label and its account under it, where it stands, its latest lines, the figures side by side, the quiet line
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
   let lines = word("读了 src/ui/list.mbt")
@@ -2149,13 +2149,15 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   // the figures side by side on one line; each part under the one before
   assert_eq(cost[0].2, cache[0].2)
   assert_true(cache[0].1 > cost[0].1)
+  // (its account under its label, what it runs as one thing, before where it stands)
   assert_true(
-    label[0].2 < status[0].2 &&
+    label[0].2 < account[0].2 &&
+    account[0].2 < status[0].2 &&
     status[0].2 < lines[0].2 &&
     lines[0].2 < cost[0].2 &&
-    cost[0].2 < account[0].2 &&
-    account[0].2 < quiet[0].2,
+    cost[0].2 < quiet[0].2,
   )
+  assert_eq(account[0].1, label[0].1)
   // in the window, by the picture: over it (no room under it), its start where the picture's is
   assert_true(quiet[0].2 + quiet[0].4 < last.2, msg="over the picture")
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
