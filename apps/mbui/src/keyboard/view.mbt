@@ -109,7 +109,7 @@ fn tap(s : State, f : Finger) -> Unit {
     return
   }
   f.done = true
-  send(s, s.board.tap(s.caps[f.cap].key, @ui.now()))
+  send(s, s.board.tap(s.caps[f.cap].key, @ui.current().moment()))
 }
 
 ///|
@@ -178,7 +178,7 @@ fn heard(json : String) -> Unit {
               _ => tap(s, f)
             }
           }
-          let f = { cap, at: @ui.now(), done: false, repeats: 0 }
+          let f = { cap, at: @ui.current().moment(), done: false, repeats: 0 }
           s.fingers[id] = f
           @ui.haptic(KeyboardTap)
           // Back and Shift as they come down (Shift held with a letter: a capital)
@@ -261,6 +261,12 @@ fn paint() -> Paint {
       first: 0x16AC66FFL,
     }
   }
+}
+
+///|
+/// `top` (its alpha its own) laid over the opaque `under` (RRGGBBAA).
+fn over(under : Int64, top : Int64) -> Int64 {
+  mix(under, top | 0xFFL, (top & 0xFFL).to_double() / 255.0)
 }
 
 ///|
@@ -390,8 +396,11 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
 let candidates_most : Int = 60
 
 ///|
-/// The keys: each its shadow (3 units under it), then itself with its edge, a finger on it showing its pressed
-/// colour.
+/// The keys: each drawn as WeChat's are (an Android drawable's order): its shadow (3 units under it), its edge (a
+/// line a unit wide on its outline, half outside it, half over its own ground), then its ground; a finger on it
+/// showing its pressed colour. (An mbui border is over what is behind its box, not over its own ground: the edge's
+/// outer half is a box half a unit larger behind the key, its inner half the key's border in the edge's colour over
+/// its ground, so neither shows the shadow through it, which was a dark ring round each key.)
 fn keys(c : @ui.Ctx, s : State, p : Paint) -> Unit {
   let u = s.scale
   let down : Map[Int, Bool] = Map([])
@@ -414,14 +423,24 @@ fn keys(c : @ui.Ctx, s : State, p : Paint) -> Unit {
     c.box(left=k.x * u, top=(k.y + 3.0) * u, w=Px(k.w * u), h=Px(k.h * u), radius=16.0 * u, bg=shadow, fn() {  })
     |> ignore
     c.box(
+      left=(k.x - 0.5) * u,
+      top=(k.y - 0.5) * u,
+      w=Px((k.w + 1.0) * u),
+      h=Px((k.h + 1.0) * u),
+      radius=16.5 * u,
+      bg=p.edge,
+      fn() {  },
+    )
+    |> ignore
+    c.box(
       left=k.x * u,
       top=k.y * u,
       w=Px(k.w * u),
       h=Px(k.h * u),
       radius=16.0 * u,
       bg~,
-      border=1.0,
-      border_color=p.edge,
+      border=0.5 * u,
+      border_color=over(bg, p.edge),
       align=ACenter,
       justify=JCenter,
       fn() {
@@ -452,20 +471,23 @@ fn frame(c : @ui.Ctx) -> Unit {
   s.scale = w / unit_width
   s.caps = caps(s.board)
   // Back held: again after a while, then again and again
-  for _, f in s.fingers {
+  for id, f in s.fingers {
     match s.caps.get(f.cap) {
       Some({ key: Back, .. }) => {
-        let held = c.now() - f.at
+        let held = c.moment() - f.at
         let due = if held < repeat_after_ms {
           0
         } else {
           1 + ((held - repeat_after_ms) / repeat_ms).to_int()
         }
-        while f.repeats < due {
-          f.repeats += 1
-          send(s, s.board.back())
-        }
-        let next = repeat_after_ms + f.repeats.to_double() * repeat_ms
+        // (what is due goes in once the frame's builds are over: each works it out alike)
+        c.after_build("back-repeat/" + id.to_string(), fn() {
+          while f.repeats < due {
+            f.repeats += 1
+            send(s, s.board.back())
+          }
+        })
+        let next = repeat_after_ms + due.to_double() * repeat_ms
         c.wake_in(next - held)
       }
       _ => ()
