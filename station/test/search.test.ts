@@ -293,7 +293,7 @@ test("Documents, Desktop and Downloads are searched through still.fail Helper, o
 });
 
 test("the machine is searched once for the same words a while, two searches at a time, a person's search typed on stopping the one before", async () => {
-  const { FileSearch, KEPT_MS } = await import("../src/search/files.ts");
+  const { FileSearch, KEPT_MS, ASKED_AGAIN_MS, ASKED_AGAIN_GUESS_MS } = await import("../src/search/files.ts");
   const home = mkdtempSync(join(tmpdir(), "search-queue-"));
   dirs.push(home);
   const plan = join(home, "plan.md");
@@ -339,10 +339,40 @@ test("the machine is searched once for the same words a while, two searches at a
   const before = asked.length;
   assert.deepEqual((await files.query(["plan"], typing, 10))!.hits.map((h) => h.path), [plan]);
   assert.equal(asked.length, before);
-  // Once KEPT_MS is up, searched again.
+  // Asked again as the chats changed (`again`) once KEPT_MS is up: what was found, up to ASKED_AGAIN_MS; with nothing
+  // said by the same device (an app from before `again`), up to ASKED_AGAIN_GUESS_MS; by another device, searched again.
   now += KEPT_MS + 1;
-  const again = files.query(["plan"], typing, 10);
+  assert.deepEqual((await files.query(["plan"], { ...typing, again: true }, 10))!.hits.map((h) => h.path), [plan]);
+  assert.deepEqual((await files.query(["plan"], typing, 10))!.hits.map((h) => h.path), [plan]);
+  assert.equal(asked.length, before);
+  const another = files.query(["plan"], { ...typing, typist: "d2" }, 10);
   await go();
-  assert.deepEqual((await again)!.hits.map((h) => h.path), [plan]);
+  assert.deepEqual((await another)!.hits.map((h) => h.path), [plan]);
   assert.ok(asked.length > before);
+  // Past ASKED_AGAIN_GUESS_MS a guess searches again; `again` is answered as found up to ASKED_AGAIN_MS.
+  now += ASKED_AGAIN_GUESS_MS + 1;
+  let searched = asked.length;
+  assert.deepEqual((await files.query(["plan"], { ...typing, typist: "d2", again: true }, 10))!.hits.map((h) => h.path), [plan]);
+  assert.equal(asked.length, searched);
+  const guessed = files.query(["plan"], typing, 10);
+  await go();
+  assert.deepEqual((await guessed)!.hits.map((h) => h.path), [plan]);
+  assert.ok(asked.length > searched);
+  // Words stopped as they were typed on (nothing found for them) are typed words again, not a guess: typed on, they
+  // stop again.
+  stopped.length = 0;
+  const pla = files.query(["pla"], typing, 10);
+  await tick();
+  const plan2 = files.query(["plan2"], typing, 10);
+  assert.equal(await pla, null);
+  assert.ok(stopped.some((q) => q.includes("pla")));
+  await go();
+  await plan2;
+  // Past ASKED_AGAIN_MS, searched again however it was asked.
+  searched = asked.length;
+  now += ASKED_AGAIN_MS + 1;
+  const late = files.query(["plan"], { ...typing, again: true }, 10);
+  await go();
+  assert.deepEqual((await late)!.hits.map((h) => h.path), [plan]);
+  assert.ok(asked.length > searched);
 });
