@@ -54,6 +54,51 @@ test "strata: content, what floats over it, what flies, the bar" {
 }
 
 ///|
+/// A page drawn moved by `page_dy` (a page sliding, a keyboard), its content 90 by 90 holding a box drawn moved by
+/// `held_dy` (a row gliding) that holds what flies (50 by 30); a composer 60 by 20 and its bar 70 by 40 over them.
+fn strata_moving(page_dy : Double, held_dy : Double) -> (Ctx) -> Unit {
+  fn(c) {
+    let page = c.column(fn() {
+      c.box(w=Px(90.0), h=Px(90.0), bg=0x333333FFL, fn() {
+        let held = c.box(w=Px(60.0), h=Px(40.0), fn() {
+          let f = c.box(w=Px(50.0), h=Px(30.0), bg=0x336699FFL, fn() {  })
+          c.stratum(f, Flying)
+        })
+        c.look(held, look(dy=held_dy))
+      })
+      |> ignore
+      let composer = c.layer(fn() { c.box(w=Px(60.0), h=Px(20.0), bg=0x993366FFL, fn() {  }) |> ignore })
+      c.stratum(composer, OverCover)
+      let bar = c.layer(fn() { c.box(w=Px(70.0), h=Px(40.0), bg=0x669933FFL, fn() {  }) |> ignore })
+      c.stratum(bar, Bar)
+    })
+    c.look(page, look(dy=page_dy))
+  }
+}
+
+///|
+/// Where instance `w` by `h` is drawn down the window.
+fn painted_y(w : Double, h : Double) -> Double {
+  let c = g()
+  c.inst[painted_at(w, h) * inst_size + 1]
+}
+
+///|
+test "strata: what flies in what moves: over what floats over the page, under its bar, moved with what holds it" {
+  // (a row gliding in a still page)
+  let t = Tester::new(strata_moving(0.0, 20.0), w=400.0, h=300.0)
+  t.frame()
+  assert_true(painted_in_order([(90.0, 90.0), (60.0, 20.0), (50.0, 30.0), (70.0, 40.0)]))
+  assert_eq(painted_y(50.0, 30.0), 20.0)
+  // (and the page moving too: its bar drawn moved with it, over what flies all the same)
+  let t = Tester::new(strata_moving(30.0, 20.0), w=400.0, h=300.0)
+  t.frame()
+  assert_true(painted_in_order([(90.0, 90.0), (60.0, 20.0), (50.0, 30.0), (70.0, 40.0)]))
+  assert_eq(painted_y(50.0, 30.0), 50.0)
+  assert_eq(painted_y(70.0, 40.0), 30.0)
+}
+
+///|
 test "strata: the cover over the bar and what flies, what is over it over it" {
   let t = Tester::new(strata_page(true, false), w=400.0, h=300.0)
   t.frame()
