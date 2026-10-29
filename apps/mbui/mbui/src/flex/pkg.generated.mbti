@@ -1,0 +1,249 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/flex"
+
+// Values
+pub const LEN_AUTO : Int32 = 0
+
+pub const LEN_PCT : Int32 = 2
+
+pub const LEN_PT : Int32 = 1
+
+pub const LEN_WITHIN : Int32 = 3
+
+pub fn compute(Node, width? : Double, height? : Double, round? : Bool, reuse? : Bool, grid? : Double) -> Unit
+
+pub fn computes() -> Int32
+
+pub let counters : FixedArray[Int32]
+
+// Errors
+
+// Types and methods
+pub(all) enum Align {
+  Auto
+  FlexStart
+  Center
+  FlexEnd
+  Stretch
+  Baseline
+  SpaceBetween
+  SpaceAround
+  SpaceEvenly
+} derive(Eq)
+
+type Box
+
+pub(all) enum BoxSizing {
+  BorderBox
+  ContentBox
+} derive(Eq)
+
+pub(all) enum Dim {
+  Auto
+  Pt(Double)
+  Pct(Double)
+  Within(Double)
+} derive(Eq)
+
+pub(all) enum Display {
+  Flex
+  DisplayNone
+  Contents
+} derive(Eq)
+
+pub(all) enum FlexDirection {
+  Column
+  Row
+  ColumnReverse
+  RowReverse
+} derive(Eq)
+
+pub(all) enum FlexWrap {
+  NoWrap
+  Wrap
+  WrapReverse
+} derive(Eq)
+
+pub(all) enum MeasureMode {
+  Undefined
+  Exactly
+  AtMost
+} derive(Eq)
+
+pub(all) struct Node {
+  style : Style
+  children : Array[Node]
+  mut measure : ((Double, MeasureMode, Double, MeasureMode) -> (Double, Double))?
+  mut left : Double
+  mut top : Double
+  mut width : Double
+  mut height : Double
+  mut line : Int32
+  mut pre_gen : Int32
+  mut cache : FixedArray[Double]
+  mut cache_n : Int32
+  mut cache_gen : Int32
+  mut box_cbw : Double
+  mut box_cbh : Double
+  mut box_memo : Box?
+  mut box_ver : Int32
+  mut dirty : Bool
+  mut p_ok : Bool
+  mut p_kw : Double
+  mut p_kh : Double
+  mut p_cbw : Double
+  mut p_cbh : Double
+  mut p_w : Double
+  mut p_h : Double
+  mut pre : Array[Double]
+  mut laid_gen : Int32
+  mut skip_gen : Int32
+}
+pub fn Node::add(Self, Self) -> Unit
+pub fn Node::laid_out(Self) -> Bool
+pub fn Node::laid_out_at(Self) -> Int32
+pub fn Node::left_out(Self) -> Bool
+pub fn Node::new() -> Self
+
+pub(all) enum Overflow {
+  Visible
+  Hidden
+  Scroll
+} derive(Eq)
+
+pub(all) enum PositionType {
+  Relative
+  Absolute
+  Static
+} derive(Eq)
+
+pub(all) struct Style {
+  mut display : Display
+  mut position : PositionType
+  mut direction : FlexDirection
+  mut wrap : FlexWrap
+  mut justify : Align
+  mut align_items : Align
+  mut align_self : Align
+  mut align_content : Align
+  mut grow : Double
+  mut shrink : Double
+  mut aspect : Double
+  mut overflow : Overflow
+  mut drop : Int32
+  mut fits : Bool
+  mut fit_need : Double
+  mut soft_min : Double
+  // private fields
+}
+pub fn Style::basis_kind(Self) -> Int32
+pub fn Style::basis_value(Self) -> Double
+pub fn Style::border_bottom_kind(Self) -> Int32
+pub fn Style::border_bottom_value(Self) -> Double
+pub fn Style::border_left_kind(Self) -> Int32
+pub fn Style::border_left_value(Self) -> Double
+pub fn Style::border_right_kind(Self) -> Int32
+pub fn Style::border_right_value(Self) -> Double
+pub fn Style::border_top_kind(Self) -> Int32
+pub fn Style::border_top_value(Self) -> Double
+pub fn Style::gap_col_kind(Self) -> Int32
+pub fn Style::gap_col_value(Self) -> Double
+pub fn Style::gap_row_kind(Self) -> Int32
+pub fn Style::gap_row_value(Self) -> Double
+pub fn Style::get_basis(Self) -> Dim
+pub fn Style::get_border_bottom(Self) -> Dim
+pub fn Style::get_border_left(Self) -> Dim
+pub fn Style::get_border_right(Self) -> Dim
+pub fn Style::get_border_top(Self) -> Dim
+pub fn Style::get_box_sizing(Self) -> BoxSizing
+pub fn Style::get_gap_col(Self) -> Dim
+pub fn Style::get_gap_row(Self) -> Dim
+pub fn Style::get_height(Self) -> Dim
+pub fn Style::get_inset_bottom(Self) -> Dim
+pub fn Style::get_inset_left(Self) -> Dim
+pub fn Style::get_inset_right(Self) -> Dim
+pub fn Style::get_inset_top(Self) -> Dim
+pub fn Style::get_margin_bottom(Self) -> Dim
+pub fn Style::get_margin_left(Self) -> Dim
+pub fn Style::get_margin_right(Self) -> Dim
+pub fn Style::get_margin_top(Self) -> Dim
+pub fn Style::get_max_height(Self) -> Dim
+pub fn Style::get_max_width(Self) -> Dim
+pub fn Style::get_min_height(Self) -> Dim
+pub fn Style::get_min_width(Self) -> Dim
+pub fn Style::get_padding_bottom(Self) -> Dim
+pub fn Style::get_padding_left(Self) -> Dim
+pub fn Style::get_padding_right(Self) -> Dim
+pub fn Style::get_padding_top(Self) -> Dim
+pub fn Style::get_width(Self) -> Dim
+pub fn Style::height_kind(Self) -> Int32
+pub fn Style::height_value(Self) -> Double
+pub fn Style::inset_bottom_kind(Self) -> Int32
+pub fn Style::inset_bottom_value(Self) -> Double
+pub fn Style::inset_left_kind(Self) -> Int32
+pub fn Style::inset_left_value(Self) -> Double
+pub fn Style::inset_right_kind(Self) -> Int32
+pub fn Style::inset_right_value(Self) -> Double
+pub fn Style::inset_top_kind(Self) -> Int32
+pub fn Style::inset_top_value(Self) -> Double
+pub fn Style::margin_bottom_kind(Self) -> Int32
+pub fn Style::margin_bottom_value(Self) -> Double
+pub fn Style::margin_left_kind(Self) -> Int32
+pub fn Style::margin_left_value(Self) -> Double
+pub fn Style::margin_right_kind(Self) -> Int32
+pub fn Style::margin_right_value(Self) -> Double
+pub fn Style::margin_top_kind(Self) -> Int32
+pub fn Style::margin_top_value(Self) -> Double
+pub fn Style::max_height_kind(Self) -> Int32
+pub fn Style::max_height_value(Self) -> Double
+pub fn Style::max_width_kind(Self) -> Int32
+pub fn Style::max_width_value(Self) -> Double
+pub fn Style::min_height_kind(Self) -> Int32
+pub fn Style::min_height_value(Self) -> Double
+pub fn Style::min_width_kind(Self) -> Int32
+pub fn Style::min_width_value(Self) -> Double
+pub fn Style::new() -> Self
+pub fn Style::padding_bottom_kind(Self) -> Int32
+pub fn Style::padding_bottom_value(Self) -> Double
+pub fn Style::padding_left_kind(Self) -> Int32
+pub fn Style::padding_left_value(Self) -> Double
+pub fn Style::padding_right_kind(Self) -> Int32
+pub fn Style::padding_right_value(Self) -> Double
+pub fn Style::padding_top_kind(Self) -> Int32
+pub fn Style::padding_top_value(Self) -> Double
+pub fn Style::reset(Self) -> Unit
+pub fn Style::set_basis(Self, Dim) -> Unit
+pub fn Style::set_border_bottom(Self, Dim) -> Unit
+pub fn Style::set_border_left(Self, Dim) -> Unit
+pub fn Style::set_border_right(Self, Dim) -> Unit
+pub fn Style::set_border_top(Self, Dim) -> Unit
+pub fn Style::set_box_sizing(Self, BoxSizing) -> Unit
+pub fn Style::set_gap_col(Self, Dim) -> Unit
+pub fn Style::set_gap_row(Self, Dim) -> Unit
+pub fn Style::set_height(Self, Dim) -> Unit
+pub fn Style::set_inset_bottom(Self, Dim) -> Unit
+pub fn Style::set_inset_left(Self, Dim) -> Unit
+pub fn Style::set_inset_right(Self, Dim) -> Unit
+pub fn Style::set_inset_top(Self, Dim) -> Unit
+pub fn Style::set_margin(Self, Dim) -> Unit
+pub fn Style::set_margin_bottom(Self, Dim) -> Unit
+pub fn Style::set_margin_left(Self, Dim) -> Unit
+pub fn Style::set_margin_right(Self, Dim) -> Unit
+pub fn Style::set_margin_top(Self, Dim) -> Unit
+pub fn Style::set_max_height(Self, Dim) -> Unit
+pub fn Style::set_max_width(Self, Dim) -> Unit
+pub fn Style::set_min_height(Self, Dim) -> Unit
+pub fn Style::set_min_width(Self, Dim) -> Unit
+pub fn Style::set_padding(Self, Dim) -> Unit
+pub fn Style::set_padding_bottom(Self, Dim) -> Unit
+pub fn Style::set_padding_left(Self, Dim) -> Unit
+pub fn Style::set_padding_right(Self, Dim) -> Unit
+pub fn Style::set_padding_top(Self, Dim) -> Unit
+pub fn Style::set_width(Self, Dim) -> Unit
+pub fn Style::width_kind(Self) -> Int32
+pub fn Style::width_value(Self) -> Double
+
+// Type aliases
+pub type MeasureFn = (Double, MeasureMode, Double, MeasureMode) -> (Double, Double)
+
+// Traits

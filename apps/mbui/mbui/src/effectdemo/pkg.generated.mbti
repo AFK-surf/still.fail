@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/effectdemo"
+
+import {
+  "mbui/effect",
+  "mbui/ui",
+}
+
+// Values
+pub fn backend(@effect.Runtime, @effect.Net) -> Unit
+
+pub fn view(Chat) -> (@ui.Ctx) -> Unit
+
+// Errors
+
+// Types and methods
+pub struct Chat {
+  mut shown : String
+  mut sent : Int32
+  mut pending : Int32
+  // private fields
+}
+pub fn Chat::send(Self, String) -> Unit
+pub fn Chat::start(@effect.Runtime, @effect.Net, Bool) -> Self
+
+pub struct World {
+  t : @ui.Tester
+  rt : @effect.Runtime
+  chat : Chat
+  net : @effect.SimNet
+  frames : Array[String]
+}
+pub fn World::new(Int32, fixed~ : Bool) -> Self
+pub fn World::step(Self, ms? : Int32) -> Unit
+pub fn World::tap(Self, String) -> Unit
+pub fn World::trace(Self) -> String
+pub fn World::two_sends(Self) -> Bool
+
+// Type aliases
+
+// Traits

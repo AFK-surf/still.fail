@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/awly"
+
+// Values
+
+// Errors
+
+// Types and methods
+type Spec
+
+type Sz
+
+// Type aliases
+
+// Traits

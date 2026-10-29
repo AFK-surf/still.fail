@@ -30,6 +30,7 @@ fn station_outflow(c : @ui.Ctx, core : Core, station : String, answers : Bool) -
 ///|
 /// The kinds an admin took out of a request, and its whole workspace (`<station>/<request>/<kind>`, `…/workspace`):
 /// ticked again, gone from here.
+// kept across runs: said by the ticks; reset (pages.mbt) empties it
 let outflow_left : Map[String, Bool] = {}
 
 ///|

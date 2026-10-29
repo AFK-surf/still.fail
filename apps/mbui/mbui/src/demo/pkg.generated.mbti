@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/demo"
+
+// Values
+
+// Errors
+
+// Types and methods
+type App
+
+type Msg
+
+// Type aliases
+
+// Traits
