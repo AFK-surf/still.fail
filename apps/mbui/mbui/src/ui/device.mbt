@@ -612,19 +612,33 @@ pub fn Ctx::catch_keys(self : Ctx, key : String, on : Bool) -> Unit {
 /// How far the soft keyboard reaches over the window's foot as this frame began, in points (0: down); the window is
 /// laid out above it.
 pub fn Ctx::ime_inset(self : Ctx) -> Double {
-  self.dev.ime_inset
+  ignore(self)
+  ime_said.get()
 }
 
 ///|
-/// Whether the soft keyboard is up as this frame began.
+/// Whether the soft keyboard is up as this frame began: what reads it changes as it comes up or goes down, not as it
+/// moves.
 pub fn Ctx::keyboard_up(self : Ctx) -> Bool {
-  self.dev.ime_inset > 0.0
+  ignore(self)
+  ime_up.get()
 }
+
+///|
+/// The soft keyboard's height as this frame began, and whether it is up: signals of their own, read where they are
+/// read (what reads neither is not built again as it moves), not among the host's settings the whole frame reads.
+// kept across runs: set as each frame begins
+let ime_said : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+
+///|
+// kept across runs: worked out of ime_said as it changes
+let ime_up : @signals.Computed[Bool] = @signals.computed(fn(_) { ime_said.get() > 0.0 }, same=fn(a, b) { a == b })
 
 ///|
 /// As a frame begins: the soft keyboard's height, as the host has it now (kept on the tape: envrec.mbt).
 fn Ctx::device_frame_start(self : Ctx) -> Unit {
   self.dev.ime_inset = h_ime_inset()
+  ime_said.set(self.dev.ime_inset)
 }
 
 ///|
