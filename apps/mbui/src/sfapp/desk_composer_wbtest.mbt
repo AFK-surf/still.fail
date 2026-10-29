@@ -756,6 +756,38 @@ test "the composer growing a line as it is typed in draws none of its words over
 }
 
 ///|
+test "a chat's composer growing a line as it is typed in keeps its send whole on its way, nothing of it faded or cut" {
+  reset()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=400.0, h=800.0, platform=2, pointing=Finger)
+  t.run_for(@ui.nav_push_ms)
+  let (px, py) = t.locate("icon:plus")[0]
+  t.tap(px + 120.0, py)
+  t.type_text("先看第三项")
+  t.run_for(2.0 * @sfpages.morph_ms)
+  t.draw()
+  let (cx, cy) = t.locate("icon:arrow-up")[0]
+  let side = @sf.theme().round.side
+  // (its round ground: the rect drawn as big as it, round its middle)
+  let send = fn() {
+    t
+    .drawn_order()
+    .filter(fn(d) {
+      d.0 == 0 && (d.3 - side).abs() < 1.0 && (d.4 - side).abs() < 1.0 && d.1 <= cx && d.1 + d.3 >= cx && d.2 <= cy && d.2 + d.4 >= cy
+    })
+    .map(fn(d) { d.5 })
+  }
+  assert_eq(send(), [1.0], msg="at rest")
+  t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
+  t.frame()
+  assert_eq(send(), [1.0], msg="as it sets off")
+  t.run_for(@sfpages.morph_ms / 4.0)
+  assert_eq(send(), [1.0], msg="a quarter of the way")
+}
+
+///|
 test "on a phone a finger 3 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
   for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
     let calls : Array[Made] = []

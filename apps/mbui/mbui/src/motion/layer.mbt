@@ -161,6 +161,9 @@ priv struct Rec {
   mut list : Int
   /// how far down from its place it is drawn on its way there this frame (0: in its place; makes_room)
   mut moving_dy : Double
+  /// how tall it shows this frame (as tall as it is laid out, or less: grown for its cause, coming out with its move;
+  /// makes_room)
+  mut shown_h : Double
   /// where it was drawn last frame (its last build's place), taken as this frame first lays it out: every build of a
   /// frame (frame_body) moves it from there, none from another build's place, which was never drawn; and its offsets
   /// then, which a move this frame sets from (not adds to, once a build)
@@ -249,6 +252,7 @@ fn Rec::new() -> Rec {
     driven: false,
     drove: 0.0,
     moving_dy: 0.0,
+    shown_h: 0.0,
     enter: None,
     ef: Anim::new(1.0),
     em: Anim::new(1.0),
@@ -1331,14 +1335,15 @@ fn makes_room(c : @ui.Ctx) -> Unit {
           continue
         }
         ignore(mr.oy.get())
+        ignore(mr.hp.get())
         let (_, my, _, mh) = c.node_rect(me.node)
         let mdy = c.look_of(me.node).dy
         if my >= ny + nh - 0.5 {
           // laid under it, drawn up over it: its words from that one's top on not drawn
           bottom = dmin(bottom, my + mdy - (ny + dy))
         } else if my + mh <= ny + 0.5 {
-          // laid over it, drawn down over it
-          top = dmax(top, my + mdy + mh - (ny + dy))
+          // laid over it, drawn down over it (as much of it as shows: grown, coming out with its move)
+          top = dmax(top, my + mdy + dmin(mh, mr.shown_h) - (ny + dy))
         }
       }
       // (its edge soft: what it draws fades in over room_soft as it is shown, the softness going as the room opens
@@ -1565,6 +1570,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       // by it that it moves away from or towards (the composer's field over its send, 2026-10-29: 「输入框变高的时候
       // 会盖住发送按钮」). Shrunk, or resized by nothing it moves for, it shows whole (a growth on its way going on, as far
       // off its new height as it was off its old).
+      r.shown_h = nh
       if e.flip && li < 0 {
         let shown = r.was_hh + (r.was_h - r.was_hh) * r.was_hp
         let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
@@ -1582,6 +1588,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         let p = r.hp.get()
         if p < 1.0 {
           let h = r.hh + (nh - r.hh) * p
+          r.shown_h = dmax(h, 0.0)
           c.cut_to_top(e.node, dmax(h, 0.0), soft=dmin(room_soft, nh - h))
         }
       }
