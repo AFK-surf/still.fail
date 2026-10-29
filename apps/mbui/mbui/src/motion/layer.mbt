@@ -879,6 +879,14 @@ pub fn layout_rest(key : String) -> Double {
 // ── a list's rows by key ────────────────────────────────────────────────
 
 ///|
+/// List `l` shown in `frame`, and in each frame what built it is kept as its nodes, its build not run (a pane beside
+/// the one in use: @ui.built_again): a frame it showed in so is no frame it was away.
+fn list_seen(l : ListMo, frame : Int) -> Unit {
+  l.seen = frame
+  @ui.built_again(fn(_) { l.seen = @ui.current().frame_number() })
+}
+
+///|
 /// What changes a list shows by its rows' keys (ListMotion.kt update): call while building, each frame, with the keys
 /// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
 /// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
@@ -905,7 +913,7 @@ pub fn list_keys(
   // many as it has rows
   match mo.lists.get(id) {
     Some(l) if physical_equal(l.names, keys) => {
-      l.seen = frame
+      list_seen(l, frame)
       return id
     }
     _ => ()
@@ -926,12 +934,13 @@ pub fn list_keys(
         seen: frame,
       }
       mo.lists[id] = l
+      list_seen(l, frame)
       return id
     }
   }
-  // not built the frame before (its page come back to, its pane slid to): drawn anew, as the first time
+  // not shown the frame before (its page come back to, its pane slid to): drawn anew, as the first time
   let away = lm.seen < frame - 1
-  lm.seen = frame
+  list_seen(lm, frame)
   // only what is between the rows alike at its start and at its end changed (a row come at the end, one gone, one
   // moved: what is between them, never every row of a long list); the keys are each row's own (a key twice in a list is
   // no list's)
