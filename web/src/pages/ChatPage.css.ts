@@ -181,6 +181,8 @@ export const detailInline = style({ display: "inline-flex", alignItems: "center"
 export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
 /** What is done with the chat, in its info (its files, its agents' letters, relaying it, it in Slack): rows with their icons, as a panel's are. */
 export const infoTools = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
+/** What holds a pull request's row in it (its card's and its menu's trigger): the row across it, as the others are. */
+export const infoPull = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)" });
 globalStyle(`${infoRows} ${panelRow}`, { padding: `0 6px 0 ${TEXT_IN - 3}px` });
 
 /** Where the chat is shared, at the end of its row. */

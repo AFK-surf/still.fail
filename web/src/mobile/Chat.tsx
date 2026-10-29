@@ -44,7 +44,7 @@ import { useAction } from "../action.ts";
 import { PeopleStack, PersonNamed } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { Letters } from "../Letters.tsx";
-import { PullMark, pullTitle, Things, useChatThings } from "../Things.tsx";
+import { PullMark, pullTitle, ThingMenu, Things, useChatThings } from "../Things.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
@@ -794,10 +794,15 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
         <div className={css.mInfoFacts}><PeopleStack people={view.people} max={5} /><span>{facts}</span></div>
         {pulls.length > 0 && (
           <InfoList>
+            {/* Held, 在对话中查看 and its link copied, as on the page of them. */}
             {pulls.slice(0, 3).map((p) => (
-              <InfoRow key={p.key} onClick={() => { app.sheet(null); window.open(p.url!, "_blank", "noopener"); }}>
-                <PullMark pull={p} size={16} /><span className={partsCss.mGrow}>{pullTitle(p)}</span><span className={partsCss.mMuted}>#{p.number}</span>
-              </InfoRow>
+              <ThingMenu key={p.key} thing={p} onShow={(seq) => { app.sheet(null); jumpTo({ station: here.station, thread: thread.id, seq }); }}>
+                <div>
+                  <InfoRow onClick={() => { app.sheet(null); window.open(p.url!, "_blank", "noopener"); }}>
+                    <PullMark pull={p} size={16} /><span className={partsCss.mGrow}>{pullTitle(p)}</span><span className={partsCss.mMuted}>#{p.number}</span>
+                  </InfoRow>
+                </div>
+              </ThingMenu>
             ))}
             {pulls.length > 3 && (
               <InfoRow onClick={() => openThings(app, here.station, thread.id, keeper, "pulls")}>

@@ -15,7 +15,10 @@ export const tile = style({
   borderRadius: MESSAGE_FILE_CORNER, cornerShape: vars.cornerShape, background: vars.neutralBg,
 });
 /** Its picture (a video's still) covering it. */
-export const tilePicture = style({ width: "100%", height: "100%", objectFit: "cover", display: "block" });
+export const tilePicture = style({
+  width: "100%", height: "100%", objectFit: "cover", display: "block", transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: { [`${tile}:hover &`]: { opacity: "0.85" } },
+});
 export const tilePlay = style({ position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" });
 export const thingsRows = style({ display: "flex", flexDirection: "column", gap: "2px" });
 /** A row: what opens it (its mark, its two lines) and 在对话中查看 at its end, round as an option, the pointer's ground on it. */

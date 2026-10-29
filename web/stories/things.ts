@@ -13,7 +13,8 @@ export function thingsDemo(): DemoExtension {
       if (t.topic === "chat" && value) owner = (value as { agents: { session: { key: string } }[] }).agents[0]?.session.key ?? owner;
       return undefined;
     },
-    topic: (t) => (t.topic === "chatThings" ? things(String((t as { q?: string }).q ?? ""), owner) : undefined),
+    topic: (t) => (t.topic === "chatThings" ? things(String((t as { q?: string }).q ?? ""), owner)
+      : t.topic === "linkPreview" ? preview(String((t as { url?: string }).url ?? "")) : undefined),
     // (a picture's bytes, and a video's still: the stories' picture)
     call: (name, p) => (name === "station.file" ? readFile(String(p.name), 0, Number.MAX_SAFE_INTEGER) : name === "station.poster" ? readFile("still.png", 0, Number.MAX_SAFE_INTEGER) : undefined),
   };
@@ -52,5 +53,17 @@ function things(q: string, owner: string): ChatThingsView {
     whole: true,
     counts: { media: media.length, files: files.length, links: links.length, pulls: pulls.length },
     media: having(media), files: having(files), links: having(links), pulls: having(pulls),
+  };
+}
+
+/** A pull request's card as its station reads it from GitHub (the `linkPreview` topic): the stories' four. */
+function preview(url: string): unknown {
+  const n = Number(/\/pull\/(\d+)/.exec(url)?.[1] ?? 0);
+  const pr = things("", "").pulls.find((p) => p.number === n);
+  if (!pr) return { kind: "none" };
+  const updatedAt = pr.updatedAt ?? Date.now();
+  return {
+    kind: "github_pull_request", url, repository: pr.repository, number: n, title: pr.title, state: pr.state, author: { login: "lin" },
+    additions: 120, deletions: 8, changedFiles: 4, updatedAt, checks: pr.checks, time: { updatedAt: stamp(updatedAt) },
   };
 }

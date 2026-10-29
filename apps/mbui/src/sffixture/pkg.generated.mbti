@@ -383,6 +383,8 @@ pub fn fixture_tabs_call(Fixture, String, Json) -> Result[Json, Json]
 
 pub fn fixture_tabs_shown(String) -> Map[String, Json]
 
+pub fn fixture_things(String, many? : Bool) -> Json
+
 pub fn fixture_topic(Fixture, String, Map[String, Json]) -> @sfbase.Topic
 
 pub fn fixture_topic_inner(Fixture, String, Map[String, Json]) -> Json?

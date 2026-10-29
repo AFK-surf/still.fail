@@ -5,14 +5,17 @@
 // kind's: the pictures a grid, the rest a row each. A picture or a file opens in the preview (an image stepping through
 // the chat's), a link or a pull request in the browser; 在对话中查看 at a row's end (a picture's menu) goes to the
 // message it was last said in. The chat's info names its pull requests itself (ThingsPulls).
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ContextMenu } from "radix-ui";
 import { useTopic } from "./core/react.ts";
 import type { ChatThing, ChatThingsView } from "./core/shapes.ts";
 import { FilePreview, fileSize, Gallery, kindOf, useFileShown, useVideoStill } from "./FilePreview.tsx";
 import { Empty, IconButton, Time } from "./ui.tsx";
 import { Segmented } from "@stillfail/ui/parts.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
-import { Chat, File, Link, PlayMark } from "@stillfail/ui/icons.tsx";
+import { Chat, Copy, File, Link, PlayMark } from "@stillfail/ui/icons.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
+import { LinkHover } from "./Peeks.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "./i18n.ts";
 import * as css from "./Things.css.ts";
@@ -70,7 +73,7 @@ export function Things({ station, thread, keeper, onShow, initial }: { station: 
         </div>
         {shown.length === 0 && <p className={css.thingsNone}>{t("web-main.find.none")}</p>}
         {kind === "media"
-          ? <div className={css.thingsGrid}>{shown.map((m) => <MediaTile key={m.key} thing={m} keeper={keeper} />)}</div>
+          ? <div className={css.thingsGrid}>{shown.map((m) => <MediaTile key={m.key} thing={m} keeper={keeper} onShow={onShow} />)}</div>
           : <div className={css.thingsRows}>{shown.map((m) => <ThingRow key={m.key} kind={kind} thing={m} keeper={keeper} onShow={onShow} />)}</div>}
         {!view.whole && <div className={css.thingsMore}><Spinner /></div>}
       </div>
@@ -79,7 +82,7 @@ export function Things({ station, thread, keeper, onShow, initial }: { station: 
 }
 
 /** A picture or a video, a square tile covered by its picture (a video's still, its play mark over it); pressed, the preview. */
-function MediaTile({ thing, keeper }: { thing: ChatThing; keeper: string }) {
+function MediaTile({ thing, keeper, onShow }: { thing: ChatThing; keeper: string; onShow(seq: number): void }) {
   const file = thing.file!;
   const owner = file.owner ?? keeper;
   const video = kindOf(file.name).kind === "video";
@@ -89,10 +92,12 @@ function MediaTile({ thing, keeper }: { thing: ChatThing; keeper: string }) {
   const url = video ? still.url : picture.url;
   return (
     <>
-      <button type="button" className={css.tile} onClick={() => setOpen(true)} aria-label={t(video ? "web-main.file.play" : "web-main.file.view", { name: file.name })}>
-        {url && (video && !still.poster ? <video className={css.tilePicture} src={url} muted playsInline preload="auto" aria-hidden="true" /> : <img className={css.tilePicture} src={url} alt="" />)}
-        {video && <span className={css.tilePlay} aria-hidden="true"><PlayMark size={22} /></span>}
-      </button>
+      <ThingMenu thing={thing} onShow={onShow}>
+        <button type="button" className={css.tile} onClick={() => setOpen(true)} aria-label={t(video ? "web-main.file.play" : "web-main.file.view", { name: file.name })}>
+          {url && (video && !still.poster ? <video className={css.tilePicture} src={url} muted playsInline preload="auto" aria-hidden="true" /> : <img className={css.tilePicture} src={url} alt="" />)}
+          {video && <span className={css.tilePlay} aria-hidden="true"><PlayMark size={22} /></span>}
+        </button>
+      </ThingMenu>
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={owner} file={file} />
     </>
   );
@@ -118,13 +123,33 @@ function ThingRow({ kind, thing, keeper, onShow }: { kind: Kind; thing: ChatThin
     </>
   );
   return (
-    <div className={css.row}>
-      {kind === "files"
-        ? <button type="button" className={css.rowOpen} onClick={() => setOpen(true)}>{words}</button>
-        : <a className={css.rowOpen} href={thing.url} target="_blank" rel="noopener noreferrer">{words}</a>}
-      <IconButton label={t("web-main.things.show")} icon={Chat} onClick={() => onShow(thing.seq)} />
-      {kind === "files" && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={thing.file!.owner ?? keeper} file={thing.file!} />}
-    </div>
+    <ThingMenu thing={thing} onShow={onShow}>
+      <div className={css.row}>
+        {kind === "files"
+          ? <button type="button" className={css.rowOpen} onClick={() => setOpen(true)}>{words}</button>
+          // (pointed at, the link's card: a pull request's as a message's link to it shows it)
+        : <LinkHover href={thing.url!} label={name}><a className={css.rowOpen} href={thing.url} target="_blank" rel="noopener noreferrer">{words}</a></LinkHover>}
+        <IconButton label={t("web-main.things.show")} icon={Chat} onClick={() => onShow(thing.seq)} />
+        {kind === "files" && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={thing.file!.owner ?? keeper} file={thing.file!} />}
+      </div>
+    </ThingMenu>
+  );
+}
+
+/** What a thing offers right clicked or held, as the app's: 在对话中查看, and a link's (a pull request's) copy. */
+export function ThingMenu({ thing, onShow, children }: { thing: ChatThing; onShow(seq: number): void; children: ReactNode }) {
+  const toast = useToast();
+  const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast(t("common.link.copied")));
+  return (
+    <ContextMenu.Root modal={false}>
+      <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+          <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => onShow(thing.seq)}><Chat size={14} />{t("web-main.things.show")}</ContextMenu.Item>
+          {thing.url && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copy(thing.url!)}><Copy size={14} />{t("common.link.copy")}</ContextMenu.Item>}
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
 

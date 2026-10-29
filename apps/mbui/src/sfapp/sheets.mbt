@@ -424,6 +424,13 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             break
           }
           let pv = Some(p)
+          // held or right clicked, its menu (在对话中查看, its link copied); pointed at, its card (sfpages things.mbt)
+          let pid = c.id("info/pull/" + text(pv, "key"))
+          @sfpages.thing_menu(c, pid, number(pv, "seq"), text(pv, "url"), fn(seq) {
+            close()
+            go_to(r, seq)
+          })
+          @sfpages.link_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid)
           if info_row(c, "info/pull/" + text(pv, "key"), fn() {
               @sfpages.pull_mark(c, pv, 16.0)
               c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore

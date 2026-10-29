@@ -41,7 +41,9 @@ if (child) {
 
 // the transcript, as the real claude keeps it
 const config = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME || ".", ".claude");
-const transcript = path.join(config, "projects", "e2e", `${sessionId}.jsonl`);
+// (in the directory the real one names by the working directory, every character but an ASCII letter or digit a dash:
+// the station looks for a session's transcript there alone, station/src/read/transcript.ts claudeProject)
+const transcript = path.join(config, "projects", process.cwd().replace(/[^a-zA-Z0-9]/g, "-"), `${sessionId}.jsonl`);
 let entry = 0;
 function record(type, content) {
   fs.mkdirSync(path.dirname(transcript), { recursive: true });

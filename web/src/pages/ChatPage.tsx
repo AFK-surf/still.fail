@@ -7,7 +7,8 @@ import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
 import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, List, Monitor, More, PanelClose, PanelOpen, Phone, Photo, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { Letters } from "../Letters.tsx";
-import { PullMark, pullTitle, Things, useChatThings } from "../Things.tsx";
+import { PullMark, pullTitle, ThingMenu, Things, useChatThings } from "../Things.tsx";
+import { LinkHover } from "../Peeks.tsx";
 import { jumpTo } from "../jumpTo.ts";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
@@ -713,6 +714,7 @@ function ChatInfo({ station, session, onLetters, onThings, onFiles, onRelay }: {
           <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
             onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }}
             onLetters={() => { setOpen(false); onLetters(); }} onThings={(kind) => { setOpen(false); onThings(kind); }}
+            onShow={(thread, seq) => { setOpen(false); jumpTo({ station, thread, seq }); }}
             onFiles={onFiles && (() => { setOpen(false); onFiles(); })} onRelay={onRelay && (() => { setOpen(false); onRelay(); })} />
         </Popover.Content>
       </Popover.Portal>
@@ -731,7 +733,7 @@ function ShareOf({ station, session, onClose }: { station: string; session: stri
 }
 
 /** What the chat's info says, as the chat is now: read only while it shows. */
-function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetters, onThings, onFiles, onRelay }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void; onLetters(): void; onThings(kind?: "pulls"): void; onFiles?: (() => void) | undefined; onRelay?: (() => void) | undefined }) {
+function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetters, onThings, onShow, onFiles, onRelay }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void; onLetters(): void; onThings(kind?: "pulls"): void; onShow(thread: number, seq: number): void; onFiles?: (() => void) | undefined; onRelay?: (() => void) | undefined }) {
   const chat = useChat(station, { session }).value;
   const link = useLink();
   const things = useChatThings(station, chat?.thread?.id ?? null);
@@ -763,7 +765,12 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
         </>}
       </dl>
       {pulls.length > 0 && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
-        {pulls.slice(0, PULLS_SHOWN).map((p) => <PanelRow key={p.key} icon={<PullMark pull={p} />} label={pullTitle(p)} end={`#${p.number}`} onClick={() => window.open(p.url!, "_blank", "noopener")} />)}
+        {/* Pointed at, its card (as a message's link to it); right clicked, 在对话中查看 and its link copied. */}
+        {pulls.slice(0, PULLS_SHOWN).map((p) => (
+          <ThingMenu key={p.key} thing={p} onShow={(seq) => { if (thread) onShow(thread.id, seq); }}>
+            <div className={css.infoPull}><LinkHover href={p.url!} label={pullTitle(p)}><div className={css.infoPull}><PanelRow icon={<PullMark pull={p} />} label={pullTitle(p)} end={`#${p.number}`} onClick={() => window.open(p.url!, "_blank", "noopener")} /></div></LinkHover></div>
+          </ThingMenu>
+        ))}
         {pulls.length > PULLS_SHOWN && <PanelRow icon={<List size={14} />} label={t("web-main.things.pullsAll", { n: pulls.length })} onClick={() => onThings("pulls")} />}
       </div>}
       {chat.agents.length > 0 && (

@@ -578,6 +578,8 @@ pub let swipe_off_ms : Double
 
 pub fn switch_workspace(@sfbase.Source, String) -> Unit
 
+pub fn thing_menu(@ui.Ctx, Int32, Double, String, (Double) -> Unit) -> Unit
+
 pub fn things_body(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, Bool, (Double) -> Unit) -> Unit
 
 pub fn things_choose(@sfbase.ChatRef, String) -> Unit

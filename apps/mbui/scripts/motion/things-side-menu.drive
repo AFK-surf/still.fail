@@ -1,0 +1,9 @@
+# As things-side.drive: a pull request right clicked, its menu (在对话中查看, 复制链接).
+timeout 20000
+until 媒体 4
+wait 1200
+tap PR 4
+wait 900
+rightclick 首页列表按天分组
+wait 900
+exit

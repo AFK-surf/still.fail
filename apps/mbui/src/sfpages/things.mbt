@@ -209,14 +209,15 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
 }
 
 ///|
-/// A thing held or right clicked (box `id`): its menu at the pointer, 在对话里看 first, then a link's copy.
-fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Double) -> Unit) -> Unit {
+/// A thing held or right clicked (box `id`, said in message `seq`): its menu at the pointer, 在对话中查看 first (`away`),
+/// then a link's copy (`url`: none for a file). The chat's info's pull requests have it too.
+pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Double) -> Unit) -> Unit {
   match c.menu_asked(id) {
     Some((x, y)) => {
       @sf.menu_held(c, "thing") |> ignore
       let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.things.show"), fn() { away(seq) }, icon="chat"))]
       if url != "" {
-        menu.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.copyLink"), fn() { menu_doing.copy = url }, icon="copy")))
+        menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { menu_doing.copy = url }, icon="copy")))
       }
       @sf.menu(menu, from=@sf.at_point(x, y))
     }
@@ -297,6 +298,10 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
     }
   }
   thing_menu(c, id, seq, url, away)
+  // pointed at, a link's card over it, a pull request's as a message's link to it shows it (peeks.mbt)
+  if kind != "files" {
+    link_peek(c, src, r.station, url, name, id)
+  }
   let show = c.id("things/show/" + kind + "/" + text(t, "key"))
   if c.clicked(show) {
     away(seq)
@@ -382,9 +387,9 @@ let things_grid_row : @ui.Style = @ui.css("row w=Full gap=S1")
 let things_measure : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// A tile: round as a message's file, the hover's grey under its picture while it comes.
+/// A tile: round as a message's file, the hover's grey under its picture while it comes; pointed at, a shade fainter.
 // kept across runs: a value (no field of it changes)
-let things_tile : @ui.Style = @ui.css("radius=Lg clip bg=Hover")
+let things_tile : @ui.Style = @ui.css("radius=Lg clip bg=Hover hovered{opacity=O85}")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -770,7 +770,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
           break
         }
         let pv = Some(p)
-        if info_pull_row(c, "info-pop/pull/" + text(pv, "key"), pv) {
+        if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
           chat_own.info_open = false
           let url = text(pv, "url")
           c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
@@ -917,8 +917,9 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
 
 ///|
 /// A pull request in the info (as info_row): its mark where a row's icon is, its title cut to the line, its number at
-/// the line's end, muted. True on the frame after a press.
-fn info_pull_row(c : @ui.Ctx, key : String, pull : Json?) -> Bool {
+/// the line's end, muted; pointed at, its card (as a message's link to it); held or right clicked, its menu (在对话中查看,
+/// its link copied). True on the frame after a press.
+fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Json?) -> Bool {
   let id = c.id(key)
   let title = @sfpages.pull_title(pull)
   let b = c.box(style=info_tool(), id~, fn() {
@@ -927,7 +928,12 @@ fn info_pull_row(c : @ui.Ctx, key : String, pull : Json?) -> Bool {
     c.text("#" + count(pull, "number").to_string(), style=info_end) |> ignore
   })
   c.semantics(b, Link, id~, label=title)
-  @sf.tip(c, key, id, title)
+  let url = text(pull, "url")
+  @sfpages.link_peek(c, src, r.station, url, title, id)
+  @sfpages.thing_menu(c, id, number(pull, "seq"), url, fn(seq) {
+    chat_own.info_open = false
+    @sfbase.go_to(r, seq)
+  })
   c.clicked(id)
 }
 
