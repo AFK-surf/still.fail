@@ -2027,8 +2027,6 @@ let en : Map[String, String] = {
   "web-pages.settings.stations.restart": "Restart station",
   "web-pages.settings.stations.restartWhat": "restart the station",
   "web-pages.settings.stations.restarting": "Restarting; running sessions carry on",
-  "web-pages.stations.network.relayUdp": "Relay over UDP",
-  "web-pages.stations.network.relayUdpNote": "When on, this station's data to and from relays that support UDP goes over UDP only, never their WebSocket (if UDP is blocked, the way through them does not work); other relays are unchanged. Applies at once; existing connections carry on.",
   "web-main.outflow.title": "Data outflow",
   "web-main.outflow.lead": "Programs on this station’s machine that ask for or were allowed to read your still.fail data. An admin of the workspace answers them here; revoked, their next read is refused.",
   "web-main.outflow.and": ", ",

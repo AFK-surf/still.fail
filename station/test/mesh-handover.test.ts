@@ -9,7 +9,7 @@ import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
 import { settle } from "./hub-fakes.ts";
 
-function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cubic" | "bbr", relayUdp?: boolean) {
+function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cubic" | "bbr") {
   const original = process.env.STILLFAIL_MESH_BIND_ADDR;
   if (bindAddr === undefined) delete process.env.STILLFAIL_MESH_BIND_ADDR;
   else process.env.STILLFAIL_MESH_BIND_ADDR = bindAddr;
@@ -24,7 +24,6 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   let calls = 0;
   let presence = false;
   let boundCongestion: string | undefined;
-  let boundRelayUdp: boolean | undefined;
   // The cloud's state as the mesh reads it once bound: a workspace, no relays, no other stations.
   const cloud = { state: { workspace_name: "ws" }, relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
@@ -33,7 +32,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),
-    Layer.succeed(StationConfig)({ raw: () => ({ network: { congestion, relayUdp } }), listen: () => () => {} } as never),
+    Layer.succeed(StationConfig)({ raw: () => ({ network: { congestion } }), listen: () => () => {} } as never),
     Layer.succeed(ControlPlane)({
       state: cloud,
       changes: Stream.never,
@@ -45,7 +44,6 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     Layer.succeed(MeshNative)({ bind: async (options: Parameters<Mesh["bind"]>[0]) => {
       calls++;
       boundCongestion = options.congestion;
-      boundRelayUdp = options.relayUdp;
       binding.resolve();
       const endpoint = await memoryMesh().bind(options);
       // Its relay link never up: no real sockets or timers in this scheduling regression.
@@ -65,7 +63,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
     built.resolve();
     yield* Effect.never;
   })));
-  return { previous, built, binding, accepting, running, calls: () => calls, presence: () => presence, congestion: () => boundCongestion, relayUdp: () => boundRelayUdp };
+  return { previous, built, binding, accepting, running, calls: () => calls, presence: () => presence, congestion: () => boundCongestion };
 }
 
 test("the mesh starts with its saved controller, cubic when no choice was made", async (t) => {
@@ -74,16 +72,6 @@ test("the mesh starts with its saved controller, cubic when no choice was made",
     try {
       await s.accepting.promise;
       assert.equal(s.congestion(), choice ?? "cubic");
-    } finally { await Effect.runPromise(Fiber.interrupt(s.running)); }
-  }
-});
-
-test("the mesh asks the relays for UDP only when it was turned on", async (t) => {
-  for (const choice of [undefined, true, false] as const) {
-    const s = startup(t, undefined, undefined, choice);
-    try {
-      await s.accepting.promise;
-      assert.equal(s.relayUdp(), choice === true);
     } finally { await Effect.runPromise(Fiber.interrupt(s.running)); }
   }
 });

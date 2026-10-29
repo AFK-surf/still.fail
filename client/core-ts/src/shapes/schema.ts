@@ -2221,7 +2221,6 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
   StationNetwork: struct([
     ["congestion", "String", { doc: "The saved congestion controller: cubic (default) or experimental bbr." }],
-    ["relayUdp", "bool", { default: true, doc: "Whether the station asks its relays for their UDP way: off by default; on, a relay that offers one carries\nits datagrams over UDP only (none from a station older than it)." }],
   ], { doc: "A station's advanced network settings, read when it starts." }),
   StationContext: struct([
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],

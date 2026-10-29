@@ -56,9 +56,6 @@ pub struct Options {
     pub relay_only: Option<bool>,
     /// Advanced choice, cubic by default; read when the endpoint is created.
     pub congestion: Option<String>,
-    /// Advanced choice, off by default: ask the relays for their UDP way (iroh's `relay_udp`). A relay that offers one
-    /// carries the datagrams over UDP only, never its WebSocket; one that offers none relays them as before.
-    pub relay_udp: Option<bool>,
 }
 
 #[napi]
@@ -107,7 +104,6 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
         .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
         .home_on_every_relay()
-        .relay_udp(options.relay_udp.unwrap_or(false))
         .transport_config(transport);
     if let Some(addr) = &options.bind_addr {
         builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(failed)?).map_err(failed)?;
@@ -196,13 +192,6 @@ impl Endpoint {
     pub fn set_congestion(&self, congestion: String) -> napi::Result<()> {
         self.inner.set_transport_config(transport(&congestion)?);
         Ok(())
-    }
-
-    /// Whether the relays are asked for their UDP way, from now on: each relay link is dialed again, its connections
-    /// going on over the new way (the advanced network setting changed while the station runs).
-    #[napi]
-    pub async fn set_relay_udp(&self, on: bool) {
-        self.inner.set_relay_udp(on).await;
     }
 
     /// iroh's own public relays: added while none of still.fail's answers, removed once one does (`keep_relays`).

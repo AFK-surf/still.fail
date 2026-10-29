@@ -5181,11 +5181,6 @@ export interface StationSearch {
 export interface StationNetwork {
 	/** The saved congestion controller: cubic (default) or experimental bbr. */
 	congestion: string;
-	/**
-	 * Whether the station asks its relays for their UDP way: off by default; on, a relay that offers one carries
-	 * its datagrams over UDP only (none from a station older than it).
-	 */
-	relayUdp?: boolean;
 }
 
 /** How a station goes on with a session whose prompt cache is over (`Overview.context`). */

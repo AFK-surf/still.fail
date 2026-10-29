@@ -9,8 +9,6 @@
   "web-pages.settings.stations.restart": "Restart station",
   "web-pages.settings.stations.restartWhat": "restart the station",
   "web-pages.settings.stations.restarting": "Restarting; running sessions carry on",
-  "web-pages.stations.network.relayUdp": "Relay over UDP",
-  "web-pages.stations.network.relayUdpNote": "When on, this station's data to and from relays that support UDP goes over UDP only, never their WebSocket (if UDP is blocked, the way through them does not work); other relays are unchanged. Applies at once; existing connections carry on.",
   "web-pages.accounts.signInFailed": "Couldn't sign in: {error}",
   "web-pages.accounts.signOutFailed": "Couldn't sign out: {error}",
   "web-pages.accounts.deleteFailed": "Couldn't delete the account: {error}",

@@ -172,29 +172,6 @@ test "a station's ⋯ restarts it" {
 }
 
 ///|
-test "network settings switch the relays' UDP way" {
-  let asked : Array[Json] = []
-  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0,
-    over=fn(s) { { ..s, call: fn(name, params, done) {
-      if name == "network.setRelayUdp" { asked.push(params) }
-      (s.call)(name, params, done)
-    } } }, ready=fn() { @settings.station_parts["ws1/st1"] = "settings" })
-  t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("中继走 UDP") is None, msg="folded")
-  scrolled_to(t, 390.0, "高级网络设置")
-  match t.find("高级网络设置") {
-    Some((x, y)) => t.tap(x, y)
-    None => fail("no advanced network settings")
-  }
-  t.draw()
-  scrolled_to(t, 390.0, "中继走 UDP")
-  t.click(Switch, label="中继走 UDP")
-  t.draw()
-  assert_eq(asked.length(), 1, msg="switched")
-  assert_eq(field(Some(asked[0]), "relayUdp"), Some(Json::boolean(true)))
-}
-
-///|
 test "a station's 设置 switches sending its log to still.fail off" {
   let asked : Array[Json] = []
   let t = setting_tester(

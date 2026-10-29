@@ -6,8 +6,8 @@
 # It is fetched there, not copied over: from the home network the upload stalls, and Hong Kong gets ~25 KB/s from
 # anywhere, so the download goes on from where it stopped. The relay is restarted on it only when nothing else has
 # the file open (a fetch left running once made systemd fail "Text file busy" for 14 minutes, 2026-10-29), and put back
-# as it was when its HTTPS does not answer within 20 s. UDP_BIND (default 0.0.0.0:443) is written in relay.toml when it
-# has no udp_bind_addr; the machine's security group has to let that UDP port in.
+# as it was when its HTTPS does not answer within 20 s. A `udp_bind_addr` left in relay.toml from when stations could
+# ask for the relay's UDP way (2026-10-29/30) is taken out: none asks any more.
 set -eu
 rev=${1:?the iroh commit}
 url=${CLOUD:-https://app.still.fail}/releases/relay/iroh-relay-$rev-linux-x64
@@ -25,17 +25,15 @@ chmod 755 "$part"
 if fuser "$part" >/dev/null 2>&1; then echo "something still has $part open" >&2; exit 1; fi
 cp -p "$bin" "$bin.before"
 cp -p "$conf" "$conf.before"
-if ! grep -q '^udp_bind_addr' "$conf"; then
-  # top-level keys come before the first [section]
-  awk -v addr="${UDP_BIND:-0.0.0.0:443}" '!done && /^\[/ { print "udp_bind_addr = \"" addr "\""; done = 1 } { print }' "$conf.before" > "$conf.new"
-  cat "$conf.new" > "$conf" && rm "$conf.new"
+if grep -q '^udp_bind_addr' "$conf"; then
+  grep -v '^udp_bind_addr' "$conf.before" > "$conf"
 fi
 rm -f "$bin" && mv "$part" "$bin"
 systemctl restart iroh-relay
 for i in $(seq 1 10); do
   sleep 2
   if curl -fsSk -o /dev/null --max-time 4 https://127.0.0.1/; then
-    echo "iroh-relay $rev is up"; journalctl -u iroh-relay --since -30s --no-pager | grep -m3 -E 'udp|serving'; exit 0
+    echo "iroh-relay $rev is up"; journalctl -u iroh-relay --since -30s --no-pager | grep -m3 'serving'; exit 0
   fi
 done
 echo "iroh-relay $rev did not come up: putting the one before back" >&2

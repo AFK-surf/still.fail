@@ -56,10 +56,9 @@ export type Endpoint = {
   removeRelay(url: string): Promise<void>;
   publicRelays(on: boolean): Promise<void>;
   keep(urls: string[]): void;
-  /// The advanced network settings changed while running (lib.rs): the controller of the connections made from now
-  /// on; the relays' UDP way, each relay link dialed again. Absent from an addon from before.
+  /// The advanced network setting changed while running (lib.rs): the controller of the connections made from now
+  /// on. Absent from an addon from before.
   setCongestion?(congestion: "cubic" | "bbr"): void;
-  setRelayUdp?(on: boolean): Promise<void>;
   accept(): Promise<Connection | null>;
   /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks).
   connect(addr: Addr, alpn: Buffer, additional?: Buffer[]): Promise<Connection>;
@@ -67,7 +66,7 @@ export type Endpoint = {
 };
 export type Mesh = {
   /// `relayOnly`: through the relays alone, no IP transports (what measures the way through a relay).
-  bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; bindAddr?: string; relayOnly?: boolean; congestion?: "cubic" | "bbr"; relayUdp?: boolean }): Promise<Endpoint>;
+  bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; bindAddr?: string; relayOnly?: boolean; congestion?: "cubic" | "bbr" }): Promise<Endpoint>;
   /// thumbs.rs `thumbnail` (native/mesh/src/thumbs.rs): the image's thumbnail in `dir`, made if not there yet; null when
   /// the image is shown itself.
   thumbnail(image: string, dir: string): Promise<{ path: string; type: string } | null>;
