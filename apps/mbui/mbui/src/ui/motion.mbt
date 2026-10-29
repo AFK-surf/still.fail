@@ -81,25 +81,26 @@ pub(all) enum Ease {
 } derive(Eq, Show)
 
 ///|
-/// Move's spring: ω·T where it rests (its way within 0.2% of its end: under a point and a half over the window's
-/// width, landing at 1.5% of its mean speed), and how far it has got there, so that the curve ends at 1. A spring of visual duration v (Motion's, ω = 2π / 1.2v)
-/// rests at T = move_k · 1.2v / 2π.
-let move_k : Double = 8.5
+/// Move's spring: ω·T where it rests (its way within 0.5% of its end, landing at 3% of its mean speed: nothing seen
+/// of a tail longer than that but a wait, the user 2026-10-29: 「动效有点太墨迹了」), and how far it has got there, so
+/// that the curve ends at 1. A spring of visual duration v (Motion's, ω = 2π / 1.2v) rests at T = move_k · 1.2v / 2π;
+/// nine tenths of the way at half of T.
+let move_k : Double = 7.4
 
 ///|
 let move_end : Double = 1.0 - (1.0 + move_k) * @dmath.exp(-move_k)
 
 ///|
-/// How long a Move takes, by how far it goes: near (a row, the composer, a card: Motion's 0.28 s, the web's MOVE),
-/// a page (pushed, risen, a sheet, a picture, the search: 0.32 s, a sheet's spring), far (across the window: the
-/// tape, the sidebar: 0.38 s, the web's moveState); each to whole frames (450, 500, 600 ms).
-pub let move_near_ms : Double = spring_move_ms(0.28)
+/// How long a Move takes, by how far it goes: near (a row, the composer, a card: 0.22 s), a page (pushed, risen, a
+/// sheet, a picture, the search: 0.26 s), far (across the window: the tape, the sidebar: 0.32 s); each to whole frames
+/// (300, 350, 450 ms: nine tenths of the way by 150, 180, 230).
+pub let move_near_ms : Double = spring_move_ms(0.22)
 
 ///|
-pub let move_page_ms : Double = spring_move_ms(0.32)
+pub let move_page_ms : Double = spring_move_ms(0.26)
 
 ///|
-pub let move_far_ms : Double = spring_move_ms(0.38)
+pub let move_far_ms : Double = spring_move_ms(0.32)
 
 ///|
 fn spring_move_ms(visual : Double) -> Double {

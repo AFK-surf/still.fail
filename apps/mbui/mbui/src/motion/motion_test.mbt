@@ -27,9 +27,9 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
 
 ///|
 test "a Move is a critically damped spring's way from rest, ending at 1" {
-  // a critically damped spring at rest (within 0.2%) at the page's length: ωT = 8.5
+  // a critically damped spring at rest (within 0.5%) at the page's length: ωT = 7.4
   let len = @ui.move_page_ms / 1000.0
-  let w = 8.5 / len
+  let w = 7.4 / len
   let (rest, _) = @motion.spring_at(1.0, w * w, 1.0, 0.0, len)
   for t in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9] {
     let (left, _) = @motion.spring_at(1.0, w * w, 1.0, 0.0, t * len)
@@ -40,7 +40,7 @@ test "a Move is a critically damped spring's way from rest, ending at 1" {
   assert_eq(@ui.Move.at(1.0), 1.0)
   // no step in its first frame (120 Hz): under 1% of the way
   assert_true(@ui.Move.at(8.4 / @ui.move_far_ms) < 0.01)
-  assert_eq((@ui.move_near_ms, @ui.move_page_ms, @ui.move_far_ms), (450.0, 500.0, 600.0))
+  assert_eq((@ui.move_near_ms, @ui.move_page_ms, @ui.move_far_ms), (300.0, 350.0, 450.0))
 }
 
 ///|

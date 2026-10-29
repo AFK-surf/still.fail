@@ -211,25 +211,51 @@ test "a picture under the composer goes out from under it at its own size first,
   let th = thumb_of(t.ctx(), id).unwrap()
   let foot = 844.0 - flight_bar_h
   assert_true(th.y + th.h > foot + 20.0, msg="\{th.y} \{th.h}")
-  let clear = (th.x, foot - 12.0 - th.h, th.w, th.h)
   let at = t.locate("img:sent-key")
   t.tap(at[0].0, (th.y + foot) / 2.0)
   let v = viewer.val.unwrap()
-  // out from under the composer: its own size, wholly over it, the composer whole over the list meanwhile
-  t.run_for(fly_lift_ms)
-  assert_true(drawn_at(t, clear), msg="\{t.drawn_images()}")
+  // one move, on one curve: out from under the composer first (its own size, the composer whole over the list
+  // meanwhile), then grown, nothing still between; the going out is the curve's first `lift` of its way
+  let lift = fly_lift_ms / (fly_lift_ms + fly_open_ms)
+  let open_ms = fly_open_ms / (1.0 - lift)
+  let out = way_at(lift)
+  let start = t.time()
+  // (a hair each side of where the going out ends)
+  let near = fly_lift_ms / 50.0
+  t.run_for(out * open_ms - near)
   assert_eq(v.flying(), 0.0)
+  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
+  t.run_for(near * 2.0)
+  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
   // then grown to its place on the stage
-  t.run_for(fly_open_ms)
+  t.run_for(start + open_ms - t.time())
   let to = v.zoom.rect().unwrap()
   assert_true(drawn_at(t, to))
-  // back: shrunk to where it went out to, then in under the composer to its thumbnail
+  // back: shrunk, then in under the composer to its thumbnail, the same curve run back
   t.back()
-  t.run_for(fly_close_ms)
-  assert_true(drawn_at(t, clear), msg="\{t.drawn_images()}")
-  t.run_for(fly_lift_ms)
+  let back = t.time()
+  let close_ms = fly_close_ms / (1.0 - lift)
+  t.run_for((1.0 - out) * close_ms - near)
+  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.val is None)
   assert_true(drawn_at(t, (th.x, th.y, th.w, th.h)))
+}
+
+///|
+/// Where along its time a move's curve has gone `share` of its way.
+fn way_at(share : Double) -> Double {
+  let mut lo = 0.0
+  let mut hi = 1.0
+  for _ in 0..<60 {
+    let m = (lo + hi) / 2.0
+    if @ui.Ease::Move.at(m) < share {
+      lo = m
+    } else {
+      hi = m
+    }
+  }
+  (lo + hi) / 2.0
 }
 
 ///|
