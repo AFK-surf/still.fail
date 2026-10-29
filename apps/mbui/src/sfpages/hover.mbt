@@ -184,7 +184,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
     hover_hold()
   }
   c.box(style=agent_card_box, fn() {
-    // its mark (28) and label (its history, › after it), a stop while it works (in the card's top right corner)
+    // its mark (28) and label (its history, › after it), the whole line theirs
     c.box(style=agent_card_head, fn() {
       let who = c.id("agent-card/history")
       if c.clicked(who) {
@@ -207,23 +207,27 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json) -> Unit {
         @sf.icon(c, "chevron-right", size=14.0, color=if c.lit(who) { t.p.text } else { t.p.muted }) |> ignore
       })
       c.semantics(w, Button, id=who, label=@sf.t("web-pages.chat.historyOf", args=[("agent", text(s, "agentText"))]))
+    })
+    |> ignore
+    // where it stands, after a dot in its tone, and for how long (three lines at most); a stop at its end while it
+    // works, what stopping is of (its working said short then: 进行中, 排队中)
+    c.box(style=agent_card_stands, fn() {
+      c.box(style=agent_card_status, fn() {
+        c.box(style=agent_card_dot_room, fn() {
+          c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
+        })
+        |> ignore
+        let since = agent_waited(c, src, av)
+        let runs = [@ui.span(text(s, "statusText"))]
+        if since != "" {
+          runs.push(@ui.span(" · " + since, color=t.p.muted))
+        }
+        c.rich(runs, style=agent_card_words) |> ignore
+      })
+      |> ignore
       if working {
         agent_card_stop(c, src, station, key)
       }
-    })
-    |> ignore
-    // where it stands, after a dot in its tone, and for how long (three lines at most)
-    c.box(style=agent_card_status, fn() {
-      c.box(style=agent_card_dot_room, fn() {
-        c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
-      })
-      |> ignore
-      let since = agent_waited(c, src, av)
-      let runs = [@ui.span(text(s, "statusText"))]
-      if since != "" {
-        runs.push(@ui.span(" · " + since, color=t.p.muted))
-      }
-      c.rich(runs, style=agent_card_words) |> ignore
     })
     |> ignore
     // its latest lines, what it does now in the words' colour, running on as they change
@@ -758,10 +762,10 @@ let agent_card_box : @ui.Style = @ui.style(w=@sf.agent_card_w, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
+let agent_card_head : @ui.Style = @ui.css("row w=Full")
 
 ///|
-/// Its mark and name, level with each other: what the stop leaves of the head.
+/// Its mark and name, level with each other.
 // kept across runs: a value (no field of it changes)
 let agent_card_who : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=ACenter)
 
@@ -776,9 +780,14 @@ let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 let agent_card_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
+/// Where it stands and its stop, on one line: its words what the stop leaves.
+// kept across runs: a value (no field of it changes)
+let agent_card_stands : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
 /// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
 // kept across runs: a value (no field of it changes)
-let agent_card_status : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart pl=S0_5")
+let agent_card_status : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=AStart, pl=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -902,16 +911,11 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=
 let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground; in the card's top right corner
-/// as far from both its edges as makes it concentric with it (a small panel's corner: @sf.capsule_in), out past the
-/// panel's padding and the card's words' (hover_inner's 10) to there.
+/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
 // kept across runs: a value (no field of it changes)
 let agent_card_stop_pill : @ui.Style = @ui.css(
   #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=Hover}
-).then(@ui.style(mt=@sf.room_of(agent_card_stop_in), mr=@sf.room_of(agent_card_stop_in)))
-
-///|
-let agent_card_stop_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - 10.0
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
