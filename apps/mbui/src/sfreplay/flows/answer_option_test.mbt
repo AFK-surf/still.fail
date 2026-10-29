@@ -9,7 +9,7 @@ test "22-answer-option" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("answer-option"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("给我几个选项 083209 card:要不要换图标 083209|先不换 083209|一起换 083209*|不用了 083209!")

@@ -13,7 +13,7 @@ test "连接, at each width and with either hand: the connects, each with how it
     let (x, y) = t.find_last("值班机器人").unwrap()
     t.tap(x, y)
     t.draw()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.pages().iter().any(fn(p) { p is Setting(Connect(_, _)) }), msg=at)
   }
 }

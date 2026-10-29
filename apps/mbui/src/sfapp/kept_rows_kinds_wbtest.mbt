@@ -31,10 +31,10 @@ fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
   if tape {
     say_room(t, "medium", "medium")
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   if tape {
     t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
-    t.run_for(@sfdesk.side_move_ms)
+    t.run_for(@ui.move_most_ms)
   }
   t
 }

@@ -29,13 +29,13 @@ fn one_page_tester(
     app.nav.push(Setting(route))
   }
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // laid out Medium, the settings' list in use beside it: the page brought over (as a press on it does) before what is
   // in it is pressed
   if @sfdesk.wide.tape {
     @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
     t.draw()
-    t.run_for(@sfdesk.side_move_ms)
+    t.run_for(@ui.move_most_ms)
   }
   t
 }
@@ -108,6 +108,6 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
 test "关于 on a phone: back goes to settings" {
   let t = one_page_tester(@settings.Route::About, 390.0, platform=2)
   t.tap_text("设置")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Settings)
 }

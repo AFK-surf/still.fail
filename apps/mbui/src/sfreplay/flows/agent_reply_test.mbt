@@ -7,7 +7,7 @@ test "05-agent-reply" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("agent-reply"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("请回答一句 064618 post:收到，这是 agent 的回复 064618")

@@ -30,7 +30,7 @@ fn publish_core(calls : Array[Made]) -> @ui.Tester {
   }
   open_fixture_over("chat-info", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 

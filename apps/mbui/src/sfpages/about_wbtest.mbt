@@ -15,7 +15,7 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
     t.tap_text("服务条款")
     assert_true(t.opened().contains("https://still.fail/terms"), msg=at)
     t.tap_text("更新日志")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Changelog), msg=at)
     assert_true(t.find("当前版本 0.1.1300") is Some(_), msg=at)
   }

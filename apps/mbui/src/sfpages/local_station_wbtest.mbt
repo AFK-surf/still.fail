@@ -24,7 +24,7 @@ test "本机 Station, at each width and with either hand: as the system says it 
     t.click(Button, label="更多操作")
     t.frame()
     // (its menu in, a sheet's or a menu's)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     let (sx, sy) = t.find_last("停止").unwrap()
     t.tap(sx, sy)
     t.frame()

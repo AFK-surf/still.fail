@@ -9,7 +9,7 @@ fn open_tester(w : Double, h : Double, platform : Int) -> (@ui.Tester, Source, C
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   (t, src, r)
 }
 
@@ -17,7 +17,7 @@ fn open_tester(w : Double, h : Double, platform : Int) -> (@ui.Tester, Source, C
 test "an agent's history a page asks of its chat: laid out Small its page over the chat; wide, the chat's side panel's tab" {
   let (t, src, r) = open_tester(390.0, 844.0, 2)
   open_detail(src, r, "s-c1")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is History(_, "s-c1", None), msg="the history's page")
   let (t, src, r) = open_tester(1280.0, 800.0, 0)
   open_detail(src, r, "s-c1")
@@ -30,10 +30,10 @@ test "an agent's history a page asks of its chat: laid out Small its page over t
 test "a new chat opened: laid out Small it rises from the foot over the page; wide, it is the page" {
   let (t, _, _) = open_tester(390.0, 844.0, 2)
   open_page(NewChat)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is NewChat && app.nav.risen())
   let (t, _, _) = open_tester(1280.0, 800.0, 0)
   open_page(NewChat)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is NewChat && !app.nav.risen())
 }

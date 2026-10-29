@@ -35,14 +35,14 @@ test "the settings' list: the same rows in the same order on a small screen's pa
     h=2400.0,
     platform=0,
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let small = settings_list_order.copy()
   small.insert(small.search("通知").unwrap() + 1, "下方栏")
   assert_eq(settings_rows_shown(t, small, 390.0), small)
   // large: the sidebar beside the settings' pages, no bottom bar beside them nor a row of it
   let t = wide_tester([], mode="settings", h=1200.0)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (edge, _) = t.find("返回会话").unwrap()
   assert_eq(settings_rows_shown(t, small, edge + 200.0), settings_list_order)
 }
@@ -55,7 +55,7 @@ test "the settings' list: no 下方栏 on a medium screen with a finger, its bar
   t.draw()
   app.nav.push(Settings)
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("外观") is Some(_))
   assert_true(t.find("通知") is Some(_))
   assert_true(t.find("下方栏") is None)
@@ -68,9 +68,9 @@ test "the settings' list: Station, 连接, Profile and 用量 among its rows whi
     assert_true(@sfdesk.rail_items(fixture("settings"), "ws1").contains(place), msg="the rail's: " + place)
   }
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("连接")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Connects("")))
   assert_true(@sfdesk.lit_place() == "settings", msg="still in the settings")
 }
@@ -86,7 +86,7 @@ test "the settings' list: how things stand at each row's end, what is wrong in r
     h=2400.0,
     platform=2,
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (the settings' fixture: a device waiting in security mode, a secret's use asked, a station off, a connect failing)
   for said in ["1 件待处理", "1 个待批准", "1/2 在线", "1 个出错", "浅色"] {
     assert_true(t.find(said) is Some(_), msg=said)

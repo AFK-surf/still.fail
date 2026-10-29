@@ -12,7 +12,7 @@ test "记忆, at each width and with either hand: a row a station (one offline s
     assert_true(t.find("离线，上线后再查看") is Some(_), msg=at)
     assert_true(t.find("发布流程") is None, msg=at)
     t.tap_text("Studio")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Memory("ws1/st1")), msg=at)
     // back to 记忆 over it
     assert_true(t.find("记忆") is Some(_), msg=at)
@@ -23,7 +23,7 @@ test "记忆, at each width and with either hand: a row a station (one offline s
     assert_true(t.find("周报") is Some(_), msg=at)
     assert_true(t.find("pdf、xlsx") is Some(_), msg=at)
     t.tap_text("发布流程")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(MemoryDoc("ws1/st1", "发布流程", 0)), msg=at)
   }
 }

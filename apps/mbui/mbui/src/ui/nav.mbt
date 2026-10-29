@@ -95,10 +95,14 @@ struct Nav[P] {
   finger : @signals.Signal[Double]
   mut p0 : Double
   mut p1 : Double
-  // when the motion started (-1: at its first frame), how long, how
+  // when the motion started (-1: at its first frame), how long (a Move's over how far it goes: move_ms), and how fast
+  // it set out (its widths per ms: a finger's let go, a slide under way)
   mut t0 : Double
   mut dur : Double
-  mut curve : Ease
+  mut v0 : Double
+  // the room it was last built in (Ctx::nav): how far a width or a height of its way is
+  mut room_w : Double
+  mut room_h : Double
   // a finger's: where it started, how fast it went (px per ms), its track
   // (for how fast, scroll.mbt)
   mut x0 : Double
@@ -167,7 +171,9 @@ pub fn[P] Nav::new(
     p1: 0.0,
     t0: -1.0,
     dur: 0.0,
-    curve: Move,
+    v0: 0.0,
+    room_w: 0.0,
+    room_h: 0.0,
     x0: 0.0,
     vel: 0.0,
     track: Tracker::new(),
@@ -243,20 +249,27 @@ pub fn[P] Nav::offset(self : Nav[P]) -> Double {
 }
 
 ///|
+/// Off to `p1` (mode 1 coming in, 2 going, 4 back to rest from a finger) from where it is, as fast as `v` (its widths
+/// per ms: the finger's as it let go), on a Move as long as its way is far (move_ms of it, in points: across its room,
+/// or up it for a page that rose).
 fn[P] Nav::go(
   self : Nav[P],
   mode : Int,
   p1 : Double,
-  dur : Double,
-  curve : Ease,
   brings? : Bool = false,
+  v? : Double = 0.0,
 ) -> Unit {
   wake()
   self.mode = mode
   self.p0 = self.p
   self.p1 = p1
-  self.dur = dur
-  self.curve = curve
+  let rising = match self.leaving {
+    Some(e) => e.rise
+    None => self.pages[self.pages.length() - 1].rise
+  }
+  let room = if rising { self.room_h } else { self.room_w }
+  self.dur = move_ms((p1 - self.p).abs() * room)
+  self.v0 = v
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
   // frame that builds it (Ctx::nav)
   self.t0 = if in_frame.val { g().clock } else { -1.0 }
@@ -321,26 +334,6 @@ fn[P] Nav::settle(self : Nav[P]) -> Unit {
   self.mode = 0
   self.p = 0.0
 }
-
-///|
-/// How long a page takes to slide in over the one on top, and back off it (popped): a page's Move.
-pub let nav_push_ms : Double = move_page_ms
-
-///|
-/// How long a page takes to rise from the bottom (Nav::rise), and to sink back: a page's Move.
-pub let nav_rise_ms : Double = move_page_ms
-
-///|
-/// How long a page let go short of going back takes to come back to its place.
-pub let nav_return_ms : Double = 200.0
-
-///|
-/// A page let go to go back goes on for this much of the way it had left (at most, from where the finger had it),
-/// and never for less than `nav_let_go_min_ms`.
-pub let nav_let_go_ms : Double = 280.0
-
-///|
-pub let nav_let_go_min_ms : Double = 120.0
 
 ///|
 /// A slide held (Nav::comes_when): its start, until it goes.
@@ -457,7 +450,7 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
   self.p = 1.0
-  self.go(1, 0.0, nav_push_ms, Move, brings=true)
+  self.go(1, 0.0, brings=true)
 }
 
 ///|
@@ -485,7 +478,7 @@ pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   e.rise = true
   self.pages.push(e)
   self.p = 1.0
-  self.go(1, 0.0, nav_rise_ms, Move, brings=true)
+  self.go(1, 0.0, brings=true)
 }
 
 ///|
@@ -518,10 +511,7 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   }
   self.leaving = self.pages.pop()
   self.topped()
-  match self.leaving {
-    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Move, brings=true)
-    _ => self.go(2, 1.0, nav_push_ms, Move, brings=true)
-  }
+  self.go(2, 1.0, brings=true)
   true
 }
 
@@ -621,15 +611,16 @@ fn[P] Nav::gesture(
         self.vel = self.track.velocity()
         let flung = dx > 40.0 && self.vel > 0.6
         if self.p > 1.0 / 3.0 || flung {
-          self.let_go()
+          self.let_go(dmax(self.vel, 0.0) / w)
         } else {
-          self.go(4, 0.0, nav_return_ms, Out)
+          // back to rest, as fast as the finger let it go (its widths per ms)
+          self.go(4, 0.0, v=self.vel / w)
         }
       }
-    3 => if self.mode == 3 { self.go(4, 0.0, nav_return_ms, Out) }
+    3 => if self.mode == 3 { self.go(4, 0.0) }
     _ =>
       if self.mode == 3 {
-        self.let_go()
+        self.let_go(0.0)
       } else if self.pages.length() > self.floor + 1 {
         let e = self.pages[self.pages.length() - 1]
         if self.pop() {
@@ -640,15 +631,15 @@ fn[P] Nav::gesture(
 }
 
 ///|
-/// Gone back from where a finger left the page: on from there, easing out.
-fn[P] Nav::let_go(self : Nav[P]) -> Unit {
+/// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
+fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
   match self.leaving {
     Some(e) => (self.went_back)(e.page, e.over, e.rise, self.pages())
     None => ()
   }
   self.topped()
-  self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), Out)
+  self.go(2, 1.0, v~)
 }
 
 ///|
@@ -672,6 +663,8 @@ pub fn[P] Ctx::nav(
 ) -> Int {
   stacks_said.get() |> ignore
   nav.floor = floor
+  nav.room_w = self.width
+  nav.room_h = self.height
   if nav.mode == 3 {
     self.page_in_hand = true
   }
@@ -833,7 +826,8 @@ fn[P] Nav::at(self : Nav[P], c : Ctx) -> Double {
     } else {
       dmax((c.now() - self.t0) / self.dur, 0.0)
     }
-    self.p = self.p0 + (self.p1 - self.p0) * self.curve.at(dmin(t, 1.0))
+    let (x, _) = move_path(self.p0 - self.p1, self.v0, dmin(t, 1.0) * self.dur, self.dur)
+    self.p = self.p1 + x
   }
   // (following a finger: where it has it, read so)
   if self.mode == 3 {

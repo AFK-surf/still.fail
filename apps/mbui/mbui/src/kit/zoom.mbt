@@ -2,8 +2,7 @@
 // shared ui/Zoom.kt ZoomState, the web's FilePreview.tsx useZoom): fitted to the stage (a margin round it, enlarged
 // or not), zoomed around a point (two fingers' pinch, a double tap, the wheel, a button), panned, and kept within the
 // stage: smaller than it, centred; larger, no gap at its edges (or, free, anywhere: a page on a canvas, dragged about
-// it). A zoom said with a glide goes there over `glide_ms`
-// on (0.16, 1, 0.3, 1), a motion said once as it sets out (Zoom::step reads where it has got to); one let go by a
+// it). A zoom said with a glide goes there on a Move as long as its way is far, a motion said once as it sets out (Zoom::step reads where it has got to); one let go by a
 // finger moving goes on at its speed, slowing, to its edges (fling). What the fingers do is the view's: it says what
 // they came to (transform, pan, fling, zoom_to, double_tap).
 
@@ -30,7 +29,6 @@ pub struct Zoom {
   free : Bool
   /// the fitted scale a whole number of these (0: as it comes)
   fit_step : Double
-  glide_ms : Double
   // a glide: whether one goes on, how far (0 … 1, a motion), from, to (scale, x, y)
   mut gliding : Bool
   glide : @motion.Value
@@ -48,13 +46,9 @@ pub struct Zoom {
 pub let zoom_fling_ms : Double = 325.0
 
 ///|
-/// How long a zoom said with a glide takes there (still.fail's: 260 ms on a quick start and a soft landing, Ease.Soft):
-/// Zoom::new's, unless said otherwise.
-pub let zoom_glide_ms : Double = @ui.move_page_ms
-
-///|
 /// A picture's zoom, as Zoom.kt's: fitted within a margin (12, or 32 on a stage 640 wide or more), never enlarged;
-/// down to half the fitted size (of 100% at most) and up to 16 times its own; its glides 260 ms. A stage's own (a
+/// down to half the fitted size (of 100% at most) and up to 16 times its own; its glides a Move as long as the
+/// picture's corners go far (@ui.move_ms). A stage's own (a
 /// remote screen, fitted edge to edge, as far as 5 times the fitted size): `margin`, `enlarge`, `min_scale` and
 /// `max_scale` (each of the fitted scale) say so. `free`: moved anywhere on the stage (a page on a canvas); `fit_step`:
 /// the fitted scale a whole number of these, rounded down.
@@ -63,7 +57,6 @@ pub fn Zoom::new(
   enlarge? : Bool = false,
   min_scale? : (Double) -> Double = fn(fit) { zmin(fit, 1.0) / 2.0 },
   max_scale? : (Double) -> Double = fn(_) { 16.0 },
-  glide_ms? : Double = zoom_glide_ms,
   free? : Bool = false,
   fit_step? : Double = 0.0,
 ) -> Zoom {
@@ -82,7 +75,6 @@ pub fn Zoom::new(
     max_of: max_scale,
     free,
     fit_step,
-    glide_ms,
     gliding: false,
     glide: @motion.Value::new(1.0),
     g_from: FixedArray::make(3, 0.0),
@@ -99,6 +91,15 @@ fn zmin(a : Double, b : Double) -> Double {
     a
   } else {
     b
+  }
+}
+
+///|
+fn zabs(a : Double) -> Double {
+  if a < 0.0 {
+    -a
+  } else {
+    a
   }
 }
 
@@ -340,7 +341,10 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
   // said once as it sets out: the motion asks the frames until it is there
   self.gliding = true
   self.glide.set(0.0)
-  ignore(self.glide.start(1.0, @motion.tween(self.glide_ms, ease=Move)))
+  // (as long as the furthest of its corners goes)
+  let far = zmax(zabs(x - self.g_from[1]), zabs(y - self.g_from[2])) +
+    zmax(self.nw, self.nh) * zabs(s - self.g_from[0])
+  ignore(self.glide.start(1.0, @motion.move(over=far)))
 }
 
 ///|

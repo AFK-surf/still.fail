@@ -480,9 +480,10 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
 }
 
 ///|
-/// A kept file's bin (KeptFiles.kt: a 36 circle, its icon in its middle).
+/// A kept file's bin (KeptFiles.kt: 36 across, its icon in its middle, its ripple a circle): no ground or corner of its
+/// own, pressed or not, so none stands round in its card's corner where no circle is concentric with it.
 // kept across runs: a value (no field of it changes)
-let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
+let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 align=ACenter justify=JCenter")
 
 ///|
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its

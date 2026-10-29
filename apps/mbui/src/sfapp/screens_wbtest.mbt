@@ -175,91 +175,91 @@ fn check(mode : String, opening : Double) -> Unit raise {
 }
 
 // The settings' pages (shots.sh's SETTINGS_PAGES): pushed over Home before the first frame, settings and the page
-// together (open_setting), each push nav_push_ms.
+// together (open_setting), each push @ui.move_most_ms.
 
 ///|
 test "settings-home" {
-  check("settings-home", @ui.nav_push_ms)
+  check("settings-home", @ui.move_most_ms)
 }
 
 ///|
 test "settings-home-dark" {
-  check("settings-home-dark", @ui.nav_push_ms)
+  check("settings-home-dark", @ui.move_most_ms)
 }
 
 ///|
 test "settings-appearance" {
-  check("settings-appearance", @ui.nav_push_ms)
+  check("settings-appearance", @ui.move_most_ms)
 }
 
 ///|
 test "settings-me" {
-  check("settings-me", @ui.nav_push_ms)
+  check("settings-me", @ui.move_most_ms)
 }
 
 ///|
 test "settings-workspace" {
-  check("settings-workspace", @ui.nav_push_ms)
+  check("settings-workspace", @ui.move_most_ms)
 }
 
 ///|
 test "settings-security" {
-  check("settings-security", @ui.nav_push_ms)
+  check("settings-security", @ui.move_most_ms)
 }
 
 ///|
 test "settings-vault" {
-  check("settings-vault", @ui.nav_push_ms)
+  check("settings-vault", @ui.move_most_ms)
 }
 
 ///|
 test "settings-vault-items" {
-  check("settings-vault-items", @ui.nav_push_ms)
+  check("settings-vault-items", @ui.move_most_ms)
 }
 
 ///|
 test "settings-stations" {
-  check("settings-stations", @ui.nav_push_ms)
+  check("settings-stations", @ui.move_most_ms)
 }
 
 ///|
 test "settings-station" {
-  check("settings-station", @ui.nav_push_ms)
+  check("settings-station", @ui.move_most_ms)
 }
 
 ///|
 test "settings-profiles" {
-  check("settings-profiles", @ui.nav_push_ms)
+  check("settings-profiles", @ui.move_most_ms)
 }
 
 ///|
 test "settings-profile" {
-  check("settings-profile", @ui.nav_push_ms)
+  check("settings-profile", @ui.move_most_ms)
 }
 
 ///|
 test "settings-connects" {
-  check("settings-connects", @ui.nav_push_ms)
+  check("settings-connects", @ui.move_most_ms)
 }
 
 ///|
 test "settings-memory" {
-  check("settings-memory", @ui.nav_push_ms)
+  check("settings-memory", @ui.move_most_ms)
 }
 
 ///|
 test "settings-memory-doc" {
-  check("settings-memory-doc", @ui.nav_push_ms)
+  check("settings-memory-doc", @ui.move_most_ms)
 }
 
 ///|
 test "settings-usage" {
-  check("settings-usage", @ui.nav_push_ms)
+  check("settings-usage", @ui.move_most_ms)
 }
 
 ///|
 test "settings-archive" {
-  check("settings-archive", @ui.nav_push_ms)
+  check("settings-archive", @ui.move_most_ms)
 }
 
 // Home over the made-up chats, nothing pushed (shots.sh home, its sheet; decide's home-jobs; notify's)
@@ -271,22 +271,22 @@ test "home" {
 
 ///|
 test "settings-run-models" {
-  check("settings-run-models", @ui.nav_push_ms)
+  check("settings-run-models", @ui.move_most_ms)
 }
 
 ///|
 test "landing" {
-  check("landing", @ui.nav_push_ms)
+  check("landing", @ui.move_most_ms)
 }
 
 ///|
 test "landing-invited" {
-  check("landing-invited", @ui.nav_push_ms)
+  check("landing-invited", @ui.move_most_ms)
 }
 
 ///|
 test "blocked" {
-  check("blocked", @ui.nav_push_ms)
+  check("blocked", @ui.move_most_ms)
 }
 
 ///|
@@ -301,168 +301,168 @@ test "home-jobs" {
 
 ///|
 test "settings-notify-off" {
-  check("settings-notify-off", @ui.nav_push_ms)
+  check("settings-notify-off", @ui.move_most_ms)
 }
 
 // The first row's chat pushed over Home (shots.sh chat, composer, cards; notify's flash)
 
 ///|
 test "chat" {
-  check("chat", @ui.nav_push_ms)
+  check("chat", @ui.move_most_ms)
 }
 
 ///|
 test "chat-loading" {
-  check("chat-loading", @ui.nav_push_ms)
+  check("chat-loading", @ui.move_most_ms)
 }
 
 ///|
 test "chat-compose" {
-  check("chat-compose", @ui.nav_push_ms)
+  check("chat-compose", @ui.move_most_ms)
 }
 
 ///|
 test "chat-attach" {
   check(
     "chat-attach",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "chat-quote" {
-  check("chat-quote", @ui.nav_push_ms)
+  check("chat-quote", @ui.move_most_ms)
 }
 
 ///|
 test "chat-sending" {
   check(
     "chat-sending",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "chat-failed" {
-  check("chat-failed", @ui.nav_push_ms)
+  check("chat-failed", @ui.move_most_ms)
 }
 
 ///|
 test "chat-cards" {
-  check("chat-cards", @ui.nav_push_ms)
+  check("chat-cards", @ui.move_most_ms)
 }
 
 ///|
 test "chat-answering" {
-  check("chat-answering", @ui.nav_push_ms)
+  check("chat-answering", @ui.move_most_ms)
 }
 
 ///|
 test "chat-md" {
-  check("chat-md", @ui.nav_push_ms)
+  check("chat-md", @ui.move_most_ms)
 }
 
 ///|
 test "chat-pick" {
   check(
     "chat-pick",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "chat-link-menu" {
-  check("chat-link-menu", @ui.nav_push_ms)
+  check("chat-link-menu", @ui.move_most_ms)
 }
 
 ///|
 test "chat-update" {
-  check("chat-update", @ui.nav_push_ms)
+  check("chat-update", @ui.move_most_ms)
 }
 
 ///|
 test "chat-flash" {
   check(
     "chat-flash",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "chat-flash-mine" {
-  check("chat-flash-mine", @ui.nav_push_ms)
+  check("chat-flash-mine", @ui.move_most_ms)
 }
 
 // The drive's pages pushed over Home (shots.sh DRIVE_MODES)
 
 ///|
 test "files" {
-  check("files", @ui.nav_push_ms)
+  check("files", @ui.move_most_ms)
 }
 
 ///|
 test "drive" {
-  check("drive", @ui.nav_push_ms)
+  check("drive", @ui.move_most_ms)
 }
 
 ///|
 test "drive-roots" {
-  check("drive-roots", @ui.nav_push_ms)
+  check("drive-roots", @ui.move_most_ms)
 }
 
 ///|
 test "drive-sub" {
-  check("drive-sub", @ui.nav_push_ms)
+  check("drive-sub", @ui.move_most_ms)
 }
 
 ///|
 test "drive-upload" {
-  check("drive-upload", @ui.nav_push_ms)
+  check("drive-upload", @ui.move_most_ms)
 }
 
 ///|
 test "drive-download" {
-  check("drive-download", @ui.nav_push_ms)
+  check("drive-download", @ui.move_most_ms)
 }
 
 ///|
 test "drive-empty" {
-  check("drive-empty", @ui.nav_push_ms)
+  check("drive-empty", @ui.move_most_ms)
 }
 
 ///|
 test "reader" {
-  check("reader", @ui.nav_push_ms)
+  check("reader", @ui.move_most_ms)
 }
 
 ///|
 test "reader-bars" {
-  check("reader-bars", @ui.nav_push_ms)
+  check("reader-bars", @ui.move_most_ms)
 }
 
 ///|
 test "reader-contents" {
-  check("reader-contents", @ui.nav_push_ms)
+  check("reader-contents", @ui.move_most_ms)
 }
 
 ///|
 test "reader-layout" {
-  check("reader-layout", @ui.nav_push_ms)
+  check("reader-layout", @ui.move_most_ms)
 }
 
 ///|
 test "reader-md" {
-  check("reader-md", @ui.nav_push_ms)
+  check("reader-md", @ui.move_most_ms)
 }
 
 ///|
 test "chat-station-files" {
-  check("chat-station-files", @ui.nav_push_ms)
+  check("chat-station-files", @ui.move_most_ms)
 }
 
 ///|
 test "chat-station-ref" {
-  let t = screen("chat-station-ref", @ui.nav_push_ms)
+  let t = screen("chat-station-ref", @ui.move_most_ms)
   screen_check(t, "chat-station-ref")
   // the station's file in the draft its card in the composer: its name, the station it is on and how it goes
   assert_true(t.locate("=发布清单").length() > 0, msg="no card of the draft's station file in the composer")
@@ -471,12 +471,12 @@ test "chat-station-ref" {
 
 ///|
 test "chat-station-file" {
-  check("chat-station-file", @ui.nav_push_ms)
+  check("chat-station-file", @ui.move_most_ms)
 }
 
 ///|
 test "chat-station-sheet" {
-  let t = screen("chat-station-sheet", @ui.nav_push_ms)
+  let t = screen("chat-station-sheet", @ui.move_most_ms)
   screen_check(t, "chat-station-sheet")
   // its card's panel up: how it goes
   assert_true(t.locate("=发送方式").length() > 0, msg="no panel of the station's file")
@@ -486,74 +486,74 @@ test "chat-station-sheet" {
 
 ///|
 test "decisions" {
-  check("decisions", @ui.nav_push_ms)
+  check("decisions", @ui.move_most_ms)
 }
 
 ///|
 test "decisions-text" {
-  check("decisions-text", @ui.nav_push_ms)
+  check("decisions-text", @ui.move_most_ms)
 }
 
 ///|
 test "decisions-idle" {
-  check("decisions-idle", @ui.nav_push_ms)
+  check("decisions-idle", @ui.move_most_ms)
 }
 
 ///|
 test "history" {
-  check("history", @ui.nav_push_ms)
+  check("history", @ui.move_most_ms)
 }
 
 ///|
 test "history-details" {
-  check("history-details", @ui.nav_push_ms)
+  check("history-details", @ui.move_most_ms)
 }
 
 ///|
 test "chat-info" {
-  check("chat-info", @ui.nav_push_ms)
+  check("chat-info", @ui.move_most_ms)
 }
 
 ///|
 test "chat-publish" {
-  check("chat-publish", @ui.nav_push_ms)
+  check("chat-publish", @ui.move_most_ms)
 }
 
 ///|
 test "chat-agent" {
-  check("chat-agent", @ui.nav_push_ms)
+  check("chat-agent", @ui.move_most_ms)
 }
 
 ///|
 test "chat-peek" {
-  check("chat-peek", @ui.nav_push_ms)
+  check("chat-peek", @ui.move_most_ms)
 }
 
 ///|
 test "chat-jobs" {
-  check("chat-jobs", @ui.nav_push_ms)
+  check("chat-jobs", @ui.move_most_ms)
 }
 
 ///|
 test "chat-job" {
-  check("chat-job", @ui.nav_push_ms)
+  check("chat-job", @ui.move_most_ms)
 }
 
 // A new chat risen over Home, its sheets; the bar's panel; a place (shots.sh newchat)
 
 ///|
 test "newchat" {
-  check("newchat", @ui.nav_rise_ms)
+  check("newchat", @ui.move_most_ms)
 }
 
 ///|
 test "newchat-station" {
-  check("newchat-station", @ui.nav_rise_ms)
+  check("newchat-station", @ui.move_most_ms)
 }
 
 ///|
 test "newchat-model" {
-  check("newchat-model", @ui.nav_rise_ms)
+  check("newchat-model", @ui.move_most_ms)
 }
 
 ///|
@@ -570,105 +570,105 @@ test "place" {
 
 ///|
 test "chat-preview-image" {
-  check("chat-preview-image", @ui.nav_push_ms)
+  check("chat-preview-image", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-pdf" {
   check(
     "chat-preview-pdf",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "chat-preview-video" {
-  check("chat-preview-video", @ui.nav_push_ms)
+  check("chat-preview-video", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-audio" {
-  check("chat-preview-audio", @ui.nav_push_ms)
+  check("chat-preview-audio", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-html" {
-  check("chat-preview-html", @ui.nav_push_ms)
+  check("chat-preview-html", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-code" {
-  check("chat-preview-code", @ui.nav_push_ms)
+  check("chat-preview-code", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-md" {
-  check("chat-preview-md", @ui.nav_push_ms)
+  check("chat-preview-md", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-csv" {
-  check("chat-preview-csv", @ui.nav_push_ms)
+  check("chat-preview-csv", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-none" {
-  check("chat-preview-none", @ui.nav_push_ms)
+  check("chat-preview-none", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-step" {
-  check("chat-preview-step", @ui.nav_push_ms)
+  check("chat-preview-step", @ui.move_most_ms)
 }
 
 ///|
 test "chat-preview-swipe" {
-  check("chat-preview-swipe", @ui.nav_push_ms)
+  check("chat-preview-swipe", @ui.move_most_ms)
 }
 
 // The player, a web service's page, what another app shares in (shots.sh player, service, share)
 
 ///|
 test "player-video" {
-  check("player-video", @ui.nav_push_ms)
+  check("player-video", @ui.move_most_ms)
 }
 
 ///|
 test "player-audio" {
   check(
     "player-audio",
-    @ui.nav_push_ms,
+    @ui.move_most_ms,
   )
 }
 
 ///|
 test "player-ended" {
-  check("player-ended", @ui.nav_push_ms)
+  check("player-ended", @ui.move_most_ms)
 }
 
 ///|
 test "player-opening" {
-  check("player-opening", @ui.nav_push_ms)
+  check("player-opening", @ui.move_most_ms)
 }
 
 ///|
 test "service" {
-  check("service", @ui.nav_push_ms)
+  check("service", @ui.move_most_ms)
 }
 
 ///|
 test "service-sized" {
-  check("service-sized", @ui.nav_push_ms)
+  check("service-sized", @ui.move_most_ms)
 }
 
 ///|
 test "service-restart" {
-  check("service-restart", @ui.nav_push_ms)
+  check("service-restart", @ui.move_most_ms)
 }
 
 ///|
 test "service-stopped" {
-  check("service-stopped", @ui.nav_push_ms)
+  check("service-stopped", @ui.move_most_ms)
 }
 
 ///|
@@ -691,5 +691,5 @@ test "share-in-files" {
 
 ///|
 test "chat-login" {
-  check("chat-login", @ui.nav_push_ms)
+  check("chat-login", @ui.move_most_ms)
 }

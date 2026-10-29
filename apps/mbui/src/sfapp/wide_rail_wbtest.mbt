@@ -24,14 +24,14 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
   let t = wide_tester(calls)
   assert_true(t.find("新建对话") is Some(_))
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is None, msg="folded")
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("closed")))
   // the bar's rail, 6 from the window's edge: its places 2 in
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   assert_eq(rx, @sfdesk.closed_bar_in + 2.0)
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is Some(_), msg="shown a while")
   // off it: still there for a moment, then folded again
   t.move(1000.0, 400.0)
@@ -40,11 +40,11 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
   assert_false(@sfdesk.wide.peeking.get())
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is None)
   // ⌘\ again: open, kept so
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is Some(_))
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::null()))
 }
@@ -68,14 +68,14 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
   // (a Mac's window: its corners 16, its buttons in the app's top row)
   let t = wide_tester(calls, window_corner=16.0, window_inset=true)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let follow = @ui.concentric(16.0, @sfdesk.closed_bar_in)
   // folded, and shown a while: no corner of the bar a pane's 34 (each frame held to the corner rule: corners_held)
   for peek in [false, true] {
     let gear = t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect
     if peek {
       t.move(gear.0 + gear.2 / 2.0, gear.1 + gear.3 / 2.0)
-      t.run_for(@sfdesk.side_move_ms)
+      t.run_for(@ui.move_most_ms)
       assert_true(t.find("新建对话") is Some(_), msg="shown a while")
     }
     let bar = t
@@ -98,7 +98,7 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       let named = @sf.t("web-main.filter.chats.named", args=[("named", @sf.t("web-main.filter.all"))])
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
       t.move(fx + fw / 2.0, fy + fh / 2.0)
-      t.run_for(@sfdesk.side_move_ms)
+      t.run_for(@ui.move_most_ms)
       let filter = t
         .boxes()
         .iter()
@@ -117,13 +117,13 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
   let t = wide_tester(calls)
   let (rx, ry, rw, rh) = t.query(Button, label="对话").unwrap().rect
   t.tap(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded)
   assert_true(@sfdesk.wide.peeking.get())
   // pressed in the bar: open again
   let (bx, by, bw, bh) = t.query(Button, label="对话").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfdesk.wide.folded)
   // its edge dragged 60 to the right: 300, kept once let go
   let edge = @sfdesk.rail_w + 240.0
@@ -142,14 +142,14 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
     let (x, y, w, h) = t.query(Button, label~).unwrap().rect
     t.move(x + w / 2.0, y + h / 2.0)
     t.tap(x + w / 2.0, y + h / 2.0)
-    t.run_for(@sfdesk.side_move_ms)
+    t.run_for(@ui.move_most_ms)
   }
   // 对话's dragged to 300, then folded
   let edge = @sfdesk.rail_w + 240.0
   t.drag(edge, 400.0, edge + 60.0, 400.0)
   t.frame()
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded)
   // 文件 pressed from the bar: its own, never folded, open at its own width
   press("文件")
@@ -164,7 +164,7 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
   t.move(1000.0, 400.0)
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfdesk.wide.peeking.get())
   assert_true(t.find("新建对话") is None)
 }
@@ -208,7 +208,7 @@ test "wide: the sidebar's edge let go a little past where the last frame drew it
   t.release(edge + 66.0, 400.0)
   assert_eq(@sfdesk.wide.side_w, 306.0)
   assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(edge_at(), @sfdesk.rail_w + 306.0)
   assert_eq(sidebar_kept(calls, "\nchats"), Some(Json::string("306")))
 }
@@ -222,19 +222,19 @@ test "wide: a sidebar's width the person's, the same in another workspace; folde
   t.drag(edge, 400.0, edge + 60.0, 400.0)
   t.frame()
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded)
   assert_eq(sidebar_kept(calls, "\nchats"), Some(Json::string("300")))
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("closed")))
   // the second: open, 300 wide
   t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.picked, "ws2")
   assert_false(@sfdesk.wide.folded)
   assert_eq(@sfdesk.wide.side_w, 300.0)
   // back in the first: folded as it was left, 300 wide
   t.key(@ui.key_of_char('1'), mods=@ui.mod_ctrl)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.picked, "ws1")
   assert_true(@sfdesk.wide.folded)
   assert_eq(@sfdesk.wide.side_w, 300.0)
@@ -298,7 +298,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   t.frame()
   app.nav.push(Archived)
   t.frame()
-  t.run_for(@sfpages.list_slide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索归档") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("试一下新的图标尺寸") is Some(_))
   // the newest beside the list
@@ -539,7 +539,7 @@ test "wide: 已归档 from the lists' filter: its place at the rail's foot while
   assert_true(t.query(Button, label="已归档") is None)
   app.nav.push(Archived)
   t.frame()
-  t.run_for(@sfpages.list_slide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="已归档") is Some(_))
 }
 
@@ -554,19 +554,19 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   // halfway: the edge on its way with the block, the list not moved across, the block's edges round it (its top row's
   // 8 giving way to the bar's 6 above)
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (hx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   assert_true(hx > @sfdesk.closed_edge && hx < ex, msg=hx.to_string())
   let (x1, y1, _, _) = t.rect_of("新建对话").unwrap()
   assert_eq(x1, x0)
   assert_true((y1 - y0).abs() <= 2.0, msg=y1.to_string())
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   assert_eq(fx, @sfdesk.closed_edge)
   // the pointer on the bar: shown a while, its edge at the sidebar's
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   // (its line in the middle of its strip)
   assert_eq(px + @sfdesk.edge_half, @sfdesk.closed_edge + @sfdesk.wide.side_w + @sfdesk.edge_half)
@@ -579,7 +579,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   let t = wide_tester(calls, mode="chat")
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
   let (left, right) = t.ctx().shown_across(t.ctx().id("main-page"), but="page-bar").unwrap()
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
@@ -587,7 +587,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   // right or the sidebar's width
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let reach = @sfdesk.closed_bar_in + @sfdesk.rail_closed_w + @sfdesk.wide.side_w + @sfdesk.peek_gap
   let room = 1280.0 - 2.0 * @sfdesk.peek_gap - right
   let want = dmax(0.0, dmin(@sfdesk.wide.side_w, dmin(room, reach - left))).round()
@@ -614,14 +614,14 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
   }
   // folded with the pointer on the rail: shown a while
   press_lit()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking.get())
   let (shown_x, _) = bar_title_at(t)
   // pressed again: open; halfway there, the title between where it was and where it ends
   press_lit()
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (mid_x, _) = bar_title_at(t)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfdesk.wide.folded)
   let (open_x, _) = bar_title_at(t)
   assert_true(
@@ -634,9 +634,9 @@ test "wide: the sidebar shown a while pinned open by its place pressed again, an
   assert_eq(shown_x - (@sfdesk.closed_bar_in + @sfdesk.rail_closed_w + s), open_x - (@sfdesk.rail_w + s))
   // pressed once more: folded, shown a while again, the same way back
   press_lit()
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (back_x, _) = bar_title_at(t)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded && @sfdesk.wide.peeking.get())
   let (again_x, _) = bar_title_at(t)
   assert_true(
@@ -658,29 +658,29 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   t.move(1000.0, 400.0)
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.folded && !@sfdesk.wide.peeking.get())
   let (folded_x, _) = bar_title_at(t)
   // the pointer on the rail: shown a while, the title where it was halfway and after
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="halfway at \{bar_title_at(t).0}, folded \{folded_x}")
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="shown at \{bar_title_at(t).0}, folded \{folded_x}")
   // its place pressed: open, the title on its way past the sidebar with the page
   press_lit()
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   let (mid_x, _) = bar_title_at(t)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfdesk.wide.folded)
   let (open_x, _) = bar_title_at(t)
   assert_true(open_x > @sfdesk.rail_w + @sfdesk.wide.side_w, msg="open at \{open_x}")
   assert_true(mid_x > folded_x && mid_x < open_x, msg="folded \{folded_x}, halfway \{mid_x}, open \{open_x}")
   // pressed again: shown a while, back beside the window's buttons
   press_lit()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="back at \{bar_title_at(t).0}, folded \{folded_x}")
 }
@@ -699,14 +699,14 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
   // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
 }
@@ -718,7 +718,7 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":0,\"left\":0,\"right\":0}}")
   update.available.set(Some({ "versionName": "0.1.9999" }))
   t.frame()
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let (_, y, _, h) = t.query(Button, label="更新").unwrap().rect
   assert_true(y >= 32.0, msg="\{y}")
   // in the sidebar's first row (新建对话's), on its line
@@ -768,7 +768,7 @@ test "wide: the lists slide in a window of their own (Sidebar.css.ts navSlider):
   t.tap_text("我参与的")
   // an eighth of the way: 全部's row (the first of the two lists drawn) moved left across the rail's places' edge,
   // nothing of it shown over them
-  t.run_for(@sfpages.list_slide_ms / 8.0)
+  t.run_for(@ui.move_most_ms / 8.0)
   let row = "夜里的构建又失败了"
   let (rx, _, rw, _) = t.query(Button, label="文件").unwrap().rect
   let edge = rx + rw
@@ -784,14 +784,14 @@ test "wide: folded, the window made narrow enough for the tape: the sidebar on t
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is None, msg="folded")
   // the window's room changes nothing it was asked: the tape's sidebar where the tape has it from the first frame
   t.resize(@sf.large_from - 40.0, 800.0)
   t.draw()
   let at_once = t.rect_of("新建对话")
   assert_true(at_once is Some(_), msg="on the tape")
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(t.rect_of("新建对话"), at_once)
 }
 
@@ -831,18 +831,18 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0)
   @sfbase.go_place("stations") |> ignore
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("MBA")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   @sfpages.switch_workspace(src, "ws2")
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Place("stations"))
   // its row in the sidebar and its page beside it, its name over the page
   let named = t.words().filter(fn(w) { w.0 == "家里的 mini" }).length()
   assert_true(named >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
   // back in the first: the one picked there still
   @sfpages.switch_workspace(src, "ws1")
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
   assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }

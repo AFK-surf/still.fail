@@ -155,6 +155,8 @@ pub fn motion_spring(Double, bounce? : Double, threshold? : Double, delay? : Dou
 
 pub fn motion_to_compose(Double, Double, Double) -> (Double, Double)
 
+pub fn move(points? : Double, over? : Double, delay? : Double) -> Spec
+
 pub let move_spring : Spec
 
 pub fn ms_to_seconds(Double) -> Double
@@ -180,6 +182,8 @@ pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool
 pub fn reshaped_over(@ui.Ctx, String) -> Double
 
 pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, align? : @ui.Align, () -> Unit) -> Unit
+
+pub fn reveal_height(String) -> Double
 
 pub fn reverse_easing((Double) -> Double) -> (Double) -> Double
 
@@ -324,11 +328,16 @@ pub(all) enum Offset {
 pub(all) enum Spec {
   Spring(Double, Double, Double, Double)
   Tween(Double, @ui.Ease, Double)
+  Moved(Double, Double, Double)
   Snap(Double)
   Motion(Transition)
 } derive(Eq, Show)
+pub fn Spec::delayed(Self, Double) -> Self
 pub fn Spec::duration(Self, Double, Double, Double) -> Double
+pub fn Spec::over(Self, Double) -> Self
+pub fn Spec::per_unit(Self, Double) -> Self
 pub fn Spec::value_at(Self, Double, Double, Double, Double, Double) -> (Double, Double)
+pub fn Spec::way_said(Self) -> Bool
 
 pub(all) enum StaggerFrom {
   First

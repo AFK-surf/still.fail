@@ -24,7 +24,7 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
   app.nav.push(Settings)
   app.nav.push(Setting(route))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 

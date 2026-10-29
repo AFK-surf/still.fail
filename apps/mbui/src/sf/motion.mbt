@@ -2,8 +2,9 @@
 // its ease-out, what comes into and goes from a list, the spring what makes way moves by, a shape, the list's glide,
 // the most a motion waits for what is here already, a control answering the hand, what is woken, the breath, copied.
 // Those the framework makes are mbui's, named there and in the table (kit's pop_in, dialog_in, switch_ms,
-// progress_ms, zoom_glide_ms, media's; @motion's springs; ui's pages pushed); motion as data is mbui's (@motion,
-// Ctx::move_state: the web's moveState, 380 ms on the ease-out by default).
+// progress_ms, media's; @motion's springs; ui's pages pushed); motion as data is mbui's (@motion, Ctx::move_state:
+// the web's moveState). What moves (a shape, the composer to another page, a state moved) is a Move as long as its
+// way is far (@ui.move_ms, @motion.move), never a length of its own.
 
 ///|
 /// The page's --ease-out (EASE_OUT: cubic-bezier(0.2, 0.7, 0.2, 1)).
@@ -52,15 +53,6 @@ pub let row_grown_in : @motion.Trans = @motion.trans(
 )
 
 ///|
-/// A shape changed for what it holds (morph.ts useMorph: the composer, a card): from the shape it had to its new one
-/// over 260 ms on the ease-out.
-pub let shape_ms : Double = @ui.move_near_ms
-
-///|
-/// The composer going with its page to another (dock.tsx, the view transition): 340 ms on the ease-out.
-pub let composer_page_ms : Double = @ui.move_page_ms
-
-///|
 /// The composer's hint, gone at once as words sent leave its field, back once they are out of it (madeChat.css.ts:
 /// the placeholder's colour over 200 ms on cubic-bezier(.2, .8, .2, 1), the arrival's curve).
 pub let hint_back_ms : Double = 200.0
@@ -83,10 +75,6 @@ pub let glide_ms : Double = 600.0
 /// The most a motion, or a page moved to, waits for what is here already (LOCAL_MS): the core's answer from what it
 /// holds, a picture decoded. Never for the network.
 pub let local_ms : Double = 100.0
-
-///|
-/// moveState's run (motion.ts moveState's default transition: 380 ms on the ease-out), Ctx::move_state's default.
-pub let move_state_ms : Double = @ui.move_far_ms
 
 ///|
 /// A control answering the hand (--dur, global.css.ts): pointed at, pressed, a switch turned, over this long on the

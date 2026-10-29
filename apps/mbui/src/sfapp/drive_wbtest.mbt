@@ -105,6 +105,8 @@ test "held: what can be done to it in a sheet (EntrySheet); 重命名 changes it
   t.draw()
   assert_true(t.find("年度数据.csv") is Some(_))
   assert_true(t.find("季度数据.csv") is None)
+  // (重命名's ripple, under the sheet that sank sooner than it fades)
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -122,6 +124,8 @@ test "held: deleted to the station's trash, said so; 新建文件夹 makes one, 
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("新的文件夹") is Some(_))
   sheet_rested(t, "sf-present")
+  // (a ripple pressed under the sheet that sank sooner than it fades)
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -131,7 +135,7 @@ test "a picture goes to the preview, read by drive.read" {
   let log = t.drive("tap 首页截图.png\n")
   assert_true(log.contains("EXIT 0"))
   // (the run ends at its tap: the preview grows in from its row, and reads it as it does)
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   let v = viewer.val.unwrap()
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))

@@ -577,12 +577,6 @@ pub let flow_ahead : Int32
 
 pub let flow_part : Int32
 
-pub let fly_close_ms : Double
-
-pub let fly_lift_ms : Double
-
-pub let fly_open_ms : Double
-
 pub fn fly_share(Bool) -> Double
 
 pub fn focus_chat(ChatRef, ChatView, Bool?) -> Json
@@ -1292,6 +1286,8 @@ pub let send_flight : @signals.Signal[SendFlight?]
 pub fn send_sharing(Source, String, String, String, () -> Unit) -> Unit
 
 pub fn sending_of(String) -> Array[LocalSent]
+
+pub let sent_down_ms : Double
 
 pub fn sent_key(String, String) -> String
 

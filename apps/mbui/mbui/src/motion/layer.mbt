@@ -1205,6 +1205,15 @@ pub fn leaving(c : @ui.Ctx, i : Int, shown : Bool) -> Unit {
 }
 
 ///|
+/// How tall what `reveal(key)` shows was laid out whole, the last time it was (0: never): how far its room goes.
+pub fn reveal_height(key : String) -> Double {
+  match mo.recs.get(motion_key("reveal\u{1}" + key)) {
+    Some(r) => r.h
+    None => 0.0
+  }
+}
+
+///|
 /// What `body` builds, as tall as `share` (0 → 1) of its own height (expandVertically / shrinkVertically, from its top
 /// or with its foot kept), cut there when `clip`; all of it at 1. `align` places what it builds across, as its parent
 /// would. Its own height is the one it was last laid out with (none the first frame, when it is nothing tall). The one
@@ -1267,10 +1276,12 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       }
     }
   }
+  together.clear()
   for e in if order.is_empty() { mo.entries } else { order } {
     // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
     c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
   }
+  moved_together()
   // what is drawn where things are this frame (placed): once every place this frame lays out is kept
   for e in mo.entries {
     match e.placed {
@@ -1281,6 +1292,49 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   makes_room(c)
   kept_recs_taken(c)
   forget_recs(c)
+}
+
+///|
+/// What moves this frame for each cause (its `by`), on a Move: how far the furthest of it goes, and each of its motions
+/// (where to, by what), set out again as long as that one, so what moves together for one cause (a composer's ground,
+/// its words, its ＋ and its send) is on one clock (docs/motion.md: as long as its way is far).
+// kept across runs: cleared as each frame's layout begins, taken as it ends (after_layout)
+let together : Map[String, (Double, Array[(Anim, Double, Spec)])] = {}
+
+///|
+/// `a` off to `to` by `spec` (said to go `far`), for cause `by` ("" none: on its own).
+fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec) -> Unit {
+  a.animate(to, spec)
+  guard by != "" && spec is Moved(_, _, _) else { return }
+  match together.get(by) {
+    Some((most, all)) => {
+      all.push((a, to, spec))
+      if far > most {
+        together[by] = (far, all)
+      }
+    }
+    None => together[by] = (far, [(a, to, spec)])
+  }
+}
+
+///|
+/// Each cause's motions as long as the furthest of them (moves_with): told again from where they set out this frame.
+fn moved_together() -> Unit {
+  together.each(fn(_, g) {
+    let (most, all) = g
+    if all.length() < 2 {
+      return
+    }
+    for m in all {
+      let (a, to, spec) = m
+      // (all said `far` by this layout: told again as long as the furthest)
+      let s = spec.over(most)
+      if s != spec {
+        a.animate(to, s)
+      }
+    }
+  })
+  together.clear()
 }
 
 ///|
@@ -1540,8 +1594,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.fy = r.was_fy
           r.ox.value = r.was_ox
           r.oy.value = r.was_oy
-          if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, e.spec) }
-          if r.was_oy == 0.0 { r.oy.snap(0.0) } else { r.oy.animate(0.0, e.spec) }
+          // (on its way again as it was told: the same spec, its way as long as it was, not one of its own)
+          let again = fn(a : Anim) { if a.spec is Snap(_) { e.spec } else { a.spec } }
+          if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, again(r.ox)) }
+          if r.was_oy == 0.0 { r.oy.snap(0.0) } else { r.oy.animate(0.0, again(r.oy)) }
         }
       }
       // gone ahead of others (list_keys' reborn): where it is now at once, come in there as a row new to it
@@ -1559,6 +1615,32 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       if !(e.flip && (was_seen || pinned_in)) || reborn {
         undo()
       }
+      // how far it goes for its cause, the furthest of all it moves (its place, its height, its ground's corners), in
+      // points: a Move of it as long as that (Spec::over), each of them on the same clock
+      let far = {
+        let dx = r.was_ox + (if was_seen { r.was_x - rx } else { 0.0 })
+        let dy = r.was_oy + (if !was_seen {
+          -pinned
+        } else if e.screen {
+          r.was_vy - vy
+        } else {
+          r.was_y - ry - pinned
+        })
+        let p0 = r.was_gp
+        let gx = r.was_gx + (r.was_x - r.was_gx) * p0
+        let gy = r.was_gy + (r.was_y - r.was_gy) * p0
+        let gw = r.was_gw + (r.was_w - r.was_gw) * p0
+        let gh = r.was_gh + (r.was_h - r.was_gh) * p0
+        let ground = if e.reshape {
+          dmax(dmax((gx - rx).abs(), (gy - ry).abs()), dmax((gx + gw - rx - nw).abs(), (gy + gh - ry - nh).abs()))
+        } else {
+          0.0
+        }
+        dmax(dmax(dx.abs(), dy.abs()), dmax(dmax((nh - r.was_h).abs(), (nw - r.was_w).abs()), ground))
+      }
+      // (one whose way is said for it, as long as that: what moves on another's clock)
+      let spec = if e.spec.way_said() { e.spec } else { e.spec.over(far) }
+      let group = if e.spec.way_said() { "" } else { e.by }
       if e.flip && (was_seen || pinned_in) && !reborn {
         let dx = if was_seen { r.was_x - rx } else { 0.0 }
         let dy = if !was_seen {
@@ -1614,18 +1696,13 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
               Some(l) if c.moment() <= l.close_until && !l.lifted.contains(e.key) => 100.0
               _ => 0.0
             }
-            let spec = match e.spec {
-              Spring(a, b, t, _) => Spring(a, b, t, delay)
-              Tween(a, b, _) => Tween(a, b, delay)
-              Snap(_) => Snap(delay)
-              Motion(tr) => Motion(tr.delayed(delay))
-            }
+            let spec = spec.delayed(delay)
             r.driven = false
             r.moved_now = true
             r.ox.value = cx + dx
-            r.ox.animate(0.0, spec)
+            moves_with(group, far, r.ox, 0.0, spec)
             r.oy.value = cy + dy
-            r.oy.animate(0.0, spec)
+            moves_with(group, far, r.oy, 0.0, spec)
           }
         }
       }
@@ -1648,7 +1725,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.hh = shown
           r.hp.snap(if nh > shown + 0.5 { 0.0 } else { 1.0 })
           if nh > shown + 0.5 {
-            r.hp.animate(1.0, e.spec)
+            moves_with(group, far, r.hp, 1.0, spec)
           }
         } else if (nh - r.was_h).abs() > 0.5 {
           r.hh = r.was_hh + (nh - r.was_h)
@@ -1709,7 +1786,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
           r.gr = corners_mix(r.was_gr, wr, p0)
           r.gp.snap(0.0)
-          r.gp.animate(1.0, e.spec)
+          moves_with(group, far, r.gp, 1.0, spec)
           r.g_now = true
           r.g_carry = e.carry
         } else {
@@ -1724,7 +1801,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             r.g_now = false
             r.gp.snap(p0)
             if p0 < 1.0 {
-              r.gp.animate(1.0, e.spec)
+              moves_with(group, far, r.gp, 1.0, spec)
             }
           }
         }

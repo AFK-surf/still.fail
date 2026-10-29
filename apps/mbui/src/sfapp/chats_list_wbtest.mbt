@@ -74,20 +74,20 @@ fn lit_rows(t : @ui.Tester) -> Int {
 ///|
 test "a finger's rows gone back from one after another: only the last stays lit, while the chat opened between is in view or after" {
   // (back to the list, the other row pressed while the first is still lit; that chat in view a while, or long)
-  for stay in [@ui.nav_push_ms, 3000.0] {
+  for stay in [@ui.move_most_ms, 3000.0] {
     let calls : Array[Made] = []
     let t = lists_tester(calls, 390.0, 2, false)
     let at = "in view \{stay}"
     t.tap_text("夜里的构建又失败了")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     t.back()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_eq(lit_rows(t), 1, msg=at)
     t.tap_text("首页的列表改成按天分组")
     t.run_for(stay)
     assert_eq(open_title(), "首页的列表改成按天分组", msg=at)
     t.back()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     assert_eq(lit_rows(t), 1, msg=at)
     t.run_for(@sfpages.left_lit_ms + @sfpages.left_fade_ms)
     assert_eq(lit_rows(t), 0, msg=at)
@@ -145,7 +145,7 @@ test "wide: rows pressed one after another, one chat open in place of the other;
       if @sfdesk.wide.tape && @sfdesk.wide.tape_at != @sfdesk.TapePane::Side {
         @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Side)
         t.draw()
-        t.run_for(@sfdesk.side_move_ms)
+        t.run_for(@ui.move_most_ms)
       }
       t.tap_text(title)
       assert_eq(open_title(), title, msg="\{w}")

@@ -116,7 +116,7 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   let r : ChatRef = { station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // whole as it comes: its buttons with it
   for words in ["存入密码 UniFi UX7", "存入", "不存"] {
     assert_true(t.find(words) is Some(_), msg=words)
@@ -133,9 +133,9 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   t.assert_idle()
   // the chat opened again: the same, at once
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   open_chat(r)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("存入密码 UniFi UX7") is None)
   assert_true(t.find("未存入 UniFi UX7") is Some(_))
   assert_true(!vc.vaults_asked, msg="the card asked the vaults topic")

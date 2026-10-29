@@ -11,7 +11,7 @@ test "a login's link: the station's page, its card brought into view" {
   let target = link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" })
   assert_true(open_target(src, target, false, None))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the page under it, scrolled to the card: well inside the window
   match t.find("在 Studio 上登录 codex") {
     Some((_, y)) => assert_true(y > 0.0 && y < 844.0, msg="the card in view at \{y}")
@@ -28,6 +28,6 @@ test "a station's 共享调试 link: its page" {
   t.draw()
   assert_true(open_target(src, link_target({ "opens": "adbShare", "workspace": "ws1", "station": "st1" }), false, None))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(AdbShare("ws1/st1")))
 }

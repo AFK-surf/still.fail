@@ -16,9 +16,9 @@ fn desk_tester(mode : String) -> @ui.Tester {
     // (what the mode opens: 文档 and the file in it)
     app.nav.replace(Home)
     open_drive_fixture(mode)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
   } else {
-    t.run_for(fly_open_ms)
+    t.run_for(@ui.move_most_ms)
   }
   t
 }
@@ -69,7 +69,7 @@ test "desk: a chat's film fitted clear of the bar and the controls, never under 
   assert_true((y + h - (800.0 - foot)).abs() < 0.5, msg="\{y + h} \{800.0 - foot}")
   assert_true(w < 1280.0, msg="\{w}")
   t.wheel_with(640.0, 400.0, 0.0, -200.0, @ui.wheel_mod_cmd)
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   let (_, _, w2, _) = @sf.player_picture_at(key).unwrap()
   assert_true(w2 > w * 1.3, msg="\{w} \{w2}")
 }
@@ -81,7 +81,7 @@ test "desk: Esc closes a chat's film as it flies in, before its player is up" {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
-  t.run_for(fly_open_ms / 4.0)
+  t.run_for(@ui.move_most_ms / 4.0)
   assert_true(viewer.val is Some(_))
   t.key(@ui.key_escape)
   assert_true(viewer.val is None)
@@ -138,13 +138,13 @@ test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alo
   assert_true((z.scale - @dmath.exp(0.4) * @dmath.exp(0.1)).abs() < 0.01, msg="\{z.scale}")
   // 0 fitted again, + a quarter more (its glide run), 1 as it is
   t.key(@ui.key_of_char('0'))
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((z.scale - 1.0).abs() < 0.001, msg="\{z.scale}")
   t.key(@ui.key_of_char('='))
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((z.scale - 1.25).abs() < 0.01, msg="\{z.scale}")
   t.key(@ui.key_of_char('1'))
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((z.scale - 1.0).abs() < 0.01, msg="\{z.scale}")
 }
 

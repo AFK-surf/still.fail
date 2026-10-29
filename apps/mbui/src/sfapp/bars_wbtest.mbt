@@ -12,7 +12,7 @@ fn chat_with_bars(top : Double, bottom : Double) -> ((Double, Double, Double, Do
     t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":\{bottom},\"left\":0,\"right\":0}}")
   }
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match (t.rect_of("整理发布清单"), t.rect_of("发消息")) {
     (Some(a), Some(b)) => (a, b)
     _ => fail("no title or composer")

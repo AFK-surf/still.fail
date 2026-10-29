@@ -325,8 +325,6 @@ pub fn visually_hidden(@ui.Ctx, String) -> Unit
 
 pub let zoom_fling_ms : Double
 
-pub let zoom_glide_ms : Double
-
 // Errors
 
 // Types and methods
@@ -749,7 +747,6 @@ pub struct Zoom {
   max_of : (Double) -> Double
   free : Bool
   fit_step : Double
-  glide_ms : Double
   mut gliding : Bool
   glide : @motion.Value
   g_from : FixedArray[Double]
@@ -767,7 +764,7 @@ pub fn Zoom::keep(Self, (Double, Double), Double) -> Unit
 pub fn Zoom::max_scale(Self) -> Double
 pub fn Zoom::min_scale(Self) -> Double
 pub fn Zoom::natural(Self, Double, Double) -> Unit
-pub fn Zoom::new(margin? : (Double) -> Double, enlarge? : Bool, min_scale? : (Double) -> Double, max_scale? : (Double) -> Double, glide_ms? : Double, free? : Bool, fit_step? : Double) -> Self
+pub fn Zoom::new(margin? : (Double) -> Double, enlarge? : Bool, min_scale? : (Double) -> Double, max_scale? : (Double) -> Double, free? : Bool, fit_step? : Double) -> Self
 pub fn Zoom::pan(Self, Double, Double) -> Unit
 pub fn Zoom::rect(Self) -> (Double, Double, Double, Double)?
 pub fn Zoom::reset(Self) -> Unit

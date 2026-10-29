@@ -29,7 +29,7 @@ test "a key's profile's page, wide: its key masked, a new one asked for from its
   assert_true(t.find("sk-…a41f") is Some(_), msg="its key masked")
   // (the row's own: its trouble's 更换 key may be drawn above, out of sight)
   tap_words(t, "更换")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("新的 API key") is Some(_), msg="a new key asked for")
 }
 
@@ -51,7 +51,7 @@ test "a profile just added, at each width and with either hand: its models to ch
     assert_true(t.find("GPT-6-MINI") is Some(_), msg=at)
     assert_true(t.find("完成") is Some(_), msg=at)
     tap_words(t, "跳过")
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     // (in this one's place: none of it left under its page)
     assert_true(app.nav.top() == Setting(Profile("ws1/st1", "cx")), msg=at)
     assert_false(app.nav.pages().contains(Setting(PickModels("ws1/st1", "cx"))), msg=at)

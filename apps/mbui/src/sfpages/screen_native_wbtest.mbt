@@ -6,7 +6,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   @sf.native_bars.on = true
   @sf.native_bars.side = 84.0
   @sf.native_over_clear()
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_true(@sf.native_over.up)
   let c = r.t.ctx()
   let stage = c.id("screen-stage/" + screen_key("ws-1/st-1", "browser:tab-1"))
@@ -22,7 +22,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
     if a.0 == "over/screen-full" { (a.3)() }
   }
   @sf.native_over_clear()
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_true(r.ui().full)
   assert_true(@sf.native_over.up)
   assert_eq(@sf.native_over.title, "")
@@ -45,7 +45,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   r.tap_label(tr("android-misc.screen.tools"))
   r.tap_label(tr("android-misc.screen.unfull"))
   @sf.native_over_clear()
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(@ui.move_most_ms)
   assert_false(r.ui().full)
   assert_true(@sf.native_over.acts.iter().any(fn(a) { a.0 == "lead/over/screen-close" }))
 }
@@ -72,15 +72,19 @@ test "Duo native screen control mode action still asks the core and close leaves
 }
 
 ///|
+/// How long the screen's page takes to slide across this window (951 wide): what each step here waits for.
+let late_column_ms : Double = @ui.move_ms(951.0)
+
+///|
 test "a late system column refits the whole picture and its control panel opens clear of the column" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   defer { @sf.native_bars_reset() }
   r.live()
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(late_column_ms)
   @sf.native_bars.on = true
   @sf.native_bars.side = 84.0
   @sf.native_over_clear()
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(late_column_ms)
   let u = r.ui()
   let shown = u.shown()
   assert_true(shown.x >= -0.1 && shown.y >= -0.1)
@@ -93,7 +97,7 @@ test "a late system column refits the whole picture and its control panel opens 
   for a in @sf.native_over.acts.copy() {
     if a.0 == "over/screen-center" { (a.3)() }
   }
-  r.t.run_for(@ui.nav_push_ms)
+  r.t.run_for(late_column_ms)
   let mut found = false
   for node in r.t.semantics() {
     if node.role is Dialog && !node.hidden {
@@ -147,3 +151,4 @@ test "screen system audio negotiates only on a capable host, mutes immediately a
   assert_false(s.audio_ready)
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
 }
+

@@ -72,7 +72,7 @@ fn edited_core(
   }
   open_fixture_over(mode, src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -195,7 +195,7 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
   // (the words after the ：, the pill's last: tapped at its right end)
   let (x, y, w, h) = t.rect_of("登录已失效").unwrap()
   t.tap(x + w - 20.0, y + h / 2.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Profile("ws1/st1", "p1")))
 }
 

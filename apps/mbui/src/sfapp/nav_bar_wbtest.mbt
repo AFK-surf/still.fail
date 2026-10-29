@@ -13,7 +13,7 @@ test "nav bar: back, title and what is at its end on one line (settings' pages)"
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
     open_setting(@settings.fixture_page(mode))
     t.draw()
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     // what the bar's line holds: what is seen on it, no taller than it (the line under a title is lower)
     let mids : Array[(String, Double)] = []
     for s in t.semantics() {
@@ -47,7 +47,7 @@ fn bar_line_under(mode : String, top : Double) -> Array[(String, Double)] {
   open_setting(@settings.fixture_page(mode))
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":0,\"left\":0,\"right\":0}}")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let mids : Array[(String, Double)] = []
   for s in t.semantics() {
     let (_, y, _, h) = s.rect

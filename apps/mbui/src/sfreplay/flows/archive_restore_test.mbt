@@ -13,7 +13,7 @@ test "36-archive-restore" {
     f.see("=已归档")
     f.tap("=已归档")
     // the archive pushed over Home
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("要归档的对话 083209")
     f.see("归档前的回复 083209")
     f.tap("icon:retry", top=true)

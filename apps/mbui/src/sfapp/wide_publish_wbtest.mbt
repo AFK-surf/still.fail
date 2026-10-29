@@ -15,7 +15,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()
@@ -58,7 +58,7 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
   reset()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, fixture("chat-info")) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()
@@ -90,7 +90,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   t.right_click(x + 24.0, y + 8.0)
   t.frame()
@@ -117,7 +117,7 @@ test "wide: the message header offers its position link and its turn's picture s
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   let before = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   t.move(x + 24.0, y + 8.0)

@@ -7,7 +7,7 @@ test "26-history" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("history"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("看看文档 083209 steps:文档目录看过了 083209")
@@ -26,7 +26,7 @@ test "26-history" {
     f.see("=历史")
     f.tap("=历史")
     // the history pushed over the chat, the sheet sunk away
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("执行历史")
     f.see("文档目录看过了 083209")
@@ -34,7 +34,7 @@ test "26-history" {
     f.see("列出 docs 目录")
     f.tap("列出 docs 目录")
     // the command's words pushed over the history
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("stillfail-port.md")
     f.end()
   })

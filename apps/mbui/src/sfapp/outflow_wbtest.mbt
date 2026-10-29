@@ -13,7 +13,7 @@ test "a station's settings list the programs granted its data, and revoking one 
   // the station's page, at its settings (a login's link opens it there)
   assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(tr("web-main.outflow.title")) is Some(_), msg="the section")
   assert_true(t.find("Comma") is Some(_), msg="the program")
   assert_true(t.find("token 用量和金额、chat 和它们的状态") is Some(_), msg="what it may read")
@@ -35,7 +35,7 @@ test "a station's settings with no program granted its data ask nothing of it" {
   t.draw()
   assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(tr("web-main.logins.title")) is Some(_), msg="its settings")
   assert_true(t.find(tr("web-main.outflow.title")) is None, msg="no section")
 }
@@ -50,7 +50,7 @@ test "an admin allows a program what they leave of what it asks, once the summar
   t.draw()
   assert_true(open_target(src, link_target({ "opens": "login", "workspace": "ws1", "station": "st1", "login": "login-2" }), false, None))
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Comma for Teams") is Some(_), msg="the program asking")
   assert_true(t.find("Comma — 按团队算 token 的 ROI") is Some(_), msg="what it says of itself")
   // the whole workspace taken out: this station's alone

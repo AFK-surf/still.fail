@@ -1900,6 +1900,29 @@ test "motion-spring" {
 }
 
 ///|
+test "motion-length" {
+  // a tween on Move, the app's or the framework's; a move by its way's length, another curve's tween, a test's not counted
+  let fs = found(
+    [
+      (
+        "src/app/page.mbt",
+        "fn v(a : @motion.Anim) -> Unit {\n" +
+        "  a.animate(1.0, @motion.tween(350.0, ease=Move))\n" +
+        "  a.animate(1.0, @motion.move(points=300.0))\n" +
+        "  a.animate(1.0, @motion.tween(140.0, ease=Out))\n" +
+        "  a.animate(1.0, @motion.tween(300.0, ease=@ui.Move, delay=20.0))\n" +
+        "}\n",
+      ),
+      ("src/app/page_wbtest.mbt", "test \"t\" {\n  a.animate(1.0, @motion.tween(300.0, ease=Move))\n}\n"),
+      ("src/motion/layer.mbt", "let s : Spec = tween(300.0, ease=Move)\n"),
+    ],
+    "motion-length",
+    3,
+  )
+  assert_eq(lines(fs), [1, 2, 5])
+}
+
+///|
 test "motion-read" {
   // the app reading whether a motion runs; a Tester's list of what moves, a test's and the framework's not counted
   let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))

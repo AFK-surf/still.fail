@@ -78,7 +78,7 @@ fn held_core(
 fn new_chat_sent(t : @ui.Tester, words : String) -> (Double, Double) raise {
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("做任何事")
   t.type_text(words)
   t.draw()
@@ -222,10 +222,10 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("做任何事")
   t.type_text("第一行\n第二行\n第三行")
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
   let tall = box()
   tap_send(t)
@@ -344,7 +344,7 @@ test "a new chat while its stations are read: its page and composer as they will
   let t = reading_core(reading, made)
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   // the page's own words and its composer, nothing said of a station not known yet
   assert_true(t.find("想让 agent 做什么？") is Some(_))
   assert_true(t.find("它会在") is None)

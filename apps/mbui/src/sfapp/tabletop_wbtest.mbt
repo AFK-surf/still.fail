@@ -20,7 +20,7 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : Strin
   if fold != "" {
     t.post(@hostapi.system_channel, fold)
   }
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -103,7 +103,7 @@ test "half open on its back half: the messages over the fold, under it the compo
   assert_true(ry > words, msg="the latest chats' row at \{ry}")
   // one tapped: that chat in this one's place
   t.tap_text("首页的列表改成按天分组")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Chat(r) => assert_true(r.session != "s-c1", msg="still \{r.session}")
     _ => fail("not a chat")

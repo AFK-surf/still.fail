@@ -10,7 +10,7 @@ fn crowded(mode : String, w? : Double = crowded_w, h? : Double = crowded_h) -> @
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2)
   open_mode(mode)
   t.draw()
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 

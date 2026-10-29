@@ -86,7 +86,13 @@ struct MoveShown {
 struct MoveRun {
   who : Mover
   mut start : Double
-  dur : Double
+  /// how long: as said, or a Move's over the furthest any of its boxes goes (`far`, in points, found as they are
+  /// built in the first frame that builds them anew, `far_frame`: its new state may come a frame or more after it is
+  /// said, a page brought over once it shows), solved in the frame after (`solved`)
+  mut dur : Double
+  mut far : Double
+  mut far_frame : Int
+  mut solved : Bool
   ease : Ease
   names : Map[String, FixedArray[Bool]]
   vars : Array[String]
@@ -99,7 +105,55 @@ struct MoveRun {
 impl Moving for MoveRun with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
+  self.ends()
+}
+
+///|
+/// When it is over: as long as its way is far, as far as it is known (said again each frame: a way found later is
+/// longer).
+fn MoveRun::ends(self : MoveRun) -> Double {
   self.start + self.dur
+}
+
+///|
+/// Box (or value) `key` built as `to` while it goes, from `from`: how far it goes counted (the points of what it moves
+/// of it: a size in points, a margin, a padding, a side, a gap, a shift; not a colour, a corner, an opacity), in the
+/// first frame that builds it otherwise than it was.
+fn MoveRun::count_far(self : MoveRun, on : FixedArray[Bool]?, from : FixedArray[Double], to : FixedArray[Double], frame : Int) -> Unit {
+  if self.solved || (self.far_frame >= 0 && frame > self.far_frame) {
+    return
+  }
+  let n = if on is None { 1 } else { move_count }
+  for k in 0..<n {
+    let moves = match on {
+      Some(on) => on[k] && (k <= 18 || k == 27 || k == 28)
+      None => true
+    }
+    if !moves {
+      continue
+    }
+    let a = from[k]
+    let b = to[k]
+    // (none said, or none to it: a max of none)
+    if a.is_nan() || b.is_nan() || a.is_inf() || b.is_inf() {
+      continue
+    }
+    if (k == 0 || k == 1) && on is Some(_) {
+      let kind = if k == 0 { move_w_kind } else { move_h_kind }
+      if from[kind] != 1.0 || to[kind] != 1.0 {
+        continue
+      }
+    }
+    if (b - a).abs() > 0.0 {
+      self.far = dmax(self.far, (b - a).abs())
+      if self.far_frame < 0 {
+        self.far_frame = frame
+      }
+    }
+  }
+  if !self.solved {
+    self.dur = move_ms(self.far)
+  }
 }
 
 ///|
@@ -125,8 +179,15 @@ impl Moving for MoveRun with sample(self, now) {
 }
 
 ///|
-/// How far the move has gone at `now` (its curve's, 0 as it set out, 1 from its end on).
-fn MoveRun::at(self : MoveRun, now : Double) -> Double {
+/// How far the move has gone at `now` (its curve's, 0 as it set out, 1 from its end on), in `frame`: its length solved
+/// from the frame after the one that built what it moves (till then, as long as what that has found so far takes).
+fn MoveRun::at(self : MoveRun, now : Double, frame : Int) -> Double {
+  if !self.solved {
+    if self.far_frame >= 0 && frame > self.far_frame {
+      self.solved = true
+    }
+    self.dur = move_ms(self.far)
+  }
   let t = whole_ms(now - self.start)
   if t <= 0.0 {
     0.0
@@ -140,7 +201,7 @@ fn MoveRun::at(self : MoveRun, now : Double) -> Double {
 ///|
 /// The properties of `moves` (each a box's name and the CSS names of what of it moves, as the web's moveState lists
 /// them) move from what they are shown as now to what the view builds from now on, together, over `duration` ms on
-/// `ease` (by default the web's: 380 ms, its ease-out). Said as the state changes: in the handler that changes it,
+/// `ease` (by default a Move as long as the furthest of them goes: move_ms). Said as the state changes: in the handler that changes it,
 /// before or after. A value of the view's own goes with them where a box lists it by its `--` name (Ctx::moved). A box
 /// shown for the first time as it sets out is at once what it is built as; with motion reduced (Ctx::still) every box
 /// is. Its clock waits as long as its first frame is late to the screen (nav_late_most at most).
@@ -148,7 +209,7 @@ fn MoveRun::at(self : MoveRun, now : Double) -> Double {
 pub fn Ctx::move_state(
   self : Ctx,
   moves : Array[(String, Array[String])],
-  duration? : Double = move_far_ms,
+  duration? : Double,
   ease? : Ease = Move,
   loc~ : SourceLoc,
 ) -> Unit {
@@ -193,7 +254,20 @@ pub fn Ctx::move_state(
   let who = Mover::new()
   // (its first frame: this one, said in it; else the next drawn, as it is handed its time)
   let late_at = if self.in_frame() { start } else { -1.0 }
-  let run : MoveRun = { who, start, dur: duration, ease, names, vars, from, waits_late: true, late_at }
+  let run : MoveRun = {
+    who,
+    start,
+    dur: duration.unwrap_or(move_ms(0.0)),
+    far: 0.0,
+    far_frame: -1,
+    solved: duration is Some(_),
+    ease,
+    names,
+    vars,
+    from,
+    waits_late: true,
+    late_at,
+  }
   self.moving_as(who, run as &Moving, "a move of \{names.keys().collect()} set out at \{loc}")
   self.move_runs.push(run)
 }
@@ -210,7 +284,8 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
     if run.vars.contains(name) {
       match run.from.get(name) {
         Some(f) => {
-          let p = run.at(self.now())
+          run.count_far(None, f.v, FixedArray::make(1, target), self.frame_no)
+          let p = run.at(self.now(), self.frame_no)
           v = f.v[0] + (target - f.v[0]) * p
           if p < 1.0 {
             part_live()
@@ -234,7 +309,7 @@ fn Ctx::moves_frame_start(self : Ctx) -> Unit {
   self.shown_last = self.shown_now
   self.shown_now = {}
   let now = self.clock
-  self.move_runs.retain(fn(r) { r.start + r.dur > now })
+  self.move_runs.retain(fn(r) { r.ends() > now })
 }
 
 ///|
@@ -263,7 +338,8 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
         Some(run) =>
           match run.from.get(key) {
             Some(f) => {
-              let p = run.at(self.now())
+              run.count_far(run.names.get(name), f.v, built, self.frame_no)
+              let p = run.at(self.now(), self.frame_no)
               shown[k] = move_mix(k, f.v, built, p)
               // (shown otherwise each frame while it goes: what holds it, kept, built each frame till it is over)
               if p < 1.0 {

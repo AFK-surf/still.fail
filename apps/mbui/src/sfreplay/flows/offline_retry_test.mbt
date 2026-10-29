@@ -6,7 +6,7 @@ test "12-offline-retry" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("offline-retry"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("断网时发出的消息 082947 post:重试后收到 082947")

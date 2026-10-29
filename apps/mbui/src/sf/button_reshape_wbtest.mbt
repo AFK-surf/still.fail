@@ -24,13 +24,14 @@ test "a button whose words change: its ground from the width it had to the new o
       |> ignore
     })
   })
-  t.run_for(@ui.move_near_ms)
+  t.run_for(@ui.move_most_ms)
   let long = button_ground_w(t)
   label.val = "已复制"
   t.frame()
   // as the move sets out, the width it had; half way, between; at its end, the new one
   assert_eq(button_ground_w(t), long)
-  t.run_for(@ui.move_near_ms / 2.0)
+  // (well on its way: no way takes less than a Move of nothing far)
+  t.run_for(@ui.move_least_ms / 2.0)
   let mid = button_ground_w(t)
   t.run_for(@motion.layout_rest("sf-btn/shape/copy") - t.time())
   let short = button_ground_w(t)

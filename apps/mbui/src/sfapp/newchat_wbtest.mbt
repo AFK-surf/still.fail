@@ -33,13 +33,13 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
   t.tap(xs[1], y)
   assert_eq(app.nav.depth(), 1)
   assert_true(app.nav.top() == Files)
-  t.run_for(switch_side_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("文件") is Some(_))
   assert_true(t.find("整理发布清单") is None)
   // back goes to the chats, in place
   t.back()
   assert_true(app.nav.top() == Home)
-  t.run_for(switch_side_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("整理发布清单") is Some(_))
 }
 
@@ -68,7 +68,7 @@ test "文件 and 奏 at the bar's top, their gear tapped: as 设置 comes in bes
     let title = place_label(place)
     let t = tester("home")
     @sfbase.go_place(place) |> ignore
-    t.run_for(switch_side_ms)
+    t.run_for(@ui.move_most_ms)
     let rest_x = bar_title_x(t, title)
     let at_rest = bar_words(t, 0.0)
     let gear = t.locate("icon:settings")
@@ -77,7 +77,7 @@ test "文件 and 奏 at the bar's top, their gear tapped: as 设置 comes in bes
     assert_true(app.nav.top() == Settings, msg=place)
     // halfway through 设置's slide in from the left: the place's page going out to the right beside it is drawn as it
     // was at rest, moved (the stack two deep, it is still its root: its gear, not a way back to 设置)
-    t.run_for(@ui.nav_push_ms / 2.0)
+    t.run_for(@ui.move_most_ms / 2.0)
     let from = bar_title_x(t, title) - rest_x
     assert_true(from > 0.0, msg=place)
     assert_eq(bar_words(t, from), at_rest, msg=place)
@@ -113,7 +113,7 @@ test "the bar: hidden under a page pushed, back as it comes back" {
   t.run_for(bar_hide_ms)
   assert_true(bar.vis.value < 0.01)
   t.back()
-  t.run_for(bar_show_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(bar.vis.value > 0.99)
 }
 
@@ -158,7 +158,7 @@ test "a new chat: 令 raises it; the first message makes the chat and the page b
   t.tap(195.0, y - 28.0 - 4.0)
   assert_eq(app.nav.depth(), 2)
   assert_true(app.nav.risen())
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("想让 agent 做什么？") is Some(_))
   assert_true(t.find("Opus 5.5") is Some(_))
   t.tap_text("做任何事")
@@ -181,7 +181,7 @@ test "a new chat with the keyboard up: the scene scrolls in what is left, the ch
   let t = tester("home")
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("做任何事")
   // the window laid out over the keyboard, as Android's host has it (adjustResize)
   let over = 844.0 - kbd_h
@@ -213,7 +213,7 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   open_mode("newchat")
   // (the page opened drawn at its moment, its rise from there)
   t.draw()
-  t.run_for(@ui.nav_rise_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("它会在 Studio 上") is Some(_))
   // the station's control, beside the model's
   let (_, cy) = t.find("Opus 5.5").unwrap()

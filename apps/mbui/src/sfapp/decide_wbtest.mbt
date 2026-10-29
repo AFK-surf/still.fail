@@ -32,7 +32,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
     @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   }
   // the pages opened slid in
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -115,7 +115,7 @@ test "the chat's own sheet: its agents, pinning it, and on to the agent's card a
   assert_true(t.find("费用估算") is Some(_))
   assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
   t.tap_text("8 轮 · 共干了 1 小时 12 分")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     History(r, key, _) => {
       assert_eq(r.session, "s-c1")
@@ -215,7 +215,7 @@ test "the 奏 page: swiped right, a decision is dismissed; none left, the day so
   assert_eq(named(calls2, "decision.dismiss").length(), 1)
   assert_eq(named(calls2, "decision.answer").length(), 0)
   assert_true(t2.find("1 / 1") is Some(_))
-  t2.run_for(card_off_ms)
+  t2.run_for(@ui.move_most_ms)
   t2.assert_idle()
 }
 
@@ -236,9 +236,9 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
   // let go far across: it flies off turning on, the next one in front not turned
   t.move(360.0, 400.0)
   t.release(360.0, 400.0)
-  t.run_for(card_off_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.turn_of("把首页和聊天页的截图都更新").unwrap() > held)
-  t.run_for(card_off_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(t.turn_of("把首页和聊天页的截图都更新"), None)
   assert_true(t.find("1 / 1") is Some(_))
   // the last tap's ripple shown whole, its way in and out
@@ -299,8 +299,8 @@ test "the history's post: where it went with its platform's mark, in the accent'
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   app.nav.push(Chat(r))
   app.nav.push(History(r, "s-c1", None))
-  t.run_for(@ui.nav_push_ms)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
   let (x, y, _, h) = t.rect_of("整理发布清单").unwrap()
   // still.fail's mark (12) just before the name, on its line
   assert_true(
@@ -311,7 +311,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
   )
   // the chat it went to is the one under the history: back to it
   t.tap_text("整理发布清单")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat(_))
 }
 
@@ -349,7 +349,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   }
   open_fixture_over("chat-info", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')

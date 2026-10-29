@@ -169,11 +169,11 @@ fn bar_set_out() -> Double {
 }
 
 ///|
-/// How long the bar takes to come back (a page it shows on), and to go (a page pushed over it).
-pub let bar_show_ms : Double = @ui.move_page_ms
+/// How far the bar goes down out of the way (points): coming back (a page it shows on), a Move as long as that is far.
+let bar_drop : Double = 120.0
 
 ///|
-/// (going, shorter than its coming: mostly gone by half of the page's push)
+/// How long the bar takes to go (a page pushed over it): shorter than its coming, mostly gone by half of the page's push.
 let bar_hide_ms : Double = 250.0
 
 ///|
@@ -522,7 +522,13 @@ fn Glide::anim(self : Glide) -> @motion.Anim {
 ///|
 /// Sent to `target` over `ms` on `ease`; nothing new when it is going there.
 fn Glide::go(self : Glide, target : Double, ms : Double, ease : @ui.Ease) -> Unit {
-  self.anim().follow(target, @motion.tween(ms, ease~))
+  self.go_by(target, @motion.tween(ms, ease~))
+}
+
+///|
+/// Sent to `target` by `spec`; nothing new when it is going there.
+fn Glide::go_by(self : Glide, target : Double, spec : @motion.Spec) -> Unit {
+  self.anim().follow(target, spec)
   self.target = target
 }
 
@@ -1155,7 +1161,11 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   // told each frame: shown or not, the notch as the place has it
   if tell {
-    m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, if shown { Move } else { Leave })
+    m.vis.go_by(if shown { 1.0 } else { 0.0 }, if shown {
+      @motion.move(points=bar_drop)
+    } else {
+      @motion.tween(bar_hide_ms, ease=Leave)
+    })
   }
   if tell && !shown {
     if m.mode {
@@ -1556,8 +1566,13 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   })
   |> ignore
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
-  if m.vis.value < 1.0 {
-    c.look(holder, @ui.look(alpha=m.vis.value, dy=(1.0 - m.vis.value) * 120.0))
+  // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
+  if m.vis.value < 1.0 || m.vis.target < 1.0 {
+    let vis = m.vis.anim()
+    c.look_by(holder, fn() {
+      let v = vis.get()
+      @ui.look(alpha=v, dy=(1.0 - v) * bar_drop)
+    })
   }
   @motion.leaving(c, holder, shown)
 }

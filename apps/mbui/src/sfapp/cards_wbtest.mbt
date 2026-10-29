@@ -18,7 +18,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
   open_cards_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -26,9 +26,9 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
 /// The chat left for Home and opened again: what was answered in it has been out of sight.
 fn out_of_sight(t : @ui.Tester) -> Unit {
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
 }

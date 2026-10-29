@@ -9,7 +9,7 @@ test "03-send-text" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("send-text"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("第一条来自 mbui 的消息 064618")

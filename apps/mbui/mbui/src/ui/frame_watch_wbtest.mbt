@@ -314,9 +314,9 @@ test "a page pushed: the frames of its slide are painted alone, the one at its e
   t.clock_frame()
   let built = builds.val
   let was = paints_alone.val
-  t.clock_frame(ms=nav_push_ms / 4.0)
+  t.clock_frame(ms=move_ms(390.0) / 4.0)
   assert_eq(builds.val, built, msg="built: \{t.built_why()}")
-  t.clock_frame(ms=nav_push_ms / 4.0)
+  t.clock_frame(ms=move_ms(390.0) / 4.0)
   assert_eq(builds.val, built, msg="built: \{t.built_why()}")
   assert_eq(paints_alone.val - was, 2)
   t.run_for(nav.rest() - t.time())

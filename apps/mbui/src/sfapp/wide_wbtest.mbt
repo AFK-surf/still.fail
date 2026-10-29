@@ -250,7 +250,7 @@ test "wide: the 奏 page shows the decision the core shows: a row pressed (decis
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="decisions")
   open_decisions()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // nothing picked yet: the first (its post on the page, as its chat draws it; its options under it)
   assert_true(t.find("量过一次就记住") is Some(_))
   assert_true(t.find("一起换") is Some(_))
@@ -276,7 +276,7 @@ test "wide: the 奏 page's decision answered by an option (decision.answer), set
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="decisions")
   open_decisions()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("一起换")
   t.frame()
   let answered = named(calls, "decision.answer")
@@ -293,7 +293,7 @@ test "wide: the 奏 page's decision answered by an option (decision.answer), set
   // a text card's reply in the composer at the foot
   let t2 = wide_tester(calls, mode="decisions-text")
   open_decisions()
-  t2.run_for(@ui.nav_push_ms)
+  t2.run_for(@ui.move_most_ms)
   t2.tap_text("sk_test_…")
   t2.type_text("sk_test_123")
   t2.enter()
@@ -322,7 +322,7 @@ test "wide: settings' sidebar taller than a short window scrolls to its last row
   let h = 430.0
   let t = wide_tester(calls, h~)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let below = match t.rect_of("本机缓存") {
     Some((_, y, _, _)) => y
     None => fail("no 本机缓存 row")
@@ -330,11 +330,11 @@ test "wide: settings' sidebar taller than a short window scrolls to its last row
   assert_true(below > h, msg="under the window's foot at first: \{below}")
   let (x, _) = t.find("返回会话").unwrap()
   t.wheel(x, h / 2.0, 3000.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (_, y, _, rh) = t.rect_of("本机缓存").unwrap()
   assert_true(y + rh <= h, msg="scrolled into the window: \{y}")
   t.tap_text("本机缓存")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::KeptFiles))
 }
 
@@ -709,22 +709,22 @@ test "wide: a line more or less in the composer, the chat's last row goes with i
   let (gx, gy, gw, gh) = composer_glass(t)
   t.tap(gx + gw / 2.0, gy + gh / 2.0)
   t.type_text("一一")
-  t.run_for(@sfpages.morph_ms)
+  t.run_for(@ui.move_most_ms)
   let gap = composer_gap(t)
   // a line more: half way, its ground on its way up and the row with it
   t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
   t.type_text("二二")
-  t.run_for(@sfpages.morph_ms / 4.0)
+  t.run_for(@ui.move_most_ms / 4.0)
   assert_true((composer_gap(t) - gap).abs() < 1.0, msg="growing: \{composer_gap(t)} from \{gap}")
-  t.run_for(@sfpages.morph_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((composer_gap(t) - gap).abs() < 1.0)
   // and the line taken out again
   t.key(@ui.key_code_backspace)
   t.key(@ui.key_code_backspace)
   t.key(@ui.key_code_backspace)
-  t.run_for(@sfpages.morph_ms / 4.0)
+  t.run_for(@ui.move_most_ms / 4.0)
   assert_true((composer_gap(t) - gap).abs() < 1.0, msg="shrinking: \{composer_gap(t)} from \{gap}")
-  t.run_for(@sfpages.morph_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((composer_gap(t) - gap).abs() < 1.0)
 }
 
@@ -864,7 +864,7 @@ test "wide: a new chat's first words stay where they were typed while the chat i
   t.run_for(@sf.hint_back_ms)
   assert_false(hint_drawn(t), msg="the hint over the field with the cursor")
   t.ctx().blur()
-  t.run_for(@sfpages.let_go_ms + @sfpages.morph_ms + @sf.hint_back_ms)
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
   assert_true(hint_drawn(t), msg="the hint back once the field is let go of")
 }
 
@@ -895,9 +895,9 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
   // what it holds there and did not at the chat's foot (the new chat's choices) carried on its ground all the way
   choices_in_ground(t)
-  t.run_for(@sfpages.page_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   choices_in_ground(t)
-  t.run_for(went + @sfpages.page_move_ms + 1.0 - t.time())
+  t.run_for(went + @ui.move_most_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
@@ -914,7 +914,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   }
   t.run_for(back + new_leave_ms + 1.0 - t.time())
   assert_true(t.find("想让 agent 做什么？") is None)
-  t.run_for(back + @sfpages.page_move_ms + 1.0 - t.time())
+  t.run_for(back + @ui.move_most_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
   assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
 }
@@ -1155,16 +1155,16 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
     assert_true(t.find(label) is Some(_), msg=label)
   }
   app.nav.push(Setting(@settings.Route::Notifications))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("提醒方式") is Some(_))
   assert_true(t.find("通知类别") is Some(_))
   assert_true(t.find("待你决定") is Some(_))
   assert_true(t.find("横幅（离开时）") is Some(_), msg="a done turn's banner while away")
   app.nav.push(Setting(@settings.Route::Permissions))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("已允许") is Some(_))
   app.nav.push(Setting(@settings.Route::Archiving))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("提示归档") is Some(_))
   assert_true(t.find("自动归档") is Some(_))
   assert_true(t.find("Studio") is Some(_))
@@ -1172,7 +1172,7 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   let t = wide_tester([], mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::StationArchiving("ws1/st1")))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("怎么自动归档") is Some(_))
   assert_true(t.find("空闲多久") is Some(_))
   assert_true(t.find("只在 Slack 里的对话") is Some(_))
@@ -1183,15 +1183,15 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("stations"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is Some(_))
   assert_true(t.find("新建对话") is None, msg="not the chats' list")
   app.nav.replace(Place("profiles"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 Profile") is Some(_))
   app.nav.replace(Place("usage"))
   // (the sidebar closing to the rail's bar as the web's: brand.tsx moveSidebar)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
 }
 
@@ -1200,28 +1200,28 @@ test "wide: to 连接 or 用量 the block closes holding the sidebar it had, as 
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("stations"))
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is Some(_))
   let s = @sfdesk.wide.side_w
   t.click(Button, label="用量")
   // halfway closed: the stations' list as it was
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("添加 station") is Some(_), msg="the stations' list as it closes")
   assert_true(t.find("新建对话") is None, msg="not the chats' list")
   assert_eq(@sfdesk.wide.side_w, s)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
   // on to 连接: closed, nothing in it drawn
   t.click(Button, label="连接")
-  t.run_for(@sfdesk.side_move_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   // to Profile: its own list as it opens, from its first frame
   t.click(Button, label="Profile")
   t.frame()
   assert_true(t.find("添加 Profile") is Some(_), msg="the profiles' list as it opens")
   assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 Profile") is Some(_))
 }
 
@@ -1230,7 +1230,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Files)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   for label in ["个人收藏", "团队共享", "Station"] {
     assert_true(t.find(label) is Some(_), msg=label)
   }
@@ -1246,7 +1246,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   // a shared folder opens in the pane, in columns (the sidebar's 文档, not the pane's)
   let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < @sfdesk.rail_w + @sfdesk.wide.side_w })[0]
   t.tap(dx, dy)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Drive(at) => assert_eq(at.root, Some(fix_docs))
     _ => fail("no folder open")
@@ -1287,7 +1287,7 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   let t = wide_tester(calls)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // one tab: none shown
   assert_true(t.query(Button, label="关闭标签") is None)
   t.key(@ui.key_of_char('t'), mods=@ui.mod_cmd)
@@ -1353,7 +1353,7 @@ test "wide: ⌘K opens a settings page by its name" {
   t.frame()
   assert_true(t.find("设置") is Some(_), msg="the settings' part")
   t.enter()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("搜索全部内容和操作") is None, msg="closed")
   match app.nav.top() {
     Setting(@settings.Route::Permissions) => ()
@@ -1377,7 +1377,7 @@ test "wide: ⌘K and a row's menu open again right after Esc closed them" {
   t.type_text("权限")
   t.frame()
   t.enter()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Setting(@settings.Route::Permissions) => ()
     _ => fail("not 权限 after reopening: " + t.words().map(fn(w) { w.0 }).join("|"))
@@ -1386,7 +1386,7 @@ test "wide: ⌘K and a row's menu open again right after Esc closed them" {
   t.key(@ui.key_escape)
   @sfdesk.open_settings()
   app.nav.replace(Home)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("重命名") is Some(_))
@@ -1423,7 +1423,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   let t = wide_tester(calls)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
   t.frame()
   assert_true(t.find("前往文件夹…") is Some(_))
@@ -1433,7 +1433,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   // (worked out by the core)
   assert_true(named(calls, "files.go").length() > 0)
   t.enter()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Drive(at) => assert_eq(at.root, Some("/Users/lin/项目"))
     _ => fail("no folder open")
@@ -1453,7 +1453,7 @@ test "wide: files going up are rows of the folder (Drive.tsx UploadRow): how far
   app.nav.replace(Home)
   open_drive_fixture("drive-upload")
   fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("旅行照片.zip") is Some(_))
   assert_true(t.find("2.5 MB / 6.0 MB") is Some(_), msg="how far")
   assert_true(t.find("已有同名文件") is Some(_), msg="a name taken")
@@ -1508,7 +1508,7 @@ test "wide: 通知's 红点 beside the banner (prefs.set badgeKinds), each kind'
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Notifications))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("红点") is Some(_), msg="the badge's tile")
   t.tap_text("红点")
   t.frame()
@@ -1522,7 +1522,7 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Shortcuts))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("快速切换对话") is Some(_))
   assert_true(t.find("⌘K") is Some(_))
   t.tap_text("⌘K")
@@ -1558,7 +1558,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
   let t = wide_tester(calls)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Radio, label="列表")
   t.frame()
   assert_true(t.find("选中一个文件来预览") is None)
@@ -1632,7 +1632,7 @@ fn files_dragging(calls : Array[Made], view? : String = "list") -> @ui.Tester {
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   fix_browse_prefs_set({ "driveViews": { "page": Json::string(view) } }) |> ignore
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -1708,7 +1708,7 @@ test "wide: 文件 moved onto a folder that has its name: asked first (跳过, �
   // (the one in 会议记录: not the row under 旧版, its own)
   let (x0, y0) = if (notes[0].1 - y1).abs() > (notes[1].1 - y1).abs() { notes[0] } else { notes[1] }
   t.drag(x0, y0, x1, y1)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("「旧版」里已有「说明.txt」") is Some(_), msg="asked")
   assert_eq(named(calls, "drive.rename").length(), 0)
   t.click(Button, label="保留两者")
@@ -1741,7 +1741,7 @@ test "wide: 文件 from the computer held over the folder say where they go; let
   let made = named(calls, "drive.mkdir")
   assert_eq(made.length(), 1)
   assert_eq(text(Some(made[0].params), "path"), "新的")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("清单.txt") is Some(_), msg="up")
   assert_true(t.find("新的") is Some(_), msg="its folder made")
 }
@@ -1823,7 +1823,7 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
 test "wide: words with no face chosen are set in the desktop app's face (Inter, carried by the app), code in the app's own; a phone's width the system's" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(faces_in[1], desktop_face, msg="the app's words")
   assert_eq(faces_in[3], "", msg="code: the app's own")
   assert_eq(named(calls, "fonts.fetch").length(), 0, msg="nothing fetched")
@@ -1840,7 +1840,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=1000.0, platform=0)
   open_setting(page)
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("星火工作室") is Some(_))
   assert_true(t.find("你是Owner") is Some(_), msg="who you are")
   assert_true(t.find("成员") is Some(_))
@@ -1856,9 +1856,9 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   assert_true(@sf.presenting())
   assert_true(t.find("移出 workspace") is Some(_), msg=t.drawn_text())
   t.key(@ui.key_escape)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("退出此 workspace")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("退出「星火工作室」？") is Some(_), msg="asked again")
 }
 
@@ -1878,7 +1878,7 @@ test "wide: 字体's faces a row each under the places' choice, the chosen one c
   let t = @ui.Tester::new(fn(c) { view(c, src2) }, w=1280.0, h=1600.0, platform=0)
   open_setting("fonts")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   for label in ["默认", "Inter", "思源黑体"] {
     assert_true(t.query(Button, label~) is Some(_), msg=label)
   }
@@ -1893,7 +1893,7 @@ test "wide: 字体's faces a row each under the places' choice, the chosen one c
   assert_true(t.query(Button, label="JetBrains Mono") is Some(_))
   open_setting("appearance")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("拖入 chat 的文件") is Some(_))
   assert_true(t.find("发文件") is Some(_))
 }
@@ -1903,7 +1903,7 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("connects"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("星火助手") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("林（你）") is Some(_), msg="who added it")
   assert_true(t.find("Studio") is Some(_), msg="its station's tag")
@@ -1919,7 +1919,7 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   assert_true(t.find("全部连接") is Some(_), msg="its menu: " + t.words().map(fn(w) { w.0 }).join("|"))
   let (mx, my) = t.find_last("我的").unwrap()
   t.tap(mx, my)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="筛选连接：我的") is Some(_), msg="the filter says it")
   // back to 全部; a row pressed: its page
   let (gx, gy, gw, gh) = t.query(Button, label="筛选连接：我的").unwrap().rect
@@ -1927,11 +1927,11 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   t.frame()
   let (ax, ay) = t.find("全部连接").unwrap()
   t.tap(ax, ay)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="筛选连接：全部") is Some(_))
   let (rx, ry) = t.find("星火助手").unwrap()
   t.tap(rx, ry)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("运行方式") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -1940,10 +1940,10 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("connects"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (rx, ry) = t.find("星火助手").unwrap()
   t.tap(rx, ry)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // its head: back over it, its name, how it is, where it is reached, its station, who owns it
   assert_true(t.query(Link, label="连接") is Some(_), msg="back: " + t.words().map(fn(w) { w.0 }).join("|"))
   for w in ["星火助手", "在线", "星火", "Studio", "所属"] {
@@ -1961,11 +1961,11 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
     assert_true(t.find(w) is Some(_), msg="its menu: " + w)
   }
   t.key(@ui.key_escape)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // its way of making sessions, a row: the ways, what switching to all in one does (the core's), its button the core's
   // words
   t.click(Link, label="会话")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("更改会话方式") is Some(_), msg="its dialog: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("更改后") is None, msg="nothing said while nothing changes")
   t.click(Radio, label="所有 thread 共用一个会话")
@@ -1974,7 +1974,7 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   assert_true(t.find("下一条消息将开始新的单会话") is Some(_))
   assert_true(t.find("仅在被 @ 时唤醒") is Some(_), msg="whether it waits for an @, in the chosen one")
   t.click(Button, label="改为单会话")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let put = named(calls, "connect.put")
   assert_eq(put.length(), 1)
   assert_eq(text(field(Some(put[0].params), "input"), "mode"), "single-session")
@@ -1984,7 +1984,7 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   links.sort_by(fn(a, b) { b.rect.0.compare(a.rect.0) })
   let (bx, by, bw, bh) = links[0].rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="添加连接") is Some(_), msg="the list again")
 }
 
@@ -1993,14 +1993,14 @@ test "wide: a Slack connect's app folded on its page, a row opening it: its look
   let calls : Array[Made] = []
   let t = wide_tester(calls, h=1400.0)
   app.nav.replace(Place("connects"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let (rx, ry) = t.find("星火助手").unwrap()
   t.tap(rx, ry)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("名字、头像和权限") is Some(_), msg="its fold: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("应用到 Slack") is None, msg="folded")
   t.click(Link, label="Slack app")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("权限 · 已开启 4 / 16") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("在 Slack 中打开此 app") is Some(_))
   // its permissions unfolded: by section, the one only admins allow marked
@@ -2027,9 +2027,9 @@ test "wide: a new connect in a dialog as the web's: the core's wizard a step at 
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("connects"))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="添加连接")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the wizard opened on the one station online, as the desktop's (not a phone's)
   let opened = named(calls, "connect.flow.open")
   assert_eq(opened.length(), 1)
@@ -2045,7 +2045,7 @@ test "wide: a new connect in a dialog as the web's: the core's wizard a step at 
   assert_eq(text(field(Some(go[0].params), "input"), "to"), "app")
   // closed: its wizard let go of
   t.click(Button, label="关闭")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "connect.flow.drop").length(), 1)
 }
 
@@ -2055,12 +2055,12 @@ test "wide: 用量 as the web's: what it counts beside its title, who spent it t
   let t = wide_tester(calls)
   app.nav.replace(Place("usage"))
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
   assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
   let (bx, by) = t.find_last("按对话").unwrap()
   t.tap(bx, by)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("整理发布清单") is Some(_), msg="the chats' list picked")
 }
 
@@ -2237,7 +2237,7 @@ test "wide: a file an agent names by its path opens itself in the preview as its
   let t = wide_tester(calls, mode="chat-peeks")
   let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
   t.tap(x, y)
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   let v = viewer.val.unwrap()
   assert_true(v.named)
   assert_eq(v.file.path, "src/list/place.mbt")
@@ -2494,10 +2494,10 @@ test "wide: 字体's 本机字体 lists the families installed here; one chosen 
   let t = wide_tester(calls)
   t.set_local_fonts("[\"Menlo\",\"Avenir Next\",\"Helvetica\"]")
   app.nav.replace(Setting(@settings.Route::Fonts))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (本机字体 the faces' last row, under the chat they set: the page scrolled to it)
   t.wheel(900.0, 400.0, 400.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="本机字体")
   t.frame()
   // every one listed, in the host's order (its person's language's: the app sorts nothing of its own)
@@ -2520,7 +2520,7 @@ test "wide: 密钥's waiting request is its card as in its chat (Vault.tsx Reque
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Vault))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   for w in ["使用 GitHub token", "git push origin main", "允许", "拒绝", "本对话内", "打开对话"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
@@ -2678,7 +2678,7 @@ test "wide: 通知's 服务开着很久, the bell's alone: 点亮铃铛 on every
   // (tall enough for the kinds' last row opened)
   let t = wide_tester(calls, h=1400.0)
   app.nav.replace(Setting(@settings.Route::Notifications))
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("服务开着很久") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.click(Button, label="服务开着很久")
   t.draw()

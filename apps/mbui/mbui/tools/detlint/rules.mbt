@@ -8,7 +8,7 @@ let rule_names : Array[String] = [
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "after-build-input", "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
-  "motion-spring", "built-by-hand", "layout-read-back",
+  "motion-spring", "built-by-hand", "layout-read-back", "motion-length",
 ]
 
 ///|
@@ -54,6 +54,7 @@ let rule_words : Map[String, String] = {
   "built-by-hand": "the app says by hand that what was built is to be built again (Ctx::forget_parts, built_from_changed): what changed is a signal (same= by its value), read where it is used, and what read it is built again by itself, nothing else (docs/incremental.md); a kept build that differs from one built whole is a read not followed, made followed, never covered by building more",
   "layout-read-back": "the app reads back where or how large something was laid out (Ctx::rect_of, laid_size, laid_rect) for what it builds: the first frame has none and draws it wrong, a change lays the frame out again; say it as layout (a box's own rules, by the width it is given, Ctx::place_by_size, cover), a press by what took it (c.hovered, press_within); a flight's ends by @motion.measure",
   "motion-spring": "the app makes a spring of its own (@motion.spring, motion_spring, Ctx::spring): a spring is one of @motion's (move_spring, sheet_spring, lift_spring), as a timed motion's curve is one of @ui.Ease's (the app's docs/motion.md, Curves)",
+  "motion-length": "a move given a length of its own (a tween on Move): a thing moved takes as long as its way is far, from where it is as it is told (@motion.move, @ui.move_ms; the app's docs/motion.md, Curves: the user, 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」)",
   "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
   "corners-each": "a box's corners said not all alike (Corners, LinkedEach): only a design's, each looked at and kept, never what came by the way (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design); say why where it is said and list it in the app's docs/ui-panels.md (四角不一致的), then raise its count: mbui itself never works corners out unlike each other",
   "cursor-hand": "the pointer's hand said over something (Ctx::cursor(…, Hand)): what takes presses shows it by itself (its click read: Ctx::clicked, a part's Response; its press taken without it said, Ctx::takes_presses: a slider), and nothing else does; what takes presses as a ground (a stage, the room round a list's rows) says Arrow",

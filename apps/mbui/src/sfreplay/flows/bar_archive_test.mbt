@@ -11,7 +11,7 @@ test "72-bar-archive" {
     f.see("从栏上归档 085454")
     f.see("都弄好了 085454")
     f.tap("从栏上归档 085454")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("icon:archive")
     f.tap("icon:archive")
     // Home at once, 已归档 said by its title with its 撤销: its time on screen, the chat popped meanwhile
@@ -37,7 +37,7 @@ test "run_to_rest: only what was said" {
   f.see("从栏上归档 085454")
   f.see("都弄好了 085454")
   f.tap("从栏上归档 085454")
-  f.run_for(@ui.nav_push_ms)
+  f.run_for(@ui.move_most_ms)
   f.see("icon:archive")
   f.tap("icon:archive")
   f.see("=已归档「从栏上归档 085454」")

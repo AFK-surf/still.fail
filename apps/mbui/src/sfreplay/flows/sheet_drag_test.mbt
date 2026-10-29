@@ -17,7 +17,7 @@ test "32-sheet-drag" {
     f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("切换 workspace")
     f.tap("icon:ling")
-    f.run_for(@ui.nav_rise_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("想让 agent 做什么？")
     f.tap("=studio")
     f.run_to(@kit.sheet_rest("sf-present"))
@@ -34,7 +34,7 @@ test "32-sheet-drag" {
     f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("选择运行的 station")
     f.tap("=取消")
-    f.run_for(@ui.nav_rise_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end
     f.run_to(@sfapp.bar_rest())

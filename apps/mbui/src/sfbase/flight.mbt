@@ -421,6 +421,11 @@ pub fn flight_len(desk : Bool) -> Double {
 pub let flight_desk_ms : Double = 520.0
 
 ///|
+/// How long the composer words were sent from takes to come down once they let go of it, its room with it
+/// (composer_hold): words sent's own, set with their flight's (docs/motion.md kind 4), not a Move's by its way.
+pub let sent_down_ms : Double = 300.0
+
+///|
 pub fn fly_share(desk : Bool) -> Double {
   if desk {
     1.0

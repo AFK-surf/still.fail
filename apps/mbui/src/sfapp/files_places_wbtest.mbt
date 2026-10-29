@@ -15,7 +15,7 @@ test "文件's places, one list in every tier: 个人收藏, each station with a
     let (w, h, platform) = size
     let t = places_tester(w, h, platform)
     app.nav.replace(Files)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     let at = "\{w} \{platform}"
     for label in ["个人收藏", "Station", "团队共享", "Studio"] {
       assert_true(t.find(label) is Some(_), msg=at + ": " + label)
@@ -26,7 +26,7 @@ test "文件's places, one list in every tier: 个人收藏, each station with a
     // (the list's, not the head of a folder shown beside it: the leftmost)
     let (x, y) = t.locate("文档").fold(init=(1.0e9, 0.0), fn(a, p) { if p.0 < a.0 { p } else { a } })
     t.tap(x, y)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
     match app.nav.top() {
       Drive(d) => assert_eq(d.root, Some(fix_docs), msg=at)
       _ => fail(at + ": no folder open")
@@ -38,11 +38,11 @@ test "文件's places, one list in every tier: 个人收藏, each station with a
 test "文件's places with a finger: rows a size up, as a finger's list has them (NavPhone); with a mouse, the sidebar's" {
   let finger = places_tester(390.0, 844.0, 2)
   app.nav.replace(Files)
-  finger.run_for(@ui.nav_push_ms)
+  finger.run_for(@ui.move_most_ms)
   let (_, _, _, phone_h) = finger.rect_of("个人收藏").unwrap()
   let mouse = places_tester(1280.0, 800.0, 0)
   app.nav.replace(Files)
-  mouse.run_for(@ui.nav_push_ms)
+  mouse.run_for(@ui.move_most_ms)
   let (_, _, _, desk_h) = mouse.rect_of("个人收藏").unwrap()
   // (its headings 15 on 21 with a finger, 12 on 18 with a mouse)
   assert_true(phone_h > desk_h, msg="\{phone_h} \{desk_h}")
@@ -62,7 +62,7 @@ test "文件 at the phone's stack's root: a station's row opened shows its place
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="展开 Studio")
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
@@ -71,7 +71,7 @@ test "文件 at the phone's stack's root: a station's row opened shows its place
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a place of it pressed: its folder pushed over 文件, which stays under it
   t.tap_text("外接硬盘")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   assert_true(app.nav.pages()[0] == Files)
   match app.nav.top() {

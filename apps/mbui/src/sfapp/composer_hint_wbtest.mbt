@@ -63,7 +63,7 @@ test "desk composer: its hint gone as its field takes the cursor, back once it i
   assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   assert_eq(hint_shown_at(t, "发消息"), None)
   t.ctx().blur()
-  let rest = @sfpages.let_go_ms + @sfpages.morph_ms + @sf.hint_back_ms
+  let rest = @sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms
   hint_watch(t, "发消息", rest) |> ignore
   let hint = t.words()[0].0
   let at = hint_shown_at(t, hint).unwrap()
@@ -71,7 +71,7 @@ test "desk composer: its hint gone as its field takes the cursor, back once it i
   t.tap(x, y)
   assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   // opened to a box with the cursor in it: not shown at all, in any frame
-  let opened = hint_watch(t, "发消息", @sfpages.morph_ms + @sf.hint_back_ms)
+  let opened = hint_watch(t, "发消息", @ui.move_most_ms + @sf.hint_back_ms)
   assert_eq(opened, [])
   // let go of: a box a moment longer, then a capsule again; the hint only once it is one, where it was
   t.ctx().blur()
@@ -87,11 +87,11 @@ test "a phone's composer: its hint gone as its field takes the cursor, back once
   t.draw()
   let at = hint_shown_at(t, "发消息").unwrap()
   t.tap_text("发消息")
-  let opened = hint_watch(t, "发消息", @sfpages.morph_ms + @sf.hint_back_ms)
+  let opened = hint_watch(t, "发消息", @ui.move_most_ms + @sf.hint_back_ms)
   assert_eq(opened, [])
   t.ctx().blur()
   // (a box a moment longer, then a capsule again, as on a computer)
-  let shut = hint_watch(t, "发消息", @sfpages.let_go_ms + @sfpages.morph_ms + @sf.hint_back_ms)
+  let shut = hint_watch(t, "发消息", @sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
   assert_hint_still(shut, at)
 }
 
@@ -116,7 +116,7 @@ test "a phone's composer opened by a tap keeps its ＋ and send whole on their w
   t.draw()
   let side = @sf.theme().round.side
   t.tap_text("发消息")
-  let until = t.time() + @sfpages.morph_ms
+  let until = t.time() + @ui.move_most_ms
   while t.time() < until {
     let (px, py) = t.locate("icon:plus")[0]
     let (sx, sy) = t.locate("icon:arrow-up")[0]

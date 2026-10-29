@@ -78,7 +78,7 @@ A test says its time; nothing else moves it.
   layout read back asks for, three at most; a layout read back still moving after them never converges, and the test
   fails saying whose; a motion going on is not drawn again at the same moment). It takes no time. A gesture over time is time said: a drag's moves come
   `drag_step_ms` apart.
-- Time goes by only by `run_for(ms)`, `ms` a declared length: an animation's (`nav_push_ms`, `sheet_scrim_ms`,
+- Time goes by only by `run_for(ms)`, `ms` a declared length: an animation's (`move_ms` of its way, `move_most_ms`, `sheet_scrim_ms`,
   `cover_slide_ms`), a timer's, or the moment a test looks at. A test runs to the end of the motion it cares about by
   that motion's own end (`Nav::rest`, `Ctx::pager_rest`, `Anim::ends_at`, `Ctx::list_rest`, `Ctx::sideways_rest`,
   `@kit.sheet_rest`, `toast_rest`, `switch_rest`; any by its name: `Tester::rest_of`), never to whenever everything has

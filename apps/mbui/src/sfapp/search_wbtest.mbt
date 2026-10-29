@@ -9,7 +9,7 @@ fn search_tester() -> @ui.Tester {
   t.scroll_to(0)
   t.draw()
   t.tap_text("搜索全部内容")
-  t.run_for(@sfpages.search_in_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -36,7 +36,7 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   assert_true(@sfpages.search_opened())
   // the bottom bar goes out of its way at once
   assert_true(@sfpages.search_bar_away())
-  t.run_for(@sfpages.search_in_ms)
+  t.run_for(@ui.move_most_ms)
   let (active, _, _, _) = t.ime()
   assert_true(active)
   // the keyboard's action key a search key (Search.kt: ImeAction.Search)
@@ -52,7 +52,7 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   t.tap_text("取消")
   assert_true(@sfpages.search_leaving())
   assert_true(!@sfpages.search_bar_away())
-  t.run_for(@sfpages.search_out_ms)
+  t.run_for(@ui.move_most_ms)
   t.draw()
   assert_true(!@sfpages.search_opened())
   assert_true(t.find("取消") is None)
@@ -109,7 +109,7 @@ test "查看更多 lists that kind alone, from the top; 全部结果 and back go
   assert_true(@sfpages.search_opened())
   t.back()
   assert_true(@sfpages.search_leaving())
-  t.run_for(@sfpages.search_out_ms)
+  t.run_for(@ui.move_most_ms)
   t.draw()
   assert_true(!@sfpages.search_opened())
   t.run_for(@sf.strokes_ms(4))
@@ -125,7 +125,7 @@ test "a message found opens its chat at it, with the words to mark there" {
   match app.nav.top() {
     Chat(r) => {
       assert_eq(r.session, "s-c1")
-      t.run_for(@ui.nav_push_ms)
+      t.run_for(@ui.move_most_ms)
       // gone to (seq 5), its words to mark there, nothing flashing
       let rd = reading_of("ws1/st1\u{1}s-c1")
       assert_eq(rd.found_at, "ts5")
@@ -143,13 +143,13 @@ test "a chat opened from the search, read a while, back: the search as it was le
   let cancel_at = t.shown_of("取消")
   t.tap_text("签名证书续期")
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (long enough in the chat that what Home moves by, not drawn meanwhile, is let go)
   for _ in 0..<200 {
     t.draw()
   }
   t.back()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.draw()
   assert_eq(app.nav.depth(), 1)
   assert_true(@sfpages.search_opened())
@@ -174,7 +174,7 @@ test "what else was found opens where it is: a file its reader, a service its ch
     _ => fail("not the reader")
   }
   app.nav.pop() |> ignore
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("签名检查页")
   assert_eq(app.nav.depth(), 3)
   assert_true(app.nav.top() == Service("ws1/st1", "job-1"))
@@ -239,7 +239,7 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   let t = search_tester()
   t.type_text("虚拟列表")
   t.tap_text("帮我把聊天页的列表做成")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let rd = reading_of("ws1/st1\u{1}s-c1")
   assert_eq(rd.found_at, "ts2")
   assert_eq(rd.flash, "")

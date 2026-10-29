@@ -7,7 +7,7 @@ test "23-dismiss" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("dismiss"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.type_text("再问一个 083209 card:先合并哪个分支 083209|先合 A 083209|先合 B 083209")
@@ -16,7 +16,7 @@ test "23-dismiss" {
     f.gone("正在发送")
     f.see("=先合 B 083209")
     // (the card's room open to its 忽略, wholly shown: Ctx::row_size)
-    f.run_for(@ui.row_size_ms)
+    f.run_for(@ui.move_most_ms)
     f.tap("=忽略")
     f.answered("decision.dismiss", 1)
     f.gone("=忽略")

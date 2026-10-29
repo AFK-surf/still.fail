@@ -525,53 +525,27 @@ pub fn lift_of(t : Thumb) -> Double {
 let lift_gap : Double = 12.0
 
 ///|
-/// How much longer a flight is for its thumbnail going out from under the bar or the composer first (the way back
-/// after it has shrunk): one move, the going out its first share and the growing the rest, on one curve, so that
-/// nothing stops between them (the user, 2026-10-29: 「前段避让跟后段放大之间…顿一下…应该浑然一体」).
-pub let fly_lift_ms : Double = 100.0
-
-///|
-/// The share of the flight's way that is the thumbnail's going out from under the bar or composer, on its way to `to`
-/// (where the picture is on the stage): as much of it as the going out is of the way the picture goes, its edges no
-/// quicker as it goes out than as it then grows (a picture mostly hidden goes out far, a time's share of it was
-/// a leap there, the user, 2026-10-29: 「从上往下的还有问题」); none when nothing hides `t`; `to` not known, as
-/// much as its time.
-fn lift_share(t : Thumb, to : (Double, Double, Double, Double)?, grow_ms : Double) -> Double {
+/// The flight's way between thumbnail `t` and `to` (where the picture is on the stage): the share of it that is the
+/// thumbnail's going out from under the bar or composer (none when nothing hides it), and how far it goes in all
+/// (points: the going out, then the growing as far as its furthest going edge goes). One move, the going out its first
+/// share and the growing the rest, on one curve, so that nothing stops between them (the user, 2026-10-29: 「前段避让跟
+/// 后段放大之间…顿一下…应该浑然一体」); its edges no quicker as it goes out than as it then grows (a picture mostly hidden
+/// goes out far, the user, 2026-10-29: 「从上往下的还有问题」); a Move as long as it all is far. `to` not known: as far as
+/// to the middle of the window.
+fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?) -> (Double, Double) {
   let lift = lift_of(t).abs()
-  if lift < 0.5 {
-    return 0.0
-  }
-  match to {
-    Some((tx, ty, tw, th)) => {
-      // (the growing's way: as far as its furthest going edge goes, from where the going out leaves it)
-      let y = t.y + lift_of(t)
-      let grow = dmax(
-        dmax((tx - t.x).abs(), (tx + tw - t.x - t.w).abs()),
-        dmax((ty - y).abs(), (ty + th - y - t.h).abs()),
-      )
-      lift / (lift + grow)
+  let lift = if lift < 0.5 { 0.0 } else { lift }
+  let y = t.y + (if lift > 0.0 { lift_of(t) } else { 0.0 })
+  let grow = match to {
+    Some((tx, ty, tw, th)) =>
+      dmax(dmax((tx - t.x).abs(), (tx + tw - t.x - t.w).abs()), dmax((ty - y).abs(), (ty + th - y - t.h).abs()))
+    None => {
+      let c = @ui.current()
+      dmax((c.width / 2.0 - t.x - t.w / 2.0).abs(), (c.height / 2.0 - y - t.h / 2.0).abs())
     }
-    None => fly_lift_ms / (fly_lift_ms + grow_ms)
   }
+  (if lift > 0.0 { lift / (lift + grow) } else { 0.0 }, lift + grow)
 }
-
-///|
-/// How long a flight `grow_ms` long when nothing hides its thumbnail is with `lift` of its way going out from under
-/// the bar or the composer.
-fn lift_ms(lift : Double, grow_ms : Double) -> Double {
-  if lift > 0.0 {
-    grow_ms + fly_lift_ms
-  } else {
-    grow_ms
-  }
-}
-
-///|
-/// The viewer grows from the thumbnail this long, and shrinks back into it, on Move (a page's).
-pub let fly_open_ms : Double = @ui.move_page_ms
-
-///|
-pub let fly_close_ms : Double = @ui.move_page_ms
 
 ///|
 /// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
@@ -1330,9 +1304,10 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
             }
             // (the whole way on one curve, its way out from under the bar or composer first, if any, then the growing:
             // Viewer::flying, Viewer::lifted)
-            v.fly_lift = lift_share(t, Some(to), fly_open_ms)
+            let (lift, far) = fly_way(t, Some(to))
+            v.fly_lift = lift
             v.fly.set(0.0)
-            ignore(v.fly.start(1.0, @motion.tween(lift_ms(v.fly_lift, fly_open_ms), ease=Move)))
+            ignore(v.fly.start(1.0, @motion.move(points=far)))
             pv_hidden.val = v.id()
           }
           None => ()
@@ -1540,7 +1515,7 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Doubl
     self.fly.set(1.0)
   }
   let (was, q) = (self.fly_lift, self.fly.get())
-  let lift = lift_share(t, from, fly_close_ms)
+  let (lift, far) = fly_way(t, from)
   let q = if q >= was {
     lift + (q - was) / (1.0 - was) * (1.0 - lift)
   } else if was > 0.0 {
@@ -1550,7 +1525,8 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Doubl
   }
   self.fly_lift = lift
   self.fly.set(q)
-  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, lift_ms(lift, fly_close_ms) * q), ease=Move)))
+  // (what is left of its way: as far as it had come)
+  ignore(self.fly.start(0.0, @motion.move(points=far)))
 }
 
 ///|

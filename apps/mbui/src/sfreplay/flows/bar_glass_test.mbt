@@ -19,7 +19,7 @@ test "50-bar-glass" {
     // 用量 tapped where it lands, as the bar chosen comes down
     f.tap_at(133.0, -50.0)
     f.see("=用量")
-    f.run_for(@sfapp.switch_side_ms)
+    f.run_for(@ui.move_most_ms)
     // the bar chosen lands on its own spring, untouched by a finger: the panel is drawn up again once it has
     f.run_to(@sfapp.bar_landed())
     f.drag("icon:zou", 0.0, -64.0, steps=bar_draw_steps)

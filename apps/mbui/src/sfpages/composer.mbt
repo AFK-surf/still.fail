@@ -76,6 +76,9 @@ priv struct Composing {
   mut cc_open : Bool
   /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
   mut hint_shape : String
+  /// whether it is a box or a capsule and how roomy, as the frame began and as built now (frame, then, now): what opens
+  /// or lets go of it (composer)
+  mut opened : (Int, String, String)
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
   mut wanted : Bool
   /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
@@ -119,6 +122,7 @@ let composing : Composing = {
   taking: false,
   cc_open: false,
   hint_shape: "",
+  opened: (-1, "", ""),
   wanted: false,
   grounds: {},
   pictures: {},
@@ -150,6 +154,7 @@ fn composing_reset() -> Unit {
   composing.menu_up = false
   composing.cc_open = false
   composing.hint_shape = ""
+  composing.opened = (-1, "", "")
   composing.wanted = false
   composing.hint_shown.set("")
   composing.taking = false
@@ -281,10 +286,20 @@ pub fn composer(
   }
   // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
   // them, not a page's quick start that leaves them behind and goes far in its first frame)
+  let opening = composer_opening(c, "\{spec.roomy}|\{multiline}")
   let shape = if moved && flight_carried(spec.draft) {
     @motion.tween(flight_desk_ms, ease=Flight)
+  } else if composer_let_go(c, spec.draft) {
+    // (let go by words sent from it: down on their flight's clock, with its room, composer_hold)
+    // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
+    @motion.tween(@sfbase.sent_down_ms, ease=Move)
+  } else if opening && !moved {
+    // (opened from a capsule or let go to one: its field passes by its ＋ and send on their way, kept off them only on
+    // this clock so far; on a faster one it cut into ＋, the user 2026-10-30: 「输入框盖住了加号和发送」)
+    // det-ok(motion-length): the field opening past ＋ and send kept off them on this clock, till their cutting is mended
+    @motion.tween(composer_shape_ms, ease=Move)
   } else {
-    @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Move)
+    @motion.move()
   }
   let hint = composer_hint(
     c,
@@ -1228,14 +1243,6 @@ fn composer_picture(
 pub let let_go_ms : Double = 300.0
 
 ///|
-/// (what a test runs to once the composer changes shape)
-pub let morph_ms : Double = @sf.shape_ms
-
-///|
-/// Laid out for the other page, how long it goes there (dock.tsx: 340, the ease out).
-pub let page_move_ms : Double = @sf.composer_page_ms
-
-///|
 /// Typing warms the agent's runtime at most once a minute.
 let warm_every_ms : Double = 60000.0
 
@@ -1776,10 +1783,34 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
   @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
   a.snap(1.0)
-  a.animate(0.0, @motion.tween(morph_ms, ease=Move, delay=ms))
+  // (down on the flight's clock of what was sent, as its ground does: composer_let_go)
+  // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
+  a.animate(0.0, @motion.tween(@sfbase.sent_down_ms, ease=Move, delay=ms))
   let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
   b.snap(box)
   b.animate(0.0, @motion.Snap(ms))
+}
+
+///|
+/// How long the composer takes to open from a capsule or to be let go to one: its field passing by its ＋ and send is
+/// kept off them on this clock (composer_hint_wbtest).
+let composer_shape_ms : Double = 300.0
+
+///|
+/// Whether the composer opens or is let go this frame: `head` (how roomy, a box or not) other than as the frame began.
+fn composer_opening(c : @ui.Ctx, head : String) -> Bool {
+  let (frame, was, now) = composing.opened
+  let was = if frame != c.frame_number() { now } else { was }
+  composing.opened = (c.frame_number(), was, head)
+  was != "" && was != head
+}
+
+///|
+/// Whether draft `draft`'s composer is let go by words sent from it now (composer_hold: from as they let go of it till
+/// it is down, its declared end), its ground going down with its room.
+fn composer_let_go(c : @ui.Ctx, draft : String) -> Bool {
+  let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
+  a.target() == 0.0 && !a.over()
 }
 
 ///|

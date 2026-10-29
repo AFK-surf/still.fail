@@ -60,7 +60,7 @@ fn touch_narrow_tester() -> @ui.Tester raise {
   // (the tape's sidebar in use at first, a strip of the chat beside it)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
-  t.run_for(@sfdesk.side_move_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 

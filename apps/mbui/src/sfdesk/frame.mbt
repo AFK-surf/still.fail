@@ -337,11 +337,6 @@ pub let side_min : Double = 180.0
 pub let side_max : Double = 480.0
 
 ///|
-/// How long the sidebar takes to open, fold, or be shown a while (brand.tsx moveSidebar: motion.ts moveState's 380 ms,
-/// its ease out).
-pub let side_move_ms : Double = @sf.move_state_ms
-
-///|
 /// What moves as the sidebar opens, folds, is shown a while or goes to another place's width: brand.tsx moveSidebar's
 /// list, its selectors the boxes' `moves` names, what of each moves by its CSS names as the web lists them. The column
 /// the page starts after (the shell's grid-template-columns: the page is laid out in what it leaves, so a value), how
@@ -672,7 +667,7 @@ pub fn frame(
       if peek && !was.1 {
         wide.peek_shift = peek_shift(c, shown, wide.page_from, s)
       }
-      c.move_state(side_moves, duration=side_move_ms)
+      c.move_state(side_moves)
     }
     _ => ()
   }
@@ -1331,7 +1326,7 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
             _ => {
               wide.tape_pull = None
               wide.tape_drag = 0.0
-              c.move_state(tape_moves, duration=side_move_ms)
+              c.move_state(tape_moves)
             }
           }
         None => ()
@@ -1394,7 +1389,7 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
         if p != Page {
           c.blur()
         }
-        c.move_state(tape_moves, duration=side_move_ms)
+        c.move_state(tape_moves)
       }
     }
     None => ()
@@ -1478,7 +1473,7 @@ fn tape_let_go(c : @ui.Ctx, at : (Double, Double, Double), p : TapePane, v : Dou
   if toward || (k > tape_pull_over && !away) {
     wide.tape_ask = Some(p)
   } else {
-    c.move_state(tape_moves, duration=side_move_ms)
+    c.move_state(tape_moves)
   }
 }
 

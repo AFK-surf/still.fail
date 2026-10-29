@@ -190,8 +190,8 @@ pub fn button(
 }
 
 ///|
-/// How a button whose words changed goes to its new width (button): a near Move.
-let button_reshape : @motion.Spec = @motion.tween(@ui.move_near_ms, ease=Move)
+/// How a button whose words changed goes to its new width (button): a Move as long as its width changes.
+let button_reshape : @motion.Spec = @motion.move()
 
 ///|
 /// How far a button's words are in from its sides.

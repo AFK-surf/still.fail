@@ -516,19 +516,15 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 }
 
 ///|
-/// The capsule changes shape over this long (Composer.kt Morph).
-let composer_morph_ms : Double = @sf.shape_ms
-
-///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
-/// then let it go to its own height over the morph's time: all of it said now, as they set off (flight_start), and
-/// anew when they know their way (flight_placed).
+/// then let it go to its own height on a Move as long as it goes down (to the least room the list keeps for it): all
+/// of it said now, as they set off (flight_start), and anew when they know their way (flight_placed).
 fn composer_hold(chat : String, room : Double, ms : Double) -> Unit {
   let c = @ui.current()
   @motion.anim(c, "composer/held/" + chat, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + chat, 0.0, global=true)
   a.snap(1.0)
-  a.animate(0.0, @motion.tween(composer_morph_ms, ease=Move, delay=ms))
+  a.animate(0.0, @motion.move(over=dmax(room - ct().least, 0.0), delay=ms))
 }
 
 ///|
@@ -1127,6 +1123,8 @@ priv struct ComposerUi {
   doing : @sf.LiveMap[String, Bool]
   /// the draft and the shape its field's hint was last shown on (composer_bar): changed, the hint waits till it is there
   mut hint_shape : (String, String)
+  /// the draft whose hint waits for its bar to be there (its parts' move, as long as it is far: composer_bar), "" none
+  mut hint_after : String
 }
 
 ///|
@@ -1141,6 +1139,7 @@ let cui : ComposerUi = {
   content_id: 0,
   doing: @sf.LiveMap::new(),
   hint_shape: ("", ""),
+  hint_after: "",
 }
 
 ///|
@@ -1169,15 +1168,15 @@ fn composer_natural(c : @ui.Ctx) -> Double? {
 }
 
 ///|
-/// The capsule's height as drawn (Composer.kt Morph): from the height it was to the one its content now takes (260
-/// ms, Ease.Out); words just sent held as tall as when they went until a quarter of the way (ChatHost.kt hold), then
+/// The capsule's height as drawn (Composer.kt Morph): from the height it was to the one its content now takes (a Move
+/// as long as it goes); words just sent held as tall as when they went until a quarter of the way (ChatHost.kt hold), then
 /// down to its own on the morph's curve (composer_hold). None before its content is laid out.
 fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
   match natural {
     Some(h) => {
       // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
       let a = @motion.anim(c, "composer/morph", h, global=true)
-      a.follow(h, @motion.tween(composer_morph_ms, ease=Move))
+      a.follow(h, @motion.move())
       let m = a.get()
       let (room, share) = composer_held(c, chat)
       Some(if room > m && share > 0.0 { m + (room - m) * share } else { m })
@@ -1851,7 +1850,6 @@ fn composer_bar(
   if c.clicked(send) {
     do_send()
   }
-  let part_ms = composer_morph_ms
   // each part goes to its new place for what the bar holds (folded or opened, its words, files, quotes, what it says
   // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
   let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}|" + d.field.text()
@@ -1861,7 +1859,7 @@ fn composer_bar(
   let reshaped = cui.hint_shape.0 == d.key && cui.hint_shape.1 != shape
   cui.hint_shape = (d.key, shape)
   let part = fn(i : Int, name : String) {
-    @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Move), by=holds)
+    @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.move(), by=holds)
   }
   let k = ct()
   // its ground under a resting pointer (@sf.pointer_rests), its tip (with its keys where there are keys: the tip's own,
@@ -1953,7 +1951,16 @@ fn composer_bar(
           hint.snap(0.0)
         } else if reshaped {
           hint.snap(0.0)
-          hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=part_ms))
+          cui.hint_after = d.key
+        } else if cui.hint_after == d.key {
+          // (back once its words are where they go: the end their move declared, as long as it was far)
+          let rest = @motion.layout_rest("composer/part/" + d.key + "/field")
+          if rest > c.moment() {
+            c.shows_until(rest)
+          } else {
+            cui.hint_after = ""
+            hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out), start_at?=if rest >= 0.0 { Some(rest) } else { None })
+          }
         } else {
           hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
         }

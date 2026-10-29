@@ -12,7 +12,7 @@ fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0) -> @u
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   // seen once it is in (grown from its thumbnail, or faded in)
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -42,22 +42,22 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (its glide: @kit.zoom_glide_ms from the tap)
-  t.run_for(@kit.zoom_glide_ms)
+  // (its glide: @ui.move_most_ms from the tap)
+  t.run_for(@ui.move_most_ms)
   assert_true((v.zoom.scale - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
   t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (its glide: @kit.zoom_glide_ms from the tap)
-  t.run_for(@kit.zoom_glide_ms)
+  // (its glide: @ui.move_most_ms from the tap)
+  t.run_for(@ui.move_most_ms)
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
   assert_true(viewer.val is None)
-  // to where its way out said it ends (fly_close_ms or pv_fade_ms from when it set out)
-  t.run_for(if v.flies { fly_close_ms } else { pv_fade_ms })
+  // to where its way out said it ends (@ui.move_most_ms or pv_fade_ms from when it set out)
+  t.run_for(if v.flies { @ui.move_most_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
 }
@@ -340,12 +340,12 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
   t.tap_text("演示录屏.mp4")
   assert_true(viewer.val is Some(_))
   // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
-  t.run_for(fly_open_ms / 2.0)
+  t.run_for(@ui.move_most_ms / 2.0)
   assert_eq(t.holes().length(), 0)
   assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
   assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 390.0 }))
   // in: the player's picture where the still was, edge to edge
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(pv_hidden.val, "")
   assert_eq(t.holes().length(), 1)
   assert_true((t.holes()[0].2 - 390.0).abs() < 0.5)
@@ -355,7 +355,7 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
 test "a video closed: the frame it shows grabbed, flown back with and kept by its thumbnail; opened again, on from there" {
   let t = video_in_chat()
   t.tap_text("演示录屏.mp4")
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   // the player 4 s in
   t.set_player(1, position=4000.0)
   t.draw()
@@ -375,7 +375,7 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
   assert_eq(t.holes().length(), 0)
   assert_eq(pv_hidden.val, id)
   // landed: the viewer gone, its player closed, the thumbnail shown again (with the frame kept)
-  t.run_for(fly_close_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(viewer.val is None && pv_leaving.val is None)
   assert_true(t.views().contains("close 1"))
   assert_eq(pv_hidden.val, "")
@@ -393,12 +393,12 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
 test "a video closed before its first frame shows: back into its thumbnail with its still, nothing kept" {
   let t = video_in_chat()
   t.tap_text("演示录屏.mp4")
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   t.set_player(1, shown=false)
   t.draw()
   t.back()
   assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 22 ") }))
-  t.run_for(fly_close_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(pv_leaving.val is None)
   assert_true(pv_frames.is_empty())
 }
@@ -501,7 +501,7 @@ test "an APK asked for: downloaded by the core, how far it has come in its words
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("下载")
   t.frame()
   // asked of the core, nothing of it here yet
@@ -552,7 +552,7 @@ fn named_tester(path : String) -> @ui.Tester {
   t.draw()
   open_preview("ws1/st1", "s-c1", attachment_of({ "name": Json::string(base_name(path)), "path": Json::string(path) }), named=true)
   t.frame()
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -697,7 +697,7 @@ test "pinched smaller than fitted and let go: back to fitted" {
   t.draw()
   t.touch(2, 150.0, 422.0)
   t.draw()
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true((v.zoom.scale - fit).abs() < 0.001)
 }
 
@@ -767,7 +767,7 @@ fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(@ui.move_most_ms)
   t.run_for(double_tap_ms)
   let z = viewer.val.unwrap().zoom
   assert_true(z.zoomed())
@@ -883,8 +883,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let v = viewer.val.unwrap()
   assert_eq(v.file.name, "compare.png")
   assert_true(v.flies && !v.fly_back)
-  // grown in: fly_open_ms from the tap
-  t.run_for(fly_open_ms)
+  // grown in: @ui.move_most_ms from the tap
+  t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
   // where its thumbnail is in the chat under it
   let th = thumb_of(t.ctx(), v.id()).unwrap()
@@ -899,8 +899,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   // the last one on it
   let mut last = 1.0e9
   let mut frames = 0
-  // its way back: fly_close_ms from back
-  let end = t.time() + fly_close_ms
+  // its way back: @ui.move_most_ms from back
+  let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
     let p = v.flying()
@@ -931,7 +931,7 @@ test "marking a picture of a long name: the bar's 取消, download and 添加到
   // the same picture under a long name, opened from the chat (a draft to put it in)
   let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
   open_preview("ws1/st1", "s-c1", { ..a, name: "web-open-2-folded-preview-of-the-chat.png" }, steps=InChat(Some(1.0), "s-c1"))
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   marks_start()
   t.draw()
   let (px, _, pw, _) = t.rect_of("添加到对话").unwrap()
@@ -991,7 +991,7 @@ test "a desktop's video opened over its chat has the keys: Space plays it each t
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(viewer.val is Some(_))
   let played = fn() { t.views().filter(fn(l) { l == "control 1 1 0" }).length() }
   let before = played()
@@ -1029,7 +1029,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   let t = preview_tester("step", w=951.0, platform=2)
   let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
   open_preview("ws1/st1", "s-c1", a, steps=InChat(Some(1.0), "s-c1"))
-  t.run_for(fly_open_ms)
+  t.run_for(@ui.move_most_ms)
   marks_start()
   t.draw()
   let v = viewer.val.unwrap()
@@ -1044,7 +1044,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   let (px, py, pw, ph) = t.rect_of("添加到对话").unwrap()
   t.tap(px + pw / 2.0, py + ph / 2.0)
   // the viewer closed back to the chat, the quote of the mark in its composer with what its note said
-  t.run_for(fly_close_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(viewer.val is None)
   assert_true(t.semantics().iter().any(fn(s) { s.value == "这里对齐" }))
   assert_false(t.ctx().field_focused())

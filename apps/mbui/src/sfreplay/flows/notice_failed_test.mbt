@@ -13,12 +13,12 @@ test "41-notice-failed" {
     f.noticed("出错 · ")
     f.tap_notice("出错 · ")
     // the chat pushed over Home at the ⚠
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("发消息")
     // the ⚠ gone to flashes, all of its way
     f.run_to(@sfapp.flash_rest())
     f.back()
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("端到端测试")
     // the bottom bar at its end
     f.run_to(@sfapp.bar_rest())

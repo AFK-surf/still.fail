@@ -6,7 +6,7 @@ test "27-pin" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("pin"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.see("发消息")
     f.tap("icon:more")

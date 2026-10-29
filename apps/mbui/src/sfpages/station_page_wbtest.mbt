@@ -7,7 +7,7 @@
 /// `w` wide, pointed at as `platform` says (a phone's finger, else 0 a Mac's mouse).
 fn station_tester(address : String, part? : String = "overview", w? : Double = 390.0, platform? : Int = 2) -> @ui.Tester {
   let t = setting_tester(Station(address), w, platform~, h=2400.0, ready=fn() { @settings.station_parts[address] = part })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -64,7 +64,7 @@ test "a station's 设置 switches going on afresh once a session's cache is over
     },
     ready=fn() { @settings.station_parts["ws1/st1"] = "settings" },
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
   assert_true(t.find("缓存过期后自动换新上下文") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   // (the switch alone takes the press: by its label)
@@ -108,7 +108,7 @@ test "a Windows station's 设置 switches running as administrator, waiting whil
       )
     },
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "以管理员身份运行")
   assert_true(t.find("2 分钟内没人确认 UAC，已取消，设置没有改变") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.click(Switch, label="以管理员身份运行")
@@ -116,7 +116,7 @@ test "a Windows station's 设置 switches running as administrator, waiting whil
   assert_eq(asked.length(), 1, msg="switched")
   assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(true)))
   // (a change under way: the switch waits, not pressed again)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Switch, label="以管理员身份运行")
   t.draw()
   assert_eq(asked.length(), 1, msg="not again while it is under way")
@@ -130,7 +130,7 @@ test "network settings stay folded and save the selected controller" {
       if name == "network.setCongestion" { asked.push(params) }
       (s.call)(name, params, done)
     } } }, ready=fn() { @settings.station_parts["ws1/st1"] = "settings" })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("BBR（实验性）") is None)
   scrolled_to(t, 390.0, "高级网络设置")
   match t.find("高级网络设置") {
@@ -161,7 +161,7 @@ test "a station's ⋯ restarts it" {
       if name == "station.restart" { asked.push((name, params)) }
       (s.call)(name, params, done)
     } } })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="更多")
   t.draw()
   presented_in(t)
@@ -192,7 +192,7 @@ test "a station's 设置 switches sending its log to still.fail off" {
     },
     ready=fn() { @settings.station_parts["ws1/st1"] = "settings" },
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "发送运行日志给 still.fail")
   assert_true(t.find("发送运行日志给 still.fail") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.click(Switch, label="发送运行日志给 still.fail")
@@ -206,7 +206,7 @@ test "a login's link opens its station's page at 设置, where its card is" {
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, ready=fn() {
     @settings.mark_login("ws1/st1", "login-2")
   })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("更多") is None, msg="not the overview")
   assert_true(t.find("在 Studio 上登录 codex") is Some(_))
 }
@@ -227,7 +227,7 @@ fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
     @sfbase.machine_here.val = Some("ws1/st2")
   })
   t.set_local_station(local)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -273,7 +273,7 @@ test "this machine's station being installed: its page says so, its 启动 busy;
     #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Studio","removed":false}}
     ,
   )
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="重试") is Some(_))
   assert_true(t.query(Button, label="启动") is None)
 }
@@ -406,7 +406,7 @@ test "the variables' field follows the core's text that comes after the page ope
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, over~, ready=fn() {
     @settings.station_parts["ws1/st1"] = "settings"
   })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // opened on the text before a save the core tells a moment later
   assert_false(t.dump().contains("\"E2E_A=1\""))
   env.val = ("E2E_A=1", 2)
@@ -421,7 +421,7 @@ test "on this machine's own page its display says so and opens nothing; its brow
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st1")
   })
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("这是本机的屏幕") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("3024 × 1964 · 无人在看") is None)
   t.tap_text("Studio 的屏幕")

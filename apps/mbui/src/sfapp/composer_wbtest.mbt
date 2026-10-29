@@ -82,7 +82,7 @@ fn fake_core(
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t
 }
 
@@ -171,7 +171,7 @@ test "words typed go with send: by the chat's thread, the field emptied, Enter a
   assert_eq(text(Some(taken[0].params), "key"), "ws1/st1:s-c1")
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
@@ -212,7 +212,7 @@ test "nothing to send: the button does nothing" {
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 0)
   // the capsule opened round the field
-  t.run_for(composer_morph_ms)
+  t.run_for(@ui.move_most_ms)
   t.assert_idle()
 }
 
@@ -241,7 +241,7 @@ test "refused before the outbox, the words come back and why is said" {
   assert_true(t.find("没有这个对话") is Some(_))
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
@@ -300,7 +300,7 @@ test "a message held: its words quoted into the draft, with a line for a comment
   }
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
@@ -314,7 +314,7 @@ test "a message going up says how far it has gone" {
   let src = fixture("chat-uploading")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("第二屏的截图，帮我看看") is Some(_))
   t.run_for(@sfpages.sending_shows_ms)
   assert_true(t.find("正在上传 42%") is Some(_))
@@ -330,7 +330,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
@@ -360,12 +360,12 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.draw()
   assert_true(t.find("未发送") is Some(_))
   // (its 重试 shown as its room opens to it: Ctx::row_size)
-  t.run_for(@ui.row_size_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
   clock.val = clock.val + fix_deliver_ms
   t.draw()
   // (what failed leaves the list as its room closes)
-  t.run_for(@ui.row_size_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
   // one that fails again: why, said once (无法重新发送：…)
@@ -374,7 +374,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   tap_send(t)
   clock.val = clock.val + fix_deliver_ms
   t.draw()
-  t.run_for(@ui.row_size_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("重试")
   t.draw()
   assert_eq(app.toast.get(), "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
@@ -543,7 +543,7 @@ test "the list keeps clear the room the composer takes in the very frame it grow
     assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
   }
   // and each frame of its morph, as the display draws them, to its end
-  let end = t.time() + composer_morph_ms
+  let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
     assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
@@ -583,7 +583,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(ends, [true])
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
   said_by_ana(171, "我也来看看")
@@ -674,7 +674,7 @@ test "a swipe from the left edge with ＋'s sheet up does not take the chat away
     t.touch(1, 2.0 + 30.0 * i.to_double(), 300.0)
   }
   t.touch(2, 302.0, 300.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
 }
 
@@ -698,7 +698,7 @@ test "words sent fly to their own row though an older page with the viewer's mes
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("刚发的这一句")
   tap_send(t)

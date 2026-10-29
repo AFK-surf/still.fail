@@ -131,7 +131,7 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.frame()
   // its chat slid in
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let parsed = named(calls, "link.parse")
   assert_eq(parsed.length(), 1)
   assert_true(parsed[0].params.stringify().contains("/o/ws1/st1/s-c2?message=2"))
@@ -152,7 +152,7 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   assert_eq(app.nav.depth(), 1)
   // it slides off from the frame that takes it
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
 }
 
@@ -179,7 +179,7 @@ test "tapped while a file is open over the window, the file is put down and the 
   assert_true(@sfbase.preview_open())
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.frame()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_false(@sfbase.preview_open())
   match app.nav.top() {
     Chat(r) => assert_eq(r.session, "s-c2")
@@ -218,7 +218,7 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   // the chat pushed and put in place, then gone to: its flash in, held (the middle of its hold), then gone
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (the middle of its hold, from when it began: its end less its length; now, where that is gone by)
   let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
   if held > t.time() {
@@ -239,7 +239,7 @@ test "a message gone to is lit whole as a band: across the list from edge to edg
   let t = notify_core(calls, sys)
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
   if held > t.time() {
     t.run_for(held - t.time())
@@ -259,7 +259,7 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   let t = notify_core(calls, sys, env=[("MBUI_REDUCE_MOTION", "1")])
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
   t.run_for(flash_ms)
   assert_eq(@sfpages.flashing_now.val.1, 0.0)
@@ -330,12 +330,12 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
   let t = notify_core(calls, sys, notify~)
   open_setting("home")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // the list's row (below the fold on a 844 high screen: the page at its end) opens their page
   t.scroll_to_end()
   t.draw()
   t.tap_text("通知")
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Notifications))
   // its banners' tile switches them, as the core keeps it
   t.tap_text("横幅")
@@ -374,7 +374,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   // (a host that sends none: a build without PostHog's key, macOS, the web)
   open_setting("about")
   t.draw()
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.scroll_to_end()
   t.draw()
   assert_true(t.find("发送使用统计和错误报告") is None)

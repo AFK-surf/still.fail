@@ -12,14 +12,14 @@ test "desk: a web service asked as a page is its chat with the service beside it
   // (a window whose side panel holds the whole of its bar, a press's room round each key: a 1280's leaves its size and
   // how far it came to its ⋯)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   app.nav.push(Service("ws1/st1", "j-web"))
   t.frame()
   t.frame()
   // the chat's page, in place of the page asked; the service in front beside it
   assert_true(app.nav.top() == Chat(r), msg="the chat's page")
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="刷新") is Some(_), msg="its bar")
   // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
   // under the page as touch has
@@ -51,7 +51,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
   t.frame()
   assert_eq(side_now(r), ([], ""))
   // (shown as the panel slides out, let go once it is gone)
-  t.run_for(@sfdesk.side_out_ms)
+  t.run_for(@ui.move_most_ms)
   t.frame()
   assert_true(!service_pages.contains(service_key("ws1/st1", "j-web")), msg="let go")
 }
@@ -63,14 +63,14 @@ test "desk: a visualization opened aside is a tab beside its chat, served from h
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   app.nav.push(PreviewFile("ws1/st1", "s-c1", "work/s-c1/release.html", "release.html"))
   t.frame()
   t.frame()
   let tab = @sfdesk.file_tab("s-c1", "work/s-c1/release.html", "release.html")
   assert_true(app.nav.top() == Chat(r), msg="the chat's page")
   assert_eq(side_now(r), ([tab], tab))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   t.frame()
   let (x, _) = t.find_last("release.html").unwrap()
   assert_true(x > 800.0, msg="its name beside the chat: \{x}")
@@ -86,8 +86,8 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
   assert_eq(side_now(r), (["jobs"], "jobs"))
   let (x, y) = t.find_last("web").unwrap()
   assert_true(x > 800.0, msg="its row beside the chat: \{x}")
@@ -106,9 +106,9 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   side_change(r, "open", Some("s-c1"))
-  t.run_for(@sfdesk.side_in_ms)
+  t.run_for(@ui.move_most_ms)
   let edge_x = fn() raise {
     for s in t.semantics() {
       if s.label.has_prefix("调整侧栏宽度") && !s.hidden {

@@ -66,8 +66,6 @@ pub fn bar_landed() -> Double
 
 pub fn bar_rest() -> Double
 
-pub let bar_show_ms : Double
-
 pub let bar_timing : @ref.Ref[BarTiming?]
 
 pub fn bars_in(@sfbase.Source, String) -> (Array[Array[String]], Int32)
@@ -268,9 +266,10 @@ pub fn elapsed(Double) -> String
 
 pub fn elsewhere_of(Json) -> @sfbase.Elsewhere
 
+pub fn emit_awaited(@sfbase.Emits, Double) -> Bool
+
 pub fn emit_clock(@ui.Ctx, @sfbase.Turn) -> Double
 
-pub fn emit_awaited(@sfbase.Emits, Double) -> Bool
 pub fn emit_emitting(@sfbase.Emits, Double) -> Bool
 
 pub fn emit_flight(@ui.Ctx, String, @sfbase.Emits, Array[String]) -> (Double, Double, Double, Double)?
@@ -420,12 +419,6 @@ pub let flight_wait_ms : Double
 pub fn flight_waiting(@ui.Ctx, String) -> Unit
 
 pub fn floor_of(@ui.Ctx, @sfbase.Reading, String, Array[String]) -> Double
-
-pub let fly_close_ms : Double
-
-pub let fly_lift_ms : Double
-
-pub let fly_open_ms : Double
 
 pub fn focus_chat(@sfbase.ChatRef, @sfbase.ChatView, Bool?) -> Json
 
@@ -923,7 +916,7 @@ pub let svc_viewports : Map[String, @sfbase.Viewport?]
 
 pub let switch_fade_ms : Double
 
-pub let switch_side_ms : Double
+pub let switch_slide : Double
 
 pub fn tag_end(Array[Int32], String) -> Int32?
 

@@ -6,7 +6,7 @@ test "09-paste-long" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("paste-long"), seed~)
     f.tap("端到端测试")
-    f.run_for(@ui.nav_push_ms)
+    f.run_for(@ui.move_most_ms)
     f.see("=studio")
     f.tap("发消息")
     f.paste_n(6000, "长段落粘贴测试。")

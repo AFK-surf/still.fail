@@ -10,7 +10,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("看一下列表")
   tap_send(t)

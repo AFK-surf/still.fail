@@ -274,15 +274,9 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
 let idle_main : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// How long a decision takes to fly off across, to go up after it is answered, to go back where it rests let go short,
-/// and to come in.
-let card_off_ms : Double = 260.0
-
-///|
+/// How long a decision takes to go up after it is answered, and to come in. Flown off across or back where it rests,
+/// let go by the finger: a Move as long as its way there is far, as fast as the finger let it go.
 let card_up_ms : Double = 360.0
-
-///|
-let card_back_ms : Double = @ui.move_near_ms
 
 ///|
 let card_arrive_ms : Double = 260.0
@@ -356,14 +350,26 @@ fn card_comes(c : @ui.Ctx) -> Unit {
 ///|
 /// The front decision `item` goes (`dir` its side, 2 up after answering): `after` (what it goes to) done at once, the
 /// deck without it from now on; it is only drawn flying off, as the next comes in (the only one, set aside: it again).
-fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit {
+/// Across, from where the finger let it go as fast as it went (`v`, points per second) over `width` (the deck's).
+fn go_decision(
+  c : @ui.Ctx,
+  dir : Int,
+  item : Json,
+  after : () -> Unit,
+  v? : Double = 0.0,
+  width? : Double = 0.0,
+) -> Unit {
   dui.out = Some(item)
   dui.out_dir = dir
   dui.out_from = dui.drag
   if dir == 2 {
     card_go(card_out(c), card_up_ms, Leave)
   } else {
-    card_go(card_out(c), card_off_ms, Leave)
+    // (its way as deck_out draws it: from where it was let go to a width and a quarter off its side)
+    let way = dir.to_double() * width * 1.25 - dui.out_from
+    let a = card_out(c)
+    a.snap(0.0)
+    a.animate(1.0, @motion.move(points=dabs(way)), velocity=if way == 0.0 { 0.0 } else { v / way })
   }
   dui.drag = 0.0
   dui.going = 0
@@ -423,11 +429,11 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
       }
     })
   }
-  let set_aside = fn() {
-    go_decision(c, -1, item, fn() { call("decision.defer", tr("android-misc.decisions.deferWhat"), {}) })
+  let set_aside = fn(v : Double) {
+    go_decision(c, -1, item, fn() { call("decision.defer", tr("android-misc.decisions.deferWhat"), {}) }, v~, width~)
   }
-  let dismiss = fn() {
-    go_decision(c, 1, item, fn() { call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {}) })
+  let dismiss = fn(v : Double) {
+    go_decision(c, 1, item, fn() { call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {}) }, v~, width~)
   }
   let answer = fn(o : Choice) {
     go_decision(c, 2, item, fn() {
@@ -466,14 +472,17 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
           let v = d.vx * 1000.0
           let fling = dabs(v) > 900.0 && dabs(at) > 16.0 && (v > 0.0) == (at > 0.0)
           if at > width * 0.35 || (fling && at > 0.0) {
-            dismiss()
+            dismiss(v)
           } else if at < -width * 0.35 || (fling && at < 0.0) {
-            set_aside()
+            set_aside(v)
           } else {
             // back where it rests
             dui.going = 3
             dui.going_from = at
-            card_go(card_back(c), card_back_ms, Move)
+            // (its way a share of where it was let go, `at` back to 0: as fast as the finger went)
+            let back = card_back(c)
+            back.snap(0.0)
+            back.animate(1.0, @motion.move(points=dabs(at)), velocity=if at == 0.0 { 0.0 } else { -v / at })
           }
         }
       }
@@ -531,7 +540,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
       }
       c.layer(fn() {
         let card = c.box(w=Fill(1.0), h=Fill(1.0), tx=dui.drag, opacity=arrive, bg=t.p.bg, fn() {
-          decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, set_aside, true)
+          decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, fn() { set_aside(0.0) }, true)
         })
         // coming in from a little smaller, about its top's middle (Decisions.kt: lerp(0.94, 1, arrive)); turned as it
         // is moved across, 4° a width (rotationZ = drag / width * 4)

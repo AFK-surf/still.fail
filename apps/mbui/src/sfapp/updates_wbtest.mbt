@@ -58,10 +58,10 @@ test "a small screen's 传输: 更新 pressed, the download the host tells of sh
   t.frame()
   guard update_button_at(t, "传输") is Some((x, y, w, h)) else { fail("no 传输 key on Home") }
   t.tap(x + w / 2.0, y + h / 2.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   guard update_button_at(t, "更新到 0.1.1") is Some((x, y, w, h)) else { fail("no 更新到 0.1.1 in 传输") }
   t.tap(x + w / 2.0, y + h / 2.0)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   // (asked again, handed to the host, which tells how it goes)
   t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\"}")
   t.draw()
@@ -86,11 +86,11 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 test "a newer build installed from the list of what comes: the list stays open, to watch it download" {
   let asked = []
   let t = updates_tester(release(["列表滑得更顺"]), asked)
-  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.move_most_ms)
   let open = fn(label : String) raise {
     let (x, y, w, h) = t.query(Button, label~).unwrap().rect
     t.tap(x + w / 2.0, y + h / 2.0)
-    t.run_for(@ui.nav_push_ms)
+    t.run_for(@ui.move_most_ms)
   }
   open("传输")
   let list = @sf.last_presented()

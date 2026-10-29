@@ -283,11 +283,13 @@ pub let mod_shift_key : Int32
 
 pub fn mods_held() -> Int32
 
-pub let move_far_ms : Double
+pub let move_least_ms : Double
 
-pub let move_near_ms : Double
+pub let move_most_ms : Double
 
-pub let move_page_ms : Double
+pub fn move_ms(Double) -> Double
+
+pub fn move_path(Double, Double, Double, Double) -> (Double, Double)
 
 pub fn native_call(String, Json) -> NativeCall
 
@@ -297,17 +299,7 @@ pub let native_unsupported : String
 
 pub let nav_late_most : Double
 
-pub let nav_let_go_min_ms : Double
-
-pub let nav_let_go_ms : Double
-
-pub let nav_push_ms : Double
-
 pub fn nav_rest() -> Double
-
-pub let nav_return_ms : Double
-
-pub let nav_rise_ms : Double
 
 pub fn notice_answer() -> Bool?
 
@@ -1221,7 +1213,7 @@ pub fn Ctx::window_size(Self) -> (Double, Double)
 pub fn Ctx::with_direction(Self, Direction, () -> Unit) -> Unit
 pub fn Ctx::with_theme(Self, Theme, () -> Unit) -> Unit
 pub fn Ctx::within(Self, Int32, Double) -> Bool
-pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64) -> Unit
+pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64, round? : Double) -> Unit
 pub fn Ctx::words_across(Self, String, TextStyle, mono? : Bool) -> Double
 pub fn Ctx::words_into(Self, Int32, String) -> Unit
 pub fn Ctx::words_of(Self, String) -> Words?
@@ -2167,6 +2159,7 @@ pub fn SpringPath::end(Self) -> Double
 pub fn SpringPath::go(Self, Double, Double, v? : Double, what? : String, loc~ : SourceLoc) -> Unit
 #callsite(autofill(loc))
 pub fn SpringPath::go_at(Self, Ctx, Double, v? : Double, loc~ : SourceLoc) -> Unit
+pub fn SpringPath::moved(Double) -> Self
 pub fn SpringPath::new(Double, k~ : Double, c~ : Double, rest? : Double) -> Self
 pub fn SpringPath::put(Self, Double) -> Unit
 pub fn SpringPath::target(Self) -> Double

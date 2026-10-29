@@ -53,7 +53,7 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
   t.draw()
   let mut was = last_y
   for _ in 0..<8 {
-    t.run_for(@ui.row_size_ms / 8.0)
+    t.run_for(@ui.move_most_ms / 8.0)
     let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
     assert_true(y >= was - 0.5 && y - was < 60.0, msg="\{y} \{was}")
     was = y

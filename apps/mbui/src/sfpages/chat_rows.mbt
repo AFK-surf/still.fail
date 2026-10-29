@@ -507,7 +507,10 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
     st.mono = mono
     st.at = c.moment()
     swap.snap(0.0)
-    swap.animate(1.0, @motion.tween(@ui.move_near_ms, ease=Move))
+    // (a Move as long as the furthest it goes: a line up, or from the one's width to the other's)
+    let style = if hot { now_words_hot } else { now_words }
+    let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
+    swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())))
   } else {
     c.wake_in(st.at + steady_dwell_ms - c.moment())
   }

@@ -76,14 +76,8 @@ fn search_reset() -> Unit {
 }
 
 ///|
-/// How long the field takes to come up (Ease.Arrive) and to go back (Ease.Standard), and how far the list goes up
-/// meanwhile (Home.kt, Search.kt).
-pub let search_in_ms : Double = @ui.move_page_ms
-
-///|
-pub let search_out_ms : Double = @ui.move_page_ms
-
-///|
+/// How far the list goes up as the field comes up (Home.kt, Search.kt); the field's way up and back a Move as long as
+/// it is far (from where it stood in the list to the top: search_way).
 pub let search_list_rise : Double = 56.0
 
 ///|
@@ -122,7 +116,7 @@ fn search_open(c : @ui.Ctx, from : Double, wide : Double) -> Unit {
   search.focus = true
   let up = search_up(c)
   up.snap(0.0)
-  up.animate(1.0, @motion.tween(search_in_ms, ease=Move))
+  up.animate(1.0, search_way())
 }
 
 ///|
@@ -159,7 +153,14 @@ fn search_close(c : @ui.Ctx) -> Unit {
     return
   }
   search.leaving = true
-  search_up(c).animate(0.0, @motion.tween(search_out_ms, ease=Move))
+  search_up(c).animate(0.0, search_way())
+}
+
+///|
+/// The field's way up and back: from where it stood in the list (its top in the window) to the top, a Move as long as
+/// that (the list's rise at least).
+fn search_way() -> @motion.Spec {
+  @motion.move(points=dmax(search.from, search_list_rise))
 }
 
 ///|

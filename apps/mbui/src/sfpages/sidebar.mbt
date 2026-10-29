@@ -57,16 +57,12 @@ pub fn filter_at(src : Source, w : Workspace) -> Int {
 }
 
 ///|
-/// How long the track slides (Sidebar.css.ts navTrack, mobile/Home.css.ts mHomePane: 240; its ease the theme's
-/// chats' list's).
-pub let list_slide_ms : Double = @sf.list_slide_ms
-
-///|
 /// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
 pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
   rows_frame(c, src)
   let last = list_filters.length() + frame.others.length() - 1
-  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide)
+  // (its track a list's width a step: a Move as long as it goes)
+  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide.per_unit(c.width))
   // the others read once switching to them is in sight: as the filter's menu opens (what it would show is there by
   // the time one is picked)
   if @sf.presented_drawn_of(filter_menu_serial.val) {
