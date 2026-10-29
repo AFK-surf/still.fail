@@ -100,6 +100,8 @@ static CGFloat nav_right(void);
 @property(nonatomic) NSRange sel;
 @property(nonatomic) NSRange marked;
 @property(nonatomic, weak) id<UITextInputDelegate> inputDelegate;
+// the keyboard's trackpad moving the caret (beginFloatingCursorAtPoint: to endFloatingCursor)
+@property(nonatomic) BOOL floating;
 @property(nonatomic, strong) UITextInputStringTokenizer *tok;
 @property(nonatomic, copy) NSDictionary *markedTextStyle;
 // the size the last frame was drawn at (layoutSubviews: one drawn at once at a new one)
@@ -416,7 +418,9 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 }
 - (void)setSelectedTextRange:(UITextRange *)range {
   MBRange *r = (MBRange *)range;
-  if (self.marked.location != NSNotFound) return;
+  // (the keyboard's trackpad: UIKit puts what closestPositionToPoint: answered after each of its moves, the caret
+  // where it was before the field moved it; the field's to place it then)
+  if (self.marked.location != NSNotFound || self.floating) return;
   self.sel = NSMakeRange(r.a, r.b - r.a);
   send_text(3, @"", (int)r.a, (int)r.b);
 }
@@ -493,6 +497,7 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 // The keyboard's trackpad (a long press on the space bar): where the finger has gone, the field's to move the caret by
 // (text kinds 9, 10; its words' places are the app's, not the view's, so closestPositionToPoint cannot answer it).
 - (void)beginFloatingCursorAtPoint:(CGPoint)p {
+  self.floating = YES;
   send_text(9, @"", (int)lround(p.x), (int)lround(p.y));
   [self requestFrame];
 }
@@ -500,7 +505,7 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
   send_text(10, @"", (int)lround(p.x), (int)lround(p.y));
   [self requestFrame];
 }
-- (void)endFloatingCursor {}
+- (void)endFloatingCursor { self.floating = NO; }
 // The system's edit actions (its floating edit menu: mb_host_text_menu; a hardware keyboard's ⌘X, ⌘C, ⌘V, ⌘A; a
 // scripted run's paste): what the field's menu offers (cut and copy over words picked, paste, select all), done as
 // Android's floating menu does them (MBView.textMenu): cut, copy and select all as the field's own keys, the
