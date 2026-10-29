@@ -368,17 +368,11 @@ test "a label is one thing: a line breaks before it, not within it, where it fit
 }
 
 ///|
-test "a label wider than a line breaks within it, its ground cut square where it goes on" {
+test "a label wider than a line breaks within it, its ground torn where it goes on" {
   let label : @ui.Ground = { room: 0.6, height: 2.0, corner: 0.5, after: 0.0 }
   let t = rich_view([@ui.span("aaaa bbbb cccc", bg=0x11111111L, ground=Some(label))], 50.0)
-  // 6 of room and "aaaa bbbb" is 51: on three lines, round only at its two ends
+  // 6 of room and "aaaa bbbb" is 51: on three lines
   assert_eq(t.lines_of("aaaa"), ["aaaa ", "bbbb ", "cccc"])
-  let grounds = t.drawn_rect_corners().filter(fn(r) { r.4 == 0x11111111L })
-  assert_eq(grounds.map(fn(r) { r.5 }), [(5.0, 0.0, 0.0, 5.0), (0.0, 0.0, 0.0, 0.0), (0.0, 5.0, 5.0, 0.0)])
-  // where it goes on, its ground runs to the paragraph's edge: out to the right of the first line, across the
-  // second, in from the left of the last
-  let (x1, _, w1, _, _, _) = grounds[1]
-  assert_eq(w1, 50.0)
-  assert_eq(grounds[0].0 + grounds[0].2, x1 + 50.0)
-  assert_eq(grounds[2].0, x1)
+  // each piece torn on a side, drawn as its outline, not a rounded box
+  assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x11111111L }).length(), 0)
 }
