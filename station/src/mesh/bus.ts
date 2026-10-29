@@ -10,7 +10,9 @@ export class Refused extends Error {}
 /// Bytes that follow a request's or an answer's head on its stream (`stillfail/station/2`, mesh/peer.ts): a file as it
 /// is read, at the pace the other end takes it. A request or an answer carries them under this symbol, so they go
 /// along with it through every part that hands it on, and never into its JSON. A request's are read by the part that
-/// answers it, all of them; an answer's by whoever asked, all of them or until it stops reading (`return`).
+/// answers it, all of them; an answer's by whoever asked, all of them or until it stops reading (`return`). A request
+/// for a file says `whole: true` to have it all after the answer; a transport that carries no bytes takes that out, and
+/// the file is answered a chunk at a time, as stations from before answer.
 export const BYTES = Symbol("bytes");
 export type Bytes = AsyncIterable<Buffer>;
 

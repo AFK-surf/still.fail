@@ -306,6 +306,8 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         : JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
       asked = envelope.request;
+      // A file asked for whole (`whole`, bus.ts) on the transport of before: answered as then, a chunk.
+      if (!bytes && envelope.request !== null && typeof envelope.request === "object") delete envelope.request.whole;
       if (bytes && envelope.bytes === true) {
         if (envelope.request === null || typeof envelope.request !== "object") throw new Error("bytes after a request that is no object");
         incoming = new Incoming(reader);
