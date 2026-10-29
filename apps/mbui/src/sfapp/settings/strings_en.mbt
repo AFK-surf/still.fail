@@ -79,7 +79,7 @@ let en : Map[String, String] = {
   "android-misc.adb.pairFailed": "Couldn't pair: {error}",
   "android-misc.adb.paired": "Paired",
   "android-misc.adb.pairing": "Pairing",
-  "android-misc.adb.phone": "On this phone",
+  "android-misc.adb.phone": "This phone's settings",
   "android-misc.adb.port.closed": "Pairing dialog closed",
   "android-misc.adb.port.connect": "Connection port",
   "android-misc.adb.port.none": "Not found",

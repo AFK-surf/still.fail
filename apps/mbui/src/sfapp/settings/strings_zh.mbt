@@ -77,7 +77,7 @@ let zh : Map[String, String] = {
   "android-misc.adb.pairFailed": "配对失败：{error}",
   "android-misc.adb.paired": "已配对",
   "android-misc.adb.pairing": "正在配对",
-  "android-misc.adb.phone": "手机上",
+  "android-misc.adb.phone": "本机设置",
   "android-misc.adb.port.closed": "配对窗口未打开",
   "android-misc.adb.port.connect": "连接端口",
   "android-misc.adb.port.none": "未找到",
