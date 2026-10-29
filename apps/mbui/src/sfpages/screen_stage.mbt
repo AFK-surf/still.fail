@@ -32,15 +32,27 @@ fn ScreenUi::fit(self : ScreenUi) -> SRect {
 }
 
 ///|
-/// Where the pointer is now as this device draws it: the trackpad's while it drives it so, else the station's; none
-/// while this device's own mouse is over the picture driving it (it is the screen's pointer then, in its shape).
+/// Where the pointer is now as this device draws it: the trackpad's while it drives it so, else the station's (none
+/// while it is hidden there, `none`); none while this device's own mouse is over the picture driving it (it is the
+/// screen's pointer then, in its shape).
 fn pointer_now(s : ScreenSess, u : ScreenUi) -> (Double, Double)? {
   if u.mouse.over {
     None
   } else if s.driving() && s.pad(s.src) {
     Some(u.pad.at())
+  } else if pointer_shape(s) == "none" {
+    None
   } else {
     s.cursor()
+  }
+}
+
+///|
+/// The station's pointer's shape (a CSS cursor's name, `none` hidden), the arrow's where it says none.
+fn pointer_shape(s : ScreenSess) -> String {
+  match text(field(s.state, "cursor"), "shape") {
+    "" => "default"
+    shape => shape
   }
 }
 
@@ -166,12 +178,18 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         match pointer_now(s, u) {
           Some((ax, ay)) =>
             c.layer(fn() {
+              // in the station's shape, its hot spot where it points (the trackpad's, hidden there, an arrow)
+              let shape = match pointer_shape(s) {
+                "none" => "default"
+                sh => sh
+              }
+              let (hx, hy) = @sf.pointer_hotspot(shape)
               c.box(
-                tx=shown.x + ax * shown.w - @sf.pointer_tip,
-                ty=shown.y + ay * shown.h - @sf.pointer_tip,
+                tx=shown.x + ax * shown.w - hx,
+                ty=shown.y + ay * shown.h - hy,
                 fn() {
                   c.image(
-                    @sf.pointer_image(c),
+                    @sf.pointer_image(c, shape~),
                     w=Px(@sf.pointer_size),
                     h=Px(@sf.pointer_size),
                     fit=FitFill,

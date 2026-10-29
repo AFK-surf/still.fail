@@ -358,7 +358,10 @@ stream for a request and wait for a body).
 The screen's pointer is one: the desktop's video leaves it out and the station says where it is (`cursor`). The page
 draws it, an arrow as large as a pointer on the screen looks at the picture's size (a 90th of its width, 10 to 18 px),
 except while this device's own mouse is over the picture and drives it: then that mouse is the pointer, shown in the
-screen's shape (a text cursor over text), and nothing is drawn. Hidden on the screen (`none`), neither is.
+screen's shape (a text cursor over text), and nothing is drawn. Hidden on the screen (`none`), neither is. The app
+(apps/mbui, `@sf.pointer_image`) draws its pointer at its own size in the screen's shape too, as a Mac draws each (the
+arrow, a text cursor, a hand, the resizing arrows, a cross, a hand grabbing, not allowed, waiting), the point each points
+with where the station says.
 
 On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
 (`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:
