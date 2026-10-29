@@ -56,14 +56,39 @@ pub fn web_peek(
   if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
   }
-  // (read as the pointer comes onto it: Peeks.tsx Hover's `warm`)
-  if c.hovered(id) {
-    ignore((src.topic)("linkPreview", link_params(station, href)))
-  }
-  hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() {
-    link_card(c, src, station, href, words, copy=fn() { link_copy(c, href) })
+  let scope = "link-peek/" + id.to_string()
+  let params = link_params(station, href)
+  peek_read(c, src, scope, "linkPreview", params, id, fn(read) {
+    hover(c, scope, id, tile=!rich_link(href), side~, fn() {
+      read()
+      link_card(c, src, scope, params, href, words, copy=fn() { link_copy(c, href) })
+    })
+    |> ignore
   })
-  |> ignore
+}
+
+///|
+/// What card `scope` over `id` shows (`name` with `params`): read as the pointer comes onto `id` (Peeks.tsx Hover's
+/// `warm`) and while the card is drawn (`card`, given what it calls as it draws its body), let go of once neither, so
+/// the next time it shows it is read again (sync.ts `cardShown`: a pull request's checks move, a file is written).
+/// Held for as long as the app ran, it was read once: a pull request's card said its first checks for good.
+fn peek_read(
+  c : @ui.Ctx,
+  src : Source,
+  scope : String,
+  name : String,
+  params : Map[String, Json],
+  id : Int,
+  card : (() -> Unit) -> Unit,
+) -> Unit {
+  let drawn = Ref(false)
+  if c.hovered(id) {
+    ignore(@sfbase.hold(src, scope, name, params))
+  }
+  card(fn() { drawn.val = true })
+  if !c.hovered(id) && !drawn.val {
+    @sfbase.let_go(src, scope)
+  }
 }
 
 ///|
@@ -118,8 +143,16 @@ fn rich_link(href : String) -> Bool {
 ///|
 /// The card (LinkCard): a pull request's or an issue's; else a page's tile (its picture over it where it has one);
 /// bars where a rich one's lines will be while it is read; `copy`, what is pressed to copy it, at its foot's end.
-fn link_card(c : @ui.Ctx, src : Source, station : String, href : String, words : String, copy? : () -> Unit = fn() {  }) -> Unit {
-  let read = (src.topic)("linkPreview", link_params(station, href))
+fn link_card(
+  c : @ui.Ctx,
+  src : Source,
+  scope : String,
+  params : Map[String, Json],
+  href : String,
+  words : String,
+  copy? : () -> Unit = fn() {  },
+) -> Unit {
+  let read = @sfbase.hold(src, scope, "linkPreview", params)
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -432,12 +465,16 @@ fn file_peek(
   line : Int?,
   id : Int,
 ) -> Unit {
+  let scope = "file-peek/" + id.to_string()
   let params = file_peek_params(station, session, path, line)
-  if c.hovered(id) {
-    ignore((src.topic)("filePeek", params))
-  }
   // (a tap opens the file itself: message.mbt open_named)
-  hover(c, "file-peek/" + id.to_string(), id, fn() { file_card(c, src, params, path) }) |> ignore
+  peek_read(c, src, scope, "filePeek", params, id, fn(read) {
+    hover(c, scope, id, fn() {
+      read()
+      file_card(c, src, scope, params, path)
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -459,8 +496,8 @@ fn file_peek_params(station : String, session : String, path : String, line : In
 /// written, its whole path under them); a few of its lines, numbered, the one named marked; an image's picture; a
 /// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
 /// and refused; bars while it is read.
-fn file_card(c : @ui.Ctx, src : Source, params : Map[String, Json], path : String) -> Unit {
-  let read = (src.topic)("filePeek", params)
+fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Json], path : String) -> Unit {
+  let read = @sfbase.hold(src, scope, "filePeek", params)
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
