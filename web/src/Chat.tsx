@@ -182,10 +182,10 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
 
 /**
  * In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (`chat.cc`), each
- * thread's bot saying there who wrote it on still.fail. None until ticked; kept for the chat while the app runs. On one
- * line (nothing written) the composer only says where it goes, quietly (each mark and place, by send); opened to write,
- * its row has 抄送 (and where, once ticked), opening a menu of the threads to tick: several stay open to tick in turn,
- * one closes once ticked.
+ * thread's bot saying there who wrote it on still.fail. None until ticked; kept for the chat while the app runs. Where
+ * it goes is said quietly by send (each mark and place), on one line and opened to write alike: it stays where it is as
+ * the composer opens and shuts (said at the row's start once opened, it jumped across: docs/relay.md). Opened to write,
+ * 抄送 just before it, opening a menu of the threads to tick: several stay open to tick in turn, one closes once ticked.
  */
 function CcChooser({ station, thread, to }: { station: string; thread: number; to: ChatCcTo[] }) {
   const call = useCall();
@@ -193,10 +193,9 @@ function CcChooser({ station, thread, to }: { station: string; thread: number; t
   const on = to.filter((o) => o.on);
   const where = (o: ChatCcTo) => <span key={o.thread} className={css.ccPlace}><ElsewhereLogo kind={o.via} size={14} />{o.place}</span>;
   return (
-    <>
-      {on.length > 0 && <span className={css.ccState} title={t("web-main.composer.ccOn", { place: on.map((o) => o.place).join("、") })}>{on.map(where)}</span>}
+    <span className={css.ccTools}>
       <span className={css.ccSwitch}>
-        <Chooser side="top" label={<>{t("web-main.composer.ccLabel")}{on.map(where)}</>}>
+        <Chooser side="top" label={t("web-main.composer.ccLabel")}>
           {to.map((o) => (
             <ChooserItem key={o.thread} checked={o.on} stays={to.length > 1} checkEnd
               onSelect={() => act(call("chat.cc", { station, thread, to: o.thread, on: !o.on }), t("web-main.composer.cc", { place: o.place }))}>
@@ -205,7 +204,8 @@ function CcChooser({ station, thread, to }: { station: string; thread: number; t
           ))}
         </Chooser>
       </span>
-    </>
+      {on.length > 0 && <span className={css.ccState} title={t("web-main.composer.ccOn", { place: on.map((o) => o.place).join("、") })}>{on.map(where)}</span>}
+    </span>
   );
 }
 

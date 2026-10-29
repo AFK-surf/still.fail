@@ -508,15 +508,14 @@ export const composerChoices = style({
     [`${composerBox}:not([data-multiline]) &`]: { flex: "none", marginRight: "0" },
   },
 });
-/** Where what is sent is copied, said (Chat.tsx CcChooser): on one line only, while some thread is ticked; nothing to press. */
+/** 抄送 and where it copies to (Chat.tsx CcChooser): at the end of what is left of the row, just before send. */
+export const ccTools = style({ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto", minWidth: "0" });
+/** Where what is sent is copied, said (Chat.tsx CcChooser): by send while some thread is ticked, on one line and opened alike; nothing to press. */
 export const ccState = style({
   display: "inline-flex", alignItems: "center", gap: "8px", padding: "0 8px", whiteSpace: "nowrap",
   fontSize: vars.textMeta, color: vars.muted,
-  selectors: {
-    [`${composerBox}[data-multiline] &`]: { display: "none" },
-  },
 });
-/** Its chooser (Chat.tsx CcChooser): in the row under the words once the composer is opened to write. */
+/** Its chooser (Chat.tsx CcChooser): just before where it copies to, once the composer is opened to write. */
 export const ccSwitch = style({
   display: "contents",
   selectors: {

@@ -326,6 +326,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
     placeholder: if placeholder != "" { placeholder } else { @sf.t("web-main.composer.placeholder") },
     toolbar: None,
     note: [],
+    tail: None,
     roomy: false,
     locked: false,
     offline: false,

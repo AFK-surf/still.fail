@@ -448,6 +448,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_flag(with_cache_cold(rich_chat(f.older)), "offline")
           } else if f.mode == "chat-peeks" {
             with_message(rich_chat(f.older), peeks_answer)
+          } else if f.mode == "chat-cc" {
+            with_cc(rich_chat(f.older))
           } else if f.mode == "chat-need" {
             with_need(rich_chat(f.older))
           } else if f.mode == "chat-working" {
@@ -1757,6 +1759,22 @@ pub fn with_cache_cold(v : Json) -> Json {
     Object(m) => {
       let o = m.copy()
       o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊约需 $1.49" }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// chat-cc: the chat linked to a Slack thread and a Feishu chat, its words copied to the Slack one (Chat.tsx CcChooser).
+pub fn with_cc(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["cc"] = [
+        { "thread": 21, "place": "#still-fail", "via": "slack", "on": true },
+        { "thread": 22, "place": "产品讨论", "via": "feishu", "on": false },
+      ]
       Json::object(o)
     }
     _ => v
