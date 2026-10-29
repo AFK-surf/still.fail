@@ -484,10 +484,11 @@ jobs:
     runs-on: windows-2025
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 10
-    # (actions: the pipeline's run of this commit and its natives artifact, for the test station's natives)
+    # (actions: the pipeline's run of this commit and its natives artifact, for the test station's natives; write: this
+    # run cancelled when main's pipeline run of this commit was, below)
     permissions:
       contents: read
-      actions: read
+      actions: write
     defaults:
       run:
         shell: bash
@@ -600,6 +601,15 @@ jobs:
               "completed success") break ;;
               completed*) main || { echo "::error::the pipeline's natives job ended $state (run $run)"; exit 1; } ;;
             esac
+            # (main's run of this commit cancelled before its natives were published, a newer push's in its place, the
+            # natives not in the release: this commit's release is the newer one's to make, as the pipeline's was. This
+            # run is cancelled as that one was, not failed: 3a22a53f's waited its 6 minutes and failed, the next run's
+            # natives job begun 1 minute after, 40837737154, 2026-10-29)
+            if main && [ -n "$run" ] && [ "$(api "actions/runs/$run" '.status + " " + (.conclusion // "")' || true)" = "completed cancelled" ]; then
+              echo "main's pipeline run of this commit was cancelled (run $run), a newer push's in its place: this run is cancelled too"
+              gh run cancel "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY"
+              sleep 120; exit 1
+            fi
             [ $((SECONDS - t0)) -lt 360 ] || { echo "::error::the pipeline's natives job not done after 6 minutes (run ${run:-not found})"; exit 1; }
             sleep 5
           done
