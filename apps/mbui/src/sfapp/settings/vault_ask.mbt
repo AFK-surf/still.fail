@@ -287,20 +287,19 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, 
     "denied" => fill("android-settings.vault.ask.denied", [("name", ask.name)])
     _ => tr("android-settings.vault.ask.expired")
   }
+  // the dot in the middle of the words' first line, not of all of them (on two lines it stays by the first); under the
+  // message's picture, as wide as it, laid over the line as the picture is over its head (message.mbt: inline at the
+  // head's start, the words past it where the name is; else out in the margin, the words at the row's start)
   c.box(style=ask_ended, fn() {
-    // (the dot in the middle of the words' first line, not of all of them: on two lines it stays by the first; and
-    // under the message's picture, as wide as it, the words where its name is: inline past the picture at the head's
-    // start, else the picture out in the margin and the words at the row's start)
-    let place = if inline {
-      @ui.style(w=Fixed(ask_pic_w), mr=@sf.room_of(@sf.message_head_in.px() - ask_pic_w))
-    } else {
-      @ui.style(w=Fixed(ask_pic_w), ml=@sf.message_avatar_out, mr=@sf.room_of(@sf.message_avatar_reach - ask_pic_w))
-    }
-    c.box(style=ask_dot_line.then(place), fn() {
-      c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+    c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() { c.text(words, style=ask_ended_words) |> ignore })
+    |> ignore
+    c.layer(fn() {
+      c.box(style=if inline { ask_dot_line } else { ask_dot_line_out }, fn() {
+        c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+      })
+      |> ignore
     })
     |> ignore
-    c.text(words, style=ask_ended_words) |> ignore
   })
   |> ignore
 }
@@ -558,18 +557,28 @@ let ask_over : @ui.Style = @ui.css("row mb=S2")
 /// Between the foot's lines, where its buttons go on to a second (8).
 let ask_foot_lines : Double = 8.0
 ///|
-/// How it ended: a dot and its words, from the top (the dot by their first line: ask_dot_line).
+/// How it ended: a dot and its words, a little under what is over it.
 // kept across runs: a value (no field of it changes)
-let ask_ended : @ui.Style = @ui.css("row align=AStart pt=S0_5")
+let ask_ended : @ui.Style = @ui.css("w=Full mt=S0_5")
 
 ///|
-/// Where the dot stands: as high as a line of the words (ask_ended_words' 20), the dot in its middle.
-// kept across runs: a value (no field of it changes)
-let ask_dot_line : @ui.Style = @ui.css("row h=Fixed(20) align=ACenter justify=JCenter")
+/// Its words inline: past the message's picture, where its name is (message.mbt msg_head_inline).
+let ask_ended_past : @ui.Style = @ui.style(w=Full, pl=@sf.message_head_in)
 
 ///|
-/// A message's picture's width (sfpages message.mbt: its 18 round), the dot's room under it.
-let ask_pic_w : Double = 18.0
+/// Its words with the picture out in the margin: at the row's start, as the name is.
+// kept across runs: a value (no field of it changes)
+let ask_ended_at : @ui.Style = @ui.css("w=Full")
+
+///|
+/// Where the dot stands: as wide as the message's picture (18) and under it, as high as a line of the words (20), the
+/// dot in its middle.
+// kept across runs: a value (no field of it changes)
+let ask_dot_line : @ui.Style = @ui.css("row w=S4_5 h=S5 align=ACenter justify=JCenter")
+
+///|
+/// The same out in the margin, where the picture is then (message_avatar_out).
+let ask_dot_line_out : @ui.Style = ask_dot_line.then(@ui.style(ml=@sf.message_avatar_out))
 
 ///|
 // kept across runs: a value (no field of it changes)
