@@ -96,18 +96,26 @@ fails, saying the frame, the node and the property. Every test holds it, as `loo
 Each step merged with all tests green and the app's frames pixel for pixel the same as before (the screens, corners,
 squeeze and contrast checks; film's images before and after where a step touches what shows).
 
-1. **The runtime** (src/ui, beside what is there): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
+1. **What a frame says goes onto its nodes.** Today a build says what takes the focus, the pointer's shape, what
+   takes presses, drags the window, keeps what is picked, asks for a menu, what is told once the build is over, and
+   its paint where presses go, what scrolls, the words that can be picked, the scroll bars, into lists of the frame's
+   (said.mbt's `build_lists`, `paint_lists`), and besides them what is read out, the corners worked out once laid
+   out, what floats over a list, what sticks, what scrolls sideways, the moves shown, the looks drawn, the words, what
+   was used (kept_nodes.mbt's RowNodes: thirty kinds a kept row records and says again). Each becomes what a node
+   holds, asked of the tree as it is laid out and painted. Then a subtree kept is its nodes and nothing besides, made
+   once or built: the ground both the old frame and the new one stand on, one list a PR, nothing shown changed.
+2. **The runtime** (src/ui, beside what is there): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
    with owners, handlers, the tree's hit tests, layout of the marked nodes, paint kept by node, the frame of step 8,
    and the Tester's check of a tree made from nothing. Its own tests: random trees changed a little at a time against
    one made fresh, as flex's reuse_test does.
-2. **The old view as an island.** `old(fn(c : Ctx) { ... })` is a node whose subtree is built the old way, every node
+3. **The old view as an island.** `old(fn(c : Ctx) { ... })` is a node whose subtree is built the old way, every node
    under it made again when anything it read changed (its build tracked as a whole, as frame_watch does the frame's).
    The whole app first runs as one island on the new runtime, and looks and does just as it did.
-3. **From the outside in.** The window and its shell (frame, panes, tape, stacks, presenters) made once; each page in
+4. **From the outside in.** The window and its shell (frame, panes, tape, stacks, presenters) made once; each page in
    them an island. Then src/kit and src/sf's components, each given its made-once form beside its old one while pages
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none
    leaves an app built two ways for longer than its PRs.
-4. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
+5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of
    instances, the `old` island itself.
