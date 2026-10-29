@@ -85,7 +85,7 @@ JPEG frames are all key frames and their config has no `description`.
   bit rate go higher than the source's own (Pace, "Bit rate"); a station from before it lets it be, and a client that
   says none gets the source's own as before. A preview's is not read.
   With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
-  Windows desktop currently captures it; the Apple native client plays it. Older sources ignore the request.
+  The desktop captures it on Windows and macOS; the Apple native client plays it. Older sources ignore the request.
   Previews never request or capture audio. No audio frames are sent without negotiation.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
@@ -470,7 +470,15 @@ not held off by a watcher.
 ### System audio
 
 Windows WASAPI shared loopback continuously drains the default output endpoint, retaining up to 300 ms of consecutive
-20 ms packets. The station pulls one packet per completed transport write, independently of video
+20 ms packets. On macOS still.fail Helper captures it in the same ScreenCaptureKit stream as the picture
+(`capturesAudio`, 48 kHz stereo, `excludesCurrentProcessAudio`, the microphone never: SystemAudio.swift), only for a
+view opened with `audio: true` (the `screen.view` request; its info then says `audio: true`); Screen Recording, which
+the view has already, is all it takes. Its float samples become interleaved PCM16 in exact 960-frame packets, each
+stamped with its first frame's capture time (the clock the video's timestamps use), 300 ms kept as on Windows; sound
+that does not follow on from the last (ScreenCaptureKit sends nothing while nothing plays) starts a packet of its own,
+the part before it dropped. The helper's messages are stillfail-screen's: 9 in asks for a packet, 8 out says the format
+(or an error: no more audio), 9 out is a packet. A helper from before it ignores `audio` and its info says none: no
+audio is pulled. The station pulls one packet per completed transport write, independently of video
 changes. PCM uses 1.536 Mbit/s before framing. Apple playback starts after a 60 ms jitter reserve and caps its queue at 300 ms and clears it on mute,
 reconnect and close. Timestamps describe capture; playback currently starts on arrival rather than aligning
 to the video presentation clock. Muting is local; capture and transport continue until the view closes.

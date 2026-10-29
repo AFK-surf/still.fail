@@ -130,8 +130,11 @@ export class Desktop implements ScreenSource {
     if (!synthetic && this.#status !== null && (!this.#status.capture || !this.#status.control)) await this.#ask(helper);
     if (!synthetic && this.#status?.capture !== true) throw this.#refused();
     // Granted since the helper started: it starts itself again to have it, and is asked once more.
+    // The Mac's system output too, when the client asked for it (never a preview's): a helper from before it says no
+    // `audio` in its info, and none is pulled.
+    const audio = options.audio === true && !options.peek;
     for (let attempt = 0; ; attempt++) {
-      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(audio ? { audio: true } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view), new MacInput(), "ScreenCaptureKit", audio);
       this.#views.add(view);
       try {
         await view.ready;
@@ -191,10 +194,13 @@ type HelperError = Error & { code?: string };
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
 /// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight,
 /// region?}: `region` a part of the display, 0..1 of it, framed alone; none, the whole); a helper from before 7 and 8
-/// lets them be, one from before regions frames the whole display (its info says `regions: true` where it frames parts).
+/// lets them be, one from before regions frames the whole display (its info says `regions: true` where it frames parts);
+/// 9 audio (empty: the next 20 ms packet of system output, a view opened with `audio: true` whose info says `audio: true`).
 /// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
 /// pictures leave the pointer out), 7 region (JSON {region}: the part of the display the frames from the next on show,
-/// as it was framed; null the whole; said before the frame whose part is another than the last one's).
+/// as it was framed; null the whole; said before the frame whose part is another than the last one's), 8 audio config
+/// (JSON {codec: "pcm_s16le", sampleRate: 48000, channels: 2}, or {error}: no more audio), 9 audio (8 bytes timestamp
+/// µs, then 3840 bytes of interleaved stereo PCM16).
 export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8, audio: 9 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 

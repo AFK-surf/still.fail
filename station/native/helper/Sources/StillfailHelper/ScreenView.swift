@@ -18,7 +18,10 @@
 //        8 bounds    JSON         {maxWidth, maxHeight, region?}: the pictures from now on fitted into these (a config
 //                                 first), of `region` of the display alone ({x, y, w, h}, 0..1 of it: a client zoomed
 //                                 in) or, without it, of the whole
-//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true}, or {error, code: "capture"|"restart"|"display"|"encoder"}
+//        9 audio     (empty)      the next 20 ms packet of the Mac's system output (a view opened with `audio: true`:
+//                                 SystemAudio.swift), sent once there is one
+//   out  1 info      JSON     first: {width, height, encoder, codec, regions: true, audio?: true}, or {error, code: "capture"|"restart"|"display"|"encoder"};
+//                             `audio` where the system output is captured too
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and
 //                             whenever it changes
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC or HVCC, or one JPEG)
@@ -30,6 +33,8 @@
 //        7 region    JSON     {region: {x, y, w, h} | null}: the part of the display the frames from the next one on
 //                             show, as it was framed (0..1 of the display; null the whole), said before a frame whose
 //                             part is another than the last one's (that frame a key frame)
+//        8 audio config JSON {codec: "pcm_s16le", sampleRate: 48000, channels: 2} after the info, or {error} (no more audio)
+//        9 audio     8 bytes timestamp (µs, the frames' clock), then 3840 bytes: 960 frames of stereo PCM16 little-endian
 // The view ends when the connection does. `synthetic: "moving"|"still"` encodes made-up pictures instead of capturing
 // (the side test's measurement of the encoder and the link): never what a person sees.
 import AppKit
@@ -64,6 +69,9 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// The bit rate asked when the view opened, then as the station asks (`rate`); none: the picture's size's.
   var bitrate: Int?
   let synthetic: String?
+  /// The Mac's system output asked for too (`audio: true`), and what captures it once it is (never the microphone).
+  let audio: Bool
+  var sound: SystemAudio?
   /// "h264", "h265" (H.264 where this Mac has no encoder of it), or "jpeg": each picture a JPEG of its own (an agent's
   /// view, a client without either).
   let jpeg: Bool
@@ -118,6 +126,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     fps = min(120, max(1, (options["fps"] as? Int) ?? 60))
     bitrate = options["bitrate"] as? Int
     synthetic = options["synthetic"] as? String
+    audio = (options["audio"] as? Bool) == true
     jpeg = (options["codec"] as? String) == "jpeg"
     hevc = (options["codec"] as? String) == "h265"
     input = ScreenInput(channel: channel, displayID: displayID)
@@ -140,6 +149,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
         if let b = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any], let w = b["maxWidth"] as? Int, let h = b["maxHeight"] as? Int {
           bounds(w, h, region: ScreenView.part(b["region"]))
         }
+      case 9: sound?.next()
       case 7: if payload.count == 4 { rate(Int(payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) })) }
       default: break
       }
@@ -279,12 +289,32 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
         configuration.queueDepth = 5
         // In a JPEG (an agent's view: the pointer is part of what it sees); a video's pointer goes as message 6.
         configuration.showsCursor = jpeg
+        // The system output, as Windows' loopback has it: every app's sound but this one's, never the microphone.
+        if audio {
+          configuration.capturesAudio = true
+          configuration.excludesCurrentProcessAudio = true
+          configuration.sampleRate = SystemAudio.rate
+          configuration.channelCount = SystemAudio.channels
+          if #available(macOS 15.0, *) { configuration.captureMicrophone = false }
+        }
         let stream = SCStream(filter: SCContentFilter(display: shown, excludingWindows: []), configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
+        var sound: SystemAudio?
+        if audio {
+          let made = SystemAudio(channel: channel)
+          do {
+            try stream.addStreamOutput(made, type: .audio, sampleHandlerQueue: made.queue)
+            sound = made
+          } catch {
+            // The picture without it: the info says no audio, and the station pulls none.
+            channel.sendJSON(4, ["audio": error.localizedDescription])
+          }
+        }
         try await stream.startCapture()
         queue.sync {
           self.stream = stream
           self.configuration = configuration
+          self.sound = sound
           self.opened(width, height)
           if !self.jpeg { self.followCursor() }
         }
@@ -299,15 +329,24 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     if jpeg {
       encoder = "JPEG, quality 0.8"
       codec = "jpeg"
-      channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true])
+      channel.sendJSON(1, info(width, height))
+      sound?.said()
       return pump()
     }
     if !makeSession(width, height) {
       channel.sendJSON(1, ["error": "no H.264 encoder", "code": "encoder"])
       return
     }
-    channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true])
+    channel.sendJSON(1, info(width, height))
+    sound?.said()
     pump()
+  }
+
+  /// What the view's first message says it is.
+  func info(_ width: Int, _ height: Int) -> [String: Any] {
+    var said: [String: Any] = ["width": width, "height": height, "encoder": encoder, "codec": codec, "regions": true]
+    if sound != nil { said["audio"] = true }
+    return said
   }
 
   func stop() {

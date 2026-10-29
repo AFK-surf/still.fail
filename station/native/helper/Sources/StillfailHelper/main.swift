@@ -16,8 +16,9 @@
 //                         starts again); `files` the folder grants (Files.swift); `asked` what the window shows
 //   permissions.show    {words, grants?, paths?}: the window that asks for the grants (Permissions.swift; `grants` the
 //                       screen's two when none named, `paths` a disk's folder for its grant) → {ok}
-//   screen.view         {maxWidth, maxHeight, display?, fps?, bitrate?, synthetic?}: a view of the display; the
-//                       connection then carries ScreenView.swift's messages both ways until either side closes it
+//   screen.view         {maxWidth, maxHeight, display?, fps?, bitrate?, audio?, synthetic?}: a view of the display
+//                       (`audio: true`: and the Mac's system output, SystemAudio.swift); the connection then carries
+//                       ScreenView.swift's messages both ways until either side closes it
 //   simulator.view      {udid, maxWidth, maxHeight, codec, bitrate?}: a view of a booted iOS Simulator, its messages
 //                       ScreenView's (SimulatorView.swift says its input)
 //   files.*             the drive's protected folders (Files.swift says them)
