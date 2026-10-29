@@ -1291,9 +1291,8 @@ fn rows_drawn(c : @ui.Ctx, list : Int) -> Array[(Double, Double)] {
 }
 
 ///|
-/// How far before the edge of the room left it a row coming into its place fades in (makes_room): about a line of
-/// words, so a line shows as it comes out, not cut through (the user, 2026-10-29: 「分界太生硬了」).
-let room_soft : Double = 24.0
+/// How far before the edge of the room left it a row coming into its place fades in (makes_room): a cut's softness.
+let room_soft : Double = @ui.cut_soft_most
 
 ///|
 /// What comes into a list's place shows only in the room what was there has left (docs/motion.md rule 4, words over
@@ -1623,7 +1622,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         if p < 1.0 {
           let h = r.hh + (nh - r.hh) * p
           r.shown_h = dmax(h, 0.0)
-          c.cut_to_top(e.node, dmax(h, 0.0), soft=dmax(dmin(room_soft, dmin(h - r.hh, nh - h)), 0.0))
+          c.cut_to_top(e.node, dmax(h, 0.0), soft=@ui.cut_soft(h - r.hh, nh - h))
         }
       }
       // coming in: a row new to its list, or (entering) a node not there the frame before

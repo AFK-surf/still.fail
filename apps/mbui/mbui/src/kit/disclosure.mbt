@@ -70,6 +70,8 @@ fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -
     None if k < 1.0 => Px(0.0)
     _ => Auto
   }
+  // (on its way, what shows of it fading to where it is cut, by each pixel: @ui.cut_soft; cut there too, so nothing of
+  // it past its room is pressed)
   c.box(h~, clip=true, fn() {
     let i = c.box(id=cid, fn() {
       if p.leaving() {
@@ -78,6 +80,10 @@ fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -
         body()
       }
     })
+    match full {
+      Some(fh) if k < 1.0 => c.cut_to_top(i, fh * k, soft=@ui.cut_soft(fh * k, fh * (1.0 - k)))
+      _ => ()
+    }
     if !p.leaving() {
       c.semantics(i, Region, label~)
     }

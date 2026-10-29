@@ -2066,7 +2066,8 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
               @sf.icon(c, "quote", size=11.0, color=k.accent) |> ignore
             })
             |> ignore
-            c.box(w=Fill(1.0), max_h=39.0, clip=true, fn() {
+            // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
+            c.box(w=Fill(1.0), fn() {
               c.rich(
                 [
                   @ui.span(fill("android-chat.quote.who", [("name", q.author)]), weight=500, color=k.text),
@@ -2075,6 +2076,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
                 size=@sf.theme().t.meta,
                 color=k.muted,
                 line=19.5,
+                max_lines=2,
               )
               |> ignore
             })

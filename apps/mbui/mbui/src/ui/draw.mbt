@@ -545,6 +545,19 @@ fn Ctx::ground_bg_of(self : Ctx, i : Int) -> Int64? {
 }
 
 ///|
+/// How far before a cut what comes out from under it fades at most (cut_to_top/bottom's `soft`): about a line of words,
+/// so a line shows as it comes out, not cut through (the user, 2026-10-29: 「分界太生硬了」).
+pub let cut_soft_most : Double = 24.0
+
+///|
+/// The softness of a cut moving as something comes out from under it or goes back: no more than has come out since it
+/// set off (`out`: what showed before is never faded) and no more than is still under it (`left`: nothing lights at once
+/// as it ends), at most cut_soft_most. A cut that stays (a box cut to its room) gives what shows of it as `out`.
+pub fn cut_soft(out : Double, left : Double) -> Double {
+  dmax(dmin(cut_soft_most, dmin(out, left)), 0.0)
+}
+
+///|
 /// Node `i` drawn only as its bottom `h` (what is above cut off, as a box growing up from its foot shows it), and
 /// tapped whole, where it is laid out. `soft`: what it draws fades out over this much before the cut, each thing by
 /// where its middle is (a line of words fading as a line), not cut off at a hard edge.

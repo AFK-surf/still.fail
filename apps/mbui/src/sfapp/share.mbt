@@ -438,10 +438,8 @@ fn shared_head(c : @ui.Ctx, source : String, title : String?) -> Unit {
     })
     |> ignore
     c.box(w=Fill(1.0), fn() {
-      c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
-        c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, w=Fill(1.0)) |> ignore
-      })
-      |> ignore
+      // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
+      c.text(head, size=t.t.title, weight=700, color=t.p.text, line=24.0, w=Fill(1.0), max_lines=2) |> ignore
       if title is Some(_) {
         c.box(w=Fill(1.0), clip=true, fn() {
           c.text(first, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
