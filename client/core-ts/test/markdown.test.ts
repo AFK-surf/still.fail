@@ -142,7 +142,20 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "4:5bf390265ff58043", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "5:5bf390265ff58043", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+});
+
+test("a_link_or_picture_alone_on_its_line_is_a_paragraph_of_its_own_with_no_blank_line_round_it", () => {
+  // a file's link written on a line of its own, its words on the next: placed, not a link within a sentence
+  assert.deepEqual(read("**看图**\n[cmp.mp4](https://x.dev/cmp.mp4)\n图离放大后的位置有多远就走多久。"), [
+    ["p", [["b", ["看图"]]]],
+    ["p", [["a", ["cmp.mp4"], { href: "https://x.dev/cmp.mp4" }]]],
+    ["p", ["图离放大后的位置有多远就走多久。"]],
+  ]);
+  assert.deepEqual(read("前一行\n![](shot.png)"), [["p", ["前一行"]], ["p", [["img", { src: "shot.png" }]]]]);
+  // within a line, or lines of words alone: as Markdown has them
+  assert.deepEqual(read("看 [这里](https://x.dev) 吧\n第二行"), [["p", ["看 ", ["a", ["这里"], { href: "https://x.dev" }], " 吧\n第二行"]]]);
+  assert.deepEqual(read("一\n二"), [["p", ["一\n二"]]]);
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {

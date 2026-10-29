@@ -35,7 +35,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
-export const MD_READING = 4;
+export const MD_READING = 5;
 
 /// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
 export function mdKey(text: string): string {
@@ -132,16 +132,67 @@ function collect(node: Node, defs: Map<string, Node>): void {
 
 const normal = (id: string) => id.replace(/[\t\n\r ]+/g, " ").trim().toLowerCase();
 
+/// A paragraph's words, a line holding only a link or a picture set apart as a paragraph of its own: written on a
+/// line of its own, as a file's or a screen's link is to be shown whole (its card, the file itself), it is so though no
+/// blank line sets it apart (the user, 2026-10-30: a video's link with its words on the very next line showed as a
+/// link in a sentence). The lines round it stay one paragraph, as Markdown has them.
+function lineParagraphs(nodes: Node[]): Node[][] {
+  // its lines, a text split where it breaks (each piece where it stands in the text, where the text is as written)
+  let line: Node[] = [];
+  const lines: Node[][] = [line];
+  for (const n of nodes) {
+    const value = n.value ?? "";
+    if (n.type !== "text" || !value.includes("\n")) {
+      line.push(n);
+      continue;
+    }
+    const from = n.position?.start.offset;
+    const to = n.position?.end.offset;
+    const placed = from !== undefined && to !== undefined && to - from === value.length;
+    let at = 0;
+    for (const piece of value.split("\n")) {
+      if (at > 0) lines.push((line = []));
+      if (piece !== "") line.push(placed ? { type: "text", value: piece, position: { start: { offset: from + at }, end: { offset: from + at + piece.length } } } : { type: "text", value: piece });
+      at += piece.length + 1;
+    }
+  }
+  const lone = (line: Node[]): boolean => {
+    const seen = line.filter((x) => !(x.type === "text" && (x.value ?? "").trim() === ""));
+    const [only] = seen;
+    return seen.length === 1 && (only?.type === "link" || only?.type === "image");
+  };
+  if (lines.length < 2 || !lines.some(lone)) return [nodes];
+  // the lines between the lone ones together again, their breaks as they were
+  const out: Node[][] = [];
+  let run: Node[] = [];
+  const end = () => {
+    if (run.length > 0) out.push(run);
+    run = [];
+  };
+  for (const each of lines) {
+    if (lone(each)) {
+      end();
+      out.push(each.filter((x) => !(x.type === "text" && (x.value ?? "").trim() === "")));
+      continue;
+    }
+    if (run.length > 0) run.push({ type: "text", value: "\n" });
+    run.push(...each);
+  }
+  end();
+  return out;
+}
+
 function blocks(nodes: Node[], cx: Cx): Md {
   return nodes.flatMap((n) => block(n, cx));
 }
 
 function block(n: Node, cx: Cx): MdNode[] {
   switch (n.type) {
-    case "paragraph": {
-      const kids = inlines(n.children ?? [], cx);
-      return kids.length ? [["p", kids]] : [];
-    }
+    case "paragraph":
+      return lineParagraphs(n.children ?? []).flatMap((line) => {
+        const kids = inlines(line, cx);
+        return kids.length ? [["p", kids] as MdNode] : [];
+      });
     case "heading":
       return [["h", inlines(n.children ?? [], cx), { depth: n.depth ?? 1 }]];
     case "inlineMath": // A \[ block uses the same delimiter tokens as inline TeX (mathSyntax.ts).
