@@ -285,9 +285,16 @@ public final class AdbShareService extends Service {
         AdbShare.setPairingPort(-1);
         end();
         probes.shutdownNow();
-        // gone with the service, whatever ended it; not lent again as the app next starts
+        // gone with the service, whatever ended it; not lent again as the app next starts. Ended for the grants while
+        // they still want it (its offer refused, say): started again a moment later (AdbShare.grantsEnded), not left
+        // ended till the process goes
+        boolean grants = AdbShare.GRANTS.equals(station);
         AdbCore.call("adb.stop", null, null);
         AdbShare.letGo(this);
         super.onDestroy();
+        if (grants) {
+            android.content.Context app = getApplicationContext();
+            new Handler(Looper.getMainLooper()).postDelayed(() -> AdbShare.grantsEnded(app), 2_000);
+        }
     }
 }

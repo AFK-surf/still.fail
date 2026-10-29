@@ -187,7 +187,8 @@ test("in WSL the station runs without Windows' PATH, and Windows keeps WSL up fr
     const done = linux.run(["tok"], { PATH: `${join(linux.root, "stub")}:/usr/bin:/bin:/mnt/tools/bin` });
     assert.equal(done.status, 0, done.out);
     assert.match(readFileSync(join(linux.home, ".config/systemd/user/stillfail-station.service"), "utf8"), /^Environment=PATH=.*:\/mnt\/tools\/bin/m);
-    assert.doesNotMatch(done.out, /WSL/);
+    // (its own words: the test's directory, named at random, may hold the letters too, as install-test-6JZWSL did)
+    assert.doesNotMatch(done.out.replaceAll(linux.root, ""), /WSL/);
   } finally {
     linux.done();
   }
