@@ -2662,6 +2662,13 @@ pub let row_top_in_y : Double = row_corner - mouse_head_h / 2.0
 pub let row_foot_in_y : Double = 2.0 * row_in_y - row_top_in_y
 
 ///|
+/// What is a capsule while its words fit one line `line_h` high (with its padding), wrapped to more: as round as that
+/// one line makes it, not round all its height (the toast's toast_r, a notice over a chat's composer).
+pub fn line_capsule_corner(line_h : Double) -> @ui.Radius {
+  rounded(line_h / 2.0)
+}
+
+///|
 /// An agent's mark `side` across (the web's ui.css.ts agentMark): its corner .3 of its side (a 28 one's 8.4: an agent's
 /// card).
 pub fn agent_mark_corner(side : Double) -> @ui.Radius {

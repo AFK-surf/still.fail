@@ -1478,6 +1478,22 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The same glass with its corner, the roundest of its four: (x, y, w, h, corner).
+pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if kind == 5 || kind == 6 {
+      out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4]))
+    }
+  }
+  out
+}
+
+///|
 /// The notches cut into the last frame's rectangles and frosted glass (Ctx::box `notch_r`): (kind (0 a rectangle, 5
 /// glass), its top, its circle's middle below the top, its radius, its fillets').
 pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {

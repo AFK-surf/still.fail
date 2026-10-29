@@ -233,6 +233,49 @@ test "its agent's cache over, in the wide frame: said over the composer, 换新�
 }
 
 ///|
+test "a notice over the composer wrapped to lines: round as one line is, its mark on its first line" {
+  let calls : Array[Made] = []
+  let said = "「ccvm」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["offline"] = Json::boolean(true)
+        o2["updating"] = Json::boolean(true)
+        o2["offlineNote"] = Json::string(said)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  t.run_for(@ui.nav_push_ms)
+  let (wx, wy, _, wh) = t.rect_of(said).unwrap()
+  let line = @sf.theme().t.meta_line
+  assert_true(wh > 1.5 * line, msg="wrapped (\{wh} high)")
+  let notice = t
+    .drawn_glass_corners()
+    .filter(fn(g) { g.0 < wx && g.0 + g.2 > wx && g.1 < wy && g.1 + g.3 > wy + wh })
+  assert_eq(notice.length(), 1)
+  let (gx, gy, _, _, corner) = notice[0]
+  // as round as it is high on one line: its words' line and 8 over and under it
+  assert_eq(corner, line / 2.0 + 8.0)
+  // its mark in the middle of its round start, on its words' first line: its ring's (its lines each a piece of their
+  // own; its leftmost pieces, about its middle, the ring's: the arrows in it, one hidden under it, are narrower)
+  let marks = t
+    .drawn_order()
+    .filter(fn(d) { d.0 != 5 && d.0 != 6 && d.1 >= gx && d.1 + d.3 <= wx && d.2 >= gy && d.2 + d.4 <= wy + wh })
+  assert_true(marks.length() > 0, msg="its mark drawn")
+  let left = marks.fold(init=@double.infinity, fn(a, m) { if m.1 < a { m.1 } else { a } })
+  let ring = marks.filter(fn(m) { m.1 < left + 0.5 })
+  let mid = ring.fold(init=0.0, fn(a, m) { a + m.2 + m.4 / 2.0 }) / ring.length().to_double()
+  assert_true((mid - (wy + line / 2.0)).abs() < 1.0, msg="its mark at \{mid}, its first line's middle \{wy + line / 2.0}")
+  assert_true((mid - (gy + corner)).abs() < 1.0, msg="its mark at \{mid}, its round start's middle \{gy + corner}")
+}
+
+///|
 test "the composer's buttons say what they are: ＋ (发送文件), 发送" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
