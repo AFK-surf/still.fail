@@ -63,7 +63,7 @@ test "an agent's history read up to its top asks for the page before once, what 
     Some(j) => "第 4 页第 \{j} 条"
     None => fail("the page's top not in view")
   }
-  t.run_for(2000.0)
+  t.run_for(history_fling_ms)
   // the page before come in above, once: what was read still in view (where the finger let it go on to), not the top
   // of the page come in
   assert_eq(asked, [4])
