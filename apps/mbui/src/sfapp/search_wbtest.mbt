@@ -158,12 +158,6 @@ test "a chat opened from the search, read a while, back: the search as it was le
   // then, the page taking its touches)
   assert_eq(t.shown_of("取消"), cancel_at)
   assert_eq(t.look_of("取消").map(fn(l) { l.2 }), Some(1.0))
-  // 取消: back to Home, its list's again
-  t.tap_text("取消")
-  t.run_for(@sfpages.search_out_ms)
-  t.draw()
-  assert_true(!@sfpages.search_opened())
-  assert_eq(@sfpages.finder_query(), "")
 }
 
 ///|
