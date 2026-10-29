@@ -53,6 +53,13 @@ void mb_host_request_frame(void);
 // lately, kept while a frame in flight may still draw them
 @property id<MTLTexture> tex;
 @property NSMutableArray *retired;
+// a frame shown in wider colours than sRGB's (a Display P3 stream's: `gamut: "p3"`, asked where frames go on the
+// system video layer, which shows them as tagged), its texture not made yet: made in sRGB only if the app draws it (a
+// faded or ended view's picture), with the transfer session and pool that convert it (main thread)
+@property MBStreamFrame *wide;
+@property VTPixelTransferSessionRef toSRGB;
+@property CVPixelBufferPoolRef srgbPool;
+@property int srgbW, srgbH;
 // the decoder (its queue): the config's format, its NAL length size and picture size, the session and its generation
 // (the output of an older one is not this one's), whether it waits for a key frame, the frames inside it
 @property CMVideoFormatDescriptionRef format;
@@ -116,6 +123,8 @@ static MBStream *stream_of(int32_t sid) {
   return s;
 }
 static void display(MBStream *s, CVPixelBufferRef px);
+static BOOL wider_than_srgb(CVPixelBufferRef px);
+static void use_texture(MBStream *s, CVPixelBufferRef px, id<MTLTexture> tex, id keep);
 
 // ---- H.264 (the stream's queue) ----
 
@@ -460,18 +469,37 @@ void mb_host_stream_show(int32_t sid, double ts) {
     s.displayed = CVPixelBufferRetain(f.pixels);
     display(s, f.pixels);
   }
+  s.wide = nil;
+  // Wider than sRGB: its texture (sRGB's, as the app draws) made only when drawn (mb_stream_texture).
+  if (f.pixels && wider_than_srgb(f.pixels)) {
+    s.wide = f;
+    s.tex = nil;
+    return;
+  }
+  use_texture(s, f.pixels, f.tex, f);
+}
+
+// Whether pixel buffer `px` is in wider colours than sRGB's: its primaries said and not BT.709's (sRGB's).
+static BOOL wider_than_srgb(CVPixelBufferRef px) {
+  CFTypeRef primaries = CVBufferCopyAttachment(px, kCVImageBufferColorPrimariesKey, NULL);
+  BOOL is = primaries && !CFEqual(primaries, kCVImageBufferColorPrimaries_ITU_R_709_2);
+  if (primaries) CFRelease(primaries);
+  return is;
+}
+
+// What the app draws stream s with from now on: pixel buffer `px`'s texture (BGRA, kept with `keep`), or `tex`.
+static void use_texture(MBStream *s, CVPixelBufferRef px, id<MTLTexture> tex, id keep) {
   id held = nil;
-  id<MTLTexture> tex = f.tex;
-  if (f.pixels) {
+  if (px) {
     if (!texture_cache && CVMetalTextureCacheCreate(NULL, NULL, mb_render_device(), NULL, &texture_cache) != kCVReturnSuccess) return;
     CVMetalTextureRef mt = NULL;
-    if (CVMetalTextureCacheCreateTextureFromImage(NULL, texture_cache, f.pixels, NULL, MTLPixelFormatBGRA8Unorm,
-                                                  (size_t)f.w, (size_t)f.h, 0, &mt) != kCVReturnSuccess || !mt) {
+    if (CVMetalTextureCacheCreateTextureFromImage(NULL, texture_cache, px, NULL, MTLPixelFormatBGRA8Unorm,
+                                                  CVPixelBufferGetWidth(px), CVPixelBufferGetHeight(px), 0, &mt) != kCVReturnSuccess || !mt) {
       return;
     }
     tex = CVMetalTextureGetTexture(mt);
     // (the CVMetalTexture and its pixel buffer kept as long as the texture is drawn)
-    held = @[ (__bridge_transfer id)mt, f ];
+    held = @[ (__bridge_transfer id)mt, keep ];
   }
   if (!tex) return;
   // what was drawn until now, kept while the frames in flight may draw it (at most three: apple_render.m's ring)
@@ -479,6 +507,41 @@ void mb_host_stream_show(int32_t sid, double ts) {
   while (s.retired.count > 4) [s.retired removeObjectAtIndex:0];
   s.tex = tex;
   if (texture_cache) CVMetalTextureCacheFlush(texture_cache, 0);
+}
+
+// A wide frame's texture in sRGB (the app's canvas is sRGB: P3's numbers drawn as they are would come out washed
+// out): converted by VideoToolbox's pixel transfer into a buffer of its own, once, when the app draws it.
+static void texture_in_srgb(MBStream *s) {
+  MBStreamFrame *f = s.wide;
+  s.wide = nil;
+  int w = (int)CVPixelBufferGetWidth(f.pixels), h = (int)CVPixelBufferGetHeight(f.pixels);
+  if (!s.toSRGB) {
+    VTPixelTransferSessionRef made = NULL;
+    if (VTPixelTransferSessionCreate(NULL, &made) != noErr || !made) return;
+    VTSessionSetProperty(made, kVTPixelTransferPropertyKey_DestinationColorPrimaries, kCVImageBufferColorPrimaries_ITU_R_709_2);
+    VTSessionSetProperty(made, kVTPixelTransferPropertyKey_DestinationTransferFunction, kCVImageBufferTransferFunction_sRGB);
+    s.toSRGB = made;
+  }
+  if (!s.srgbPool || s.srgbW != w || s.srgbH != h) {
+    if (s.srgbPool) CVPixelBufferPoolRelease(s.srgbPool);
+    s.srgbPool = NULL;
+    NSDictionary *attrs = @{
+      (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
+      (id)kCVPixelBufferWidthKey : @(w),
+      (id)kCVPixelBufferHeightKey : @(h),
+      (id)kCVPixelBufferMetalCompatibilityKey : @YES,
+      (id)kCVPixelBufferIOSurfacePropertiesKey : @{},
+    };
+    CVPixelBufferPoolRef pool = NULL;
+    if (CVPixelBufferPoolCreate(NULL, NULL, (__bridge CFDictionaryRef)attrs, &pool) != kCVReturnSuccess) return;
+    s.srgbPool = pool;
+    s.srgbW = w;
+    s.srgbH = h;
+  }
+  CVPixelBufferRef out = NULL;
+  if (CVPixelBufferPoolCreatePixelBuffer(NULL, s.srgbPool, &out) != kCVReturnSuccess || !out) return;
+  if (VTPixelTransferSessionTransferImage(s.toSRGB, f.pixels, out) == noErr) use_texture(s, out, nil, (__bridge id)out);
+  CVPixelBufferRelease(out);
 }
 
 // Pixel buffer `px` put on the stream's layer: its IOSurface the layer's contents, in the transaction the frame that
@@ -490,6 +553,8 @@ static void display(MBStream *s, CVPixelBufferRef px) {
   if (!layer || !px) return;
   IOSurfaceRef surface = CVPixelBufferGetIOSurface(px);
   if (!surface) return;
+  // (shown in its own colours, a P3 stream's wider than sRGB's: Core Animation matches the surface's colour space,
+  // which VideoToolbox's decoded buffer carries from the stream's VUI, Display P3's ICC profile for a P3 stream)
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   layer.contents = (__bridge id)surface;
@@ -531,6 +596,14 @@ void mb_host_stream_close(int32_t sid) {
   if (s.displayed) CVPixelBufferRelease(s.displayed);
   s.displayed = NULL;
   [s.onLayer removeAllObjects];
+  s.wide = nil;
+  if (s.toSRGB) {
+    VTPixelTransferSessionInvalidate(s.toSRGB);
+    CFRelease(s.toSRGB);
+    s.toSRGB = NULL;
+  }
+  if (s.srgbPool) CVPixelBufferPoolRelease(s.srgbPool);
+  s.srgbPool = NULL;
   [streams_lock lock];
   [streams removeObjectForKey:@(sid)];
   [streams_lock unlock];
@@ -636,6 +709,7 @@ void mb_host_stream_codec(int32_t sid, moonbit_string_t cmd, moonbit_bytes_t dat
 
 id<MTLTexture> mb_stream_texture(int sid) {
   MBStream *s = stream_of(sid);
+  if (s && s.wide) texture_in_srgb(s);
   return s ? s.tex : nil;
 }
 

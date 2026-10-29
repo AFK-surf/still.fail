@@ -461,6 +461,8 @@ pub let still_look : Look
 
 pub fn stream_audio_here() -> Bool
 
+pub fn stream_layers_here() -> Bool
+
 pub fn strike(String) -> Run
 
 pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity, narrow? : Patch, dark? : Patch, selected? : Patch, hovered? : Patch, focused? : Patch, pressed? : Patch, disabled? : Patch) -> Style

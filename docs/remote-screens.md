@@ -87,6 +87,14 @@ JPEG frames are all key frames and their config has no `description`.
   With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
   The desktop captures it on Windows and macOS; the Apple native client plays it. Older sources ignore the request.
   Previews never request or capture audio. No audio frames are sent without negotiation.
+  Colours: a video's are sRGB's, tagged so in its VUI (colour_primaries 1, transfer 13, matrix 1, studio range; the
+  Windows desktop's BT.709's transfer). With `"gamut": "p3"` (the client shows a video tagged Display P3 as such) this
+  Mac's desktop is captured in Display P3 and its VUI says so (colour_primaries 12): wider colours on a wide-gamut
+  phone. Without it they are sRGB's, whatever the Mac's display is: its own space (a wide-gamut OLED's, P3's) shown as
+  sRGB came out washed out. The Apple app asks it where its frames go on the system's video layer
+  (@hostapi.stream_layers: Core Animation shows the decoded IOSurface in its tagged colour space); a frame it draws
+  itself there (a faded or ended view's) is converted to sRGB first (apple_stream.m). A client that draws the frames
+  into an sRGB canvas (the web, Android, Windows) asks none. Other sources and older stations ignore it.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
   `peek` (a tab of the browser: the desktop's view wakes its display), else 501.

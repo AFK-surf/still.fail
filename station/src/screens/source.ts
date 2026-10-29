@@ -30,7 +30,9 @@ export type ScreenInput =
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
 /// `fit`: the viewer's own screen (a phone), in its CSS pixels and their scale: a source that lays itself out (a tab of
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit; audio?: boolean };
+/// `gamut: "p3"`: the viewer shows a video tagged Display P3 as such: a source that has wider colours (this Mac's
+/// desktop) may send them; the others' stay sRGB, as they are without it.
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
 /// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).

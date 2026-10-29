@@ -640,6 +640,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     params["quality"] = Json::string(quality)
   }
   if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
+  // Shown by the system's video layer (its frames tagged colours honoured, a wide-gamut screen's shown as wide): the
+  // Mac's desktop sent in Display P3; the app's canvas (a faded or ended view's picture) has it converted to sRGB.
+  if @ui.stream_layers_here() { params["gamut"] = Json::string("p3") }
   match self.fit {
     Some((w, h, scale)) =>
       params["fit"] = Json::object({

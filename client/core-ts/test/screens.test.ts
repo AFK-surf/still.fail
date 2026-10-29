@@ -139,6 +139,8 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality: "original" }) as J).call.ask.quality, "original");
   for (const quality of [undefined, "best", 3]) assert.equal("quality" in (parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality }) as J).call.ask, false, String(quality));
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", quality: "hd", peek: true }) as J).call.ask.quality, undefined);
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", gamut: "p3" }) as J).call.ask.gamut, "p3");
+  for (const gamut of [undefined, "srgb", 1]) assert.equal("gamut" in (parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", gamut }) as J).call.ask, false, String(gamut));
 });
 
 test("a_screen_link_opens_the_screen", () => {
