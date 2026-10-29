@@ -725,6 +725,37 @@ test "the room a list keeps for the composer opened with one line is as tall as 
 }
 
 ///|
+test "the composer growing a line as it is typed in draws none of its words over the row of ＋ and send on its way, on a phone and on a computer" {
+  for screen in [(@ui.Pointing::Finger, 2), (@ui.Pointing::Mouse, 0)] {
+    let (pointing, platform) = screen
+    let calls : Array[Made] = []
+    let (t, _) = desk_composer_tester(calls, pointing~, platform~)
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    t.type_text("先看第三项")
+    t.run_for(2.0 * @sfpages.morph_ms)
+    t.draw()
+    let (cx, cy) = t.locate("icon:arrow-up")[0]
+    let half = @sf.theme().round.side / 2.0
+    let over = fn() {
+      t
+      .glyphs_shown()
+      .filter(fn(g) { g.1 < cy + half && g.3 > cy - half })
+      .length()
+    }
+    assert_eq(over(), 0, msg="at rest, platform \{platform}")
+    let lines = t.text_runs().length()
+    // (words enough for a line more)
+    t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
+    t.frame()
+    assert_true(t.text_runs().length() > lines, msg="no line more: \{t.text_runs()}")
+    assert_eq(over(), 0, msg="as it sets off, platform \{platform}")
+    t.run_for(@sfpages.morph_ms / 2.0)
+    assert_eq(over(), 0, msg="half way, platform \{platform}")
+  }
+}
+
+///|
 test "on a phone a finger 3 off the send button, beside it or over it, sends: the button's reach over the composer's own (its field, its box)" {
   for off in [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)] {
     let calls : Array[Made] = []

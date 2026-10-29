@@ -2291,6 +2291,7 @@ pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
 pub fn Tester::get(Self, Role, label? : String) -> SemNode raise
+pub fn Tester::glyphs_shown(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hand_moves(Self) -> Array[String]
 pub fn Tester::haptics(Self) -> Array[Haptic]
 pub fn Tester::hold_drag(Self, Double, Double, Double, Double, steps? : Int32) -> Unit

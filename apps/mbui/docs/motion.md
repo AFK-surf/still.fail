@@ -81,7 +81,10 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
 4. **No words over words while it moves.** At no moment of a motion are one thing's words drawn where another's are,
    both seen (the user, 2026-10-29: 「查一下现在哪些动效会存在文字叠文字的问题」「加」). Held on every frame a Tester
    draws while something moves (mbui's words_over.mbt); what is over others now is each test file's known number
-   (`words_over_known`), which only falls.
+   (`words_over_known`), which only falls. What grows for its cause while it moves (`@motion.layout` outside a list:
+   the composer's field a line taller) shows only as tall as it showed, going to its new height with its move, so what
+   it has more comes out as it gets there, not over what stands by it (its ＋ and send, 2026-10-29); a list's rows make
+   room for each other instead (`makes_room`).
 
 ## Curves
 
