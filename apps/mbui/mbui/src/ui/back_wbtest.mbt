@@ -59,3 +59,25 @@ test "on Android a finger dragged from the edge is not a swipe back: the page st
   assert_eq(t.rect_of("title 2").unwrap().0, 0.0)
   t.assert_idle()
 }
+
+///|
+test "on Android the system's back gesture's steps move the page as it follows them: no frame built again for one" {
+  let nav = Nav::new(1)
+  let t = Tester::new(back_view(nav), platform=2)
+  nav.push(2)
+  t.run_for(nav_push_ms)
+  on_back(0, 0.0, 0.0, 0)
+  back_step(t)
+  // (the steps come between frames, as a host's do; the frame after the one the gesture began in is built, as that one asked)
+  on_back(1, 20.0, 0.0, 0)
+  back_step(t)
+  for x in [40.0, 80.0, 120.0] {
+    on_back(1, x, 0.0, 0)
+    back_step(t)
+    assert_eq(t.built_why(), "")
+  }
+  assert_eq(t.rect_of("title 2").unwrap().0, 120.0)
+  on_back(2, 0.0, 1.0, 0)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(nav.depth(), 1)
+}

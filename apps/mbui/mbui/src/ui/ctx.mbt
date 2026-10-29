@@ -1556,8 +1556,13 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 /// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
   // (read so: what reads it is built again as the pointer comes over it or leaves it, hand.mbt)
-  hand.over.has(id) |> ignore
+  let over = hand.over.has(id)
   hand.pointing.get() |> ignore
+  // (in a frame, where the frame took the pointer to rest as it began (hand_arrive): what moved under it as the frame
+  // was painted is found under it as the frame ends, and lit by the next, built again or not)
+  if in_frame.val && id != 0 {
+    return over || (self.lit_every && pointing() is Mouse)
+  }
   self.hover == id || (id != 0 && (self.hover_in.contains(id) || (self.lit_every && pointing() is Mouse)))
 }
 

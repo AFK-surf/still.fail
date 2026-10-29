@@ -824,12 +824,20 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   paint_phase.val = 0
   nodes_run.fresh = true
   nodes_run.whole = true
+  looks_rebuilt.val = true
   watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore
+  looks_rebuilt.val = false
   looks_drawn.val = false
   painted_alone.val = false
   looks_compare(c, alone, n, wake, cycling, t, then, painted~)
   t0
 }
+
+///|
+/// Whether the frame is being built whole again to be compared with it as it was painted alone or of its looks alone
+/// (looks_check): a check's, no frame of the app's (frame_hook is not told of it).
+// kept across runs: set and let go within a frame
+let looks_rebuilt : Ref[Bool] = Ref(false)
 
 ///|
 /// How many of the hand's discrete events the frame before had seen (hand.mbt's `events`).
