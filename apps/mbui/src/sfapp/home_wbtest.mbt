@@ -652,3 +652,28 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   assert_true(app.nav.top() == NewChat, msg="landed")
   assert_true(drawn("整理发布清单"), msg="shown with what it landed on")
 }
+
+///|
+test "a row swiped off and archived, then asked back with 撤销, is back where it rests, not off to the left" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  t.scroll_to(12)
+  t.draw()
+  let before = t.locate("=把旧的截图都换成新的")
+  let (_, y) = before[0]
+  t.drag(340.0, y, 120.0, y)
+  t.run_for(@sfpages.swipe_off_ms)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.draw()
+  assert_true(t.locate("=把旧的截图都换成新的").is_empty())
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("撤销")
+  assert_eq(named(calls, "chat.archive").length(), 2)
+  t.scroll_to(12)
+  t.draw()
+  // where it rests, its 归档 under it covered: nothing of the swipe left
+  let after = t.locate("=把旧的截图都换成新的")
+  assert_eq(after.length(), 1)
+  assert_eq(after[0].0, before[0].0)
+  assert_true(t.locate("=归档").is_empty())
+}
