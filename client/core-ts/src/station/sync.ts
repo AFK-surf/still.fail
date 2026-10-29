@@ -63,6 +63,9 @@ const SEARCHED = new Set(["session", "session-removed", "thread", "thread-remove
 const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
+/// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
+/// times a second, each search asked again a search of the machine's files there (docs/search.md).
+export const SEARCH_STALE_MS = 2_000;
 /// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
 /// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
 export const RESOURCES_EVERY_MS = 5_000;
@@ -108,6 +111,8 @@ export class StationsSync {
   readonly #links: Links;
   /// What their streams told while a read was out, to tell again on top of what it brings.
   readonly #retold = new Retold();
+  /// The stations whose searches shown are to be asked again once SEARCH_STALE_MS is up.
+  readonly #staleSearches = new Set<string>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
@@ -487,7 +492,7 @@ export class StationsSync {
       Effect.sleep(SEARCH_SETTLE_MS).pipe(
         Effect.andThen(
           Effect.sync(() => {
-            if (this.#core.store.inUse(topic)) this.#enqueue(address, `search/${key}`, Priority.shown, this.#search(topic));
+            if (this.#core.views.searchShownNow(topic)) this.#enqueue(address, `search/${key}`, Priority.shown, this.#search(topic));
           }),
         ),
       ),
@@ -499,7 +504,7 @@ export class StationsSync {
       const address = topic.station as string;
       const key = topicKey(topic);
       const link = this.#links.get(address);
-      if (!link || !this.reachable(address) || !this.#core.store.inUse(topic)) return;
+      if (!link || !this.reachable(address) || !this.#core.views.searchShownNow(topic)) return;
       const params = [`q=${encode(topic.q as string)}`];
       if (typeof topic.kind === "string") params.push(`kinds=${encode(topic.kind)}`);
       if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
@@ -519,14 +524,29 @@ export class StationsSync {
   /// What the station holds changed (a chat said in, archived, removed; a job): the searches of it shown are asked
   /// again (what was found shown meanwhile), the rest let go.
   #searchStale(address: string): void {
+    if (this.#staleSearches.has(address)) return;
+    this.#staleSearches.add(address);
+    this.#core.runner.fork(
+      Effect.sleep(SEARCH_STALE_MS).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            this.#staleSearches.delete(address);
+            this.#askSearchesAgain(address);
+          }),
+        ),
+      ),
+    );
+  }
+
+  #askSearchesAgain(address: string): void {
     const link = this.#links.get(address);
     if (!link) return;
     for (const key of [...link.memory.keys()]) {
       if (!key.includes('"stationSearch"')) continue;
       const topic = JSON.parse(key) as Topic;
       if (topic.topic !== "stationSearch") continue;
-      if (this.#core.store.inUse(topic)) this.searchShown(topic);
-      else link.memory.delete(key);
+      if (this.#core.views.searchShownNow(topic)) this.searchShown(topic);
+      else if (!this.#core.store.inUse(topic)) link.memory.delete(key);
     }
   }
 

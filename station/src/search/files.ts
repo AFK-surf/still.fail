@@ -18,9 +18,21 @@ import type { Asker, Group, Hit } from "./match.ts";
 const PROTECTED = ["Documents", "Desktop", "Downloads"];
 /// Where a Mac keeps its apps.
 const APPS = ["/Applications", "/System/Applications"];
-/// How long Spotlight has to answer, and how many paths it is let give before it is stopped.
+/// How long Spotlight has to answer, and how many paths it is let give before it is stopped; what files say is asked
+/// for fewer (a common word is in a hundred thousand of them, each counted by Spotlight before it is given).
 const WAIT_MS = 3_000;
 const MOST = 1000;
+const MOST_SAID = 100;
+/// Words shorter than this are looked for at the start of names alone: `*u*` is in nearly every name on the machine.
+export const SHORT = 3;
+/// A search's files are found again only after this long: the same words asked at once by several of a person's
+/// devices (as they connect again), or again and again by a client from before it let go of what it no longer shows,
+/// are one search of the machine; a file made since is found a few seconds later.
+export const KEPT_MS = 5_000;
+/// At most this many searches of the machine at once; one that waited this long for its turn finds no files (the
+/// rest of what the search finds is not held up for them).
+export const AT_ONCE = 2;
+export const TURN_MS = 2_000;
 
 /// Where a Mac keeps what is the person's own (mail, messages, calendars, contacts, notes, photos), under the home.
 export const PERSONAL = [
@@ -39,7 +51,7 @@ export type FileSearchDeps = {
   home?: string;
   /// Spotlight's paths for a query, under `within` (none: anywhere), at most `most` (a test's own; null: walk the folders
   /// as where there is no Spotlight).
-  spotlight?: ((query: string, within: string[], most: number) => Promise<string[]>) | null;
+  spotlight?: ((query: string, within: string[], most: number, signal?: AbortSignal) => Promise<string[]>) | null;
   /// The time, as the walk's end is told by (a test's own).
   now?: () => number;
   /// The folders macOS keeps from the station (Documents, Desktop, Downloads), asked through still.fail Helper where it
@@ -52,10 +64,15 @@ const under = (path: string, dir: string) => path === dir || path.startsWith(dir
 /// A word as Spotlight's query language has it in a string: its quotes, backslashes and wildcards escaped.
 const quoted = (word: string) => word.replace(/[\\"*?]/g, (c) => `\\${c}`);
 
-/// Spotlight's query for the words: each in a name (any part of it), or (`content`) in a name or what a file says (a
-/// word of it), case and diacritics aside.
-export function spotlightQuery(words: string[], content = true): string {
-  return words.map((w) => (content ? `(kMDItemFSName == "*${quoted(w)}*"cd || kMDItemTextContent == "${quoted(w)}*"cdw)` : `kMDItemFSName == "*${quoted(w)}*"cd`)).join(" && ");
+/// Spotlight's query for the words: each in a name (any part of it; a SHORT word at its start), or (`content`) in a
+/// name or what a file says (a word of it), case and diacritics aside. Null for what files say where every word is
+/// short: nothing asked.
+export function spotlightQuery(words: string[], content: false): string;
+export function spotlightQuery(words: string[], content?: boolean): string | null;
+export function spotlightQuery(words: string[], content = true): string | null {
+  if (content && words.every((w) => w.length < SHORT)) return null;
+  const name = (w: string) => (w.length < SHORT ? `kMDItemFSName == "${quoted(w)}*"cd` : `kMDItemFSName == "*${quoted(w)}*"cd`);
+  return words.map((w) => (content && w.length >= SHORT ? `(${name(w)} || kMDItemTextContent == "${quoted(w)}*"cdw)` : name(w))).join(" && ");
 }
 
 /// What tools make and keep, never what a person looks for: a path through any of these is passed over.
@@ -68,8 +85,9 @@ const noisy = (path: string, home: string) => {
 };
 
 /// `mdfind` asked: its paths as they come, stopped at `most` or after WAIT_MS.
-export function mdfind(query: string, within: string[], most: number): Promise<string[]> {
+export function mdfind(query: string, within: string[], most: number, signal?: AbortSignal): Promise<string[]> {
   return new Promise((resolve) => {
+    if (signal?.aborted) return resolve([]);
     const args = ["-0", ...within.flatMap((w) => ["-onlyin", w]), query];
     const child = spawn("/usr/bin/mdfind", args, { stdio: ["ignore", "pipe", "ignore"] });
     const paths: string[] = [];
@@ -93,6 +111,7 @@ export function mdfind(query: string, within: string[], most: number): Promise<s
     });
     child.on("error", done);
     child.on("close", done);
+    signal?.addEventListener("abort", done, { once: true });
   });
 }
 
@@ -109,7 +128,7 @@ export const WALK_MS = 3_000;
 
 /// The files and folders under `tops` whose name has every word, or (a small text file) whose name and words have them:
 /// a folder at a time, the nearest the top first, until `most` are found or `ms` is up (`left`: some were not reached).
-export async function walk(tops: string[], words: string[], options: { skip: string[]; most: number; ms: number; now: () => number }): Promise<{ paths: string[]; left: boolean }> {
+export async function walk(tops: string[], words: string[], options: { skip: string[]; most: number; ms: number; now: () => number; signal?: AbortSignal }): Promise<{ paths: string[]; left: boolean }> {
   const until = options.now() + options.ms;
   const skipped = (p: string) => options.skip.some((d) => under(p, d));
   const has = (text: string) => {
@@ -120,7 +139,7 @@ export async function walk(tops: string[], words: string[], options: { skip: str
   const paths: string[] = [];
   while (folders.length > 0) {
     if (paths.length >= options.most) return { paths, left: true };
-    if (options.now() > until) return { paths, left: true };
+    if (options.now() > until || options.signal?.aborted) return { paths, left: true };
     const dir = folders.shift()!;
     let names: Dirent[];
     try {
@@ -157,6 +176,13 @@ export async function walk(tops: string[], words: string[], options: { skip: str
 export class FileSearch {
   readonly #deps: FileSearchDeps;
   readonly #home: string;
+  /// What searches found lately, by what they asked (KEPT_MS): the same asked again meanwhile is answered from it.
+  readonly #found = new Map<string, { at: number; files: Promise<Group | null> }>();
+  /// The searches going now and those waiting for their turn. `typist`: the device a person types on (Asker.typist),
+  /// `typed`: its words; a search typed on (later words of the same typist's, grown or shortened) takes the place of
+  /// the one before, which stops. An agent's and another station's have no typist: each goes, none stops another.
+  #going: { typist?: string; typed: string; stop: AbortController }[] = [];
+  #waiting: { typist?: string; typed: string; go: () => void; drop: () => void }[] = [];
 
   constructor(deps: FileSearchDeps) {
     this.#deps = deps;
@@ -164,8 +190,60 @@ export class FileSearch {
   }
 
   /// The files the words find for `asker`: those whose name has the first word first, then the most recently changed.
+  /// The same search within KEPT_MS is answered as it was; the machine is searched AT_ONCE searches at a time (one that
+  /// waited TURN_MS finds none), a person's search typed on in place of the one before it.
   async query(words: string[], asker: Asker, limit: number): Promise<Group | null> {
     if (words.length === 0) return null;
+    const now = this.#deps.now ?? (() => wall.now());
+    const writer = asker.scopes.includes("write");
+    const key = JSON.stringify([words, asker.workspace, asker.home, writer, limit, this.#deps.personal(), this.#deps.roots(asker.home ? null : asker.workspace)]);
+    for (const [k, f] of this.#found) if (now() - f.at > KEPT_MS) this.#found.delete(k);
+    const kept = this.#found.get(key);
+    if (kept) return kept.files;
+    const files = this.#turn(asker.typist, words.join(" "))
+      .then((stop) =>
+        stop === null ? null : this.#search(words, asker, limit, stop.signal).then((found) => (stop.signal.aborted ? null : found)).finally(() => this.#next(stop)),
+      )
+      .catch(() => null);
+    this.#found.set(key, { at: now(), files });
+    // One stopped or passed over is not kept.
+    void files.then((f) => {
+      if (f === null && this.#found.get(key)?.files === files) this.#found.delete(key);
+    });
+    return files;
+  }
+
+  /// A search's turn: its controller once it may go, null when a later one typed on took its place or it waited
+  /// TURN_MS.
+  #turn(typist: string | undefined, typed: string): Promise<AbortController | null> {
+    const before = (w: { typist?: string; typed: string }) => typist !== undefined && w.typist === typist && (typed.startsWith(w.typed) || w.typed.startsWith(typed));
+    for (const g of this.#going.filter(before)) g.stop.abort();
+    for (const w of this.#waiting.filter(before)) w.drop();
+    this.#waiting = this.#waiting.filter((w) => !before(w));
+    return new Promise((resolve) => {
+      const go = () => {
+        const stop = new AbortController();
+        this.#going.push({ ...(typist !== undefined ? { typist } : {}), typed, stop });
+        resolve(stop);
+      };
+      if (this.#going.length < AT_ONCE) return go();
+      const waiting = { ...(typist !== undefined ? { typist } : {}), typed, go: () => (stopWait(), go()), drop: () => (stopWait(), resolve(null)) };
+      const stopWait = wall.after(TURN_MS, () => {
+        this.#waiting = this.#waiting.filter((w) => w !== waiting);
+        resolve(null);
+      });
+      this.#waiting.push(waiting);
+    });
+  }
+
+  #next(stop: AbortController) {
+    const at = this.#going.findIndex((g) => g.stop === stop);
+    if (at < 0) return;
+    this.#going.splice(at, 1);
+    this.#waiting.shift()?.go();
+  }
+
+  async #search(words: string[], asker: Asker, limit: number, signal: AbortSignal): Promise<Group | null> {
     const writer = asker.scopes.includes("write");
     const pinned = this.#deps.roots(asker.home ? null : asker.workspace);
     // A read-only member: only what their workspace pinned.
@@ -184,12 +262,15 @@ export class FileSearch {
       const helper = this.#deps.helper ?? null;
       const guarded = writer ? PROTECTED.map((n) => join(home, n)) : kept(pinned);
       const viaHelper = helper ? helper.granted(guarded) : [];
+      const said = spotlightQuery(words);
       asks = writer
-        ? [spotlight(spotlightQuery(words, false), [home], MOST), spotlight(spotlightQuery(words), [home], MOST / 2), spotlight(spotlightQuery(words, false), APPS, 50)]
-        : open(pinned).length > 0 ? [spotlight(spotlightQuery(words), open(pinned), MOST)] : [];
-      for (const top of viaHelper) asks.push(helper!.search(top, spotlightQuery(words), MOST / 2, protect).catch(() => []));
+        ? [spotlight(spotlightQuery(words, false), [home], MOST, signal), ...(said !== null ? [spotlight(said, [home], MOST_SAID, signal)] : []), spotlight(spotlightQuery(words, false), APPS, 50, signal)]
+        : open(pinned).length > 0 ? [spotlight(said ?? spotlightQuery(words, false), open(pinned), MOST, signal)] : [];
+      // (still.fail Helper's search is not stopped: a search stopped does not wait for it)
+      const stopped = new Promise<string[]>((resolve) => signal.addEventListener("abort", () => resolve([]), { once: true }));
+      for (const top of viaHelper) asks.push(Promise.race([helper!.search(top, said ?? spotlightQuery(words, false), MOST_SAID, protect).catch(() => []), stopped]));
     } else {
-      const walked = await walk(writer ? [home] : pinned, words, { skip: protect, most: MOST, ms: WALK_MS, now: this.#deps.now ?? (() => wall.now()) });
+      const walked = await walk(writer ? [home] : pinned, words, { skip: protect, most: MOST, ms: WALK_MS, now: this.#deps.now ?? (() => wall.now()), signal });
       left = walked.left;
       asks = [Promise.resolve(walked.paths)];
     }

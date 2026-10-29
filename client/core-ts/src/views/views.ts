@@ -583,6 +583,17 @@ export class Views implements Owner {
     }
   }
 
+  /// Whether a station's search (`stationSearch`) is subscribed to, or of a search a UI subscribes to now: one let go is kept a while
+  /// (EVICT_AFTER_MS) with its watches, and is not asked again for them (each words typed was one).
+  searchShownNow(topic: Topic): boolean {
+    if (this.#core.store.subscribed(topic)) return true;
+    const key = topicKey(topic);
+    for (const live of this.#views.values()) {
+      if (live.topic.topic === "search" && live.watches.has(key) && this.#core.store.subscribed(live.topic)) return true;
+    }
+    return false;
+  }
+
   stop(view: Topic): void {
     const key = topicKey(view);
     const again = this.#again.get(key);
