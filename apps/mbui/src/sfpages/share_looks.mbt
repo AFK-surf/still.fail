@@ -302,7 +302,9 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     c.box(style=term_block, fn() {
       for k, q in spent {
         let q = Some(q)
-        term_key_line(c, if k == 0 { "tokens" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"))
+        // (its tokens and cost under it, as the tasks' average under them: on its line a long name was cut short)
+        term_key_line(c, if k == 0 { "accounts" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), "")
+        term_key_line(c, "", text(q, "lineText"), "")
       }
       term_key_line(c, "chats", text(fleet, "chatsText"), "")
       term_key_line(c, "devices", text(fleet, "where"), "")
