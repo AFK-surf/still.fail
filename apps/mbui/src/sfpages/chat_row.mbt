@@ -40,7 +40,7 @@ let rows : Rows = {
 
 ///|
 fn chat_rows_reset() -> Unit {
-  rows_left.clear()
+  row_left.val = ("", false)
   rows.renaming = ""
   rows.rename_for = ""
   rows.rename_seen = false
@@ -203,15 +203,24 @@ pub fn chat_row(
   // (`apart`: the room its list keeps under it, outside the slot a swipe moves it in)
   // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
   // and a while after, then fades, the row alone built for its frames (the user, 2026-10-29: 「别那么快消失，留一会儿」)
+  // (one row: the chat last in view; another's in view, it is that one's. Its time from the frame it was gone back
+  // from, on the clock: not paused while the list is out of view)
+  let left_at = c.id("row-left/" + key)
   let left = if !finger {
     false
   } else if on {
-    rows_left[key] = true
+    row_left.val = (key, false)
     false
+  } else if row_left.val.0 == key {
+    if !row_left.val.1 {
+      c.mark(left_at)
+      row_left.val = (key, true)
+    }
+    true
   } else {
-    rows_left.contains(key)
+    false
   }
-  let lit = on || (left && !@kit.after(c, "row-left/" + key, left, left_lit_ms, later=true))
+  let lit = on || (left && c.within(left_at, left_lit_ms))
   let lit = @motion.animate(
     c,
     "row-lit/" + key,
@@ -220,7 +229,7 @@ pub fn chat_row(
   )
   // (faded: forgotten)
   if left && lit == 0.0 {
-    rows_left.remove(key)
+    row_left.val = ("", false)
   }
   let draw = fn(tx : Double, apart : Bool) -> Int {
     let ground = if finger {
@@ -468,9 +477,10 @@ pub let left_lit_ms : Double = @ui.nav_push_ms * 2.0
 pub let left_fade_ms : Double = 400.0
 
 ///|
-/// Each finger's row whose chat is in view or was gone back from, till its ground has faded.
-// kept across runs: cleared by chat_rows_reset, each forgotten once its ground has faded
-let rows_left : Map[String, Bool] = Map([])
+/// The finger's row whose chat is in view or was gone back from last, till its ground has faded, and whether its
+/// going back is marked (the time its ground stays counted from).
+// kept across runs: put back by chat_rows_reset, forgotten once its ground has faded
+let row_left : Ref[(String, Bool)] = Ref(("", false))
 
 ///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).

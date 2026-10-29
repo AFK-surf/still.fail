@@ -60,6 +60,41 @@ test "a row's menu at each width and with either hand: held by a finger, right c
 }
 
 ///|
+/// How many rows of the list are on a ground of the chat in view (theme's `selected`, at any share): lit.
+fn lit_rows(t : @ui.Tester) -> Int {
+  let selected = @sf.theme().p.selected & 0xFFFFFF00L
+  t
+  .boxes()
+  .filter(fn(b) {
+    b.h == @sfpages.touch_row_h && (b.bg & 0xFFL) != 0L && (b.bg & 0xFFFFFF00L) == selected
+  })
+  .length()
+}
+
+///|
+test "a finger's rows gone back from one after another: only the last stays lit, while the chat opened between is in view or after" {
+  // (back to the list, the other row pressed while the first is still lit; that chat in view a while, or long)
+  for stay in [@ui.nav_push_ms, 3000.0] {
+    let calls : Array[Made] = []
+    let t = lists_tester(calls, 390.0, 2, false)
+    let at = "in view \{stay}"
+    t.tap_text("夜里的构建又失败了")
+    t.run_for(@ui.nav_push_ms)
+    t.back()
+    t.run_for(@ui.nav_push_ms)
+    assert_eq(lit_rows(t), 1, msg=at)
+    t.tap_text("首页的列表改成按天分组")
+    t.run_for(stay)
+    assert_eq(open_title(), "首页的列表改成按天分组", msg=at)
+    t.back()
+    t.run_for(@ui.nav_push_ms)
+    assert_eq(lit_rows(t), 1, msg=at)
+    t.run_for(@sfpages.left_lit_ms + @sfpages.left_fade_ms)
+    assert_eq(lit_rows(t), 0, msg=at)
+  }
+}
+
+///|
 test "a mouse pointing at a row: its time and 归档 at its top right; a finger's row with nothing left in it has no 归档 of its own" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
