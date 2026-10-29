@@ -156,8 +156,8 @@ export function MessageDecision({ message: m, thread, children }: { message: Cha
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
   const box = useRef<HTMLDivElement>(null);
-  // Settled on screen, the options stay as they were, the one picked marked, none pressed, till they are out of sight
-  // (useSettling: then how it went, at once); open again (an answer that failed), they are back at once.
+  // Settled, how it went in their place, its room going to its new height with whatever else changes (useSettling);
+  // open again (an answer that failed), they are back at once.
   const [drawnOpen, setDrawnOpen] = useState(open);
   const shown = open || drawnOpen;
   useSettling(box, open, drawnOpen, setDrawnOpen);

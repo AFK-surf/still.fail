@@ -1,7 +1,6 @@
-// What goes from under a message once it is answered or let go (a decision's options, 忽略) moves nothing in the list
-// while it is on screen (docs/list-motion.md; the user, 2026-10-29: after a pick 「全是消息列表高度变化，会导致一些东西
-// 挪来挪去」): it stays as it was drawn, its room with it, and goes only once out of sight (scrolled out of its pane, the
-// page hidden), at once. The list's height changes only for what comes, which opens in its turn (listQueue.ts).
+// What goes from under a message once it is answered or let go (a decision's options, 忽略): what takes its place
+// comes in where it was, its room going to the new height by the list's law, on screen as out of sight, together with
+// whatever else changes (docs/list-motion.md, 2026-10-30: 「需要系统性设计一下」; no more "only once out of sight").
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, LEAVE, motionMs, play } from "@stillfail/ui/motion.ts";
 import * as css from "./Chat.css.ts";
@@ -27,6 +26,14 @@ const giveGap = (el: HTMLElement) => {
   return play(before, [{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], OPEN);
 };
 
+/** The gap before `el` taken by the item before it as `el` closes, so that both close together. */
+const takeGap = (el: HTMLElement) => {
+  const gap = gapBefore(el);
+  const before = el.previousElementSibling;
+  if (!gap || !(before instanceof HTMLElement)) return null;
+  return play(before, [{ marginBottom: "0px" }, { marginBottom: `${-gap}px` }], { ...OPEN, fill: "forwards" });
+};
+
 /** Whether `el` shows: some of it in its list's pane (or the window), the page in front. */
 const inSight = (el: HTMLElement) => {
   if (!moving()) return false;
@@ -37,43 +44,47 @@ const inSight = (el: HTMLElement) => {
 };
 
 /**
- * `box` settling once `open` goes: on screen it stays as it was drawn (`drawnOpen` kept), nothing moving for it; out of
- * sight (scrolled out of its pane, the page hidden) it is what takes its place at once, or nothing, `gone`. Open again
- * (an answer that failed), it is back at once.
+ * `box` settling once `open` goes: what takes its place (or nothing, `gone`) at once, its room going from the height it
+ * had to the new one by the list's law, as what else changes does (docs/list-motion.md, 2026-10-30: on screen as out
+ * of sight; nothing waits to be out of sight). Open again (an answer that failed), it is back at once.
  */
 export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, drawnOpen: boolean, setDrawnOpen: (open: boolean) => void,
   to: { gone?: () => void } = {}) {
   const { gone } = to;
+  const from = useRef<number | null>(null);
   useLayoutEffect(() => {
     if (open) {
       if (!drawnOpen) setDrawnOpen(true);
       return;
     }
     if (!drawnOpen) return;
-    const settle = () => { setDrawnOpen(false); gone?.(); };
     const el = box.current;
-    if (!el || el.childElementCount === 0 || !inSight(el)) return void settle();
-    const sight = new IntersectionObserver((seen) => { if (seen.some((e) => !e.isIntersecting)) settle(); },
-      { root: listPaneOf(el) });
-    sight.observe(el);
-    const hidden = () => { if (!moving()) settle(); };
-    document.addEventListener("visibilitychange", hidden);
-    return () => { sight.disconnect(); document.removeEventListener("visibilitychange", hidden); };
+    from.current = el && el.childElementCount > 0 && inSight(el) ? el.getBoundingClientRect().height : null;
+    setDrawnOpen(false);
+    gone?.();
   }, [box, open, drawnOpen, setDrawnOpen, gone]);
+  // its room from the height it had to the one it has now, what it says now coming in
+  useLayoutEffect(() => {
+    const was = from.current;
+    from.current = null;
+    const el = box.current;
+    if (drawnOpen || was === null || !el || !el.isConnected) return;
+    const now = el.getBoundingClientRect().height;
+    if (Math.abs(now - was) < 0.5) return;
+    play(el, [{ height: `${was}px`, overflow: "clip" }, { height: `${now}px`, overflow: "clip" }], OPEN);
+    for (const child of el.children) play(child, [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
+  }, [box, drawnOpen]);
 }
 
 /**
  * `children` while `shown`, under a message: coming after the message is there, they open their space and come in as
  * anything new in the list does (motion.ts ENTER), in their turn; going, they fade where they are, pressed no more,
- * their space kept till it is out of sight (useSettling). Nothing while not shown.
+ * their space closing with them (docs/list-motion.md). Nothing once gone.
  */
 export function Settles({ shown, children }: { shown: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
-  const [drawn, setDrawn] = useState(shown);
   const [kept, setKept] = useState(shown);
   if (shown && !kept) setKept(true);
-  const gone = useRef(() => setKept(false)).current;
-  useSettling(box, shown, drawn, setDrawn, { gone });
   const came = useRef(shown);
   const given = useRef<Animation | null>(null);
   useLayoutEffect(() => {
@@ -86,9 +97,16 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     // Back while going (an answer that failed): at once.
     for (const a of el.getAnimations({ subtree: true })) a.cancel();
     el.inert = !shown;
-    // Going on screen: faded where it is.
+    // Going: faded where it is as its room closes by the list's law, with whatever else changes; gone once closed.
     if (!shown) {
-      if (was && moving()) for (const child of el.children) play(child, [{ opacity: 1 }, { opacity: 0 }], { ...LEAVE, fill: "forwards" });
+      if (!was) return;
+      if (!moving() || !inSight(el)) return void setKept(false);
+      for (const child of el.children) play(child, [{ opacity: 1 }, { opacity: 0 }], { ...LEAVE, fill: "forwards" });
+      const height = el.getBoundingClientRect().height;
+      const closing = play(el, [{ height: `${height}px`, overflow: "clip" }, { height: "0px", overflow: "clip" }], { ...OPEN, fill: "forwards" });
+      given.current = takeGap(el);
+      const gap = given.current;
+      void closing.finished.then(() => { gap?.cancel(); setKept(false); }, () => undefined);
       return;
     }
     if (was || !moving()) return;
@@ -108,7 +126,7 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     return () => { out(); el.style.removeProperty("display"); };
   }, [shown]);
   if (!kept) return null;
-  return <div ref={box} className={css.settles}>{(shown || drawn) && children}</div>;
+  return <div ref={box} className={css.settles}>{children}</div>;
 }
 
 /**
