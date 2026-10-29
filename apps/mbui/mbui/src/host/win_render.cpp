@@ -72,7 +72,7 @@ static size_t last_cap;
 static float last_bg[3];
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 56
+#define MB_INST 60
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
@@ -82,12 +82,12 @@ static const char *shader_src =
     "Texture2D atlas : register(t0);\n"
     "Texture2D img : register(t1);\n"
     "Texture2D bd : register(t2);\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 14 fours each\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 15 fours each\n"
     "Buffer<float4> segs : register(t3);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
     "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; float4 rot : INST8;\n"
-    "  float4 rr : INST9; float4 oclip : INST10; float4 orc : INST11; float4 ors : INST12; float4 fade : INST13;\n"
+    "  float4 rr : INST9; float4 oclip : INST10; float4 orc : INST11; float4 ors : INST12; float4 fade : INST13; float4 fadex : INST14;\n"
     "  uint vid : SV_VertexID; };\n"
     "struct VOut { float4 pos : SV_Position; float2 p : POS; float2 cp : CPOS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
@@ -95,7 +95,7 @@ static const char *shader_src =
     "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6;\n"
     "  nointerpolation float4 rs : INST7; nointerpolation float4 rr : INST8;\n"
     "  nointerpolation float4 oclip : INST9; nointerpolation float4 orc : INST10; nointerpolation float4 ors : INST11;\n"
-    "  nointerpolation float4 fade : INST12; };\n"
+    "  nointerpolation float4 fade : INST12; nointerpolation float4 fadex : INST13; };\n"
     "VOut vmain(VIn I) {\n"
     "  uint vid = I.vid;\n"
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
@@ -114,7 +114,7 @@ static const char *shader_src =
     "  VOut o;\n"
     "  o.pos = float4(at.x / vp.x * 2.0 - 1.0, 1.0 - at.y / vp.y * 2.0, 0.0, 1.0);\n"
     "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs; o.rr = I.rr;\n"
-    "  o.oclip = I.oclip; o.orc = I.orc; o.ors = I.ors; o.fade = I.fade;\n"
+    "  o.oclip = I.oclip; o.orc = I.orc; o.ors = I.ors; o.fade = I.fade; o.fadex = I.fadex;\n"
     "  return o;\n"
     "}\n"
     MB_CORNER_SL
@@ -187,9 +187,11 @@ static const char *shader_src =
     "    cover *= clip_cover(cp, I.oclip, I.orc, I.ors, scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  }\n"
-    "  // and faded out towards a cut, each pixel by where it is (scene.mbt 52-55)\n"
+    "  // and faded out towards a cut, each pixel by where it is (scene.mbt 52-59)\n"
     "  if (I.fade.y > 0.0) cover *= saturate((cp.y - I.fade.x) / I.fade.y);\n"
     "  if (I.fade.w > 0.0) cover *= saturate((I.fade.z - cp.y) / I.fade.w);\n"
+    "  if (I.fadex.y > 0.0) cover *= saturate((cp.x - I.fadex.x) / I.fadex.y);\n"
+    "  if (I.fadex.w > 0.0) cover *= saturate((I.fadex.z - cp.x) / I.fadex.w);\n"
     "  if (cover <= 0.0) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
     "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(mb_corner_of(p - I.rect.xy - hh, I.rr), min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
@@ -201,11 +203,11 @@ static const char *shader_src =
     "    float a;\n"
     "    if (I.prm.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 14 + mb_seg_slot(i)), I.rect, p));\n"
+    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 15 + mb_seg_slot(i)), I.rect, p));\n"
     "      a = saturate(0.5 - (d - I.prm.x) * scale);\n"
     "    } else {\n"
     "      float4 w = float4(0.0, 0.0, 0.0, 0.0);\n"
-    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 14 + mb_seg_slot(i)), I.rect, p, scale);\n"
+    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 15 + mb_seg_slot(i)), I.rect, p, scale);\n"
     "      a = mb_path_cover(w, I.c2.z);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -475,12 +477,13 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  // the instance's fourteen float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth,
-  // how it is turned, a box's corners' radii, the outer clip's rect, corners' radii and how smooth, how it fades
-  D3D11_INPUT_ELEMENT_DESC el[14];
-  for (UINT i = 0; i < 14; i++)
+  // the instance's fifteen float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth,
+  // how it is turned, a box's corners' radii, the outer clip's rect, corners' radii and how smooth, how it fades down
+  // and across
+  D3D11_INPUT_ELEMENT_DESC el[15];
+  for (UINT i = 0; i < 15; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 14, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 15, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
@@ -820,7 +823,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
 }
 
 // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the pixel
-// shader to read (segs, t3): as they are, 14 fours an instance.
+// shader to read (segs, t3): as they are, 15 fours an instance.
 static ID3D11Buffer *segs_buf;
 static ID3D11ShaderResourceView *segs_srv;
 static size_t segs_cap;

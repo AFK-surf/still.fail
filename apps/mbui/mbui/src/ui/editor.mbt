@@ -1011,6 +1011,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     dmin(n.x + n.fw, clip_stack[k + 2]),
     dmin(n.y + n.fh, clip_stack[k + 3]),
   )
+  let i0 = self.ninst
   // its scroll bar, where its words scroll in it (scroll_bar.mbt)
   let bar = if sideways.contains(n.id) { self.bar_at(n) } else { None }
   let focused = self.has_focus(n.id)
@@ -1075,6 +1076,19 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     if resting || phase % 2 == 0 {
       let (x, y, w, h) = st.caret_box(tl, n, coff)
       self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
+    }
+  }
+  // where its words go on past an edge (scrolled up, down, along), they fade out towards it, as far as they go on (a
+  // line's worth at most): not cut off there (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)
+  let up = st.scroll
+  let down = dmax(0.0, tl.h - (n.fh - n.pad_t - n.pad_b)) - st.scroll
+  let back = st.scroll_x
+  let on = dmax(0.0, tl.w - dmax(0.0, n.fw - n.pad_l - n.pad_r - caret_w)) - st.scroll_x
+  if up > 0.0 || down > 0.0 || back > 0.0 || on > 0.0 {
+    let a = self.inst
+    for q in i0..<self.ninst {
+      inst_fade(a, q * inst_size, n.y, cut_soft(up, up), n.y + n.fh, cut_soft(down, down))
+      inst_fade_across(a, q * inst_size, n.x, cut_soft(back, back), n.x + n.fw, cut_soft(on, on))
     }
   }
   match bar {

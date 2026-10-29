@@ -531,6 +531,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
       let to = c.words_across(st.words, style, mono=st.mono)
       let across = from + (to - from) * k
       st.asked = across
+      let mut rolled = -1
       let window = c.box(style=@ui.style(w=Cut, max_w=Fixed(across), h=Fixed(line), clip=true), fn() {
         let wide = if from > to { from } else { to }
         let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }), fn() {
@@ -538,8 +539,15 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
           c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
         })
         c.look(both, @ui.look(dy=-line * k))
+        rolled = both
       })
-      ignore(window)
+      // what rolls out and in fading out towards the window's top and foot, and its end as it widens or narrows (or
+      // where the line cuts it short), each pixel by where it is: not cut off at its edges (the user, 2026-10-30:
+      // 「现在有很多粗暴裁剪的」)
+      let roll = @ui.cut_soft(line * k, line * (1.0 - k))
+      let gone = (to - from).abs()
+      let end = if cut { @ui.cut_soft_most } else { @ui.cut_soft(gone * k, gone * (1.0 - k)) }
+      c.fade_to(rolled, window, top=roll, end~, foot=roll)
     } else {
       st.asked = c.words_across(st.words, style, mono=st.mono)
       c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore

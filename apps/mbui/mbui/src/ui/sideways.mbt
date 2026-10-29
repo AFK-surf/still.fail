@@ -103,6 +103,9 @@ pub fn Ctx::sideways(
     inner = self.box(w?=inner_w, keep=fill, tx=-st.x, pl=px, pr=px, pt=py, pb=foot, body)
     self.sideways_depth -= 1
   })
+  // where more of it goes on past an edge, what it holds fades out towards that edge (as far as it goes on, a line's
+  // worth at most), not cut off there (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)
+  self.fade_to(inner, b, start=cut_soft(st.x, st.x), end=cut_soft(st.max - st.x, st.max - st.x))
   self.nodes[b].sideways = true
   // a scroll target (the pointer's), not a tap's
   self.nodes[b].hit = false
@@ -314,6 +317,8 @@ pub fn Ctx::capped(
   let b = self.box(w~, max_h~, mx~, bg~, radius~, clip=true, id~, fn() {
     inner = self.box(w=Fill(1.0), ty=-st.x, padx~, pady~, body)
   })
+  // (where more goes on past its top or its foot, fading out towards it: Ctx::sideways)
+  self.fade_to(inner, b, top=cut_soft(st.x, st.x), foot=cut_soft(st.max - st.x, st.max - st.x))
   self.nodes[b].sideways = true
   self.nodes[b].shrinks = shrinks
   self.nodes[b].hit = false

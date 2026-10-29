@@ -150,7 +150,7 @@ test "a Tester over a live host: the words laid out and drawn by its text, the f
 
 ///|
 /// The numbers of an instance (scene.mbt).
-let inst_numbers = 56
+let inst_numbers = 60
 
 ///|
 test "a run filmed: every frame of the film once, in order, from the Tester's first, each the last drawn by its moment" {

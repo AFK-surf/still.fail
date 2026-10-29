@@ -89,6 +89,27 @@ test "sideways: in a row drawn again as the list scrolled, a finger up or down o
 }
 
 ///|
+test "sideways: what it holds fades out towards an edge it goes on past, each pixel by where it is, not cut off there; at its start none at its start (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)" {
+  let at = Ref::new(0.0)
+  let t = sideways_view(at)
+  t.draw()
+  let y = t.rect_of("xxxx").unwrap().1
+  // (its glyphs: from its top, how they fade from their left and their right)
+  let fades = fn() {
+    t.drawn_fades_across().filter(fn(d) { d.0 == 1 && (d.1 - y).abs() < 20.0 }).map(fn(d) { (d.3, d.5) })
+  }
+  assert_true(fades().length() > 0, msg="no glyphs")
+  // at its start: towards its end only
+  assert_true(fades().iter().all(fn(f) { f.0 <= 0.0 && f.1 > 0.0 }), msg="at its start: \{fades()[:3]}")
+  t.drag(250.0, y + 5.0, 50.0, y + 5.0)
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+  assert_true(at.val > 0.0, msg="not scrolled")
+  // scrolled on: towards its start, and towards its end while it goes on past it (600 wide in 300)
+  let more = at.val < 300.0 - 0.5
+  assert_true(fades().iter().all(fn(f) { f.0 > 0.0 && (f.1 > 0.0) == more }), msg="scrolled to \{at.val}: \{fades()[:3]}")
+}
+
+///|
 test "sideways: it stops at its ends" {
   let at = Ref::new(0.0)
   let t = sideways_view(at)

@@ -568,7 +568,14 @@ fn tree_sig(c : Ctx) -> Int64 {
     int(if e.keep is Some(_) { 1 } else { 0 })
     num(e.bottom)
     num(e.top)
+    num(e.right)
+    num(e.left)
     num(e.cut_soft)
+    int(e.fade_of)
+    num(e.fades.0)
+    num(e.fades.1)
+    num(e.fades.2)
+    num(e.fades.3)
   }
   h
 }
