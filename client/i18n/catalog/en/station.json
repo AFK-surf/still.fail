@@ -21,7 +21,6 @@
   "station.agentEnv.tooLong": "Line {line}: the value is too long (at most {most} characters)",
   "station.agentEnv.tooMany": "Too many variables (at most {most})",
   "station.feishu.answerEmpty": "Write an answer first",
-  "station.feishu.answerPlaceholder": "Write your answer",
   "station.feishu.answered": "{name} answered: {answer}",
   "station.feishu.answeredBefore": "This question was already answered",
   "station.feishu.badAppId": "The App ID looks like cli_xxx",
@@ -36,7 +35,6 @@
   "station.feishu.notRegistered": "No app made by that scan; scan again",
   "station.feishu.registerFailed": "Couldn't start making the app by scan: {error}",
   "station.feishu.seconds": "{s} s",
-  "station.feishu.send": "Send",
   "station.feishu.sent": "Sent",
   "station.screen.notFound": "This screen is no longer on this station",
   "station.screen.notClosed": "This screen can't be closed from here",
@@ -325,7 +323,6 @@
   "station.session.noProfile": "No Profile can run {runtime}",
   "station.session.noProfileHere": "No Profile can run {runtime} for this workspace's chats; an admin of the station's home workspace can enable one",
   "station.session.noProfileForModel": "No {runtime} Profile can run {model}: turn it on in a Profile first",
-  "station.slack.answer": "Answer",
   "station.slack.chooseFirst": "Choose an option first",
   "station.slack.confirm": "OK",
   "station.slack.fileNotFetched": "[Couldn't fetch file {name}: {error}]",
@@ -542,5 +539,8 @@
   "station.outflow.window.cancel": "Cancel",
   "station.outflow.window.reason": "allow {program} to read your still.fail data",
   "station.outflow.window.kind": "“{kind}”",
-  "station.outflow.window.signer": "Signed by"
+  "station.outflow.window.signer": "Signed by",
+  "station.card.asking": "✍️ Your answer needed",
+  "station.slack.replyHint": "Reply in this thread to answer",
+  "station.feishu.replyHint": "Reply in the chat to answer"
 }

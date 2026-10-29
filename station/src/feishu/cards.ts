@@ -12,9 +12,10 @@ export const CARD_CHARS = 6000;
 /// What a button or a form says back when pressed: the thread it answers in (`t`), and what was chosen (`l`).
 export type Answer = { sf: "answer"; t: string; l?: string };
 
-const card = (elements: Json[], summary?: string): Json => ({
+const card = (elements: Json[], summary?: string, header?: Json): Json => ({
   schema: "2.0",
   config: { update_multi: true, enable_forward: true, ...(summary ? { summary: { content: summary } } : {}) },
+  ...(header ? { header } : {}),
   body: { elements },
 });
 
@@ -34,7 +35,8 @@ export function textCards(text: string): Json[] {
 const plain = (content: string): Json => ({ tag: "plain_text", content });
 
 /// A question's card: its text, then a button for each option (the recommended one last, as still.fail shows them, and
-/// filled), or a field with a button that sends it. `thread`: where the answer goes.
+/// filled); or, for one to write, the text under an orange header marking it as a question and a line saying to reply
+/// (with its hint), with no field, as a reply in the chat answers it. `thread`: where the answer goes.
 export function questionCard(text: string, question: Json, thread: string, lang: Lang): Json {
   const elements: Json[] = [];
   if (text.trim() !== "") elements.push(markdown(text));
@@ -48,15 +50,9 @@ export function questionCard(text: string, question: Json, thread: string, lang:
       if (typeof o?.detail === "string" && o.detail.trim() !== "") elements.push(note(o.detail));
     }
   } else if (question?.type === "text") {
-    const value: Answer = { sf: "answer", t: thread };
-    elements.push({
-      tag: "form",
-      name: "answer_form",
-      elements: [
-        { tag: "input", name: "answer", width: "fill", placeholder: plain(typeof question.placeholder === "string" && question.placeholder !== "" ? question.placeholder : tr(lang, "station.feishu.answerPlaceholder")) },
-        { tag: "button", name: "send", text: plain(tr(lang, "station.feishu.send")), type: "primary_filled", form_action_type: "submit", behaviors: [{ type: "callback", value }] },
-      ],
-    });
+    const hint = typeof question.placeholder === "string" && question.placeholder.trim() !== "" ? ` · ${question.placeholder.trim()}` : "";
+    elements.push(note(`${tr(lang, "station.feishu.replyHint")}${hint}`));
+    return card(elements, undefined, { title: plain(tr(lang, "station.card.asking")), template: "orange" });
   }
   return card(elements);
 }

@@ -311,8 +311,11 @@ describe("slack", { concurrency: true }, () => {
     assert.equal(long[0].text, `选\n\n**A**\n${"说".repeat(80)}\n\n**B**`);
     assert.ok(long[1].elements[0].options.every((o: any) => o.description === undefined));
     assert.equal(long[1].elements[0].initial_option, undefined, "nothing recommended: nothing chosen");
+    // One to write: no field, the words marked as a question, answered by a reply in the thread.
     const t = questionBlocks("写个名字", { type: "text", placeholder: "名字" }, "zh");
-    assert.deepEqual([t[1].type, t[1].element.type, t[1].element.placeholder.text, t[2].elements[0].text.text], ["input", "plain_text_input", "名字", "发送"]);
+    assert.deepEqual(t.map((b: any) => b.type), ["header", "markdown", "context"]);
+    assert.deepEqual([t[0].text.text, t[1].text, t[2].elements[0].text], ["✍️ 需要你回答", "写个名字", "在这个线程里回复作答 · 名字"]);
+    assert.equal(questionBlocks("写", { type: "text" }, "zh")[2].elements[0].text, "在这个线程里回复作答");
     assert.deepEqual(answeredBlocks("选一个", "Ada", "<合并>", "zh")[1].elements[0].text, "✓ Ada 回答：&lt;合并&gt;");
   });
 
