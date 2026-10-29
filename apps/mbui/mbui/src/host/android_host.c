@@ -7,6 +7,7 @@
 #include <GLES3/gl3.h>
 #include <android/log.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,7 @@ static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
+static jmethodID m_posted;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
@@ -85,6 +87,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   text_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/MBText"));
   images_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Images"));
   m_request_frame = (*env)->GetStaticMethodID(env, host_cls, "requestFrame", "()V");
+  m_posted = (*env)->GetStaticMethodID(env, host_cls, "posted", "()V");
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
@@ -255,7 +258,42 @@ static GLuint view_tex(int id);
 static void view_parts_in(int tid, int32_t start, int32_t end);
 static void views_lost(JNIEnv *env);
 
+// The native views kept under the canvas, not drawn in it: a stream's on its layer (kind 4, StreamLayer.java): where
+// one shows, the canvas is taken away (gles_render.h: its picture one white texel, its coverage what is drawn), the
+// layer under the surface seen there.
+#define MB_VIEWS_UNDER 1
+static uint8_t *views_under;  // by id
+static int views_under_cap;
+static GLuint white_tex;  // in the context now; 0 once it is lost
+static int view_under(int tid) {
+  int id = tid - MB_VIEW_TEX;
+  return id > 0 && id < views_under_cap && views_under[id];
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_StreamLayer_under(JNIEnv *env, jclass c, jint id, jboolean on) {
+  if (id <= 0) return;
+  if (id >= views_under_cap) {
+    int cap = views_under_cap ? views_under_cap : 16;
+    while (cap <= id) cap *= 2;
+    views_under = realloc(views_under, (size_t)cap);
+    memset(views_under + views_under_cap, 0, (size_t)(cap - views_under_cap));
+    views_under_cap = cap;
+  }
+  views_under[id] = on ? 1 : 0;
+}
+
 static GLuint image_tex(int id) {
+  if (id > MB_VIEW_TEX && view_under(id)) {
+    if (!white_tex) {
+      static const uint8_t white[4] = {255, 255, 255, 255};
+      glGenTextures(1, &white_tex);
+      glBindTexture(GL_TEXTURE_2D, white_tex);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    return white_tex;
+  }
   if (id > MB_VIEW_TEX) return view_tex(id - MB_VIEW_TEX);
   if (id > MB_STREAM_TEX) return stream_tex(id - MB_STREAM_TEX);
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
@@ -269,6 +307,7 @@ static void images_lost(JNIEnv *env) {
     return;
   }
   for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
+  white_tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
   views_lost(env);
@@ -472,8 +511,10 @@ void mb_host_request_frame(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_request_frame);
 }
 
-// A message posted from outside the frames (post.h), on whatever thread: a frame asked of the view (Host.requestFrame
-// is any thread's). A thread the VM does not know is attached for the call and let go after.
+// A message posted from outside the frames (post.h), on whatever thread: the app told on the GL thread, between frames
+// (Host.posted: Native.posted, below), and it takes what changes only signals then (ui's messages_between), a frame
+// asked for only where something is left for one. A thread the VM does not know is attached for the call and let go
+// after.
 static void mb_post_wake(void) {
   if (!vm || !host_cls) return;
   JNIEnv *env = NULL;
@@ -482,7 +523,7 @@ static void mb_post_wake(void) {
     if ((*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) return;
     attached = 1;
   }
-  (*env)->CallStaticVoidMethod(env, host_cls, m_request_frame);
+  (*env)->CallStaticVoidMethod(env, host_cls, m_posted);
   if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
   if (attached) (*vm)->DetachCurrentThread(vm);
 }
@@ -837,7 +878,7 @@ int32_t mb_host_reduce_motion(void) {
 // onDrawFrame); ready or failed once per item. Also (Native.tell) what the pickers gave, the gallery read, marks
 // drawn, a video's frame grabbed, an update's progress: the kinds named as src/ui/hostcall.mbt's outside_* and
 // Native.java's OUTSIDE_*.
-enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2 };
+enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_POSTED = 11, MB_OUTSIDE_STREAMED = 12 };
 static void (*outside_cb)(int32_t, int32_t, int32_t);
 int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
   outside_cb = f;
@@ -846,6 +887,13 @@ int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint kind, jint id, jint state) {
   if (outside_cb) outside_cb(kind, id, state);
+}
+
+// Something posted since (mb_post_wake, Host.posted: on the GL thread, between frames): the app told (MB_OUTSIDE_POSTED),
+// or, before it has said where it is told, a frame asked for.
+JNIEXPORT void JNICALL Java_dev_mbui_Native_posted(JNIEnv *env, jclass c) {
+  if (outside_cb) outside_cb(MB_OUTSIDE_POSTED, 0, 0);
+  else mb_host_request_frame();
 }
 
 // How many of the app's asks are not answered yet, and what they are, as the frame just built left it
@@ -1643,6 +1691,7 @@ static JNIEnv *streams_env(void) {
 }
 
 static GLuint stream_tex(int id) { return id > 0 && id < stream_cap ? stream_texs[id] : 0; }
+static void unroute(int32_t sid, int what);
 
 // A Java exception out of a call into Streams: logged (its stack on logcat) and cleared, so the GL thread's next JNI
 // call does not find it pending (CheckJNI aborts the process on that).
@@ -1759,6 +1808,7 @@ void mb_host_stream_show(int32_t id, double ts) {
 }
 
 void mb_host_stream_close(int32_t id) {
+  unroute(id, 3);
   JNIEnv *env = streams_env();
   (*env)->CallStaticVoidMethod(env, streams_cls, m_st_close, id);
   streams_threw(env);
@@ -1787,18 +1837,227 @@ int32_t mb_host_h264_here(void) {
 // The device beyond the window (device.mbt): a key catcher, the soft keyboard, the clipboard, awake, haptics.
 #include "android_device.h"
 
-int32_t mb_host_stream_audio_here(void) { return 0; }
-void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }
-// (no system video layer here: a stream drawn by the app, @hostapi.stream_layers)
-int32_t mb_host_stream_layers(void) { return 0; }
-// (nor a pointer on one: the app draws its own, @hostapi.stream_pointer)
-void mb_host_stream_pointer(int32_t id, moonbit_bytes_t png, double w, double h, double hx, double hy) {
-  (void)id; (void)png; (void)w; (void)h; (void)hx; (void)hy;
+// Whether a switch of a run's says no (MBUI_<NAME>=0, or the debug property adb sets, `debug.mbui.<name>` 0: a phone's
+// release build takes no environment of a run's): stream layers and H.265 turned off to compare, the app as before.
+static int switched_off(const char *env, const char *prop) {
+  const char *v = getenv(env);
+  char p[PROP_VALUE_MAX];
+  if (!v && __system_property_get(prop, p) > 0) v = p;
+  return v && strcmp(v, "0") == 0;
 }
-void mb_host_stream_pointer_at(int32_t id, double x, double y, int32_t shown) { (void)id; (void)x; (void)y; (void)shown; }
-// (no engine routes a stream's frames past the app here: @hostapi.stream_direct)
-void mb_host_stream_direct(int32_t id, double route, double after, int32_t what) { (void)id; (void)route; (void)after; (void)what; }
 
-// H.265 not decoded here (a remote screen asks H.264): apple_stream.m's is the one that does.
-int32_t mb_host_h265_here(void) { return 0; }
-void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h) { (void)id; (void)hvcc; (void)w; (void)h; }
+// A stream's sound: played by an AudioTrack of its own (Streams.Sound), the app's packets and its route's alike.
+static jmethodID m_st_audio;
+int32_t mb_host_stream_audio_here(void) { return switched_off("MBUI_STREAM_AUDIO", "debug.mbui.stream_audio") ? 0 : 1; }
+void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) {
+  JNIEnv *env = streams_env();
+  if (!m_st_audio) m_st_audio = (*env)->GetStaticMethodID(env, streams_cls, "audio", "(I[B)V");
+  // (stopped: what its route plays stops with it, until the app routes it again)
+  if (Moonbit_array_length(data) == 0) unroute(id, 2);
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_audio, id, b);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+// ---- streams on a layer of the system's (StreamLayer.java: @hostapi.stream_layers, native views of kind 4) ----
+
+static jclass layers_cls;
+static jmethodID m_sl_here, m_sl_hevc_here, m_sl_pointer, m_sl_pointer_at, m_st_hevc, m_st_direct;
+static JNIEnv *layers_env(void) {
+  JNIEnv *env = streams_env();
+  if (!layers_cls) {
+    layers_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/StreamLayer"));
+    m_sl_here = (*env)->GetStaticMethodID(env, layers_cls, "here", "()Z");
+    m_sl_hevc_here = (*env)->GetStaticMethodID(env, layers_cls, "hevcHere", "()Z");
+    m_sl_pointer = (*env)->GetStaticMethodID(env, layers_cls, "pointer", "(I[BFFFF)V");
+    m_sl_pointer_at = (*env)->GetStaticMethodID(env, layers_cls, "pointerAt", "(IDDZ)V");
+    m_st_hevc = (*env)->GetStaticMethodID(env, streams_cls, "hevc", "(I[BII)V");
+    m_st_direct = (*env)->GetStaticMethodID(env, streams_cls, "direct", "(IJZD[B)V");
+  }
+  return env;
+}
+
+// A system video layer here where Android has what it takes (API 33: a SurfaceControl's crop, position and scale), an
+// H.264 decoder and the switch is not off (debug.mbui.stream_layers 0): a remote screen's frames decoded by MediaCodec
+// straight onto a layer under the canvas, nothing of the app's built or drawn for them; else drawn by the app as before.
+int32_t mb_host_stream_layers(void) {
+  static int known = -1;
+  if (known < 0) {
+    if (switched_off("MBUI_STREAM_LAYERS", "debug.mbui.stream_layers")) {
+      known = 0;
+    } else {
+      JNIEnv *env = layers_env();
+      jboolean here = (*env)->CallStaticBooleanMethod(env, layers_cls, m_sl_here);
+      known = !streams_threw(env) && here ? 1 : 0;
+    }
+  }
+  return known;
+}
+
+// The station's pointer over stream `id`'s picture on its layer: a layer of its own over it (StreamLayer.pointer).
+void mb_host_stream_pointer(int32_t id, moonbit_bytes_t png, double w, double h, double hx, double hy) {
+  if (!mb_host_stream_layers()) return;
+  JNIEnv *env = layers_env();
+  jbyteArray b = jbytes(env, png);
+  (*env)->CallStaticVoidMethod(env, layers_cls, m_sl_pointer, id, b, (jfloat)w, (jfloat)h, (jfloat)hx, (jfloat)hy);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+void mb_host_stream_pointer_at(int32_t id, double x, double y, int32_t shown) {
+  if (!mb_host_stream_layers()) return;
+  JNIEnv *env = layers_env();
+  (*env)->CallStaticVoidMethod(env, layers_cls, m_sl_pointer_at, id, x, y, shown ? JNI_TRUE : JNI_FALSE);
+  streams_threw(env);
+}
+
+// H.265 where streams show on their layers (decoded there by the host's own MediaCodec, not the framework's feed) and
+// the device decodes it in its hardware; the switch not off (debug.mbui.h265 0).
+int32_t mb_host_h265_here(void) {
+  static int known = -1;
+  if (known < 0) {
+    if (!mb_host_stream_layers() || switched_off("MBUI_H265", "debug.mbui.h265")) {
+      known = 0;
+    } else {
+      JNIEnv *env = layers_env();
+      jboolean here = (*env)->CallStaticBooleanMethod(env, layers_cls, m_sl_hevc_here);
+      known = !streams_threw(env) && here ? 1 : 0;
+    }
+  }
+  return known;
+}
+
+void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h) {
+  JNIEnv *env = layers_env();
+  jbyteArray b = jbytes(env, hvcc);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_hevc, id, b, w, h);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+}
+
+// ---- routes: a remote screen's frames straight from the app's engine (apple_stream.m's, the same) ----
+//
+// Where the app's engine reads a remote screen itself (still.fail's shell: mb_stream_route_take, handed over by the
+// app's src/sfcore/android_engine.c), the frames of the view the app routed to a stream (@hostapi.stream_direct) come
+// here from the engine's threads, not through the app's queue: handed to the stream's own decoder (Streams.direct),
+// each decoded one shown on its layer at once and acknowledged to its sender (mb_stream_route_acks), nothing of the
+// app's run. A config stops the route until the app has taken it and routes it again.
+
+typedef struct {
+  uint64_t route, seq, used;
+  int32_t video, audio;
+} mb_route;
+#define MB_ROUTES 8
+static mb_route routes[MB_ROUTES];
+static uint64_t routes_used;
+static pthread_mutex_t routes_lock = PTHREAD_MUTEX_INITIALIZER;
+static int (*route_ack)(double route, double ts);
+
+// (under routes_lock) route's entry; made where `make` (in a free one, else one routing nothing used least lately)
+static mb_route *route_at(uint64_t route, int make) {
+  mb_route *empty = NULL, *old = NULL;
+  for (int i = 0; i < MB_ROUTES; i++) {
+    mb_route *r = &routes[i];
+    if (r->route == route && route) {
+      r->used = ++routes_used;
+      return r;
+    }
+    if (!r->route) {
+      if (!empty) empty = r;
+    } else if (!r->video && !r->audio && (!old || r->used < old->used)) {
+      old = r;
+    }
+  }
+  if (!make || !route) return NULL;
+  mb_route *r = empty ? empty : old;
+  if (r) *r = (mb_route){route, 0, ++routes_used, 0, 0};
+  return r;
+}
+
+// Stream sid no longer where a route's frames (`what` 1) or sound (2) go.
+static void unroute(int32_t sid, int what) {
+  pthread_mutex_lock(&routes_lock);
+  for (int i = 0; i < MB_ROUTES; i++) {
+    if ((what & 1) && routes[i].video == sid) routes[i].video = 0;
+    if ((what & 2) && routes[i].audio == sid) routes[i].audio = 0;
+  }
+  pthread_mutex_unlock(&routes_lock);
+}
+
+void mb_stream_route_acks(int (*ack)(double route, double ts)) { route_ack = ack; }
+
+// (Streams' decoder thread) whether route's frames still go to stream sid, and frame ts of route acknowledged
+JNIEXPORT jboolean JNICALL Java_dev_mbui_Streams_routed(JNIEnv *env, jclass c, jlong route, jint sid) {
+  pthread_mutex_lock(&routes_lock);
+  mb_route *r = route_at((uint64_t)route, 0);
+  int on = r && r->video == sid;
+  pthread_mutex_unlock(&routes_lock);
+  return on ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Streams_routeAck(JNIEnv *env, jclass c, jlong route, jdouble ts) {
+  if (route_ack) route_ack((double)route, ts);
+}
+
+// An engine's thread this attached to the VM is detached as it ends (a thread that ends attached aborts the process).
+static pthread_key_t route_attached;
+static pthread_once_t route_attached_once = PTHREAD_ONCE_INIT;
+static void route_detach(void *unused) {
+  (void)unused;
+  (*vm)->DetachCurrentThread(vm);
+}
+static void route_attached_key(void) { pthread_key_create(&route_attached, route_detach); }
+
+int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len) {
+  int32_t sid = 0;
+  pthread_mutex_lock(&routes_lock);
+  mb_route *r = route_at(route, 1);
+  if (r) {
+    r->seq = seq;
+    // (a config: the app's to take, and what follows it, until it routes them again)
+    if (kind == 1) r->video = 0;
+    else if (kind == 5) r->audio = 0;
+    else if (kind == 2) sid = r->video;
+    else if (kind == 6 && len == 3840) sid = r->audio;
+  }
+  pthread_mutex_unlock(&routes_lock);
+  if (!sid || !vm || !streams_cls || !m_st_direct || !m_st_audio || len > 0x7fffffff) return 0;
+  JNIEnv *env = NULL;
+  if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) return 0;
+    pthread_once(&route_attached_once, route_attached_key);
+    pthread_setspecific(route_attached, (void *)1);
+  }
+  jbyteArray b = (*env)->NewByteArray(env, (jsize)len);
+  if (!b) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return 0;
+  }
+  (*env)->SetByteArrayRegion(env, b, 0, (jsize)len, (const jbyte *)bytes);
+  if (kind == 6) (*env)->CallStaticVoidMethod(env, streams_cls, m_st_audio, sid, b);
+  else (*env)->CallStaticVoidMethod(env, streams_cls, m_st_direct, sid, (jlong)route, key ? JNI_TRUE : JNI_FALSE, (jdouble)ts, b);
+  int took = !(*env)->ExceptionCheck(env);
+  if (!took) (*env)->ExceptionClear(env);
+  (*env)->DeleteLocalRef(env, b);
+  return took;
+}
+
+// The app's (GL thread): stream sid takes route's frames (`what` 1) and sound (2) from now, where the last record
+// offered by it is the `after`th (nothing of it left in the app's queue); those not asked no longer.
+void mb_host_stream_direct(int32_t sid, double route, double after, int32_t what) {
+  unroute(sid, ~what & 3);
+  if (!(what & 3) || route < 1) return;
+  // (the frames only to a stream decoded on its layer: Streams.Own)
+  if (!mb_host_stream_layers()) what &= ~1;
+  if (!(what & 3)) return;
+  JNIEnv *env = layers_env();
+  if (!m_st_audio) m_st_audio = (*env)->GetStaticMethodID(env, streams_cls, "audio", "(I[B)V");
+  pthread_mutex_lock(&routes_lock);
+  mb_route *r = route_at((uint64_t)route, 0);
+  if (r && (double)r->seq == after) {
+    if (what & 1) r->video = sid;
+    if (what & 2) r->audio = sid;
+  }
+  pthread_mutex_unlock(&routes_lock);
+}

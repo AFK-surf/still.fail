@@ -153,6 +153,48 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
 }
 
 ///|
+test "on a host whose decoder is driven from here, a stream on its system video layer is decoded by the host itself: no feed, a frame of its size taken as it comes" {
+  let cell : Ref[Stream?] = Ref::new(None)
+  let t = Tester::new(
+    fn(c) {
+      match cell.val {
+        Some(s) => c.stream(s, w=Px(320.0), h=Px(180.0)) |> ignore
+        None => ()
+      }
+    },
+    h264=true,
+  )
+  // (Android's: its feed for a stream drawn by the app, its own MediaCodec onto the layer for one shown there)
+  t.set_stream_feeds(true)
+  t.set_stream_layers(true)
+  let acks = []
+  let s = Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() {  }, layer=true)
+  cell.val = Some(s)
+  s.h264(wb_avcc, 640, 360)
+  s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  // the frame handed to the host as it is, no decoder's command of the feed's
+  let has = fn(id : Int, what : String) { t.stream_fed(id).iter().any(fn(l) { l.contains(what) }) }
+  assert_true(has(s.id(), "frame key=true ts=1"), msg="\{t.stream_fed(s.id())}")
+  assert_false(has(s.id(), "do "), msg="\{t.stream_fed(s.id())}")
+  t.stream_shows(s.id(), 1.0, 640, 360)
+  t.draw()
+  assert_eq(acks, [1.0])
+  // the next shows itself: taken as it comes, nothing built
+  s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  t.stream_shows(s.id(), 2.0, 640, 360)
+  t.frame_at(t.fake.time + said_frame_ms)
+  assert_eq(acks, [1.0, 2.0])
+  assert_eq(t.built_why(), "")
+  assert_false(has(s.id(), "do "), msg="\{t.stream_fed(s.id())}")
+  // one drawn by the app on the same host (no layer asked): its feed, as before
+  let plain = Stream::new(shown=fn(_) {  }, broken=fn() {  })
+  plain.h264(wb_avcc, 640, 360)
+  assert_true(has(plain.id(), "do "), msg="\{t.stream_fed(plain.id())}")
+  plain.close()
+  s.close()
+}
+
+///|
 test "a stream shown by its layer has its route's frames taken by the host while it shows itself: what came so said by one event, nothing built" {
   let cell : Ref[Stream?] = Ref::new(None)
   let layer : Ref[Bool] = Ref::new(true)

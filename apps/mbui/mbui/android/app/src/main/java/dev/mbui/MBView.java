@@ -84,6 +84,22 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         return super.dispatchHoverEvent(e);
     }
 
+    // ---- its surface (main thread) ----
+
+    /** Its surface made: the streams' layers (StreamLayer) put under it, where it is the host's. */
+    @Override
+    public void surfaceCreated(android.view.SurfaceHolder holder) {
+        super.surfaceCreated(holder);
+        if (Host.view == this) StreamLayer.parentFrom(this);
+    }
+
+    /** Its surface gone: the streams' layers off the screen with it (kept, to be put under the next). */
+    @Override
+    public void surfaceDestroyed(android.view.SurfaceHolder holder) {
+        StreamLayer.parentGone(this);
+        super.surfaceDestroyed(holder);
+    }
+
     // ---- GL thread ----
 
     @Override
