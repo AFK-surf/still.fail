@@ -241,6 +241,7 @@ public class MainActivity extends Activity {
             }
         }
         if (multicast != null) multicast.acquire();
+        Streams.behind(false);
         // the window's size classes and the device's fold, said to the app as they change (src/hostapi/system.mbt)
         folds.start();
         // back on screen after a while off it: said to the app (src/hostapi/system.mbt)
@@ -256,6 +257,8 @@ public class MainActivity extends Activity {
         // the drawing paused once the window is off the screen, not as it starts going: the system's animation of
         // the window going (into the launcher's icon, to the recent apps) moves what it last drew, as a View's
         mbView.onPause();
+        // a remote screen's sound stops with its picture (Streams.behind)
+        Streams.behind(true);
         folds.stop();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
@@ -435,6 +438,8 @@ public class MainActivity extends Activity {
         Host.activity = this;
         Host.view = mbView;
         NativeViews.moveTo(layer);
+        // (the streams' layers under this activity's surface, where it has one)
+        StreamLayer.parentFrom(mbView);
         Native.overOther(over());
         mbView.onResume();
         // back as the app has it now, whatever this activity was told before (Host.backWanted)

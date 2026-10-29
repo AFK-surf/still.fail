@@ -35,12 +35,16 @@
 // nothing built or painted for it, no frame asked, as a video plays under the app's canvas. Its first frame, another
 // size, what the app let go of itself and whatever else comes, as before.
 //
-// Routed (`route`, where the host has routes: @hostapi.stream_direct, macOS's, iOS's and Windows'): while it shows
-// itself so, the app may have the host take a route's frames and sound straight from the app's engine (still.fail's
-// shell reading a remote screen), not by way of the app's queue: the host decodes, shows and acknowledges each, nothing
-// of the app's run. What came so is said in one event as the stream's are next taken ("D TS N BYTES": the frame it
-// shows, how many came and their bytes), on the run's tape as any; no ticket is the app's for them. A config of the
-// route stops it (the host's), and a stream that no longer shows itself stops it as the frame begins.
+// Routed (`route`, where the host has routes: @hostapi.stream_direct, macOS's, iOS's, Windows' and Android's): while it
+// shows itself so, the app may have the host take a route's frames and sound straight from the app's engine
+// (still.fail's shell reading a remote screen), not by way of the app's queue: the host decodes, shows and acknowledges
+// each, nothing of the app's run. What came so is said in one event as the stream's are next taken ("D TS N BYTES":
+// the frame it shows, how many came and their bytes), on the run's tape as any; no ticket is the app's for them. A
+// config of the route stops it (the host's), and a stream that no longer shows itself stops it as the frame begins.
+//
+// A stream on its system video layer is decoded by the host itself even where the host's decoder is otherwise driven
+// from here (Android's: @hostapi.stream_feeds; its layered streams' own MediaCodec decodes onto the layer, as Apple's
+// VideoToolbox does): no feed for it.
 
 ///|
 /// A picture decoded frame by frame.
@@ -177,7 +181,8 @@ pub fn Stream::h264(self : Stream, avcc : Bytes, w : Int, h : Int) -> Unit {
   self.need_key = true
   if self.id != 0 {
     h_stream_h264(self.id, avcc, w, h)
-    if h_stream_feeds() {
+    // (one on its system video layer is decoded by the host itself, onto that layer: no feed, whatever the host's)
+    if h_stream_feeds() && self.view is None {
       let f = match self.feed {
         Some(f) => f
         None => {

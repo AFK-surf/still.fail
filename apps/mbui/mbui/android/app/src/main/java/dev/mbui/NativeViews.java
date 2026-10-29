@@ -83,6 +83,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Kind 1, a video: Media3's ExoPlayer onto its picture's surface, reading the file through the app (ViewSource:
  * ranged reads the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of
  * its own.
+ * Kind 4, a stream's picture (StreamLayer): not drawn in the canvas but on a layer of the system's under it, where
+ * the canvas is cleared for it (android_host.c's views_under).
  * Kind 2, a page of HTML in a WebView, as still.fail's Android app shows an HTML file (FilePreview.kt HtmlPage):
  * scripts on, no file or content access, no DOM storage, no link followed. A page's and a site's frame draws its
  * WebView into its picture (TouchFrame.draw) as the WebView changes, not as it moves; a page taller than a picture can
@@ -619,8 +621,10 @@ final class NativeViews {
     }
 
     static int open(int kind, String arg) {
-        if (kind < 1 || kind > 3) return 0;
+        if (kind < 1 || kind > 4) return 0;
         int id = next.incrementAndGet();
+        // a stream's picture on a layer of its own under the canvas (kind 4, `arg` the stream's id): StreamLayer's
+        if (kind == 4) return StreamLayer.open(id, arg) ? id : 0;
         NView v = kind == 1 ? new Video(id, arg) : kind == 2 ? new Page(id, arg) : new Site(id, arg);
         // (its picture's SurfaceTexture is of the GL context, made here, on its thread, before the view is)
         v.picture = new Picture(id);
@@ -690,7 +694,10 @@ final class NativeViews {
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
                       float r0, float r1, float r2, float r3, boolean shown) {
         NView v = views.get(id);
-        if (v == null) return;
+        if (v == null) {
+            StreamLayer.place(id, x, y, w, h, cx0, cy0, cx1, cy1, shown);
+            return;
+        }
         float d = Host.view.density;
         float most = Math.max(Math.max(r0, r1), Math.max(r2, r3));
         float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, most * d, 0, 0,
@@ -811,7 +818,10 @@ final class NativeViews {
 
     static void close(int id) {
         NView v = views.remove(id);
-        if (v == null) return;
+        if (v == null) {
+            StreamLayer.close(id);
+            return;
+        }
         v.closed = true;
         Host.log("view " + id + ": closed (" + (long) v.bytes + " bytes given)");
         // (no frame draws its picture from now on; its surface let go once nothing draws on it)
@@ -1071,7 +1081,11 @@ final class NativeViews {
 
     static int info(int id, double[] out) {
         NView v = views.get(id);
-        if (v == null) return -1;
+        if (v == null) {
+            if (!StreamLayer.has(id)) return -1;
+            java.util.Arrays.fill(out, 0);
+            return 1;
+        }
         out[0] = v.duration;
         out[1] = v.position;
         out[2] = v.playing;
@@ -1132,7 +1146,11 @@ final class NativeViews {
      */
     static void tell(int id, int what, String text) {
         NView v = views.get(id);
-        if (v == null) return;
+        if (v == null) {
+            // (a stream's layer raised over the others: StreamLayer)
+            if (what == 5) StreamLayer.raise(id);
+            return;
+        }
         if (what == 5) {
             // raised over the others (the app paints it after them): what takes a touch where they meet
             Host.main.post(() -> {

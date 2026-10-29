@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Executors;
 
 /**
@@ -39,6 +40,12 @@ import java.util.concurrent.Executors;
  * texture) or a later one is shown.
  *
  * <p>A JPEG decoded is told ("f TS W H"), one that does not decode let go ("d TS"). Each event asks for a frame.
+ *
+ * <p>A stream shown on a layer of the system's (StreamLayer: a native view of kind 4) is decoded by the host itself
+ * instead (Own: MediaCodec onto its layer's surface, deciding as apple_stream.m's VideoToolbox does: the framework's
+ * feed is not used), H.264 or H.265: a frame decoded is told ("f TS W H"), and put on the layer as the app shows it, or
+ * at once where it came by a route (direct: past the app's queue, acknowledged here). What it says is told to the app
+ * between frames (StreamLayer.streamed), not as a frame asked for.
  *
  * <p>Called from the C host (android_host.c mb_host_stream_*) on the GL thread, but for the decoders' own threads.
  */
@@ -97,18 +104,207 @@ final class Streams {
         dropSurfaces();
         int id = ++nextId;
         streams.put(id, new Stream(id));
+        opened.add(id);
         return id;
     }
 
     static void h264(int id, byte[] avcc, int w, int h) {
         Stream s = streams.get(id);
-        if (s != null) s.configure(avcc, w, h);
+        if (s == null) return;
+        if (s.layered) s.own().configure(false, avcc, w, h);
+        else s.configure(avcc, w, h);
+    }
+
+    /** An H.265 config (hvcC): only a stream on its layer takes it (its own decoder; android_host.c h265_here). */
+    static void hevc(int id, byte[] hvcc, int w, int h) {
+        Stream s = streams.get(id);
+        if (s != null) s.own().configure(true, hvcc, w, h);
     }
 
     static void frame(int id, byte[] data, boolean key, double ts) {
-        // (the framework's feed hands H.264 frames over as "queue" commands: `codec`)
         Stream s = streams.get(id);
-        if (s != null) s.say("d " + num(ts));
+        if (s == null) return;
+        // (its own decoder's, on its layer; else the framework's feed hands H.264 frames over as "queue" commands: `codec`)
+        if (s.own != null) s.own.feed(data, key, ts, 0);
+        else s.say("d " + num(ts));
+    }
+
+    /** Whether stream `id` is shown on a layer of its own (StreamLayer: its view of kind 4 open), GL thread. */
+    static void layered(int id, boolean on) {
+        Stream s = streams.get(id);
+        if (s != null) s.layered = on;
+    }
+
+    /**
+     * A frame of route `route` taken straight from the app's engine (android_host.c mb_stream_route_take, on the
+     * engine's thread): fed to stream `id`'s own decoder, shown and acknowledged there, nothing of the app's run.
+     */
+    static void direct(int id, long route, boolean key, double ts, byte[] data) {
+        Own o = owns.get(id);
+        if (o == null) {
+            // (closed meanwhile: taken, as far as its sender is concerned)
+            routeAck(route, ts);
+            return;
+        }
+        o.feed(data, key, ts, route);
+    }
+
+    /**
+     * One 20 ms sound packet of stream `id` (3840 bytes, 48 kHz stereo PCM16 little-endian; empty: stop, what is queued
+     * let go), the app's (GL thread) or a route's (`direct`: android_host.c mb_stream_route_take, the engine's thread).
+     */
+    static void audio(int id, byte[] data) {
+        // (behind another app, its window off the screen: no sound, as no picture; the user, 2026-10-29)
+        if (behind && data.length > 0) return;
+        Sound o = sounds.get(id);
+        if (o == null) {
+            if (data.length == 0 || !opened.contains(id)) return;
+            o = sounds.computeIfAbsent(id, Sound::new);
+        }
+        o.play(data);
+    }
+
+    /** Whether the app's window is off the screen (MainActivity's onStop till its onStart): its streams' sound let go. */
+    private static volatile boolean behind;
+
+    /**
+     * The window off the screen or back (MainActivity, the main thread): off, each stream's sound stopped, what is
+     * queued let go, and what comes meanwhile dropped; back, it starts again from what comes, its reserve first.
+     */
+    static void behind(boolean off) {
+        behind = off;
+        if (off) {
+            for (Sound o : sounds.values()) o.play(new byte[0]);
+        }
+    }
+
+    /** The streams open, by id (any thread). */
+    private static final java.util.Set<Integer> opened = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Its players, by stream id (any thread: a route's packets come on the engine's). */
+    private static final java.util.concurrent.ConcurrentHashMap<Integer, Sound> sounds = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * A stream's sound (apple_stream.m's, the same): an AudioTrack fed on a thread of its own, started once 60 ms are
+     * queued, emptied and started anew past 300 ms queued (after a stall in the transport) and as it runs dry (an
+     * underrun refills the same reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the
+     * stream closes.
+     */
+    static final class Sound {
+        private static final int RATE = 48000, PACKET = 3840, FRAMES = 960;
+        private final int id;
+        private final HandlerThread thread;
+        private final Handler handler;
+        private android.media.AudioTrack track;
+        /** frames written since it last started anew; whether it plays */
+        private long written;
+        private boolean playing, released;
+
+        Sound(int id) {
+            this.id = id;
+            thread = new HandlerThread("mbui-sound-" + id);
+            thread.start();
+            handler = new Handler(thread.getLooper());
+        }
+
+        void play(byte[] data) {
+            handler.post(() -> {
+                if (released) return;
+                if (data.length == 0) {
+                    stop();
+                    return;
+                }
+                // (one let in as the window went: dropped after its stop, as those after it)
+                if (data.length != PACKET || behind) return;
+                if (track == null && !make()) return;
+                long queued = written - (track.getPlaybackHeadPosition() & 0xffffffffL);
+                // past 300 ms queued (a stall), or run dry while playing: emptied, the reserve filled again first
+                if (queued >= 15L * FRAMES || (playing && queued <= 0)) anew();
+                int n = track.write(data, 0, data.length, android.media.AudioTrack.WRITE_NON_BLOCKING);
+                if (n > 0) written += n / 4;
+                if (!playing && written - (track.getPlaybackHeadPosition() & 0xffffffffL) >= 3L * FRAMES) {
+                    try {
+                        track.play();
+                        playing = true;
+                    } catch (IllegalStateException e) {
+                        Host.log("stream " + id + ": its sound does not play: " + e);
+                    }
+                }
+            });
+        }
+
+        private boolean make() {
+            try {
+                int min = android.media.AudioTrack.getMinBufferSize(RATE, android.media.AudioFormat.CHANNEL_OUT_STEREO,
+                        android.media.AudioFormat.ENCODING_PCM_16BIT);
+                track = new android.media.AudioTrack.Builder()
+                        .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE).build())
+                        .setAudioFormat(new android.media.AudioFormat.Builder().setSampleRate(RATE)
+                                .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_STEREO)
+                                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT).build())
+                        .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+                        .setPerformanceMode(android.media.AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                        // room for the 300 ms it holds at most, and a packet more
+                        .setBufferSizeInBytes(Math.max(min, 16 * PACKET)).build();
+                written = 0;
+                playing = false;
+                return true;
+            } catch (RuntimeException e) {
+                Host.log("stream " + id + ": no sound player: " + e);
+                track = null;
+                return false;
+            }
+        }
+
+        /** What is queued let go, its head back at 0. */
+        private void anew() {
+            try {
+                track.pause();
+                track.flush();
+            } catch (IllegalStateException ignored) {
+            }
+            // (a flush sets the head back to 0 once paused)
+            written = 0;
+            playing = false;
+        }
+
+        private void stop() {
+            if (track == null) return;
+            try {
+                track.pause();
+                track.flush();
+            } catch (IllegalStateException ignored) {
+            }
+            track.release();
+            track = null;
+            playing = false;
+        }
+
+        void release() {
+            handler.post(() -> {
+                released = true;
+                stop();
+                thread.quitSafely();
+            });
+        }
+    }
+
+    /** Whether route `route`'s frames go to stream `id` now (android_host.c), and frame `ts` of it acknowledged. */
+    static native boolean routed(long route, int id);
+    static native void routeAck(long route, double ts);
+
+    /** Its own decoders, by stream id (any thread: a route's frames come on the engine's). */
+    private static final java.util.concurrent.ConcurrentHashMap<Integer, Own> owns = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** What stream `id`'s layer showed, its picture now (StreamLayer.grab), GL thread: the app draws it itself. */
+    static void grabbed(int id, Bitmap b) {
+        Stream s = streams.get(id);
+        if (s == null) return;
+        s.upload(b);
+        if (s.shownBitmap != null && s.shownBitmap != b) s.shownBitmap.recycle();
+        s.shownBitmap = b;
     }
 
     /** A command for stream `id`'s decoder or SurfaceTexture (@ui's stream_feed.mbt); "latch" is a frame shown. */
@@ -130,8 +326,10 @@ final class Streams {
         if (s == null) return "";
         synchronized (s.events) {
             String e = s.events.poll();
-            return e == null ? "" : e;
+            if (e != null) return e;
         }
+        // what came by its route since it was last told, after all else it said
+        return s.own != null ? s.own.toldDirect() : "";
     }
 
     // MBUI_STREAM_THROW_SHOW=N (a test's, android-streams.sh thrown): the Nth show() throws, for the host to clear
@@ -146,7 +344,8 @@ final class Streams {
     static void show(int id, double ts) {
         dropSurfaces();
         Stream s = streams.get(id);
-        if (s != null) s.show(ts);
+        if (s != null && s.own != null) s.own.show(ts);
+        else if (s != null) s.show(ts);
         if (throwShow != null && throwShow.equals(String.valueOf(++shows))) throw new RuntimeException("MBUI_STREAM_THROW_SHOW: show " + shows);
     }
 
@@ -315,16 +514,32 @@ final class Streams {
         Jpeg jpeg;
         /** The JPEG frame shown last, kept to upload again into a new context. */
         Bitmap shownBitmap;
+        /** Shown on a layer of its own (StreamLayer), its frames decoded by its own decoder (`own`) */
+        volatile boolean layered;
+        Own own;
+        /** what it said told the app and not read yet (StreamLayer.streamed) */
+        final AtomicBoolean streamedOwed = new AtomicBoolean();
 
         Stream(int id) {
             this.id = id;
+        }
+
+        /** Its own decoder, made as its first config comes (GL thread). */
+        Own own() {
+            if (own == null) {
+                own = new Own(this);
+                owns.put(id, own);
+            }
+            return own;
         }
 
         void say(String e) {
             synchronized (events) {
                 events.add(e);
             }
-            Host.requestFrame();
+            // on its layer: the app told between frames, what changes nothing drawn taken without one
+            if (layered) StreamLayer.streamed(id, streamedOwed);
+            else Host.requestFrame();
         }
 
         void configure(byte[] avcc, int w, int h) {
@@ -385,11 +600,18 @@ final class Streams {
             tex = 0;
             texW = texH = 0;
             texture(id, 0);
-            if (shownBitmap != null) upload(shownBitmap);
+            if (shownBitmap != null && !shownBitmap.isRecycled()) upload(shownBitmap);
             if (video != null) surfaceAnew();
         }
 
         void close() {
+            opened.remove(id);
+            Sound sound = sounds.remove(id);
+            if (sound != null) sound.release();
+            if (own != null) {
+                owns.remove(id);
+                own.release();
+            }
             // the SurfaceTexture let go once the decoder drawing on it has stopped (on its thread)
             if (video != null) video.release(st, surface);
             else if (st != null) {
@@ -622,13 +844,18 @@ final class Streams {
          * neither shown nor acknowledged while the screen stays still, and the station sends nothing more until it is.
          */
         private static MediaCodec avcDecoder(int w, int h) throws java.io.IOException {
+            return decoder(MediaFormat.MIMETYPE_VIDEO_AVC, w, h);
+        }
+
+        /** A decoder of `mime` that gives each frame back as soon as it is decoded, where the device has one. */
+        static MediaCodec decoder(String mime, int w, int h) throws java.io.IOException {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                MediaFormat ask = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, Math.max(w, 16), Math.max(h, 16));
+                MediaFormat ask = MediaFormat.createVideoFormat(mime, Math.max(w, 16), Math.max(h, 16));
                 ask.setFeatureEnabled(android.media.MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency, true);
                 String name = new MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(ask);
                 if (name != null) return MediaCodec.createByCodecName(name);
             }
-            return MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+            return MediaCodec.createDecoderByType(mime);
         }
 
         private void stopCodec() {
@@ -789,6 +1016,378 @@ final class Streams {
                 }
             }
         }
+    }
+
+    // ---- a stream's own decoder (on its layer) ----
+
+    /**
+     * MediaCodec onto the stream's layer (StreamLayer.surface), deciding itself as apple_stream.m's VideoToolbox does:
+     * frames let go until a key frame after a config or a failure ("d TS"), the older of two inside it counted taken, a
+     * decoder that failed made anew from the next key frame ("b"); each frame decoded told ("f TS W H") and held until
+     * the app shows it (`show`: put on the layer, those before it passed over), or one that came by a route put on the
+     * layer at once and acknowledged to its sender. All on a thread of its own, its callbacks there too.
+     */
+    static final class Own {
+        private final Stream stream;
+        private final int sid;
+        private final HandlerThread thread;
+        private final Handler handler;
+        private MediaCodec codec;
+        private int gen;
+        private boolean hevc, released;
+        private byte[] config;
+        private int lengthSize = -1, width, height;
+        private boolean needKey = true;
+        /** the decoder's free input buffers; frames waiting for one (annex B, time, key); frames inside it, not out */
+        private final ArrayDeque<Integer> inputs = new ArrayDeque<>();
+        private final ArrayDeque<Object[]> waiting = new ArrayDeque<>();
+        private final ArrayDeque<Double> inside = new ArrayDeque<>();
+        /** decoded and held for the app to show, by time: their output buffers */
+        private final TreeMap<Double, Integer> decoded = new TreeMap<>();
+        /** the frames fed it from a route, by time: their bytes, -1 once let go (acknowledged); their route */
+        private final HashMap<Double, Long> direct = new HashMap<>();
+        private long directRoute;
+        /** the last of them shown (-1 none since the config), and how many came, their bytes (under `this`) */
+        private volatile double directAt = -1;
+        private long directFrames, directBytes;
+        /** what the app was told of them (GL thread: toldDirect) */
+        private double toldAt = -1;
+        private long toldFrames, toldBytes;
+
+        Own(Stream stream) {
+            this.stream = stream;
+            sid = stream.id;
+            thread = new HandlerThread("mbui-stream-" + sid);
+            thread.start();
+            handler = new Handler(thread.getLooper());
+        }
+
+        /** A config (avcC, or hvcC for H.265): the decoder made anew for it, from the next key frame (GL thread). */
+        void configure(boolean hevc, byte[] config, int w, int h) {
+            // (the frames after it the app's to show, whatever their times)
+            directAt = -1;
+            handler.post(() -> {
+                if (released) return;
+                stop();
+                this.hevc = hevc;
+                this.config = config;
+                lengthSize = hevc ? hvccLengthSize(config) : avcLengthSize(config);
+                width = w;
+                height = h;
+                start();
+            });
+        }
+
+        /** Frame `ts` (AVCC), the app's (`route` 0) or a route's (android_host.c): into the decoder, in order. */
+        void feed(byte[] data, boolean key, double ts, long route) {
+            if (route != 0) {
+                synchronized (this) {
+                    directFrames++;
+                    directBytes += data.length;
+                }
+            }
+            handler.post(() -> {
+                if (route != 0) {
+                    if (released) {
+                        routeAck(route, ts);
+                        return;
+                    }
+                    directRoute = route;
+                    direct.put(ts, (long) data.length);
+                }
+                if (released || codec == null || (needKey && !key)) {
+                    letGo(ts);
+                    return;
+                }
+                needKey = false;
+                byte[] b = annexB(data, lengthSize);
+                if (b == null) {
+                    // not a frame it can take: the next key frame asked for
+                    letGo(ts);
+                    needKey = true;
+                    stream.say("b");
+                    return;
+                }
+                waiting.add(new Object[] {b, ts, key});
+                inside.add(ts);
+                pump();
+                // a decoder that holds frames back would wait for more while the sender waits for an acknowledgement:
+                // with two inside, the older one counts as taken
+                if (inside.size() >= 2) letGo(inside.poll());
+            });
+        }
+
+        /** Frame `ts` shown by the app (GL thread): put on the layer, those decoded before it passed over. */
+        void show(double ts) {
+            handler.post(() -> {
+                if (codec == null) return;
+                Integer at = decoded.get(ts);
+                if (ts < directAt || at == null) {
+                    // (one older than a frame of its route shown since, or not one held: passed over)
+                    passOver(ts, ts < directAt);
+                    return;
+                }
+                passOver(ts, false);
+                decoded.remove(ts);
+                put(at);
+            });
+        }
+
+        /** What came by its route since the app was last told ("D TS N BYTES"), "" nothing (GL thread). */
+        String toldDirect() {
+            long frames, bytes;
+            synchronized (this) {
+                frames = directFrames;
+                bytes = directBytes;
+            }
+            double at = directAt;
+            if (at == toldAt && frames == toldFrames) return "";
+            String e = "D " + num(at) + " " + (frames - toldFrames) + " " + (bytes - toldBytes);
+            toldAt = at;
+            toldFrames = frames;
+            toldBytes = bytes;
+            return e;
+        }
+
+        /** The stream closed (GL thread): its decoder stopped, its layer let go. */
+        void release() {
+            handler.post(() -> {
+                released = true;
+                stop();
+                StreamLayer.drop(sid);
+                thread.quitSafely();
+            });
+        }
+
+        // ---- its thread ----
+
+        /** Output buffer `index` put on the layer. */
+        private void put(int index) {
+            try {
+                codec.releaseOutputBuffer(index, true);
+                StreamLayer.rendered(sid);
+            } catch (RuntimeException e) {
+                Host.log("stream " + sid + ": a frame not put on its layer: " + e);
+            }
+        }
+
+        /** The frames held before `ts` (and it, `with`) given back, not shown. */
+        private void passOver(double ts, boolean with) {
+            for (java.util.Iterator<Map.Entry<Double, Integer>> i = decoded.entrySet().iterator(); i.hasNext(); ) {
+                Map.Entry<Double, Integer> e = i.next();
+                if (e.getKey() > ts || (!with && e.getKey() == ts)) break;
+                try {
+                    codec.releaseOutputBuffer(e.getValue(), false);
+                } catch (RuntimeException ignored) {
+                }
+                i.remove();
+            }
+        }
+
+        /** Frame `ts` let go: one fed from a route acknowledged to its sender here, else said. */
+        private void letGo(double ts) {
+            Long d = direct.get(ts);
+            if (d != null) {
+                if (d >= 0) {
+                    direct.put(ts, -1L);
+                    routeAck(directRoute, ts);
+                }
+                return;
+            }
+            stream.say("d " + num(ts));
+        }
+
+        /** The frames waiting put into the decoder's free input buffers. */
+        private void pump() {
+            while (codec != null && !inputs.isEmpty() && !waiting.isEmpty()) {
+                int index = inputs.poll();
+                Object[] f = waiting.poll();
+                byte[] b = (byte[]) f[0];
+                double ts = (Double) f[1];
+                try {
+                    ByteBuffer buffer = codec.getInputBuffer(index);
+                    if (buffer == null || buffer.capacity() < b.length) {
+                        inside.remove(ts);
+                        letGo(ts);
+                        inputs.addFirst(index);
+                        continue;
+                    }
+                    buffer.clear();
+                    buffer.put(b);
+                    codec.queueInputBuffer(index, 0, b.length, (long) ts, (Boolean) f[2] ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
+                } catch (RuntimeException e) {
+                    failed(e);
+                    return;
+                }
+            }
+        }
+
+        /** The decoder failed: let go of what was in it, made anew, the next key frame asked for. */
+        private void failed(Exception e) {
+            Host.log("stream " + sid + ": the decoder failed: " + e);
+            stop();
+            start();
+            stream.say("b");
+        }
+
+        /** A decoder for the config there is (none without one, or where none starts). */
+        private void start() {
+            gen++;
+            needKey = true;
+            if (released || config == null || lengthSize < 0) return;
+            String mime = hevc ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
+            MediaCodec made = null;
+            try {
+                MediaFormat format = MediaFormat.createVideoFormat(mime, Math.max(width, 16), Math.max(height, 16));
+                if (hevc) {
+                    format.setByteBuffer("csd-0", ByteBuffer.wrap(hvccCsd(config)));
+                } else {
+                    format.setByteBuffer("csd-0", ByteBuffer.wrap(avcCsd(config, 0)));
+                    format.setByteBuffer("csd-1", ByteBuffer.wrap(avcCsd(config, 1)));
+                }
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(width * height, 1 << 20));
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
+                format.setInteger(MediaFormat.KEY_PRIORITY, 0);
+                made = H264.decoder(mime, width, height);
+                // (a Snapdragon's: each frame given back as soon as decoded, as H264.start says)
+                String named = made.getName();
+                if (named.startsWith("c2.qti.") || named.startsWith("OMX.qcom.")) {
+                    format.setInteger("vendor.qti-ext-dec-picture-order.enable", 1);
+                    format.setInteger("vendor.qti-ext-dec-low-latency.enable", 1);
+                }
+                final int g = gen;
+                made.setCallback(callback(g), handler);
+                made.configure(format, StreamLayer.surface(sid, width, height), null, 0);
+                made.start();
+                codec = made;
+                Host.log("stream " + sid + ": " + named + " onto its layer, " + width + "x" + height);
+            } catch (Exception e) {
+                Host.log("stream " + sid + ": no " + mime + " decoder: " + e);
+                if (made != null) {
+                    try {
+                        made.release();
+                    } catch (Exception ignored) {
+                    }
+                }
+                codec = null;
+            }
+        }
+
+        /** The decoder stopped: what was waiting or inside it let go (the app's said, a route's acknowledged). */
+        private void stop() {
+            if (codec != null) {
+                try {
+                    codec.stop();
+                } catch (Exception ignored) {
+                }
+                try {
+                    codec.release();
+                } catch (Exception ignored) {
+                }
+            }
+            codec = null;
+            gen++;
+            double max = Double.NEGATIVE_INFINITY, routedMax = Double.NEGATIVE_INFINITY;
+            for (Double t : inside) {
+                Long d = direct.get(t);
+                if (d == null) max = Math.max(max, t);
+                else if (d >= 0) routedMax = Math.max(routedMax, t);
+            }
+            inside.clear();
+            waiting.clear();
+            inputs.clear();
+            decoded.clear();
+            direct.clear();
+            if (max != Double.NEGATIVE_INFINITY) stream.say("d " + num(max));
+            if (routedMax != Double.NEGATIVE_INFINITY) routeAck(directRoute, routedMax);
+            needKey = true;
+        }
+
+        private MediaCodec.Callback callback(int g) {
+            return new MediaCodec.Callback() {
+                @Override
+                public void onInputBufferAvailable(MediaCodec c, int index) {
+                    if (g != gen || c != codec) return;
+                    inputs.add(index);
+                    pump();
+                }
+
+                @Override
+                public void onOutputBufferAvailable(MediaCodec c, int index, MediaCodec.BufferInfo info) {
+                    if (g != gen || c != codec) return;
+                    if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0 || info.size <= 0) {
+                        try {
+                            c.releaseOutputBuffer(index, false);
+                        } catch (RuntimeException ignored) {
+                        }
+                        return;
+                    }
+                    double ts = info.presentationTimeUs;
+                    while (!inside.isEmpty() && inside.peek() <= ts) inside.poll();
+                    Long d = direct.get(ts);
+                    if (d != null) {
+                        // one fed from a route: those before it done with
+                        direct.keySet().removeIf(t -> t <= ts);
+                        if (d < 0) {
+                            c.releaseOutputBuffer(index, false);
+                            return;
+                        }
+                        long route = directRoute;
+                        if (routed(route, sid)) {
+                            // shown at once, and acknowledged: what the app said decoded before it passed over
+                            passOver(ts, true);
+                            put(index);
+                            directAt = ts;
+                            routeAck(route, ts);
+                            return;
+                        }
+                    }
+                    decoded.put(ts, index);
+                    stream.say("f " + num(ts) + " " + width + " " + height);
+                }
+
+                @Override
+                public void onError(MediaCodec c, MediaCodec.CodecException e) {
+                    if (g != gen || c != codec) return;
+                    failed(e);
+                }
+
+                @Override
+                public void onOutputFormatChanged(MediaCodec c, MediaFormat f) {}
+            };
+        }
+    }
+
+    /** An hvcC's NAL length size (ISO/IEC 14496-15 8.3.3), -1 when it is not one. */
+    static int hvccLengthSize(byte[] b) {
+        if (b.length < 23 || b[0] != 1) return -1;
+        int n = (b[21] & 3) + 1;
+        return n == 3 ? -1 : n;
+    }
+
+    /** An hvcC's parameter sets (VPS, SPS, PPS), each after a start code (csd-0); null when it is not one. */
+    static byte[] hvccCsd(byte[] b) {
+        if (hvccLengthSize(b) < 0) return null;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        int arrays = b[22] & 0xff, at = 23;
+        for (int a = 0; a < arrays; a++) {
+            if (at + 3 > b.length) return null;
+            int units = ((b[at + 1] & 0xff) << 8) | (b[at + 2] & 0xff);
+            at += 3;
+            for (int i = 0; i < units; i++) {
+                if (at + 2 > b.length) return null;
+                int len = ((b[at] & 0xff) << 8) | (b[at + 1] & 0xff);
+                at += 2;
+                if (len == 0 || at + len > b.length) return null;
+                out.write(0);
+                out.write(0);
+                out.write(0);
+                out.write(1);
+                out.write(b, at, len);
+                at += len;
+            }
+        }
+        return out.toByteArray();
     }
 
     // ---- JPEG ----

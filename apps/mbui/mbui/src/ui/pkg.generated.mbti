@@ -137,6 +137,8 @@ pub fn gif_frames(Bytes) -> GifFrames?
 
 pub fn h264_here() -> Bool
 
+pub fn h265_here() -> Bool
+
 pub fn haptic(Haptic) -> Unit
 
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
@@ -1087,6 +1089,7 @@ pub fn Ctx::native(Self, NativeView, w? : Size, h? : Size, content? : (Double, D
 pub fn[P] Ctx::nav(Self, Nav[P], (P) -> Unit, bg? : Int64, edge? : Double, floor? : Int32, takes_back? : Bool) -> Int32
 pub fn[P] Ctx::nav_flat(Self, Nav[P], (P) -> Unit, bg? : Int64, stacks? : Bool, takes_back? : Bool) -> Int32
 pub fn Ctx::node_bg(Self, Int32) -> Int64
+pub fn Ctx::node_drawn_across(Self, Int32) -> (Double, Double)
 pub fn Ctx::node_id(Self, Int32) -> Int32
 pub fn Ctx::node_is_list(Self, Int32) -> Bool
 pub fn Ctx::node_pad(Self, Int32) -> (Double, Double, Double, Double)
@@ -1176,7 +1179,7 @@ pub fn Ctx::stick(Self, Int32, Double) -> Unit
 pub fn Ctx::still(Self) -> Bool
 pub fn Ctx::stop_wheel(Self, Int32) -> Unit
 pub fn Ctx::stratum(Self, Int32, Stratum) -> Unit
-pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : Fit, radius? : Double, at? : (Double, Double, Double, Double)?) -> Int32
+pub fn Ctx::stream(Self, Stream, w? : Size, h? : Size, fit? : Fit, radius? : Double, at? : (Double, Double, Double, Double)?, layer? : Bool) -> Int32
 pub fn Ctx::style_size(Self, TextStyle) -> (Double, Double)
 pub fn Ctx::take_back(Self, () -> Unit) -> Unit
 pub fn Ctx::take_key(Self, Int32, mods? : Int32) -> Bool
@@ -2147,9 +2150,13 @@ pub fn Stream::close(Self) -> Unit
 pub fn Stream::direct_count(Self) -> (Int32, Int32)
 pub fn Stream::frame(Self, Bytes, Bool, Double) -> Unit
 pub fn Stream::h264(Self, Bytes, Int32, Int32) -> Unit
+pub fn Stream::hevc(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::id(Self) -> Int32
 pub fn Stream::jpeg(Self, Bytes, Double) -> Unit
-pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Self
+pub fn Stream::layered(Self) -> Bool
+pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit, layer? : Bool, quiet? : ((Double) -> Bool)?) -> Self
+pub fn Stream::pointer_at(Self, (Double, Double)?) -> Unit
+pub fn Stream::pointer_image(Self, String, () -> Bytes, Double, Double, Double, Double) -> Unit
 pub fn Stream::route(Self, Int32, Double, video~ : Bool, audio~ : Bool) -> Unit
 pub fn Stream::shown_any(Self) -> Bool
 pub fn Stream::shown_at(Self) -> Double?
@@ -2260,6 +2267,7 @@ pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
 pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]
 pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
+pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_lines(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_notches(Self) -> Array[(Int32, Double, Double, Double, Double)]
@@ -2398,6 +2406,7 @@ pub fn Tester::set_env(Self, String, String) -> Unit
 pub fn Tester::set_font_scale(Self, Double) -> Unit
 pub fn Tester::set_frame_period(Self, Double) -> Unit
 pub fn Tester::set_frame_times(Self, Array[Double]) -> Unit
+pub fn Tester::set_h265(Self, Bool) -> Unit
 pub fn Tester::set_ime_inset(Self, Double) -> Unit
 pub fn Tester::set_keyboard(Self, Bool) -> Unit
 pub fn Tester::set_local_fonts(Self, String) -> Unit
@@ -2410,6 +2419,7 @@ pub fn Tester::set_reduce_motion(Self, Bool) -> Unit
 pub fn Tester::set_reduce_transparency(Self, Bool) -> Unit
 pub fn Tester::set_stream_audio(Self, Bool) -> Unit
 pub fn Tester::set_stream_feeds(Self, Bool) -> Unit
+pub fn Tester::set_stream_layers(Self, Bool) -> Unit
 pub fn Tester::set_unreadable_font(Self, String) -> Unit
 pub fn Tester::set_wall(Self, Double) -> Unit
 pub fn Tester::set_window_inset(Self, Bool) -> Unit

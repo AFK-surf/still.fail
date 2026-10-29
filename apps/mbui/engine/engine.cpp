@@ -45,6 +45,9 @@ void sf_shell_call(const void* shell, uint64_t id, const char* op, const uint8_t
 uint8_t* sf_shell_call_sync(const void* shell, const char* op, const uint8_t* json, size_t json_len, size_t* out_len);
 void sf_free(uint8_t* ptr, size_t len);
 void sf_shell_stop(void* shell);
+void sf_shell_set_say(const void* shell, void (*say)(void*, const uint8_t*, size_t, const uint8_t*, size_t), void* ctx);
+void sf_shell_set_media(const void* shell, uint8_t (*media)(void*, uint64_t, uint8_t, uint8_t, uint64_t, uint64_t, const uint8_t*, size_t), void* ctx);
+uint8_t sf_shell_screen_ack(const void* shell, uint64_t call, double ts);
 int32_t sf_utc_offset_min(double at_ms);
 #ifdef __ANDROID__
 uint8_t* sf_shell_stats(size_t* out_len);
@@ -199,7 +202,35 @@ class Engine {
       std::lock_guard<std::mutex> lock(gate_->mutex);
       gate_->engine = nullptr;
     }
-    if (shell_) sf_shell_stop(shell_);
+    void* shell;
+    {
+      std::lock_guard<std::mutex> lock(tapMutex_);
+      shell = shell_;
+      shell_ = nullptr;
+    }
+    if (shell) sf_shell_stop(shell);
+  }
+
+  /// Where the shell says a tapped remote screen's records (sf_engine_tap): set on it now if it has started, else as
+  /// it starts.
+  void tap(sf_engine_said say, sf_engine_media media, void* ctx) {
+    std::lock_guard<std::mutex> lock(tapMutex_);
+    say_ = say;
+    media_ = media;
+    tapCtx_ = ctx;
+    tapShell();
+  }
+
+  /// (under tapMutex_) the shell told where it says a tapped view's records, once both are here
+  void tapShell() {
+    if (!shell_ || !say_) return;
+    sf_shell_set_say(shell_, say_, tapCtx_);
+    if (media_) sf_shell_set_media(shell_, media_, tapCtx_);
+  }
+
+  int screenAck(uint64_t call, double ts) {
+    std::lock_guard<std::mutex> lock(tapMutex_);
+    return shell_ ? sf_shell_screen_ack(shell_, call, ts) : 0;
   }
 
   /// An answer (the shell's, from one of its threads, or the app's): a task for the loop.
@@ -358,7 +389,12 @@ class Engine {
   void run() {
     if (host_.thread) host_.thread(host_.ctx);
     double t0 = steadyMs();
-    shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
+    void* shell = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
+    {
+      std::lock_guard<std::mutex> lock(tapMutex_);
+      shell_ = shell;
+      tapShell();
+    }
     if (!shell_) {
       fatal("the core's files cannot be kept: " + dataDir_);
     } else if (host_.shell) {
@@ -444,6 +480,11 @@ class Engine {
   bool beta_;
   sf_engine_host host_;
   void* shell_ = nullptr;
+  // where a tapped remote screen's records go (sf_engine_tap), and shell_ as it is set and let go, under tapMutex_
+  std::mutex tapMutex_;
+  sf_engine_said say_ = nullptr;
+  sf_engine_media media_ = nullptr;
+  void* tapCtx_ = nullptr;
   Gate* gate_ = new Gate{{}, this};
 #ifdef _WIN32
   HANDLE thread_ = nullptr;
@@ -520,6 +561,14 @@ extern "C" SF_ENGINE_API void sf_engine_complete(sf_engine* e, uint64_t id, cons
 extern "C" SF_ENGINE_API void sf_engine_stop(sf_engine* e) {
   e->engine->stop();
   delete e;
+}
+
+extern "C" SF_ENGINE_API void sf_engine_tap(sf_engine* e, sf_engine_said say, sf_engine_media media, void* ctx) {
+  e->engine->tap(say, media, ctx);
+}
+
+extern "C" SF_ENGINE_API int sf_engine_screen_ack(sf_engine* e, uint64_t call, double ts) {
+  return e->engine->screenAck(call, ts);
 }
 
 #ifdef __ANDROID__

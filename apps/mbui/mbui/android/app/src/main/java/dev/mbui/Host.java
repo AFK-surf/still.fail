@@ -250,6 +250,25 @@ final class Host {
         if (view != null) view.wantFrame();
     }
 
+    /** A post told on the GL thread and not taken there yet (posted). */
+    private static final java.util.concurrent.atomic.AtomicBoolean postedOwed = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * Something posted for the app's next frame (post.h's mb_post, android_host.c mb_post_wake: any thread): the app
+     * told on the GL thread, between frames (Native.posted), once until it has taken what came; it takes what changes
+     * only signals then, and asks for a frame only where something is left for one (ui's messages_between). A core's
+     * message that changes nothing drawn (a remote screen's acknowledgement, its pointer's move) builds nothing.
+     */
+    static void posted() {
+        MBView v = view;
+        if (v == null) return;
+        if (!postedOwed.compareAndSet(false, true)) return;
+        v.queueEvent(() -> {
+            postedOwed.set(false);
+            Native.posted();
+        });
+    }
+
     /**
      * The frame `ms` after the one being built (its time, the vsync's), else after now: drawn at the first vsync at or
      * past it (MBView.wakeAt), asked for two display frames before.

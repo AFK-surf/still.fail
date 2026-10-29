@@ -9,6 +9,14 @@
 // loopback listener, dev.mbui.Loopback; `picked.*`: a picked file read a part at a time) go to a dev.mbui.CoreHost
 // (android/), which answers on threads of its own through the engine's sf_engine_complete.
 //
+// A remote screen's view the core taps (client/shell `istream.tap`) is read by the shell itself: its picture's and
+// sound's messages come to the app straight from the shell's threads (sf_engine_tap: shell_say, on_message as the
+// core's), each record offered first to the app's host (shell_media: mbui's mb_stream_route_take, handed over by
+// src/sfcore/android_engine.c), which takes those of a view the app routed to a stream (decoded, shown and
+// acknowledged there, past the app's queue); the app acknowledges such a view's frames through the shell too
+// (mb_core_screen_ack). MBUI_PROBE=1 (or `adb shell setprop debug.mbui.probe 1`) says what the shell did of them every
+// 5 s (`PROBE core: …`).
+//
 // MB_CORE_TRACE=1 in the app's environment says what the core says (its first 400 bytes) and the app's calls in the
 // log.
 //
@@ -26,6 +34,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/system_properties.h>
+#include <unistd.h>
 #include "core_api.h"
 #include "engine.h"
 
@@ -50,6 +60,12 @@ static struct {
 
 // starting, taking and stopping a core: the app's (GL) thread and a push's
 static pthread_mutex_t A_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// What the shell says and offers of a tapped view, from its threads (shell_say, shell_media), while a core runs:
+// `tap_open` under T_lock, closed before the engine stops, so nothing reaches the app after.
+static pthread_mutex_t T_lock = PTHREAD_MUTEX_INITIALIZER;
+static int tap_open;
+static mb_core_media_fn media_take;
 
 // A thread this attached to the VM (the core's, as it first calls the app) is detached as it ends: a thread that ends
 // attached aborts the process.
@@ -161,6 +177,39 @@ static void engine_say(void *ctx, const char *json, size_t len, const uint8_t *b
     return;
   }
   if (A.on_message) A.on_message(json, len, NULL, 0, A.ctx);
+}
+
+// A tapped remote screen's message for the app, from the shell's threads (sf_engine_tap), as the core's would be said.
+static void shell_say(void *ctx, const uint8_t *json, size_t len, const uint8_t *bytes, size_t blen) {
+  (void)ctx;
+  static const uint8_t none = 0;
+  pthread_mutex_lock(&T_lock);
+  if (tap_open && A.on_message) A.on_message((const char *)json, len, bytes ? (blen ? bytes : &none) : NULL, blen, A.ctx);
+  pthread_mutex_unlock(&T_lock);
+}
+
+// A tapped remote screen's record offered to the app's host before it is said (client/shell `Media`): whether it took it.
+static uint8_t shell_media(void *ctx, uint64_t call, uint8_t kind, uint8_t key, uint64_t seq, uint64_t ts,
+                           const uint8_t *bytes, size_t len) {
+  (void)ctx;
+  int took = 0;
+  pthread_mutex_lock(&T_lock);
+  mb_core_media_fn take = media_take;
+  if (tap_open && take && A.on_message) took = take(call, kind, key, seq, ts, bytes, len);
+  pthread_mutex_unlock(&T_lock);
+  return took ? 1 : 0;
+}
+
+void mb_core_route_media(mb_core_media_fn take) {
+  pthread_mutex_lock(&T_lock);
+  media_take = take;
+  pthread_mutex_unlock(&T_lock);
+}
+
+int mb_core_screen_ack(double call, double ts) {
+  sf_engine *e = A.engine;
+  if (!e || call < 1) return 0;
+  return sf_engine_screen_ack(e, (uint64_t)call, ts);
 }
 
 // A call only the app does, to its CoreHost (onApp), which answers through complete; one it does not take, failed.
@@ -361,6 +410,10 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
     A.listener = NULL;
     say_fatal("the core's thread did not start");
   } else {
+    pthread_mutex_lock(&T_lock);
+    tap_open = 1;
+    pthread_mutex_unlock(&T_lock);
+    sf_engine_tap(A.engine, shell_say, shell_media, NULL);
     (*env)->CallVoidMethod(env, A.listener, A.started, (jlong)(intptr_t)A.engine);
     cleared(env);
     CORE_LOG("core: started in Hermes (%d bytes of bytecode), its files in %s, cloud %s%s", (int)size, data_dir,
@@ -374,7 +427,10 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
 
 static void core_stop(void);
 
+static void probe_taps(void);
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
+  probe_taps();
   pthread_mutex_lock(&A_lock);
   // one started ahead with another still.fail cloud or channel than the app's (a run given its own): not the app's
   if (A.engine && !A.on_message && (strcmp(A.origin, cloud_origin) != 0 || A.beta != beta)) {
@@ -402,6 +458,9 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
 }
 
 static void core_stop(void) {
+  pthread_mutex_lock(&T_lock);
+  tap_open = 0;
+  pthread_mutex_unlock(&T_lock);
   JNIEnv *env = core_env();
   (*env)->CallVoidMethod(env, A.listener, A.closing);
   cleared(env);
@@ -456,4 +515,50 @@ int mb_core_secure_test(void) {
   if (!core_init(env)) return 0;
   (*env)->CallStaticVoidMethod(env, A.core_host, A.secure_test);
   return !cleared(env);
+}
+
+// MBUI_PROBE=1, or `adb shell setprop debug.mbui.probe 1` (a release build takes no environment of a run's): what the
+// shell did of remote screens every 5 s (`PROBE core: tap.views=… tap.video=… tap.direct.video=… …`: those read, those
+// the app's host took itself rather than the app's queue, the acks it sent itself, and the reads of streams the core
+// asked meanwhile), as apple_core.mm's: whether the views are tapped and their frames go straight to the decoder.
+static long long stat_count(const char *json, const char *key) {
+  char k[64];
+  snprintf(k, sizeof k, "\"%s\":[", key);
+  const char *at = strstr(json, k);
+  return at ? atoll(at + strlen(k)) : 0;
+}
+
+static void *probe_loop(void *unused) {
+  (void)unused;
+  static const char *keys[] = {"tap.views", "tap.video", "tap.direct.video", "tap.audio", "tap.direct.audio", "tap.acks",
+                               "istream.read", "istream.write"};
+  enum { N = sizeof keys / sizeof keys[0] };
+  long long was[N] = {0};
+  for (;;) {
+    sleep(5);
+    size_t n = 0;
+    char *stats = sf_engine_shell_stats(&n);
+    if (!stats) continue;
+    char line[512];
+    int at = snprintf(line, sizeof line, "PROBE core:");
+    for (int i = 0; i < N && at < (int)sizeof line; i++) {
+      long long c = stat_count(stats, keys[i]);
+      at += snprintf(line + at, sizeof line - (size_t)at, " %s=%lld", keys[i], c - was[i]);
+      was[i] = c;
+    }
+    free(stats);
+    CORE_LOG("%s", line);
+  }
+  return NULL;
+}
+
+static void probe_taps(void) {
+  static int started;
+  if (started) return;
+  started = 1;
+  const char *env = getenv("MBUI_PROBE");
+  char prop[PROP_VALUE_MAX] = "";
+  if (!(env && *env && strcmp(env, "0") != 0) && !(__system_property_get("debug.mbui.probe", prop) > 0 && strcmp(prop, "0") != 0)) return;
+  pthread_t t;
+  if (pthread_create(&t, NULL, probe_loop, NULL) == 0) pthread_detach(t);
 }

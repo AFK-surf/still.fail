@@ -68,6 +68,20 @@ SF_ENGINE_API void sf_engine_complete(sf_engine *engine, uint64_t id, const char
 /// host after it returns, and `engine` is gone. Not from the core's thread.
 SF_ENGINE_API void sf_engine_stop(sf_engine *engine);
 
+/// A remote screen's frames, sound and their configs, read by the shell itself once the core taps a view of one
+/// (client/shell `istream.tap`): `say` gets each message for the app as the core's `say` would (its JSON, the bytes
+/// beside it), `media` is offered each record first, as it is (client/shell's `Media`: call, kind, key, seq, ts, bytes;
+/// 1 when it took it, nothing said then). From the shell's threads, a view's in order; `media` may be NULL. Set once,
+/// any thread, before or after the core's thread has started the shell; nothing is said after sf_engine_stop.
+typedef void (*sf_engine_said)(void *ctx, const uint8_t *json, size_t len, const uint8_t *bytes, size_t blen);
+typedef uint8_t (*sf_engine_media)(void *ctx, uint64_t call, uint8_t kind, uint8_t key, uint64_t seq, uint64_t ts,
+                                   const uint8_t *bytes, size_t len);
+SF_ENGINE_API void sf_engine_tap(sf_engine *engine, sf_engine_said say, sf_engine_media media, void *ctx);
+
+/// A remote screen's frame `ts` acknowledged straight to its station by the shell, where it reads the view of the app's
+/// call `call` itself (sf_engine_tap): 1, else 0 (the app asks the core). Any thread.
+SF_ENGINE_API int sf_engine_screen_ack(sf_engine *engine, uint64_t call, double ts);
+
 #ifdef __ANDROID__
 /// The core's JS sampled for `seconds` (the runtime is made registered for it; nothing is sampled until this is asked),
 /// its trace (Chrome's format) written to `path` then: what the core spends its time on, in the app as shipped.

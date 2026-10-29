@@ -138,6 +138,8 @@ pub fn gpu_ms() -> Double
 
 pub fn h264_here() -> Bool
 
+pub fn h265_here() -> Bool
+
 pub fn haptic(Int32) -> Unit
 
 pub let haptic_confirm : Int32
@@ -338,11 +340,19 @@ pub fn stream_frame(Int32, Bytes, Bool, Double) -> Unit
 
 pub fn stream_h264(Int32, Bytes, Int32, Int32) -> Unit
 
+pub fn stream_hevc(Int32, Bytes, Int32, Int32) -> Unit
+
 pub fn stream_jpeg(Int32, Bytes, Double) -> Unit
+
+pub fn stream_layers() -> Bool
 
 pub fn stream_next(Int32) -> String
 
 pub fn stream_open() -> Int32
+
+pub fn stream_pointer(Int32, Bytes, Double, Double, Double, Double) -> Unit
+
+pub fn stream_pointer_at(Int32, Double, Double, Bool) -> Unit
 
 pub fn stream_show(Int32, Double) -> Unit
 
@@ -803,7 +813,12 @@ pub(open) trait Host {
   fn nt_text(Self, Int32) -> String = _
   fn st_audio_here(Self) -> Int32 = _
   fn st_audio(Self, Int32, Bytes) -> Unit = _
+  fn st_layers(Self) -> Int32 = _
+  fn st_pointer(Self, Int32, Bytes, Double, Double, Double, Double) -> Unit = _
+  fn st_pointer_at(Self, Int32, Double, Double, Int32) -> Unit = _
   fn st_direct(Self, Int32, Double, Double, Int32) -> Unit = _
+  fn st_h265_here(Self) -> Int32 = _
+  fn st_hevc(Self, Int32, Bytes, Int32, Int32) -> Unit = _
   fn st_open(Self) -> Int32 = _
   fn st_h264(Self, Int32, Bytes, Int32, Int32) -> Unit = _
   fn st_frame(Self, Int32, Bytes, Int32, Double) -> Unit = _
