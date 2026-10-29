@@ -873,6 +873,7 @@ pub fn Ctx::editor(
   n.line_h = line
   n.line_trim = trim
   n.clip = true
+  n.wrap = max_lines > 1
   n.text = placeholder
   n.shorter = shorter
   if plain {
@@ -1215,6 +1216,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     upstream: -1,
     floating: None,
     scroll: 0.0,
+    scroll_x: 0.0,
     followed: (-1, -1, -1),
     pasted: None,
     limit: 0,
@@ -1295,6 +1297,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.upstream = -1
   if text == "" {
     st.scroll = 0.0
+    st.scroll_x = 0.0
   }
   // the caret shown at once where it is put; and a frame to draw it, written from wherever it was (an answer between
   // frames, a fiber, a timer), as the input's own changes have
