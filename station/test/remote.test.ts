@@ -16,6 +16,7 @@ import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePa
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
+import { bytesOf, withBytes } from "../src/mesh/bus.ts";
 
 const dirs: string[] = [];
 const cleanup: (() => Promise<void> | void)[] = [];
@@ -93,6 +94,12 @@ function station(options: { clock?: Clock.Clock; meshWaitMs?: number; dir?: stri
   return { dir, store, jobs, remote, told };
 }
 
+/// `request` as the other station takes it from the transport: its JSON, and the bytes after it.
+const overWire = (request: Json) => {
+  const taken = JSON.parse(JSON.stringify(request));
+  const bytes = bytesOf(request);
+  return bytes === null ? taken : withBytes(taken, bytes);
+};
 const b64 = (s: string) => Buffer.from(s).toString("base64");
 const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
@@ -346,7 +353,7 @@ describe("remote", { concurrency: true }, () => {
       asked.push(request);
       if (target === "" && request.method === "peers") return { workspace: "ws", stations: roster, current: true };
       if (target !== "B") throw new Error("peer is not another station in this workspace");
-      const answer = await answerPeer(b.remote, workspace ?? "ws", "A", JSON.parse(JSON.stringify(request)));
+      const answer = await answerPeer(b.remote, workspace ?? "ws", "A", overWire(request));
       if ("error" in answer) throw new Refused(answer.error);
       return answer.result;
     };
@@ -356,7 +363,7 @@ describe("remote", { concurrency: true }, () => {
       if (target !== "A") throw new Error("peer is not another station in this workspace");
       if (!back.reach) throw new Error("not reached");
       back.told.push(request);
-      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", JSON.parse(JSON.stringify(request)));
+      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", overWire(request));
       if ("error" in answer) throw new Refused(answer.error);
       return answer.result;
     });
@@ -564,7 +571,7 @@ describe("remote", { concurrency: true }, () => {
     back.reach = true;
     const again = station({ clock, dir: b.dir, store: b.store, jobs: b.jobs });
     again.remote.attach(async (_target, workspace, request) => {
-      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", JSON.parse(JSON.stringify(request)));
+      const answer = await answerPeer(a.remote, workspace ?? "ws", "B", overWire(request));
       if ("error" in answer) throw new Refused(answer.error);
       return answer.result;
     });
