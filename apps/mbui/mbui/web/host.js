@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 56;
+  const INST = 60;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -179,12 +179,15 @@
   layout(location=11) in vec4 a_orc;
   layout(location=12) in vec4 a_ors;
   layout(location=13) in vec4 a_fade;
+  layout(location=14) in vec4 a_fadex;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos; out vec2 v_cpos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
   flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr; flat out vec4 v_oclip; flat out vec4 v_orc; flat out vec4 v_ors;
-  flat out vec4 v_fade;
+  // how far each pixel is into its fades (scene.mbt 52-59: from its left, top, right, foot; 1 and past: whole), worked
+  // out where it is drawn at its corners and taken across it as it goes straight
+  out vec4 v_ramp;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -200,14 +203,17 @@
     if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
     gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
     v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;
-    v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors; v_fade = a_fade;
+    v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;
+    vec2 cq = a_rot.w > 0.5 ? at : pos;
+    v_ramp = vec4(a_fadex.y > 0.0 ? (cq.x - a_fadex.x) / a_fadex.y : 2.0, a_fade.y > 0.0 ? (cq.y - a_fade.x) / a_fade.y : 2.0,
+      a_fadex.w > 0.0 ? (a_fadex.z - cq.x) / a_fadex.w : 2.0, a_fade.w > 0.0 ? (a_fade.z - cq.y) / a_fade.w : 2.0);
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos; in vec2 v_cpos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
   flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;
-  flat in vec4 v_fade;
+  in vec4 v_ramp;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
@@ -219,8 +225,8 @@
   uniform vec4 u_shape[8];
   uniform vec4 u_rad[2];
   uniform int u_n;
-  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2044 fours
-  // (146 instances) a row
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours
+  // (136 instances) a row
   uniform highp sampler2D u_segs;
   out vec4 o;
   // corner.sl begin (scripts/chk corner-sl: not edited here)
@@ -405,11 +411,11 @@
       float a;
       if (v_p.x > 0.0) {
         float d = 1e9;
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 14 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2044, t / 2044), 0), v_rect, p)); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 15 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p)); }
         a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);
       } else {
         vec4 w = vec4(0.0);
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 14 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2044, t / 2044), 0), v_rect, p, u_scale); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 15 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p, u_scale); }
         a = mb_path_cover(w, v_c2.z);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -537,9 +543,9 @@
       cover *= clip_cover(cp, v_oclip, v_orc, v_ors, u_scale);
       if (cover <= 0.0) discard;
     }
-    // and faded out towards a cut, each pixel by where it is (scene.mbt 52-55)
-    if (v_fade.y > 0.0) cover *= clamp((cp.y - v_fade.x) / v_fade.y, 0.0, 1.0);
-    if (v_fade.w > 0.0) cover *= clamp((v_fade.z - cp.y) / v_fade.w, 0.0, 1.0);
+    // and faded out towards a cut, each pixel by where it is (scene.mbt 52-59)
+    vec4 ramp = clamp(v_ramp, 0.0, 1.0);
+    cover *= ramp.x * ramp.y * ramp.z * ramp.w;
     if (cover <= 0.0) discard;
     shade(p);
     o *= cover;
@@ -833,8 +839,8 @@
   }
 
   // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
-  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (146 instances' 14), as many rows as they take.
-  const SEGS_ROW = 2044;
+  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (136 instances' 15), as many rows as they take.
+  const SEGS_ROW = 2040;
   let segsTex = null, segsRows = 0;
   function segsUpload(n) {
     let d = n;

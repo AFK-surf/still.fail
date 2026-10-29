@@ -145,6 +145,13 @@ priv struct Drawn {
   mut bottom : Double
   /// drawn only as its top this tall (-1 whole)
   mut top : Double
+  /// drawn only as its right this wide, as its left this wide (-1 whole)
+  mut right : Double
+  mut left : Double
+  /// the node whose edges what it draws fades out towards, by each pixel (-1 none), and how far before each it does
+  /// (start, top, end, foot: Ctx::fade_to)
+  mut fade_of : Int
+  mut fades : (Double, Double, Double, Double)
   /// how far before where it is cut it fades out to the cut (0: cut hard)
   mut cut_soft : Double
   /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
@@ -397,6 +404,10 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     keep_rel: -1,
     bottom: -1.0,
     top: -1.0,
+    right: -1.0,
+    left: -1.0,
+    fade_of: -1,
+    fades: (0.0, 0.0, 0.0, 0.0),
     cut_soft: 0.0,
     ground: None,
     ground_bg: None,
@@ -577,6 +588,48 @@ pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) ->
 }
 
 ///|
+/// What node `i` draws fading out towards the edges of node `of` (what cuts it: the box it scrolls in, the window it
+/// rolls through), each pixel by where it is, over `start`, `top`, `end` and `foot` before each (0: up to it whole).
+/// Not its own ground, which `of`'s is: what it holds, where it goes on past what shows of it (the user, 2026-10-30:
+/// 「现在有很多粗暴裁剪的」).
+pub fn Ctx::fade_to(
+  self : Ctx,
+  i : Int,
+  of : Int,
+  start? : Double = 0.0,
+  top? : Double = 0.0,
+  end? : Double = 0.0,
+  foot? : Double = 0.0,
+) -> Unit {
+  let e = self.drawn_of(i)
+  if start > 0.0 || top > 0.0 || end > 0.0 || foot > 0.0 {
+    e.fade_of = of
+    e.fades = (start, top, end, foot)
+  } else {
+    e.fade_of = -1
+    e.fades = (0.0, 0.0, 0.0, 0.0)
+  }
+}
+
+///|
+/// Node `i` drawn only as its left `w` (what is past it cut off, as words in a window opening to their end show), and
+/// tapped whole, where it is laid out. `soft`: as cut_to_bottom's, across.
+pub fn Ctx::cut_to_left(self : Ctx, i : Int, w : Double, soft? : Double = 0.0) -> Unit {
+  let e = self.drawn_of(i)
+  e.left = dmax(w, 0.0)
+  e.cut_soft = soft
+}
+
+///|
+/// Node `i` drawn only as its right `w` (what is before it cut off), and tapped whole, where it is laid out. `soft`: as
+/// cut_to_bottom's, across.
+pub fn Ctx::cut_to_right(self : Ctx, i : Int, w : Double, soft? : Double = 0.0) -> Unit {
+  let e = self.drawn_of(i)
+  e.right = dmax(w, 0.0)
+  e.cut_soft = soft
+}
+
+///|
 /// What node `i` draws this frame (as it looks) kept in `into`, relative to node `rel`'s corner (its list's, for a
 /// row that may leave).
 pub fn Ctx::keep_drawing(self : Ctx, i : Int, rel : Int, into : Drawing) -> Unit {
@@ -721,8 +774,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   let keep = e.keep is Some(_)
   let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
-    (e.top >= 0.0 && e.top < self.nodes[i].fh)
-  if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.part == 0 && e.row == 0 {
+    (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
+    (e.right >= 0.0 && e.right < self.nodes[i].fw) ||
+    (e.left >= 0.0 && e.left < self.nodes[i].fw)
+  if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 && e.part == 0 && e.row == 0 {
     return false
   }
   // (drawn otherwise than it is tapped: moved, or over everything, or cut)
@@ -815,10 +870,12 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     let k = clip_top()
     let top = clip_stack[k + 1]
     let bottom = clip_stack[k + 3]
+    let left = clip_stack[k]
+    let right = clip_stack[k + 2]
     push_clip(
-      clip_stack[k],
+      if e.right >= 0.0 { dmax(left, n.x + n.fw - e.right) } else { left },
       if e.bottom >= 0.0 { dmax(top, n.y + n.fh - e.bottom) } else { top },
-      clip_stack[k + 2],
+      if e.left >= 0.0 { dmin(right, n.x + e.left) } else { right },
       if e.top >= 0.0 { dmin(bottom, n.y + e.top) } else { bottom },
     )
   }
@@ -866,22 +923,48 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
     }
   }
-  // cut softly: what it draws fading out towards where it is cut, each pixel by where it is (the renderers: 52-55), so
+  // cut softly: what it draws fading out towards where it is cut, each pixel by where it is (the renderers: 52-59), so
   // that a line of words half out shows its half, fading to the cut, not the whole line fainter (2026-10-30: 「带渐隐，
   // 但不是整行渐隐」)
   if cutting && e.cut_soft > 0.0 {
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
     let foot = e.top >= 0.0 && e.top < n.fh
+    let start = e.right >= 0.0 && e.right < n.fw
+    let end = e.left >= 0.0 && e.left < n.fw
     for k in i0..<self.ninst {
-      inst_fade(
-        a,
-        k * inst_size,
-        n.y + n.fh - e.bottom + dy,
-        if top { e.cut_soft } else { 0.0 },
-        n.y + e.top + dy,
-        if foot { e.cut_soft } else { 0.0 },
-      )
+      let b = k * inst_size
+      if top || foot {
+        inst_fade(
+          a,
+          b,
+          n.y + n.fh - e.bottom + dy,
+          if top { e.cut_soft } else { 0.0 },
+          n.y + e.top + dy,
+          if foot { e.cut_soft } else { 0.0 },
+        )
+      }
+      if start || end {
+        inst_fade_across(
+          a,
+          b,
+          n.x + n.fw - e.right + dx,
+          if start { e.cut_soft } else { 0.0 },
+          n.x + e.left + dx,
+          if end { e.cut_soft } else { 0.0 },
+        )
+      }
+    }
+  }
+  // fading towards the edges of what cuts it, where they are (laid out: what moves them moves it after)
+  if e.fade_of >= 0 && e.fade_of < self.count {
+    let a = self.inst
+    let o = self.nodes[e.fade_of]
+    let (start, top, end, foot) = e.fades
+    for k in i0..<self.ninst {
+      let b = k * inst_size
+      inst_fade(a, b, o.y, top, o.y + o.fh, foot)
+      inst_fade_across(a, b, o.x, start, o.x + o.fw, end)
     }
   }
   match e.keep {
@@ -920,6 +1003,12 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         }
         if d.insts[q + 55] > 0.0 {
           d.insts[q + 54] = d.insts[q + 54] - l.y
+        }
+        if d.insts[q + 57] > 0.0 {
+          d.insts[q + 56] = d.insts[q + 56] - l.x
+        }
+        if d.insts[q + 59] > 0.0 {
+          d.insts[q + 58] = d.insts[q + 58] - l.x
         }
         // where it turns about, as its rect is
         if d.insts[q + 32] != 0.0 {
@@ -983,6 +1072,7 @@ fn Ctx::transform_insts(
     a[b + 1] = oy + (a[b + 1] - oy) * sy + dy
     // what it fades towards, cut in its subtree: moved with it
     inst_fade_moved(a, b, oy, sy, dy)
+    inst_fade_moved_across(a, b, ox, sx, dx)
     // turned already (a look inside this one's): where it turns about moves as its rect does
     if a[b + 32] != 0.0 {
       a[b + 33] = ox + (a[b + 33] - ox) * sx + dx
@@ -1099,6 +1189,7 @@ fn turn_insts(
         a[b + 18] = a[b + 18] + tx
         a[b + 19] = a[b + 19] + ty
         inst_fade_moved(a, b, 0.0, 1.0, ty)
+        inst_fade_moved_across(a, b, 0.0, 1.0, tx)
       }
       a[b + 32] = 0.0
       a[b + 33] = 0.0
@@ -1291,6 +1382,7 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look, apart?
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
     inst_fade_moved(a, b, 0.0, 1.0, n.y)
+    inst_fade_moved_across(a, b, 0.0, 1.0, n.x)
     // (its outer clip the one painted in now's, as what it was cut to is what cuts it now: transform_insts)
     inst_outer_from(a, b, clip_top() + 12)
     clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)

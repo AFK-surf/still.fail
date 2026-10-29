@@ -1736,6 +1736,22 @@ pub fn Tester::drawn_fades(self : Tester) -> Array[(Int, Double, Double, Double,
 }
 
 ///|
+/// How each instance drawn in the last frame fades out towards a cut across (scene.mbt 56-59), in drawing order: its
+/// kind, its rect's top and height, then from its left how far it is whole past where it is 0, and from its right (0:
+/// none that way), with where each is 0.
+pub fn Tester::drawn_fades_across(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let a = c.inst
+    out.push((a[b + 5].to_int(), a[b + 1], a[b + 3], a[b + 57], a[b + 56], a[b + 59], a[b + 58]))
+  }
+  out
+}
+
+///|
 /// The image instances drawn in the last frame: (x, y, w, h, u0, v0, du,
 /// dv, opacity).
 pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {

@@ -899,6 +899,7 @@ fn Ctx::insts_moved(self : Ctx, i0 : Int, band : (Double, Double, Double, Double
     a[b + 1] = a[b + 1] + dy
     unband(a, b + 16, band, dx, dy)
     inst_fade_moved(a, b, 0.0, 1.0, dy)
+    inst_fade_moved_across(a, b, 0.0, 1.0, dx)
     // (its outer, where it has one)
     if inst_has_outer(a, b) {
       a[b + 40] = a[b + 40] + dx

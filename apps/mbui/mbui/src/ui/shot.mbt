@@ -287,6 +287,7 @@ fn shift_inst(a : FixedArray[Double], b : Int, dx : Double, dy : Double) -> Unit
   a[b + 18] = a[b + 18] + dx
   a[b + 19] = a[b + 19] + dy
   inst_fade_moved(a, b, 0.0, 1.0, dy)
+  inst_fade_moved_across(a, b, 0.0, 1.0, dx)
   if inst_has_outer(a, b) {
     a[b + 40] = a[b + 40] + dx
     a[b + 41] = a[b + 41] + dy

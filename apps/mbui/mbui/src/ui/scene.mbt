@@ -1,4 +1,4 @@
-// Painting: the laid-out tree becomes a flat list of instances (56 floats
+// Painting: the laid-out tree becomes a flat list of instances (60 floats
 // each) that every renderer draws with one shader:
 //   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
 //   36-39) · 5 kind · 6 border width · 7 blur
@@ -25,7 +25,8 @@
 //   towards a cut softly (draw.mbt, Ctx::cut_to_top/bottom `soft`), each
 //   pixel by where it is, not the whole of what is drawn: from its top, 0 at
 //   52 and whole 53 below it; from its foot, 0 at 54 and whole 55 above it
-//   (none where 53, 55 are 0).
+//   (none where 53, 55 are 0); 56-59 the same across: from its left, 0 at 56
+//   and whole 57 right of it; from its right, 0 at 58 and whole 59 left of it.
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -39,7 +40,7 @@
 // six to an instance, none drawn).
 
 ///|
-let inst_size = 56
+let inst_size = 60
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -503,6 +504,10 @@ fn Ctx::push_inst(
   a[b + 53] = 0.0
   a[b + 54] = 0.0
   a[b + 55] = 0.0
+  a[b + 56] = 0.0
+  a[b + 57] = 0.0
+  a[b + 58] = 0.0
+  a[b + 59] = 0.0
   if inst_owners_kept() {
     inst_owned(self.ninst)
   }
@@ -1119,9 +1124,45 @@ fn inst_fade_moved(a : FixedArray[Double], b : Int, oy : Double, sy : Double, dy
 }
 
 ///|
-/// How much of instance `b` shows at `y` down the screen as it fades out towards a cut (52-55): 1 where it does not.
-fn inst_fade_at(a : FixedArray[Double], b : Int, y : Double) -> Double {
+/// How much of instance `b` shows at (`x`, `y`) as it fades out towards a cut (52-59): 1 where it does not.
+fn inst_fade_at(a : FixedArray[Double], b : Int, x : Double, y : Double) -> Double {
   let top = if a[b + 53] > 0.0 { dclamp((y - a[b + 52]) / a[b + 53], 0.0, 1.0) } else { 1.0 }
   let foot = if a[b + 55] > 0.0 { dclamp((a[b + 54] - y) / a[b + 55], 0.0, 1.0) } else { 1.0 }
-  top * foot
+  let start = if a[b + 57] > 0.0 { dclamp((x - a[b + 56]) / a[b + 57], 0.0, 1.0) } else { 1.0 }
+  let end = if a[b + 59] > 0.0 { dclamp((a[b + 58] - x) / a[b + 59], 0.0, 1.0) } else { 1.0 }
+  top * foot * start * end
+}
+
+///|
+/// Instance `b` fading out towards a cut across (56-59), as inst_fade does down: from its left, 0 at `start` and whole
+/// `start_soft` right of it; from its right, 0 at `end` and whole `end_soft` left of it.
+fn inst_fade_across(
+  a : FixedArray[Double],
+  b : Int,
+  start : Double,
+  start_soft : Double,
+  end : Double,
+  end_soft : Double,
+) -> Unit {
+  if start_soft > 0.0 && (a[b + 57] <= 0.0 || start + start_soft > a[b + 56] + a[b + 57]) {
+    a[b + 56] = start
+    a[b + 57] = start_soft
+  }
+  if end_soft > 0.0 && (a[b + 59] <= 0.0 || end - end_soft < a[b + 58] - a[b + 59]) {
+    a[b + 58] = end
+    a[b + 59] = end_soft
+  }
+}
+
+///|
+/// Instance `b`'s fading across (56-59) moved as its rect is: about `ox` by `sx`, then by `dx`.
+fn inst_fade_moved_across(a : FixedArray[Double], b : Int, ox : Double, sx : Double, dx : Double) -> Unit {
+  if a[b + 57] > 0.0 {
+    a[b + 56] = ox + (a[b + 56] - ox) * sx + dx
+    a[b + 57] = a[b + 57] * sx
+  }
+  if a[b + 59] > 0.0 {
+    a[b + 58] = ox + (a[b + 58] - ox) * sx + dx
+    a[b + 59] = a[b + 59] * sx
+  }
 }

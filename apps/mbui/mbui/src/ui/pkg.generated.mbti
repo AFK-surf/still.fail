@@ -966,6 +966,8 @@ pub fn Ctx::copy_text(Self, String) -> Unit
 pub fn Ctx::cover(Self, String, Int32, Array[Int32], Int32, (Self, Double, Double) -> Unit) -> Unit
 pub fn Ctx::cursor(Self, Int32, Cursor) -> Unit
 pub fn Ctx::cut_to_bottom(Self, Int32, Double, soft? : Double) -> Unit
+pub fn Ctx::cut_to_left(Self, Int32, Double, soft? : Double) -> Unit
+pub fn Ctx::cut_to_right(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cut_to_top(Self, Int32, Double, soft? : Double) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::cycle(Self, Double, resident? : Bool, loc~ : SourceLoc) -> Double
@@ -989,6 +991,7 @@ pub fn Ctx::editor_focused(Self, String) -> Bool
 pub fn Ctx::effect(Self, String, async (@effect.Scope) -> Unit) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::every(Self, Double, from? : Double, elapsed? : Double, loc~ : SourceLoc) -> Int32
+pub fn Ctx::fade_to(Self, Int32, Int32, start? : Double, top? : Double, end? : Double, foot? : Double) -> Unit
 pub fn Ctx::field_can(Self, Int32) -> Int32
 pub fn Ctx::field_edit(Self, Int32, Int32, paste? : String) -> Unit
 pub fn Ctx::field_files(Self, String) -> Array[(String, Bytes)]?
@@ -2278,6 +2281,7 @@ pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
 pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]
 pub fn Tester::drawn_fades(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
+pub fn Tester::drawn_fades_across(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
 pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
