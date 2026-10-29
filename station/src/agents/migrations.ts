@@ -91,6 +91,7 @@ export const NOTES: [number, string][] = [
   [84, "A person's Android phone is now asked for per chat, as a vault secret is: phone_use {reason} puts a card in your chat, and once its person approves it the phone is this chat's alone, reached through an adb server of the grant's own (adb -P <port> -s <serial>, as phone_use says); adb_devices lists only phones lent with an app from before."],
   [85, "Cards are no longer an optional extra: when you ask people to choose among answers you can name or to confirm one (a single yes, 合并), post the question with an options card (a text card when they must write a value), so they answer with a tap and it reaches their 奏 list. Asking without one is only for what they must word themselves or for information you wait on from others."],
   [86, "The vault keeps credential files too (kind file, at most 64 KB: a kubeconfig, a service account's JSON key, a certificate): secret_save {kind: \"file\", path} keeps a file as it is (none of path, command or value: the person picks it on the card), and secret_run with its grant writes it out for that command alone, its path in env (KUBECONFIG, GOOGLE_APPLICATION_CREDENTIALS) and STILLFAIL_SECRET."],
+  [87, "adb_devices no longer gives a 共享调试 link: that page no longer lends a phone, so a link to it asks for nothing. Ask for the phone of the person you work for only with phone_use (its card is how they grant it)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
