@@ -1864,6 +1864,13 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
   assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "登录按钮"));
+  // its station no longer says the key (it keeps it only a while): the row still does, its page open by it
+  const later: J = { ...made, title: "登录按钮 2" };
+  delete later.clientKey;
+  t.set(rows("ws/st"), [old, theirs, later]);
+  await t.read(list, 2);
+  const mine = list.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "ember:c-1");
+  assert.deepEqual([mine?.title, mine?.clientKey], ["登录按钮 2", key]);
 });
 
 test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", async () => {
