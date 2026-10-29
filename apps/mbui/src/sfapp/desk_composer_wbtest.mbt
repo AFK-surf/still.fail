@@ -814,21 +814,22 @@ test "desk composer: where 抄送 copies to is said just before send in either s
         Some((x, _)) => xs.push(x)
         None => fail("where it copies to not drawn at \{t.time()}")
       }
-      t.frame(ms=16.0)
+      t.frame()
     }
   }
   // opened: where it copies to just before send, 抄送 just before that, not at the row's start
   let (cc_x, _) = t.locate("=抄送")[0]
   assert_true(cc_x > send_x - 200.0, msg="抄送 at \{cc_x}, send at \{send_x}")
-  watch(100.0)
+  watch(@sfpages.morph_ms)
   // let go of (one line): the place said just before send, where it was; nothing to press
   t.ctx().blur()
-  watch(@sfpages.let_go_ms + @sfpages.morph_ms + 200.0)
+  // (its shape changing once it is let go of, and as long again after)
+  watch(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
   assert_true(t.locate("=抄送") is [], msg="抄送 only once opened")
   // opened again
   let (px, py) = t.locate("icon:plus")[0]
   t.tap(px + 200.0, py)
-  watch(@sfpages.morph_ms + 200.0)
+  watch(2.0 * @sfpages.morph_ms)
   // (going with send, which stands a pixel further in on one line)
   let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 1.5 })
   assert_true(moved.is_empty(), msg="went across: \{xs}")

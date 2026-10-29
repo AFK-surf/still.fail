@@ -631,8 +631,8 @@ pub(all) struct ComposerSpec {
   session : String
   placeholder : String
   toolbar : (() -> Unit)?
+  note : Array[(String, String)]
   tail : (() -> Unit)?
-  tail_shut : Bool
   roomy : Bool
   locked : Bool
   offline : Bool
