@@ -1249,7 +1249,9 @@ pub fn Ctx::paint_rect(
 ///|
 /// Draws `d` again, relative to node `rel`'s corner, with `look` over it (about its rect), cut to what cuts what is
 /// painted now.
-pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Unit {
+/// `apart`: bands down the window (top, bottom) it is not drawn in, cut back from each (what has taken that place since
+/// it was drawn: a list's rows in their places over a row gone, motion's makes_room).
+pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look, apart? : Array[(Double, Double)] = []) -> Unit {
   let n = self.nodes[rel]
   let (cut, cut_r, cut_s) = clip_at(clip_top())
   let count = d.insts.length() / inst_size
@@ -1300,6 +1302,27 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     (0.0, 0.0, 0.0, 0.0),
     (0.0, 0.0, 0.0, 0.0),
   )
+  // cut back from what has taken its place: each thing it drew cut at the band's edge on its own side of it (its
+  // middle's), none of it drawn where it lies wholly in one
+  for band in apart {
+    let (t, b) = band
+    for k in i0..<self.ninst {
+      let q = k * inst_size
+      let y0 = dmax(a[q + 1], a[q + 17])
+      let y1 = dmin(a[q + 1] + a[q + 3], a[q + 19])
+      if y1 <= t || y0 >= b {
+        continue
+      }
+      if y0 >= t && y1 <= b {
+        a[q + 11] = 0.0
+        a[q + 15] = if a[q + 5] == 0.0 { 0.0 } else { a[q + 15] }
+      } else if (y0 + y1) / 2.0 < (t + b) / 2.0 {
+        a[q + 19] = dmin(a[q + 19], t)
+      } else {
+        a[q + 17] = dmax(a[q + 17], b)
+      }
+    }
+  }
 }
 
 // ── what the motion package reads of a frame ────────────────────────────

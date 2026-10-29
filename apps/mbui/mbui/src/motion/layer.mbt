@@ -1230,6 +1230,23 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// Where down the window the rows of list `list` (its id) in their places are drawn this frame (none on its way there):
+/// what a row gone from it, drawn as it goes, gives way to (draw_ghosts).
+fn rows_in_place(c : @ui.Ctx, list : Int) -> Array[(Double, Double)] {
+  let out = []
+  for e in mo.entries {
+    if e.key == 0 || e.reshape {
+      continue
+    }
+    guard mo.recs.get(e.key) is Some(r) && r.list == list && r.moving_dy.abs() <= 0.5 else { continue }
+    let (_, y, _, h) = c.node_rect(e.node)
+    let dy = c.look_of(e.node).dy
+    out.push((y + dy, y + dy + h))
+  }
+  out
+}
+
+///|
 /// How far before the edge of the room left it a row coming into its place fades in (makes_room): about a line of
 /// words, so a line shows as it comes out, not cut through (the user, 2026-10-29: 「分界太生硬了」).
 let room_soft : Double = 24.0
@@ -1727,8 +1744,9 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
       continue
     }
     // (its two Anims say their ends as they are read: frames until they are there)
-    // from as it was (1) to its far end (0)
-    c.draw_drawing(gh.drawing, li, gh.trans.at(1.0 - pf, 1.0 - pm))
+    // from as it was (1) to its far end (0); not where a row of its list is in its place now: what goes gives way to
+    // what is there, never its words under that's (docs/motion.md rule 4)
+    c.draw_drawing(gh.drawing, li, gh.trans.at(1.0 - pf, 1.0 - pm), apart=rows_in_place(c, id))
   }
   let mut j = done.length() - 1
   while j >= 0 {
