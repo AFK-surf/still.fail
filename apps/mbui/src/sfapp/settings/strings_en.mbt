@@ -49,7 +49,7 @@ let en : Map[String, String] = {
   "android-misc.adb.ask.granted": "Phone debugging allowed · {scope}",
   "android-misc.adb.ask.denied": "Phone debugging refused",
   "android-misc.adb.ask.ended": "Phone debugging ended: {why}",
-  "android-misc.adb.chats.about": "A chat's agent that needs this phone asks for it in the chat; once you allow it on the card, only that chat's agent can use it.",
+  "android-misc.adb.chats.about": "An agent asks in its chat; once you allow it, only that chat can use the phone.",
   "android-misc.adb.chats.count": "{n} chats using it",
   "android-misc.adb.chats.live": "Chats using it",
   "android-misc.adb.chats.none": "No chat is using this phone",

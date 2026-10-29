@@ -562,16 +562,9 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     }
   }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"))
+    // (what it is, in the title's ⓘ: not a card of words over the page)
+    nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"), about=tr("android-misc.adb.chats.about"))
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
-    blocks.push(fn() {
-      list_card(c, fn() {
-        list_row(c, fn() {
-          c.text(tr("android-misc.adb.chats.about"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-        })
-        |> ignore
-      })
-    })
     // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices)
     blocks.push(fn() {
       list_card(c, fn() {

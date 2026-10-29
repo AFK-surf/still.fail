@@ -18,7 +18,7 @@
   "android-misc.adb.ask.sharing": "Debugging shared with {name}",
   "android-misc.adb.ask.stop": "Stop sharing",
   "android-misc.adb.ask.title": "Let agents on {name} debug this device?",
-  "android-misc.adb.chats.about": "A chat's agent that needs this phone asks for it in the chat; once you allow it on the card, only that chat's agent can use it.",
+  "android-misc.adb.chats.about": "An agent asks in its chat; once you allow it, only that chat can use the phone.",
   "android-misc.adb.chats.count": "{n} chats using it",
   "android-misc.adb.chats.live": "Chats using it",
   "android-misc.adb.chats.none": "No chat is using this phone",

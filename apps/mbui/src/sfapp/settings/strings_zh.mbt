@@ -48,7 +48,7 @@ let zh : Map[String, String] = {
   "android-misc.adb.ask.granted": "已允许调试手机 · {scope}",
   "android-misc.adb.ask.denied": "已拒绝调试手机",
   "android-misc.adb.ask.ended": "调试手机已结束：{why}",
-  "android-misc.adb.chats.about": "对话里的 agent 要用这台手机时，会在对话里申请；你在卡片上允许后，只有那个对话的 agent 能用。",
+  "android-misc.adb.chats.about": "agent 在对话里申请，你允许后只有那个对话能用。",
   "android-misc.adb.chats.count": "{n} 个对话在用",
   "android-misc.adb.chats.live": "正在使用的对话",
   "android-misc.adb.chats.none": "现在没有对话在用这台手机",
