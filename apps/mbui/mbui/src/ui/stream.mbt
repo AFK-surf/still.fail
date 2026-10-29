@@ -33,6 +33,13 @@
 // event is taken as it comes (streams_arrive; between frames, streams_said), the frame shown and said shown at once,
 // nothing built or painted for it, no frame asked, as a video plays under the app's canvas. Its first frame, another
 // size, what the app let go of itself and whatever else comes, as before.
+//
+// Routed (`route`, where the host has routes: @hostapi.stream_direct, macOS's and iOS's): while it shows itself so, the
+// app may have the host take a route's frames and sound straight from the app's engine (still.fail's shell reading a
+// remote screen), not by way of the app's queue: the host decodes, shows and acknowledges each, nothing of the app's
+// run. What came so is said in one event as the stream's are next taken ("D TS N BYTES": the frame it shows, how many
+// came and their bytes), on the run's tape as any; no ticket is the app's for them. A config of the route stops it
+// (the host's), and a stream that no longer shows itself stops it as the frame begins.
 
 ///|
 /// A picture decoded frame by frame.
@@ -72,6 +79,11 @@ pub struct Stream {
   /// whether a frame of `ts` decoded may be shown as it comes, nothing of the app's built for it (Stream::new's
   /// `quiet`: the app's say, where what it draws around the picture follows the frame shown); None: any of its size
   priv quiet : ((Double) -> Bool)?
+  /// the route last asked of the host (Stream::route): its key, and whether its frames and its sound
+  priv mut routed : (Int, Bool, Bool)
+  /// the frames that came by a route (its "D" events), and their bytes
+  priv mut direct_frames : Int
+  priv mut direct_bytes : Int
 }
 
 ///|
@@ -134,6 +146,9 @@ pub fn Stream::new(
     layer,
     view: None,
     quiet,
+    routed: (0, false, false),
+    direct_frames: 0,
+    direct_bytes: 0,
   }
   open_streams.push(s)
   s
@@ -362,6 +377,58 @@ fn Stream::shows_itself(self : Stream) -> Bool {
 }
 
 ///|
+/// Route `route`'s frames (`video`) and sound (`audio`) taken by the host straight from the app's engine
+/// (@hostapi.stream_direct), from the record after the `after`th, the last the app took of it: its frames only while it
+/// shows itself (its system video layer, its decoder the host's, a frame shown, past a key frame). Asked again as each
+/// is taken while it is wanted (the host takes it only when nothing of the route is left in the app's queue); said once
+/// when it is not. Nothing of the app's changes by it: what came so is said by the stream's events ("D").
+pub fn Stream::route(self : Stream, route : Int, after : Double, video~ : Bool, audio~ : Bool) -> Unit {
+  if self.closed || self.id == 0 {
+    return
+  }
+  let video = video && self.routable()
+  let want = (if video || audio { route } else { 0 }, video, audio)
+  if !video && !audio && !self.routed.1 && !self.routed.2 {
+    return
+  }
+  self.routed = want
+  match fake.val {
+    Some(f) => fake_fed(f, self.id, "route \{want.0} after=\{after} video=\{video} audio=\{audio}")
+    None => @hostapi.stream_direct(self.id, route.to_double(), after, video~, audio~)
+  }
+}
+
+///|
+/// Whether a route's frames may be shown by the host as they come: it shows itself, a frame of it shown, its H.264 or
+/// H.265 past a key frame.
+fn Stream::routable(self : Stream) -> Bool {
+  self.shows_itself() && self.h264 && self.at is Some(_) && !self.need_key
+}
+
+///|
+/// The frames that came by a route (Stream::route) as its events said, and their bytes.
+pub fn Stream::direct_count(self : Stream) -> (Int, Int) {
+  (self.direct_frames, self.direct_bytes)
+}
+
+///|
+/// A route's "D TS N BYTES": the frames counted; the one shown, if any (`ts` ≥ 0), shown from now, as far as the app is
+/// concerned (the host showed it and said it shown to its sender).
+fn Stream::take_direct(self : Stream, w : Array[String]) -> Unit {
+  guard w is [_, t, n, b, ..] else { return }
+  match (stream_num(t), stream_num(n), stream_num(b)) {
+    (Some(ts), Some(n), Some(b)) => {
+      self.direct_frames += n.to_int()
+      self.direct_bytes += b.to_int()
+      if ts >= 0.0 {
+        self.at = Some(ts)
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
 /// A host's event taken as it comes, while the stream shows itself (streams_arrive): a frame decoded of the size it
 /// shows (shown on its layer and said shown at once), one let go (said), its decoder broken. False for one that
 /// changes what the app draws (the first frame, another size): taken as the frame is built, as before.
@@ -405,6 +472,15 @@ fn Stream::take_quietly(self : Stream, e : String) -> Bool {
       (self.broken)()
       true
     }
+    ["D", t, ..] =>
+      match (stream_num(t), self.quiet) {
+        (Some(ts), Some(f)) if ts >= 0.0 && !f(ts) => false
+        (Some(_), _) => {
+          self.take_direct(w)
+          true
+        }
+        _ => false
+      }
     _ => false
   }
 }
@@ -533,6 +609,10 @@ fn streams_frame_start() -> Unit {
     if s.closed {
       continue
     }
+    // (its frames routed to the host while it showed itself: no longer, now it does not; its sound goes on)
+    if s.routed.1 && !s.routable() {
+      s.route(s.routed.0, -1.0, video=false, audio=s.routed.2)
+    }
     s.taken = c.frame_no
     // (what the host said of it, taken as the frame began: streams_arrive)
     let events = s.own.copy()
@@ -568,6 +648,7 @@ fn streams_frame_start() -> Unit {
           s.need_key = true
           (s.broken)()
         }
+        ["D", ..] => s.take_direct(w)
         _ => ()
       }
     }

@@ -37,7 +37,13 @@ static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_st
 static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, core_data_dir, NULL, mb_post, mb_post_drop, mb_core_screen_ack};
 #endif
 
-__attribute__((constructor)) static void use_hermes_engine(void) { mbc_use(&hermes_engine); }
+__attribute__((constructor)) static void use_hermes_engine(void) {
+  mbc_use(&hermes_engine);
+  // a remote screen's frames and sound the shell reads itself go to the stream the app routed them to, past its queue
+  // (mbui's apple_stream.m), acknowledged to the station through the shell
+  mb_core_route_media(mb_stream_route_take);
+  mb_stream_route_acks(mb_core_screen_ack);
+}
 
 #if TARGET_OS_IPHONE
 #include <sys/utsname.h>

@@ -1796,6 +1796,8 @@ void mb_host_stream_pointer(int32_t id, moonbit_bytes_t png, double w, double h,
   (void)id; (void)png; (void)w; (void)h; (void)hx; (void)hy;
 }
 void mb_host_stream_pointer_at(int32_t id, double x, double y, int32_t shown) { (void)id; (void)x; (void)y; (void)shown; }
+// (no engine routes a stream's frames past the app here: @hostapi.stream_direct)
+void mb_host_stream_direct(int32_t id, double route, double after, int32_t what) { (void)id; (void)route; (void)after; (void)what; }
 
 // H.265 not decoded here (a remote screen asks H.264): apple_stream.m's is the one that does.
 int32_t mb_host_h265_here(void) { return 0; }

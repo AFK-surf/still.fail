@@ -179,6 +179,7 @@ pub(open) trait Host {
   st_layers(Self) -> Int = _
   st_pointer(Self, Int, Bytes, Double, Double, Double, Double) -> Unit = _
   st_pointer_at(Self, Int, Double, Double, Int) -> Unit = _
+  st_direct(Self, Int, Double, Double, Int) -> Unit = _
   st_h265_here(Self) -> Int = _
   st_hevc(Self, Int, Bytes, Int, Int) -> Unit = _
   st_open(Self) -> Int = _
@@ -2640,6 +2641,14 @@ impl Host with st_pointer_at(_, _, _, _, _) { () }
 ///|
 fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) -> Unit {
   current.val.st_pointer_at(id, x, y, shown)
+}
+
+///|
+impl Host with st_direct(_, _, _, _, _) { () }
+
+///|
+fn st_direct(id : Int, route : Double, after : Double, what : Int) -> Unit {
+  current.val.st_direct(id, route, after, what)
 }
 impl Host with st_h265_here(_) { 0 }
 

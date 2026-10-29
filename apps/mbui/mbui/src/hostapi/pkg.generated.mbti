@@ -330,6 +330,8 @@ pub fn stream_close(Int32) -> Unit
 
 pub fn stream_codec(Int32, String, Bytes) -> Unit
 
+pub fn stream_direct(Int32, Double, Double, video~ : Bool, audio~ : Bool) -> Unit
+
 pub fn stream_feeds() -> Bool
 
 pub fn stream_frame(Int32, Bytes, Bool, Double) -> Unit
@@ -801,6 +803,7 @@ pub(open) trait Host {
   fn nt_text(Self, Int32) -> String = _
   fn st_audio_here(Self) -> Int32 = _
   fn st_audio(Self, Int32, Bytes) -> Unit = _
+  fn st_direct(Self, Int32, Double, Double, Int32) -> Unit = _
   fn st_open(Self) -> Int32 = _
   fn st_h264(Self, Int32, Bytes, Int32, Int32) -> Unit = _
   fn st_frame(Self, Int32, Bytes, Int32, Double) -> Unit = _

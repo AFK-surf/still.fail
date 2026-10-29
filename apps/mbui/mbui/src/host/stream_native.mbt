@@ -58,3 +58,6 @@ extern "C" fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Dou
 
 ///|
 extern "C" fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) -> Unit = "mb_host_stream_pointer_at"
+
+///|
+extern "C" fn st_direct(id : Int, route : Double, after : Double, what : Int) -> Unit = "mb_host_stream_direct"

@@ -129,3 +129,15 @@ pub fn stream_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double
 pub fn stream_pointer_at(id : Int, x : Double, y : Double, shown : Bool) -> Unit {
   st_pointer_at(id, x, y, if shown { 1 } else { 0 })
 }
+
+///|
+/// Stream `id` takes the frames (`video`) and the sound (`audio`) of route `route` straight from the app's engine, where
+/// one reads them itself (still.fail's shell reads a remote screen: its view's call is the route), from the record after
+/// the `after`th it offered, when that one is the last it offered (nothing of the route left in the app's queue: else
+/// nothing changes, and the app routes it again as it takes the next); those not asked for no longer. Taken so, a frame
+/// is decoded, shown and acknowledged by the host, a packet played, nothing of the app's run for them; the app is told
+/// what came in one event when it next reads the stream's (`D TS N BYTES`: @ui's Stream). A config of the route stops
+/// it until the app routes it again. macOS and iOS (apple_stream.m); elsewhere nothing, the app takes them all.
+pub fn stream_direct(id : Int, route : Double, after : Double, video~ : Bool, audio~ : Bool) -> Unit {
+  st_direct(id, route, after, (if video { 1 } else { 0 }) + (if audio { 2 } else { 0 }))
+}
