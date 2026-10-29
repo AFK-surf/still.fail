@@ -62,7 +62,7 @@ pub fn switcher_open_with(words : String) -> Unit {
 ///|
 /// How ⌘K's panel comes (Switcher.css.ts switcher: popKeyframes from its top, 140 ms on the ease-out).
 // kept across runs: a value (no field of it changes)
-let switcher_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0, spec=@motion.tween(@kit.pop_ms, ease=Out))
+let switcher_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0, spec=@motion.tween(@kit.pop_ms, ease=Out), ground_first=true)
 
 ///|
 /// How ⌘K goes: at once, as the web's (unmounted).

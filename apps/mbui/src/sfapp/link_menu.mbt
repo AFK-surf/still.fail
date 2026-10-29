@@ -97,8 +97,8 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
     along=Start,
     offset=6.0,
     scrim=0x00000047L,
-    enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
-    exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=Leave)),
+    enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out), ground_first=true),
+    exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=Leave), ground_first=true),
     look=menu_panel_look,
     item_look=fn(c, s) { menu_row_look(c, s, link_icon(s.entry.value)) },
   )

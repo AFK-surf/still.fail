@@ -28,6 +28,10 @@ pub(all) struct Look {
   rot : Double
   /// drawn cut to a circle this far about (ox, oy), moved with it (0: not cut; a change of theme spreading: reveal.mbt)
   circle : Double
+  /// the opacity of the words it holds over its own (`alpha`): a panel coming in whole under its words before they
+  /// show (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
+  /// over that's (docs/motion.md rule 4)
+  words : Double
 } derive(Show, Eq, Debug)
 
 ///|
@@ -43,6 +47,7 @@ pub let still_look : Look = {
   oy: 0.5,
   rot: 0.0,
   circle: 0.0,
+  words: 1.0,
 }
 
 ///|
@@ -58,8 +63,9 @@ pub fn look(
   oy? : Double = 0.5,
   rot? : Double = 0.0,
   circle? : Double = 0.0,
+  words? : Double = 1.0,
 ) -> Look {
-  { alpha, dx, dy, sx, sy, ox, oy, rot, circle }
+  { alpha, dx, dy, sx, sy, ox, oy, rot, circle, words }
 }
 
 ///|
@@ -77,6 +83,7 @@ pub fn Look::then(self : Look, o : Look) -> Look {
     oy: if scales { self.oy } else { o.oy },
     rot: self.rot + o.rot,
     circle: if self.circle > 0.0 { self.circle } else { o.circle },
+    words: self.words * o.words,
   }
 }
 
@@ -89,7 +96,8 @@ pub fn Look::is_still(self : Look) -> Bool {
   self.sx == 1.0 &&
   self.sy == 1.0 &&
   self.rot == 0.0 &&
-  self.circle == 0.0
+  self.circle == 0.0 &&
+  self.words == 1.0
 }
 
 ///|
@@ -729,6 +737,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if alpha <= 0.002 && !keep {
     return true
   }
+  // (the words in it as much fainter again: Look's `words`, push_inst)
+  let words_was = words_alpha.val
+  words_alpha.val = words_was * look.words
   let n = self.nodes[i]
   let (outer, outer_r, outer_s) = clip_at(clip_top())
   let i0 = self.ninst
@@ -786,6 +797,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
+  words_alpha.val = words_was
   dr.mode = was
   match painting {
     Some(p) => self.part_paint_end(e.part, i, i0, p)
