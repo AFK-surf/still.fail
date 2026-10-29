@@ -89,7 +89,7 @@ styles `--ease-out`, `--ease-leave`, `--ease-move`).
 
 | What it is | Curve | Length |
 |---|---|---|
-| A move: seen where it was and where it goes, going there (kinds 3 and 5, a picture flown open, the search rising) | `Move`: a critically damped spring's way from rest | by how far it goes: `move_near_ms` (a row, the composer, a card: Motion's 0.28 s), `move_page_ms` (a page, a sheet, a picture, a side panel: 0.32 s), `move_far_ms` (across the window: the tape, the sidebar: 0.38 s) |
+| A move: seen where it was and where it goes, going there (kinds 3 and 5, a picture flown open, the search rising) | `Move`: a critically damped spring's way from rest | by how far it goes: `move_near_ms` 300 (a row, the composer, a card), `move_page_ms` 350 (a page, a sheet, a picture, a side panel), `move_far_ms` 450 (across the window: the tape, the sidebar), nine tenths of the way by half of each |
 | What the hand let go of, or moves with its hand's speed (kind 1); rows making way | a spring: `move_spring`, `sheet_spring`, given the hand's speed | the spring's own |
 | What comes (faded in, from a little smaller, up from a line below) and a control answering (kind 7) | `Out` (.2, .7, .2, 1), the web's --ease-out | the presets below: 120–240 ms |
 | What goes (faded out, shrinking, off the screen) | `Leave` (.4, 0, 1, 1) | shorter than its coming |
@@ -133,16 +133,16 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | 2 | ⌘K | its scrim faded in over 120 ms, its panel grown out of 0.97 from its top over 140 ms ease-out; out at once | web/src/Switcher.css.ts:19, 25 |
 | 2 | a chat's find bar, in place of its buttons | in 120 ms ease-out, a fade (`@kit.tip_in`); out at once | web/src/ChatFind.css.ts:10 |
 | 2 | woken over a picture or a film: the viewer's bars, the player's controls | in 120 ms, resting out 320 ms, ease-out (`@sf.wake_ms`, `sleep_ms`: kit's media's) | web/src/FilePreview.css.ts:37, 54; web/ui/src/viewer/media.css.ts:23-25 |
-| 3 | a shape: the composer, a card | a near Move, 450 ms (`@sf.shape_ms`) | web/src/morph.ts `useMorph` |
-| 3 | the composer to another page | a page's Move, 500 ms (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
-| 3 | a layout switched: the sidebar, the tape | a far Move, 600 ms (`@sf.move_state_ms`); a side panel a page's | `moveState`, web/ui/src/motion.ts:287 |
+| 3 | a shape: the composer, a card | a near Move, 300 ms (`@sf.shape_ms`) | web/src/morph.ts `useMorph` |
+| 3 | the composer to another page | a page's Move, 350 ms (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
+| 3 | a layout switched: the sidebar, the tape | a far Move, 450 ms (`@sf.move_state_ms`); a side panel a page's | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1), set alike and broken into lines alike in the field and in the message (the theme's `words`, the composer's width), so moved, in pieces: what is on one line in both, each from where it was typed to where the message has it | web/src/madeChat.ts:329-331 (sfbase/flight.mbt); ChatHost.kt `pieces`, SendText.kt |
 | 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
-| 4 | a picture into the viewer and back | a page's Move, 500 ms, each way | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
-| 5 | pushed, popped | a page's Move, 500 ms; swiped back and let go, on at `Out` | web/src/mobile/app.css.ts:16, 22-30 |
-| 5 | risen | a page's Move, 500 ms | web/src/mobile/app.css.ts:32 |
+| 4 | a picture into the viewer and back | a page's Move, 350 ms, each way | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
+| 5 | pushed, popped | a page's Move, 350 ms; swiped back and let go, on at `Out` | web/src/mobile/app.css.ts:16, 22-30 |
+| 5 | risen | a page's Move, 350 ms | web/src/mobile/app.css.ts:32 |
 | 5 | another place on the bar | a page's Move from its side; in place, faded in on `Out` | web/src/mobile/app.css.ts:34 |
 | 6 | the glide | a share of what is left, τ 100 ms | `GLIDE_TAU`, web/ui/src/motion.ts:33 |
 | 7 | pressed, pointed at; a switch turned | 140 ms ease-out (`@sf.dur_ms`, `@kit.switch_ms`) | `--dur`, web/src/styles/global.css.ts:104; web/ui/src/parts.css.ts:85, 94 |

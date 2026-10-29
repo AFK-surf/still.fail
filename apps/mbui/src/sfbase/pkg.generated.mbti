@@ -1851,6 +1851,7 @@ pub(all) struct ChatItem {
   decision_text : String?
   last : String?
   offline : String?
+  updating : Bool
   reconnecting : String?
   connect : Bool
   origin_text : String
@@ -1911,6 +1912,7 @@ pub(all) struct ChatView {
   outbox : Array[Outgoing]
   offline : Bool
   offline_note : String?
+  updating : Bool
   cache_cold : (String, String, Bool)?
   state : (String, String, String)?
   state_ask : Double?

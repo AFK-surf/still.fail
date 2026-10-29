@@ -529,9 +529,10 @@ pub fn lift_of(t : Thumb) -> Double {
 let lift_gap : Double = 12.0
 
 ///|
-/// How long a thumbnail takes going out from under the bar or the composer before it grows (the way back after it has
-/// shrunk), on Move: a thing moved (docs/motion.md).
-pub let fly_lift_ms : Double = 240.0
+/// How much longer a flight is for its thumbnail going out from under the bar or the composer first (the way back
+/// after it has shrunk): one move, the going out its first share and the growing the rest, on one curve, so that
+/// nothing stops between them (the user, 2026-10-29: 「前段避让跟后段放大之间…顿一下…应该浑然一体」).
+pub let fly_lift_ms : Double = 100.0
 
 ///|
 /// The share of the flight's way that is the thumbnail's going out from under the bar or composer, for a flight
@@ -1306,7 +1307,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
             if v.shown_kind() == Some(KVideo) {
               v.fly_pic = v.still(src)
             }
-            // (at an even pace: the way out from under the bar or composer first, if any, then the growing:
+            // (the whole way on one curve, its way out from under the bar or composer first, if any, then the growing:
             // Viewer::flying, Viewer::lifted)
             v.fly_lift = lift_share(t, fly_open_ms)
             v.fly.set(0.0)
@@ -1861,27 +1862,28 @@ pub fn Viewer::cancel_download(self : Viewer, c : @ui.Ctx, src : Source, dl : Js
 // ── an image ───────────────────────────────────────────────────────────
 
 ///|
-/// How far its flight has got (0 the thumbnail, 1 the stage), on Move (a thing moved); 1 when it is not flying.
+/// How far its flight has got (0 the thumbnail, 1 the stage): its share past the going out of the flight's one Move
+/// (a thing moved); 1 when it is not flying.
 pub fn Viewer::flying(self : Viewer) -> Double {
   if !self.flies {
     return 1.0
   }
-  let q = self.fly.get()
-  if q <= self.fly_lift {
+  let e = @ui.Ease::Move.at(self.fly.get())
+  if e <= self.fly_lift {
     0.0
   } else {
-    @ui.Ease::Move.at((q - self.fly_lift) / (1.0 - self.fly_lift))
+    (e - self.fly_lift) / (1.0 - self.fly_lift)
   }
 }
 
 ///|
 /// How far its thumbnail has gone out from under the bar or the composer (0 where the chat lays it out, 1 clear of
-/// them), on Move; 1 when nothing hid it.
+/// them): the first share of the flight's one Move; 1 when nothing hid it.
 pub fn Viewer::lifted(self : Viewer) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     return 1.0
   }
-  @ui.Ease::Move.at(self.fly.get() / self.fly_lift)
+  dmin(@ui.Ease::Move.at(self.fly.get()) / self.fly_lift, 1.0)
 }
 
 ///|

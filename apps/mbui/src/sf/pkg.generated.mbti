@@ -1984,6 +1984,10 @@ pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Double?, Bool
 
 pub let update_raised : Raised
 
+pub fn updating_mark(@ui.Ctx, Double, Int64) -> Int32
+
+pub let updating_rise_ms : Double
+
 pub let usage_bar_max : @ui.Len
 
 pub let usage_part_r : Double

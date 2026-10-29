@@ -173,7 +173,8 @@ fn bar_set_out() -> Double {
 pub let bar_show_ms : Double = @ui.move_page_ms
 
 ///|
-let bar_hide_ms : Double = 300.0
+/// (going, shorter than its coming: mostly gone by half of the page's push)
+let bar_hide_ms : Double = 250.0
 
 ///|
 /// The lens: a capsule over the ball's place, as large as it is drawn.
