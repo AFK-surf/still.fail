@@ -12,6 +12,7 @@
 // is lowered, to the source's own. A view starts at START_RATE (its first frame, a whole picture, is its largest: on a
 // narrow link one at the source's own rate held the view up for a second) and goes up by START_UP each step until it
 // is first lowered.
+import { wall } from "../ops/fibers.ts";
 
 /// Frames sent and not acknowledged, at most: before the link's round trip is known, and however short it is.
 export const START_UNACKED = 2;
@@ -64,9 +65,60 @@ export const FPS_CHOICES = [120, 90, 60, 30, 15] as const;
 export type Fps = (typeof FPS_CHOICES)[number];
 export const isFps = (v: unknown): v is Fps => FPS_CHOICES.includes(v as Fps);
 
+/// How long the station's own loop stood still (ms, in all, since it was first asked): a frame's round trip and the wait
+/// of the oldest on the way are counted without it. A Mac host's loop stood still 40–140 ms every few seconds
+/// (2026-10-29: busy with searches asked again and again) on a LAN of 4 ms and nothing lost: its frames' acknowledgements
+/// were read that late, taken for frames held back by the link, and the rate went down to what the source made (a
+/// screen changing little makes little), on to MIN_RATE and the picture to LOW_BOUNDS. A frame held at the client
+/// (decoded slowly) or on the link (a queue, a packet lost) is held as before.
+export const STALL_TICK_MS = 10;
+export class LoopStall {
+  #total = 0;
+  #last = 0;
+  #stop: (() => void) | null = null;
+  #users = 0;
+  readonly #now: () => number;
+  constructor(now: () => number = () => hostNow()) {
+    this.#now = now;
+  }
+
+  /// Counted while someone uses it (a view): the function says how long the loop stood still so far.
+  use(): { stalled: () => number; done: () => void } {
+    if (this.#users++ === 0) {
+      this.#last = this.#now();
+      this.#stop = wall.every(STALL_TICK_MS, () => this.#tick());
+    }
+    let done = false;
+    return {
+      stalled: () => this.stalled(),
+      done: () => {
+        if (done) return;
+        done = true;
+        if (--this.#users === 0 && this.#stop !== null) {
+          this.#stop();
+          this.#stop = null;
+        }
+      },
+    };
+  }
+
+  /// How long it stood still so far, the stand it is in now (its tick not come yet) with it.
+  stalled(): number {
+    return this.#total + Math.max(0, this.#now() - this.#last - STALL_TICK_MS);
+  }
+
+  #tick() {
+    const now = this.#now();
+    this.#total += Math.max(0, now - this.#last - STALL_TICK_MS);
+    this.#last = now;
+  }
+}
+export const loopStall = new LoopStall();
+
 export class Pacer {
-  /// The frames sent and not acknowledged, oldest first: their timestamps, sizes and when they went.
-  readonly #out: { ts: number; bytes: number; at: number }[] = [];
+  /// The frames sent and not acknowledged, oldest first: their timestamps, sizes, when they went and how long the
+  /// loop had stood still by then.
+  readonly #out: { ts: number; bytes: number; at: number; stall: number }[] = [];
   /// Round trips measured, oldest first.
   #trips: { at: number; ms: number }[] = [];
   /// The frames acknowledged lately: when, and their sizes.
@@ -88,9 +140,12 @@ export class Pacer {
   readonly #gap: number | null;
   #due = -Infinity;
   readonly #now: () => number;
-  /// `start`: the bit rate the source was opened at (none: its own); `fps`: the 帧率 asked (none: 自动).
-  constructor(now: () => number, start: number | null = null, fps?: number) {
+  readonly #stalled: () => number;
+  /// `start`: the bit rate the source was opened at (none: its own); `fps`: the 帧率 asked (none: 自动); `stalled`: how
+  /// long the station's loop stood still so far (LoopStall), left out of round trips and waits.
+  constructor(now: () => number, start: number | null = null, fps?: number, stalled: () => number = () => 0) {
     this.#now = now;
+    this.#stalled = stalled;
     this.#rate = start;
     this.#gap = fps !== undefined && fps > 0 ? 1000 / fps : null;
   }
@@ -114,14 +169,14 @@ export class Pacer {
 
   sent(ts: number, bytes: number) {
     const now = this.#now();
-    this.#out.push({ ts, bytes, at: now });
+    this.#out.push({ ts, bytes, at: now, stall: this.#stalled() });
     if (this.#gap !== null) this.#due = Math.max(this.#due + this.#gap, now + this.#gap / 2);
   }
 
   /// The client decoded every frame up to `ts`; the newest of them gives a round trip.
   acked(ts: number) {
     const now = this.#now();
-    let newest: { at: number } | null = null;
+    let newest: { at: number; stall: number } | null = null;
     while (this.#out.length > 0 && this.#out[0]!.ts <= ts) {
       const f = this.#out.shift()!;
       this.#through.push({ at: now, bytes: f.bytes });
@@ -130,7 +185,7 @@ export class Pacer {
     if (newest === null) return;
     this.#first = Math.min(this.#first, now);
     while (this.#through.length > 0 && this.#through[0]!.at < now - DELIVERY_WINDOW_MS) this.#through.shift();
-    const trip = now - newest.at;
+    const trip = Math.max(0, now - newest.at - (this.#stalled() - newest.stall));
     const base = this.rtt();
     this.#trips.push({ at: now, ms: trip });
     // The latest is kept however old: a still screen sends nothing for long.
@@ -150,7 +205,8 @@ export class Pacer {
     const rtt = this.rtt();
     if (rtt === null) return this.#out.length < START_UNACKED;
     const now = this.#now();
-    const may = this.#out.length < MAX_UNACKED && now - this.#out[0]!.at <= rtt + queueMs(rtt);
+    const oldest = this.#out[0]!;
+    const may = this.#out.length < MAX_UNACKED && now - oldest.at - (this.#stalled() - oldest.stall) <= rtt + queueMs(rtt);
     if (!may) {
       // A frame held back: the link carries less than the frames (an acknowledgement late alone, a screen still or
       // changing little, holds nothing back and lowers nothing).

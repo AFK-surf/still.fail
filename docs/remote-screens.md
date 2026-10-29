@@ -161,6 +161,12 @@ client, so any client that acknowledges what it drew is paced.
   the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
   4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
   smaller, rather than fewer and late.
+  A frame's round trip and the oldest's wait are counted without the moments the station's own loop stood still
+  (screen-pace.ts `LoopStall`: a 10 ms tick, how late it came): a Mac host's loop stood still 40–140 ms every few
+  seconds (2026-10-29, busy with searches asked again and again) on a LAN of 4 ms with nothing lost, its
+  acknowledgements read that late were taken for frames held back by the link, and the rate went down to what the
+  source made (a screen changing little makes little), to 300 kbit/s and the picture to 720p. A frame held at the
+  client (decoded slowly) or on the link (a queue, a packet lost) is held as before.
 - **Frame rate.** A view that asked a 帧率 (`fps`) gets no more frames than that: each frame takes the next slot of
   1000/fps ms, one that went up to half a slot late letting the next come that much sooner (`Pacer.wait`), so no
   second carries more than fps + 1 and a source that captures at that very rate (and is a little early or late) keeps

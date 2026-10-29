@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CUT, DOWN, DOWNSIZE_MS, FPS_CHOICES, FrameLatency, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
+import { CUT, DOWN, DOWNSIZE_MS, FPS_CHOICES, FrameLatency, LoopStall, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -256,4 +256,42 @@ test("a 帧率 asked: no second carries more frames than it (and one), and a sou
   // None asked (自动): as many as come.
   assert.equal(new Pacer(() => 0).wait(), 0);
   assert.ok(capped(undefined, 1000 / 240, 1000).length >= 239);
+});
+
+test("the station's loop standing still is left out of round trips and waits: frames held by it lower nothing", () => {
+  // Frames each 16 ms over a near link (acknowledged 30 ms after they went), the station's loop standing still 128 ms
+  // every 640 ms (nothing read meanwhile; then the pump asks before the acknowledgements are read): told, the rate stays
+  // its own; not told, it is taken for the link.
+  const run = (told: boolean) => {
+    let now = 0;
+    let stood = 0;
+    const pacer = new Pacer(() => now, null, undefined, told ? () => stood : () => 0);
+    pacer.ceiling(ownRate(1920, 1080));
+    const due: { at: number; ts: number }[] = [];
+    let ts = 0;
+    for (let t = 0; t < 20_000; t++) {
+      now = t;
+      if (t % 640 >= 512) continue;
+      if (t % 640 === 0 && t > 0) stood += 128;
+      if (t % 16 === 0 && pacer.may()) {
+        ts += 1000;
+        pacer.sent(ts, 2_000);
+        due.push({ at: t + 30, ts });
+      }
+      while (due.length > 0 && due[0]!.at <= t) pacer.acked(due.shift()!.ts);
+    }
+    return pacer.rate()!;
+  };
+  assert.equal(run(true), ownRate(1920, 1080));
+  assert.ok(run(false) < ownRate(1920, 1080) / 2, `not told, taken for the link: ${run(false)}`);
+});
+
+test("LoopStall counts how long the loop stood still past its tick, the stand it is in now too", () => {
+  let now = 0;
+  const stall = new LoopStall(() => now);
+  const used = stall.use();
+  assert.equal(used.stalled(), 0);
+  now = 100;
+  assert.equal(used.stalled(), 90);
+  used.done();
 });
