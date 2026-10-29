@@ -76,15 +76,15 @@
   side.push(row(tSel, 'support'));
   side.push(row(tChan, 'web'));
   side.push(head(tDmHead, 'Direct messages'));
-  for (const [who, n] of [['Ana Costa', '0015'], ['Ben Okafor', '0001'], ['Chen Wei', '0010'], ['Dana Kim', '0004'],
-    ['Felix Wagner', '0007'], ['Lin (you)', '0022']]) side.push(row(tDm, who, ava(n)));
+  for (const [who, n] of [['Ana Costa (you)', '0015'], ['Ben Okafor', '0001'], ['Chen Wei', '0010'], ['Dana Kim', '0004'],
+    ['Felix Wagner', '0007'], ['Lin', '0022']]) side.push(row(tDm, who, ava(n)));
   sideBox.replaceChildren(...side);
   { let y = 0; for (const r of side) { r.style.top = y + 'px'; y += r.getBoundingClientRect().height || 28; } sideBox.style.height = y + 'px'; }
   // every other picture of a real person: one of the made-up people's
   $$('img').forEach((img) => {
     if (!/ca\.slack-edge\.com|avatars-slack-edge/.test(img.src)) return;
     const r = img.getBoundingClientRect();
-    setImg(img, r.left < 60 && r.top > 500 ? LIN : r.left < 60 ? img.src : pic('', '#d6d6d6'));
+    setImg(img, r.left < 60 && r.top > 500 ? ANA : r.left < 60 ? img.src : pic('', '#d6d6d6'));
   });
 
   // ---- the channel: #support ----
@@ -155,7 +155,8 @@
   const context = (text) => `<div class="p-block_kit_renderer__block_wrapper"><div class="p-context_block"><span class="p-context_block__text" style="opacity:.7;font-size:12px">${text}</span></div></div>`;
 
   // what the channel shows: an earlier message, then Ana's, its replies counted under it
-  const ANA_TEXT = `${mention('@still.fail')} checkout is failing for some customers in the EU, they get a 500 after entering their card. Can you look?`;
+  const ANA_PLAIN = ' EU cards get a 500 at checkout, can you look?';
+  const ANA_TEXT = `${mention('@still.fail')}${ANA_PLAIN}`;
   const main = [
     divider('Yesterday'),
     message(tRoot, { who: 'Chen Wei', at: '4:52 PM', img: ava('0010'), html: 'Refund for order #48213 went through, the customer confirmed by email 👍' }),
@@ -168,8 +169,8 @@
   // the thread beside it: the agent's question to Lin as still.fail's card in Slack (station/src/slack/cards.ts: its words,
   // then the options as radio buttons, the recommended last and chosen already, each its detail under it, and OK),
   // answered from the phone: then its words and who answered what (answeredBlocks)
-  const FOUND = `Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. The fix is one line in the payment flow, but it touches payments. ${mention('@Lin')}, ship it?`;
-  const FIXED = `Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. ${mention('@Ana Costa')} can you try once more?`;
+  const FOUND = `Found it: the 3-D Secure redirect drops the locale. The fix touches payments. ${mention('@Lin')}, ship it?`;
+  const FIXED = `Fixed and live. ${mention('@Ana Costa')} can you try again?`;
   const radio = (label, detail, on) =>
     `<label style="display:flex;gap:9px;align-items:flex-start;padding:4px 0;cursor:default">` +
     `<span style="flex:none;width:16px;height:16px;margin-top:2px;border-radius:50%;box-sizing:border-box;` +
@@ -177,7 +178,7 @@
     `<span><span style="display:block;font-size:15px;line-height:22px">${label}</span>` +
     `<span style="display:block;font-size:13px;line-height:18px;opacity:.7">${detail}</span></span></label>`;
   const card = `<div class="p-block_kit_renderer__block_wrapper" data-card="ask"><div style="padding:4px 0 2px">` +
-    radio('Not yet', 'Leave it for review', false) + radio('Fix and deploy', 'Patch it, run the payment tests, deploy', true) +
+    radio('Not yet', 'Leave it for review', false) + radio('Fix and deploy', 'Patch, test, deploy', true) +
     `</div><button class="c-button c-button--primary c-button--small" type="button" style="margin-top:6px">OK</button></div>`;
   const answered = `<div class="p-block_kit_renderer__block_wrapper" data-card="answered"><div class="p-context_block">` +
     `<span class="p-context_block__text" style="opacity:.7;font-size:13px">✓ Lin answered: Fix and deploy</span></div></div>`;
@@ -190,7 +191,7 @@
     sep,
     ask,
     message(tApp, { who: 'still.fail', at: '9:41 AM', img: APP, app: true, html: FIXED }),
-    message(tApp, { who: 'Ana Costa', at: '9:43 AM', img: ANA, html: 'Just paid with my French card, it works. Thanks! 🙌' }),
+    message(tApp, { who: 'Ana Costa', at: '9:43 AM', img: ANA, html: 'Works now, thanks! 🙌' }),
   ];
   // what the agent does now, as Slack shows an app's status under its thread (assistant.threads.setStatus:
   // station/src/slack/status.ts), over the reply box
@@ -234,13 +235,88 @@
     const scroller = $('.c-scrollbar__hider', list);
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   };
-  // in at its mark: what is not yet is not shown
-  // marks: ana (her question), working (the agent at it: its status), found (its card), deploy (answered from the
-  // phone: the agent at it again), fixed, thanks
+  // ---- as the film goes: Ana at this computer (the Slack is hers), typing, sending, opening the thread, answering ----
+  // a key each KEY_S; the caret steady while keys come, else blinking (on and off each CARET_S), as macOS draws it
+  const KEY_S = 0.055, CARET_S = 0.53, AT = '@still.fail';
+  const TYPED = AT + ANA_PLAIN, THANKS = 'Works now, thanks! \u{1F64C}';
+  const inThread = (e) => !!e.closest('.p-threads_flexpane');
+  const editors = $$('.ql-editor'), holders = $$('.ql-placeholder');
+  const sends = $$('[data-qa="texty_send_button"]');
+  const box = (pick) => {
+    const editor = editors.find(pick);
+    const wrap = editor?.closest('.c-wysiwyg_container') || editor?.parentElement?.parentElement?.parentElement;
+    return { editor, holder: holders.find(pick), send: wrap?.querySelector('[data-qa="texty_send_button"]') || sends.find(pick) };
+  };
+  const mainIn = box((e) => !inThread(e)), threadIn = box(inThread);
+  const caret = () => '<span data-caret style="display:inline-block;width:2px;height:1.15em;margin-left:1px;vertical-align:text-bottom;background:#d1d2d3"></span>';
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  // what a box shows: its words so far (an @-mention a chip once typed whole, as Slack makes it), its caret if it has
+  // the focus, its send button lit while there is something to send (Slack's green)
+  const fill = (inp, s, focus, caretOn) => {
+    if (!inp.editor) return;
+    const words = s.startsWith(AT) ? mention(AT) + esc(s.slice(AT.length)).replace(/ /g, ' ') : esc(s).replace(/ /g, ' ');
+    inp.editor.innerHTML = `<p>${s ? words : ''}${focus && caretOn ? caret() : ''}${s || (focus && caretOn) ? '' : '<br>'}</p>`;
+    inp.editor.classList.toggle('ql-blank', !s);
+    if (inp.holder) inp.holder.style.display = s ? 'none' : '';
+    if (inp.send) {
+      inp.send.style.setProperty('background', s ? '#007a5a' : 'transparent', 'important');
+      inp.send.style.setProperty('color', s ? '#fff' : 'rgba(232,232,232,.35)', 'important');
+      inp.send.style.borderRadius = '4px';
+      inp.send.classList.toggle('c-wysiwyg_container__button--disabled', !s);
+      inp.send.classList.toggle('c-button--disabled', !s);
+      const group = inp.send.closest('.c-wysiwyg_container__send_button--with_options');
+      group?.classList.toggle('c-wysiwyg_container__send_button--with_options_disabled', !s);
+      if (group) group.style.setProperty('background', s ? '#007a5a' : 'transparent', 'important');
+      group?.querySelectorAll('button').forEach((b) => b.style.setProperty('color', s ? '#fff' : 'rgba(232,232,232,.35)', 'important'));
+    }
+  };
+  // typed from `from`, the letters of `text` so far at t (the last key's moment too, for the caret)
+  const typedAt = (t, from, text) => {
+    const n = from === undefined || t < from ? 0 : Math.min([...text].length, Math.floor((t - from) / KEY_S + 1e-6) + 1);
+    return { s: [...text].slice(0, n).join(''), last: n ? from + (n - 1) * KEY_S : -1e9 };
+  };
+  const caretOnAt = (t, last) => t - last < CARET_S || Math.floor((t - last) / CARET_S) % 2 === 0;
+  // the moments keys go down (compose_sim.mjs: a key's sound each)
+  window.deskKeys = (m) => [
+    ...(m.typing === undefined ? [] : [...TYPED].map((_, i) => m.typing + i * KEY_S)),
+    ...(m.reply === undefined ? [] : [...THANKS].map((_, i) => m.reply + i * KEY_S)),
+  ];
+
+  // 👀 on Ana's message while the agent works: what still.fail does in a channel, where Slack shows no status line
+  // (station/src/slack/status.ts), gone while it waits on Lin and once it is done
+  const eyes = document.createElement('div');
+  eyes.style.cssText = 'display:flex;gap:4px;margin:4px 0 2px';
+  eyes.innerHTML = '<span style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 6px;border-radius:12px;' +
+    'background:rgba(232,232,232,.06);box-shadow:inset 0 0 0 1px rgba(232,232,232,.13);font-size:12px;color:#d1d2d3">' +
+    '<span style="font-size:15px;line-height:1">\u{1F440}</span>1</span>';
+  const anaMsg = main[main.length - 1];
+  const anaBlocks = $('.c-message__message_blocks', anaMsg);
+  anaBlocks?.after(eyes);
+
+  // the thread open beside the channel once Ana opens it (a click on its replies); the channel the window's width till
+  // then: the pane taken out of the layout's grid, as Slack lays it with no thread open
+  const pane = $('.p-view_contents--secondary'), resizer = $('.p-ia4_client__resizer--secondary');
+  const tabs = $('.p-client_workspace__tabpanel');
+
+  // the pointer: macOS's arrow, moved eased from one place to the next (window.at's marks), a click a press of it
+  const arrow = document.createElement('div');
+  arrow.style.cssText = 'position:fixed;left:0;top:0;width:22px;height:30px;z-index:100000;pointer-events:none;transform-origin:3px 2px;display:none';
+  arrow.innerHTML = '<svg width="22" height="30" viewBox="0 0 22 30"><path d="M3 2 L3 23 L8.2 18.3 L11.6 26.2 L15 24.7 L11.7 17 L18.6 17 Z" fill="#000" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  document.body.append(arrow);
+  const easeIO = (x) => (x = Math.min(1, Math.max(0, x)), x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const centre = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width * 0.35, r.top + r.height / 2]; };
+
   window.at = (t, m = {}) => {
     const on = (at) => at === undefined || t >= at;
     const show = (el, at) => { el.style.display = on(at) ? '' : 'none'; };
-    show(main[main.length - 1], m.ana);
+    const between = (a, b) => a !== undefined && t >= a && (b === undefined || t < b);
+    // the thread pane: open from the click on the replies
+    const open = on(m.open);
+    if (pane) pane.style.display = open ? '' : 'none';
+    if (resizer) resizer.style.display = open ? '' : 'none';
+    // (the channel over the pane's column too: the sidebar's, then the rest)
+    if (tabs) tabs.style.gridTemplateColumns = open ? '' : '288px 1fr';
+    show(anaMsg, m.ana);
     show(thread[0], m.ana);
     show(sep, m.found);
     show(ask, m.found);
@@ -248,19 +324,37 @@
     $('[data-card="answered"]', ask).style.display = on(m.deploy) ? '' : 'none';
     show(thread[3], m.fixed);
     show(thread[4], m.thanks);
-    // (its status while it works: reading before its card, fixing after the answer, none once it said how it went)
-    const words = on(m.fixed) ? '' : on(m.deploy) ? 'is fixing the 3-D Secure return URL…' : on(m.found) ? '' : on(m.working) ? 'is reading the checkout logs…' : '';
-    status.style.display = words ? 'flex' : 'none';
-    $('i', status).textContent = words;
-    $('i', status).style.fontStyle = 'normal';
+    status.style.display = 'none';
+    eyes.style.display = between(m.eyes, m.found) || between(m.deploy, m.fixed) ? 'flex' : 'none';
+    // the boxes: the channel's while Ana asks (focused till she opens the thread), the thread's while she answers
+    const a = on(m.ana) ? { s: '', last: m.ana } : typedAt(t, m.typing, TYPED);
+    fill(mainIn, a.s, !open, caretOnAt(t, a.last));
+    const r = on(m.thanks) ? { s: '', last: m.thanks } : typedAt(t, m.reply, THANKS);
+    fill(threadIn, r.s, open && on(m.fixed), caretOnAt(t, r.last));
     const n = [m.found, m.fixed, m.thanks].filter((x) => on(x)).length;
     if (sepCount) sepCount.textContent = n === 1 ? '1 reply' : `${n} replies`;
-    const rc = $('[data-qa="reply_bar_count"]', main[main.length - 1]);
+    const rc = $('[data-qa="reply_bar_count"]', anaMsg);
     if (rc) rc.textContent = n === 1 ? '1 reply' : `${n} replies`;
-    const bar = $('[data-qa="reply_bar"]', main[main.length - 1]);
+    const bar = $('[data-qa="reply_bar"]', anaMsg);
     if (bar) bar.style.visibility = n ? '' : 'hidden';
+    // (the channel's list as wide as the channel: Slack sizes it in pixels, as its view is)
+    const w = mainList.parentElement.getBoundingClientRect().width;
+    if (w > 0) for (const e of [mainList, ...$$('.c-scrollbar__child', mainList)]) e.style.width = w + 'px';
     lay(mainBox, mainList, true);
     lay(threadBox, threadList);
+    // the pointer: from the channel's box to the replies, pressed on them as the thread opens, gone a while after
+    const showArrow = m.point !== undefined && t >= m.point && t < (m.open ?? 1e9) + 0.8;
+    arrow.style.display = showArrow ? '' : 'none';
+    if (showArrow && bar) {
+      const from = mainIn.editor ? centre(mainIn.editor) : [600, 700];
+      const to = open ? arrowAt : centre(bar);
+      if (!open) arrowAt = to;
+      const k = easeIO((t - m.point) / Math.max(0.1, (m.open - 0.15) - m.point));
+      const x = from[0] + (to[0] - from[0]) * k, y = from[1] + 30 + (to[1] - from[1] - 30) * k;
+      const pressed = t >= m.open - 0.12 && t < m.open + 0.06;
+      arrow.style.transform = `translate(${x}px, ${y}px) scale(${pressed ? 0.88 : 1})`;
+    }
   };
+  let arrowAt = [0, 0];
   window.at(1e9);
 })();

@@ -78,12 +78,12 @@
   {
    "kind": "person",
    "by": "Ana",
-   "text": "@still.fail checkout is failing for some customers in the EU, they get a 500 after entering their card. Can you look?",
+   "text": "@still.fail EU cards get a 500 at checkout, can you look?",
    "when": "2 min ago"
   },
   {
    "kind": "agent",
-   "text": "Found it: cards that need 3-D Secure are sent back to a return page without the locale, so the bank's redirect lands on a 500. The fix is one line in the payment flow, but it touches payments. @Lin, ship it?",
+   "text": "Found it: the 3-D Secure redirect drops the locale. The fix touches payments. @Lin, ship it?",
    "when": "Just now",
    "options": [
     {
@@ -92,7 +92,7 @@
     },
     {
      "label": "Fix and deploy",
-     "detail": "Patch it, run the payment tests, deploy",
+     "detail": "Patch, test, deploy",
      "recommended": true
     }
    ]
@@ -102,33 +102,25 @@
  "answered": [
   [
    {
-    "at": 300,
+    "at": 200,
     "working": true,
-    "activity": "Fixing the 3-D Secure return URL"
+    "activity": "Fixing the 3-D Secure redirect"
    },
    {
-    "at": 1400,
-    "activity": "Running the payment tests"
-   },
-   {
-    "at": 2500,
-    "activity": "Deploying to production"
-   },
-   {
-    "at": 3700,
+    "at": 2200,
     "post": {
-     "text": "Fixed and live: EU cards go through 3-D Secure again, and all 14 payment tests pass. @Ana Costa can you try once more?"
+     "text": "Fixed and live. @Ana Costa can you try again?"
     }
    },
    {
-    "at": 4000,
+    "at": 2400,
     "working": false
    },
    {
-    "at": 7000,
+    "at": 4000,
     "post": {
      "by": "Ana",
-     "text": "Just paid with my French card, it works. Thanks! 🙌"
+     "text": "Works now, thanks! 🙌"
     }
    }
   ]

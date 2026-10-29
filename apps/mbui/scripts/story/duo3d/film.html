@@ -13,5 +13,11 @@ body{font-family:"SF Pro Display","PingFang SC",-apple-system,sans-serif;backgro
 #end{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;flex-direction:column;gap:26px;background:radial-gradient(1500px 1000px at 50% 42%,#f6f4f0,#e7e3dd 62%,#dcd7cf)}
 #end img{width:120px;height:120px}
 #end b{font-size:64px;font-weight:600;color:#1f1b17;letter-spacing:.5px}
-</style></head><body><div id="viewport"></div><div id="desk"><img id="desk0"><img id="desk1"></div><div id="end"><img src="../mark.svg"><b>still.fail</b></div>
+#end i{font-style:normal;font-size:38px;font-weight:500;color:#5a534b;margin-top:-6px}
+#end i:empty{display:none}
+/* a line under the picture saying what happens (FILM_CAPTIONS, compose_sim.mjs) */
+#cap{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);padding:14px 30px;border-radius:40px;opacity:0;white-space:nowrap;
+  font-size:44px;font-weight:600;color:#1f1b17;letter-spacing:.2px;background:rgba(250,248,245,.92);box-shadow:0 6px 24px rgba(0,0,0,.12)}
+#cap:empty{display:none}
+</style></head><body><div id="viewport"></div><div id="desk"><img id="desk0"><img id="desk1"></div><div id="end"><img src="../mark.svg"><b>still.fail</b><i id="endline"></i></div><div id="cap"></div>
 <script type="module" src="./film.js"></script></body></html>
