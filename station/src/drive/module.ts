@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { routes } from "../api/routes/transfers.ts";
-import { Refused } from "../mesh/bus.ts";
+import { type Bytes, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
 import { nameOf } from "../mesh/peer-http.ts";
 import { wall } from "../ops/fibers.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, StationDrive } from "../services.ts";
@@ -21,8 +21,12 @@ type Json = any;
 const scoped = (drive: Drive, g: { workspace: string; home: boolean }) => (g.home ? drive : drive.scoped(g.workspace));
 const join2 = (a: string, b: string) => (a === "" ? b : `${a}/${b}`);
 
-/// What another station reads of this one's drive with a grant of this one's: its names walked, a part of a file under
-/// them, the originals let go once moved.
+/// How much of a file is read at once as it is sent.
+const PIECE = 1024 * 1024;
+
+/// What another station reads of this one's drive with a grant of this one's: its names walked, a file under them (all
+/// of it from an offset after the answer, `whole`; a station from before asks for a part at a time), the originals let
+/// go once moved.
 export async function driveForPeer(drive: Drive, key: Buffer, request: Json, workspace: string | null, now: number): Promise<Json> {
   try {
     const g: Granted = verify(key, request?.grant, workspace, now);
@@ -36,8 +40,20 @@ export async function driveForPeer(drive: Drive, key: Buffer, request: Json, wor
         const path = typeof request.path === "string" ? request.path : "";
         const offset = typeof request.offset === "number" && Number.isSafeInteger(request.offset) && request.offset >= 0 ? request.offset : -1;
         if (!covers(g, path) || offset < 0) throw new DriveError("permission", "that is not what was granted");
-        const got = await d.read(g.root, join2(g.path, path), offset, CHUNK, g.anywhere);
-        return { data: got.bytes.toString("base64"), size: got.total, mtime: got.mtime };
+        const at = join2(g.path, path);
+        const got = await d.read(g.root, at, offset, request.whole === true ? PIECE : CHUNK, g.anywhere);
+        if (request.whole !== true) return { data: got.bytes.toString("base64"), size: got.total, mtime: got.mtime };
+        // The rest as it is read, until it changes (its bytes then end early, and the reader asks again).
+        async function* rest(): Bytes {
+          yield got.bytes;
+          for (let next = offset + got.bytes.length; next < got.total; ) {
+            const more = await d.read(g.root, at, next, PIECE, g.anywhere);
+            if (more.mtime !== got.mtime || more.total !== got.total || more.bytes.length === 0) return;
+            next += more.bytes.length;
+            yield more.bytes;
+          }
+        }
+        return withBytes({ size: got.total, mtime: got.mtime }, rest());
       }
       case "drive.release": {
         if (!g.move) throw new DriveError("permission", "that grant copies, and does not move");
@@ -54,10 +70,56 @@ export async function driveForPeer(drive: Drive, key: Buffer, request: Json, wor
   }
 }
 
-/// Another station's drive as a transfer's source: read over the station transport with its grant.
+/// Another station's drive as a transfer's source: read over the station transport with its grant, a file whole from
+/// where it is first read, its parts taken from what keeps coming (from a station from before, a part each request).
 export function peerSource(ask: (station: string, request: Json) => Promise<Json>, t: Transfer): Source {
   const station = t.from.station!;
   const base = { workspace: t.workspace, grant: t.from.grant };
+  /// The file coming now: which, where its next byte goes, what it is, what came and was not taken yet.
+  let coming: { path: string; at: number; size: number; mtime: number; bytes: AsyncIterator<Buffer>; carry: Buffer } | null = null;
+  const stop = async () => {
+    const was = coming;
+    coming = null;
+    await was?.bytes.return?.();
+  };
+  const read = async (path: string, offset: number, again = true): Promise<{ bytes: Buffer; size: number; mtime: number }> => {
+    if (coming !== null && (coming.path !== path || coming.at !== offset)) await stop();
+    if (coming === null) {
+      const got = await ask(station, { ...base, method: "drive.part", path, offset, whole: true });
+      if (typeof got?.size !== "number") throw new Error(`${station} answered no part of ${path}`);
+      const mtime = typeof got.mtime === "number" ? got.mtime : 0;
+      const bytes = bytesOf(got);
+      if (bytes === null) {
+        if (typeof got.data !== "string") throw new Error(`${station} answered no part of ${path}`);
+        return { bytes: Buffer.from(got.data, "base64"), size: got.size, mtime };
+      }
+      coming = { path, at: offset, size: got.size, mtime, bytes: bytes[Symbol.asyncIterator](), carry: Buffer.alloc(0) };
+    }
+    const c = coming;
+    const parts = [c.carry];
+    let n = c.carry.length;
+    let ended = false;
+    while (n < CHUNK && c.at + n < c.size) {
+      const next = await c.bytes.next().catch((error) => {
+        coming = null;
+        throw error;
+      });
+      if (next.done) {
+        ended = true;
+        break;
+      }
+      parts.push(next.value);
+      n += next.value.length;
+    }
+    const all = Buffer.concat(parts, n);
+    const bytes = all.subarray(0, CHUNK);
+    c.carry = all.subarray(bytes.length);
+    c.at += bytes.length;
+    if (ended || c.at >= c.size) coming = null;
+    // It changed while it came: asked again, as it is now.
+    if (bytes.length === 0 && c.at < c.size && again) return read(path, offset, false);
+    return { bytes, size: c.size, mtime: c.mtime };
+  };
   return {
     station,
     part: CHUNK,
@@ -65,12 +127,11 @@ export function peerSource(ask: (station: string, request: Json) => Promise<Json
       const got = await ask(station, { ...base, method: "drive.walk", names });
       return { items: Array.isArray(got?.items) ? got.items : [] };
     },
-    read: async (path, offset) => {
-      const got = await ask(station, { ...base, method: "drive.part", path, offset });
-      if (typeof got?.data !== "string" || typeof got.size !== "number") throw new Error(`${station} answered no part of ${path}`);
-      return { bytes: Buffer.from(got.data, "base64"), size: got.size, mtime: typeof got.mtime === "number" ? got.mtime : 0 };
+    read: (path, offset) => read(path, offset),
+    release: async (names) => {
+      await stop();
+      await ask(station, { ...base, method: "drive.release", names });
     },
-    release: async (names) => void (await ask(station, { ...base, method: "drive.release", names })),
   };
 }
 

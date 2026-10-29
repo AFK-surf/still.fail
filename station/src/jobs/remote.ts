@@ -30,8 +30,9 @@ import type { Cloud } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
-import { type Inbox, MESH_WAIT_MS, type PeerCall, PeerBus, Refused } from "../mesh/bus.ts";
-import { Bulk, LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
+import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
+import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
+import { Bulk, LINK, PACKED, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 
 // The requests between stations are the platform's bus (mesh/bus.ts); its types, here as they always were.
 export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
@@ -1115,7 +1116,9 @@ export class Remote {
       }
       case "sync.put": {
         ongoing();
-        return { pieces: await putBlobs(join(syncing, "blobs"), field(request, "blobs"), fromBase64(text(request, "data"))) };
+        // The packed pieces after the request; from a station from before, base64 in it.
+        const packed = bytesOf(request);
+        return { pieces: await putBlobs(join(syncing, "blobs"), field(request, "blobs"), packed !== null ? await readBytes(packed, PACKED) : fromBase64(text(request, "data"))) };
       }
       case "sync.commit": {
         const state = ongoing();
@@ -1199,6 +1202,29 @@ export class Remote {
       }
       case "file.put": {
         if (job) throw new Error("inputs are immutable after a task starts");
+        const incoming = bytesOf(request);
+        if (incoming !== null) {
+          // The whole file after the request (`size` of it), written as it comes; a station from before sends chunks.
+          const size = asU64(field(request, "size"));
+          if (size === null || size > MAX_FILE) throw new Error("file limit exceeded");
+          const name = text(request, "path");
+          const path = filePath(work, name, true);
+          if (meta.uploads === null || typeof meta.uploads !== "object" || Array.isArray(meta.uploads)) meta.uploads = {};
+          meta.uploads[name] = false;
+          writeJson(record, meta);
+          const file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o666);
+          try {
+            if (!(await file.stat()).isFile()) throw new Error("only regular files can be transferred");
+            if ((await writeBytes(file, incoming, 0, size)) !== size) throw new Error("the file did not all come");
+            await file.truncate(size);
+            await file.sync();
+          } finally {
+            await file.close();
+          }
+          meta.uploads[name] = true;
+          writeJson(record, meta);
+          return { bytes: size };
+        }
         const offset = asU64(field(request, "offset"));
         if (offset === null) throw new Error("offset is required");
         const data = fromBase64(text(request, "data"));
@@ -1238,6 +1264,8 @@ export class Remote {
           if (size > MAX_FILE) throw new Error("file limit exceeded");
           const offset = asU64(field(request, "offset")) ?? 0;
           if (offset > size) throw new Error("offset past end");
+          // All of it from there, after the answer; a station from before asks for chunks.
+          if (field(request, "whole") === true) return withBytes({ size }, fileBytes(path, offset, size));
           const buffer = Buffer.alloc(CHUNK);
           const n = readSync(fd, buffer, 0, CHUNK, offset);
           return { data: buffer.subarray(0, n).toString("base64"), size, eof: offset + n >= size };
@@ -1516,8 +1544,8 @@ export class Remote {
     return finished ? "over" : "wait";
   }
 
-  /// A file of a task's station (`request`'s path) to `path` here, in chunks; its size. An existing file is replaced
-  /// only when `replace`.
+  /// A file of a task's station (`request`'s path) to `path` here, whole after one answer (a station from before answers
+  /// a chunk, and is asked for each); its size. An existing file is replaced only when `replace`.
   private async download(ask: (request: Json) => Promise<Json>, request: Json, path: string, replace: boolean): Promise<number> {
     if (!replace && existsSync(path)) throw new Error("local output already exists; choose another path");
     const temp = withExtension(path, `${randomBytes(8).toString("hex")}.part`);
@@ -1529,7 +1557,18 @@ export class Remote {
       try {
         let offset = 0;
         for (;;) {
-          const answer = await this.bulk.run(() => ask({ ...request, method: "file.get", offset }));
+          const answer = await this.bulk.run(async () => {
+            const got = await ask({ ...request, method: "file.get", offset, whole: true });
+            const bytes = bytesOf(got);
+            if (bytes !== null) offset += await writeBytes(file, bytes, offset, MAX_FILE);
+            return got;
+          });
+          if (bytesOf(answer) !== null) {
+            if (offset !== asU64(field(answer, "size"))) throw new Error("the file did not all come");
+            await file.sync();
+            size = offset;
+            break;
+          }
           const data = fromBase64(text(answer, "data"));
           if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("invalid file response");
           for (let at = 0; at < data.length; ) at += (await file.write(data, at, data.length - at)).bytesWritten;
@@ -1556,13 +1595,24 @@ export class Remote {
   private async fetchFile(ask: (request: Json) => Promise<Json>, path: string, limit: number): Promise<Buffer | null> {
     const parts: Buffer[] = [];
     for (let offset = 0; ; ) {
-      const answer = await this.bulk.run(() => ask({ method: "file.get", path, offset }));
-      if ((asU64(field(answer, "size")) ?? 0) > limit) return null;
-      const data = fromBase64(text(answer, "data"));
-      parts.push(data);
-      offset += data.length;
-      if (field(answer, "eof") === true) return Buffer.concat(parts);
-      if (data.length === 0) throw new Error("file transfer made no progress");
+      const got = await this.bulk.run(async () => {
+        const answer = await ask({ method: "file.get", path, offset, whole: true });
+        const bytes = bytesOf(answer);
+        const size = asU64(field(answer, "size")) ?? 0;
+        if (size > limit) {
+          if (bytes !== null) await stopBytes(bytes);
+          return null;
+        }
+        if (bytes === null) return { data: fromBase64(text(answer, "data")), eof: field(answer, "eof") === true };
+        const data = await readBytes(bytes, limit);
+        if (offset + data.length !== size) throw new Error("the file did not all come");
+        return { data, eof: true };
+      });
+      if (got === null) return null;
+      parts.push(got.data);
+      offset += got.data.length;
+      if (got.eof) return Buffer.concat(parts);
+      if (got.data.length === 0) throw new Error("file transfer made no progress");
     }
   }
 
@@ -1830,6 +1880,13 @@ export class Remote {
         const stat = fstatSync(fd);
         const size = stat.size;
         if (!stat.isFile() || size > MAX_FILE) throw new Error("input must be a regular file of at most 1 GiB");
+        // Whole, after one request; to a station from before, in chunks.
+        try {
+          await this.bulk.run(() => this.ask(station, withBytes({ ...request, method: "file.put", offset: 0, size }, fileBytes(path, 0, size))));
+          return { uploaded: path, bytes: size };
+        } catch (error) {
+          if (!(error instanceof NoBytes)) throw error;
+        }
         let offset = 0;
         for (;;) {
           const chunk = Buffer.alloc(CHUNK);

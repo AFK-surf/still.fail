@@ -6,7 +6,7 @@ import { log } from "../ops/log.ts";
 import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
-import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
+import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
@@ -50,7 +50,7 @@ export const MeshLive = Layer.effectDiscard(
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -142,7 +142,7 @@ export const MeshLive = Layer.effectDiscard(
         yield* FiberSet.run(
           connections,
           Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
+            conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
             : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : (parts.allAlpns().find((p) => conn.alpn().equals(p.alpn))?.serve(conn) ?? serve(members, conn)),
