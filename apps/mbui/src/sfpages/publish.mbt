@@ -617,6 +617,6 @@ let publish_file_press : @ui.Style = @ui.css("w=Full h=Full")
 ///|
 /// The room its ✕ (＋ once taken out) hangs in past its top and right edge (@sf.with_corner_remove), kept in the
 /// picture taken too.
-pub fn publish_file_hung() -> Double {
+fn publish_file_hung() -> Double {
   @sf.corner_remove_reach(@sf.message_file_corner)
 }
