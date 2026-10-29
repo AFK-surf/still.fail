@@ -200,25 +200,37 @@ pub fn chat_row(
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
   // (`apart`: the room its list keeps under it, outside the slot a swipe moves it in)
-  // a finger's: its chat's page in view, its ground on at once; gone back from it, the ground stays while the page
-  // slides off and a while after, then fades (the user, 2026-10-29: 「别那么快消失，留一会儿」)
-  let lit = if finger {
-    @motion.animate(
-      c,
-      "row/" + key + "/on",
-      if on { 1.0 } else { 0.0 },
-      spec=if on { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave, delay=left_lit_ms) },
-    )
+  // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
+  // and a while after, then fades as it is painted (the user, 2026-10-29: 「别那么快消失，留一会儿」)
+  let left_at = if !finger {
+    -1.0
+  } else if on {
+    rows_left[key] = -1.0
+    -1.0
   } else {
-    0.0
+    match rows_left.get(key) {
+      Some(at) if at < 0.0 => {
+        rows_left[key] = c.moment()
+        c.moment()
+      }
+      Some(at) if c.moment() < at + left_lit_ms + left_fade_ms => at
+      Some(_) => {
+        rows_left.remove(key)
+        -1.0
+      }
+      None => -1.0
+    }
   }
+  let left = left_at >= 0.0
+  let lit = on || (left && !@kit.after(c, "row-left/" + key, left, left_lit_ms, later=true))
+  let fading = left && !lit
   let draw = fn(tx : Double, apart : Bool) -> Int {
     let ground = if finger {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
-      } else if lit > 0.0 {
-        @sf.alpha(t.p.selected, lit)
+      } else if lit {
+        t.p.selected
       } else if lifted >= 0.0 {
         // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
         let p = lifted / lift_ms
@@ -245,6 +257,18 @@ pub fn chat_row(
       style=if lifted_ink > 0.0 { place.then(row_lifted(lifted_ink)) } else { place },
       tx~,
       fn() {
+      // (its ground fading, under it: on Leave from its time on, by the clock as it is painted)
+      if fading && ground == 0L {
+        c.layer(fn() {
+          let under = c.box(style=left_ground(at), fn() {  })
+          let from = left_at + left_lit_ms
+          c.look_by(under, fn() {
+            let p = dclamp((c.now_before(from + left_fade_ms) - from) / left_fade_ms, 0.0, 1.0)
+            @ui.look(alpha=1.0 - @ui.Ease::Leave.at(p))
+          })
+        })
+        |> ignore
+      }
       // (the library's list row, a chat's as high as its row always is: @sf.list_row)
       @sf.list_row(
         c,
@@ -456,6 +480,19 @@ pub let left_lit_ms : Double = @ui.nav_push_ms * 2.0
 
 ///|
 pub let left_fade_ms : Double = 400.0
+
+///|
+/// Each finger's row whose chat is in view (-1) or was gone back from, when (the frames' clock), till its ground has
+/// faded.
+// kept across runs: rows' moments, each forgotten once its ground has faded
+let rows_left : Map[String, Double] = Map([])
+
+///|
+/// A finger's row's ground fading, gone back from its chat, where its list stands: the selected one, its corners the
+/// row's (@sf.list_row_slot).
+fn left_ground(at : @sf.ListAt) -> @ui.Style {
+  @sf.list_row_slot(at).then(@ui.style(h=Full, bg=Data(@sf.theme().p.selected)))
+}
 
 ///|
 /// How long a row going ahead of others has a ground of its own (motion's lift).
