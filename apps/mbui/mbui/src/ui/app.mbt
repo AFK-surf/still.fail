@@ -1261,8 +1261,9 @@ fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
 
 ///|
 /// The back gesture's step to the stack that takes back: x in its own
-/// terms (from its left), its width.
-fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double) -> Unit {
+/// terms (from its left), its width; the system's progress where it is the
+/// system's (on_back).
+fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? : Double = -1.0) -> Unit {
   match self.back {
     Some(f) => {
       let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
@@ -1271,7 +1272,7 @@ fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double) -> Unit {
       } else {
         (0.0, self.width)
       }
-      f(kind, x - left, w, t)
+      f(kind, x - left, w, t, progress)
     }
     None => ()
   }
@@ -1311,8 +1312,8 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// from the edge it came from), let go to go back, called off; or a back
 /// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
-fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
-  took_input("back", h_now(), [kind.to_double(), x, _progress, edge.to_double()])
+fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
+  took_input("back", h_now(), [kind.to_double(), x, progress, edge.to_double()])
   if kind != 1 {
     hand_event()
   }
@@ -1321,8 +1322,8 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
   // from the right edge, the finger's way is mirrored
   let from_left = if edge == 1 { c.width - x } else { x }
   match kind {
-    0 => c.back_gesture(0, from_left, t)
-    1 => c.back_gesture(1, from_left, t)
+    0 => c.back_gesture(0, from_left, t, progress~)
+    1 => c.back_gesture(1, from_left, t, progress~)
     2 => c.back_gesture(4, 0.0, t)
     _ => c.back_gesture(3, 0.0, t)
   }

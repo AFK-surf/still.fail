@@ -296,6 +296,6 @@ pub fn Ctx::frame_dt(self : Ctx) -> Double {
 /// it (Ctx::nav: a page's own goes before the stack's): for what lies over the pages or over a page (a sheet, a panel,
 /// a step of a page's), which back closes first. No edge swipe comes here.
 pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
-  self.back_next = Some(fn(kind, _, _, _) { if kind == 4 { f() } })
+  self.back_next = Some(fn(kind, _, _, _, _) { if kind == 4 { f() } })
   self.back_node_next = -1
 }

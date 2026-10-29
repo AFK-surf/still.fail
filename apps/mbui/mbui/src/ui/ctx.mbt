@@ -461,11 +461,12 @@ pub struct Ctx {
   // back: where it goes this frame (the Nav drawn that can go back) and the
   // node it is drawn in, as the last frame had them; whether the host was
   // told that the app takes back; a finger on the left edge (1: there, 2:
-  // moving the page)
-  mut back : ((Int, Double, Double, Double) -> Unit)?
+  // moving the page). Its steps: kind, x, width, time, the system's progress
+  // (-1 none: mbui's own edge)
+  mut back : ((Int, Double, Double, Double, Double) -> Unit)?
   mut back_node : Int
   mut back_edge : Double
-  mut back_next : ((Int, Double, Double, Double) -> Unit)?
+  mut back_next : ((Int, Double, Double, Double, Double) -> Unit)?
   mut back_node_next : Int
   mut back_edge_next : Double
   mut back_told : Bool

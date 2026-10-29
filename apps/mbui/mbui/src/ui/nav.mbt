@@ -104,6 +104,12 @@ struct Nav[P] {
   mut x0 : Double
   mut vel : Double
   track : Tracker
+  // the system's gesture (Android's): where its finger last moved to, when, and the progress and the page's place
+  // then; the system's progress said with it after that is its own going back as it calls the gesture off
+  mut moved_x : Double
+  mut moved_at : Double
+  mut moved_progress : Double
+  mut moved_p : Double
   on_leave : (P) -> Unit
   // the pages that come in from the left and go back that way
   from_left : (P) -> Bool
@@ -160,6 +166,10 @@ pub fn[P] Nav::new(
     x0: 0.0,
     vel: 0.0,
     track: Tracker::new(),
+    moved_x: 0.0,
+    moved_at: 0.0,
+    moved_progress: -1.0,
+    moved_p: 0.0,
     on_leave,
     from_left,
     mover: Mover::new(),
@@ -548,8 +558,16 @@ let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 /// Back as a back gesture asks: kind 0 started at x (in a view `w` wide), 1
 /// moved to x, 2 let go there (back if past a third or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
-/// with none); `t` the time. Never past its floor (Ctx::nav's `floor`).
-fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double) -> Unit {
+/// with none); `t` the time; `progress` the system's (-1 none: mbui's own
+/// edge). Never past its floor (Ctx::nav's `floor`).
+fn[P] Nav::gesture(
+  self : Nav[P],
+  kind : Int,
+  x : Double,
+  w : Double,
+  t : Double,
+  progress? : Double = -1.0,
+) -> Unit {
   let w = dmax(w, 1.0)
   match kind {
     0 =>
@@ -561,12 +579,33 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         self.vel = 0.0
         self.track.reset()
         self.track.add(t, x)
+        self.moved_x = x
+        self.moved_at = t
+        self.moved_progress = progress
+        self.moved_p = 0.0
       }
     1 =>
       if self.mode == 3 {
-        self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
-        self.finger.set(self.p)
-        self.track.add(t, x)
+        if progress >= 0.0 && x == self.moved_x {
+          // the system's step with its finger where it was, longer than a moving finger's steps are apart: lifted,
+          // the system going back on its own before it says it is called off (Android's BackProgressAnimator takes
+          // its progress to 0 first, on its spring, the finger's place kept); the page goes back with that progress,
+          // not standing where the finger left it. (A finger held still: its progress comes to where the finger is,
+          // by no more than it lagged.)
+          if t - self.moved_at > tracker_gap_ms && self.moved_progress > 0.0 && progress < self.moved_progress {
+            self.p = self.moved_p * progress / self.moved_progress
+            self.finger.set(self.p)
+            self.track.add(t, self.x0 + self.p * w)
+          }
+        } else {
+          self.p = dclamp((x - self.x0) / w, 0.0, 1.0)
+          self.finger.set(self.p)
+          self.track.add(t, x)
+          self.moved_x = x
+          self.moved_at = t
+          self.moved_progress = progress
+          self.moved_p = self.p
+        }
       }
     2 =>
       if self.mode == 3 {
@@ -695,7 +734,7 @@ pub fn[P] Ctx::nav(
   if self.back_next is Some(_) && !leaving && takes_back {
     ()
   } else if takes_back && (n > floor + 1 || nav.mode >= 3 || (floor == 0 && nav.mode != 0)) {
-    self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
+    self.back_next = Some(fn(kind, x, w, t, progress) { nav.gesture(kind, x, w, t, progress~) })
     self.back_node_next = i
     self.back_edge_next = edge
   } else {
@@ -865,7 +904,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 pub fn Ctx::back(self : Ctx) -> Bool {
   match self.back {
     Some(f) => {
-      f(4, 0.0, 1.0, self.clock)
+      f(4, 0.0, 1.0, self.clock, -1.0)
       self.read_changed("gone back")
       true
     }
@@ -877,7 +916,7 @@ pub fn Ctx::back(self : Ctx) -> Bool {
 /// Back taken by what is drawn over the stack (a viewer, a sheet), on the frames it calls this, after the stack is
 /// drawn: the system's back, a back button (Ctx::back) call `f` once let go; no edge swipe of its own.
 pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
-  self.back_next = Some(fn(kind, _x, _w, _t) {
+  self.back_next = Some(fn(kind, _x, _w, _t, _) {
     if kind == 2 || kind == 4 {
       f()
     }
@@ -904,7 +943,7 @@ pub(all) enum BackStep {
 /// for what moves back with the finger as a stack's page does without being one (a tape's panels). No edge swipe of
 /// its own.
 pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
-  self.back_next = Some(fn(kind, x, _w, t) {
+  self.back_next = Some(fn(kind, x, _w, t, _) {
     match kind {
       0 => f(Began(x, t))
       1 => f(Moved(x, t))

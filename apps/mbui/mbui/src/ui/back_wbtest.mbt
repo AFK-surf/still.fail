@@ -46,6 +46,37 @@ test "on Android the swipe from the edge is the system's: the finger taken from 
 }
 
 ///|
+test "on Android a swipe called off goes back with the system's progress as it falls, not standing where the finger lifted" {
+  let nav = Nav::new(1)
+  let t = Tester::new(back_view(nav), platform=2)
+  nav.push(2)
+  t.run_for(nav_push_ms)
+  on_back(0, 0.0, 0.0, 0)
+  back_step(t)
+  // out, then quickly back, and lifted: the system's progress a little behind the finger
+  for step in [(40.0, 0.08), (80.0, 0.17), (120.0, 0.26), (160.0, 0.35), (200.0, 0.43), (140.0, 0.38), (80.0, 0.27)] {
+    on_back(1, step.0, step.1, 0)
+    back_step(t)
+  }
+  assert_eq(t.rect_of("title 2").unwrap().0, 80.0)
+  // called off: the system takes its progress to 0 on its own, the finger's place kept, before it says so
+  let mut was = 80.0
+  for progress in [0.2, 0.14, 0.09, 0.05, 0.02, 0.0] {
+    on_back(1, 80.0, progress, 0)
+    back_step(t)
+    let x = t.rect_of("title 2").unwrap().0
+    assert_true(x <= was, msg="\{x} \{was}")
+    was = x
+  }
+  // back with it: where its progress is, there when it is
+  assert_true(was < 1.0, msg="\{was}")
+  on_back(3, 0.0, 0.0, 0)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(nav.depth(), 2)
+  assert_eq(t.rect_of("title 2").unwrap().0, 0.0)
+}
+
+///|
 test "on Android a finger dragged from the edge is not a swipe back: the page stays where it is" {
   let nav = Nav::new(1)
   let t = Tester::new(back_view(nav), platform=2)
