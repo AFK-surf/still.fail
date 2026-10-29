@@ -34,48 +34,53 @@ pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
 /// Where `passage` (a quote's) is in `text`, its spaces and line breaks aside (Chat.tsx findText: each run of them one
 /// space, either side): (from, to), UTF-16, its first letter to its last; None where it is not, or is only spaces.
 pub fn find_passage(text : String, passage : String) -> (Int, Int)? {
-  // each side with its runs of spaces as one, and where each letter kept was in the text
-  let flat = StringBuilder()
-  let at : Array[Int] = []
-  let mut spaced = false
-  for i in 0..<text.length() {
-    let u = text.unsafe_charcode_at(i)
-    if is_space(u) {
-      if !spaced && at.length() > 0 {
-        flat.write_char(' ')
-        at.push(i)
+  // each side's letters with their runs of spaces as one; the text's with where each starts and ends in it
+  let flat : Array[Char] = []
+  let from : Array[Int] = []
+  let to : Array[Int] = []
+  let mut at = 0
+  for ch in text {
+    let n = if ch.to_int() > 0xFFFF { 2 } else { 1 }
+    if is_space(ch.to_int()) {
+      if flat.length() > 0 && flat[flat.length() - 1] != ' ' {
+        flat.push(' ')
+        from.push(at)
+        to.push(at + n)
       }
-      spaced = true
     } else {
-      flat.write_substring(text, i, 1)
-      at.push(i)
-      spaced = false
+      flat.push(ch)
+      from.push(at)
+      to.push(at + n)
     }
+    at = at + n
   }
-  let wanted = StringBuilder()
-  let mut any = false
+  let wanted : Array[Char] = []
   let mut gap = false
-  for i in 0..<passage.length() {
-    let u = passage.unsafe_charcode_at(i)
-    if is_space(u) {
+  for ch in passage {
+    if is_space(ch.to_int()) {
       gap = true
     } else {
-      if gap && any {
-        wanted.write_char(' ')
+      if gap && wanted.length() > 0 {
+        wanted.push(' ')
       }
       gap = false
-      wanted.write_substring(passage, i, 1)
-      any = true
+      wanted.push(ch)
     }
   }
-  let wanted = wanted.to_string()
-  if !any {
+  let m = wanted.length()
+  if m == 0 {
     return None
   }
-  match flat.to_string().find(wanted) {
-    Some(k) => Some((at[k], at[k + wanted.length() - 1] + 1))
-    None => None
+  for k in 0..<(flat.length() - m + 1) {
+    let mut j = 0
+    while j < m && flat[k + j] == wanted[j] {
+      j = j + 1
+    }
+    if j == m {
+      return Some((from[k], to[k + m - 1]))
+    }
   }
+  None
 }
 
 ///|

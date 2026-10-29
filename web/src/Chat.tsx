@@ -2920,8 +2920,8 @@ function findText(root: Element, wanted: string): Range | null {
 
 let passageMarks: { host: HTMLElement; layer: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
 /**
- * Marks a range for a moment, as a passage picked is: a ground behind each of its lines, as tall and as wide as its
- * words; in, held, and faded (`[data-passage-marks]`, global.css.ts). The layer is in the block the
+ * Marks a range for a moment: a ground behind each of its lines, as tall and as wide as its words, round at the
+ * passage's two ends and square where it runs on from one line to the next; in, held, and faded (`[data-passage-marks]`, global.css.ts). The layer is in the block the
  * words are in, below them and above its ground (your bubble's).
  */
 function flashRange(range: Range): void {
@@ -2945,9 +2945,12 @@ function flashRange(range: Range): void {
   }
   const box = host.getBoundingClientRect();
   const x = box.left + host.clientLeft, y = box.top + host.clientTop;
-  layer.replaceChildren(...lines.map((l) => {
+  // Round at the passage's two ends alone: its first line's start, its last line's end (global.css.ts).
+  layer.replaceChildren(...lines.map((l, i) => {
     const ground = document.createElement("span");
     Object.assign(ground.style, { left: `${l.left - x}px`, top: `${l.top - y}px`, width: `${l.right - l.left}px`, height: `${l.bottom - l.top}px` });
+    if (i === 0) ground.dataset.start = "";
+    if (i === lines.length - 1) ground.dataset.end = "";
     return ground;
   }));
   passageMarks = { host, layer, timer: setTimeout(unmarkPassage, 2400) };

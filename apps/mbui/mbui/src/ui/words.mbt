@@ -31,6 +31,7 @@ priv struct WordsMark {
   a : Int
   b : Int
   color : Int64
+  round : Double
 }
 
 ///|
@@ -42,12 +43,14 @@ let words_marks : Array[WordsMark] = []
 let words_kept : Map[String, Words] = {}
 
 ///|
-/// This frame's selections, by rich node: the range in its own text and the colour drawn behind it.
-let words_sel : Map[Int, (Int, Int, Int64)] = {}
+/// This frame's selections, by rich node: the range in its own text, the colour drawn behind it, how round its ends
+/// are, and whether the passage starts and ends in it (its ends rounded there, not where it runs on to another line).
+let words_sel : Map[Int, (Int, Int, Int64, Double, Bool, Bool)] = {}
 
 ///|
 /// Box `i` (built this frame) holds words that may be selected, kept as `key` once laid out (words_of); `a` until
-/// `b` of them is drawn selected, `color` behind it (none while `a` >= `b`).
+/// `b` of them is drawn selected, `color` behind it (none while `a` >= `b`): a ground a line, its corners `round` at
+/// the passage's two ends alone, square where it runs on from one line to the next.
 pub fn Ctx::words(
   self : Ctx,
   i : Int,
@@ -55,9 +58,10 @@ pub fn Ctx::words(
   a? : Int = 0,
   b? : Int = 0,
   color? : Int64 = 0L,
+  round? : Double = 0.0,
 ) -> Unit {
   ignore(self)
-  words_marks.push({ node: i, key, a, b, color })
+  words_marks.push({ node: i, key, a, b, color, round })
 }
 
 ///|
@@ -112,7 +116,7 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
             let la = imax(m.a - start, 0)
             let lb = imin(m.b - start, rl.text.length())
             if la < lb {
-              words_sel[i] = (la, lb, m.color)
+              words_sel[i] = (la, lb, m.color, m.round, m.a >= start, m.b <= start + rl.text.length())
             }
           }
         }
@@ -177,10 +181,32 @@ fn Ctx::rich_nodes(self : Ctx, i : Int, out : Array[Int]) -> Unit {
 /// The selection drawn behind rich node `i`'s words this frame (paint_rich).
 fn Ctx::paint_selection(self : Ctx, i : Int, lay : RichLayout, ox : Double, oy : Double, alpha : Double) -> Unit {
   match words_sel.get(i) {
-    Some((a, b, color)) =>
+    Some((a, b, color, round, starts, ends)) => {
+      // (one ground a line: a line's rects, where it has several, as one)
+      let lines : Array[(Double, Double, Double, Double)] = []
       for r in lay.rects(a, b) {
-        self.emit_rect(ox + r.0, oy + r.1, r.2, r.3, 0.0, color, 0.0, 0L, alpha)
+        let (x, y, w, h) = r
+        match lines.last() {
+          Some((lx, ly, lw, lh)) if y < ly + lh && y + h > ly => {
+            let x0 = dmin(lx, x)
+            let y0 = dmin(ly, y)
+            lines[lines.length() - 1] = (x0, y0, dmax(lx + lw, x + w) - x0, dmax(ly + lh, y + h) - y0)
+          }
+          _ => lines.push(r)
+        }
       }
+      for k, r in lines {
+        let (x, y, w, h) = r
+        self.emit_rect(ox + x, oy + y, w, h, 0.0, color, 0.0, 0L, alpha)
+        if round > 0.0 {
+          let r = dmin(round, dmin(w, h) / 2.0)
+          // its start's corners on its first line, its end's on its last
+          let first = if k == 0 && starts { r } else { 0.0 }
+          let last = if k == lines.length() - 1 && ends { r } else { 0.0 }
+          self.corners_each(self.ninst - 1, first, last, last, first)
+        }
+      }
+    }
     None => ()
   }
 }

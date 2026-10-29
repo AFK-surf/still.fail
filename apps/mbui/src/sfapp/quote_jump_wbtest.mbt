@@ -47,6 +47,16 @@ test "a quote's card pressed: the list goes to the message it quotes, and only t
     assert_true(mw < ww - 1.0 || marks.length() > 1)
     assert_true(((colour & 0xFFL).to_double() / 255.0 - @sfbase.picked_alpha).abs() < 0.02)
   }
+  // a ground a line, round at the passage's two ends alone: its first line's start, its last line's end (here it runs
+  // on over two lines, square where it does)
+  let lines = t
+    .drawn_rect_corners()
+    .filter(fn(r) { r.4 >> 8 == p.accent >> 8 && (r.4 & 0xFFL) != 0L })
+    .map(fn(r) { r.5 })
+  assert_eq(lines.length(), 2)
+  let round = @sf.ui_theme().corner(Md)
+  assert_eq(lines[0], (round, 0.0, 0.0, round))
+  assert_eq(lines[1], (0.0, round, round, 0.0))
   // then gone, nothing of it after
   t.run_for(flash_ms)
   t.draw()

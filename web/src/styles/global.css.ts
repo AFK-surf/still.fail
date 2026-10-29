@@ -306,7 +306,7 @@ globalStyle("mark[data-stroke]::after", {
 });
 globalStyle(`${STILL} mark[data-stroke]::after`, stillAtOnce);
 /** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): as a
- *  passage picked in it is, the accent's ground behind each of its lines, under the words (the layer is below the text
+ *  passage picked in it is coloured, the accent's ground behind each of its lines, under the words (the layer is below the text
  *  of the block it is in). */
 globalStyle("[data-passage-host]", { position: "relative", isolation: "isolate" });
 globalStyle("[data-passage-marks]", { position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none" });
@@ -314,4 +314,7 @@ globalStyle("[data-passage-marks] > span", {
   position: "absolute",
   background: `color-mix(in srgb, ${vars.accent} 26%, transparent)`, animation: `${passageFlashKeyframes} 2400ms both`,
 });
+// own corner: a passage's ends, round where it starts and ends, square where it runs on to the next line (docs/ui-panels.md)
+globalStyle("[data-passage-marks] > span[data-start]", { borderTopLeftRadius: `calc(6px * ${vars.cornerScale})`, borderBottomLeftRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape }); // own corner: a passage's start
+globalStyle("[data-passage-marks] > span[data-end]", { borderTopRightRadius: `calc(6px * ${vars.cornerScale})`, borderBottomRightRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape }); // own corner: a passage's end
 globalStyle(`${STILL} [data-passage-marks] > span`, stillFlash(passageFlashHeldKeyframes, "2400ms"));

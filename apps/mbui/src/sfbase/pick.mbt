@@ -105,8 +105,8 @@ pub fn mouse_picks() -> Bool {
 /// (`mouse`), what of it the page's selection holds is told the pill, and a right click on it offers its turn shared
 /// (`share`, where it is given: share_offered); held with a finger, its bar shares its turn and copies `link` too
 /// (where they are given). `marks` drawn behind its words first (a search's strokes), its words
-/// kept as laid out then too (`keep`); `lit`, a passage of them drawn as one picked is, on its own ground (a quote's
-/// that led here: from, to, the ground), while none is picked in it.
+/// kept as laid out then too (`keep`); `lit`, a passage of them on its own ground (a quote's that led here: from, to,
+/// the ground), its two ends round, while none is picked in it.
 pub fn pickable(
   c : @ui.Ctx,
   ts : String,
@@ -141,7 +141,8 @@ pub fn pickable(
   if pk.ts == ts {
     c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, picked_alpha))
   } else if lit is Some((a, b, color)) {
-    c.words(box, key, a~, b~, color~)
+    // (round at the passage's two ends, square where it runs on to the next line)
+    c.words(box, key, a~, b~, color~, round=c.theme().corner(Md))
   } else if pressed_in || keep {
     c.words(box, key)
   }
