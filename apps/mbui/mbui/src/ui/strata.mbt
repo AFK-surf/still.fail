@@ -80,10 +80,9 @@ pub fn Ctx::stratum(self : Ctx, i : Int, s : Stratum) -> Unit {
 ///|
 /// What flies (Flying), put off till now: painted, over what was painted before (a stratum over it about to be).
 fn Ctx::land_flying(self : Ctx) -> Unit {
-  if dr.mode != 0 || dr.overlaying || dr.raising || dr.covering || dr.over_all {
+  if dr.mode == mode_hits || dr.overlaying || dr.raising || dr.covering || dr.over_all {
     return
   }
-  self.raise_flying()
   self.paint_overlays()
 }
 

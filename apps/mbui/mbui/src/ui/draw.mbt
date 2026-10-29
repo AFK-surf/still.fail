@@ -168,6 +168,19 @@ priv struct Drawn {
 }
 
 ///|
+/// A move of what is painted moved by a look of its own (Ctx::paint_node's `moved`): about (ox, oy) by sx, sy, then by
+/// dx, dy, turned by rot about where its point is drawn.
+priv struct Move {
+  ox : Double
+  oy : Double
+  sx : Double
+  sy : Double
+  dx : Double
+  dy : Double
+  rot : Double
+} derive(Eq)
+
+///|
 priv struct DrawState {
   entries : Array[Drawn]
   /// by node: its entry this build (when `stamp` is this build's)
@@ -181,7 +194,13 @@ priv struct DrawState {
   /// 0 drawn and tapped, 1 only its tap rects (as laid out), 2 only drawn (as it looks)
   mut mode : Int
   mut overlaying : Bool
-  overlay : Array[(Int, Double)]
+  /// what is Flying (strata.mbt) put off where it was come to, painted at the next stratum over it (a bar, a cover, a
+  /// layer opened over the page) or once its layer is painted: its node, how faded, and the moves of what held it
+  /// drawn moved by a look of its own (outermost first: Move), made on it as they would have been in its place. Never
+  /// painted in its place: nothing that records what is painted (a kept part, a list's row) holds any of it.
+  overlay : Array[(Int, Double, Array[Move])]
+  /// the moves of what is being painted moved by a look of its own, outermost first (what flies in it takes them)
+  moves : Array[Move]
   /// what is over the scrim of the modal layer up (Stratum's OverScrim), painted once that scrim is (Ctx::paint_raised); the
   /// scrims built this frame (overlay.mbt), and whether those are being painted
   raised : Array[(Int, Double)]
@@ -193,10 +212,6 @@ priv struct DrawState {
   /// painted after them covers them, and a layer opened over them does; drawn where they were painted (what holds them
   /// moved them with its look, as what it holds)
   tops : Array[(Int, Int)]
-  /// what is Flying (strata.mbt) painted so where it could not be put off, as `tops`: put after the rest painted so
-  /// far at the next stratum over it (a bar, a cover, a layer opened over the page) or once its layer is painted, under
-  /// the `tops` (handles are over what flies)
-  flying_tops : Array[(Int, Int)]
   /// the page's covers built this frame (Ctx::stratum's Cover), what is over them (OverCover) waiting for one to be
   /// painted, and whether that is being painted
   covers : Array[Int]
@@ -223,11 +238,11 @@ let dr : DrawState = {
   mode: 0,
   overlaying: false,
   overlay: [],
+  moves: [],
   raised: [],
   scrims: [],
   raising: false,
   tops: [],
-  flying_tops: [],
   covers: [],
   over_cover: [],
   covering: false,
@@ -305,7 +320,7 @@ fn reset_drawing() -> Unit {
   dr.scrims.clear()
   dr.raising = false
   dr.tops.clear()
-  dr.flying_tops.clear()
+  dr.moves.clear()
   dr.covers.clear()
   dr.over_cover.clear()
   dr.covering = false
@@ -717,7 +732,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       glass_paint.run_len = run_len
     }
     if e.z == z_flying && !dr.overlaying {
-      dr.overlay.push((i, alpha))
+      dr.overlay.push((i, alpha, dr.moves.copy()))
       return true
     }
     if e.z == z_over_scrim && !dr.raising {
@@ -732,6 +747,12 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       dr.over_layers.push((i, alpha))
       return true
     }
+  }
+  // what flies in what is drawn moved by a look of its own (tapped as that is: not at all): put off all the same, with
+  // the moves of what holds it, never painted in its place
+  if e.z == z_flying && !dr.overlaying && dr.mode == mode_draw && !dr.raising && !dr.covering && !dr.over_all {
+    dr.overlay.push((i, alpha, dr.moves.copy()))
+    return true
   }
   let alpha = alpha * look.alpha
   if alpha <= 0.002 && !keep {
@@ -794,9 +815,15 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
   let painting = if e.part != 0 { Some(self.part_paint_begin(e.part, i)) } else { None }
+  if moved {
+    dr.moves.push({ ox, oy, sx: look.sx, sy: look.sy, dx, dy, rot: look.rot })
+  }
   dr.bypass = i
   self.paint(i, alpha)
   dr.bypass = -1
+  if moved {
+    dr.moves.pop() |> ignore
+  }
   words_alpha.val = words_was
   dr.mode = was
   match painting {
@@ -914,12 +941,6 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       d.frame = self.frame_no
     }
     _ => ()
-  }
-  // over everything though it could not be put off (what holds it is drawn by a look of its own, or only drawn, or
-  // cut: painted as it looks, where a look of ours is not one more pass): after the rest of its layer once that is
-  // painted (raise_tops), where what holds it moved it to, as an editor's handles are
-  if e.z == z_flying && !dr.overlaying && dr.mode != mode_hits && self.ninst > i0 {
-    dr.flying_tops.push((i0, self.ninst))
   }
   true
 }
@@ -1094,20 +1115,55 @@ fn turn_insts(
 }
 
 ///|
-/// What is Flying put off (strata.mbt), drawn now, as it looks (tapped already, where it is laid out).
+/// Whether `moves` are of what is in all that is painted moved now (the first `base` of dr.moves): begun with them.
+fn moves_under(moves : Array[Move], base : Int) -> Bool {
+  if moves.length() < base {
+    return false
+  }
+  for k in 0..<base {
+    if moves[k] != dr.moves[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// What is Flying put off (strata.mbt), drawn now, as it looks (tapped already, where it is laid out), moved as what
+/// held it moved it but for what holds where it is drawn now too (the moves begun before it, which move it with the
+/// rest).
 fn Ctx::paint_overlays(self : Ctx) -> Unit {
   if dr.overlay.is_empty() {
     return
   }
   dr.overlaying = true
+  let was = dr.mode
   dr.mode = mode_draw
+  let base = dr.moves.length()
   let todo = dr.overlay.copy()
   dr.overlay.clear()
+  let (outer, outer_r, outer_s) = clip_at(clip_top())
   for p in todo {
-    let (i, alpha) = p
+    let (i, alpha, moves) = p
+    // (not in what holds where it is drawn now: put off again, to where it is)
+    if !moves_under(moves, base) {
+      dr.overlay.push(p)
+      continue
+    }
+    let i0 = self.ninst
     self.paint(i, alpha)
+    // moved as what held it moved what it painted in its place: the innermost first
+    for k = moves.length() - 1; k >= base; k = k - 1 {
+      let m = moves[k]
+      if m.dx != 0.0 || m.dy != 0.0 || m.sx != 1.0 || m.sy != 1.0 || m.rot != 0.0 {
+        self.transform_insts(i0, self.ninst, m.ox, m.oy, m.sx, m.sy, m.dx, m.dy, outer, outer_r, outer_s)
+      }
+      if m.rot != 0.0 {
+        turn_insts(self.inst, i0, self.ninst, m.rot, m.ox + m.dx, m.oy + m.dy, outer)
+      }
+    }
   }
-  dr.mode = 0
+  dr.mode = was
   dr.overlaying = false
 }
 
@@ -1141,52 +1197,14 @@ fn Ctx::paint_top(self : Ctx, from : Int) -> Unit {
 }
 
 ///|
-/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is Flying that could not be put off and then what is
-/// over everything in it (`tops`: handles) moved after all the rest painted so far, each as it was painted and in the
-/// order it was, the rest closed up in its order.
+/// Once a layer is painted (Ctx::paint; the page: app.mbt): what is over everything in it (`tops`: handles) moved
+/// after all the rest painted so far, each as it was painted and in the order it was, the rest closed up in its order.
 fn Ctx::raise_tops(self : Ctx) -> Unit {
-  self.raise_flying()
   if dr.tops.is_empty() {
     return
   }
   self.raise_ranges(dr.tops)
   dr.tops.clear()
-}
-
-///|
-/// What is Flying that could not be put off (`flying_tops`) moved after the rest painted so far; the `tops` painted
-/// before it is moved kept where they are now.
-fn Ctx::raise_flying(self : Ctx) -> Unit {
-  let r = dr.flying_tops
-  if r.is_empty() {
-    return
-  }
-  let n = self.ninst
-  let raised = r.fold(init=0, fn(s, x) { s + x.1 - x.0 })
-  // where an instance goes: one raised after the rest, in their order; one after the first raised closed up
-  fn moved(q : Int) -> Int {
-    if q < r[0].0 {
-      return q
-    }
-    let mut before = 0
-    let mut into = 0
-    for x in r {
-      if q >= x.0 && q < x.1 {
-        return n - raised + into + q - x.0
-      }
-      if x.1 <= q {
-        before = before + x.1 - x.0
-      }
-      into = into + x.1 - x.0
-    }
-    q - before
-  }
-  for k, t in dr.tops {
-    let to = moved(t.0)
-    dr.tops[k] = (to, to + t.1 - t.0)
-  }
-  self.raise_ranges(r)
-  r.clear()
 }
 
 ///|
