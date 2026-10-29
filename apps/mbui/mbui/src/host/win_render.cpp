@@ -158,7 +158,21 @@ static const char *shader_src =
     "  float d = mb_sd_corner(p - m, hs, min(rr, min(hs.x, hs.y)), ss, 1.0 + 2.0 / sc);\n"
     "  return saturate(0.5 - d * sc);\n"
     "}\n"
-    "float4 fmain(VOut I) : SV_Target {\n"
+    "// A glyph's coverage, a pixel's three stripes each its own (ClearType: win_text.cpp draw_layout), blended stripe by\n"
+    "// stripe as the second source (the blend's INV_SRC1_COLOR); what else is drawn, by its alpha as before. Every\n"
+    "// target is cleared opaque (encode), so the stripes always fall on a ground of the pixel's own.\n"
+    "static float3 stripes;\n"
+    "static bool striped;\n"
+    "float4 fmain0(VOut I);\n"
+    "struct FOut { float4 c : SV_Target0; float4 w : SV_Target1; };\n"
+    "FOut fmain(VOut I) {\n"
+    "  striped = false;\n"
+    "  FOut o;\n"
+    "  o.c = fmain0(I);\n"
+    "  o.w = striped ? float4(stripes, o.c.a) : o.c.aaaa;\n"
+    "  return o;\n"
+    "}\n"
+    "float4 fmain0(VOut I) {\n"
     "  float2 p = I.p, cp = I.cp;\n"
     "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
     "  float cover = 1.0;\n"
@@ -203,7 +217,15 @@ static const char *shader_src =
     "    // started over)\n"
     "    float2 uv = clamp(I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw, I.c2.xy + 0.5, I.c2.xy + I.c2.zw - 0.5) / 2048.0;\n"
     "    float4 t = atlas.SampleLevel(samp, uv, 0);\n"
-    "    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
+    "    if (kind == 1) {\n"
+    "      // (a mask drawn in gray has its three the same as its alpha: as before; a glyph drawn larger or smaller than\n"
+    "      // its picture, its stripes no longer on the screen's: in gray, their mean)\n"
+    "      float2 off = abs(I.rect.zw * scale - I.c2.zw);\n"
+    "      float3 cov = max(off.x, off.y) > 0.5 ? t.aaa : t.rgb;\n"
+    "      stripes = cov * (col.a * cover);\n"
+    "      striped = true;\n"
+    "      return float4(col.rgb * stripes, dot(stripes, float3(1.0, 1.0, 1.0) / 3.0));\n"
+    "    }\n"
     "    if (kind == 7) {\n"
     "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
     "      float2 c = I.pd.yz; float r = I.pd.w * 0.5;\n"
@@ -487,7 +509,8 @@ static void make_pipeline(void) {
   D3D11_RENDER_TARGET_BLEND_DESC &b = bd.RenderTarget[0];
   b.BlendEnable = TRUE;
   b.SrcBlend = b.SrcBlendAlpha = D3D11_BLEND_ONE;
-  b.DestBlend = b.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+  b.DestBlend = D3D11_BLEND_INV_SRC1_COLOR;
+  b.DestBlendAlpha = D3D11_BLEND_INV_SRC1_ALPHA;
   b.BlendOp = b.BlendOpAlpha = D3D11_BLEND_OP_ADD;
   b.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
   dev->CreateBlendState(&bd, &blend);

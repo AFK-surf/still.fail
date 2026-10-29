@@ -37,7 +37,7 @@ typedef struct {
 
 static IDWriteFactory2 *dw;
 static IDWriteFontFallback *fallback;
-static IDWriteRenderingParams *params;
+static IDWriteRenderingParams *params, *params_ct;
 static ID2D1Factory *d2d;
 static IWICImagingFactory *wic;
 // Where a glyph is drawn: a bitmap of RT_SIZE pixels, Direct2D's target over it at the scale it was made for, a white
@@ -92,6 +92,13 @@ static void init(void) {
                                   DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
                                   DWRITE_GRID_FIT_MODE_DISABLED, &p2);
   params = p2;
+  // A glyph in one colour drawn with ClearType, as Windows draws any app's text (the user, 2026-10-29, beside Chrome:
+  // gray coverage looked soft): each of a pixel's three stripes, red, green, blue left to right, covered on its own,
+  // the same plain coverage otherwise; a colour glyph (an emoji) in gray as before.
+  IDWriteRenderingParams2 *c2 = NULL;
+  dw->CreateCustomRenderingParams(1.0f, 0.0f, 0.0f, 1.0f, DWRITE_PIXEL_GEOMETRY_RGB,
+                                  DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC, DWRITE_GRID_FIT_MODE_DISABLED, &c2);
+  params_ct = c2;
   D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), NULL, (void **)&d2d);
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
   CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory),
@@ -720,11 +727,23 @@ static void draw_layout(IDWriteTextLayout *l, double sc, Target *t, Drawn *d) {
   if (pw <= 0 || ph <= 0 || pw > RT_SIZE || ph > RT_SIZE) return;
   target_ensure(t, sc);
   if (!t->rt) return;
+  // One colour: drawn white with ClearType on opaque black, each stripe's coverage in its channel (the shader blends a
+  // mask stripe by stripe: win_render.cpp fmain), its alpha their mean. Straight on the black: in a layer made for
+  // ClearType (D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE) Direct2D drew it gray after all.
+  bool stripes = params_ct && !color;
   t->rt->BeginDraw();
-  t->rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+  t->rt->Clear(D2D1::ColorF(0, 0, 0, stripes ? 1.0f : 0.0f));
+  if (stripes) {
+    t->rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+    t->rt->SetTextRenderingParams(params_ct);
+  }
   t->rt->DrawTextLayout(D2D1::Point2F((FLOAT)-x0, (FLOAT)-y0), l, t->white,
                         D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT | D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
   t->rt->EndDraw();
+  if (stripes) {
+    t->rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    t->rt->SetTextRenderingParams(params);
+  }
   WICRect r = {0, 0, pw, ph};
   IWICBitmapLock *lock = NULL;
   if (SUCCEEDED(t->bitmap->Lock(&r, WICBitmapLockRead, &lock))) {
@@ -740,7 +759,7 @@ static void draw_layout(IDWriteTextLayout *l, double sc, Target *t, Drawn *d) {
         o[0] = s[2];
         o[1] = s[1];
         o[2] = s[0];
-        o[3] = s[3];
+        o[3] = stripes ? (uint8_t)((o[0] + o[1] + o[2] + 1) / 3) : s[3];
         // premultiplied: drawn in white, a mask's pixel has its colour equal to its alpha; an emoji's does not
         if (color == 1 && o[3] > 64 && (o[0] + 32 < o[3] || o[1] + 32 < o[3] || o[2] + 32 < o[3])) color = 2;
       }
@@ -1081,8 +1100,8 @@ extern "C" void mb_host_ref_begin(double w, double h, double scale, int32_t bg) 
       D2D1_RENDER_TARGET_TYPE_SOFTWARE,
       D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
   d2d->CreateWicBitmapRenderTarget(ref_bmp, &p, &ref_rt);
-  ref_rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-  ref_rt->SetTextRenderingParams(params);
+  ref_rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+  ref_rt->SetTextRenderingParams(params_ct);
   ref_rt->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 1), &ref_brush);
   ref_rt->BeginDraw();
   ref_rt->Clear(rgb(bg));
