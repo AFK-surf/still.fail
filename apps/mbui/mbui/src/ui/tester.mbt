@@ -191,6 +191,8 @@ fn leaked_state() -> Array[String] {
 /// each of them where they differ (top left, then round it: an iPhone Duo's outer screen, 8 along its hinge).
 /// `words_over_held`: whether every frame it draws while something moves is held to showing no words over others
 /// (Tester::hold_words_over); false for a test that draws them on purpose, to find them.
+/// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
+/// says it from the app's first frame on; Tester::set_nav_able changes it later.
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
@@ -220,6 +222,7 @@ pub fn Tester::new(
   window_corner? : Double = 0.0,
   window_corners? : FixedArray[Double],
   words_over_held? : Bool = true,
+  nav_able? : Bool = false,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -287,7 +290,7 @@ pub fn Tester::new(
     window_corner,
     window_corners,
     font_scale: 1.0,
-    nav_able: false,
+    nav_able,
     nav_said: "",
     a11y: false,
     a11y_said: "",

@@ -130,13 +130,14 @@ let native_foot_made : Ref[Double?] = Ref(None)
 pub let native_in : Double = 4.0
 
 ///|
-/// The corner of the cards in the screen's corner `k` (top left, then round it), down the side: concentric with the
+/// The corner of the cards in the screen's corner `k` (top left, then round it), beside the system's tabs (placed
+/// native_in from its edges from the frame they are its, bar_in_now): concentric with the
 /// screen's own there, so the screen cuts none of a card's line (the user, 2026-10-27), each corner its own (an iPhone
 /// Duo's outer screen: along its hinge, its 8, the cards' 4); 0 where it says none.
 pub fn native_card_corner_at(k : Int) -> Double {
   let r = native_bars.corners[k]
-  if native_side() && r > 0.0 {
-    dmax(0.0, r - native_in)
+  if native_bars.on && r > 0.0 {
+    @ui.concentric(r, native_in)
   } else {
     0.0
   }

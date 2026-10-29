@@ -281,6 +281,21 @@ test "a chat opened with a card to decide in view: its first frame lays the card
 }
 
 ///|
+test "a chat opened with what waits to be decided in view: no bell from its first frame on" {
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("整理发布清单")
+  let bell = @sf.t("web-main.chat.asks.go")
+  // its first frame, the list not laid out yet: nothing known to be out of view
+  assert_true(t.query(Button, label=bell) is None, msg="a bell at its first frame")
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_true(t.query(Button, label=bell) is None, msg="a bell as it slides in")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label=bell) is None, msg="a bell at rest")
+}
+
+///|
 test "a chat's place: told the core as the list comes to rest (the message at the top, its top's pixels below the list's); opened again there, it is where it was left" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

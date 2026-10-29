@@ -55,7 +55,7 @@ pub(all) struct Wide {
   /// what the block last moved for, as it was last built (brand.tsx moveSidebar's callers: folded or opened as chosen,
   /// shown a while, a place with no sidebar of its own, another sidebar at its own width: side_key): a move sets out as
   /// it changes
-  mut moved_as : (Bool, Bool, Bool, String)?
+  mut moved_as : (Bool, Bool, Bool, String, Bool)?
   /// where the move has got to this frame: the sidebar's top row's height, its frosted bands' ground (0 the sidebar's,
   /// 1 the closed bar's), the lists' marks on the rail (0 gone, 1 in)
   mut brand_h : Double
@@ -662,10 +662,12 @@ pub fn frame(
   // workspace's sidebar at its own width (side_key, not the width: a width is no cause); not for the window's room
   // folding it (crowded), a fold's place or the tape coming or going, which put it as they have it at once, nor for its
   // edge, whose width it follows at once, held or let go (let go a little past where the last frame drew it, the rest
-  // of the way is the hand's too, not a move after it)
-  let cause = (wide.folded, wide.peeking.get(), gated || bare, wide.side_key)
+  // of the way is the hand's too, not a move after it); nor for the system's bars taking the app's places or giving
+  // them back (an iPhone Duo's, told as the app starts: its sidebar one width beside the system's tabs, side_follow),
+  // which put it as they have it at once
+  let cause = (wide.folded, wide.peeking.get(), gated || bare, wide.side_key, @sf.native_on())
   match wide.moved_as {
-    Some(was) if was != cause && !wide.edge_held => {
+    Some(was) if was != cause && was.4 == cause.4 && !wide.edge_held => {
       // shown a while from now: how far the page moves aside, worked out once as it starts (Rail.tsx markPeek)
       if peek && !was.1 {
         wide.peek_shift = peek_shift(c, shown, wide.page_from, s)
