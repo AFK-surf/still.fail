@@ -99,12 +99,13 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
   tap_send(t)
   t.draw()
   t.draw()
-  // the core's outbox has it: the row is its, what flies goes on to it
+  // the core's outbox has it: the row is its, by the key it was sent as (one row from the press on), what flies goes
+  // on to it
   let rd = reading_of("ws1/st1\u{1}s-c1")
   assert_eq(sent_rows(), [])
   match send_flight.get() {
     Some(f) => {
-      assert_true(f.key != "o:local:1")
+      assert_true(f.key == "o:local:1")
       assert_true(rd.known.contains(f.key))
       assert_false(rd.rises.contains(f.key))
     }
@@ -242,7 +243,7 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
   t.frame()
   let lands = match send_flight.get() {
     Some(f) => {
-      assert_true(f.key == "o:out-1")
+      assert_true(f.key == "o:local:1")
       f.way.ends()
     }
     None => fail("nothing flies")

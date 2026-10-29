@@ -836,7 +836,7 @@ test "a list's running sums are its rows' heights added up" {
         direction: Ltr,
         layer: 0,
         part: 0,
-        row_causes: {},
+        causes: None,
         sizes: {},
         sizes_mover: Mover::new(),
   }

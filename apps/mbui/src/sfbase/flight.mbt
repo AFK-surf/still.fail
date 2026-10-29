@@ -580,7 +580,8 @@ pub(all) struct FlightPiece {
 /// a new chat's first words (they come up with its list): they go as one block.
 pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.WordsPiece)? {
   guard f.lines is Some(lines) && !f.carried else { return None }
-  guard c.words_of(flight_words_key) is Some(w) &&
+  // (their shape, not where they lie: placed where they are as laid out, flight_pieces_drawn)
+  guard c.words_shape_of(flight_words_key) is Some(w) &&
     w.pieces.length() == 1 &&
     w.text == f.text else {
     return None

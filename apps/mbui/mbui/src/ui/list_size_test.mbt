@@ -2,44 +2,32 @@
 // end to end at every moment, what is in view staying where the list's rule has it.
 
 ///|
-/// A list of `n()` rows 50 tall (row `tall` 120 once it changed), keyed by their place; what changed one said by
-/// `cause(i)`, its moment the clock's as it was first said.
+/// A list of the rows `ids()` gives (each 50 tall, but row `tall` 120 once `changed()`), keyed by their ids: what
+/// came, went and changed worked out by the list (ListRows) as it is built.
 fn sized_rows(
-  n : () -> Int,
-  cause : (Int) -> String,
+  ids : () -> Array[Int],
   stick_end? : Bool = true,
   tall? : Int = -1,
+  changed? : () -> Bool = fn() { false },
 ) -> (@ui.Ctx) -> Unit {
-  let at : Map[String, Double] = {}
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
   fn(c) {
+    let now = ids()
+    let (items, keys) = rows.rows(c, now.map(fn(i) { "r" + i.to_string() }), now, fn(i) {
+      if i == tall && changed() { "tall" } else { "" }
+    })
     c.list(
       "list",
-      n(),
+      items.length(),
       50.0,
-      fn(i) {
-        let what = cause(i)
-        if what != "" {
-          let k = what + "/" + i.to_string()
-          let t = match at.get(k) {
-            Some(t) => t
-            None => {
-              at[k] = c.moment()
-              c.moment()
-            }
-          }
-          c.row_size(
-            "r" + i.to_string(),
-            match what {
-              "comes" => Comes(t)
-              "goes" => Goes(t)
-              _ => Changed(t)
-            },
-          )
-        }
-        let h = if i == tall && what == "changed" { 120.0 } else { 50.0 }
+      fn(k) {
+        let i = items[k]
+        ignore(keys)
+        let h = if i == tall && changed() { 120.0 } else { 50.0 }
         c.box(h=Px(h), fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
       },
       stick_end~,
+      sized=rows.sized(),
     )
     |> ignore
   }
@@ -58,7 +46,7 @@ fn rows_end_to_end(t : @ui.Tester, from : Int, to : Int) -> Unit raise {
 ///|
 test "list: a row come at the end of a list held there opens its room from nothing, its foot where the view's is" {
   let n = [20]
-  let t = @ui.Tester::new(sized_rows(fn() { n[0] }, fn(i) { if i == 20 { "comes" } else { "" } }), w=300.0, h=400.0)
+  let t = @ui.Tester::new(sized_rows(fn() { Array::makei(n[0], fn(i) { i }) }), w=300.0, h=400.0)
   assert_eq(bottom_of(t, 19), 400.0)
   n[0] = 21
   t.draw()
@@ -81,11 +69,7 @@ test "list: a row come at the end of a list held there opens its room from nothi
 ///|
 test "list: a row going closes its room to nothing, the rows over it coming down" {
   let goes = [false]
-  let t = @ui.Tester::new(
-    sized_rows(fn() { 20 }, fn(i) { if i == 19 && goes[0] { "goes" } else { "" } }),
-    w=300.0,
-    h=400.0,
-  )
+  let t = @ui.Tester::new(sized_rows(fn() { Array::makei(if goes[0] { 19 } else { 20 }, fn(i) { i }) }), w=300.0, h=400.0)
   let y18 = y_of(t, 18)
   goes[0] = true
   t.draw()
@@ -96,7 +80,8 @@ test "list: a row going closes its room to nothing, the rows over it coming down
   assert_eq(bottom_of(t, 19), 400.0)
   rows_end_to_end(t, 12, 20)
   t.run_for(@ui.row_size_ms / 2.0)
-  assert_eq(t.row(19).unwrap().3, 0.0)
+  // (closed: out of the list)
+  assert_true(t.row(19) is None)
   assert_eq(y_of(t, 18), y18 + 50.0)
 }
 
@@ -105,19 +90,7 @@ test "list: a row read from stays where it shows as one over it grows and one un
   let n = [40]
   let changed = [false]
   let t = @ui.Tester::new(
-    sized_rows(
-      fn() { n[0] },
-      fn(i) {
-        if i == 5 && changed[0] {
-          "changed"
-        } else if i == 40 {
-          "comes"
-        } else {
-          ""
-        }
-      },
-      tall=5,
-    ),
+    sized_rows(fn() { Array::makei(n[0], fn(i) { i }) }, tall=5, changed=fn() { changed[0] }),
     w=300.0,
     h=400.0,
   )

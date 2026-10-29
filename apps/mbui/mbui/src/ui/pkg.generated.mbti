@@ -854,6 +854,7 @@ pub struct Ctx {
   info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int32, Int32), (String, Double?)]
   words_reads : Map[String, Bool]
+  words_shape_reads : Map[String, Bool]
   left_ids : Map[Int32, Bool]
   left_reads : Map[Int32, (Bool, SourceLoc)]
   mut fit_rows : Int32
@@ -1062,7 +1063,7 @@ pub fn Ctx::layer(Self, pad? : Double, align? : Align, () -> Unit) -> Int32
 pub fn Ctx::left_out(Self, Int32, loc~ : SourceLoc) -> Bool
 pub fn Ctx::lifetime(Self, String) -> @effect.Scope
 pub fn Ctx::lines(Self, Array[Line], w~ : Size, h~ : Size) -> Int32
-pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool) -> Int32
+pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses) -> Int32
 pub fn Ctx::list_above(Self, Int32) -> Int32
 pub fn Ctx::list_follow_from(Self, String, Int32, margin? : Double) -> Unit
 pub fn Ctx::list_info(Self, String) -> ListInfo?
@@ -1154,7 +1155,6 @@ pub fn Ctx::right_clicked(Self, Int32) -> (Double, Double)?
 pub fn Ctx::roving(Self, String, orientation? : Orientation, wrap? : Bool, current? : Int32, () -> Unit) -> Unit
 pub fn Ctx::roving_prefer(Self, Int32) -> Unit
 pub fn Ctx::row(Self, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, () -> Unit) -> Int32
-pub fn Ctx::row_size(Self, String, RowSize, ms? : Double) -> Unit
 pub fn Ctx::rtl(Self) -> Bool
 pub fn Ctx::say(Self, String) -> Unit
 pub fn Ctx::scope(Self, Int32, () -> Unit) -> Unit
@@ -1224,6 +1224,7 @@ pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64) -
 pub fn Ctx::words_across(Self, String, TextStyle, mono? : Bool) -> Double
 pub fn Ctx::words_into(Self, Int32, String) -> Unit
 pub fn Ctx::words_of(Self, String) -> Words?
+pub fn Ctx::words_shape_of(Self, String) -> Words?
 pub fn[T] Ctx::words_smaller(Self, Double, () -> T) -> T
 
 pub(all) enum Cursor {
@@ -1600,6 +1601,16 @@ pub struct ListReader {
 pub fn ListReader::info(Self) -> ListInfo?
 pub fn ListReader::place(Self) -> (Int32, Double, Double)?
 pub fn ListReader::row_height(Self, Int32) -> Double?
+
+pub struct ListRows[T] {
+  // private fields
+}
+pub fn[T] ListRows::came(Self[T], String) -> Double?
+pub fn[T] ListRows::new() -> Self[T]
+pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
+pub fn[T] ListRows::rows(Self[T], Ctx, Array[String], Array[T], (T) -> String, watched? : Bool, ms? : (String) -> Double?, comes? : (T) -> Bool) -> (Array[T], Array[String])
+pub fn[T] ListRows::sized(Self[T]) -> RowCauses
+pub fn[T] ListRows::went(Self[T], String) -> Double?
 
 type ListState
 
@@ -1995,6 +2006,12 @@ pub(all) enum Role {
   Heading
   ScrollArea
 } derive(Eq, Show, @debug.Debug)
+
+pub struct RowCauses {
+  by : Map[String, (RowSize, Double)]
+  mut keys : Array[String]
+  // private fields
+}
 
 pub(all) enum RowSize {
   Comes(Double)

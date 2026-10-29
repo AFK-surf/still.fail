@@ -220,6 +220,12 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
   messages = d.inMessages(messages, undefined, [{ text: "sk_test_1" }]);
   assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
+  // Its station still saying it waits (its row not told the answer yet): what is on its way settles it all the same,
+  // the card closing with the answer coming in, not a moment after it (docs/list-motion.md).
+  messages = [askedMsg(2)];
+  messages = d.inMessages(messages, [2, false], [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
+  assert.equal(messages[0].decision.resolved, true);
+  assert.equal(messages[0].decision.text, "你 选择了「B」");
 });
 
 test("a_picked_option_or_a_written_answer_quotes_the_post", () => {

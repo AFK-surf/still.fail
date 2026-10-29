@@ -135,7 +135,7 @@ struct ListState {
   mut part : Int
   /// what changed its rows' heights (Ctx::row_size): what each row built said last, by the row's place, and each
   /// row's way from the height it had to the one it is laid out at, by the row's key (list_size.mbt)
-  row_causes : Map[Int, (String, RowSize, Double)]
+  mut causes : RowCauses?
   sizes : Map[String, RowSizing]
   sizes_mover : Mover
 }
@@ -439,6 +439,9 @@ pub struct Ctx {
   info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
+  /// words read as the view built only for their shape (Ctx::words_shape_of): read back as their lines change, not as
+  /// they move
+  words_shape_reads : Map[String, Bool]
   /// the boxes whose rows left them out as last laid out (Ctx::box `drop`), by id, and those the view asked about as
   /// it built (Ctx::left_out: what it was told); how many rows laid out this pass may leave something out
   left_ids : Map[Int, Bool]
@@ -713,6 +716,7 @@ fn Ctx::new() -> Ctx {
     info_reads: [],
     row_reads: Map::new(),
     words_reads: Map::new(),
+    words_shape_reads: Map::new(),
     left_ids: Map::new(),
     left_reads: Map::new(),
     fit_rows: 0,

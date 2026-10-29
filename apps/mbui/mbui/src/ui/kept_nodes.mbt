@@ -416,6 +416,7 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.push(self.place_reads.length())
   into.push(self.row_reads.length())
   into.push(self.words_reads.length())
+  into.push(self.words_shape_reads.length())
   into.push(self.shown_watch.length())
   into.push(self.move_runs.length())
   into.push(self.asked_actions.length())
@@ -445,7 +446,7 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
 let kept_census_names : Array[String] = [
   "a layer opened", "a layer opened as laid out", "what takes its presses",
   "a cover", "a list's place read back", "a row read back", "words read back",
-  "what shows across read back",
+  "words' shape read back", "what shows across read back",
   "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
   "where the focus returns", "a list of its own", "a field of its own", "what it owns", "a focus group", "a cover",
   "a spring", "a native view", "a picture at a rect", "a stream", "what is drawn over", "what is raised", "a scrim",
@@ -485,8 +486,6 @@ fn Ctx::row_laid(
   if self.nodes_keep_in(st) &&
     rn.ok &&
     !rn.in_pool &&
-    // (not while its list's rows' heights go to others: what changed each said again as it is built, list_size.mbt)
-    !st.row_sizing(k, self.clock) &&
     rn.n > 0 &&
     !rn.watch.is_stale() &&
     rn.iw == iw &&

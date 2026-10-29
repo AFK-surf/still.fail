@@ -1,0 +1,13 @@
+# 大屏, a mouse: words sent in the made-up chat fly into their row as it opens; the fixture's agent sets to work and its
+# answer comes out of its avatar (emit.mbt).
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 看一下列表的高度
+wait 700
+log measure
+tap icon:arrow-up
+wait 4500
+exit
