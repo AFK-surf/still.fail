@@ -39,6 +39,7 @@ fn reset_globals() -> Unit {
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
+  inst_owners.track = false
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -188,7 +189,9 @@ fn leaked_state() -> Array[String] {
 /// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
 /// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt); `window_corners`
 /// each of them where they differ (top left, then round it: an iPhone Duo's outer screen, 8 along its hinge).
-/// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt).
+/// `words_over_held`: whether every frame it draws while something moves is held to showing no words over others
+/// (Tester::hold_words_over); false for a test that draws them on purpose, to find them.
+/// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
   view : (Ctx) -> Unit,
@@ -216,6 +219,7 @@ pub fn Tester::new(
   corners_held? : Bool = true,
   window_corner? : Double = 0.0,
   window_corners? : FixedArray[Double],
+  words_over_held? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -363,6 +367,7 @@ pub fn Tester::new(
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
+  words_over_begin(loc.to_string(), words_over_held)
   said_log.on = false
   said_log.built.reset()
   said_log.sb.reset()
@@ -634,6 +639,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
   }
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
+  self.hold_words_over()
   self.hold_corners()
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()

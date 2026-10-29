@@ -49,6 +49,7 @@ fn pace_of(seed : UInt) -> @core.Pace {
 /// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
 /// (Replay::drop), each with what came for it. `platform`: the system it is on (Tester::new's), by default by its width:
 /// a phone's (Android) narrower than medium_from, else the Mac.
+#callsite(autofill(loc))
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
@@ -57,6 +58,7 @@ pub fn Flow::start(
   h? : Double = 844.0,
   env? : Array[(String, String)] = [],
   platform? : Int,
+  loc~ : SourceLoc,
 ) -> Flow {
   let r = @core.Replay::parse(trace)
   // (asks the run's timing made, with what came for them: each test says which and why)
@@ -93,8 +95,8 @@ pub fn Flow::start(
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
   // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~)
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, loc~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, loc~)
   }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {

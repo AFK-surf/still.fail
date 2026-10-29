@@ -1,4 +1,4 @@
-# still.fail's motion: nine kinds, three rules
+# still.fail's motion: nine kinds, four rules
 
 Every motion in the app is one of nine kinds. A kind says what the motion tells the person, what sets it off, where
 it goes from and to, and which presets it may use. Nothing moves outside these kinds, and nothing is set off another
@@ -66,7 +66,7 @@ on the page, and the tape brings the page over once the page shows it (`Nav::top
 sliding over with the page before on it and swapping it mid-way. Every move of a state (`Ctx::move_state`: the tape,
 the sidebar, a side panel) waits for its first frame's lateness as a slide does.
 
-## Three rules
+## Four rules
 
 1. **No motion from a layout's difference.** A place or a size moves only when its cause says so, from the frame of
    its cause. No node moves because its laid-out box differs from last frame's, and no measured size (`measured`,
@@ -78,6 +78,10 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
 3. **No logic reads whether a motion runs.** What is shown, what can be pressed and when state is cleared follow from
    the cause and the motion's declared end (`ends()`), never from `moving()` (the framework's determinism.md: logic
    waits for no motion's end).
+4. **No words over words while it moves.** At no moment of a motion are one thing's words drawn where another's are,
+   both seen (the user, 2026-10-29: 「查一下现在哪些动效会存在文字叠文字的问题」「加」). Held on every frame a Tester
+   draws while something moves (mbui's words_over.mbt); what is over others now is each test file's known number
+   (`words_over_known`), which only falls.
 
 ## Curves
 
