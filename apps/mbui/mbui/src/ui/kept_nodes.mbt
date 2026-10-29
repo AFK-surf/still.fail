@@ -835,6 +835,14 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
 }
 
 ///|
+/// What `body` builds, kept as its nodes (Ctx::part_nodes) whether parts are drawn again as recorded or not
+/// (Tester::keep_parts, kept_part.mbt's way, kept by tests alone): a part over the others whose build says what floats
+/// over them (Ctx::floats_over), said again with its nodes, so what scrolls under it keeps clear of it kept or not.
+pub fn Ctx::kept_as_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_out? : Bool = false) -> Unit {
+  self.part_nodes(id, key, body, read_out)
+}
+
+///|
 /// What `body` builds, in a box of its own filling the one being built, read out or not (Ctx::kept_part's), kept as
 /// its nodes (kept_nodes.mbt's head): built again where something it read changed, or what builds it may build it
 /// otherwise (the frame built anew), or it is built elsewhere (`key`, its id's scope, its owner, its layer, ...); else
