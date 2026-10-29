@@ -92,10 +92,15 @@ fi
 BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
 t2=$(now)
 
-# the icon, the app's own (still.fail's, youdid.wtf's, still.fail mbui's), made once for each version of its script
+# the icon, the app's own (still.fail's face; youdid.wtf's under its tape; still.fail mbui's still.fail's), made once
+# for each version of its script; and its white face for a dark system (AppIconDark.icns: the host shows it in the Dock
+# while the system is dark, src/host/mac_app.m dock_icon)
 VARIANT=${MBUI_VARIANT:-mbui}
-ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$VARIANT.icns
-[ -f "$ICON" ] || swift "$D/mac-icon.swift" "$VARIANT" "$ICON" > /dev/null
+[ "$VARIANT" = beta ] && FACE=beta || FACE=stable
+ICON=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE.icns
+ICON_DARK=$OUT/AppIcon-$(shasum -a 256 "$D/mac-icon.swift" | cut -c1-12)-$FACE-dark.icns
+[ -f "$ICON" ] || swift "$D/mac-icon.swift" "$FACE" "$ICON" > /dev/null
+[ -f "$ICON_DARK" ] || swift "$D/mac-icon.swift" "$FACE-dark" "$ICON_DARK" > /dev/null
 
 rm -rf "$APPDIR" "$ZIP"
 mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents/Frameworks"
@@ -130,6 +135,7 @@ if [ -n "$OWN" ]; then
 fi
 cp out/core/core.hbc "$APPDIR/Contents/Resources/core.hbc"
 cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
+cp "$ICON_DARK" "$APPDIR/Contents/Resources/AppIconDark.icns"
 # the oldest macOS the program runs on, as it was linked: the one asked for
 MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
 [ "$MINOS" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "mac-app.sh: linked for macOS $MINOS, not $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1; }

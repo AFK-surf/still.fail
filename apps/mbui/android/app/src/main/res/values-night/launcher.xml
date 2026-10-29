@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every app's but the debug build's: still.fail's black face (design/brand/icon-stable.svg); values-night's the white. -->
+<resources>
+    <color name="launcher_bg">#F4F4F5</color>
+    <color name="launcher_ink">#1C1D20</color>
+    <color name="launcher_cheek">#F6BC9F</color>
+</resources>

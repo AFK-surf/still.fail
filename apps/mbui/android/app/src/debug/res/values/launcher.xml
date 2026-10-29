@@ -2,5 +2,6 @@
 <!-- The debug build (dev.mbui.demo) apart from the others on a launcher: grey. -->
 <resources>
     <color name="launcher_bg">#5F646B</color>
-    <color name="launcher_dot">#C9CDD2</color>
+    <color name="launcher_ink">#FFFFFF</color>
+    <color name="launcher_cheek">#9AA0A7</color>
 </resources>

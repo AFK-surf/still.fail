@@ -1,14 +1,14 @@
 // still.fail's macOS, iOS, Windows and Linux icons (the Android app's launcher icon, android/app/src/main/res:
-// still.fail's mark, s. in Inter Bold, on its app's colour; design/brand): drawn into the shape of a macOS app icon and
+// still.fail's face, its eyes and cheeks, on its app's colour; design/brand): drawn into the shape of a macOS app icon and
 // made an .icns, the iPhone's square (the system rounds it) as the 1024-pixel PNG of an asset catalog's app icon
 // (scripts/ios.sh), Windows' .ico, or Linux's 512-pixel PNG (its desktop entry's icon, in Windows' shape). Which app's:
-// VARIANT, as mac-app.sh's MBUI_VARIANT (mbui by default: still.fail mbui's violet; stable still.fail's paper, beta
-// youdid.wtf's night).
+// VARIANT, as mac-app.sh's MBUI_VARIANT (stable by default, still.fail's black face, as mbui's app is still.fail's now;
+// beta youdid.wtf's, the orange tape across its corner; stable-dark and beta-dark their white faces, for a dark Dock).
 //   swift apps/mbui/scripts/mac-icon.swift [VARIANT] OUT.icns
 //   swift apps/mbui/scripts/mac-icon.swift --ios OUT.png
 //   swift apps/mbui/scripts/mac-icon.swift --ico OUT.ico
 //   swift apps/mbui/scripts/mac-icon.swift --png OUT.png
-// The Android drawable's 108-unit viewport, of which a launcher shows the middle 72 (18 to 90), is laid on the icon's
+// The face's 100-unit tile (design/brand/make.py's, the middle 72 of the Android drawable's 108) is laid on the icon's
 // 824-point rounded square (100 to 924 of 1024, Apple's grid), on the whole of the iPhone's, or on Windows' square
 // (32 to 992: its icons fill their cell, a sliver of it left for the rounded corners' edge to be seen).
 // Windows' and Linux's are not made where they are built (no AppKit there): kept in the repository, named by this
@@ -21,28 +21,33 @@ let args = Array(CommandLine.arguments.dropFirst())
 let ios = args.contains("--ios"), png = args.contains("--png"), ico = args.contains("--ico") || png
 let rest = args.filter { !$0.hasPrefix("--") }
 let out = rest.last ?? "AppIcon.icns"
-let variant = rest.count > 1 ? rest[0] : "mbui"
+let variant = rest.count > 1 ? (rest[0] == "mbui" ? "stable" : rest[0]) : "stable"
 // where the square is on the 1024 grid, and its corners' radius
 let (edge, side, radius): (CGFloat, CGFloat, CGFloat) = ios ? (0, 1024, 0) : ico ? (32, 960, 192) : (100, 824, 185)
 
 func rgb(_ hex: Int) -> NSColor {
   NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
 }
-// the app's tile, its s and its dot (android/app/src/<variant>/res/values/launcher.xml's)
-let colours: [String: (NSColor, NSColor, NSColor)] = [
-  "mbui": (rgb(0x5B4FD6), rgb(0xFFFFFF), rgb(0xFFD66B)),
-  "stable": (rgb(0xFAFAF9), rgb(0x18181B), rgb(0xE5704A)),
-  "beta": (rgb(0x111114), rgb(0xFAFAFA), rgb(0xE5704A)),
+// the app's tile, its eyes and its cheeks (android/app/src/<variant>/res/values/launcher.xml's), and whether the tape is
+// across its corner
+let colours: [String: (NSColor, NSColor, NSColor, Bool)] = [
+  "stable": (rgb(0x1C1D20), rgb(0xFFFFFF), rgb(0xF6BC9F), false),
+  "stable-dark": (rgb(0xF4F4F5), rgb(0x1C1D20), rgb(0xF6BC9F), false),
+  "beta": (rgb(0x1C1D20), rgb(0xFFFFFF), rgb(0xF6BC9F), true),
+  "beta-dark": (rgb(0xF4F4F5), rgb(0x1C1D20), rgb(0xF6BC9F), true),
 ]
 guard let palette = colours[variant] else {
-  FileHandle.standardError.write("mac-icon.swift: VARIANT is mbui, stable or beta, not \(variant)\n".data(using: .utf8)!)
+  FileHandle.standardError.write("mac-icon.swift: VARIANT is stable, stable-dark, beta or beta-dark (mbui: stable), not \(variant)\n".data(using: .utf8)!)
   exit(1)
 }
-let (ground, ink, dotColour) = palette
+let (ground, ink, cheekColour, taped) = palette
+let tapeColour = rgb(0xE5704A)
 
 // brand: made by design/brand/make.py
-let sPath = "M47.41 69.84C44.94 69.84 42.76 69.49 40.85 68.78C38.94 68.07 37.39 67.05 36.19 65.71C34.98 64.36 34.2 62.75 33.84 60.85L41.52 59.53C41.92 60.96 42.62 62.03 43.62 62.74C44.63 63.46 45.97 63.81 47.66 63.81C49.22 63.81 50.46 63.51 51.37 62.91C52.29 62.31 52.74 61.56 52.74 60.64C52.74 59.83 52.42 59.18 51.77 58.66C51.12 58.15 50.12 57.76 48.77 57.48L43.49 56.39C40.53 55.78 38.32 54.75 36.85 53.3C35.39 51.85 34.66 49.97 34.66 47.67C34.66 45.71 35.19 44.02 36.27 42.6C37.34 41.18 38.84 40.08 40.77 39.31C42.7 38.54 44.95 38.16 47.54 38.16C49.97 38.16 52.07 38.5 53.85 39.17C55.62 39.84 57.05 40.78 58.15 42C59.24 43.23 59.98 44.67 60.35 46.35L53.05 47.63C52.72 46.58 52.12 45.73 51.24 45.06C50.35 44.4 49.16 44.07 47.67 44.07C46.31 44.07 45.18 44.35 44.26 44.92C43.35 45.49 42.89 46.24 42.89 47.18C42.89 47.95 43.18 48.6 43.77 49.13C44.37 49.67 45.39 50.08 46.83 50.39L52.35 51.48C55.32 52.08 57.53 53.07 58.98 54.43C60.43 55.8 61.15 57.58 61.15 59.78C61.15 61.79 60.57 63.55 59.39 65.06C58.22 66.57 56.6 67.74 54.54 68.58C52.47 69.42 50.1 69.84 47.41 69.84Z"
-let dot = (x: 70.9 as CGFloat, y: 65.05 as CGFloat, r: 4.76 as CGFloat)
+let eyePaths = ["M39 47.6C39 51.25 36.05 54.2 32.4 54.2C28.75 54.2 25.8 51.25 25.8 47.6C25.8 43.95 28.75 41 32.4 41C36.05 41 39 43.95 39 47.6Z", "M74.2 47.6C74.2 51.25 71.25 54.2 67.6 54.2C63.95 54.2 61 51.25 61 47.6C61 43.95 63.95 41 67.6 41C71.25 41 74.2 43.95 74.2 47.6Z"]
+let cheekPaths = ["M17.9 67.8L24.5 67.8C26.65 67.8 28.4 69.55 28.4 71.7C28.4 73.85 26.65 75.6 24.5 75.6L17.9 75.6C15.75 75.6 14 73.85 14 71.7C14 69.55 15.75 67.8 17.9 67.8Z", "M75.5 67.8L82.1 67.8C84.25 67.8 86 69.55 86 71.7C86 73.85 84.25 75.6 82.1 75.6L75.5 75.6C73.35 75.6 71.6 73.85 71.6 71.7C71.6 69.55 73.35 67.8 75.5 67.8Z"]
+let tapePath = "M42 0L62 0L100 38L100 58Z"
+let tapeWords = "M65.7 18.23L70.23 13.7L72.03 15.5C72.36 15.83 72.58 16.16 72.71 16.48C72.83 16.8 72.86 17.11 72.79 17.39C72.73 17.68 72.58 17.93 72.36 18.16C72.18 18.34 71.99 18.46 71.78 18.52C71.58 18.58 71.38 18.59 71.17 18.55C70.96 18.51 70.76 18.44 70.57 18.32L70.53 18.36C70.69 18.54 70.8 18.75 70.86 18.99C70.92 19.23 70.92 19.48 70.85 19.73C70.79 19.99 70.64 20.23 70.42 20.45C70.18 20.69 69.91 20.84 69.6 20.91C69.3 20.98 68.98 20.96 68.64 20.84C68.3 20.72 67.96 20.48 67.62 20.14ZM67.4 18.4L68.2 19.2C68.47 19.47 68.72 19.61 68.95 19.63C69.18 19.65 69.38 19.58 69.55 19.41C69.68 19.28 69.76 19.14 69.8 18.97C69.84 18.81 69.83 18.65 69.77 18.48C69.71 18.31 69.6 18.15 69.45 17.99L68.62 17.17ZM69.26 16.53L69.99 17.26C70.12 17.4 70.26 17.49 70.41 17.55C70.57 17.61 70.72 17.62 70.87 17.59C71.01 17.57 71.15 17.49 71.27 17.37C71.44 17.21 71.51 17.01 71.5 16.79C71.48 16.57 71.37 16.35 71.15 16.14L70.4 15.39ZM70.07 22.59L74.59 18.07L77.62 21.1L76.85 21.87L74.75 19.77L73.66 20.86L75.6 22.8L74.85 23.56L72.9 21.61L71.77 22.75L73.87 24.86L73.1 25.63ZM77.67 22.69L78.44 21.92L82.14 25.61L81.37 26.38L79.99 25L76.23 28.75L75.3 27.83L79.06 24.07ZM77.68 30.21L83.76 27.23L84.97 28.44L82.03 34.56L81 33.53L82.46 30.62C82.65 30.25 82.87 29.85 83.12 29.43C83.36 29 83.64 28.54 83.93 28.05L84.13 28.25C83.64 28.55 83.18 28.83 82.76 29.08C82.34 29.33 81.95 29.56 81.59 29.75L78.71 31.23ZM79.7 30.13L80.43 29.4L82.84 31.81L82.11 32.54Z"
 // brand end
 
 /// An SVG path of M, L, C and Z (absolute, as make.py writes them), its points through `p`.
@@ -85,14 +90,13 @@ func render(_ size: Int) -> Data {
   NSGraphicsContext.saveGraphicsState()
   NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
   let k = CGFloat(size) / 1024
-  // the viewport's (x, y), y down, to the icon's points, y up
-  func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: (edge + (x - 18) * side / 72) * k, y: (1024 - (edge + (y - 18) * side / 72)) * k) }
-  func len(_ v: CGFloat) -> CGFloat { v * side / 72 * k }
+  // the tile's (x, y), y down, to the icon's points, y up
+  func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: (edge + x * side / 100) * k, y: (1024 - (edge + y * side / 100)) * k) }
   // the square, its corners as macOS's (about 22.5% of its side)
   let square = NSBezierPath(roundedRect: NSRect(x: edge * k, y: edge * k, width: side * k, height: side * k),
                             xRadius: radius * k, yRadius: radius * k)
-  // on macOS's grid its shadow under it (Apple's template's: 28% black, 10 down, 12 soft); the paper's tile edged
-  // faintly, as it would be lost on a light Dock or taskbar
+  // on macOS's grid its shadow under it (Apple's template's: 28% black, 10 down, 12 soft); the white face's tile
+  // edged faintly, as it would be lost on a light Dock or taskbar
   NSGraphicsContext.saveGraphicsState()
   if !ios && !ico {
     let shadow = NSShadow()
@@ -104,17 +108,25 @@ func render(_ size: Int) -> Data {
   ground.setFill()
   square.fill()
   NSGraphicsContext.restoreGraphicsState()
-  if variant == "stable" && !ios {
+  if variant.hasSuffix("-dark") && !ios {
     NSColor(white: 0, alpha: 0.06).setStroke()
     square.lineWidth = k
     square.stroke()
   }
-  // the s, and its dot
+  // the eyes, the cheeks, and the tape inside the square
   ink.setFill()
-  shape(sPath, p).fill()
-  let c = p(dot.x, dot.y)
-  dotColour.setFill()
-  NSBezierPath(ovalIn: NSRect(x: c.x - len(dot.r), y: c.y - len(dot.r), width: 2 * len(dot.r), height: 2 * len(dot.r))).fill()
+  for d in eyePaths { shape(d, p).fill() }
+  cheekColour.setFill()
+  for d in cheekPaths { shape(d, p).fill() }
+  if taped {
+    NSGraphicsContext.saveGraphicsState()
+    square.addClip()
+    tapeColour.setFill()
+    shape(tapePath, p).fill()
+    NSColor.white.setFill()
+    shape(tapeWords, p).fill()
+    NSGraphicsContext.restoreGraphicsState()
+  }
   NSGraphicsContext.restoreGraphicsState()
   return rep.representation(using: .png, properties: [:])!
 }

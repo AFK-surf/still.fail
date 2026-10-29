@@ -10,8 +10,8 @@ import * as bubblesCss from "./SystemBubbles.css.ts";
 import { moveState } from "@stillfail/ui/motion.ts";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
-// still.fail's brand, from web/public (design/brand/README.md): the mark (s. in Inter Bold, its dot still.fail's
-// orange), the wordmark and the illustrations. Mark and wordmark have -dark twins, picked by the page's 外观 like the
+// still.fail's brand, from web/public (design/brand/README.md): the mark (the face: the black one on light, the white
+// one on dark), the wordmark and the illustrations. Mark and wordmark have -dark twins, picked by the page's 外观 like the
 // rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
@@ -28,7 +28,7 @@ function Themed({ name, width, height, alt = "", className }: { name: string; wi
   return <img className={className} src={`${BASE}${name}${dark ? "-dark" : ""}.svg`} alt={alt} width={width} height={height} />;
 }
 
-/** The mark, s. (its square as wide as the s. nearly). */
+/** The mark, the face on its rounded square. */
 export function Mark({ size, className }: { size: number; className?: string }) {
   return <Themed name="mark" width={size} height={size} className={className} />;
 }
