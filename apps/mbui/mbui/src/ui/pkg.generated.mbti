@@ -2290,6 +2290,7 @@ pub fn Tester::draw(Self) -> Unit
 pub fn Tester::drawlist(Self, bytes? : Bool) -> String
 pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
+pub fn Tester::drawn_cut(Self) -> Array[(Int32, Double, Double, Double, Double, (Double, Double, Double, Double))]
 pub fn Tester::drawn_fades(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_fades_across(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]

@@ -94,3 +94,34 @@ test "a phone's composer: its hint gone as its field takes the cursor, back once
   let shut = hint_watch(t, "发消息", @sfpages.let_go_ms + @sfpages.morph_ms + @sf.hint_back_ms)
   assert_hint_still(shut, at)
 }
+
+///|
+/// Whether what is drawn about (`x`, `y`) (an icon, a button's round: within `r` of it) is drawn whole, nothing of it
+/// cut off.
+fn drawn_whole_at(t : @ui.Tester, x : Double, y : Double, r : Double) -> Bool {
+  let near = t
+    .drawn_cut()
+    .filter(fn(d) { d.1 >= x - r && d.1 + d.3 <= x + r && d.2 >= y - r && d.2 + d.4 <= y + r })
+  near.length() > 0 &&
+  near.iter().all(fn(d) {
+    let (x0, y0, x1, y1) = d.5
+    d.1 >= x0 - 0.5 && d.2 >= y0 - 0.5 && d.1 + d.3 <= x1 + 0.5 && d.2 + d.4 <= y1 + 0.5
+  })
+}
+
+///|
+test "a phone's composer opened by a tap keeps its ＋ and send whole on their way, its field beside them covering neither (the user, 2026-10-30: 「输入框盖住了加号和发送」)" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.draw()
+  let side = @sf.theme().round.side
+  t.tap_text("发消息")
+  let until = t.time() + @sfpages.morph_ms
+  while t.time() < until {
+    let (px, py) = t.locate("icon:plus")[0]
+    let (sx, sy) = t.locate("icon:arrow-up")[0]
+    assert_true(drawn_whole_at(t, px, py, side / 2.0), msg="＋ cut at \{t.time()}")
+    assert_true(drawn_whole_at(t, sx, sy, side / 2.0 + 1.0), msg="send cut at \{t.time()}")
+    t.frame()
+  }
+}
