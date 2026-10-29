@@ -1,7 +1,9 @@
 # vendor
 
 Crates taken from crates.io, and Swift packages the native apps build in, changed for still.fail; `[patch.crates-io]` in
-mesh/ and client/ points at the crates. Each change is marked `ember:` in the source. Drop one here once upstream has
+mesh/ and client/ points at the crates. iroh is not here: still.fail's branch of it is
+[zzj3720/iroh](https://github.com/zzj3720/iroh/tree/stillfail) (`stillfail`: upstream's release and a commit for each of
+our changes, its tests in its own CI; STILLFAIL.md there), taken by commit in `[patch.crates-io]`. Each change is marked `ember:` in the source. Drop one here once upstream has
 the same.
 
 - **PermissionFlow** (Swift, EYHN/PermissionFlow at 9b02967, as Cue's Computer Use pins it; only SystemSettingsKit and
@@ -41,26 +43,9 @@ the same.
   - Without advertising (ember's devices: they only look stations up), the interfaces are still joined.
   - A republish (same addresses and TXT) is not a new discovery: `Peer`'s equality includes when it was seen, so
     every mDNS packet reached the endpoint as new addresses (also reported upstream-side in rayfish/rayfish#161).
-- **iroh 1.0.3** (src/socket/remote_map/remote_state.rs): an address waiting to open a path (the connection out of
-  path ids or the remote's CIDs) is queued once, not again by every connection that still cannot open it at each 333 ms
-  retry. With two or more connections to a remote at the limit the queue multiplied each time, to gigabytes
-  (n0-computer/iroh#4390; upstream's fix #4551 is merged but in no release yet).
-- **iroh 1.0.3** (src/socket/remote_map/remote_state.rs): the Initial packets sent to every known path before one
-  is selected are kept, and sent at once to addresses that Address Lookup finds afterwards. Without it a station
-  found by mDNS a moment after the dial (the relay down or unreachable) was only tried at QUIC's next Initial
-  retransmit, 1 s or 3 s after the first: LAN connections took 1–6 s.
-- **iroh 1.0.3** (src/endpoint.rs `Builder::home_on_every_relay`, src/socket.rs, src/socket/transports.rs,
-  src/socket/transports/relay.rs and relay/actor.rs): one endpoint home on all its relays at once, a relay transport
-  for each (the first with the endpoint's whole map, home on what the others are not; the others one relay each), its
-  address naming each, a datagram for a relay sent through the transport whose relay it is. Upstream takes one relay
-  transport and is home on one relay: an endpoint was out of reach on the others (the station kept itself on them
-  with a keeper endpoint for each, keep.rs), and a device that wanted another relay took a key of its own for it, a
-  connection of its own, all on it ending as it moved.
-- **iroh 1.0.3** (src/socket/remote_map/remote_state.rs): a connection opens a path through every relay the remote
-  is on, its first path a relay's too (upstream: only beside a first path over IP). On an endpoint home on several
-  relays a relay's path is given up as any other (the connection's path idle timeout, not 30 s: the connection goes on
-  through another relay meanwhile) and opened again 2 s later until it is back. Together: a relay going away moves
-  the connection's packets to another and its streams go on (`endpoint_home_on_every_relay_survives_a_relay_gone`).
+
+
+
 - **noq-udp 1.3.0** (src/linux.rs): no UDP segmentation offload (GSO) on Android, each datagram sent on its own. An
   Android emulator's network accepts a segmented burst and drops all of it; QUIC on a direct path then got nothing
   through once it sent more than a packet or two at once, until iroh dropped the path 15 s later (docs/mesh-lan.md).

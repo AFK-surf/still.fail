@@ -1,7 +1,7 @@
 # What every job on mini1's runners starts with (after its checkout): the toolchains on PATH, and Rust built in a
 # Cargo target of the job's own (under RUNNER_TEMP, emptied before each job), through sccache, whose cache of compiled
 # crates (~/stillfail-ci/sccache) is what is kept between jobs.
-# No target is kept and shared: the runners check out to paths of their own, so a vendored crate (vendor/iroh, a lib
+# No target is kept and shared: the runners check out to paths of their own, so a patched crate (iroh, a lib
 # and a cdylib, its .dylib named without a hash) is another build from each, and builds of other branches and features
 # piled up beside one another; rustc took the wrong one (E0308, "multiple different versions of crate iroh_relay",
 # 2026-10-02 and 03), with kache as the wrapper and without it, in one target for all and in one per set of
