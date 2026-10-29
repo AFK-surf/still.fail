@@ -89,6 +89,11 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   for (const file of ["natives/shell-win32-x64-e873.tar.gz", "natives/shell-other-e873ee4f2e77b28f78c16a38.tar.gz", "natives/../station.json", "natives/x/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"]) {
     assert.equal(releaseType(file), null, file);
   }
+  // The relays' iroh-relay (.github/workflows/relay.yml), by the iroh commit it is built from.
+  assert.equal(releaseType("relay/iroh-relay-43a6892ffe0689de0cf2545e3a8f3d567146b408-linux-x64"), "application/octet-stream");
+  for (const file of ["relay/iroh-relay-43a6892f-linux-x64", "relay/iroh-relay-43a6892ffe0689de0cf2545e3a8f3d567146b408-darwin-arm64", "relay/../station.json"]) {
+    assert.equal(releaseType(file), null, file);
+  }
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");

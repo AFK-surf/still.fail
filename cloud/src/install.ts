@@ -119,6 +119,9 @@ const APP_FILES: [RegExp, string][] = [
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9]+\.ttf\.gz$/, "application/gzip"],
   // and its preview: the characters of the fonts page alone, for the face to be shown before it is fetched.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/preview-[0-9a-f]{8}\.ttf$/, "font/ttf"],
+  // The iroh-relay still.fail's relays on machines of their own (Beijing's, Hong Kong's) run, built from the iroh the
+  // station pins (.github/workflows/relay.yml), named by that commit; cloud/relay-update.sh puts it on a relay.
+  [/^relay\/iroh-relay-[0-9a-f]{40}-linux-x64$/, "application/octet-stream"],
   // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
   // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
   // there).

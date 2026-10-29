@@ -1,0 +1,55 @@
+# The iroh-relay still.fail's relays on machines of their own (Beijing's, Hong Kong's) run: built from the iroh the station
+# pins (station/native/mesh/Cargo.toml's [patch]: still.fail's branch, zzj3720/iroh, with the relay's UDP way) and put
+# in the releases bucket as relay/iroh-relay-<commit>-linux-x64, which the relays fetch themselves
+# (cloud/relay-update.sh). Put there because the relays cannot be reached with anything large otherwise: copied from the
+# home network the upload stalls, and Beijing gets nothing from GitHub (2026-10-29). Once a commit: skipped when the
+# bucket has it.
+name: relay
+on:
+  push:
+    branches: [main]
+    paths: [station/native/mesh/Cargo.toml, .github/workflows/relay.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  relay:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    # production's bucket token, on main only
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: station/native/mesh/Cargo.toml, sparse-checkout-cone-mode: false }
+      - id: pin
+        run: |
+          rev=$(sed -n 's/^iroh-relay = { git = "https:\/\/github.com\/zzj3720\/iroh", rev = "\([0-9a-f]\{40\}\)" }$/\1/p' station/native/mesh/Cargo.toml)
+          [ -n "$rev" ] || { echo "no zzj3720/iroh rev for iroh-relay in station/native/mesh/Cargo.toml" >&2; exit 1; }
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          name="relay/iroh-relay-$rev-linux-x64"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if curl -fsSL -o /dev/null -r 0-0 "https://app.still.fail/releases/$name"; then echo "have=yes" >> "$GITHUB_OUTPUT"; echo "$name is in the bucket"; fi
+      - if: steps.pin.outputs.have != 'yes'
+        uses: actions/checkout@v5
+        with: { repository: zzj3720/iroh, ref: "${{ steps.pin.outputs.rev }}", path: iroh }
+      - if: steps.pin.outputs.have != 'yes'
+        uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-unknown-linux-musl }
+      # Static (musl): the relays' Ubuntu and whatever they run later take it as it is.
+      - if: steps.pin.outputs.have != 'yes'
+        working-directory: iroh
+        run: |
+          sudo apt-get install -y musl-tools
+          cargo build --release -p iroh-relay --features server --bin iroh-relay --target x86_64-unknown-linux-musl
+          mkdir ../out && cp target/x86_64-unknown-linux-musl/release/iroh-relay ../out/ && strip ../out/iroh-relay
+          ../out/iroh-relay --version && sha256sum ../out/iroh-relay
+      - if: steps.pin.outputs.have != 'yes' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NAME: ${{ steps.pin.outputs.name }}
+        run: |
+          account=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/octet-stream" -T out/iroh-relay \
+            "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$NAME" > /dev/null
+          echo "put $NAME"
