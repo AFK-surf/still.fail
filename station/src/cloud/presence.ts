@@ -167,11 +167,13 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (text === "pong") answered = true;
       else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
-    socket.on("close", (code) => {
+    socket.on("close", (code, reason) => {
       ping?.();
       unlisten();
       if (code === CLOSE_REMOVED) removed(s, CLOSE_REMOVED);
-      resume(failed ? Effect.fail(failed) : Effect.succeed(`${plane.name} closed the presence socket`));
+      // With its code and reason: replaced by another socket of this station's (4000), silent (4008), the cloud restarting (1001, 1012)…
+      const why = reason.length > 0 ? `${code} ${reason.toString("utf8")}` : String(code);
+      resume(failed ? Effect.fail(failed) : Effect.succeed(`${plane.name} closed the presence socket (${why})`));
     });
     return Effect.sync(() => {
       ping?.();

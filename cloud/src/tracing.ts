@@ -11,6 +11,7 @@ import { validKeyHex, verifyAnySignature } from "./grants";
 import { TELEMETRY_BATCHES_PER_MINUTE } from "./limits";
 
 const AXIOM = "https://api.axiom.co/v1/traces";
+const AXIOM_LOGS = "https://api.axiom.co/v1/logs";
 const MAX_BYTES = 512 * 1024;
 const MAX_SPANS = 1000;
 
@@ -105,8 +106,8 @@ export class TelemetryLimiter extends DurableObject<Env> {
   }
 }
 
-async function toAxiom(env: Env, body: string): Promise<boolean> {
-  const response = await fetch(AXIOM, {
+async function toAxiom(env: Env, body: string, to = AXIOM): Promise<boolean> {
+  const response = await fetch(to, {
     method: "POST",
     headers: { authorization: `Bearer ${env.AXIOM_TOKEN}`, "x-axiom-dataset": env.AXIOM_DATASET ?? "ember", "content-type": "application/json" },
     body,
@@ -157,6 +158,34 @@ export async function receiveTraces(request: Request, env: Env, account: string 
   if (spans > MAX_SPANS) return reply({ error: "too_large" }, 413);
   if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
   return (await toAxiom(env, body)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+}
+
+/**
+ * POST /v1/telemetry/logs: a batch of a station's log lines (OTLP JSON logs, scrubbed by the station:
+ * station/src/ops/log-export.ts), signed by the station as its spans are, passed on to Axiom.
+ */
+export async function receiveLogs(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
+  let body: string;
+  try {
+    body = await readText(request, MAX_BYTES);
+  } catch {
+    return reply({ error: "too_large" }, 413);
+  }
+  const station = await stationSender(request, env, body);
+  if (!station) return reply({ error: "invalid_session" }, 401);
+  if (!(await env.TELEMETRY_LIMITS.getByName(`station:${station}`).consume())) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
+  let records = 0;
+  try {
+    const value = JSON.parse(body) as { resourceLogs?: { scopeLogs?: { logRecords?: unknown[] }[] }[] };
+    if (!Array.isArray(value.resourceLogs)) throw new Error("shape");
+    for (const resource of value.resourceLogs) for (const scope of resource.scopeLogs ?? []) records += scope.logRecords?.length ?? 0;
+  } catch {
+    return reply({ error: "invalid_request" }, 400);
+  }
+  if (records > MAX_SPANS) return reply({ error: "too_large" }, 413);
+  if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
+  return (await toAxiom(env, body, AXIOM_LOGS)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
 }
 
 /** The span of a /v1/* call made in a recorded trace, sent to Axiom (dropped if that fails). */

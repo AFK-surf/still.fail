@@ -17,7 +17,7 @@ import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
-import { receiveTraces } from "./tracing";
+import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -150,6 +150,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (claims instanceof Response) return claims;
     return receiveTraces(request, env, claims?.sub ?? null);
   }
+
+  // A station's log, signed with its key (tracing.ts).
+  if (path === "/v1/telemetry/logs" && method === "POST") return receiveLogs(request, env);
 
   // A bug report about still.fail itself, from a station's agent (signed with its key) or a signed-in account (feedback.ts).
   if (path === "/v1/feedback" && method === "POST") {

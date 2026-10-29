@@ -29,8 +29,9 @@ export type ProviderSpec = {
   readonly notifyPath: string;
   readonly notifyTag: string;
   readonly notifyFormer: boolean;
-  /// Traces (OTLP JSON), signed under each prefix's tag; none: the provider takes none.
-  readonly telemetry: { readonly path: string; readonly prefixes: readonly string[] } | null;
+  /// Traces (OTLP JSON, `path`) and the station's log (OTLP JSON, `logs`), signed under each prefix's tag; none: the
+  /// provider takes none.
+  readonly telemetry: { readonly path: string; readonly logs: string | null; readonly prefixes: readonly string[] } | null;
   /// Where releases are: `<base>/releases/station.json` and `<base>/install.sh`.
   readonly releaseBase: (origin: string) => string;
   /// Member credentials it signs: their `iss` and header `typ`.
@@ -56,7 +57,7 @@ export const STILLFAIL: ProviderSpec = {
   notifyPath: "/v1/stations/notify",
   notifyTag: "ember-station-notify-v1",
   notifyFormer: true,
-  telemetry: { path: "/v1/telemetry/traces", prefixes: ["stillfail", "ember"] },
+  telemetry: { path: "/v1/telemetry/traces", logs: "/v1/telemetry/logs", prefixes: ["stillfail", "ember"] },
   releaseBase: (origin) => origin,
   credential: { issuers: ["stillfail-cloud", "ember-cloud"], types: ["stillfail-member+jwt", "ember-member+jwt"] },
   feedback: true,
