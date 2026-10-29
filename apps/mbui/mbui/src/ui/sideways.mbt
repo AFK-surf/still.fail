@@ -116,8 +116,8 @@ pub fn Ctx::sideways(
     st.show_last = show
     self.show(show)
   }
-  self.sideways_built(st, b, inner)
-  row_said_sideways(id, b, inner)
+  self.nodes[b].scroller = id
+  self.nodes[b].scroller_inner = true
   b
 }
 
@@ -134,6 +134,21 @@ fn Ctx::sideways_built(self : Ctx, st : Sideways, b : Int, inner : Int) -> Unit 
     st.inner = inner
     st.others.clear()
     st.frame = self.build_no
+  }
+}
+
+///|
+/// What scrolls, from the nodes once all of them are made (a list's rows as it was laid out): each box said to scroll
+/// (Node's `scroller`) built this build, in the order made.
+fn Ctx::sideways_found(self : Ctx) -> Unit {
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    if n.scroller != 0 {
+      match sideways.get(n.scroller) {
+        Some(st) => self.sideways_built(st, i, if n.scroller_inner { n.first } else { -1 })
+        None => ()
+      }
+    }
   }
 }
 
@@ -319,8 +334,8 @@ pub fn Ctx::capped(
   self.nodes[b].sideways = true
   self.nodes[b].shrinks = shrinks
   self.nodes[b].hit = false
-  self.sideways_built(st, b, inner)
-  row_said_sideways(id, b, inner)
+  self.nodes[b].scroller = id
+  self.nodes[b].scroller_inner = true
   b
 }
 
