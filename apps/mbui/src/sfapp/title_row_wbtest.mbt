@@ -175,3 +175,21 @@ test "a window with its buttons in the app's top row: its top drags it before an
     }
   }
 }
+
+///|
+test "a new chat with its 文件 tab: the empty part of its bar drags the window, the tab open beside it or not" {
+  let calls : Array[Made] = []
+  // (the page under it takes presses over the window's title row: what drags there is the bar's own)
+  for platform in [0, 3] {
+    let t = wide_tester(calls, mode="newchat-files", platform~, window_inset=true)
+    t.run_for(@ui.nav_push_ms)
+    assert_true(t.drags_window_at(600.0, 22.0), msg="platform \{platform}: the tab open")
+    t.click(Button, label="收起侧栏")
+    t.run_for(@sfdesk.side_out_ms)
+    assert_true(t.drags_window_at(600.0, 22.0), msg="platform \{platform}: the tab closed")
+    assert_true(t.drags_window_at(1000.0, 22.0), msg="platform \{platform}: the tab closed, by 文件")
+    let before = t.window_drags()
+    t.tap(600.0, 22.0)
+    assert_eq(t.window_drags() - before, 1)
+  }
+}
