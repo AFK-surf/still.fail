@@ -9,8 +9,6 @@
   "web-pages.settings.stations.restart": "重启 station",
   "web-pages.settings.stations.restartWhat": "重启 station",
   "web-pages.settings.stations.restarting": "正在重启，进行中的会话不受影响",
-  "web-pages.stations.network.relayUdp": "中继走 UDP",
-  "web-pages.stations.network.relayUdpNote": "打开后，此 station 与支持 UDP 的中继之间的数据只走 UDP，不再走 WebSocket（UDP 不通时，经这些中继的线路不通）；不支持 UDP 的中继照旧。保存后立即生效，已有连接不断。",
   "web-pages.accounts.signInFailed": "无法登录：{error}",
   "web-pages.accounts.signOutFailed": "无法退出登录：{error}",
   "web-pages.accounts.deleteFailed": "无法注销账号：{error}",

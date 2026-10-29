@@ -1022,22 +1022,6 @@ fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, 
               obj([("station", str(address)), ("congestion", str(algorithm))]), done=@sf.t("web-pages.stations.network.saved"))
           }, label=@sf.t("web-pages.stations.network.algorithm"), disabled=!manager || busy, whole=true)
       })
-      // Whether the station asks the relays for their UDP way (its datagrams over UDP only where one is offered).
-      let udp_busy = is_doing(core, ["network.setRelayUdp"], [("station", address)])
-      let udp = flag(network, "relayUdp")
-      let now = @sf.switch_row(
-        c,
-        "network-udp/" + address,
-        @sf.t("web-pages.stations.network.relayUdp"),
-        udp,
-        note=@sf.t("web-pages.stations.network.relayUdpNote"),
-        disabled=!manager,
-        busy=udp_busy,
-      )
-      if now != udp {
-        @settings.act(core, @sf.t("web-pages.stations.network.what"), "network.setRelayUdp",
-          obj([("station", str(address)), ("relayUdp", Json::boolean(now))]), done=@sf.t("web-pages.stations.network.saved"))
-      }
     }
   })
 }

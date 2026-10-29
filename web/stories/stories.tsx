@@ -378,7 +378,7 @@ const together = (...all: DemoExtension[]): DemoExtension => ({
 const fullStation = (): DemoExtension => together(
   permissionsDemo("missing", screensDemo()), agentEnvDemo("set"), logins(), memberships(),
   { then: (t, value) => (t.topic === "stations" && Array.isArray(value)
-    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false }, network: { congestion: "cubic", relayUdp: false } } } : s))
+    ? (value as StationView[]).map((s) => (s.overview ? { ...s, overview: { ...s.overview, search: { files: "spotlight", personal: false }, context: { afreshWhenCold: false }, network: { congestion: "cubic" } } } : s))
     : undefined) },
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in

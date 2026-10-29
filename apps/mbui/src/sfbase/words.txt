@@ -1974,8 +1974,6 @@ web-pages.stations.network.bbr
 web-pages.stations.network.note
 web-pages.stations.network.what
 web-pages.stations.network.saved
-web-pages.stations.network.relayUdp
-web-pages.stations.network.relayUdpNote
 web-pages.settings.stations.restart
 web-pages.settings.stations.restartWhat
 web-pages.settings.stations.restarting

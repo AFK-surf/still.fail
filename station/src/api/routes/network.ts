@@ -1,6 +1,6 @@
-// An operator's network choices (the congestion controller, the relays' UDP way). Saved, and taken by the running mesh
-// as saved (mesh.ts applyNetwork); a station started again (below) has them from its start. A request sets what it
-// names.
+// An operator's network choice (the congestion controller). Saved, and taken by the running mesh as saved (mesh.ts
+// applyNetwork); a station started again (below) has it from its start. The relays' UDP way, a choice until
+// 2026-10-30, is no more: a client from before that still sets it is answered as if it did, nothing saved.
 import { error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -17,16 +17,15 @@ export const routes = ({ config, changed, restart }: { config: ConfigFile; chang
     let body: any;
     try { body = JSON.parse(r.body.toString("utf8")); }
     catch { return error(400, "invalid JSON"); }
-    const set: { congestion?: "cubic" | "bbr"; relayUdp?: boolean } = {};
+    const set: { congestion?: "cubic" | "bbr" } = {};
     if (body !== null && typeof body === "object" && "congestion" in body) {
       if (body.congestion !== "cubic" && body.congestion !== "bbr") return error(400, "congestion: expected cubic or bbr");
       set.congestion = body.congestion;
     }
-    if (body !== null && typeof body === "object" && "relayUdp" in body) {
-      if (typeof body.relayUdp !== "boolean") return error(400, "relayUdp: expected a boolean");
-      set.relayUdp = body.relayUdp;
+    if (Object.keys(set).length === 0) {
+      if (body !== null && typeof body === "object" && typeof body.relayUdp === "boolean") return json(200, JSON.stringify(networkView(config.raw())));
+      return error(400, "expected congestion");
     }
-    if (Object.keys(set).length === 0) return error(400, "expected congestion or relayUdp");
     config.update((raw) => { raw.network = { ...raw.network, ...set }; });
     changed?.();
     return json(200, JSON.stringify(networkView(config.raw())));

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
-import { checkNetwork, congestionOf, relayUdpOf } from "../src/mesh/settings.ts";
+import { checkNetwork, congestionOf } from "../src/mesh/settings.ts";
 import { routes } from "../src/api/routes/network.ts";
 import type { Request } from "../src/api/request.ts";
 
@@ -39,12 +39,13 @@ test("network choices persist, validate and belong to station managers", async (
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("the relays' UDP way is off until a manager turns it on, and is saved apart from the controller", async () => {
+test("the relays' UDP way is no choice any more: a client from before that sets it is answered, nothing saved", async () => {
   const dir = mkdtempSync(join(tmpdir(), "network-settings-"));
   try {
     const config = new ConfigFile(dir);
     config.check = (raw) => checkNetwork(raw.network);
-    assert.equal(relayUdpOf(config.raw()), false);
+    // A config.json from when it was a choice still opens.
+    config.update((raw) => { raw.network = { congestion: "bbr", relayUdp: true }; });
     const route = routes({ config })[0]!;
     const request = (role: string, body: unknown): Request => ({
       method: "PUT", path: "/network/settings", query: [], headers: {}, lang: "zh",
@@ -52,15 +53,10 @@ test("the relays' UDP way is off until a manager turns it on, and is saved apart
       viewer: { sub: "a", email: "a@x", name: "A", role, workspace: "w", device: "d" },
     });
     assert.equal((await route.handle(request("member", { relayUdp: true }), [])).status, 403);
-    for (const bad of [{ relayUdp: "yes" }, { relayUdp: null }, {}]) assert.equal((await route.handle(request("owner", bad), [])).status, 400);
-    assert.equal((await route.handle(request("admin", { congestion: "bbr" }), [])).status, 200);
+    for (const bad of [{ relayUdp: "yes" }, {}]) assert.equal((await route.handle(request("owner", bad), [])).status, 400);
     const answer = await route.handle(request("admin", { relayUdp: true }), []);
     assert.equal(answer.status, 200);
-    assert.deepEqual(JSON.parse(String(answer.body)), { congestion: "bbr", relayUdp: true });
-    const restarted = new ConfigFile(dir);
-    assert.equal(relayUdpOf(restarted.raw()), true);
-    assert.equal(congestionOf(restarted.raw()), "bbr");
-    assert.throws(() => config.update((raw) => { raw.network.relayUdp = 1; }), /relayUdp: expected a boolean/);
+    assert.deepEqual(JSON.parse(String(answer.body)), { congestion: "bbr" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -91,15 +87,15 @@ test("the running mesh takes the network settings as they are saved, each once i
   try {
     const config = new ConfigFile(dir);
     const said: string[] = [];
-    const off = applyNetwork({ setCongestion: (c) => void said.push(`congestion ${c}`), setRelayUdp: async (on) => void said.push(`udp ${on}`) }, config);
+    const off = applyNetwork({ setCongestion: (c) => void said.push(`congestion ${c}`) }, config);
     config.update((raw) => { raw.unrelated = 1; });
     assert.deepEqual(said, []);
     config.update((raw) => { raw.network = { congestion: "bbr" }; });
-    config.update((raw) => { raw.network = { congestion: "bbr", relayUdp: true }; });
-    config.update((raw) => { raw.network = { congestion: "cubic", relayUdp: false }; });
-    assert.deepEqual(said, ["congestion bbr", "udp true", "congestion cubic", "udp false"]);
+    config.update((raw) => { raw.network = { congestion: "bbr", other: true }; });
+    config.update((raw) => { raw.network = { congestion: "cubic" }; });
+    assert.deepEqual(said, ["congestion bbr", "congestion cubic"]);
     off();
     config.update((raw) => { raw.network = { congestion: "bbr" }; });
-    assert.equal(said.length, 4);
+    assert.equal(said.length, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
