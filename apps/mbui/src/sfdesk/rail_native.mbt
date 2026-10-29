@@ -9,6 +9,12 @@
 let nav_want : Ref[(Source, Workspace, Array[Workspace])?] = { val: None }
 
 ///|
+/// Whether the last frame left the system, able to lay out the app's tabs, without them (nav_frame): it refused those
+/// handed, or the frame handed none.
+// kept across runs: said by each frame that hands them, put back with the app (rail_native_reset)
+let nav_untaken : Ref[Bool] = { val: false }
+
+///|
 let native_workspace_anchor : Ref[Int] = { val: 0 }
 
 ///|
@@ -119,10 +125,6 @@ pub fn on_cards() -> Bool {
 /// in the system's bars; `act` what it does chosen. A page on its way out (a stack's move) hands none: the one on top
 /// does.
 fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw? : String) -> Bool {
-  // Even the short system column needs one entry to the chat's complete menu.
-  if !@sf.native_on() || (column_short.val && id != "chat/info") {
-    return false
-  }
   if drawn_page.val is Some(p) && p != app.nav.top() {
     return false
   }
@@ -130,6 +132,12 @@ fn bar_action(id : String, title : String, icon : String, act : () -> Unit, raw?
   match nav_page.search_by(fn(p) { p.0.id == key }) {
     Some(i) => nav_page.remove(i) |> ignore
     None => ()
+  }
+  // Even the short system column needs one entry to the chat's complete menu. (Read as the page is built: the column
+  // come to be short or no longer, what built it builds again and hands as it is now, what it handed before not left
+  // in the bars.)
+  if !@sf.native_on() || (column_short.get() && id != "chat/info") {
+    return false
   }
   let data = match raw {
     Some(d) => d
@@ -242,6 +250,14 @@ fn native_side_now() -> Unit {
 /// change: @hostapi.nav_bar), the page's actions in them, none where it wants none (a phone's frame).
 pub fn nav_frame(body : () -> Unit) -> Unit {
   nav_want.val = None
+  // (where the system lays out the app's tabs, the wide frame hands it them each frame (frame.mbt: on the tape) and it
+  // takes them: the frame is laid out with them from the first it can, as the frames after it are, not one laid out
+  // without them (the cards on the tape with no room for its column, the page past the window's edge) and the next
+  // with them; what came of it said as the frame ends, as it hands them. Not counted on after a frame that left it
+  // without them: one it refused, or one that handed none)
+  if !@sf.native_bars.on && @sf.native_able() && !nav_untaken.val {
+    @sf.native_bars.on = true
+  }
   floating_bar.val = None
   @sf.native_over_clear()
   // (the column as the window is now, turned or not, before anything is laid out beside it)
@@ -287,11 +303,13 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
         rail_nav(src, w, all, card)
       }
       @sf.native_bars.on = @hostapi.nav_bar(bar)
+      nav_untaken.val = @sf.native_able() && !@sf.native_bars.on
       floating_bar.val = Some(bar)
       native_side_now()
     }
     None => {
       @hostapi.nav_bar_none()
+      nav_untaken.val = @sf.native_able()
       @sf.native_bars.on = false
       @sf.native_bars.side = 0.0
     }
@@ -444,7 +462,7 @@ fn tab_kept_key(ws : String, tab : String) -> String {
 /// bars since the last frame done.
 fn native_frame(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   nav_want.val = Some((src, w, all))
-  column_short.val = @sf.native_side() && c.window_size().0 < column_short_below
+  column_short.set(@sf.native_side() && c.window_size().0 < column_short_below)
   // (the host says the screen's corner only where it lays out the tabs, ios_nav.h mb_host_window_corner; said once the
   // window is on the screen, what was kept before it is drawn anew, its corners its own then)
   let mut changed = false
@@ -578,7 +596,7 @@ let nav_log_was : Ref[String] = { val: "" }
 /// bell and the chat's complete menu. The workspace switch lives in the sidebar heading;
 /// other page actions stay in their cards when the column has no room for them.
 // kept across runs: said again each frame (native_frame), put back by rail_native_reset
-let column_short : Ref[Bool] = { val: false }
+let column_short : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// The outer screen's width and under (an iPhone Duo's, 466 across; its inner one on its side 951).
@@ -588,9 +606,10 @@ let column_short_below : Double = 600.0
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
   native_workspace_anchor.val = 0
-  column_short.val = false
+  column_short.set(false)
   @sf.native_bars_reset()
   nav_want.val = None
+  nav_untaken.val = false
   native_sidebar_items.clear()
   floating_bar.val = None
   native_floating.val = []

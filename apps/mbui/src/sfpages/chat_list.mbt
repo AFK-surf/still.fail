@@ -415,7 +415,13 @@ fn to_ask(
 ) -> Bool {
   let p = @sf.theme().p
   let asks = asks_of(v)
-  let shown = asks.length() > 0 && !asks_in_view(ask_rows, info)
+  // (out of view once the list is laid out: before it is, as a chat opens, nothing is known to be out of view, and a
+  // bell shown there went out again in the frames after)
+  let laid = match info {
+    Some(i) => i.first >= 0
+    None => false
+  }
+  let shown = asks.length() > 0 && laid && !asks_in_view(ask_rows, info)
   let look = match @motion.presence(c, "chat-ask", shown, enter=float_trans(), exit=float_trans()) {
     Some(l) => l
     None => return shown

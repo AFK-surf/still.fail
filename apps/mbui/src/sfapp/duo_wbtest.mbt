@@ -36,8 +36,7 @@ fn native_chat(
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner=corner, window_corners?=corners)
-  t.set_nav_able(able)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.nav_push_ms)
   t
@@ -259,12 +258,12 @@ test "an iPhone Duo folded, its outer screen on its side: the cards' corners eac
   let side = @sf.corner_radii(@sf.tape_side_corners())
   // (the list's card along the hinge: 4 in from the screen's 8, concentric with it; its corners away from the
   // screen's edge the tape's)
-  assert_eq(side[0], 8.0 - @sf.native_in)
-  assert_eq(side[3], 8.0 - @sf.native_in)
+  assert_eq(side[0], @ui.concentric(8.0, @sf.native_in))
+  assert_eq(side[3], @ui.concentric(8.0, @sf.native_in))
   // (the page's card along the other side: the screen's 59 less the same)
   let page = @sf.corner_radii(@sf.tape_corners(left=false, right=true))
-  assert_eq(page[1], 59.0 - @sf.native_in)
-  assert_eq(page[2], 59.0 - @sf.native_in)
+  assert_eq(page[1], @ui.concentric(59.0, @sf.native_in))
+  assert_eq(page[2], @ui.concentric(59.0, @sf.native_in))
   assert_eq(t.corner_faults(), [])
 }
 
@@ -704,6 +703,13 @@ test "Duo sidebar glass circles share a baseline and keep their inset with a lar
       }
     }
   }
+}
+
+///|
+test "an iPhone Duo: the system's bars told as the app starts put the sidebar where they have it at once, moving nothing" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  assert_true(@sf.native_on())
+  assert_true(!t.moving().join("\n").contains("a move of"), msg=t.moving().join("\n"))
 }
 
 ///|
