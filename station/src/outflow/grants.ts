@@ -1,7 +1,8 @@
 // The grants of data outflow (docs/data-outflow.md): which program on this machine may read which kinds of the
-// station's data, given by a person at it, kept until revoked. Kept in <data>/outflow.json (0600): each grant with the
-// SHA-256 of its token (never the token), the program as the system said it then, what it said of itself, its kinds,
-// when and the latest reads.
+// station's data (or of every station of its workspace), given by an admin of the workspace in still.fail, kept until
+// revoked; and the requests the admins have not answered yet, or whose program has not come for its token yet. Kept
+// in <data>/outflow.json (0600): each grant with the SHA-256 of its token (never the token), the program as the system
+// said it then, what it said of itself, its kinds, how far it reaches, who allowed it, when and the latest reads.
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,7 +34,11 @@ export function identityKey(i: Identity): string {
   return i.valid && i.teamId !== null && i.identifier !== null ? `team:${i.teamId}:${i.identifier}` : `file:${i.path}:${i.sha256 ?? ""}`;
 }
 
-export type Read = { at: number; scope: Scope; rows: number };
+/// What a grant reaches: this station's chats, or those of every station of its home workspace.
+export type Reach = "station" | "workspace";
+
+/// `station`: the station read, when not this one.
+export type Read = { at: number; scope: Scope; rows: number; station?: string };
 
 export type Grant = {
   id: string;
@@ -43,15 +48,37 @@ export type Grant = {
   /// What the program said of itself when it asked (shown as its own words).
   said: { name: string; purpose: string };
   scopes: Scope[];
+  /// Absent on a grant from before: this station.
+  reach?: Reach;
+  /// The admin who allowed it (their email); absent on a grant from before, allowed at this machine.
+  allowedBy?: string;
   grantedAt: number;
   /// The latest reads, the newest last (at most READS_KEPT).
   reads: Read[];
 };
 
 /// A grant as the pages are given it: without its token.
-export type GrantView = Omit<Grant, "token"> & { lastReadAt: number | null };
+export type GrantView = Omit<Grant, "token" | "reach"> & { reach: Reach; lastReadAt: number | null };
+
+/// A program's request, until its program takes what was answered: asking while no admin answered; then allowed
+/// (with what the admin left of it) or refused.
+export type Request = {
+  id: string;
+  identity: Identity;
+  said: { name: string; purpose: string };
+  scopes: Scope[];
+  reach: Reach;
+  askedAt: number;
+  answer: null | { at: number; by: string; allow: false } | { at: number; by: string; allow: true; scopes: Scope[]; reach: Reach };
+};
+
+/// What a program asking is answered, once there is an answer: its grant and token, or refused.
+export type Taken = { grant: GrantView; token: string } | "refused";
 
 const READS_KEPT = 100;
+/// A request is kept this long after it was asked or answered, unless its program takes the answer before: one no
+/// admin answers in a week goes, as does an allowed one its program never came back for.
+export const REQUEST_KEPT_MS = 7 * 24 * 60 * 60_000;
 const TOKEN_PREFIX = "sfo_";
 
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -60,24 +87,78 @@ export class OutflowGrants {
   readonly #file: string;
   readonly #now: () => number;
   #grants: Grant[];
+  #requests: Request[];
   readonly #listeners = new Set<() => void>();
 
   constructor(data: string, now: () => number) {
     this.#file = join(data, "outflow.json");
     this.#now = now;
-    this.#grants = this.#load();
+    const kept = this.#load();
+    this.#grants = kept.grants;
+    this.#requests = kept.requests;
   }
 
   list(): GrantView[] {
-    return this.#grants.map(({ token: _, ...g }) => ({ ...g, lastReadAt: g.reads.at(-1)?.at ?? null }));
+    return this.#grants.map(({ token: _, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null }));
   }
 
-  /// A new grant for `identity`, and its token (said once, never kept). Another grant of the same program goes: what
-  /// it asked for now is what it has.
-  add(identity: Identity, said: Grant["said"], scopes: Scope[]): { grant: GrantView; token: string } {
-    const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
+  /// The requests no admin has answered yet, the oldest first.
+  asking(): Request[] {
+    this.#expire();
+    return this.#requests.filter((r) => r.answer === null);
+  }
+
+  /// A program asks: its request, a new one, or the one it already has that its program has not taken (asked again
+  /// while no admin answered, it says now what it asks for). One a request of it refused before is asked anew.
+  ask(identity: Identity, said: Request["said"], scopes: Scope[], reach: Reach): Request {
+    this.#expire();
     const key = identityKey(identity);
-    const grant: Grant = { id: randomBytes(8).toString("hex"), token: digest(token), identity, said, scopes: [...scopes], grantedAt: this.#now(), reads: [] };
+    const had = this.#requests.find((r) => identityKey(r.identity) === key && r.answer?.allow !== false);
+    if (had?.answer === null) {
+      Object.assign(had, { identity, said, scopes: [...scopes], reach });
+      this.#save();
+      return had;
+    }
+    if (had) return had;
+    const request: Request = { id: randomBytes(8).toString("hex"), identity, said, scopes: [...scopes], reach, askedAt: this.#now(), answer: null };
+    this.#requests = [...this.#requests.filter((r) => identityKey(r.identity) !== key), request];
+    this.#save();
+    return request;
+  }
+
+  /// An admin's answer to request `id` (`by`: their email): allowed with the kinds and reach they left of it (no more
+  /// than it asked), or refused. False when there is no such request waiting for one.
+  answer(id: string, by: string, answer: { allow: false } | { allow: true; scopes: Scope[]; reach: Reach }): boolean {
+    this.#expire();
+    const request = this.#requests.find((r) => r.id === id && r.answer === null);
+    if (!request) return false;
+    const at = this.#now();
+    if (answer.allow) {
+      const scopes = request.scopes.filter((s) => answer.scopes.includes(s));
+      if (scopes.length === 0) return this.answer(id, by, { allow: false });
+      const reach: Reach = request.reach === "workspace" && answer.reach === "workspace" ? "workspace" : "station";
+      request.answer = { at, by, allow: true, scopes, reach };
+    } else request.answer = { at, by, allow: false };
+    this.#save();
+    return true;
+  }
+
+  /// What request `id`'s program is given, once answered (null while asking, or when there is no such request): the
+  /// grant made of it and its token (said once, never kept), or refused. Either way the request goes. Another grant
+  /// of the same program goes: what it asked for now is what it has.
+  take(id: string): Taken | null {
+    this.#expire();
+    const request = this.#requests.find((r) => r.id === id);
+    if (!request || request.answer === null) return null;
+    this.#requests = this.#requests.filter((r) => r !== request);
+    if (!request.answer.allow) {
+      this.#save();
+      return "refused";
+    }
+    const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
+    const key = identityKey(request.identity);
+    const { scopes, reach, by, at } = request.answer;
+    const grant: Grant = { id: randomBytes(8).toString("hex"), token: digest(token), identity: request.identity, said: request.said, scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
     this.#grants = [...this.#grants.filter((g) => identityKey(g.identity) !== key), grant];
     this.#save();
     return { grant: this.list().find((g) => g.id === grant.id)!, token };
@@ -100,10 +181,10 @@ export class OutflowGrants {
   }
 
   /// A read made with grant `id`.
-  read(id: string, scope: Scope, rows: number): void {
+  read(id: string, scope: Scope, rows: number, station?: string): void {
     const grant = this.#grants.find((g) => g.id === id);
     if (!grant) return;
-    grant.reads = [...grant.reads, { at: this.#now(), scope, rows }].slice(-READS_KEPT);
+    grant.reads = [...grant.reads, { at: this.#now(), scope, rows, ...(station === undefined ? {} : { station }) }].slice(-READS_KEPT);
     this.#save();
   }
 
@@ -113,19 +194,28 @@ export class OutflowGrants {
     return () => void this.#listeners.delete(listener);
   }
 
-  #load(): Grant[] {
+  /// Requests asked or answered longer ago than REQUEST_KEPT_MS go.
+  #expire(): void {
+    const since = this.#now() - REQUEST_KEPT_MS;
+    const kept = this.#requests.filter((r) => (r.answer?.at ?? r.askedAt) >= since);
+    if (kept.length === this.#requests.length) return;
+    this.#requests = kept;
+    this.#save();
+  }
+
+  #load(): { grants: Grant[]; requests: Request[] } {
     try {
       const raw = JSON.parse(readFileSync(this.#file, "utf8"));
-      return Array.isArray(raw?.grants) ? raw.grants : [];
+      return { grants: Array.isArray(raw?.grants) ? raw.grants : [], requests: Array.isArray(raw?.requests) ? raw.requests : [] };
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT") log.warn("outflow", "the grants do not read; none are had", { error: (e as Error).message });
-      return [];
+      return { grants: [], requests: [] };
     }
   }
 
   #save(): void {
     const tmp = `${this.#file}.tmp-${process.pid}`;
-    writeFileSync(tmp, `${JSON.stringify({ grants: this.#grants })}\n`, { mode: 0o600 });
+    writeFileSync(tmp, `${JSON.stringify({ grants: this.#grants, requests: this.#requests })}\n`, { mode: 0o600 });
     renameSync(tmp, this.#file);
     for (const listener of this.#listeners) listener();
   }

@@ -1,39 +1,47 @@
 // Data outflow's own socket (docs/data-outflow.md): <data>/run/outflow.sock, on this machine alone, HTTP. A program
 // here asks for some kinds of the station's data (POST /v1/request): the station says who it is by the other end of the
-// socket (never by what it says of itself), the person at this machine answers in a window, and the program gets a
-// token. With it, that program alone reads what it was granted (GET /v1/usage, GET /v1/chats, GET /v1/messages), in
-// the shape of `/v1`.
+// socket (never by what it says of itself), an admin of the workspace answers in still.fail, and the program gets a
+// token. With it, that program alone reads what it was granted (GET /v1/stations, /v1/usage, /v1/chats,
+// /v1/messages), of this station or, granted the workspace, of any station of it, in the shape of `/v1`.
 import { createHash } from "node:crypto";
-import { type FSWatcher, chmodSync, createReadStream, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, watch } from "node:fs";
+import { chmodSync, createReadStream, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
 import { basename, dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
 import { log } from "../ops/log.ts";
-import { type Lang, tr } from "../ops/i18n.ts";
-import { type Identity, type OutflowGrants, SCOPES, type Scope, identityKey } from "./grants.ts";
+import type { Lang } from "../ops/i18n.ts";
+import { type Identity, type OutflowGrants, type Reach, SCOPES, type Scope, type Taken, identityKey } from "./grants.ts";
 
 /// A read of the station's (read/ops.ts), its answer as JSON text.
 export type Reads = (op: string, args: unknown, lang: Lang) => Promise<string>;
 
-/// The window that asks the person here (still.fail Helper's `outflow.ask`): the kinds they left, or null (refused,
-/// closed, not answered). `busy` when another is up. `left`: the program hung up; the window goes.
-export type Ask = (request: { words: Record<string, string>; identity: Identity; scopes: { id: Scope; name: string; why: string }[]; ms: number; left: AbortSignal }) => Promise<Scope[] | null | "busy">;
-
 /// Who is at the other end of a connection, as the system says it; null when it cannot say.
 export type Identify = (socket: Socket) => Promise<Identity | null>;
+
+/// A station of the workspace as a program granted it is told it: `here` is this one.
+export type StationEntry = { id: string; name: string; here: boolean };
+
+/// The stations of the home workspace: this one, which there are (this one among them), and a read of another's (the
+/// same ops, asked over the station transport), its answer as JSON text.
+export type Workspace = {
+  here: () => StationEntry;
+  stations: () => Promise<StationEntry[]>;
+  read: (station: string, op: string, args: unknown) => Promise<string>;
+};
 
 export type OutflowOptions = {
   path: string;
   grants: OutflowGrants;
   reads: Reads;
   identify: Identify;
-  /// Null where no window can ask (no still.fail Helper: not macOS).
-  ask: Ask | null;
+  workspace: Workspace;
   lang: () => Lang;
+  /// The station's clock: how a request waits for its answer.
+  sleep: (ms: number) => Promise<void>;
 };
 
-/// How long the window waits for an answer.
+/// How long a request waits for an admin's answer before it is told to ask again (`202`).
 export const ASK_MS = 10 * 60_000;
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
@@ -84,7 +92,6 @@ export class OutflowServer {
   #server: Server | null = null;
   /// The socket this process listens on, which `path` links to (see `listen`).
   #own: string | null = null;
-  #watch: FSWatcher | null = null;
   /// The requests being answered, waited for as it closes (a window asking is called off: their sockets close).
   readonly #answering = new Set<Promise<void>>();
 
@@ -121,14 +128,6 @@ export class OutflowServer {
         server.off("error", reject);
         chmodSync(own, 0o600);
         this.#link();
-        // A process before this fix removes `path` itself as it stops: put back while this one listens.
-        try {
-          // (any change in the directory: not every platform names the file it was)
-          this.#watch = watch(dir, () => {
-            if (this.#own !== null) this.#link(true);
-          });
-          this.#watch.on("error", () => {});
-        } catch {}
         resolve();
       });
     });
@@ -143,8 +142,6 @@ export class OutflowServer {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
     // The link goes only while it is still this process's: the next process's stays.
-    this.#watch?.close();
-    this.#watch = null;
     const own = this.#own;
     this.#own = null;
     if (own !== null) {
@@ -154,6 +151,12 @@ export class OutflowServer {
       rmSync(own, { force: true });
     }
     await Promise.allSettled([...this.#answering]);
+  }
+
+  /// The process before this one is gone: one from before the link removed `path` itself as it stopped; linked again
+  /// where it is not there.
+  previousGone(): void {
+    this.#link(true);
   }
 
   /// `path` linked to this process's socket, in one step; with `missing`, only when it is not there.
@@ -194,7 +197,7 @@ export class OutflowServer {
   async #answer(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://outflow");
     if (req.method === "POST" && url.pathname === "/v1/request") return this.#request(req, res);
-    if (req.method === "GET" && (url.pathname === "/v1/usage" || url.pathname === "/v1/chats" || url.pathname === "/v1/messages")) return this.#read(req, res, url);
+    if (req.method === "GET" && ["/v1/stations", "/v1/usage", "/v1/chats", "/v1/messages"].includes(url.pathname)) return this.#read(req, res, url);
     throw new Refused(404, "no such request");
   }
 
@@ -205,29 +208,47 @@ export class OutflowServer {
   }
 
   async #request(req: IncomingMessage, res: ServerResponse) {
-    const ask = this.#o.ask;
-    if (ask === null) throw new Refused(501, "unsupported: no window can ask on this machine");
     const given = await body(req);
     const asked = Array.isArray(given?.scopes) ? [...new Set(given.scopes)] : [];
     if (asked.length === 0 || !asked.every((s): s is Scope => SCOPES.includes(s as Scope))) throw new Refused(400, `scopes are some of ${SCOPES.join(", ")}`);
+    const reach: Reach = given?.workspace === true ? "workspace" : "station";
     const caller = await this.#caller(req);
     const self = { name: said(given?.name), purpose: said(given?.purpose) };
-    // Gone while it waits: the window goes, and nothing is given.
+    const request = this.#o.grants.ask(caller, self, asked, reach);
+    // Gone while it waits: nothing is taken, and the request stays for when it asks again.
     const left = new AbortController();
     req.socket.once("close", () => left.abort());
-    const lang = this.#o.lang();
-    const scopesAsked = asked.map((id) => ({ id, name: tr(lang, `station.outflow.scope.${id}`), why: tr(lang, `station.outflow.scope.${id}Why`) }));
-    const answer = await ask({ words: words(lang, caller, self, asked), identity: caller, scopes: scopesAsked, ms: ASK_MS, left: left.signal });
-    if (answer === "busy") throw new Refused(409, "another request is being answered");
-    if (answer === null || answer.length === 0) throw new Refused(403, "refused");
-    const scopes = answer.filter((s) => asked.includes(s));
-    if (left.signal.aborted) {
-      log.info("outflow", "a program left before it was answered; nothing granted", { app: caller.app, path: caller.path });
-      return;
-    }
-    const { grant, token } = this.#o.grants.add(caller, self, scopes);
-    log.info("outflow", "granted", { grant: grant.id, app: caller.app, team: caller.teamId, identifier: caller.identifier, scopes });
-    send(res, 200, { token, grant: grant.id, scopes });
+    const taken = await this.#answered(request.id, left.signal);
+    if (left.signal.aborted) return;
+    if (taken === null) return send(res, 202, { request: request.id, state: "asking" });
+    if (taken === "refused") throw new Refused(403, "refused");
+    log.info("outflow", "granted", { grant: taken.grant.id, app: caller.app, team: caller.teamId, identifier: caller.identifier, scopes: taken.grant.scopes, reach: taken.grant.reach });
+    send(res, 200, { token: taken.token, grant: taken.grant.id, scopes: taken.grant.scopes, reach: taken.grant.reach });
+  }
+
+  /// Request `id`'s answer, taken as soon as an admin gave it; null when none came in ASK_MS, or the program left.
+  #answered(id: string, left: AbortSignal): Promise<Taken | null> {
+    const grants = this.#o.grants;
+    return new Promise((resolve) => {
+      let done = false;
+      const end = (taken: Taken | null) => {
+        if (done) return;
+        done = true;
+        stop();
+        left.removeEventListener("abort", gone);
+        resolve(taken);
+      };
+      const gone = () => end(null);
+      const look = () => {
+        if (done || left.aborted) return;
+        const taken = grants.take(id);
+        if (taken !== null) end(taken);
+      };
+      const stop = grants.listen(look);
+      left.addEventListener("abort", gone, { once: true });
+      void this.#o.sleep(ASK_MS).then(() => end(null));
+      look();
+    });
   }
 
   async #read(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -236,9 +257,33 @@ export class OutflowServer {
     if (grant === null) throw new Refused(401, "revoked");
     const caller = await this.#caller(req);
     if (identityKey(caller) !== identityKey(grant.identity)) throw new Refused(401, "this token was given to another program");
+    const whole = grant.reach === "workspace";
+    if (url.pathname === "/v1/stations") {
+      const here = this.#o.workspace.here();
+      const stations = whole ? await this.#o.workspace.stations().catch(() => null) : [];
+      if (stations === null) throw new Refused(503, "the workspace's stations are not known right now");
+      return send(res, 200, { stations: [here, ...stations.filter((s) => s.id !== here.id)] });
+    }
+    // Another station of the workspace, named by its id as /v1/stations says it.
+    const named = url.searchParams.get("station") ?? "";
+    const station = named === "" || named === this.#o.workspace.here().id ? null : named;
+    if (station !== null) {
+      if (!whole) throw new Refused(403, "not granted: other stations");
+      const stations = await this.#o.workspace.stations().catch(() => null);
+      if (stations === null) throw new Refused(503, "the workspace's stations are not known right now");
+      if (!stations.some((s) => s.id === station)) throw new Refused(404, "no such station in the workspace");
+    }
     const scope: Scope = url.pathname === "/v1/usage" ? "usage" : url.pathname === "/v1/messages" ? "messages" : "chats";
     if (!grant.scopes.includes(scope)) throw new Refused(403, `not granted: ${scope}`);
     const lang = this.#o.lang();
+    const reads = async (op: string, args: unknown) => {
+      if (station === null) return this.#o.reads(op, args, lang);
+      try {
+        return await this.#o.workspace.read(station, op, args);
+      } catch (e) {
+        throw new Refused(502, `that station did not answer: ${(e as Error).message}`);
+      }
+    };
     let text: string;
     if (scope === "usage") {
       const from = int(url, "from");
@@ -247,50 +292,21 @@ export class OutflowServer {
       if (from === null || to === null || from >= to) throw new Refused(400, "from and to are ms, from before to");
       if (to - from > SPAN_MAX_MS) throw new Refused(400, "a span is at most 31 days");
       if (Math.abs(tz) > 1440) throw new Refused(400, "tz is minutes east of UTC, at most 1440");
-      text = await this.#o.reads("outflowUsage", { from, to, tz, lang }, lang);
+      text = await reads("outflowUsage", { from, to, tz, lang });
     } else if (scope === "messages") {
       const thread = int(url, "thread");
       if (thread === null) throw new Refused(400, "thread is the chat's, as /v1/chats names it");
       const after = Math.max(0, int(url, "after") ?? 0);
       const limit = Math.min(Math.max(int(url, "limit") ?? MESSAGES_PAGE, 1), MESSAGES_PAGE_MAX);
-      text = await this.#o.reads("outflowMessages", { thread, after, limit }, lang);
+      text = await reads("outflowMessages", { thread, after, limit });
       if (text === "null") throw new Refused(404, "no such chat");
     } else {
-      text = await this.#o.reads("outflowChats", { since: int(url, "since") ?? 0 }, lang);
+      text = await reads("outflowChats", { since: int(url, "since") ?? 0 });
     }
     const read = JSON.parse(text);
-    this.#o.grants.read(grant.id, scope, (scope === "usage" ? read.rows : scope === "messages" ? read.messages : read.chats)?.length ?? 0);
+    this.#o.grants.read(grant.id, scope, (scope === "usage" ? read.rows : scope === "messages" ? read.messages : read.chats)?.length ?? 0, station ?? undefined);
     send(res, 200, read);
   }
-}
-
-/// The window's words in `lang`: who asks, as the system says it and as it says itself, and the summary confirmed.
-export function words(lang: Lang, who: Identity, self: { name: string; purpose: string }, scopes: Scope[]): Record<string, string> {
-  const w = (key: string, args: Record<string, unknown> = {}) => tr(lang, `station.outflow.window.${key}`, args);
-  const program = who.app ?? who.identifier ?? who.path.split("/").at(-1) ?? who.path;
-  const signer = who.valid && who.teamId !== null ? (who.signer ?? who.teamId) : w("unsignedShort");
-  const kinds = scopes.map((s) => w("kind", { kind: tr(lang, `station.outflow.scope.${s}`) })).join(w("and"));
-  return {
-    title: w("title"),
-    heading: w("heading", { program }),
-    signer: w("signer"),
-    unsigned: w("unsigned"),
-    program: w("program"),
-    identifier: w("identifier"),
-    path: w("path"),
-    saidHeading: w("saidHeading"),
-    said: [self.name, self.purpose].filter((s) => s !== "").join(" — "),
-    scopesHeading: w("scopesHeading"),
-    until: w("until"),
-    refuse: w("refuse"),
-    allow: w("allow"),
-    confirmTitle: w("confirmTitle"),
-    summary: w("summary", { kinds, program, signer }),
-    back: w("back"),
-    confirm: w("confirm"),
-    cancel: w("cancel"),
-    reason: w("reason", { program }),
-  };
 }
 
 /// An unsigned program's executable, as its bytes are: hashed again only when the file changed.

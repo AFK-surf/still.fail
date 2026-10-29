@@ -580,7 +580,7 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
   out.push(fn() { station_logins(c, core, address) })
   // (asked for only when the station's overview says there are some)
   match field(o, "outflowGrants") {
-    Some(Number(n, ..)) if n > 0.0 => out.push(fn() { station_outflow(c, core, address) })
+    Some(Number(n, ..)) if n > 0.0 => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers")) })
     _ => ()
   }
   match field(o, "agentEnv") {

@@ -152,6 +152,7 @@ export const PARAMS: Record<string, string> = {
   "job.clearEnded": "session:string",
   "memory.get": "",
   "outflow.revoke": "id:string",
+  "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -541,6 +542,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // A program's grant of the station's data revoked (docs/data-outflow.md): its next read is refused.
     case "outflow.revoke":
       return op("DELETE", () => `/outflow/grants/${p.at("id")}`, null, { kind: "outflowGrants" });
+    // An admin's answer to a program's request for the station's data: allowed with the kinds and reach they left, or
+    // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
+    case "outflow.answer":
+      return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);

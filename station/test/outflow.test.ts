@@ -1,17 +1,22 @@
-// Data outflow (docs/data-outflow.md): a program on this machine asks over the station's socket, the person answers,
-// and that program alone reads what it was granted, in the shape of /v1, until the grant is revoked.
+// Data outflow (docs/data-outflow.md): a program on this machine asks over the station's socket, an admin of the
+// workspace answers in still.fail, and that program alone reads what it was granted, in the shape of /v1, of this
+// station or of every station of the workspace, until the grant is revoked.
 import assert from "node:assert/strict";
 import { request as http } from "node:http";
+import type { Socket } from "node:net";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { type Identity, OutflowGrants, type Scope } from "../src/outflow/grants.ts";
-import { type Ask, OutflowServer, words } from "../src/outflow/server.ts";
+import { type Identity, OutflowGrants, REQUEST_KEPT_MS } from "../src/outflow/grants.ts";
+import { ASK_MS, OutflowServer, type Workspace } from "../src/outflow/server.ts";
 import { routes } from "../src/api/routes/outflow.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import * as read from "../src/read/store.ts";
 import { outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
+import { usageOps } from "../src/read/ops-usage.ts";
+import { peerRead, textOf } from "../src/outflow/peer.ts";
+import { bytesOf } from "../src/mesh/bus.ts";
 
 const dirs: string[] = [];
 after(() => {
@@ -27,21 +32,41 @@ const tempdir = () => {
 const COMMA: Identity = { path: "/Applications/Comma.app/Contents/Resources/station/node", valid: true, teamId: "D9AAN3VJK8", identifier: "surf.comma.station", signer: "Developer ID Application: AFK Inc. (D9AAN3VJK8)", app: "Comma", sha256: null };
 const OTHER: Identity = { ...COMMA, teamId: "XXXXXXXXXX", signer: "Developer ID Application: Someone (XXXXXXXXXX)" };
 
-type Rig = { server: OutflowServer; grants: OutflowGrants; path: string; data: string; asked: Parameters<Ask>[0][]; caller: { now: Identity | null }; answer: { next: Scope[] | null | "busy" }; reads: [string, any][] };
+const HERE = { id: "st-here", name: "Office", here: true };
+const THERE = { id: "st-there", name: "Ann's Mac", here: false };
 
-async function rig(options: { ask?: boolean } = {}): Promise<Rig> {
+type Rig = {
+  server: OutflowServer; grants: OutflowGrants; path: string; data: string; caller: { now: Identity | null }; reads: [string, any][]; remote: [string, string, any][];
+  /// The requests' waits for an admin, each ended (as ASK_MS passing would) by calling it.
+  waits: (() => void)[]; waited: { count: number }; clock: { now: number };
+  /// The connections the station was asked who is at the other end of.
+  sockets: Socket[];
+};
+
+function station(r: Pick<Rig, "reads" | "remote">): Workspace {
+  return {
+    here: () => HERE,
+    stations: async () => [HERE, THERE],
+    read: async (id, op, args) => (r.remote.push([id, op, args]), JSON.stringify({ rows: [{ day: "2026-10-29" }], chats: [{ thread: 9 }] })),
+  };
+}
+
+async function rig(): Promise<Rig> {
   const data = tempdir();
   const path = join(data, "o.sock");
-  let now = 1_000;
-  const grants = new OutflowGrants(data, () => ++now);
-  const asked: Parameters<Ask>[0][] = [];
+  const clock = { now: 1_000 };
+  const grants = new OutflowGrants(data, () => ++clock.now);
   const caller = { now: COMMA as Identity | null };
-  const answer = { next: ["usage", "chats"] as Scope[] | null | "busy" };
   const reads: [string, any][] = [];
+  const remote: [string, string, any][] = [];
+  const waits: (() => void)[] = [];
+  const waited = { count: 0 };
+  const sockets: Socket[] = [];
   const server = new OutflowServer({
     path, grants, lang: () => "en",
-    identify: async () => caller.now,
-    ask: options.ask === false ? null : async (q) => (asked.push(q), answer.next),
+    identify: async (socket) => (sockets.push(socket), caller.now),
+    workspace: station({ reads, remote }),
+    sleep: (ms) => (assert.equal(ms, ASK_MS), waited.count++, new Promise<void>((resolve) => waits.push(resolve))),
     reads: async (op, args) => {
       reads.push([op, args]);
       const a = args as { thread?: number };
@@ -51,7 +76,7 @@ async function rig(options: { ask?: boolean } = {}): Promise<Rig> {
   });
   await server.listen();
   after(() => server.close());
-  return { server, grants, path, data, asked, caller, answer, reads };
+  return { server, grants, path, data, caller, reads, remote, waits, waited, clock, sockets };
 }
 
 function call(r: Rig, method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; body: any }> {
@@ -67,26 +92,54 @@ function call(r: Rig, method: string, path: string, body?: unknown, token?: stri
   });
 }
 
-const ask = (r: Rig, scopes: string[] = ["usage", "chats"]) => call(r, "POST", "/v1/request", { name: "Comma", purpose: "ROI for your team", scopes });
+const ask = (r: Rig, scopes: string[] = ["usage", "chats"], more: object = {}) => call(r, "POST", "/v1/request", { name: "Comma", purpose: "ROI for your team", scopes, ...more });
 
-test("a program asks, the person allows what they leave, and the program reads it with its token until revoked", async () => {
+/// A request asked: once it waits for an admin.
+async function asked(r: Rig, scopes?: string[], more?: object) {
+  const want = r.waited.count + 1;
+  const answer = ask(r, scopes, more);
+  while (r.waited.count < want) await new Promise((resolve) => setImmediate(resolve));
+  return { answer };
+}
+
+/// ASK_MS passes for the requests waiting.
+const pass = (r: Rig) => r.waits.splice(0).forEach((f) => f());
+
+const ADMIN = { home: true, role: "admin", email: "boss@x" } as never;
+const MEMBER = { home: true, role: "member", email: "ann@x" } as never;
+/// The station's members' routes: GET /outflow/grants, DELETE /outflow/grants/:id, POST /outflow/requests/:id.
+function members(r: Rig) {
+  const [list, revoke, answer] = routes(r.grants);
+  return {
+    list: async (viewer = MEMBER) => JSON.parse((await list!.handle({ viewer, query: [] } as never, [])).body.toString()),
+    revoke: async (id: string, viewer = MEMBER) => (await revoke!.handle({ viewer, query: [] } as never, [id])).status,
+    answer: async (id: string, given: unknown, viewer = ADMIN) => (await answer!.handle({ viewer, query: [], body: Buffer.from(JSON.stringify(given)) } as never, [id])).status,
+  };
+}
+
+test("a program asks, an admin allows what they leave in still.fail, and the program reads it with its token until revoked", async () => {
   const r = await rig();
+  const m = members(r);
   // Only this user may open the socket.
   assert.equal(statSync(r.path).mode & 0o777, 0o600);
-  r.answer.next = ["usage"];
-  const granted = await ask(r);
+  const asking = (await asked(r)).answer;
+  // The members see who asks as the system says it, and what it said of itself; only an admin answers it.
+  const [request] = (await m.list()).requests;
+  assert.deepEqual(request.identity, COMMA);
+  assert.deepEqual(request.said, { name: "Comma", purpose: "ROI for your team" });
+  assert.deepEqual([request.scopes, request.reach], [["usage", "chats"], "station"]);
+  assert.equal(await m.answer(request.id, { allow: true, scopes: ["usage"] }, MEMBER), 403);
+  assert.equal(await m.answer(request.id, { allow: true, scopes: ["usage", "messages"], workspace: true }), 200);
+  const granted = await asking;
   assert.equal(granted.status, 200);
-  assert.deepEqual(granted.body.scopes, ["usage"], "what the person left");
+  assert.deepEqual([granted.body.scopes, granted.body.reach], [["usage"], "station"], "what the admin left of what it asked, never more");
   assert.match(granted.body.token, /^sfo_[A-Za-z0-9_-]{43}$/);
-  // The window was told who asks as the system says it, and what it said of itself as its own words.
-  assert.equal(r.asked.length, 1);
-  assert.deepEqual(r.asked[0]!.identity, COMMA);
-  assert.deepEqual(r.asked[0]!.scopes.map((s) => s.id), ["usage", "chats"]);
-  assert.equal(r.asked[0]!.words.said, "Comma — ROI for your team");
-  assert.match(r.asked[0]!.words.summary!, /Developer ID Application: AFK Inc\. \(D9AAN3VJK8\)/);
-  // Kept by its hash alone.
+  assert.deepEqual((await m.list()).requests, []);
+  // Kept by its hash alone, with who allowed it.
   assert.ok(!readFileSync(join(r.data, "outflow.json"), "utf8").includes(granted.body.token));
   assert.equal(statSync(join(r.data, "outflow.json")).mode & 0o777, 0o600);
+  const [grant] = r.grants.list();
+  assert.equal(grant!.allowedBy, "boss@x");
 
   const token = granted.body.token;
   const usage = await call(r, "GET", "/v1/usage?from=0&to=86400000&tz=480", undefined, token);
@@ -97,10 +150,13 @@ test("a program asks, the person allows what they leave, and the program reads i
   assert.equal((await call(r, "GET", "/v1/chats", undefined, token)).status, 403);
   assert.equal((await call(r, "GET", `/v1/usage?from=0&to=${32 * 86_400_000}`, undefined, token)).status, 400);
   assert.equal((await call(r, "GET", "/v1/usage", undefined, token)).status, 400);
-  // Its reads are kept, for the person to see.
-  const [grant] = r.grants.list();
-  assert.deepEqual(grant!.reads.map((x) => [x.scope, x.rows]), [["usage", 2]]);
-  assert.equal(grant!.lastReadAt, grant!.reads[0]!.at);
+  // This station alone: the others of the workspace are not its to read.
+  assert.deepEqual((await call(r, "GET", "/v1/stations", undefined, token)).body, { stations: [HERE] });
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1&station=st-there", undefined, token)).status, 403);
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1&station=st-here", undefined, token)).status, 200, "this one by its id");
+  assert.equal(r.remote.length, 0);
+  // Its reads are kept, for the members to see.
+  assert.deepEqual(r.grants.list()[0]!.reads.map((x) => [x.scope, x.rows]), [["usage", 2], ["usage", 2]]);
 
   // The token copied to another program reads nothing; nor does no token.
   r.caller.now = OTHER;
@@ -108,69 +164,112 @@ test("a program asks, the person allows what they leave, and the program reads i
   r.caller.now = COMMA;
   assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1")).status, 401);
 
-  // Revoked from still.fail (its members' route): refused from then on.
-  const [, revoke] = routes(r.grants);
-  const viewer = { home: true } as never;
-  assert.equal((await revoke!.handle({ viewer, query: [] } as never, [grant!.id])).status, 200);
+  // Revoked from still.fail: refused from then on.
+  assert.equal(await m.revoke(grant!.id), 200);
   assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token), { status: 401, body: { error: "revoked" } });
-  assert.equal((await revoke!.handle({ viewer, query: [] } as never, [grant!.id])).status, 404);
+  assert.equal(await m.revoke(grant!.id), 404);
 });
 
-test("refused, busy, unsupported, and asking again replaces the program's grant", async () => {
+test("no answer yet: told to ask again, the same request kept; answered meanwhile, the next ask takes it; refused", async () => {
   const r = await rig();
-  r.answer.next = null;
-  assert.deepEqual(await ask(r), { status: 403, body: { error: "refused" } });
-  r.answer.next = "busy";
-  assert.equal((await ask(r)).status, 409);
+  const m = members(r);
   assert.equal((await ask(r, ["files"])).status, 400, "only the kinds there are");
   assert.equal((await ask(r, [])).status, 400);
   r.caller.now = null;
-  r.answer.next = ["usage"];
   assert.equal((await ask(r)).status, 403, "a program the system cannot say is not asked for");
   r.caller.now = COMMA;
-  assert.equal(r.grants.list().length, 0);
+  assert.equal(r.grants.asking().length, 0);
 
-  const first = await ask(r);
-  r.answer.next = ["chats"];
-  const second = await ask(r);
+  const first = (await asked(r)).answer;
+  pass(r);
+  const told = await first;
+  assert.equal(told.status, 202);
+  assert.equal(told.body.state, "asking");
+  // Asked again (now for the workspace): the same request, as it asks now.
+  const again = (await asked(r, ["usage", "chats", "messages"], { workspace: true })).answer;
+  assert.deepEqual(r.grants.asking().map((q) => [q.id, q.scopes, q.reach]), [[told.body.request, ["usage", "chats", "messages"], "workspace"]]);
+  pass(r);
+  assert.equal((await again).status, 202);
+  // An admin allows it while the program is away; its next ask is given the token at once.
+  assert.equal(await m.answer(told.body.request, { allow: true, scopes: ["usage", "chats"], workspace: true }), 200);
+  assert.equal(await m.answer(told.body.request, { allow: false }), 404, "answered once");
+  const granted = await ask(r, ["usage", "chats", "messages"], { workspace: true });
+  assert.deepEqual([granted.status, granted.body.scopes, granted.body.reach], [200, ["usage", "chats"], "workspace"]);
+
+  // Asking again replaces the program's grant, once answered.
+  const third = (await asked(r, ["chats"])).answer;
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["chats"] }), 200);
+  const second = await third;
   assert.deepEqual(r.grants.list().map((g) => g.scopes), [["chats"]], "the same program holds one grant");
-  assert.equal((await call(r, "GET", "/v1/chats", undefined, first.body.token)).status, 401);
+  assert.equal((await call(r, "GET", "/v1/chats", undefined, granted.body.token)).status, 401);
   assert.equal((await call(r, "GET", "/v1/chats?since=5", undefined, second.body.token)).status, 200);
   assert.deepEqual(r.reads.at(-1), ["outflowChats", { since: 5 }]);
-  // Grants outlive the station process.
-  assert.deepEqual(new OutflowGrants(r.data, () => 0).list().map((g) => g.id), r.grants.list().map((g) => g.id));
 
-  const none = await rig({ ask: false });
-  assert.equal((await ask(none)).status, 501);
+  // Refused: told so once, then asking is anew.
+  const fourth = (await asked(r)).answer;
+  const id = r.grants.asking()[0]!.id;
+  assert.equal(await m.answer(id, { allow: false }), 200);
+  assert.deepEqual(await fourth, { status: 403, body: { error: "refused" } });
+  const fifth = (await asked(r)).answer;
+  assert.notEqual(r.grants.asking()[0]!.id, id);
+  // Allowed with nothing left of it is refused.
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: [] }), 200);
+  assert.equal((await fifth).status, 403);
+  // Grants and requests outlive the station process.
+  assert.deepEqual(new OutflowGrants(r.data, () => 0).list().map((g) => g.id), r.grants.list().map((g) => g.id));
 });
 
-test("a program that left before it was answered is given nothing, and its window goes", async () => {
-  const data = tempdir();
-  const grants = new OutflowGrants(data, () => 1);
-  let asked!: () => void;
-  const waiting = new Promise<void>((resolve) => (asked = resolve));
-  const server = new OutflowServer({
-    path: join(data, "o.sock"), grants, lang: () => "en", identify: async () => COMMA, reads: async () => "{}",
-    // Answered "allow" only once the window was told the program left.
-    ask: ({ left }) => (asked(), new Promise((resolve) => left.addEventListener("abort", () => resolve(["usage"]), { once: true }))),
-  });
-  await server.listen();
-  after(() => server.close());
-  const req = http({ socketPath: join(data, "o.sock"), method: "POST", path: "/v1/request" });
+test("a program that left before it was answered takes nothing; its request waits for it, and goes after a week", async () => {
+  const r = await rig();
+  const m = members(r);
+  const req = http({ socketPath: r.path, method: "POST", path: "/v1/request" });
   req.on("error", () => {});
   req.end(JSON.stringify({ scopes: ["usage"] }));
-  await waiting;
+  while (r.waited.count < 1) await new Promise((resolve) => setImmediate(resolve));
   req.destroy();
-  await server.close();
-  assert.equal(grants.list().length, 0);
+  // The station heard it go.
+  const socket = r.sockets.at(-1)!;
+  if (!socket.destroyed) await new Promise((resolve) => socket.once("close", resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  const id = r.grants.asking()[0]!.id;
+  assert.equal(await m.answer(id, { allow: true, scopes: ["usage"] }), 200);
+  assert.equal(r.grants.list().length, 0, "nothing taken while nobody asks");
+  assert.equal((await ask(r, ["usage"])).status, 200);
+  assert.equal(r.grants.list().length, 1);
+
+  // No admin answers in a week: the request goes.
+  const late = (await asked(r, ["chats"])).answer;
+  pass(r);
+  assert.equal((await late).status, 202);
+  r.clock.now += REQUEST_KEPT_MS + 1;
+  assert.deepEqual((await m.list()).requests, []);
 });
 
-test("the window says an unsigned program is unsigned", () => {
-  const unsigned: Identity = { path: "/tmp/x/node", valid: true, teamId: null, identifier: "node", signer: null, app: null, sha256: "ab" };
-  const w = words("en", unsigned, { name: "", purpose: "" }, ["usage", "chats"]);
-  assert.equal(w.heading, "node asks to read your still.fail data");
-  assert.equal(w.summary, "Give “Token usage and cost” and “Chats and how they stand” of all this station’s chats to node (an unsigned program) until you revoke it.");
-  assert.equal(w.said, "");
+test("granted the workspace: the program lists its stations and reads each, the others' asked over the station transport", async () => {
+  const r = await rig();
+  const m = members(r);
+  const asking = (await asked(r, ["usage", "chats"], { workspace: true })).answer;
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["usage", "chats"], workspace: true }), 200);
+  const { body } = await asking;
+  assert.equal(body.reach, "workspace");
+  assert.deepEqual((await call(r, "GET", "/v1/stations", undefined, body.token)).body, { stations: [HERE, THERE] });
+  const there = await call(r, "GET", "/v1/usage?from=0&to=86400000&station=st-there", undefined, body.token);
+  assert.deepEqual([there.status, there.body.rows], [200, [{ day: "2026-10-29" }]]);
+  assert.deepEqual(r.remote, [["st-there", "outflowUsage", { from: 0, to: 86_400_000, tz: 0, lang: "en" }]]);
+  assert.equal((await call(r, "GET", "/v1/chats?station=st-there&since=3", undefined, body.token)).body.chats[0].thread, 9);
+  assert.equal((await call(r, "GET", "/v1/chats?station=st-nowhere", undefined, body.token)).status, 404);
+  assert.equal((await call(r, "GET", "/v1/chats", undefined, body.token)).body.chats[0].thread, 1, "this station's without one named");
+  assert.deepEqual(r.grants.list()[0]!.reads.map((x) => [x.scope, x.station ?? null]), [["usage", "st-there"], ["chats", "st-there"], ["chats", null]]);
+});
+
+test("asked for the workspace, an admin may leave it to this station", async () => {
+  const r = await rig();
+  const m = members(r);
+  const asking = (await asked(r, ["usage"], { workspace: true })).answer;
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["usage"] }), 200);
+  const { body } = await asking;
+  assert.equal(body.reach, "station");
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1&station=st-there", undefined, body.token)).status, 403);
 });
 
 test("v1 reads: the home workspace's usage and chats, field by field, no message", () => {
@@ -205,14 +304,18 @@ test("v1 reads: the home workspace's usage and chats, field by field, no message
   // Only those with something new since.
   const later = home.createdAt + 365 * 86_400_000;
   assert.deepEqual(outflowChats(r, later) as any, { since: later, chats: [] });
+  // Another station of a workspace this one joined reads that workspace's, as its program's grant there asks.
+  const theirs = usageOps.outflowChats!(r, { since: 0, ws: { workspace: "other-ws", home: false } }) as any;
+  assert.deepEqual(theirs.chats.map((c: any) => c.title), ["Theirs"]);
+  const spent = usageOps.outflowUsage!(r, { lang: "en", from: 0, to: 365 * 86_400_000, tz: 0, ws: { workspace: "other-ws", home: false } }) as any;
+  assert.deepEqual([spent.rows.map((x: any) => x.person), spent.to], [["bob@x"], 31 * 86_400_000], "a span of 31 days at most, whoever asks");
 });
 
 test("messages: a chat's, a page at a time, to a program granted them", async () => {
   const r = await rig();
-  r.answer.next = ["messages"];
-  const { body } = await ask(r, ["messages"]);
-  assert.deepEqual(r.asked[0]!.scopes.map((x) => x.id), ["messages"]);
-  assert.match(r.asked[0]!.scopes[0]!.why, /conversations/, "the window says it gives the conversations away");
+  const asking = (await asked(r, ["messages"])).answer;
+  assert.equal(await members(r).answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["messages"] }), 200);
+  const { body } = await asking;
   const page = await call(r, "GET", "/v1/messages?thread=7&after=2&limit=1000", undefined, body.token);
   assert.equal(page.status, 200);
   assert.deepEqual(r.reads.at(-1), ["outflowMessages", { thread: 7, after: 2, limit: 500 }], "a page is at most 500");
@@ -253,19 +356,19 @@ test("a station's update keeps the socket: the process before, stopping, leaves 
   const path = join(data, "o.sock");
   const grants = new OutflowGrants(data, () => 1);
   const make = (name: string) =>
-    new OutflowServer({ path, grants, lang: () => "en", identify: async () => COMMA, ask: null, reads: async () => JSON.stringify({ chats: [{ thread: name }] }) });
+    new OutflowServer({ path, grants, lang: () => "en", identify: async () => (name === "next" ? null : COMMA), workspace: station({ reads: [], remote: [] }), sleep: async () => {}, reads: async () => "{}" });
   const before = make("before");
   await before.listen();
   const next = make("next");
   await next.listen();
   await before.close();
-  // what answers there now is the next process (it has no window: unsupported)
+  // what answers there now is the next process (which cannot say who asks: refused)
   const answer = await new Promise<number>((resolve, reject) => {
     const req = http({ socketPath: path, method: "POST", path: "/v1/request" }, (res) => (res.resume(), resolve(res.statusCode!)));
     req.on("error", reject);
     req.end(JSON.stringify({ scopes: ["usage"] }));
   });
-  assert.equal(answer, 501);
+  assert.equal(answer, 403);
   assert.equal(statSync(path).mode & 0o777, 0o600);
   await next.close();
   assert.throws(() => statSync(path), "gone with the last");
@@ -278,22 +381,29 @@ test("a station's update keeps the socket: the process before, stopping, leaves 
   await again.close();
 });
 
-test("a process from before this one, stopping, removes the path itself: it is put back", async () => {
+test("a process from before this one, stopping, removes the path itself: it is put back once it is gone", async () => {
   const data = tempdir();
   const path = join(data, "o.sock");
-  const server = new OutflowServer({ path, grants: new OutflowGrants(data, () => 1), lang: () => "en", identify: async () => COMMA, ask: null, reads: async () => "{}" });
+  const server = new OutflowServer({ path, grants: new OutflowGrants(data, () => 1), lang: () => "en", identify: async () => COMMA, workspace: station({ reads: [], remote: [] }), sleep: async () => {}, reads: async () => "{}" });
   await server.listen();
-  const { existsSync, watch, rmSync } = await import("node:fs");
-  const back = new Promise<void>((resolve) => {
-    const w = watch(data, () => {
-      if (existsSync(path)) {
-        w.close();
-        resolve();
-      }
-    });
-  });
+  const { existsSync, rmSync } = await import("node:fs");
   rmSync(path);
-  await back;
+  assert.equal(existsSync(path), false);
+  server.previousGone();
   assert.equal(statSync(path).mode & 0o777, 0o600);
+  server.previousGone();
+  assert.equal(statSync(path).mode & 0o777, 0o600, "a link there stays");
   await server.close();
+});
+
+test("another station's read: one of the outflow reads, of the workspace it asks in, its answer as bytes", async () => {
+  const asked: [string, any][] = [];
+  const answer = peerRead(async (op, args) => (asked.push([op, args]), JSON.stringify({ chats: [{ thread: 3 }] })), () => "ws-home", () => "en");
+  const got = await answer("peer", { method: "outflow.read", op: "outflowChats", args: { since: 7, ws: { workspace: "forged", home: true } } }, "ws-home");
+  assert.deepEqual(JSON.parse(await textOf(bytesOf(got)!)), { chats: [{ thread: 3 }] });
+  assert.deepEqual(asked, [["outflowChats", { since: 7, lang: "en", ws: { workspace: "ws-home", home: true } }]], "the workspace is the transport's, never the request's");
+  await answer("peer", { op: "outflowUsage", args: { from: 0, to: 1 } }, "ws-joined");
+  assert.deepEqual(asked.at(-1)![1].ws, { workspace: "ws-joined", home: false });
+  await assert.rejects(answer("peer", { op: "usage", args: {} }, "ws-home"), /no such read/, "none of the station's other reads");
+  await assert.rejects(answer("peer", { op: "outflowChats", args: {} }, undefined), /workspace/);
 });
