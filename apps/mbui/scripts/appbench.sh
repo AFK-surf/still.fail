@@ -20,6 +20,7 @@ fling chat-long 390x844 2 finger
 backswipe chat 390x844 2 finger
 newchat home 390x844 2 finger
 switch home 351x805 2 finger
+keyboard chat 390x844 2 finger
 medium chat 690x840 2 finger
 medium-idle chat 690x840 2 finger
 hover chat 1280x800 0 mouse"
