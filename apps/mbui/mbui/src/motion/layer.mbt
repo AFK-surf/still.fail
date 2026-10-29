@@ -31,11 +31,16 @@ pub(all) struct Trans {
   dy : Double
   fade_spec : Spec
   spec : Spec
+  /// a panel's (what is put over others, its own ground under its words): faded in whole under its words before they
+  /// come in over it, they going before it as it goes (Look's `words`), so that never are its words and what it is put
+  /// over both seen in one place (docs/motion.md rule 4)
+  ground_first : Bool
 } derive(Show, Eq)
 
 ///|
 /// A transition: fadeIn/Out to `fade`, scaleIn/Out to `scale`, slideIn/Out by `dx`, `dy`; all by `spec` unless the
-/// fade has its own.
+/// fade has its own. `ground_first`: a panel's, its ground's fade in the first half of its own and its words' in the
+/// second.
 pub fn trans(
   fade? : Double = 1.0,
   scale? : Double = 1.0,
@@ -45,6 +50,7 @@ pub fn trans(
   dy? : Double = 0.0,
   spec? : Spec = tween(300.0, ease=Out),
   fade_spec? : Spec,
+  ground_first? : Bool = false,
 ) -> Trans {
   {
     fade,
@@ -58,6 +64,7 @@ pub fn trans(
       None => spec
     },
     spec,
+    ground_first,
   }
 }
 
@@ -65,8 +72,16 @@ pub fn trans(
 /// How it looks `pf` of the way in by its opacity and `pm` by the rest (1: all the way in, as laid out).
 pub fn Trans::at(self : Trans, pf : Double, pm : Double) -> @ui.Look {
   let s = self.scale + (1.0 - self.scale) * pm
+  let a = self.fade + (1.0 - self.fade) * pf
+  // (its ground whole by half its fade, its words from there: the words' own opacity over the ground's)
+  let (alpha, words) = if self.ground_first {
+    let ground = dmin(1.0, 2.0 * a)
+    (ground, if ground > 0.0 { dmax(0.0, 2.0 * a - 1.0) / ground } else { 0.0 })
+  } else {
+    (a, 1.0)
+  }
   {
-    alpha: self.fade + (1.0 - self.fade) * pf,
+    alpha,
     dx: self.dx * (1.0 - pm),
     dy: self.dy * (1.0 - pm),
     sx: s,
@@ -75,6 +90,7 @@ pub fn Trans::at(self : Trans, pf : Double, pm : Double) -> @ui.Look {
     oy: self.oy,
     rot: 0.0,
     circle: 0.0,
+    words,
   }
 }
 
@@ -1641,7 +1657,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px
         let y = fy + (ny - fy) * py
-        look = look.then({ alpha: 1.0, dx: x - nx, dy: y - ny, sx: s, sy: s, ox: 0.0, oy: 0.0, rot: 0.0, circle: 0.0 })
+        look = look.then({ alpha: 1.0, dx: x - nx, dy: y - ny, sx: s, sy: s, ox: 0.0, oy: 0.0, rot: 0.0, circle: 0.0, words: 1.0 })
       }
       None => ()
     }

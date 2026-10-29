@@ -550,6 +550,7 @@ fn tree_sig(c : Ctx) -> Int64 {
     num(l.sy)
     num(l.rot)
     num(l.circle)
+    num(l.words)
     int(e.z)
     int(if e.only { 1 } else { 0 })
     int(if e.look_by is Some(_) { 1 } else { 0 })
@@ -557,6 +558,7 @@ fn tree_sig(c : Ctx) -> Int64 {
     int(if e.keep is Some(_) { 1 } else { 0 })
     num(e.bottom)
     num(e.top)
+    num(e.cut_soft)
   }
   h
 }

@@ -1775,11 +1775,14 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
 /// How the node keyed `what` (its id's key, as built: c.id(what)), else the first text node containing `what` (`=WORDS`:
 /// whose words are WORDS exactly, as Tester::locate takes it), was drawn in the last frame over how it is laid out: its
 /// scale across and down and its opacity, its own look's and all its ancestors' together (a card shrunk to 90% as it
-/// goes: (0.9, 0.9, 1.0)). None when there is no such node.
+/// goes: (0.9, 0.9, 1.0)); words, as they are drawn, by their looks' `words` too (a panel's words after its ground).
+/// None when there is no such node.
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
   let c = g()
   let found = self.node_named(what)
   guard found >= 0 else { return None }
+  let k = c.nodes[found].kind
+  let words = k == kind_text || k == kind_rich || k == kind_editor
   let mut sx = 1.0
   let mut sy = 1.0
   let mut alpha = 1.0
@@ -1790,7 +1793,7 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
         let l = e.look_now()
         sx = sx * l.sx
         sy = sy * l.sy
-        alpha = alpha * l.alpha
+        alpha = alpha * l.alpha * (if words { l.words } else { 1.0 })
       }
       None => ()
     }

@@ -57,14 +57,14 @@ pub fn in_room(
 /// app, pengxiao 2026-10-25, its dialogs and menus vanishing as they closed). A popover's, a menu's, a select's, a
 /// hover card's, a dialog's by default.
 // kept across runs: a value (no field of it changes)
-pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_ms, ease=Out))
+pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_ms, ease=Out), ground_first=true)
 
 ///|
 pub let pop_ms : Double = 140.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pop_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_out_ms, ease=Leave))
+pub let pop_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_out_ms, ease=Leave), ground_first=true)
 
 ///|
 pub let pop_out_ms : Double = 100.0
@@ -72,7 +72,7 @@ pub let pop_out_ms : Double = 100.0
 ///|
 /// How a tooltip comes (parts.css.ts tooltip: fadeKeyframes, 120 ms on the ease-out); it goes at once.
 // kept across runs: a value (no field of it changes)
-pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.0, ease=Out))
+pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.0, ease=Out), ground_first=true)
 
 ///|
 /// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a

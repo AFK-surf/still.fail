@@ -417,6 +417,11 @@ fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 }
 
 ///|
+/// How much fainter the words painted now are than what holds them (the looks being painted: Look's `words`).
+// kept across runs: 1 between frames, each look that changes it putting it back as it is painted (draw.mbt)
+let words_alpha : Ref[Double] = Ref(1.0)
+
+///|
 fn Ctx::push_inst(
   self : Ctx,
   x : Double,
@@ -450,6 +455,8 @@ fn Ctx::push_inst(
   a[b + 8] = ((color >> 24) & 0xFFL).to_double() / 255.0
   a[b + 9] = ((color >> 16) & 0xFFL).to_double() / 255.0
   a[b + 10] = ((color >> 8) & 0xFFL).to_double() / 255.0
+  // (words fainter by the looks they are in: words_alpha)
+  let alpha = if kind == 1.0 || kind == 3.0 || kind == 7.0 { alpha * words_alpha.val } else { alpha }
   a[b + 11] = (color & 0xFFL).to_double() / 255.0 * alpha
   a[b + 12] = c2a
   a[b + 13] = c2b

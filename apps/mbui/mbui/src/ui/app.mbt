@@ -408,6 +408,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   dr.tops.clear()
   c.segs.clear()
   text_runs.runs.clear()
+  words_alpha.val = 1.0
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()

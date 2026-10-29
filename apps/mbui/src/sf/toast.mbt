@@ -38,13 +38,16 @@ pub fn toast_said(message : String) -> String {
 pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", action_id? : Int = 0) -> Bool {
   let mut pressed = false
   let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
-  c.box(
+  // (its ground whole by half its way in, its words from there, as a panel's: motion's Trans `ground_first`; never
+  // its words and what it is over both seen in one place, docs/motion.md rule 4)
+  let ground = if 2.0 * k > 1.0 { 1.0 } else { 2.0 * k }
+  let words = if ground > 0.0 && 2.0 * k > 1.0 { (2.0 * k - 1.0) / ground } else { 0.0 }
+  let tb = c.box(
     style=if action == "" { toast_box } else { toast_acting_box },
     radius=toast_r,
     shadow=toast_shadow,
     shadow_y=toast_shadow_y,
     shadow_color=theme().p.shadow,
-    opacity=k,
     tx=s.dx,
     ty=(1.0 - k) * toast_rise,
     fn() {
@@ -58,7 +61,7 @@ pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", actio
       |> ignore
     },
   )
-  |> ignore
+  c.look(tb, @ui.look(alpha=ground, words~))
   pressed
 }
 
