@@ -325,6 +325,16 @@ fn lint_mbt(
       c.args[1].1.iter().any(fn(i) { toks[i].kind == "ident" && toks[i].text == "Hand" }) {
       add("cursor-hand", c.at, f.line_text(c.at))
     }
+    // what was built said by hand to be built again: what changed is a signal, and what read it is built again by
+    // itself (docs/incremental.md); the framework's own not counted
+    if built_by_hand.contains(c.name) && c.kind == "method" && app && !in_t {
+      add("built-by-hand", c.at, f.line_text(c.at))
+    }
+    // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
+    // frame out twice): said as layout instead; the framework's own not counted
+    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t {
+      add("layout-read-back", c.at, f.line_text(c.at))
+    }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
     // laid out at changed (the app's docs/motion.md)
     match follow_target(f, c, returns) {

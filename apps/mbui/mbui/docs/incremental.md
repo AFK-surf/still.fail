@@ -51,6 +51,29 @@ nodes instead (step 5 below).
    computeds that ran this frame and of what was built or laid out again; only their instances are sent. Hits, the
    pointer, the focus and what is read out are asked of the frame's tree.
 
+## What decides the work
+
+An app says what it shows, by what it reads, and who each thing is; never what is to be built again. What the
+framework does again follows from three things alone, as in Compose, Flutter and SwiftUI:
+
+1. **Who a node is: where it is in the tree, by the call that made it or the key it was given.** Not where it falls in
+   the frame's order: a node more or less built before it (a bar's button as it shows, a mark in a motion) changes
+   nothing of what comes after it. What is kept of a node (its layout, its build, its motions, its measure) is kept by
+   who it is. A list's rows are so (a row in its own nodes, kept_nodes.mbt's `row_nodes_lent`); every node is to be.
+2. **What it read.** Every state is a signal, the app's too (a host's bars, a column's width, a press). A plain mutable
+   read as it is built is a read nothing follows; it is made a signal, never followed by forgetting what was kept
+   (detlint `built-by-hand`: only goes down, to none).
+3. **In which phase it read it.** What is built reads what it shows; layout reads the room and what moves a size (a
+   row's height going); paint reads what moves a place or a look. A motion read in build makes it build each frame it
+   goes: it is read where it is used. What is built never reads what was laid out (detlint `layout-read-back`: the
+   first frame has none, a change lays the frame out twice); a list's rows coming, going and changing their height are
+   the list's, from each row's key and what it shows (as Compose's animateItem, a diffable collection view), not told
+   by the app for each kind of row.
+
+A frame kept that differs from the frame built whole (the Tester's `looks_check`, `rows_check`) is a read not
+followed, or a node taken for another. The fix is that read made followed, or that node known for who it is; never
+building more (a part forgotten, a row built each frame, "built again while it moves"), which hides the next one.
+
 ## What goes
 
 `outside_events`, a part's `held`, `pointed` and `came_built`, the frame built once more after an event;
