@@ -8,7 +8,7 @@ import WebSocket from "ws";
 import type { BotIdentity } from "../connects/connections.ts";
 import { channelKey, personKey } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
-import { ConnectedSurface } from "../connects/surface.ts";
+import { ConnectedSurface, MEMBERS_MS } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
@@ -359,8 +359,13 @@ export class FeishuSurface extends ConnectedSurface {
     return out;
   }
 
-  /// The people in a group (`GET /im/v1/chats/:id/members`; bots are not among them), by their name in it.
-  async peopleIn(chat: string): Promise<Member[]> {
+  /// The people in a group (`GET /im/v1/chats/:id/members`; bots are not among them), by their name in it, kept for
+  /// MEMBERS_MS.
+  peopleIn(chat: string): Promise<Member[]> {
+    return this.kept(`members:${chat}`, MEMBERS_MS, () => this.membersOf(chat));
+  }
+
+  private async membersOf(chat: string): Promise<Member[]> {
     const out: Member[] = [];
     let token = "";
     for (let page = 0; page < 20; page++) {

@@ -8,12 +8,16 @@
 // and is told through its API is its own (slack/surface.ts, feishu/surface.ts).
 import { Clock, Deferred, Effect, Exit, FiberSet, Result, Scope } from "effect";
 import WebSocket from "ws";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import type { Handler, Person, ThreadRef } from "../sessions/chat.ts";
 import type { BotIdentity, Connection, SocketStatus } from "./connections.ts";
 import type { NameBook } from "./names.ts";
 import type { StatusLine } from "./status.ts";
+
+/// How long who is in a channel or group is kept for (`peopleIn`: who a note relaying a chat there can mention).
+export const MEMBERS_MS = 60_000;
 
 type Json = any;
 
@@ -65,6 +69,8 @@ export abstract class ConnectedSurface implements Connection {
   private readonly onHeard: () => void;
   protected stopped = false;
   private readonly scope: Scope.Closeable;
+  /// What `kept` holds: each answer as it was asked for (one asking at a time) and when.
+  private readonly answers = new Map<string, { at: number; answer: Promise<unknown> }>();
   /// Runs an effect as a fiber of the surface's scope (on its clock): it ends when the surface stops.
   protected readonly run: (effect: Effect.Effect<void, never>) => Promise<void>;
 
@@ -79,6 +85,28 @@ export abstract class ConnectedSurface implements Connection {
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
+  }
+
+  /// What `read` answers for `key`, kept for `ms` on the surface's clock: asked again only after, or once it failed;
+  /// those asking while it is asked wait for that answer.
+  protected kept<T>(key: string, ms: number, read: () => Promise<T>): Promise<T> {
+    const now = this.clock?.currentTimeMillisUnsafe() ?? wall.now();
+    const had = this.answers.get(key);
+    if (had !== undefined && now - had.at < ms) return had.answer as Promise<T>;
+    const answer = read();
+    this.answers.set(key, { at: now, answer });
+    answer.catch(() => {
+      if (this.answers.get(key)?.answer === answer) this.answers.delete(key);
+    });
+    return answer;
+  }
+
+  /// `kept`'s answer for `key` let go of when it was asked at least `ms` ago: whether it was.
+  protected forget(key: string, ms: number): boolean {
+    const had = this.answers.get(key);
+    if (had === undefined || (this.clock?.currentTimeMillisUnsafe() ?? wall.now()) - had.at < ms) return false;
+    this.answers.delete(key);
+    return true;
   }
 
   /// Who its bot is and where, as the platform says now.

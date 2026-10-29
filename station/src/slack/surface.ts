@@ -7,7 +7,7 @@ import WebSocket from "ws";
 import type { BotIdentity } from "../connects/connections.ts";
 import { channelKey, personKey } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
-import { ConnectedSurface } from "../connects/surface.ts";
+import { ConnectedSurface, MEMBERS_MS } from "../connects/surface.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
@@ -225,6 +225,8 @@ export type SlackSurfaceOptions = {
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
 const QUESTION_CHARS = 8_000;
+/// How long the workspace's people are kept for (peopleIn).
+export const PEOPLE_MS = 10 * 60_000;
 
 export class SlackSurface extends ConnectedSurface {
   protected readonly kind = "slack";
@@ -429,9 +431,20 @@ export class SlackSurface extends ConnectedSurface {
   }
 
   /// The people in a channel (conversations.members), named as users.list says (bots, deactivated accounts and
-  /// Slackbot left out): their display name, their full name beside it where it differs.
+  /// Slackbot left out): their display name, their full name beside it where it differs. Who is in a channel is kept
+  /// for MEMBERS_MS, the workspace's people for PEOPLE_MS (users.list is all of it, page by page, and Slack lets a bot
+  /// ask it some 20 times a minute); someone in the channel the workspace's people did not have reads those again, once
+  /// in MEMBERS_MS at most.
   async peopleIn(channel: string): Promise<Member[]> {
-    const ids = new Set<string>();
+    const ids = await this.kept(`members:${channel}`, MEMBERS_MS, () => this.membersOf(channel));
+    let all = await this.kept("people", PEOPLE_MS, () => this.everyone());
+    if (ids.some((id) => !all.seen.has(id)) && this.forget("people", MEMBERS_MS)) all = await this.kept("people", PEOPLE_MS, () => this.everyone());
+    return ids.flatMap((id) => all.people.get(id) ?? []);
+  }
+
+  /// Who is in a channel (conversations.members), at most a couple of thousand.
+  private async membersOf(channel: string): Promise<string[]> {
+    const ids: string[] = [];
     let cursor = "";
     for (let page = 0; page < 10; page++) {
       const params: Params = [
@@ -440,28 +453,38 @@ export class SlackSurface extends ConnectedSurface {
       ];
       if (cursor !== "") params.push(["cursor", cursor]);
       const d = await this.client.api("conversations.members", params, this.botToken);
-      for (const id of Array.isArray(d?.members) ? d.members : []) if (typeof id === "string") ids.add(id);
+      for (const id of Array.isArray(d?.members) ? d.members : []) if (typeof id === "string" && !ids.includes(id)) ids.push(id);
       cursor = text(d?.response_metadata?.next_cursor);
       if (cursor === "") break;
     }
-    const out: Member[] = [];
-    cursor = "";
-    for (let page = 0; page < 50 && out.length < ids.size; page++) {
+    return ids;
+  }
+
+  /// The workspace's people (users.list), at most ten thousand: every account it listed (`seen`), and those of them a
+  /// note can mention by id.
+  private async everyone(): Promise<{ seen: Set<string>; people: Map<string, Member> }> {
+    const seen = new Set<string>();
+    const people = new Map<string, Member>();
+    let cursor = "";
+    for (let page = 0; page < 50; page++) {
       const params: Params = [["limit", "200"]];
       if (cursor !== "") params.push(["cursor", cursor]);
       const d = await this.client.api("users.list", params, this.botToken);
       for (const u of Array.isArray(d?.members) ? d.members : []) {
         const id = text(u?.id);
-        if (!ids.has(id) || u?.is_bot === true || u?.deleted === true || id === "USLACKBOT") continue;
-        const { name, picture } = personOf({ user: u });
-        if (name === "") continue;
+        if (id === "") continue;
+        seen.add(id);
+        if (u?.is_bot === true || u?.deleted === true || id === "USLACKBOT") continue;
         const full = text(u?.profile?.real_name) || text(u?.real_name);
-        out.push({ id, name, ...(full !== "" && full !== name ? { aka: full } : {}), ...(picture ? { picture } : {}) });
+        const { name: shown, picture } = personOf({ user: u });
+        const name = shown || full;
+        if (name === "") continue;
+        people.set(id, { id, name, ...(full !== "" && full !== name ? { aka: full } : {}), ...(picture ? { picture } : {}) });
       }
       cursor = text(d?.response_metadata?.next_cursor);
       if (cursor === "") break;
     }
-    return out;
+    return { seen, people };
   }
 
   /// The thread in Slack: its workspace's address, the channel, its root's ts without the dot.

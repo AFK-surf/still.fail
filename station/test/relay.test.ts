@@ -6,7 +6,8 @@ import type { Place, ThreadRef } from "../src/sessions/chat.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { mentioned, relay, relayPeople, relayPlaces } from "../src/sessions/relay.ts";
-import { SlackSurface } from "../src/slack/surface.ts";
+import { MEMBERS_MS } from "../src/connects/surface.ts";
+import { PEOPLE_MS, SlackSurface } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
 import { Rig, message, settle, testClock, type Setup } from "./hub-fakes.ts";
 import { FakeSlack } from "./slack-fake.ts";
@@ -278,10 +279,11 @@ test("Slack: the channels the bot is in, page by page; a conversation begins wit
   }
 });
 
-test("Slack: the people in a channel, named as users.list names them, bots and deactivated accounts left out", async () => {
+test("Slack: the people in a channel, named as users.list names them, bots and deactivated accounts left out; kept a while", async () => {
   const fake = await FakeSlack.start();
+  const time = testClock();
   try {
-    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), clock: time.clock });
     fake.answer("conversations.members", (seen: { params: Record<string, string> }) =>
       seen.params.cursor === "m2" ? { ok: true, members: ["UBOT", "UOLD"], response_metadata: { next_cursor: "" } } : { ok: true, members: ["UANN", "UBO"], response_metadata: { next_cursor: "m2" } },
     );
@@ -295,6 +297,25 @@ test("Slack: the people in a channel, named as users.list names them, bots and d
       { id: "UBO", name: "Bo" },
     ]);
     assert.deepEqual(fake.calls("conversations.members").map((c) => [c.params.channel, c.params.cursor ?? null]), [["C1", null], ["C1", "m2"]]);
+    const asked = () => [fake.calls("conversations.members").length, fake.calls("users.list").length];
+    assert.deepEqual(asked(), [2, 2]);
+    // Asked again soon (the note's @, then relaying): nothing asked of Slack.
+    assert.equal((await surface.peopleIn("C1")).length, 2);
+    assert.deepEqual(asked(), [2, 2]);
+    // Who is in the channel, read again after a minute; the workspace's people kept.
+    await time.adjust(MEMBERS_MS);
+    await surface.peopleIn("C1");
+    assert.deepEqual(asked(), [4, 2]);
+    // Someone the workspace's people did not have: those read again (once a minute at most).
+    fake.answer("conversations.members", { ok: true, members: ["UANN", "UNEW"], response_metadata: { next_cursor: "" } });
+    fake.answer("users.list", { ok: true, members: [{ id: "UANN", profile: { display_name: "ann" } }, { id: "UNEW", profile: { real_name: "New" } }], response_metadata: { next_cursor: "" } });
+    await time.adjust(MEMBERS_MS);
+    assert.deepEqual((await surface.peopleIn("C1")).map((p) => p.id), ["UANN", "UNEW"]);
+    assert.deepEqual(asked(), [5, 3]);
+    // And after PEOPLE_MS in any case.
+    await time.adjust(PEOPLE_MS);
+    await surface.peopleIn("C1");
+    assert.deepEqual(asked(), [6, 4]);
   } finally {
     await fake.close();
   }
