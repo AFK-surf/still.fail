@@ -145,8 +145,8 @@ pub fn stream_pointer_at(id : Int, x : Double, y : Double, shown : Bool) -> Unit
 /// nothing changes, and the app routes it again as it takes the next); those not asked for no longer. Taken so, a frame
 /// is decoded, shown and acknowledged by the host, a packet played, nothing of the app's run for them; the app is told
 /// what came in one event when it next reads the stream's (`D TS N BYTES`: @ui's Stream). A config of the route stops
-/// it until the app routes it again. macOS and iOS (apple_stream.m), Windows' frames (win_stream.cpp: no sound there);
-/// elsewhere nothing, the app takes them all.
+/// it until the app routes it again. macOS and iOS (apple_stream.m), Windows (win_stream.cpp), Android
+/// (android_host.c); elsewhere nothing, the app takes them all.
 pub fn stream_direct(id : Int, route : Double, after : Double, video~ : Bool, audio~ : Bool) -> Unit {
   st_direct(id, route, after, (if video { 1 } else { 0 }) + (if audio { 2 } else { 0 }))
 }
