@@ -80,6 +80,17 @@ struct Node {
   mut first : Int
   mut last : Int
   mut next : Int
+  /// who it is (docs/incremental.md, What decides the work): what holds it and its key there (its id, or how many
+  /// before it there have none), not where it falls in the frame's order; the slot of the frame's nodes it was last
+  /// put in; how many of what it holds have no id, as they are built (`keyless`: it is one of them); the pass of a build
+  /// that last made it
+  mut ident : Int
+  mut keyless : Bool
+  /// the scope it was built in (Ctx::scope's)
+  mut seed : Int
+  mut slot : Int
+  mut kids : Int
+  mut made_pass : Int
   mut dir : Dir
   mut w : Size
   mut h : Size
@@ -321,6 +332,12 @@ fn Node::new() -> Node {
     first: -1,
     last: -1,
     next: -1,
+    ident: 0,
+    keyless: false,
+    seed: 0,
+    slot: -1,
+    kids: 0,
+    made_pass: -1,
     dir: Column,
     w: Auto,
     h: Auto,

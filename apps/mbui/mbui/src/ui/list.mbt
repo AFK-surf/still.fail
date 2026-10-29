@@ -588,7 +588,8 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
     self.width = st.vw
     self.height = st.vh
   }
-  let r = self.alloc(kind_box)
+  // (who it is: its item, however many rows were built before it)
+  let r = self.alloc_part(kind_box, true, true, key=item_key(k))
   self.nodes[r].item = k
   let row = st.row
   // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
