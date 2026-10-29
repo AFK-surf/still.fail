@@ -364,7 +364,7 @@ pub fn open_search_mode(String) -> Unit
 
 pub fn open_triple(String, String) -> Unit
 
-pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String) -> Unit
+pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @ui.Side) -> Unit
 
 pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
