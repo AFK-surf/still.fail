@@ -69,8 +69,9 @@ export function keptCount(preview: PublishPreview, ticking: Ticking): number {
  * The picture as it would be, on the page's ground: the chat's name, its messages as the chat's list draws them (its
  * rows, as a message out of its chat is drawn: StaticMessage; the viewer's own in their bubbles at the end, an agent's
  * cards as cards; their heads in line with their pictures where the list has them so, `inline`: the phone's), still.fail's
- * mark and name at its foot. What is only for the one sharing it (each message's and attachment's box to tick, one left
- * out, how much was hidden in a message) is marked `data-shot-off`: the picture taken (takePicture) leaves it out.
+ * mark and name at its foot. What is only for the one sharing it (each message's box to tick in a column before its
+ * words, an attachment's ✕, one left out, how much was hidden in a message) is marked `data-shot-off`: the picture taken
+ * (takePicture) leaves it out, and the room of that column (TICKS).
  */
 export function PublishPicture({ preview, ticking, paper, inline = false }: { preview: PublishPreview; ticking: Ticking; paper: RefObject<HTMLDivElement | null>; inline?: boolean }) {
   const hidden = new Map(preview.messages.map((m) => [m.n, m.hiddenText]));
@@ -82,8 +83,11 @@ export function PublishPicture({ preview, ticking, paper, inline = false }: { pr
           const off = ticking.off.has(messageKey(m.seq));
           return (
             <div key={m.seq} className={css.said} data-off={off || undefined} data-shot-off={off ? "" : undefined}>
-              {/* Its box to tick, at the top of the side its words leave: its head's end, the start of the viewer's own. */}
-              <input type="checkbox" className={css.messageTick} data-mine={m.mine || undefined} checked={!off} onChange={() => ticking.toggle(messageKey(m.seq))}
+              {/* Lit while its box is pointed at: a band across the picture, behind it. */}
+              <span className={css.lit} data-shot-off="" />
+              {/* Its box to tick, in a column of its own before the words (before the pictures out in the margin), on the
+                  middle of its first line: its head's, or the viewer's own bubble's first line. */}
+              <input type="checkbox" className={css.messageTick} data-bubble={bubbleFirst(m) || undefined} checked={!off} onChange={() => ticking.toggle(messageKey(m.seq))}
                 aria-label={t("web-pages.chat.publish.message")} data-shot-off="" />
               {/* Its files each to tick, as it has them (by its n and where each is: the preview's `files`). */}
               <FileTick.Provider value={(file, sessionKey) => {
@@ -110,6 +114,8 @@ export function takePicture(paper: HTMLElement): Promise<Blob> {
   return longPicture(paper, {
     scale: Math.min(Math.max(window.devicePixelRatio || 1, 1), 3),
     background: getComputedStyle(paper).backgroundColor,
+    // (the column of the messages' boxes to tick before its words: the page's, not the picture's)
+    start: css.TICKS,
     // (the copy's nodes are another window's: not this one's Element)
     keep: (node) => node.nodeType !== Node.ELEMENT_NODE || !(node as Element).hasAttribute("data-shot-off"),
     copied: (node) => {
@@ -120,14 +126,23 @@ export function takePicture(paper: HTMLElement): Promise<Blob> {
   });
 }
 
-/** An attachment in the picture, as the chat shows it: ticked (its box in the corner), it goes in it; unticked, it fades. */
+/** Whether message `m` begins with the viewer's own words in their bubble (its box on the bubble's first line). */
+function bubbleFirst(m: PublishPreview["list"][number]): boolean {
+  return m.mine && m.text !== "" && m.quotes.length === 0 && m.attachments.length === 0;
+}
+
+/**
+ * An attachment in the picture, as the chat shows it, with what waits to go in the composer has: a ✕ hung on its top
+ * right corner takes it out (pressed anywhere on it too); out, it fades and its ✕ turns into a ＋ that puts it back.
+ */
 function FileToggle({ file: f, sessionKey, ticking }: { file: PublishFile; sessionKey: string | null; ticking: Ticking }) {
   const on = !ticking.off.has(f.k);
   return (
-    <label className={css.file} data-off={!on || undefined} data-shot-off={!on ? "" : undefined}>
-      <FileLook sessionKey={sessionKey ?? f.file.owner ?? null} file={f.file} />
-      <input type="checkbox" className={css.tick} checked={on} onChange={() => ticking.toggle(f.k)} aria-label={f.name} data-shot-off="" />
-    </label>
+    <div className={css.file} data-off={!on || undefined} data-shot-off={!on ? "" : undefined} onClick={() => ticking.toggle(f.k)}>
+      <div className={css.fileLook}><FileLook sessionKey={sessionKey ?? f.file.owner ?? null} file={f.file} /></div>
+      <button type="button" className={css.hung} data-shot-off="" onClick={(e) => { e.stopPropagation(); ticking.toggle(f.k); }}
+        aria-label={t(on ? "web-pages.chat.publish.leaveOut" : "web-pages.chat.publish.putBack")}><Close size={12} /></button>
+    </div>
   );
 }
 
