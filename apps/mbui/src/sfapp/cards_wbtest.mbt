@@ -115,12 +115,12 @@ test "an option answered on screen: the card stays as it is, none pressed again;
   let tall = options_tall(t)
   tap_now(t, "把首页和聊天页的截图都更新")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // all that comes of it come: the options still there as they were, 忽略 faded in its place, how it went said in the
-  // line that said who decides
+  // all that comes of it come: the options still there as they were, the one picked marked, 忽略 faded in its place;
+  // the line that said who decides faded where it is, nothing said in its place (the user, 2026-10-29: 有个勾不就行了吗)
   t.run_for(turn_most_ms)
   assert_eq(options_tall(t), tall)
-  assert_true(t.find("你 选择了「一起换」") is Some(_))
-  assert_true(t.find("等 林 决定") is None)
+  assert_true(t.find("你 选择了「一起换」") is None)
+  assert_true(faded(t, "等 林 决定"))
   assert_true(faded(t, "忽略"))
   // (none of them answers again)
   tap_now(t, "这次只改列表，截图下次再说")
