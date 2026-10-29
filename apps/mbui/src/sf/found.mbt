@@ -31,6 +31,59 @@ pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
 }
 
 ///|
+/// Where `passage` (a quote's) is in `text`, its spaces and line breaks aside (Chat.tsx findText: each run of them one
+/// space, either side): (from, to), UTF-16, its first letter to its last; None where it is not, or is only spaces.
+pub fn find_passage(text : String, passage : String) -> (Int, Int)? {
+  // each side with its runs of spaces as one, and where each letter kept was in the text
+  let flat = StringBuilder()
+  let at : Array[Int] = []
+  let mut spaced = false
+  for i in 0..<text.length() {
+    let u = text.unsafe_charcode_at(i)
+    if is_space(u) {
+      if !spaced && at.length() > 0 {
+        flat.write_char(' ')
+        at.push(i)
+      }
+      spaced = true
+    } else {
+      flat.write_substring(text, i, 1)
+      at.push(i)
+      spaced = false
+    }
+  }
+  let wanted = StringBuilder()
+  let mut any = false
+  let mut gap = false
+  for i in 0..<passage.length() {
+    let u = passage.unsafe_charcode_at(i)
+    if is_space(u) {
+      gap = true
+    } else {
+      if gap && any {
+        wanted.write_char(' ')
+      }
+      gap = false
+      wanted.write_substring(passage, i, 1)
+      any = true
+    }
+  }
+  let wanted = wanted.to_string()
+  if !any {
+    return None
+  }
+  match flat.to_string().find(wanted) {
+    Some(k) => Some((at[k], at[k + wanted.length() - 1] + 1))
+    None => None
+  }
+}
+
+///|
+fn is_space(u : Int) -> Bool {
+  u == 32 || u == 9 || u == 10 || u == 13 || u == 0xA0 || u == 0x3000
+}
+
+///|
 /// `runs` with `words` (a search's) semibold wherever they are in their text (TextMark.kt markWeight): each run cut
 /// where a word starts or ends in it. As they were with none.
 pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.Run] {

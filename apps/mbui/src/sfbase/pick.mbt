@@ -105,7 +105,8 @@ pub fn mouse_picks() -> Bool {
 /// (`mouse`), what of it the page's selection holds is told the pill, and a right click on it offers its turn shared
 /// (`share`, where it is given: share_offered); held with a finger, its bar shares its turn and copies `link` too
 /// (where they are given). `marks` drawn behind its words first (a search's strokes), its words
-/// kept as laid out then too (`keep`).
+/// kept as laid out then too (`keep`); `lit`, a passage of them drawn as one picked is, on its own ground (a quote's
+/// that led here: from, to, the ground), while none is picked in it.
 pub fn pickable(
   c : @ui.Ctx,
   ts : String,
@@ -119,6 +120,7 @@ pub fn pickable(
   marks? : (Int) -> Unit = fn(_) {  },
   share? : (() -> Unit)? = None,
   link? : String = "",
+  lit? : (Int, Int, Int64)? = None,
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
@@ -137,7 +139,9 @@ pub fn pickable(
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
   if pk.ts == ts {
-    c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, 0.26))
+    c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, picked_alpha))
+  } else if lit is Some((a, b, color)) {
+    c.words(box, key, a~, b~, color~)
   } else if pressed_in || keep {
     c.words(box, key)
   }
@@ -198,6 +202,10 @@ pub fn pickable(
     pk.sel.slide(c)
   }
 }
+
+///|
+/// How much of the accent a picked passage's ground is.
+pub let picked_alpha : Double = 0.26
 
 ///|
 /// The press a pick was last felt for.

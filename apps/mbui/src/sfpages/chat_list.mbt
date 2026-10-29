@@ -70,6 +70,24 @@ pub fn chat_list(
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
   let gutter = side
+  // the room over row `i`: none at the list's ends, a little over a message joined to the one before, else the gap
+  let top_at = fn(i : Int) -> Double {
+    let e = list[i]
+    let joined = match e {
+      Said(m) => m.joined
+      Out(o) => o.joined
+      _ => false
+    }
+    if e is Top || e is Foot || (i > 0 && list[i - 1] is Top) {
+      0.0
+    } else if joined {
+      joined_gap
+    } else {
+      list_gap
+    }
+  }
+  // the message gone to lit whole, or only what a quote that led there quoted, where its words have it (passage_lit)
+  let whole = flash_whole(c, rd)
   let list_box = c.box(style=chat_list_box, fn() {
     c.list(
       key,
@@ -77,19 +95,7 @@ pub fn chat_list(
       chat_row_est,
       fn(i) {
         let e = list[i]
-        let after_top = i > 0 && list[i - 1] is Top
-        let joined = match e {
-          Said(m) => m.joined
-          Out(o) => o.joined
-          _ => false
-        }
-        let top = if e is Top || e is Foot || after_top {
-          0.0
-        } else if joined {
-          joined_gap
-        } else {
-          list_gap
-        }
+        let top = top_at(i)
         let mk = key + "\u{1}" + keys[i]
         // what changed its height and when (docs/list-motion.md): it came while the list showed, or it goes
         match rd.going.get(keys[i]) {
@@ -149,18 +155,17 @@ pub fn chat_list(
               Out(_) => makes_way(lf, keys[i])
               _ => came_over(lf)
             }
-            let ri = row_box(c, side, top, fn() {
+            // gone to, lit whole: a band across the list from edge to edge, half the room to the rows over and under
+            let band = match e {
+              Said(m) if whole && m.ts == lit.0 && lit.1 > 0.0 =>
+                Some((lit.1, top / 2.0, if i + 1 < n { top_at(i + 1) / 2.0 } else { 0.0 }))
+              _ => None
+            }
+            let ri = row_box(c, side, top, lit=band, fn() {
               // (where a message out of a picture comes in over it: emit.mbt; read as it changes, Emits::read)
               em.read()
               if keys[i] == em.out_key {
                 @motion.measure(c, c.box(fn() {  }), "emit-out/" + rk + "/" + keys[i])
-              }
-              match e {
-                Said(m) if m.ts == lit.0 && lit.1 > 0.0 && !(m.mine && m.text != "") => {
-                  let g = c.layer(fn() { c.box(style=flash_ground, fn() {  }) |> ignore })
-                  c.look(g, @ui.look(alpha=lit.1))
-                }
-                _ => ()
               }
               entry_row(c, src, here, e)
             })
@@ -233,6 +238,8 @@ pub fn chat_list(
       on_found=fn(rd) { rd.found_centre = true },
       find_around~,
     )
+    // gone to by a quote: what it quoted, low in the message, to the list's middle
+    passage_centre(c, rd, key, "chat-list/" + key)
     // the way to the newest: away from its end, or short of the chat's end
     rd.jump = la.away || v.newer
     to_latest(c, src, r, v, la.away || v.newer, room)
@@ -241,6 +248,8 @@ pub fn chat_list(
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
   })
+  // (where it is, for what a quote led to to be put in its middle: passage_centre)
+  @motion.measure(c, list_box, "chat-list/" + key)
   // (what of it the bar and the composer hide: its pictures, noted as its, go out from under them before they grow
   // into the viewer)
   @sfbase.note_list(c, list_box, rk, bar, room)
@@ -321,7 +330,7 @@ pub fn here_of(
     station: r.station,
     session: r.session,
     view: v,
-    go: Some(fn(seq) { @sfbase.go_to(r, seq) }),
+    go: Some(fn(seq, passage) { @sfbase.go_to(r, seq, passage~) }),
     inline: inline,
     gutter: gutter,
     list: Some({ rk, turns, emits: em, flight }),
@@ -661,8 +670,16 @@ let ring_room : Double = 3.0
 let chat_list_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// A row's room (its node): in from the pane's sides to the column (`side` each), `top` over it.
-fn row_box(c : @ui.Ctx, side : Double, top : Double, body : () -> Unit) -> Int {
+/// A row's room (its node): in from the pane's sides to the column (`side` each), `top` over it. `lit`: how lit it is
+/// as a message gone to, and how far its ground reaches over and under it (square, out to the pane's sides as the row
+/// runs: nothing of it in a corner; lit one after another, such grounds meet), its words where they are without it.
+fn row_box(
+  c : @ui.Ctx,
+  side : Double,
+  top : Double,
+  body : () -> Unit,
+  lit? : (Double, Double, Double)? = None,
+) -> Int {
   // The system column is reserved by the shell; the text still needs its own
   // inset from the card's edge, also when a details card stands beside it.
   let trailing = if @sf.native_side() { native_row_inset() } else { side }
@@ -670,7 +687,19 @@ fn row_box(c : @ui.Ctx, side : Double, top : Double, body : () -> Unit) -> Int {
     if top > 0.0 {
       c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
     }
-    c.box(style=row_line, fn() {
+    let line = match lit {
+      Some((_, over, under)) =>
+        row_line.then(@ui.style(pt=@sf.room_of(over), mt=@sf.room_of(-over), pb=@sf.room_of(under), mb=@sf.room_of(-under)))
+      None => row_line
+    }
+    c.box(style=line, fn() {
+      match lit {
+        Some((alpha, _, _)) => {
+          let g = c.layer(fn() { c.box(style=flash_ground, fn() {  }) |> ignore })
+          c.look(g, @ui.look(alpha~))
+        }
+        None => ()
+      }
       c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
       c.box(style=row_middle, body) |> ignore
       c.box(style=@ui.style(w=Fixed(trailing)), fn() {  }) |> ignore
@@ -708,14 +737,92 @@ fn float_box(c : @ui.Ctx, right : Double, foot : Double, body : () -> Int) -> Un
 }
 
 ///|
-/// A message gone to, its ground (msgFlash): the accent's, round, out past its row's room.
+/// A message gone to lit whole, its ground (msgFlash): the accent's, as its row's band (row_box).
 // kept across runs: a value (no field of it changes)
-let flash_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=AccentBg").then(@sf.outset(8.0))
+let flash_ground : @ui.Style = @ui.css("w=Full h=Full bg=AccentBg")
 
 ///|
-/// The message gone to flashing in the list drawn now and how far its flash is (its ts, 0 to 1): the viewer's own
-/// words' bubble takes it (message.mbt mine_bubble), anyone else's row a ground under it.
+/// The message gone to flashing in the list drawn now and how far its flash is (its ts, 0 to 1): its row's band
+/// (row_box), or the passage a quote quoted behind its words (passage_lit).
 pub let flashing_now : Ref[(String, Double)] = Ref(("", 0.0))
+
+///|
+/// Whether the message gone to in a chat is lit whole: led there by no quote, or by one whose passage its words do not
+/// have (Chat.tsx Quotes' jump: then the whole message); not while its words are yet to be laid out.
+fn flash_whole(c : @ui.Ctx, rd : @sfbase.Reading) -> Bool {
+  if rd.flash_passage == "" {
+    return true
+  }
+  match c.words_of("pick/" + rd.flash) {
+    Some(w) => @sf.find_passage(w.text, rd.flash_passage) is None
+    None => false
+  }
+}
+
+///|
+/// The passage a quote that led to message `ts` quoted, where its words (box `key` laid out as `words`) have it, and
+/// the ground it is drawn on as lit now: the accent's as a passage picked in it has it (pickable), fading with its
+/// flash; None for any other message, or one lit whole.
+fn passage_lit(c : @ui.Ctx, here : MessageHere, ts : String) -> (Int, Int, Int64)? {
+  let rd = match here.list {
+    Some(l) => reading_of(l.rk)
+    None => return None
+  }
+  if rd.flash != ts || rd.flash_passage == "" {
+    return None
+  }
+  let lit = flash_of(c, rd, ts)
+  match c.words_of("pick/" + ts) {
+    Some(w) =>
+      match @sf.find_passage(w.text, rd.flash_passage) {
+        Some((a, b)) if lit > 0.0 => Some((a, b, @sf.alpha(@sf.theme().p.accent, @sfbase.picked_alpha * lit)))
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+/// Whether message `ts`'s words are to be kept as laid out for a passage a quote quoted to be found in them.
+fn passage_wanted(here : MessageHere, ts : String) -> Bool {
+  match here.list {
+    Some(l) => {
+      let rd = reading_of(l.rk)
+      rd.flash == ts && rd.flash_passage != ""
+    }
+    None => false
+  }
+}
+
+///|
+/// Once the message gone to is laid out: the passage a quote quoted, low in it (past 80% of the list's height, the
+/// list's box measured as `pane`), comes to the list's middle (Chat.tsx Quotes' jump: the quoted words at the middle),
+/// once.
+fn passage_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : String) -> Unit {
+  if !rd.flash_centre || rd.flash == "" {
+    return
+  }
+  match (c.words_of("pick/" + rd.flash), @motion.measured_rect(c, pane)) {
+    (Some(w), Some((_, py, _, ph))) => {
+      rd.flash_centre = false
+      match @sf.find_passage(w.text, rd.flash_passage) {
+        Some((a, b)) => {
+          let lines = w.rects(a, b)
+          if lines.length() > 0 {
+            let (_, y, _, _) = lines[0]
+            let (_, ly, _, lh) = lines[lines.length() - 1]
+            let mid = (y + ly + lh) / 2.0 - py
+            if mid > ph * 0.8 {
+              c.list_scroll_by(list, mid - ph / 2.0)
+            }
+          }
+        }
+        None => ()
+      }
+    }
+    _ => ()
+  }
+}
 
 ///|
 /// Where the round buttons go: the pane's foot, at its end.
