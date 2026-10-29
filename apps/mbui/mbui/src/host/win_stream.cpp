@@ -24,9 +24,12 @@
 // played as it comes (below), nothing of the app's queue.
 //
 // A stream's sound (@hostapi.stream_audio, 48 kHz stereo PCM16 in 20 ms packets, the app's and a route's alike): a
-// source voice of XAudio2's of its own (one engine for all), as apple_stream.m's player: started once 60 ms are
-// queued, emptied past 300 ms queued (after a stall in the transport) and as it runs dry (an underrun refills the same
-// reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the stream closes.
+// source voice of XAudio2's of its own (one engine for all), as apple_stream.m's player: started once its reserve is
+// queued (100 ms at first), emptied once more than that and 200 ms are (after a stall in the transport) and as it runs
+// dry (an underrun refills the reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the
+// stream closes. The reserve follows how late packets come: a gap between two longer than it covers makes it that
+// long and a packet more, at most 300 ms (packets of a Mac's sound, each 20 ms by their own clock, came here 50 to
+// 270 ms apart now and then, a busy Mac's: 60 ms ran dry, and each time it did was heard as a crackle).
 //
 // A stream's system video layer (@hostapi.stream_layers, a native view of kind 4: win_views.cpp hands its content's
 // visual here, mb_stream_attach): a composition swap chain the size of the frame, in a visual of the views'
@@ -176,6 +179,9 @@ struct Stream {
   // its sound (under sound_lock): its voice, whether it plays, its packets' memory (the voice reads each till played)
   IXAudio2SourceVoice *voice;
   int sound_playing, sound_gone;
+  // the packets queued before it plays (5 at first: sound_play), and when the last one came (QueryPerformanceCounter)
+  int sound_reserve;
+  LONGLONG sound_at;
   uint8_t *sound_ring;
   unsigned sound_next;
 };
@@ -1502,7 +1508,8 @@ void mb_host_stream_show(int32_t id, double ts) {
 
 #define SOUND_PACKET 3840  // 20 ms: 960 frames of 48 kHz stereo PCM16
 #define SOUND_FRAMES 960
-#define SOUND_RING 32      // packets' memory: the 15 queued at most, the one playing, and room
+#define SOUND_RING 32      // packets' memory: the 25 queued at most, the one playing, and room
+#define SOUND_MOST 15      // the largest reserve: 300 ms
 
 static SRWLOCK sound_lock = SRWLOCK_INIT;
 static IXAudio2 *sound_engine;
@@ -1532,6 +1539,7 @@ static void sound_stop(Stream *s) {
   if (s->voice) s->voice->DestroyVoice();
   s->voice = NULL;
   s->sound_playing = 0;
+  s->sound_at = 0;
 }
 
 // (under sound_lock) one 20 ms packet played after those queued
@@ -1552,10 +1560,26 @@ static void sound_play(Stream *s, const uint8_t *bytes) {
     if (!s->sound_ring) s->sound_ring = (uint8_t *)malloc((size_t)SOUND_RING * SOUND_PACKET);
     s->sound_playing = 0;
   }
+  if (!s->sound_reserve) s->sound_reserve = 5;
+  // how long since the last packet: a gap longer than the reserve covers makes it that long and a packet more
+  static LARGE_INTEGER freq;
+  if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER now;
+  QueryPerformanceCounter(&now);
+  if (s->sound_at) {
+    int gap = (int)((now.QuadPart - s->sound_at) * 1000 / freq.QuadPart);
+    int need = gap / 20 + 2;
+    // (a gap of a second or more: the sound paused, not late)
+    if (gap < 1000 && need > s->sound_reserve && s->sound_reserve < SOUND_MOST) {
+      s->sound_reserve = need < SOUND_MOST ? need : SOUND_MOST;
+      fprintf(stderr, "win: stream %d: sound %d ms apart, its reserve %d ms\n", s->id, gap, s->sound_reserve * 20);
+    }
+  }
+  s->sound_at = now.QuadPart;
   XAUDIO2_VOICE_STATE st;
   s->voice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
-  // past 300 ms queued (a stall), or run dry while playing: emptied, the reserve filled again first
-  if (st.BuffersQueued >= 15 || (s->sound_playing && st.BuffersQueued == 0)) {
+  // more than the reserve and 200 ms queued (a stall), or run dry while playing: emptied, the reserve filled again
+  if ((int)st.BuffersQueued >= s->sound_reserve + 10 || (s->sound_playing && st.BuffersQueued == 0)) {
     s->voice->Stop();
     s->voice->FlushSourceBuffers();
     s->sound_playing = 0;
@@ -1567,8 +1591,9 @@ static void sound_play(Stream *s, const uint8_t *bytes) {
   b.AudioBytes = SOUND_PACKET;
   b.pAudioData = slot;
   if (FAILED(s->voice->SubmitSourceBuffer(&b))) return;
-  // started once 60 ms are queued
-  if (!s->sound_playing && st.BuffersQueued + 1 >= 3 && SUCCEEDED(s->voice->Start())) s->sound_playing = 1;
+  // started once its reserve is queued
+  if (!s->sound_playing && (int)st.BuffersQueued + 1 >= s->sound_reserve && SUCCEEDED(s->voice->Start()))
+    s->sound_playing = 1;
 }
 
 // (any thread) stream s's packet played, or (empty) its sound stopped
