@@ -200,14 +200,15 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
       return
     }
     let blocks : Array[() -> Unit] = []
-    let pad = fn(f : () -> Unit) { c.box(w=Fill(1.0), padx=18.0, pt=8.0, gap=12.0, f) |> ignore }
+    // (as far in as every page's blocks: the page's room, 12; it stood 18 in, its cards beside others' 12)
+    let pad = fn(f : () -> Unit) { c.box(style=new_profile_pad, f) |> ignore }
     let group_box = fn(f : () -> Unit) { rows_card(c, f) }
     if step == "pick" {
       blocks.push(fn() {
         pad(fn() { c.text(text(d, "hint"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
       })
       // the machine's own logins not used yet: a profile on one needs no sign-in
-      for b in machine_login_offers(c, core, s, inset=18.0, fn(rt) {
+      for b in machine_login_offers(c, core, s, inset=12.0, fn(rt) {
           edit([("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))])
         }) {
         blocks.push(b)
@@ -444,7 +445,12 @@ fn pick_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
 ///|
 /// A group in the page's room (the pick step's pad: 18 in, 8 under what is over it, its parts 12 apart).
 // kept across runs: a value (no field of it changes)
-let pick_group_room : @ui.Style = @ui.css("w=Full px=S4_5 pt=S2 gap=S3")
+let pick_group_room : @ui.Style = @ui.css("w=Full px=S3 pt=S2 gap=S3")
+
+///|
+/// A block of a new profile's page, as far in as the page's room (12), 8 under what is over it.
+// kept across runs: a value (no field of it changes)
+let new_profile_pad : @ui.Style = @ui.css("w=Full px=S3 pt=S2 gap=S3")
 
 ///|
 /// An account on several stations (ProfileAccountScreen): what they have in common, then each station's part, each

@@ -140,23 +140,20 @@ fn run_view(
     })
     |> ignore
   }
-  let setting_row = fn(k : String, body : () -> Unit) {
-    let rid = c.id(k)
-    let tapped = hit(c, rid)
-    c.box(dir=Row, w=Fill(1.0), padx=14.0, pady=12.0, gap=12.0, radius=14.0, bg=t.p.card, align=ACenter, id=rid, fn() {
-      body()
-      chevron(c)
-    })
-    |> ignore
+  // (a row of the library's list card, as every page's: the user, 2026-10-29, cards each page rounded its own way)
+  let setting_row = fn(k : String, title : String, note : String, trouble : String, lead : (() -> Unit)?) {
+    let mut tapped = false
+    @sf.group(c, fn() { tapped = @sf.link_row(c, k, title, note~, trouble~, lead?) })
     tapped
   }
   let fast = flag(v, "fastAvailable")
-  c.box(w=Fill(1.0), h=Fill(1.0), padx=18.0, fn() {
+  // (in the page's room, 12 from its sides, as every page's blocks: it stood 18 in)
+  c.box(style=run_body, fn() {
     scroll_page(c, "run-session/" + key, [
       fn() {
         // what it was and what it becomes, a line each property, the changes marked
         c.box(w=Fill(1.0), pt=8.0, fn() {
-          c.box(w=Fill(1.0), pad=14.0, gap=6.0, radius=14.0, bg=t.p.chip, fn() {
+          @sf.page_card(c, fn() {
             let labels = [tr("android-chat.run.label.model"), tr("android-chat.run.label.effort"), tr("android-chat.run.label.account")]
             if fast {
               labels.push(tr("android-chat.run.label.speed"))
@@ -193,10 +190,9 @@ fn run_view(
       },
       fn() {
         group(tr("android-chat.run.label.model"))
-        if setting_row("session-run-model", fn() {
+        if setting_row("session-run-model", text(v, "modelText"), "", "", Some(fn() {
             @sf.maker_mark(c, text(field(v, "maker"), "id"), runtime, 18.0) |> ignore
-            row_title(c, text(v, "modelText"))
-          }) {
+          })) {
           run_list[of] = "model"
         }
       },
@@ -232,16 +228,13 @@ fn run_view(
       },
       fn() {
         group(tr("android-chat.run.label.account"))
-        if setting_row("session-run-account", fn() {
-            c.box(w=Fill(1.0), fn() {
-              c.text(text(v, "accountText"), size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
-              c.text(text(v, "accountNote"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
-              if flag(v, "accountWarn") {
-                c.text(tr("android-chat.run.account.warn"), size=t.t.caption, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
-              }
-            })
-            |> ignore
-          }) {
+        if setting_row(
+            "session-run-account",
+            text(v, "accountText"),
+            text(v, "accountNote"),
+            if flag(v, "accountWarn") { tr("android-chat.run.account.warn") } else { "" },
+            None,
+          ) {
           run_list[of] = "account"
         }
         gap(c, 16.0)
@@ -251,12 +244,12 @@ fn run_view(
   |> ignore
   // its button at its foot: in a panel of its own, each end in the foot corner it is in concentric with it
   // (@sf.foot_capsule)
-  let (foot_l, foot_r, foot_b) = @sf.foot_capsule(wide_button_h, 18.0, 12.0)
+  let (foot_l, foot_r, foot_b) = @sf.foot_capsule(wide_button_h, 12.0, 12.0)
   // the model picked is another station's: said so over the button, which borrows it (asked again)
   match field(v, "borrow") {
     Some(Object(_)) as b => {
       let allowed = flag(b, "allowed")
-      c.box(w=Fill(1.0), pl=22.0, pr=22.0, pt=8.0, fn() {
+      c.box(w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, fn() {
         c.text(if allowed { text(b, "note") } else { opt_text(b, "why").unwrap_or(text(b, "note")) }, size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
         |> ignore
       })
@@ -601,23 +594,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
       },
       fn() {
         c.text(tr("android-settings.add.emails"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+        // (the library's lines to type in: one frame for every field)
         c.box(w=Fill(1.0), pt=6.0, fn() {
-          c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=t.p.card, border=1.0, border_color=t.p.line, fn() {
-            c.editor(
-              key,
-              field=field_of(key),
-              placeholder=tr("android-settings.add.emailsPlaceholder"),
-              font_size=15.0,
-              max_lines=3,
-              plain=true,
-              line=21.0,
-              color=t.p.text,
-              placeholder_color=t.p.subtle,
-              caret_color=t.p.accent,
-              enter_sends=false,
-            )
-            |> ignore
-          })
+          @sf.textarea(c, key, rows=1, most=3, placeholder=tr("android-settings.add.emailsPlaceholder"), field=field_of(key))
           |> ignore
         })
         |> ignore
@@ -888,3 +867,8 @@ let run_list : Map[String, String] = Map([])
 /// A property's label in what a run was and becomes (meta, muted, on one line).
 // kept across runs: a value (no field of it changes)
 let run_label : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+/// The run page's blocks, in the page's room (12 from its sides) and as tall as the page.
+// kept across runs: a value (no field of it changes)
+let run_body : @ui.Style = @sf.pg_room.then(@ui.style(h=@sf.grow))
