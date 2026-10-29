@@ -76,7 +76,7 @@ test("the card shared says how many chats are at work now, and on how many stati
       { station: "w/a", online: true, rows: [row("1", agent(true)), row("2", agent(true), agent(false)), row("3", agent(false))], archived: [on(25, 9), on(26, 1), on(1, 3)], jobs: [], runs: [], calls: [] },
       { station: "w/b", online: true, rows: [row("4", agent(true))], archived: [on(25, 20), on(26, 5), on(26, 6)], jobs: [], runs: [], calls: [] },
       // down: none of what it last said counted
-      { station: "w/c", online: false, rows: [row("5", agent(true))], archived: [on(26, 3)], jobs: [], runs: [{ at: on(26, 1), session: "remote:w:a:s-1" }] },
+      { station: "w/c", online: false, rows: [row("5", agent(true))], archived: [on(26, 3)], jobs: [], runs: [{ at: on(26, 1), session: "remote:w:a:s-1" }], calls: [] },
       // today's chats, at rest: one written in today (e), one archived today (g); f's quiet since yesterday
       { station: "w/e", online: true, rows: [quiet("6", on(26, 3))], archived: [], jobs: [], runs: [], calls: [] },
       { station: "w/f", online: true, rows: [quiet("7", on(25, 22))], archived: [], jobs: [], runs: [], calls: [] },
