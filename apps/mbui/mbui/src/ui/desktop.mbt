@@ -447,6 +447,13 @@ fn with_marks(old : Int, m : Int, cursor : Int) -> Int {
 fn Ctx::id_built(self : Ctx, i : Int) -> Unit {
   let n = self.nodes[i]
   self.built_ids[n.id] = i
+  match self.focus_ahead.get(n.id) {
+    Some(f) => {
+      self.focus_ahead.remove(n.id)
+      n.focus = Some(f)
+    }
+    None => ()
+  }
   match self.marks_ahead.get(n.id) {
     Some(m) => {
       self.marks_ahead.remove(n.id)

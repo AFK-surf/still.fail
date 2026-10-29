@@ -68,7 +68,32 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
     return
   }
   let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press }
-  self.focusables.push(f)
+  // (held by its node, docs/retained.md the way there's 1: by `node`, else by the id's, made or to be: Ctx::id_built)
+  let i = if node >= 0 {
+    node
+  } else {
+    match self.built_ids.get(id) {
+      Some(i) if i < self.count && self.nodes[i].id == id => i
+      _ => -1
+    }
+  }
+  if i >= 0 {
+    self.nodes[i].focus = Some(f)
+  } else {
+    self.focus_ahead[id] = f
+  }
+}
+
+///|
+/// What can take the focus this build, in Tab's order: the nodes said to (Node's `focus`), in the order they were made.
+fn Ctx::focusables_found(self : Ctx) -> Unit {
+  self.focusables.clear()
+  for i in 0..<self.count {
+    match self.nodes[i].focus {
+      Some(f) => self.focusables.push({ ..f, node: i })
+      None => ()
+    }
+  }
 }
 
 ///|

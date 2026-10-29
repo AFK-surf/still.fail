@@ -304,6 +304,8 @@ pub struct Ctx {
   // made, to be marked on it as it is
   built_ids : Map[Int, Int]
   marks_ahead : Map[Int, Int]
+  /// what was said to take the focus by its id before its node was made (Ctx::focusable), to be marked on it as it is
+  focus_ahead : Map[Int, Focusable]
   // the hit targets of the last frame (and of this one, collected) that are pointed at and never pressed (Ctx::box's
   // `points`): a press, or a finger reaching round it, goes past them to what holds them
   mut points : Map[Int, Bool]
@@ -644,6 +646,7 @@ fn Ctx::new() -> Ctx {
     next_hit_marks: [],
     built_ids: {},
     marks_ahead: {},
+    focus_ahead: {},
     points: {},
     passes: {},
     next_passes: {},

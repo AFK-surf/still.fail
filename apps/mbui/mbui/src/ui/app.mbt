@@ -585,6 +585,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   desk_build_start()
   c.built_ids.clear()
   c.marks_ahead.clear()
+  c.focus_ahead.clear()
   // (where the build says streams, native views and pictures at a rect of their own are drawn, by node: kept till the
   // next build, a frame painted again alone drawing them where its build said: frame_watch.mbt)
   stream_nodes.clear()
@@ -611,6 +612,8 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
+  // what Tab goes among, as the nodes made it (focus.mbt)
+  c.focusables_found()
   root
 }
 

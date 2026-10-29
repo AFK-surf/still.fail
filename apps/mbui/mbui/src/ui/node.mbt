@@ -80,6 +80,9 @@ struct Node {
   /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
   /// holds_through, menu_asked); 0 none said
   mut marks : Int
+  /// how it takes the focus where it does (Ctx::focusable): what Tab goes among is the nodes that do, in their order
+  /// (Ctx::focusables_found)
+  mut focus : Focusable?
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -333,6 +336,7 @@ fn Node::new() -> Node {
     hit: false,
     points: false,
     marks: 0,
+    focus: None,
     parent: -1,
     first: -1,
     last: -1,
@@ -490,6 +494,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.hit = false
   self.points = false
   self.marks = 0
+  self.focus = None
   self.first = -1
   self.last = -1
   self.next = -1

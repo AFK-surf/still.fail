@@ -1,10 +1,10 @@
-// What a frame's builds and its paint say of it besides what they draw. Its builds: what takes the focus, whether
-// the mouse drags lists, what is told outside once the builds are over. Its paint: where presses go (its targets),
-// what is only pointed at, what the wheel and a finger scroll, the words that can be picked, the scroll bars, a
-// Tester's lines of words. Each is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`), added
-// to in the order said. What a target is said to be as it is built (the pointer's shape over it, what a press on it
-// does besides, whether it asks for a menu) is no list: its node holds it (Node's `marks`), and its targets carry it
-// (hit_marks).
+// What a frame's builds and its paint say of it besides what they draw. Its builds: whether the mouse drags lists,
+// what is told outside once the builds are over. Its paint: where presses go (its targets), what is only pointed at,
+// what the wheel and a finger scroll, the words that can be picked, the scroll bars, a Tester's lines of words. Each
+// is a list of the frame's (a SaidList, one of `build_lists` or `paint_lists`), added to in the order said. What a
+// node is said to be as it is built is no list: its node holds it (the pointer's shape over it, what a press on it
+// does besides, whether it asks for a menu: Node's `marks`, carried by its targets, hit_marks; how it takes the
+// focus: Node's `focus`).
 //
 // A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its build and its paint
 // added, from where the list stood as they began, and says it again, moved to where it is drawn now, each frame it is
@@ -145,11 +145,10 @@ let paint_lists : Array[&SaidList] = [
 ]
 
 ///|
-/// The lists the frame's builds add to, each said again by what is kept: what takes the focus, whether the mouse drags
-/// lists, what is told once the builds are over.
+/// The lists the frame's builds add to, each said again by what is kept: whether the mouse drags lists, what is told
+/// once the builds are over.
 // kept across runs: never written
 let build_lists : Array[&SaidList] = [
-  FocusSaid::{  },
   MouseDragsSaid::{  },
   TellsSaid::{  },
 ]
@@ -292,54 +291,6 @@ fn said_num(v : Double) -> Int64 {
 }
 
 // ── the builds' lists ───────────────────────────────────────────────────
-
-///|
-/// What takes the focus (Ctx::focusable), in Tab's order.
-priv struct FocusSaid {}
-
-///|
-priv struct FocusTaken {
-  all : Array[Focusable]
-}
-
-///|
-impl SaidList for FocusSaid with said_len(_, c) {
-  c.focusables.length()
-}
-
-///|
-impl SaidList for FocusSaid with said_take(_, c, from) {
-  FocusTaken::{ all: c.focusables[from:].to_owned() }
-}
-
-///|
-impl SaidList for FocusSaid with said_cut(_, c, len) {
-  c.focusables.truncate(len)
-}
-
-///|
-impl SaidAgain for FocusTaken with said_again(self, c, m) {
-  for f in self.all {
-    c.focusables.push(
-      if m.node >= 0 {
-        { ..f, node: m.node }
-      } else if m.by != 0 {
-        { ..f, node: f.node + m.by }
-      } else {
-        f
-      },
-    )
-  }
-}
-
-///|
-impl SaidAgain for FocusTaken with said_show(self, sb) {
-  for f in self.all {
-    sb.write_string(
-      "focus \{said_id(f.id)} \{said_id(f.group)} \{said_id(f.layer)} \{f.keys} \{f.on_press}\n",
-    )
-  }
-}
 
 ///|
 /// Whether the mouse drags lists as a finger does (Ctx::mouse_drags_lists): the last said holds.
