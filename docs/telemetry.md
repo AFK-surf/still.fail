@@ -40,7 +40,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ### station 的日志
 
-`station/src/ops/log-export.ts`，**默认开**（2026-10-29 用户定：「应该脱敏默认发，然后用户可以关闭，不然 debug 都没法搞」）。起因是用户 station 之间共享 skill 不同步，要看的是两台连 still.fail cloud 的记录（`presence` 那几行），我们这边一条都没有，只能找用户要日志文件。在 `config.json` 里关掉（改配置立即生效）：
+`station/src/ops/log-export.ts`，**默认开**（2026-10-29 用户定：「应该脱敏默认发，然后用户可以关闭，不然 debug 都没法搞」）。起因是用户 station 之间共享 skill 不同步，要看的是两台连 still.fail cloud 的记录（`presence` 那几行），我们这边一条都没有，只能找用户要日志文件。workspace 的管理员在 app 和网页的 station 设置 →「诊断」→「发送运行日志给 still.fail」关掉（`diagnostics.setLogs`，station 的 `PUT /diagnostics/settings {logs}`，概览的 `diagnostics.logs`），或者在 `config.json` 里关掉（改配置立即生效）：
 
 ```json
 { "telemetry": { "logs": false } }

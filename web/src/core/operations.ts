@@ -9,6 +9,7 @@ export interface OperationParams {
   "search.setPersonal": { personal: boolean };
   "network.setCongestion": { congestion: string };
   "context.setAfresh": { afreshWhenCold: boolean };
+  "diagnostics.setLogs": { logs: boolean };
   "elevation.set": { on: boolean };
   "session.warm": { key: string };
   "session.evict": { key: string };
@@ -157,6 +158,7 @@ export function bindStationOperations(call: Call) {
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     networkSetCongestion: <T = unknown>(params: OperationParams["network.setCongestion"]) => call("network.setCongestion", params) as Promise<T>,
     contextSetAfresh: <T = unknown>(params: OperationParams["context.setAfresh"]) => call("context.setAfresh", params) as Promise<T>,
+    diagnosticsSetLogs: <T = unknown>(params: OperationParams["diagnostics.setLogs"]) => call("diagnostics.setLogs", params) as Promise<T>,
     elevationSet: <T = unknown>(params: OperationParams["elevation.set"]) => call("elevation.set", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,
     sessionEvict: <T = unknown>(params: OperationParams["session.evict"]) => call("session.evict", params) as Promise<T>,
