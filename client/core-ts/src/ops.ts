@@ -71,6 +71,8 @@ export const PARAMS: Record<string, string> = {
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
+  "network.setRelayUdp": "relayUdp:boolean",
+  "station.restart": "",
   "context.setAfresh": "afreshWhenCold:boolean",
   "diagnostics.setLogs": "logs:boolean",
   "elevation.set": "on:boolean",
@@ -313,6 +315,11 @@ function stationOp(name: string, params: unknown): Request | null {
     // station's routes/context.ts); set by the workspace's owners and admins.
     case "network.setCongestion":
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
+    case "network.setRelayUdp":
+      return op("PUT", () => "/network/settings", p.pick(["relayUdp"]), OVERVIEW);
+    // The station started again by its launcher (its routes/network.ts), managers only.
+    case "station.restart":
+      return op("POST", () => "/station/restart", null, OVERVIEW);
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
     // Whether it sends its log to still.fail, scrubbed (its station's routes/diagnostics.ts); set by the workspace's

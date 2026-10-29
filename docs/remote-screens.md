@@ -209,9 +209,21 @@ client, so any client that acknowledges what it drew is paced.
   was used from #1203 until 2026-10-28, when on real ways with nothing lost it held what went to a device at 20–30
   KB/s for hours (a 17 KB window at 80 ms) where Cubic sent 2–4 MB/s.
   Station settings keep an **Advanced network settings** fold at the bottom. Its congestion controller defaults to
-  CUBIC; managers can opt into experimental BBR. The saved `network.congestion` (`cubic` or `bbr`) is read when the
-  station starts; saving does not interrupt existing transfers. BBR in noq 1.3.0 has the idle/app-limited bandwidth
+  CUBIC; managers can opt into experimental BBR. The saved `network.congestion` (`cubic` or `bbr`) is taken by the
+  running endpoint as saved (mesh.ts `applyNetwork`, iroh's `set_transport_config`) for the connections made from then
+  on; a connection made keeps its own, so saving does not interrupt existing transfers. BBR in noq 1.3.0 has the idle/app-limited bandwidth
   estimation defect tracked in n0-computer/noq#852, so it stays opt-in. This changes the station's sender only.
+  Beside it, **Relay over UDP** (`network.relayUdp`, off by default, taken as saved: each relay link is dialed again, its
+  connections going on; iroh's `set_relay_udp`) has the station
+  ask its relays for their UDP way (iroh's `relay_udp`, still.fail's branch of iroh-relay): a relay that offers one
+  (Beijing's and Hong Kong's once their iroh-relay has `udp_bind_addr`) carries the station's datagrams over UDP
+  only, never its WebSocket, so a way UDP does not get through shows as one that does not work instead of being
+  covered; a relay that offers none (Cloudflare's) relays them by its WebSocket as before. Over the WebSocket each leg
+  to the relay is TCP of its own, under QUIC's recovery. Measured through a local relay (20 ms a leg, 50 Mbit/s,
+  relay only, 2026-10-29): with 0.5% random loss a leg, a file went at 20 Mbit/s over UDP with BBR (4.8 over the
+  WebSocket with Cubic) and 60 fps of 20 KB frames came in 60 ms at p50 (1.5 s); with Cubic, UDP was slower there
+  than the WebSocket (its two TCP legs each recover at half the round trip), and faster with loss only from a
+  narrow link (20 Mbit/s: a file 13–14 against 10 Mbit/s, frames p99 58 ms against 83–595 ms).
 
 
 `station/side/screen-net.ts` measures it: a view over iroh through a proxy on this machine that delays, drops and

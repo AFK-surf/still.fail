@@ -6,7 +6,7 @@ import { AutomaticDecisions, AutomaticDecisionCompletion, AutomaticDecisionPolic
 import { Illustration } from "../brand.tsx";
 import { CAN_NOTIFY } from "../notify.ts";
 import { useSettingsList } from "../settingsList.tsx";
-import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, Plus, Quota, Refresh, Server, ShieldCheck, Sliders, Sparks, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, Plus, Power, Quota, Refresh, Server, ShieldCheck, Sliders, Sparks, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -709,6 +709,8 @@ function shownAs(s: StationView, mark: Mark | undefined): StationView {
  */
 export function useStationEdits(view: WorkspaceView | undefined, account: Account, stations: StationView[]) {
   const navigate = useGo();
+  const call = useCall();
+  const act = useAct();
   const [removing, setRemoving] = useState<StationView | null>(null);
   // Asked in a dialog of ours, not window.prompt.
   const [naming, setNaming] = useState<StationView | null>(null);
@@ -729,6 +731,8 @@ export function useStationEdits(view: WorkspaceView | undefined, account: Accoun
     ...(drive && s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
     ...(manager ? [
       { label: t("web-pages.settings.stations.rename"), icon: Edit, disabled: renaming(s), onSelect: () => setNaming(s) },
+      // Started again (its launcher hands over: sessions go on), so what its advanced settings saved takes effect.
+      ...(s.online ? [{ label: t("web-pages.settings.stations.restart"), icon: Power, onSelect: () => { void act(call("station.restart", { station: s.station }), t("web-pages.settings.stations.restartWhat"), t("web-pages.settings.stations.restarting")); } }] : []),
       { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
     ] : []),
   ];

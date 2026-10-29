@@ -56,6 +56,9 @@ pub struct Options {
     pub relay_only: Option<bool>,
     /// Advanced choice, cubic by default; read when the endpoint is created.
     pub congestion: Option<String>,
+    /// Advanced choice, off by default: ask the relays for their UDP way (iroh's `relay_udp`). A relay that offers one
+    /// carries the datagrams over UDP only, never its WebSocket; one that offers none relays them as before.
+    pub relay_udp: Option<bool>,
 }
 
 #[napi]
@@ -70,13 +73,10 @@ pub struct Endpoint {
     accepted: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<IrohConnection>>>>,
 }
 
-#[napi]
-pub async fn bind(options: Options) -> napi::Result<Endpoint> {
-    let bytes: [u8; 32] = options.secret_key.as_ref().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
-    let key = SecretKey::from_bytes(&bytes);
-    let relays: Vec<RelayUrl> = options.relay_urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
-    // BBR is opt-in: noq 1.3.0 can underestimate bandwidth after idle (n0-computer/noq#852).
-    let controller: Arc<dyn noq_proto::congestion::ControllerFactory + Send + Sync> = match options.congestion.as_deref().unwrap_or("cubic") {
+/// The connections' transport: the congestion controller named (BBR is opt-in: noq 1.3.0 can underestimate bandwidth
+/// after idle, n0-computer/noq#852), the paths kept alive and given up as PATH_KEEP_ALIVE and PATH_IDLE say.
+fn transport(congestion: &str) -> napi::Result<QuicTransportConfig> {
+    let controller: Arc<dyn noq_proto::congestion::ControllerFactory + Send + Sync> = match congestion {
         "cubic" => {
             let mut config = noq_proto::congestion::CubicConfig::default();
             config.initial_window(256 * 1024);
@@ -89,18 +89,26 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
         }
         _ => return Err(failed("congestion: expected cubic or bbr")),
     };
+    Ok(QuicTransportConfig::builder()
+        .congestion_controller_factory(controller)
+        .default_path_keep_alive_interval(PATH_KEEP_ALIVE)
+        .default_path_max_idle_timeout(PATH_IDLE)
+        .build())
+}
+
+#[napi]
+pub async fn bind(options: Options) -> napi::Result<Endpoint> {
+    let bytes: [u8; 32] = options.secret_key.as_ref().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
+    let key = SecretKey::from_bytes(&bytes);
+    let relays: Vec<RelayUrl> = options.relay_urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
+    let transport = transport(options.congestion.as_deref().unwrap_or("cubic"))?;
     let mut builder = IrohEndpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
         .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
         .home_on_every_relay()
-        .transport_config(
-            QuicTransportConfig::builder()
-                .congestion_controller_factory(controller)
-                .default_path_keep_alive_interval(PATH_KEEP_ALIVE)
-                .default_path_max_idle_timeout(PATH_IDLE)
-                .build(),
-        );
+        .relay_udp(options.relay_udp.unwrap_or(false))
+        .transport_config(transport);
     if let Some(addr) = &options.bind_addr {
         builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(failed)?).map_err(failed)?;
     }
@@ -180,6 +188,21 @@ impl Endpoint {
     pub async fn remove_relay(&self, url: String) -> napi::Result<()> {
         self.inner.remove_relay(&relay_url(&url)?).await;
         Ok(())
+    }
+
+    /// The congestion controller of the connections made from now on, dialed and accepted (one made keeps its own):
+    /// the advanced network setting changed while the station runs.
+    #[napi]
+    pub fn set_congestion(&self, congestion: String) -> napi::Result<()> {
+        self.inner.set_transport_config(transport(&congestion)?);
+        Ok(())
+    }
+
+    /// Whether the relays are asked for their UDP way, from now on: each relay link is dialed again, its connections
+    /// going on over the new way (the advanced network setting changed while the station runs).
+    #[napi]
+    pub async fn set_relay_udp(&self, on: bool) {
+        self.inner.set_relay_udp(on).await;
     }
 
     /// iroh's own public relays: added while none of still.fail's answers, removed once one does (`keep_relays`).

@@ -14,8 +14,8 @@ import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
-import { congestionOf } from "./settings.ts";
-import { bindStation } from "./native.ts";
+import { congestionOf, relayUdpOf } from "./settings.ts";
+import { bindStation, type Endpoint } from "./native.ts";
 import { lanAddrs, tailnetAddrs } from "./lan.ts";
 import { Superseded } from "./superseded.ts";
 import { Storms } from "./storms.ts";
@@ -51,12 +51,14 @@ export const MeshLive = Layer.effectDiscard(
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()), relayUdp: relayUdpOf(config.raw()) })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
+      // The advanced network settings as they are saved, on the running endpoint (no restart needed).
+      yield* Effect.acquireRelease(Effect.sync(() => applyNetwork(endpoint, config)), (off) => Effect.sync(off));
       // What other stations are told of this one's relay (jobs/load.ts), while it is on the mesh.
       yield* Effect.acquireRelease(Effect.sync(() => side.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
       yield* Effect.forkScoped(keepRelays(endpoint, side.net));
@@ -161,3 +163,25 @@ export const MeshLive = Layer.effectDiscard(
     }))));
   }),
 );
+
+/// Follows the saved network settings on a running endpoint: a congestion controller chosen applies to the connections
+/// made from then on, the relays' UDP way to each relay link at once (dialed again). Gives what stops following.
+export function applyNetwork(endpoint: Pick<Endpoint, "setCongestion" | "setRelayUdp">, config: { raw(): any; listen(f: (raw: any) => void): () => void }): () => void {
+  let congestion = congestionOf(config.raw());
+  let relayUdp = relayUdpOf(config.raw());
+  return config.listen((raw) => {
+    const nextCongestion = congestionOf(raw);
+    if (nextCongestion !== congestion) {
+      congestion = nextCongestion;
+      try { endpoint.setCongestion?.(congestion); }
+      catch (e) { log.warn("mesh", "congestion controller not changed", { error: (e as Error).message }); }
+      log.info("mesh", "congestion controller for new connections", { congestion });
+    }
+    const nextUdp = relayUdpOf(raw);
+    if (nextUdp !== relayUdp) {
+      relayUdp = nextUdp;
+      void endpoint.setRelayUdp?.(relayUdp);
+      log.info("mesh", "relays' UDP way", { on: relayUdp });
+    }
+  });
+}

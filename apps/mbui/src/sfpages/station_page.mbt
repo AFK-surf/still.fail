@@ -267,8 +267,9 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
 }
 
 ///|
-/// Its ⋯ (edits.menu, without its 文件: its page opens them from its folders): renaming it, removing it from the
-/// workspace (asked first).
+/// Its ⋯ (edits.menu, without its 文件: its page opens them from its folders): renaming it, restarting it while it is
+/// online (its launcher hands over, its sessions go on, what its advanced settings saved taking effect), removing it
+/// from the workspace (asked first).
 fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
   let address = text(s, "station")
   let key = "station-more/" + address
@@ -298,6 +299,14 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
   @sf.menu(
     [
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
+      if flag(s, "online") {
+        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
+          @settings.act(core, @sf.t("web-pages.settings.stations.restartWhat"), "station.restart",
+            obj([("station", str(address))]), done=@sf.t("web-pages.settings.stations.restarting"))
+        }))
+      } else {
+        None
+      },
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
     ],
     from=Of(mid),
@@ -1013,6 +1022,22 @@ fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, 
               obj([("station", str(address)), ("congestion", str(algorithm))]), done=@sf.t("web-pages.stations.network.saved"))
           }, label=@sf.t("web-pages.stations.network.algorithm"), disabled=!manager || busy, whole=true)
       })
+      // Whether the station asks the relays for their UDP way (its datagrams over UDP only where one is offered).
+      let udp_busy = is_doing(core, ["network.setRelayUdp"], [("station", address)])
+      let udp = flag(network, "relayUdp")
+      let now = @sf.switch_row(
+        c,
+        "network-udp/" + address,
+        @sf.t("web-pages.stations.network.relayUdp"),
+        udp,
+        note=@sf.t("web-pages.stations.network.relayUdpNote"),
+        disabled=!manager,
+        busy=udp_busy,
+      )
+      if now != udp {
+        @settings.act(core, @sf.t("web-pages.stations.network.what"), "network.setRelayUdp",
+          obj([("station", str(address)), ("relayUdp", Json::boolean(now))]), done=@sf.t("web-pages.stations.network.saved"))
+      }
     }
   })
 }

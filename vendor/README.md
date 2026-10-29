@@ -3,7 +3,8 @@
 Crates taken from crates.io, and Swift packages the native apps build in, changed for still.fail; `[patch.crates-io]` in
 mesh/ and client/ points at the crates. iroh is not here: still.fail's branch of it is
 [zzj3720/iroh](https://github.com/zzj3720/iroh/tree/stillfail) (`stillfail`: upstream's release and a commit for each of
-our changes, its tests in its own CI; STILLFAIL.md there), taken by commit in `[patch.crates-io]`. Each change is marked `ember:` in the source. Drop one here once upstream has
+our changes, its tests in its own CI; STILLFAIL.md there), taken by commit in `[patch.crates-io]`, iroh-relay from the
+same commit (its v1.3.0, with the relay's UDP way). Each change is marked `ember:` in the source. Drop one here once upstream has
 the same.
 
 - **PermissionFlow** (Swift, EYHN/PermissionFlow at 9b02967, as Cue's Computer Use pins it; only SystemSettingsKit and
