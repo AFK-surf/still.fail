@@ -106,15 +106,19 @@
     "one": "1 chat running",
     "other": "{n} chats running"
   },
-  "core-logic.fleet.quota_by": {
+  "core-logic.fleet.accounts_by": {
     "one": "1 {kind} account used",
     "other": "{n} {kind} accounts used"
+  },
+  "core-logic.fleet.keys_by": {
+    "one": "1 API key used",
+    "other": "{n} API keys used"
   },
   "core-logic.fleet.accounts": {
     "one": "1 account",
     "other": "{n} accounts"
   },
-  "core-logic.fleet.quota_of": "of a week's quota",
+  "core-logic.fleet.tokens_of": "tokens, {cost} at API prices",
   "core-logic.fleet.today": "Today",
   "core-logic.fleet.week": "Last 7 days",
   "core-logic.fleet.archived": "Chats archived",

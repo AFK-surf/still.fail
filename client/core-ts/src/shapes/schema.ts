@@ -556,7 +556,6 @@ export const SHAPES: Record<string, Shape> = {
   QuotaWindow: struct([
     ["label", "String"],
     ["usedPercent", "f64"],
-    ["spentWeek", opt("f64"), { doc: "What it used over the last 7 days, in percent of its allowance (past 100 where it reset in them); absent on older stations." }],
     ["resetsAt", opt("i64"), { client: opt("I54") }],
     ["mark", "String"],
     ["left", "i64", { client: "I54" }],
@@ -2700,7 +2699,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
     ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],
-    ["quota", vec("FleetQuota"), { doc: "The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left\nout; none read: empty." }],
+    ["spent", vec("FleetSpent"), { doc: "What its chats used over the last 7 days, by kind of account, the most tokens first; nothing used:\nempty." }],
     ["chats", "i64", { client: "I54", doc: "The chats at work now: their agents running, or a task of theirs running on another station." }],
     ["chatsText", "String", { doc: "That in words: 9 个对话正在运行." }],
     ["where", "String", { doc: "How many stations were used today: those of today's chats (at work, or their last letter written, or archived,\ntoday), and those that ran their tasks today: 今天用了 3 台设备." }],
@@ -2730,16 +2729,18 @@ export const SHAPES: Record<string, Shape> = {
     ["share", "f64", { doc: "Of the most on a day, 0 to 1." }],
     ["today", "bool"],
   ]),
-  FleetQuota: struct([
-    ["kind", "String", { doc: "The kind of subscription (the profiles' group: claude, chatgpt…)." }],
+  FleetSpent: struct([
+    ["kind", "String", { doc: "The kind of account (the profiles' group: claude, chatgpt…, key)." }],
     ["name", "String", { doc: "Its name: Claude 订阅." }],
-    ["accounts", "i64", { client: "I54" }],
+    ["accounts", "i64", { client: "I54", doc: "Its accounts the chats used." }],
     ["accountsText", "String", { doc: "Its accounts in words: 6 个账号." }],
-    ["used", "i64", { client: "I54", doc: "How much of a week's quota they used, in percent of one account's: each account's share of its own\nadded up (80% and 90%: 170%)." }],
-    ["usedText", "String", { doc: "170%." }],
-    ["share", "f64", { doc: "That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85)." }],
-    ["lead", "String", { doc: "What says it before the share: 用 6 个 Claude 订阅账号消耗了." }],
-    ["of", "String", { doc: "What says it after: 的周额度." }],
+    ["tokens", "i64", { client: "I54", doc: "The tokens its calls read and wrote, the cache's too." }],
+    ["tokensText", "String", { doc: "Those, short: 1.2B." }],
+    ["costText", "String", { doc: "What they would cost at API prices: $1,234 (≥ with calls of a model without a price)." }],
+    ["lineText", "String", { doc: "Both, as a line ends: 1.2B · $1,234." }],
+    ["share", "f64", { doc: "Its tokens as a share of all kinds', what its ring draws (0 to 1)." }],
+    ["lead", "String", { doc: "What says it before its tokens: 用 6 个 Claude 订阅账号消耗了." }],
+    ["of", "String", { doc: "What says it after: token，折合 $1,234." }],
   ]),
   FleetToday: struct([
     ["title", "String"],

@@ -1261,6 +1261,8 @@ export class Views implements Owner {
             runs: arr(get(this.ok({ topic: "stationUsage", station: s.address }), "remoteRuns"))
               .filter((r) => typeof get(r, "at") === "number" && typeof get(r, "session") === "string")
               .map((r) => ({ at: get(r, "at") as number, session: get(r, "session") as string })),
+            // its chats' calls, by day, chat, profile and model, as the usage page reads them
+            calls: arr(get(this.ok({ topic: "stationUsage", station: s.address }), "rows")),
           };
         });
         const offset = this.#core.host.utcOffsetMin(now);

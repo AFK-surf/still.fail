@@ -542,8 +542,6 @@ export interface QuotaCredits {
 export interface QuotaWindow {
 	label: string;
 	usedPercent: number;
-	/** What it used over the last 7 days, in percent of its allowance (past 100 where it reset in them); absent on older stations. */
-	spentWeek?: number;
 	resetsAt?: number;
 	mark: string;
 	left: number;
@@ -3570,26 +3568,28 @@ export interface FleetDay {
 	today: boolean;
 }
 
-export interface FleetQuota {
-	/** The kind of subscription (the profiles' group: claude, chatgpt…). */
+export interface FleetSpent {
+	/** The kind of account (the profiles' group: claude, chatgpt…, key). */
 	kind: string;
 	/** Its name: Claude 订阅. */
 	name: string;
+	/** Its accounts the chats used. */
 	accounts: number;
 	/** Its accounts in words: 6 个账号. */
 	accountsText: string;
-	/**
-	 * How much of a week's quota they used, in percent of one account's: each account's share of its own
-	 * added up (80% and 90%: 170%).
-	 */
-	used: number;
-	/** 170%. */
-	usedText: string;
-	/** That as a share of all their accounts' weeks, what its ring draws (0 to 1: 170% of two, 0.85). */
+	/** The tokens its calls read and wrote, the cache's too. */
+	tokens: number;
+	/** Those, short: 1.2B. */
+	tokensText: string;
+	/** What they would cost at API prices: $1,234 (≥ with calls of a model without a price). */
+	costText: string;
+	/** Both, as a line ends: 1.2B · $1,234. */
+	lineText: string;
+	/** Its tokens as a share of all kinds', what its ring draws (0 to 1). */
 	share: number;
-	/** What says it before the share: 用 6 个 Claude 订阅账号消耗了. */
+	/** What says it before its tokens: 用 6 个 Claude 订阅账号消耗了. */
 	lead: string;
-	/** What says it after: 的周额度. */
+	/** What says it after: token，折合 $1,234. */
 	of: string;
 }
 
@@ -3616,10 +3616,10 @@ export interface FleetView {
 	/** When this is, in words: 10月26日 04:12. */
 	at: string;
 	/**
-	 * The subscriptions' weekly quota used, by kind, the most accounts first; a kind that used none left
-	 * out; none read: empty.
+	 * What its chats used over the last 7 days, by kind of account, the most tokens first; nothing used:
+	 * empty.
 	 */
-	quota: FleetQuota[];
+	spent: FleetSpent[];
 	/** The chats at work now: their agents running, or a task of theirs running on another station. */
 	chats: number;
 	/** That in words: 9 个对话正在运行. */

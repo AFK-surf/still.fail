@@ -82,7 +82,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
     // what it leaves out
     for look in [
-      ("大字报", "489%", "OpenCode Go 订阅"),
+      ("大字报", "2.5 亿", "OpenCode Go 订阅"),
       ("小票", "5 个", "9 个对话正在运行"),
       ("终端", "still.fail fetch", "10/20"),
       ("夜色", "用 6 个 Claude 订阅账号消耗了", "5 个"),
@@ -114,7 +114,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [
-  "10月26日 04:12", "489%", "的周额度", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
+  "10月26日 04:12", "2.5 亿", "token，折合 $1,604", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
   "一生万物，万物归一",
 ]
 
@@ -163,18 +163,18 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  // the first kind's said round its share, read down: what leads it over the rings and the share, the share large,
-  // what it is of under it; each other kind a line of its own, its ring's key: its name, its accounts, its share at
-  // the line's end (the shares one under another)
+  // the first kind's said round its tokens, read down: what leads it over the rings and the tokens, the tokens large,
+  // what they would cost under them; each other kind a line of its own, its ring's key: its name, its accounts, its
+  // tokens and cost at the line's end (one under another)
   let lead = word("用 6 个 Claude 订阅账号消耗了")
-  let share = word("489%")
-  let of = word("的周额度")
+  let share = word("2.5 亿")
+  let of = word("token，折合 $1,604")
   assert_true(lead.length() == 1 && share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(lead, share, of)}")
   assert_true(
     lead[0].2 < share[0].2 && of[0].2 > share[0].2 && of[0].1 == share[0].1 && lead[0].1 < share[0].1,
     msg="\{(lead, share, of)}",
   )
-  let keys = [("ChatGPT 订阅", "17%"), ("OpenCode Go 订阅", "6%")].map(fn(k) { (word(k.0), word("2 个账号"), word(k.1)) })
+  let keys = [("ChatGPT 订阅", "4700 万 · $262"), ("OpenCode Go 订阅", "1100 万 · $45.10")].map(fn(k) { (word(k.0), word("2 个账号"), word(k.1)) })
   for k in keys {
     let (name, accounts, used) = k
     assert_true(name.length() == 1 && accounts.length() == 2 && used.length() == 1, msg="\{k}")

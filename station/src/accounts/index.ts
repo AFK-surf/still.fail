@@ -52,7 +52,6 @@ import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, lentCodexUsage, machineUsage } from "./quota.ts";
-import { spentSince } from "./spent.ts";
 
 export { checkConfig } from "./check.ts";
 export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
@@ -61,8 +60,6 @@ type Json = any;
 
 /// How often allowances are asked again while someone follows.
 const QUOTA_EVERY_MS = 5 * 60_000;
-/// The span a window's use is told over (`spentWeek`): the card shared of a workspace's week.
-const SPENT_WEEK_MS = 7 * 24 * 3600 * 1000;
 /// A Claude token handed to a process (or lent to another station) that cannot renew it is renewed first when it would
 /// last less than this, so it is not swapped soon after.
 const HANDED_MARGIN_MS = 3600_000;
@@ -1285,7 +1282,7 @@ export class Accounts {
         fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,
         check: checkView,
         login: this.logins.get(p.id),
-        quota: this.quotaSpent(p.id),
+        quota: this.quotas.get(p.id) ?? null,
         // Shared with the workspace's other stations, or another station's (absent: neither; old clients ignore it).
         share: this.deps.shared?.view(p) ?? null,
         // The joined workspaces whose sessions may run on it, and whether the viewer's may.
@@ -1297,22 +1294,6 @@ export class Accounts {
     // The connects it runs of the viewer's workspace (those of others are not shown there).
     const connects = new Set(config.connects.filter((c) => c.workspace === joined).map((c) => c.id));
     return views.map((v) => ({ ...v, usedBy: v.usedBy.filter((c: string) => connects.has(c)) }));
-  }
-
-  /// A profile's allowance as last read, each window with what it used over the last 7 days (`spentWeek`, percent of
-  /// its allowance: accounts/spent.ts) where how full it read then is kept.
-  private quotaSpent(id: string): ProfileQuota | null {
-    const quota = this.quotas.get(id);
-    if (quota === undefined) return null;
-    const since = this.background.now() - SPENT_WEEK_MS;
-    const readings = this.deps.store.quotaReadings(id, since);
-    return {
-      ...quota,
-      windows: quota.windows.map((w) => {
-        const read = readings.get(w.label);
-        return read === undefined ? w : { ...w, spentWeek: spentSince(read, since) };
-      }),
-    };
   }
 
   /// The workspaces the station joined, its home one left out.
