@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
-import { checkNetwork, congestionOf } from "../src/mesh/settings.ts";
+import { checkNetwork, congestionOf, relayUdpOf } from "../src/mesh/settings.ts";
 import { routes } from "../src/api/routes/network.ts";
 import type { Request } from "../src/api/request.ts";
 
@@ -36,5 +36,30 @@ test("network choices persist, validate and belong to station managers", async (
     assert.equal(changed, 2);
     assert.throws(() => config.update((raw) => { raw.network.congestion = "bad"; }), /cubic or bbr/);
     assert.equal(congestionOf(new ConfigFile(dir).raw()), "cubic");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the relays' UDP way is off until a manager turns it on, and is saved apart from the controller", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "network-settings-"));
+  try {
+    const config = new ConfigFile(dir);
+    config.check = (raw) => checkNetwork(raw.network);
+    assert.equal(relayUdpOf(config.raw()), false);
+    const route = routes({ config })[0]!;
+    const request = (role: string, body: unknown): Request => ({
+      method: "PUT", path: "/network/settings", query: [], headers: {}, lang: "zh",
+      body: Buffer.from(JSON.stringify(body)),
+      viewer: { sub: "a", email: "a@x", name: "A", role, workspace: "w", device: "d" },
+    });
+    assert.equal((await route.handle(request("member", { relayUdp: true }), [])).status, 403);
+    for (const bad of [{ relayUdp: "yes" }, { relayUdp: null }, {}]) assert.equal((await route.handle(request("owner", bad), [])).status, 400);
+    assert.equal((await route.handle(request("admin", { congestion: "bbr" }), [])).status, 200);
+    const answer = await route.handle(request("admin", { relayUdp: true }), []);
+    assert.equal(answer.status, 200);
+    assert.deepEqual(JSON.parse(String(answer.body)), { congestion: "bbr", relayUdp: true });
+    const restarted = new ConfigFile(dir);
+    assert.equal(relayUdpOf(restarted.raw()), true);
+    assert.equal(congestionOf(restarted.raw()), "bbr");
+    assert.throws(() => config.update((raw) => { raw.network.relayUdp = 1; }), /relayUdp: expected a boolean/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -8,6 +8,7 @@ export interface OperationParams {
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
   "search.setPersonal": { personal: boolean };
   "network.setCongestion": { congestion: string };
+  "network.setRelayUdp": { relayUdp: boolean };
   "context.setAfresh": { afreshWhenCold: boolean };
   "diagnostics.setLogs": { logs: boolean };
   "elevation.set": { on: boolean };
@@ -158,6 +159,7 @@ export function bindStationOperations(call: Call) {
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     networkSetCongestion: <T = unknown>(params: OperationParams["network.setCongestion"]) => call("network.setCongestion", params) as Promise<T>,
+    networkSetRelayUdp: <T = unknown>(params: OperationParams["network.setRelayUdp"]) => call("network.setRelayUdp", params) as Promise<T>,
     contextSetAfresh: <T = unknown>(params: OperationParams["context.setAfresh"]) => call("context.setAfresh", params) as Promise<T>,
     diagnosticsSetLogs: <T = unknown>(params: OperationParams["diagnostics.setLogs"]) => call("diagnostics.setLogs", params) as Promise<T>,
     elevationSet: <T = unknown>(params: OperationParams["elevation.set"]) => call("elevation.set", params) as Promise<T>,

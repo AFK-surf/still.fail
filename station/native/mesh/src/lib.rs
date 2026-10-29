@@ -56,6 +56,9 @@ pub struct Options {
     pub relay_only: Option<bool>,
     /// Advanced choice, cubic by default; read when the endpoint is created.
     pub congestion: Option<String>,
+    /// Advanced choice, off by default: ask the relays for their UDP way (iroh's `relay_udp`). A relay that offers one
+    /// carries the datagrams over UDP only, never its WebSocket; one that offers none relays them as before.
+    pub relay_udp: Option<bool>,
 }
 
 #[napi]
@@ -94,6 +97,7 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
         .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
         .home_on_every_relay()
+        .relay_udp(options.relay_udp.unwrap_or(false))
         .transport_config(
             QuicTransportConfig::builder()
                 .congestion_controller_factory(controller)

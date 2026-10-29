@@ -1987,6 +1987,8 @@ let zh : Map[String, String] = {
   "web-pages.stations.network.note": "控制此 station 的数据发送方式，重启 station 后生效。BBR 在部分连接上可能明显变慢，通常无需修改。",
   "web-pages.stations.network.what": "修改网络设置",
   "web-pages.stations.network.saved": "已保存，重启 station 后生效",
+  "web-pages.stations.network.relayUdp": "中继走 UDP",
+  "web-pages.stations.network.relayUdpNote": "打开后，此 station 与支持 UDP 的中继之间的数据只走 UDP，不再走 WebSocket（UDP 不通时，经这些中继的线路不通）；不支持 UDP 的中继照旧。重启 station 后生效。",
   "web-main.outflow.title": "数据外流",
   "web-main.outflow.lead": "这台 station 所在机器上申请或已获准读取 still.fail 数据的程序。由 workspace 的管理员在这里批准；取消授权后，它下一次读取就会被拒绝。",
   "web-main.outflow.and": "、",
