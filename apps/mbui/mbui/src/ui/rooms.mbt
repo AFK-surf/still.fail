@@ -96,7 +96,7 @@ fn Ctx::press_targets(self : Ctx) -> Array[Int] {
 /// Whether node `i` takes presses: a target with an id, not only pointed at, its click read, drawn.
 fn Ctx::takes_at(self : Ctx, i : Int) -> Bool {
   let b = self.nodes[i]
-  b.hit && !b.points && b.id != 0 && desk.takers.contains(b.id) && b.fw > 0.0 && b.fh > 0.0
+  b.hit && !b.points && b.id != 0 && (b.marks & mark_takes) != 0 && b.fw > 0.0 && b.fh > 0.0
 }
 
 ///|
@@ -117,7 +117,7 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
     // press on it is what holds it's, no target of its own; a ground is no control, Ctx::cursor's Arrow: a stage, the
     // room round a list's rows, a message's words a hold picks in; a column's edge is pressed as drawn, as_drawn)
     if self.takes_at(i) &&
-      desk.cursors.get(self.nodes[i].id) != Some(Cursor::Arrow.code()) &&
+      marked_cursor(self.nodes[i].marks) != Some(Cursor::Arrow.code()) &&
       !as_drawn(self.nodes[i].id) {
       takes[i] = true
       if whole[i] {

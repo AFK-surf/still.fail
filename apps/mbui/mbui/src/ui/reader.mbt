@@ -443,6 +443,7 @@ pub fn Ctx::pager(
   let i = self.alloc(kind_box)
   let n = self.nodes[i]
   n.id = id
+  self.id_built(i)
   n.hit = true
   n.w = w
   n.h = h

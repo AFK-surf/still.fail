@@ -867,6 +867,7 @@ pub fn Ctx::editor(
   let (_, _, own_lh) = font_metrics(font_size, 400)
   let lh = if line > 0.0 { line } else { own_lh }
   n.id = id
+  self.id_built(i)
   n.hit = true
   n.w = w
   n.font_size = font_size
