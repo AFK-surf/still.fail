@@ -1,7 +1,7 @@
 # As things-side.drive: a tile pointed at (a shade fainter).
 timeout 20000
-until 媒体 6
+until 媒体 4
 wait 1200
-hover img:home-after.png
+hover img:after.png
 wait 600
 exit

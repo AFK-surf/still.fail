@@ -1955,13 +1955,11 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
   let media = [
     said(thing("9/work/s-c1/after.png", 9, "Claude", "10 分钟前", { "file": file("after.png", 1170, 2532, 702000) }), "列表高度改前改后"),
     said(thing("9/work/s-c1/before.png", 9, "Claude", "10 分钟前", { "file": file("before.png", 1170, 2532, 698000) }), "列表高度改前改后"),
-    said(thing("5/work/s-c1/home-after.png", 5, "Claude", "1 小时前", { "file": file("home-after.png", 1170, 2532, 812000) }), "首页按天分组：电脑上和手机上各截了一张"),
-    said(thing("5/work/s-c1/compare.png", 5, "Claude", "1 小时前", { "file": file("compare.png", 1600, 900, 402000) }), "首页按天分组：电脑上和手机上各截了一张"),
     said(thing("4/work/s-c1/演示录屏.mp4", 4, "Claude", "2 小时前", { "file": film_file("演示录屏.mp4", 1920, 1080, 3200000, 12000, 360) }), "录了一段滑动"),
     thing("3/work/s-c1/插画参考.png", 3, "Ana", "昨天 22:40", { "file": file("插画参考.png", 1200, 800, 245760) }),
   ]
   // (when each message was said, the day's heading and its time)
-  let when : Map[Int, (String, String)] = { 9: ("今天", "19:20"), 5: ("今天", "18:12"), 4: ("今天", "17:05"), 3: ("昨天", "22:40") }
+  let when : Map[Int, (String, String)] = { 9: ("今天", "19:20"), 4: ("今天", "17:05"), 3: ("昨天", "22:40") }
   let files = [
     thing("5/work/s-c1/build.log", 5, "Claude", "1 小时前", { "file": file("build.log", 0, 0, 18432) }),
     thing("3/work/s-c1/性能报告.pdf", 3, "Claude", "2 小时前", { "file": file("性能报告.pdf", 0, 0, 1048576) }),
