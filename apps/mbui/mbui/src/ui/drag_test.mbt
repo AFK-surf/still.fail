@@ -402,3 +402,61 @@ test "drag_on hold: a mouse drags it at once" {
   assert_true(moved.val > 80.0)
   assert_eq(t.haptics(), [])
 }
+
+///|
+/// A drag area over the whole window (a remote screen's stage), a panel over it that stops the wheel (a popover's: its
+/// box laid in a layer) with a button in it; how often the area was pressed down, tapped, and the button clicked.
+fn panel_over_area(downs : Ref[Int], taps : Ref[Int], clicks : Ref[Int]) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      let area = c.id("stage")
+      let button = c.id("button")
+      match c.drag_of(area) {
+        Some(d) => {
+          if d.down {
+            downs.val += 1
+          }
+          if d.take_tap() {
+            taps.val += 1
+          }
+        }
+        None => ()
+      }
+      if c.clicked(button) {
+        clicks.val += 1
+      }
+      c.drag_area(area, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {
+        c.layer(fn() {
+          let panel = c.box(id=c.id("panel"), w=Px(100.0), h=Px(100.0), fn() {
+            c.box(id=button, w=Px(60.0), h=Px(40.0), fn() { c.text("原画", size=10.0) |> ignore }) |> ignore
+          })
+          c.stop_wheel(panel)
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+}
+
+///|
+test "a press on a panel that stops the wheel is the panel's: the drag area under it is not pressed, nor tapped" {
+  let downs = Ref::new(0)
+  let taps = Ref::new(0)
+  let clicks = Ref::new(0)
+  let t = panel_over_area(downs, taps, clicks)
+  t.draw()
+  t.press_at(20.0, 20.0)
+  t.draw()
+  t.release(20.0, 20.0)
+  t.draw()
+  assert_eq(clicks.val, 1)
+  assert_eq(downs.val, 0)
+  assert_eq(taps.val, 0)
+  // beside the panel, the area is pressed as ever
+  t.tap(200.0, 200.0)
+  t.draw()
+  assert_eq(taps.val, 1)
+}

@@ -25,6 +25,11 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
       !out.contains(ids[k]) &&
       claim_in_shape(c, ids[k], x, y) {
       out.push(ids[k])
+      // what the press lands on stops it (a modal's ground, a popover's panel: Ctx::stop_wheel): what lies under it is
+      // not pressed, as the wheel does not reach it (2026-10-29 用户: 控制中心 点画质，点击落到了下面的远程桌面上)
+      if stops_press(c, ids[k]) {
+        break
+      }
     }
     k = k - 1
   }
@@ -40,6 +45,17 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
     }
   }
   out
+}
+
+///|
+/// Whether `id`, laid among what scrolls (scene.mbt), is there only to stop what is under it: a modal's ground, a box
+/// that stops the wheel (Ctx::stop_wheel), nothing of its own that scrolls or is dragged.
+fn stops_press(c : Ctx, id : Int) -> Bool {
+  !c.lists.contains(id) &&
+  !pagers.contains(id) &&
+  !drags.contains(id) &&
+  !captures.contains(id) &&
+  !sideways.contains(id)
 }
 
 ///|
