@@ -501,8 +501,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_text_menu()
   c.sync_edit_can()
   match frame_hook.val {
-    Some(f) => f()
-    None => ()
+    Some(f) if !looks_rebuilt.val => f()
+    _ => ()
   }
   paint_phase.val = 2
 }
@@ -1326,7 +1326,13 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
     2 => c.back_gesture(4, 0.0, t)
     _ => c.back_gesture(3, 0.0, t)
   }
-  h_request_frame()
+  // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; else what began,
+  // ended or was called off, come from outside what is a signal yet)
+  if kind == 1 {
+    h_frame_owed()
+  } else {
+    h_request_frame()
+  }
 }
 
 ///|
