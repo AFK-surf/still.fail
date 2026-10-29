@@ -2,8 +2,19 @@
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
 // decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
 // once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault
-// item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). What closes does so in its
-// turn among what changes the list's height (sfbase's list_turns.mbt).
+// item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). Answered on screen, a card
+// stays as it is, none of it pressed any more, and becomes its line once out of sight (sfbase's list_turns.mbt
+// Turns::in_turn): the list's height changes only for what comes.
+
+///|
+/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the frame before left
+/// it (Reading::sees); never out of a chat's list.
+fn seen_in(c : @ui.Ctx, here : MessageHere, seq : Double?) -> Bool {
+  match here.list {
+    Some(l) => reading_of(l.rk).sees(c.frame_number(), seq)
+    None => false
+  }
+}
 
 ///|
 /// Under post `m` of chat `here` (thread `thread`; None while nothing can be sent there), what it asks; `turns`: its
@@ -59,18 +70,16 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     None => m.options
   }
   let key = here.station + "/" + m.ts
-  // answered, what is under it closes in its turn, its options and 忽略 together (after the answer has come in): they
-  // go (200 ms, fading to 90%, Decisions.css.ts), their room closing on the rows' spring a little late, how it went
-  // fading in after them in their place
+  // answered, what is under it stays as it is while it is on screen, the one picked marked, none pressed, 忽略 faded
+  // in its room; out of sight its options and 忽略 are gone, how it went in their place, at once
   let open = match turns {
-    Some(tu) => tu.in_turn(c, "ask/" + m.ts, !resolved, close_turn_ms)
+    Some(tu) => tu.in_turn(c, "ask/" + m.ts, !resolved, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
     None => !resolved
   }
-  let asked_at = match turns {
-    Some(tu) => tu.started_at("ask/" + m.ts)
-    None => -1.0
+  let start_at = match turns {
+    Some(tu) => tu.start("ask/" + m.ts)
+    None => None
   }
-  let start_at = if asked_at >= 0.0 { Some(asked_at) } else { None }
   let thread = if here.view.offline || here.view.archived { None } else { here.view.thread }
   c.box(style=decision_box, fn() {
     under_post(
@@ -82,8 +91,18 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       start_at?,
       fn() {
         c.box(style=decision_box, fn() {
+          // (who decides; answered while it shows, how it went in that line's place, the one fading out, then the
+          // other in: chat_rows.mbt said_in_place)
           match m.card {
-            Some({ assignee_text: Some(a), .. }) => c.text(a, style=settled_line) |> ignore
+            Some({ assignee_text: Some(a), .. }) => {
+              let went = match m.decision {
+                Some({ text: Some(w), .. }) if resolved => Some(w)
+                _ => None
+              }
+              let (was, now) = said_in_place(c, "who/" + key, went is Some(_))
+              let i = c.text(if was is Some(_) { a } else { went.unwrap_or(a) }, style=settled_line)
+              c.look(i, was.unwrap_or(now))
+            }
             _ => ()
           }
           match m.card {
@@ -115,7 +134,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         |> ignore
       },
     )
-    ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at~)
+    ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at=start_at)
     // (in their place once they close: in the same turn)
     let outcome = match m.decision {
       Some({ text: Some(words), .. }) if resolved && !open => Some(words)
@@ -174,10 +193,10 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// An agent's request about a vault item, in place of its post `m`'s words (VaultAsk.tsx VaultAsk): what is asked as a
 /// card, as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer
 /// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
-/// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided, the card goes
-/// in its turn among what changes the list's height, as a post's answered options do (message_decision: fading to 90%,
-/// its room closing on the rows' spring a little late), how it went fading in after it in its place. Where nothing is
-/// answered (no core: a letter's, the 奏 page's, which answers it under the post), the card without its answer.
+/// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided on screen, the
+/// card stays as it is, the answer given marked and none pressed any more, and is that line once out of sight, as a
+/// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's, the
+/// 奏 page's, which answers it under the post), the card without its answer.
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
@@ -194,7 +213,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   // nothing moving)
   let room = if ask.typed && ask.save_kind == "file" { @sf.ask_card_room_most } else { @sf.ask_card_room }
   let asking = fn() {
-    c.box(style=room, fn() {
+    c.box(style=room.then(ask_card_under_head), fn() {
       match here.core {
         Some(core) =>
           @settings.vault_card(
@@ -204,6 +223,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
             card.vault,
             asked,
             @settings.card_answer(ask.answer, ask.lasts, mine_to(here, card.assignee), who=card.assignee_text),
+            ended=if decided { Some((ask.status, ask.scope)) } else { None },
           )
         None => @settings.vault_ask_words(c, asked)
       }
@@ -214,9 +234,8 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "vault/" + m.ts, !decided, close_turn_ms)
-      let at = l.turns.started_at("vault/" + m.ts)
-      let start_at = if at >= 0.0 { Some(at) } else { None }
+      let open = l.turns.in_turn(c, "vault/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let start_at = l.turns.start("vault/" + m.ts)
       under_post(
         c,
         "vault-card/" + key,
@@ -248,12 +267,13 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 
 ///|
 /// An agent's request for its person's phone in place of its post's words (docs/adb-share.md): its card while it waits
-/// (answered with `adb.decide` on the chat's station), then a line saying how it went.
+/// (answered with `adb.decide` on the chat's station), then a line saying how it went: decided on screen, the card
+/// stays, the answer given marked, till it is out of sight (vault_ask_card's).
 fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : PhoneAsk) -> Unit {
   let decided = ask.status != ""
   let asking = fn() {
-    c.box(style=@sf.ask_card_room, fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text)
+    c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None })
     })
     |> ignore
   }
@@ -261,9 +281,8 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "phone/" + m.ts, !decided, close_turn_ms)
-      let at = l.turns.started_at("phone/" + m.ts)
-      let start_at = if at >= 0.0 { Some(at) } else { None }
+      let open = l.turns.in_turn(c, "phone/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let start_at = l.turns.start("phone/" + m.ts)
       under_post(
         c,
         "phone-card/" + key,
@@ -351,7 +370,7 @@ pub fn decision_options(
         "options/" + m.ts,
         options.map(fn(o) { (o.label, o.detail, o.recommended) }),
         !resolved,
-        busy,
+        if resolved { None } else { busy },
         chosen~,
         wide=true,
         room~,
@@ -377,9 +396,10 @@ pub fn decision_options(
 
 ///|
 /// 忽略 under what asks what no one has decided, post `seq` of the chat (`asked`: the core's, on the post or the chat's
-/// `stateAsk`): the viewer lets it go (`decision.dismiss`), gone at once and back if that fails. It goes as the archive
-/// buttons go (280 ms, ArchiveEase: fading, to 85% from its top left, its room closing), in its turn among what changes
-/// the list's height, and with the options once the card is answered (`asking` false, from `asked_at`).
+/// `stateAsk`; `state`: shown where the chat stands, not under the post): the viewer lets it go (`decision.dismiss`),
+/// let go at once and back if that fails. Let go, or the card answered, on screen it fades where it is (the archive
+/// buttons' 280 ms, ArchiveEase), its room kept; out of sight it is gone, its room with it (Turns::in_turn), with the
+/// options once the card is answered (`asking` false, from `asked_at`).
 fn ask_dismiss(
   c : @ui.Ctx,
   src : Source,
@@ -388,8 +408,9 @@ fn ask_dismiss(
   asked : Bool,
   resolved : Bool,
   asking? : Bool = true,
-  asked_at? : Double = -1.0,
+  asked_at? : Double? = None,
   at_end? : Bool = false,
+  state? : Bool = false,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
   if !asked && !resolved {
@@ -399,14 +420,18 @@ fn ask_dismiss(
   // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
   // (at the end of a card, no motion of its own: the card's, as the core says it let go)
   let (mine, own_at) = match here.list {
-    Some(l) if !at_end =>
-      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms), l.turns.started_at("dismiss/" + k))
-    _ => (!dismissed.contains(k), -1.0)
+    Some(l) if !at_end => {
+      let seen = seen_in(c, here, if state { None } else { Some(seq) })
+      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
+    }
+    _ => (!dismissed.contains(k), None)
   }
+  // (its room while it has one; pressed while it is asked, not let go nor answered)
   let shown = asking && mine
+  let live = shown && !resolved && !dismissed.contains(k)
   let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + k)
-  if shown && c.clicked(id) {
+  if live && c.clicked(id) {
     dismissed[k] = true
     c.tell("ask-dismiss/" + k, fn() {
       act(
@@ -419,7 +444,7 @@ fn ask_dismiss(
       )
     })
   }
-  let hot = shown && c.hovered(id)
+  let hot = live && c.hovered(id)
   // (at the end of the card: there until the card goes, as the core says it let go; pressed once)
   if at_end {
     if asking {
@@ -427,11 +452,11 @@ fn ask_dismiss(
       // (on the card row's lines, level with its first line and the bell: ask_line_words; a press reaches it from
       // round it, press_reach)
       let look = @sf.theme().chat_list
-      let b = c.box(id=if shown { id } else { 0 }, fn() {
+      let b = c.box(id=if live { id } else { 0 }, fn() {
         let said = (if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)
         c.text(words, style=@sf.ask_line_words(said)) |> ignore
       })
-      if shown {
+      if live {
         c.semantics(b, Button, id~, label=words)
       }
     }
@@ -442,9 +467,11 @@ fn ask_dismiss(
     "dismiss/" + k,
     shown,
     exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
-    start_at?=if at >= 0.0 { Some(at) } else { None },
+    start_at?=at,
     fn() {
-      c.box(style=dismiss_room, id=if shown { id } else { 0 }, fn() {
+      // (let go or answered on screen: faded where it is, its room kept till it is out of sight)
+      let look = @motion.presence(c, "dismiss-live/" + k, live, enter=@motion.trans(fade=0.0, spec=archive_tween))
+      let b = c.box(style=dismiss_room, id=if live { id } else { 0 }, fn() {
         c.rich([@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot)], style=if hot {
           dismiss_words_hot
         } else {
@@ -452,7 +479,8 @@ fn ask_dismiss(
         })
         |> ignore
       })
-      |> ignore
+      c.look(b, look.unwrap_or(@ui.look(alpha=0.0)))
+      @motion.leaving(c, b, live)
     },
   )
 }
@@ -498,3 +526,9 @@ let dismiss_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 ///|
 // kept across runs: a value (no field of it changes)
 let dismiss_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
+
+///|
+/// An agent's request as its card in place of its post's words: a little under the post's head, as a card under a
+/// post's words is, not on it as a line of words is (over @sf.ask_card_room or its room for a file).
+// kept across runs: a value (no field of it changes)
+let ask_card_under_head : @ui.Style = @ui.css("mt=S2")

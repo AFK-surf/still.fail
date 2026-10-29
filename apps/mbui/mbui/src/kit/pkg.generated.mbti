@@ -95,6 +95,8 @@ pub let form_words : FormWords
 
 pub let ground_in : @motion.Trans
 
+pub let ground_out : @motion.Trans
+
 pub fn group_item_look(@ui.Ctx, ToggleState) -> Unit
 
 pub fn group_look(@ui.Ctx, GroupState, () -> Unit) -> Unit

@@ -211,14 +211,73 @@ pub fn vault_ask(
 
 ///|
 /// Request `request` in workspace `ws` as its card where it is asked (a chat's, the 奏 page's): what is asked, and its
-/// answer at the foot as the card says it (`answer`: card_answer), whole with its message.
-pub fn vault_card(c : @ui.Ctx, core : Core, ws : String, request : String, ask : Asked, answer : Answer) -> Unit {
+/// answer at the foot as the card says it (`answer`: card_answer), whole with its message. `ended`: how it went
+/// (granted, denied, else ended; `scope`), once answered while the card shows: said in its answer's place
+/// (answered_in_place).
+pub fn vault_card(
+  c : @ui.Ctx,
+  core : Core,
+  ws : String,
+  request : String,
+  ask : Asked,
+  answer : Answer,
+  ended? : (String, String)? = None,
+) -> Unit {
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
-    vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), foot=answer is (Approve(_) | SetUp))
+    answered_in_place(c, "vault/" + request, ended.map(fn(e) { (e.0 == "granted", vault_outcome_words(ask, e.0, e.1)) }), fn() {
+      vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), foot=answer is (Approve(_) | SetUp))
+    })
   })
   |> ignore
 }
+
+///|
+/// A card's answer at its foot (`answer`), answered while the card shows (`ended`: whether it was granted, and how it
+/// went in words): its answer fades out where it is (answered_fade_ms, Leave), only drawn, then how it went fades in
+/// after it over the room it leaves, its dot and its words in the middle of it. The answer stays laid out (unseen):
+/// the card keeps its size to the point, and the list it is in changes its height only once it is out of sight
+/// (sfbase's list_turns.mbt Turns::in_turn).
+pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, String)?, answer : () -> Unit) -> Unit {
+  let was = @motion.presence(
+    c,
+    "answered-was/" + key,
+    ended is None,
+    exit=@motion.trans(fade=0.0, spec=@motion.tween(answered_fade_ms, ease=Leave)),
+  )
+  c.box(style=answered_whole, fn() {
+    let a = c.box(style=answered_room, answer)
+    match ended {
+      None => ()
+      Some((granted, words)) => {
+        c.look(a, was.unwrap_or(@ui.look(alpha=0.0)))
+        c.draw_only(a)
+        if was is None {
+          let now = @motion.presence(
+            c,
+            "answered-now/" + key,
+            true,
+            enter=@motion.trans(fade=0.0, spec=@motion.tween(answered_fade_ms, ease=Out)),
+            initial=true,
+          )
+          c.layer(fn() {
+            let o = c.box(style=answered_over, fn() {
+              c.box(style=if granted { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
+              c.text(words, style=ask_ended_words) |> ignore
+            })
+            c.look(o, now.unwrap_or(@ui.look()))
+          })
+          |> ignore
+        }
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// How long a card's answer takes to fade out once answered where it shows, and how it went to fade in after it.
+pub let answered_fade_ms : Double = 200.0
 
 ///|
 /// What is asked as its card alone, with no answer at its foot (AskCard without children: where nothing is answered).
@@ -295,19 +354,7 @@ pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
 /// (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
 pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true) -> Unit {
-  let save = ask.save_kind != ""
-  let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
-  let words = match status {
-    "granted" if save =>
-      fill("android-settings.vault.ask.kept", [
-        ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
-        ("name", ask.name),
-      ])
-    "granted" => fill("android-settings.vault.ask.granted", [("name", ask.name), ("scope", tr("android-settings.vault.scope." + scope))])
-    "denied" if save => fill("android-settings.vault.ask.notKept", [("name", ask.name)])
-    "denied" => fill("android-settings.vault.ask.denied", [("name", ask.name)])
-    _ => tr("android-settings.vault.ask.expired")
-  }
+  let words = vault_outcome_words(ask, status, scope)
   // the dot in the middle of the words' first line, not of all of them (on two lines it stays by the first); under the
   // message's picture, as wide as it, laid over the line as the picture is over its head (message.mbt: inline at the
   // head's start, the words past it where the name is; else out in the margin, the words at the row's start)
@@ -323,6 +370,24 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, 
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// How a request ended, in words (vault_outcome's).
+pub fn vault_outcome_words(ask : Asked, status : String, scope : String) -> String {
+  let save = ask.save_kind != ""
+  let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
+  match status {
+    "granted" if save =>
+      fill("android-settings.vault.ask.kept", [
+        ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
+        ("name", ask.name),
+      ])
+    "granted" => fill("android-settings.vault.ask.granted", [("name", ask.name), ("scope", tr("android-settings.vault.scope." + scope))])
+    "denied" if save => fill("android-settings.vault.ask.notKept", [("name", ask.name)])
+    "denied" => fill("android-settings.vault.ask.denied", [("name", ask.name)])
+    _ => tr("android-settings.vault.ask.expired")
+  }
 }
 
 ///|
@@ -647,6 +712,22 @@ let ask_dot_line : @ui.Style = @ui.css("row w=S4_5 h=S5 align=ACenter justify=JC
 /// The same out in the margin, where the picture is then (message_avatar_out).
 // kept across runs: a value (no field of it changes)
 let ask_dot_line_out : @ui.Style = ask_dot_line.then(@ui.style(ml=@sf.message_avatar_out))
+
+///|
+/// A card's answer's room at its foot (answered_in_place): the card's width, what is in it as far apart as in the card
+/// (@sf.card's 14).
+// kept across runs: a value (no field of it changes)
+let answered_room : @ui.Style = @ui.css("w=Full gap=S3_5")
+
+///|
+/// What holds a card's answer and how it went over it (answered_in_place): the card's width.
+// kept across runs: a value (no field of it changes)
+let answered_whole : @ui.Style = @ui.css("w=Full")
+
+///|
+/// How it went over a card's answer's room: its dot and its words on a line in the middle of the room's height.
+// kept across runs: a value (no field of it changes)
+let answered_over : @ui.Style = @ui.css("row w=Full h=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

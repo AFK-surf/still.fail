@@ -266,6 +266,8 @@ pub fn post_take() -> Int32
 
 pub fn present(FixedArray[Double], Int32, Double, Double, Double) -> Unit
 
+pub fn push_service() -> String
+
 pub fn push_token() -> String
 
 pub fn reduce_motion() -> Bool

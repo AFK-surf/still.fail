@@ -171,10 +171,14 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
   first tenth: beside every other send it read as a jump (the user, 2026-10-27: 「非 new chat 的发消息比 new chat 流畅很多」).
   The composer going down to its chat's foot as they set out goes on their way too, not a page's 340 ms ease-out, which
   went a fifth of 200 in its first frame, ahead of words still setting off (the user: 「composer 好像还是会一帧动老远」).
-- A card answered from here: the web's order (Decisions.tsx DecisionOptions, listQueue.ts reserveRow). Picked, none is
-  pressed any more; the answer's row comes in first, in a turn kept for it as it is picked (list_turns.mbt `keep_turn`),
-  and only once it is in do the options close, in the next turn. Closing them with the answer (#2222) read as the list
-  jumping about (the user, 2026-10-27: 「决策点完先 disable，决策消息上屏动效播完，然后决策再收起来」).
+- A card answered from here (and anything answered or let go under a post: 忽略, a vault's or a phone's request, the
+  chat's need at its end): on screen it moves nothing. Picked, none is pressed any more, the one picked as it was,
+  the rest faded, the line over them saying who decides saying how it went in its place; the answer's row comes in, in a turn kept for it as it is picked (list_turns.mbt `keep_turn`), the
+  one change of the list's height. The card does not close: it becomes how it went only out of sight (scrolled away
+  and back, the chat left and opened again), at once (`Turns::in_turn`'s `seen`, `Reading::sees`); 忽略 fades where it
+  is, its room kept; a card with buttons says how it went in its buttons' room, as high as they were, and the chat's need at its end says it was let go, each fading out, then in (`said_in_place`, settings' `answered_in_place`). Closing the options after the answer (#2245) still moved the list three or four times (the
+  user, 2026-10-29: 「后续动效有点太多了而且全是消息列表高度变化」「统一设计一下」); closing them with it (#2222) read
+  as the list jumping about.
 - The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
   is the composer moving with its page, not the page's layout changing.
 - Words sent keep the shape they were typed in, so that sending them only moves them (Android's SendText.kt, the

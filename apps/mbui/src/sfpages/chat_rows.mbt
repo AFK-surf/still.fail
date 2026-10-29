@@ -39,8 +39,8 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end; let go (the core
-  // says so at once), the card goes as a post's answered options do (fading to 90%, its room closing on the rows'
-  // spring) and the line saying it was let go fades in after it in its place (vault_ask_card's)
+  // says so at once), on screen the card stays, saying so, 忽略 no longer pressed, and out of sight it is the line
+  // saying it was let go, as a post's answered options are (Turns::in_turn)
   let asking = match here.view.state_ask {
     Some(seq) if turn => Some(seq)
     _ => None
@@ -48,9 +48,8 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   match (here.list, here.view.thread) {
     (Some(l), Some(thread)) if asking is Some(_) || lead == "dismissed" => {
       let key = here.station + "/" + thread.to_int().to_string()
-      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_), close_turn_ms)
-      let at = l.turns.started_at("need/" + key)
-      let start_at = if at >= 0.0 { Some(at) } else { None }
+      let open = l.turns.in_turn(c, "need/" + key, asking is Some(_), close_turn_ms, seen=seen_in(c, here, None))
+      let start_at = l.turns.start("need/" + key)
       under_post(
         c,
         "need-card/" + key,
@@ -96,19 +95,24 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
     _ => c.text(words, style=said) |> ignore
   }
   match here.view.state_ask {
-    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false) }) |> ignore
+    Some(seq) => c.box(style=decision_box, fn() { ask_dismiss(c, src, here, seq, true, false, state=true) }) |> ignore
     None => ()
   }
 }
 
 ///|
 /// What the chat needs of the viewer as a card (chat_state): the bell and its words in the ink, 忽略 at its end (under
-/// them where a native narrow chat has little room); `seq` the post that asks, None as the card goes (its 忽略 drawn,
-/// nothing left to let go).
+/// them where a native narrow chat has little room); `seq` the post that asks, None once let go while it shows: in its
+/// place how it went (`words`, 已忽略：…), quiet, where the bell's ink began (no bell: nothing is asked any more), as
+/// far in as 忽略 is from the end, 忽略 faded
+/// where it was, nothing left to press. What it said fades out, then how it went fades in after it (said_in_place): the card's room never changes.
 fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest : String, seq : Double?) -> Unit {
   let look = @sf.theme().chat_list
-  let said = @sf.ask_line_words(look.state_turn.then(chat_state_wraps))
   let stacked = @sf.native_on() && c.width <= chat_narrow_w
+  let live = seq is Some(_)
+  let (was, now) = said_in_place(c, "need/" + here.station + "/" + here.session, !live)
+  let asking = was is Some(_)
+  let said = @sf.ask_line_words((if asking { look.state_turn } else { look.state_quiet }).then(chat_state_wraps))
   let dismiss = fn() {
     match seq {
       Some(seq) => ask_dismiss(c, src, here, seq, true, false, at_end=true)
@@ -119,24 +123,54 @@ fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest
   }
   // (an option row's ground and room, @sf.ask_line_card: its corner and its sides an option's)
   @sf.ask_line_card(c, column=stacked, fn() {
-    c.box(style=need_card_words, label=words, fn() {
+    let w = c.box(style=if asking { need_card_words } else { need_card_words.then(@sf.ask_line_start(state_icon)) }, label=words, fn() {
       // (the bell where an option's number is, in the middle of its disc: concentric with the row's corner as it is)
-      c.box(style=@sf.ask_line_mark(), fn() { lead_icon(c, "need", @sf.theme().p.text, centred=true) }) |> ignore
-      if rest != "" {
-        c.text(rest, style=said) |> ignore
+      if asking {
+        c.box(style=@sf.ask_line_mark(), fn() { lead_icon(c, "need", @sf.theme().p.text, centred=true) }) |> ignore
+      }
+      let line = if asking { rest } else { words }
+      if line != "" {
+        c.text(line, style=said) |> ignore
       }
     })
-    |> ignore
+    c.look(w, if asking { was.unwrap() } else { now })
     // (its words' end as far in from the row's end as the bell's from its start: the bell's room in its disc's column
-    // mirrored, so neither end's thing lies nearer its round end than the other's)
+    // mirrored, so neither end's thing lies nearer its round end than the other's; let go, 忽略 faded where it was)
     let end_room = @sf.ask_line_end(state_icon)
-    if stacked {
-      c.box(style=need_card_actions.then(end_room), dismiss) |> ignore
+    let e = if stacked {
+      c.box(style=need_card_actions.then(end_room), dismiss)
     } else {
-      c.box(style=end_room, dismiss) |> ignore
+      c.box(style=end_room, dismiss)
     }
+    c.look(e, was.unwrap_or(@ui.look(alpha=0.0)))
+    @motion.leaving(c, e, live)
   })
   |> ignore
+}
+
+///|
+/// A line under or in a card saying something else once it is answered while it shows (`answered`), in the same room:
+/// what it said fading out (options_out_ms, Leave), then what it says now fading in after it (as long, Out); nothing
+/// moves. Its looks: what it said while that shows (None once gone), and what it says now.
+fn said_in_place(c : @ui.Ctx, key : String, answered : Bool) -> (@ui.Look?, @ui.Look) {
+  let was = @motion.presence(
+    c,
+    "said-was/" + key,
+    !answered,
+    exit=@motion.trans(fade=0.0, spec=@motion.tween(options_out_ms, ease=Leave)),
+  )
+  let now = match was {
+    Some(_) => @ui.look(alpha=0.0)
+    None =>
+      @motion.presence(
+        c,
+        "said-now/" + key,
+        true,
+        enter=@motion.trans(fade=0.0, spec=@motion.tween(options_out_ms, ease=Out)),
+        initial=true,
+      ).unwrap_or(@ui.look())
+  }
+  (was, now)
 }
 
 ///|

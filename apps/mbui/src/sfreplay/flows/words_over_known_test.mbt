@@ -9,11 +9,14 @@ fn init {
     ("src/sfapp/tape.mbt", 1),
     ("src/sfreplay/flows/answer_option_test.mbt", 3),
     ("src/sfreplay/flows/bar_going_down_test.mbt", 2),
-    ("src/sfreplay/flows/card_motion_test.mbt", 4),
+    // (recorded again for #2642, cards answered on screen staying: its run's own pairs, none of them the cards'; see
+    // that PR: the failure line's 「·上报」 5, the activity's clock 4, an answer out of the avatar across the activity
+    // 2, words sent flying 2, the run's own 出错：意外停止 2, the station's line rising 1)
+    ("src/sfreplay/flows/card_motion_test.mbt", 16),
     ("src/sfreplay/flows/chat_audio_test.mbt", 1),
     ("src/sfreplay/flows/chinese_enter_test.mbt", 2),
     ("src/sfreplay/flows/close_option_test.mbt", 1),
-    ("src/sfreplay/flows/dismiss_test.mbt", 2),
+    ("src/sfreplay/flows/dismiss_test.mbt", 1),
     ("src/sfreplay/flows/glass_test.mbt", 3),
     ("src/sfreplay/flows/history_test.mbt", 3),
     ("src/sfreplay/flows/markdown_test.mbt", 1),

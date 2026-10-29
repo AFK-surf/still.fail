@@ -1,8 +1,7 @@
-# The made-up chat's card answered from it (Decisions.kt DecisionUnder): the options go (to 90%, fading, their room
-# closing 100 ms late) and 你 选择了「一起换」 comes in their place (decide.mbt under_post).
+# The made-up chat's card answered from it: on screen the options stay as they are, the one picked marked, none pressed
+# any more, 忽略 fading where it is; your answer comes in under them (decision.mbt message_decision, Turns::in_turn).
 timeout 20000
 until =一起换
 wait 800
 tap =一起换
-until 选择了「一起换」
-wait 1200
+wait 3000

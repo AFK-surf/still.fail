@@ -27,6 +27,10 @@ pub fn adb_texts() -> Json
 
 pub let all_places : Array[String]
 
+pub let answered_fade_ms : Double
+
+pub fn answered_in_place(@ui.Ctx, String, (Bool, String)?, () -> Unit) -> Unit
+
 pub fn appearance(Json?) -> String
 
 pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, secret? : Bool) -> Unit
@@ -218,9 +222,11 @@ pub fn panels_frame(Core) -> Unit
 
 pub fn pending_login(Core, String, String) -> Json?
 
-pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?) -> Unit
+pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?) -> Unit
 
 pub fn phone_outcome(@ui.Ctx, String, String, String) -> Unit
+
+pub fn phone_outcome_words(String, String, String) -> String
 
 pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
 
@@ -302,7 +308,7 @@ pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, ext
 
 pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
 
-pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer) -> Unit
+pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer, ended? : (String, String)?) -> Unit
 
 pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, extra? : (() -> Unit)?, foot? : Bool) -> Unit
 
@@ -313,6 +319,8 @@ pub let vault_kinds : Array[String]
 pub let vault_lasts : Array[String]
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool) -> Unit
+
+pub fn vault_outcome_words(Asked, String, String) -> String
 
 pub fn vault_problem(String, Map[String, String], Bool, String) -> String
 

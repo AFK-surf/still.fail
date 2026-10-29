@@ -332,6 +332,7 @@ pub using @sfbase {
   dismiss_turn_ms,
   turn_calm_ms,
   turn_most_ms,
+  unseen_at,
   under_turn,
   absolute_times,
   message_runs,

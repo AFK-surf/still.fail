@@ -11,17 +11,17 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
       tu.step(c, -1.0)
       match phase.val {
         0 => {
-          ignore(tu.in_turn(c, "k", true, close_turn_ms))
+          ignore(tu.in_turn(c, "k", false, close_turn_ms, seen=true))
           tu.admit(c, "a", row_turn_ms)
           phase.val = 1
         }
         1 => {
-          // (asked after the row: its turn after the row's)
-          ignore(tu.in_turn(c, "k", false, close_turn_ms))
+          // (something coming under a post on screen, asked after the row: its turn after the row's)
+          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
           tu.admit(c, "b", row_turn_ms)
           phase.val = 2
         }
-        _ => ignore(tu.in_turn(c, "k", false, close_turn_ms))
+        _ => ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
       }
       c.box(fn() {  }) |> ignore
     },
@@ -35,17 +35,52 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
   assert_true(a_at >= 0.0)
   assert_false(tu.waiting.contains("a"))
   // the change and the next row wait for the row's turn
-  assert_eq(tu.shown.get("k"), Some(true))
+  assert_eq(tu.shown.get("k"), Some(false))
   assert_true(tu.waiting.contains("b"))
   // (each turn holds the next two frames past its motion: turn_calm_ms)
   t.run_for(row_turn_ms + turn_calm_ms)
-  assert_eq(tu.shown.get("k"), Some(false))
+  assert_eq(tu.shown.get("k"), Some(true))
   assert_eq(tu.started_at("k"), a_at + row_turn_ms + turn_calm_ms)
   assert_true(tu.waiting.contains("b"))
-  // the close holds the next row for its 520 ms
+  // the change holds the next row for its 520 ms
   t.run_for(close_turn_ms + turn_calm_ms)
   assert_false(tu.waiting.contains("b"))
   assert_true((tu.started_at("b") - (a_at + row_turn_ms + close_turn_ms + 2.0 * turn_calm_ms)).abs() < 0.001)
+  t.assert_idle()
+}
+
+///|
+test "turns: what goes from under a post on screen stays, its room with it, and goes at once once out of sight" {
+  reset()
+  let tu = turns_of("test")
+  let seen = Ref::new(true)
+  let shown = Ref::new(true)
+  let first = Ref::new(true)
+  let t = @ui.Tester::new(
+    fn(c) {
+      tu.step(c, -1.0)
+      shown.val = tu.in_turn(c, "k", first.val, close_turn_ms, seen=seen.val)
+      first.val = false
+      c.box(fn() {  }) |> ignore
+    },
+    w=100.0,
+    h=100.0,
+    platform=2,
+  )
+  t.draw()
+  t.draw()
+  // on screen: still shown, nothing asked, however long
+  assert_true(shown.val)
+  assert_true(tu.asks.is_empty())
+  t.run_for(turn_most_ms)
+  assert_true(shown.val)
+  assert_eq(tu.start("k"), None)
+  // out of sight: gone at once, its motion over long before
+  seen.val = false
+  t.draw()
+  assert_false(shown.val)
+  assert_eq(tu.start("k"), Some(unseen_at))
+  assert_true(tu.asks.is_empty())
   t.assert_idle()
 }
 
@@ -82,7 +117,7 @@ test "turns: the next waits for the list at rest (its glide's declared end), not
 }
 
 ///|
-test "a decision answered here: your answer comes in first, the options none pressed meanwhile, closing in the next turn" {
+test "a decision answered here: your answer comes in, the options staying as they are, none pressed, while on screen" {
   // (the fixture's own core: it answers the card, and posts the answer as yours)
   reset()
   let src = fixture("chat")
@@ -102,20 +137,15 @@ test "a decision answered here: your answer comes in first, the options none pre
   t.draw()
   let tu = turns_of("ws1/st1\u{1}s-c1")
   let rd = reading_of("ws1/st1\u{1}s-c1")
-  // your answer came in, in the turn kept for it as you picked; the options still there meanwhile
+  // your answer came in, in the turn kept for it as you picked; the options there
   assert_true(rd.admitted.contains("m:ts108"))
   assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  // their turn: after your answer's rise, the list at rest after it
-  t.draw()
-  t.draw()
-  let at = tu.start_of("ask/ts8")
-  assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
-  t.run_for(at - t.time())
-  assert_eq(tu.shown.get("ask/ts8"), Some(false))
-  assert_eq(tu.started_at("ask/ts8"), at)
-  t.run_for(under_rest() - t.time())
-  assert_true(t.find("你 选择了「一起换」") is Some(_))
-  assert_true(t.find("把首页和聊天页的截图都更新") is None)
+  // all that comes of it come: they stay, no turn asked to close them
+  t.run_for(turn_most_ms)
+  assert_eq(tu.shown.get("ask/ts8"), Some(true))
+  assert_true(tu.asks.iter().all(fn(a) { a.what != Change("ask/ts8") }))
+  assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
+  assert_true(t.find("等 林 决定") is None)
 }
 
 ///|
@@ -128,23 +158,23 @@ test "turns: a turn kept for the viewer's row goes to it, before what was asked 
       tu.step(c, -1.0)
       match phase.val {
         0 => {
-          ignore(tu.in_turn(c, "k", true, close_turn_ms))
+          ignore(tu.in_turn(c, "k", false, close_turn_ms, seen=true))
           // (a row under way: what is kept waits behind it)
           tu.admit(c, "a", row_turn_ms)
           tu.keep_turn(c)
           phase.val = 1
         }
         1 => {
-          // (the options' change seen before the answer's row)
-          ignore(tu.in_turn(c, "k", false, close_turn_ms))
+          // (a change under a post seen before the answer's row)
+          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
           phase.val = 2
         }
         2 => {
           tu.admit(c, "b", row_turn_ms)
-          ignore(tu.in_turn(c, "k", false, close_turn_ms))
+          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
           phase.val = 3
         }
-        _ => ignore(tu.in_turn(c, "k", false, close_turn_ms))
+        _ => ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
       }
       c.box(fn() {  }) |> ignore
     },
@@ -161,9 +191,9 @@ test "turns: a turn kept for the viewer's row goes to it, before what was asked 
   t.run_for(row_turn_ms + turn_calm_ms)
   assert_false(tu.waiting.contains("b"))
   assert_eq(tu.started_at("b"), a_at + row_turn_ms + turn_calm_ms)
-  assert_eq(tu.shown.get("k"), Some(true))
-  t.run_for(row_turn_ms + turn_calm_ms)
   assert_eq(tu.shown.get("k"), Some(false))
+  t.run_for(row_turn_ms + turn_calm_ms)
+  assert_eq(tu.shown.get("k"), Some(true))
   assert_eq(tu.started_at("k"), tu.started_at("b") + row_turn_ms + turn_calm_ms)
 }
 

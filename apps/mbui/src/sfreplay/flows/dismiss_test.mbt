@@ -1,5 +1,6 @@
-// 23-dismiss (e2e/traces/dismiss.trace): 忽略 under a question no one has decided goes at once, and the card's options
-// with it (decision.dismiss: off alice's list, still waiting for others).
+// 23-dismiss (e2e/traces/dismiss.trace): 忽略 under a question no one has decided is let go at once (decision.dismiss:
+// off alice's list, still waiting for others), fading where it is; the card's options stay as they were on screen,
+// none pressed (gone once out of sight: cards_wbtest.mbt).
 
 ///|
 test "23-dismiss" {
@@ -15,13 +16,10 @@ test "23-dismiss" {
     f.gone("正在发送")
     f.see("=先合 B 083209")
     f.tap("=忽略")
+    f.answered("decision.dismiss", 1)
     f.gone("=忽略")
-    f.gone("=先合 B 083209")
-    // 忽略 and the options gone, their room closed (closed already where waiting for them gone took the time there)
-    let rest = @sfapp.under_rest()
-    if rest > f.t.time() && rest < @double.infinity {
-      f.run_to(rest)
-    }
+    f.see("=先合 B 083209")
+    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

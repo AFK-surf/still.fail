@@ -1,5 +1,6 @@
 // 24-close-option (e2e/traces/close-option.trace): an option the agent made to close the card (action=close) ends the
-// wait without a message (decision.close).
+// wait without a message (decision.answer, its option closing it): the card stays as it is on screen, none pressed any
+// more (how it went is its line once out of sight: cards_wbtest.mbt).
 
 ///|
 test "24-close-option" {
@@ -15,8 +16,9 @@ test "24-close-option" {
     f.gone("正在发送")
     f.see("=不需要部署 083209")
     f.tap("=不需要部署 083209")
-    f.gone("=不需要部署 083209")
-    f.run_to(@sfapp.under_rest())
+    f.answered("decision.answer", 1)
+    f.see("=不需要部署 083209")
+    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

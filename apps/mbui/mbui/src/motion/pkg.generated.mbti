@@ -219,7 +219,7 @@ pub async fn stagger(Int32, Int32, from? : StaggerFrom, async (Int32) -> Unit) -
 
 pub fn steps(Int32, direction? : StepsAt) -> (Double) -> Double
 
-pub fn trans(fade? : Double, scale? : Double, ox? : Double, oy? : Double, dx? : Double, dy? : Double, spec? : Spec, fade_spec? : Spec) -> Trans
+pub fn trans(fade? : Double, scale? : Double, ox? : Double, oy? : Double, dx? : Double, dy? : Double, spec? : Spec, fade_spec? : Spec, ground_first? : Bool) -> Trans
 
 pub fn transform_axis(Axis, translate? : Double, scale? : Double, box_scale? : Double, origin? : Double) -> Unit
 
@@ -351,6 +351,7 @@ pub(all) struct Trans {
   dy : Double
   fade_spec : Spec
   spec : Spec
+  ground_first : Bool
 } derive(Eq, Show)
 pub fn Trans::at(Self, Double, Double) -> @ui.Look
 

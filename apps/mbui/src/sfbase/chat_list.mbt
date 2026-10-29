@@ -67,6 +67,12 @@ pub(all) struct Reading {
   mut top_seq : Double
   /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between (wide_find.mbt)
   mut bottom_seq : Double
+  /// the frame those were last worked out in (read_place: once its builds were over, its page shown), whether where
+  /// the chat stands (its State row) was in view then, and whether the list was still then (not gliding, nothing in
+  /// its turns under way or waiting): what is on screen (Reading::sees)
+  mut view_frame : Int
+  mut state_seen : Bool
+  mut view_still : Bool
   /// how far that message's top is below the list's (points: above it, less than 0)
   mut top_off : Double
   mut at_end : Bool
@@ -195,6 +201,9 @@ pub fn reading_of(key : String) -> Reading {
         seen_whole: -1.0,
         top_seq: -1.0,
         bottom_seq: -1.0,
+        view_frame: -10,
+        state_seen: false,
+        view_still: true,
         top_off: 0.0,
         at_end: true,
         told_place: "",
@@ -729,9 +738,32 @@ pub fn follows(info : @ui.ListInfo?) -> Bool? {
 /// between the bar (`top`) and the composer (`room` over the list's foot), while the window is not short of the chat's
 /// end (read up to there: a message shown whole on a page in front is read, its end seen or not); the first and the
 /// last message in view, and how far the first's top is below the list's.
-pub fn read_place(rd : Reading, v : ChatView, list : Array[Entry], lr : @ui.ListReader, top : Double, room : Double) -> Unit {
+pub fn read_place(
+  rd : Reading,
+  v : ChatView,
+  list : Array[Entry],
+  lr : @ui.ListReader,
+  top : Double,
+  room : Double,
+  frame : Int,
+) -> Unit {
   let n = list.length()
   let info = lr.info()
+  rd.view_frame = frame
+  rd.state_seen = match info {
+    Some(i) if i.first >= 0 => {
+      let mut k = i.first
+      let mut seen = false
+      while k <= i.last && k < n {
+        if list[k] is State(_, _, _) {
+          seen = true
+        }
+        k = k + 1
+      }
+      seen
+    }
+    _ => false
+  }
   match (info, lr.place()) {
     (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
       let foot = i.height - room
@@ -787,6 +819,25 @@ pub fn read_place(rd : Reading, v : ChatView, list : Array[Entry], lr : @ui.List
       y
     }
     _ => 0.0
+  }
+}
+
+///|
+/// Whether the row of message `seq` (None: where the chat stands, its State row) was on screen as the frame before
+/// `frame` left the list, its page shown then: what changes in it is seen changing (Turns::in_turn's `seen`). The
+/// chat left and opened again, or the row scrolled away and back, it was not. While the list moves (gliding, a turn
+/// under way or waiting) it counts as seen whatever is in view: what goes out of sight goes once the list is still,
+/// never changing the rows' places while they are on their way.
+pub fn Reading::sees(self : Reading, frame : Int, seq : Double?) -> Bool {
+  if self.view_frame != frame - 1 {
+    return false
+  }
+  if !self.view_still {
+    return true
+  }
+  match seq {
+    Some(s) => self.top_seq >= 0.0 && s >= self.top_seq && s <= self.bottom_seq
+    None => self.state_seen
   }
 }
 
@@ -1652,7 +1703,14 @@ pub fn list_after(
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
-    c.after_build("reading", fn() { read_place(rd, v, list, lr, bar, room) })
+    let frame = c.frame_number()
+    // (still: what goes out of sight goes only then, never shifting rows on their way: Reading::sees)
+    let tu = turns_of(r.station + "\u{1}" + r.session)
+    let still = !c.list_moving(key) && tu.asks.is_empty() && !tu.open
+    c.after_build("reading", fn() {
+      read_place(rd, v, list, lr, bar, room, frame)
+      rd.view_still = still
+    })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
     rd.scale = c.scale

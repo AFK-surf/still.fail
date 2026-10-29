@@ -259,7 +259,7 @@ pub fn log(String) -> Unit
 
 pub let long_press_ms : Double
 
-pub fn look(alpha? : Double, dx? : Double, dy? : Double, scale? : Double, sx? : Double, sy? : Double, ox? : Double, oy? : Double, rot? : Double, circle? : Double) -> Look
+pub fn look(alpha? : Double, dx? : Double, dy? : Double, scale? : Double, sx? : Double, sy? : Double, ox? : Double, oy? : Double, rot? : Double, circle? : Double, words? : Double) -> Look
 
 pub let loupe_reach : Double
 
@@ -963,7 +963,7 @@ pub fn Ctx::double_clicked(Self, Int32) -> Bool
 pub fn Ctx::drag_area(Self, Int32, axis? : DragAxis, w? : Size, h? : Size, ty? : Double, () -> Unit) -> Int32
 pub fn Ctx::drag_of(Self, Int32) -> Drag?
 pub fn Ctx::drag_on(Self, Int32, axis? : DragAxis, hold? : Bool) -> Unit
-pub fn Ctx::draw_drawing(Self, Drawing, Int32, Look) -> Unit
+pub fn Ctx::draw_drawing(Self, Drawing, Int32, Look, apart? : Array[(Double, Double)]) -> Unit
 pub fn Ctx::draw_ground(Self, Int32, Double, Double, Double, Double, (Double, Double, Double, Double), bg? : Int64) -> Unit
 pub fn Ctx::draw_only(Self, Int32) -> Unit
 pub fn Ctx::drawn_at(Self, Int32) -> (Double, Double)
@@ -1194,7 +1194,7 @@ pub fn Ctx::with_direction(Self, Direction, () -> Unit) -> Unit
 pub fn Ctx::with_theme(Self, Theme, () -> Unit) -> Unit
 pub fn Ctx::within(Self, Int32, Double) -> Bool
 pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64) -> Unit
-pub fn Ctx::words_across(Self, String, TextStyle) -> Double
+pub fn Ctx::words_across(Self, String, TextStyle, mono? : Bool) -> Double
 pub fn Ctx::words_into(Self, Int32, String) -> Unit
 pub fn Ctx::words_of(Self, String) -> Words?
 pub fn[T] Ctx::words_smaller(Self, Double, () -> T) -> T
@@ -1585,6 +1585,7 @@ pub(all) struct Look {
   oy : Double
   rot : Double
   circle : Double
+  words : Double
 } derive(Eq, Show, @debug.Debug)
 pub fn Look::is_still(Self) -> Bool
 pub fn Look::then(Self, Self) -> Self

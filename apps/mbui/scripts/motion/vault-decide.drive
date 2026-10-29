@@ -1,0 +1,7 @@
+# An agent's request to keep a password, at the chat's end (MBUI_FIXTURE=chat-vault), answered 不存 there: the card
+# stays as it is on screen, the answer given as it was, the rest greyed, none pressed (decision.mbt vault_ask_card).
+timeout 20000
+until =不存
+wait 800
+tap =不存
+wait 2000
