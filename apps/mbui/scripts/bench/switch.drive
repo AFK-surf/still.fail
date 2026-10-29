@@ -1,0 +1,15 @@
+# 小屏, a finger: a chat opened from the chats and gone back to them, twice: by the system's back gesture across the
+# screen, then by back said at once.
+timeout 20000
+until 整理发布清单
+wait 500
+log measure
+tap 整理发布清单
+wait 900
+backswipe 351
+wait 900
+tap 整理发布清单
+wait 900
+back
+wait 900
+exit

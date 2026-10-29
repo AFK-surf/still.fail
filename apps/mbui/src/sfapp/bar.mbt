@@ -139,6 +139,12 @@ impl @ui.Moving for BarClock with rest_at(self, now, frame) {
   ignore(self)
   ignore(now)
   ignore(frame)
+  bar_springs_end()
+}
+
+///|
+/// When the bar's springs are all at rest (the frames' clock, ms; before now: they are).
+fn bar_springs_end() -> Double {
   let mut e = -1.0
   for s in [bar.o, bar.k, bar.held, bar.ball_x, bar.ball_y] {
     e = dmax(e, s.end())
@@ -149,13 +155,6 @@ impl @ui.Moving for BarClock with rest_at(self, now, frame) {
 ///|
 impl @ui.Moving for BarClock with sample(self, now) {
   self.now = now
-}
-
-///|
-/// The bar reads where its springs are from the time it keeps, as it is built.
-impl @ui.Moving for BarClock with keeps_time(self) {
-  ignore(self)
-  true
 }
 
 ///|
@@ -635,6 +634,8 @@ priv struct BarModel {
   /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
   mut icon_was : String
   icon_swap : Glide
+  /// the frame it was last told in (Ctx::frame_number): told once a frame, by the first of its builds in it
+  mut told : Int
 }
 
 ///|
@@ -677,6 +678,7 @@ let bar : BarModel = {
   swap: None,
   waits: false,
   icon_was: "",
+  told: -1,
   icon_swap: glide("icon-swap", 1.0),
 }
 
@@ -715,6 +717,7 @@ fn bar_reset() -> Unit {
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
   bar_clock.now = 0.0
+  bar.told = -1
 }
 
 ///|
@@ -1065,6 +1068,27 @@ fn tint_of(id : String, on : Bool) -> Double {
 /// The bottom bar over the pages of `w` (Places.kt PlaceBar, Bar.kt BottomBar). `shown`: on a place's top page with
 /// nothing over it; `active`: the place shown (its top page's).
 fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
+  // a part of its own, kept as its nodes (mbui's Ctx::kept_as_nodes: what floats over the pages said again with it):
+  // what its springs read of the clock as they go builds it again each frame, not the pages under it. Its key what it
+  // is laid out by besides what it reads: the window, the navigation bar's room, the ground, the place shown and
+  // whether it shows
+  let t = @sf.theme()
+  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{active} \{shown}"
+  c.kept_as_nodes(
+    c.id("bar/kept"),
+    key,
+    fn() {
+      bar_drawn(c, src, ws, active, shown)
+      // where its springs are, read as it was built: built again as they are told and each frame while they go
+      c.shows_motion(bar_clock.mover, bar_springs_end() > c.moment())
+    },
+    read_out=true,
+  )
+}
+
+///|
+/// The bar as it is this frame (bottom_bar's part).
+fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
   let t = @sf.theme()
   let (sets, cur) = bars_in(src, ws.id)
   let items = sets[cur]
@@ -1119,12 +1143,20 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   bar_glyph.val = Some(glyph)
   bar_stations_said.val = said
   let m = bar
+  // told once a frame, by its first build in it: built again in the same frame (a frame's passes, or a check
+  // building it whole), it draws what that build told, a ride set out from where it is not set out again from there
+  let tell = m.told != c.frame_number()
+  m.told = c.frame_number()
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
-  m.sample()
+  if tell {
+    m.sample()
+  }
   // told each frame: shown or not, the notch as the place has it
-  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, Arrive)
-  if !shown {
+  if tell {
+    m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, Arrive)
+  }
+  if tell && !shown {
     if m.mode {
       m.open_panel(false)
     }
@@ -1132,7 +1164,9 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     m.drag_y = -1.0
     m.holds = false
   }
-  m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
+  if tell {
+    m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
+  }
   let ai = match active {
     Some(a) => items.search(a).unwrap_or(-1)
     None => -1
@@ -1163,7 +1197,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   }
   let sliding = m.drag >= 0.0
   let active_key = active.unwrap_or("")
-  if !sliding && active_key != m.active_was {
+  if tell && !sliding && active_key != m.active_was {
     m.active_was = active_key
     m.trip = dmax(8.0, (goal_x - m.ball_x.x).abs())
   }
@@ -1177,12 +1211,13 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       }
     _ => None
   }
-  if m.width != w {
+  if tell && m.width != w {
     // a new width (turned): there at once
     m.width = w
     m.ball_x.put(goal_x)
   }
   match ride {
+    _ if !tell => ()
     Some((s, j)) => {
       // where its place is at a time, by the panel's and the notch's ways (as swap_at has it each frame): ridden
       // after on the ball's springs, worked out once as it sets out (Ride), again only when those ways change
@@ -1212,17 +1247,21 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       m.ball_y.go(goal_y, ball_down, ball_damping(ball_down))
     }
   }
-  m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
+  if tell {
+    m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
+  }
   let ball_shown = ai >= 0 ||
     sliding ||
     (match m.swap {
       Some({ key: Some(_), .. }) => true
       _ => false
     })
-  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Css)
-  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Css)
+  if tell {
+    m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Css)
+    m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Css)
+  }
   // first drawn (or under reduced motion): everything where it goes, at once
-  if !m.placed || c.still() {
+  if tell && (!m.placed || c.still()) {
     m.placed = true
     m.jump()
   }
