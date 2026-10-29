@@ -1,6 +1,6 @@
 // The card shared of a workspace's agents at work (the `fleet` view; 2026-10-26 用户：「来点花哨的设计和更多信息」，then 「改成
 // xx 个 xx 订阅账号的 xx% 周额度，分天和周统计，还有当前 chat 数量」「模型调用不需要」「不如归档 chat 多少个」): how much of
-// its subscriptions' weekly quota was used, by kind of subscription; how many chats were archived and what was spent
+// its subscriptions' weekly quota was used over the last 7 days, by kind of subscription; how many chats were archived and what was spent
 // today and over the last 7 days, each day's chats archived; how many chats are at work now (a chat whose task runs on
 // another station at work too), and how many stations were used today, by today's chats or for the tasks they ran
 // (「应该改成今天会话分布在几个设备而不是正在运行的会话」「那不是运行任务没有算进去」); how many tasks chats ran on other
@@ -31,10 +31,14 @@ function weekly(w: J): boolean {
   return mark === "W" || mark === "7D";
 }
 
-/// The workspace's subscriptions by kind (the profiles view's items), each kind's accounts with a week's quota read and
-/// how much of a week's quota they used in all, each account's share of its own added up: two can use more than one's
-/// (80% and 90%: 170%, 1.7 accounts' weeks), and that as a share of all their weeks (`share`, its ring: 170% of two,
-/// 0.85). The most weekly quota used first; a kind that used none (0%) left out (「0% 不要显示」). Keys (API Key) have no quota.
+/// The workspace's subscriptions by kind (the profiles view's items), each kind's accounts that used some of their
+/// week's quota over the last 7 days and how much of a week's quota they used in all, each account's share of its own
+/// added up: two can use more than one's (80% and 90%: 170%, 1.7 accounts' weeks), and that as a share of all their
+/// weeks (`share`, its ring: 170% of two, 0.85). What an account used over the 7 days is what its station read it use
+/// in them (its week window's `spentWeek`: station accounts/spent.ts), not how full its week reads now (2026-10-29
+/// 用户「它只是把每个账号的使用额度算进去，根本不是实际这段时间使用掉的额度」): a week begun before them counts
+/// what was used before, one that reset in them nothing of the week before; a station from before says none. The most
+/// weekly quota used first; a kind that used none (0%) left out (「0% 不要显示」). Keys (API Key) have no quota.
 export function quotaOf(profiles: J[]): J[] {
   const kinds = new Map<string, number[]>();
   for (const p of profiles) {
@@ -43,8 +47,8 @@ export function quotaOf(profiles: J[]): J[] {
     const quota = get(get(p, "profile"), "quota");
     if (get(quota, "state") !== "ok") continue;
     const week = arr(get(quota, "windows")).find(weekly);
-    if (week === undefined || typeof week.usedPercent !== "number") continue;
-    kinds.set(kind, [...(kinds.get(kind) ?? []), week.usedPercent]);
+    if (week === undefined || typeof week.spentWeek !== "number" || week.spentWeek <= 0) continue;
+    kinds.set(kind, [...(kinds.get(kind) ?? []), week.spentWeek]);
   }
   const order = (k: string) => GROUPS.indexOf(k as (typeof GROUPS)[number]);
   return [...kinds.entries()]
