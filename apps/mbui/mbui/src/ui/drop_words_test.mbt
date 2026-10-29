@@ -169,3 +169,107 @@ test "words dropped beside a field in a dialog belong to that field, not the pag
   assert_eq(dialog_field.text(), "dialog words")
   assert_eq(t.ime().1, "dialog words")
 }
+
+///|
+test "files from the Finder let go on a field go in as their paths, a line each, and are not read" {
+  let f = @ui.Field::new(text="see ")
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      // (a view that would take files as they came)
+      match @ui.take_drop() {
+        Some(_) => abort("files let go on a field taken as files")
+        None => ()
+      }
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (ex, ey, ew, eh) = t.rect_of("the field").unwrap()
+  t.drop_files(ex + ew - 4.0, ey + eh / 2.0, [("a.txt", b"a"), ("My Folder/", b"")], paths=[
+    "/Users/lin/a.txt", "/Users/lin/My Folder",
+  ])
+  t.frame()
+  t.frame()
+  assert_eq(f.text(), "see /Users/lin/a.txt\n/Users/lin/My Folder")
+  assert_eq(t.ime().1, "see /Users/lin/a.txt\n/Users/lin/My Folder")
+}
+
+///|
+test "files let go on a box that takes words go in as their paths; on a view that takes files, as files, not their paths" {
+  let f = @ui.Field::new(text="")
+  let took : Array[@ui.Pick] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Fill(1.0), fn() {
+        let cap = c.id("cap")
+        c.clicked(cap) |> ignore
+        c.words_into(cap, "e")
+        c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+          c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+        })
+        |> ignore
+        // a folder of a files page: what is let go on it goes up there
+        let folder = c.id("folder")
+        c.clicked(folder) |> ignore
+        c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
+        match @ui.take_drop() {
+          Some((x, y, pick)) =>
+            match c.rect_of(folder) {
+              Some((fx, fy, fw, fh)) if x >= fx && x < fx + fw && y >= fy && y < fy + fh => took.push(pick)
+              _ => ()
+            }
+          None => ()
+        }
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let (ex, ey, _, _) = t.rect_of("the field").unwrap()
+  // on the box, beside its field: their paths in the field
+  t.drop_files(ex + 50.0, ey - 36.0, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(f.text(), "/Users/lin/a.txt")
+  assert_eq(took.length(), 0)
+  // on the folder: the files, read, and no paths in the field
+  let (fx, fy) = t.find("a folder").unwrap()
+  t.drop_files(fx, fy, [("b.txt", b"bb")], paths=["/Users/lin/b.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 1)
+  assert_eq(took[0].files().map(fn(fs) { fs.map(fn(p) { p.name }) }), Some(["b.txt"]))
+  assert_eq(f.text(), "/Users/lin/a.txt")
+}
+
+///|
+test "files let go where nothing takes them in the frame they came are let go, not taken by a later one" {
+  let takes = Ref(false)
+  let took : Array[@ui.Pick] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.text("nothing here") |> ignore
+      if takes.val {
+        match @ui.take_drop() {
+          Some((_, _, pick)) => took.push(pick)
+          None => ()
+        }
+      }
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (x, y) = t.find("nothing here").unwrap()
+  t.drop_files(x, y, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  takes.val = true
+  // (built again: a press on it)
+  t.tap(x, y)
+  t.frame()
+  assert_eq(took.length(), 0)
+}

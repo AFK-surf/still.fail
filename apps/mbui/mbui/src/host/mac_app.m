@@ -134,11 +134,14 @@ static void window_shown_now(void);
 #include "apple_device.h"
 
 static int32_t drop_pick(NSArray<NSURL *> *urls);
+static void bring_back(void);
 
 // Files dragged in from outside (Finder) and let go on the window (ui/drop.mbt): where they are held, posted on
-// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, their files read as a pick's
-// ({"type":"drop","x","y","pick"}). Words dragged in (another app's text, a browser page's) are said only as they are
-// let go, with what they say ({"type":"words","x","y","text"}): a field there takes them.
+// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, with their paths and the pick
+// their reading is, read once the app takes them as files ({"type":"drop","x","y","pick","paths"}: a field takes their
+// paths). Words dragged in (another app's text, a browser page's) are said only as they are let go, with what they say
+// ({"type":"words","x","y","text"}): a field there takes them. Either let go here, the window comes to the front and
+// has the keys, as a click on it would give them: what was let go into a field is typed on at once.
 static void drop_post(NSString *json) {
   NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
   mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
@@ -190,22 +193,27 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
   NSArray<NSURL *> *urls = [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
                                                                   options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  NSDictionary *m;
   if (urls.count == 0) {
     // words: what they say, where they were let go
     NSString *s = [info.draggingPasteboard stringForType:NSPasteboardTypeString];
-    NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
-    NSDictionary *m = @{@"type" : @"words", @"x" : @(p.x), @"y" : @(p.y), @"text" : s ?: @""};
-    NSData *json = s.length ? [NSJSONSerialization dataWithJSONObject:m options:0 error:nil] : nil;
-    if (!json) {
-      drop_post(@"{\"type\":\"left\"}");
-      return NO;
-    }
-    mb_post("mbui.drop", (const char *)json.bytes, json.length, NULL, 0);
-    return YES;
+    m = s.length ? @{@"type" : @"words", @"x" : @(p.x), @"y" : @(p.y), @"text" : s} : nil;
+  } else {
+    // files: their paths, and the pick their reading is (begun as the app takes them as files)
+    NSMutableArray *paths = [NSMutableArray new];
+    for (NSURL *u in urls)
+      if (u.path.length) [paths addObject:u.path];
+    m = @{@"type" : @"drop", @"x" : @(p.x), @"y" : @(p.y), @"pick" : @(drop_pick(urls)), @"paths" : paths};
   }
-  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
-  int32_t pid = drop_pick(urls);
-  drop_post([NSString stringWithFormat:@"{\"type\":\"drop\",\"x\":%.1f,\"y\":%.1f,\"pick\":%d}", p.x, p.y, pid]);
+  NSData *json = m ? [NSJSONSerialization dataWithJSONObject:m options:0 error:nil] : nil;
+  if (!json) {
+    drop_post(@"{\"type\":\"left\"}");
+    return NO;
+  }
+  mb_post("mbui.drop", (const char *)json.bytes, json.length, NULL, 0);
+  // (after the drag has ended in the app it came from: else that one takes the front back as it finishes)
+  dispatch_async(dispatch_get_main_queue(), ^{ bring_back(); });
   return YES;
 }
 
@@ -3034,10 +3042,18 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
 // Files let go on the window (ui/drop.mbt): read as a pick's, a folder's files by their way down from where it was
 // dropped ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes (so an empty one is made
 // too); Finder's .DS_Store left out.
+// A drop's files: read once the app first asks how its pick goes (mb_host_pick_state: ui/drop.mbt take_drop, as a
+// view takes them as files); taken as their paths, or by nothing, never (mb_host_pick_end).
+static void drop_pick_read(int32_t pid, NSArray<NSURL *> *urls);
+
 static int32_t drop_pick(NSArray<NSURL *> *urls) {
   if (!picks) picks = [NSMutableDictionary new];
   int32_t pid = next_pick++;
-  picks[@(pid)] = [@{@"state" : @0} mutableCopy];
+  picks[@(pid)] = [@{@"state" : @0, @"urls" : urls} mutableCopy];
+  return pid;
+}
+
+static void drop_pick_read(int32_t pid, NSArray<NSURL *> *urls) {
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
     NSFileManager *fm = [NSFileManager defaultManager];
@@ -3071,7 +3087,6 @@ static int32_t drop_pick(NSArray<NSURL *> *urls) {
     }
     pick_told(pid, names, datas);
   });
-  return pid;
 }
 
 int32_t mb_host_pick_start(int32_t kind) {
@@ -3123,7 +3138,14 @@ int32_t mb_host_pick_photo(moonbit_string_t src) { (void)src; return 0; }
 
 int32_t mb_host_pick_state(int32_t pid) {
   NSMutableDictionary *p = picks[@(pid)];
-  return p ? [p[@"state"] intValue] : -1;
+  if (!p) return -1;
+  // (a drop's files, asked for: read from now, drop_pick)
+  NSArray<NSURL *> *urls = p[@"urls"];
+  if (urls) {
+    [p removeObjectForKey:@"urls"];
+    drop_pick_read(pid, urls);
+  }
+  return [p[@"state"] intValue];
 }
 
 int32_t mb_host_pick_count(int32_t pid) { return (int32_t)[picks[@(pid)][@"names"] count]; }

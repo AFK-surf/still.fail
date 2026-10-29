@@ -379,6 +379,20 @@ test "wide: words dragged in from another app and let go anywhere on the chat go
 }
 
 ///|
+test "wide: files from the Finder let go on the chat go into its composer as their paths, a line each, not as files" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  let (x, y) = t.find("做完了：").unwrap()
+  t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
+  t.frame()
+  t.frame()
+  assert_true(t.ime().0)
+  assert_eq(t.ime().1, "/Users/lin/报告.pdf\n/Users/lin/截图")
+  // (nothing went up: they were not taken as files)
+  assert_eq(named(calls, "composer.add").length(), 0)
+}
+
+///|
 test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter the next, Esc closes it and forgets" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

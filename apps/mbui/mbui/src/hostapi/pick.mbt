@@ -66,9 +66,18 @@ pub fn pick(kind : PickKind, hold? : Bool = false) -> Pick? {
 ///|
 /// Files let go on the window from outside (the host's `mbui.drop` message names the pick their reading is: ui's
 /// drop.mbt), as an ask of the system's: read whole, a folder's by their way down from where it was dropped
-/// ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes.
+/// ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes. Asked how it goes from now: a
+/// host may read them only once asked (macOS's: mac_app.m drop_pick), so a drop taken otherwise reads nothing.
 pub fn dropped_pick(id : Int) -> Pick {
+  pk_state(id) |> ignore
   { id, }
+}
+
+///|
+/// Files let go on the window that nothing took as files (taken as their paths, or by nothing): let go, unread where
+/// the host has not read them yet.
+pub fn forget_dropped(id : Int) -> Unit {
+  pk_end(id)
 }
 
 ///|
