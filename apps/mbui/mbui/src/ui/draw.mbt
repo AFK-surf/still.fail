@@ -137,6 +137,8 @@ priv struct Drawn {
   mut bottom : Double
   /// drawn only as its top this tall (-1 whole)
   mut top : Double
+  /// how far before where it is cut it fades out to the cut (0: cut hard)
+  mut cut_soft : Double
   /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
   /// left, then round it) instead of where it is laid out: a shape on its way to its new one (motion's reshape); None
   /// as laid out
@@ -372,6 +374,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     keep_rel: -1,
     bottom: -1.0,
     top: -1.0,
+    cut_soft: 0.0,
     ground: None,
     ground_bg: None,
     part: 0,
@@ -520,16 +523,21 @@ fn Ctx::ground_bg_of(self : Ctx, i : Int) -> Int64? {
 
 ///|
 /// Node `i` drawn only as its bottom `h` (what is above cut off, as a box growing up from its foot shows it), and
-/// tapped whole, where it is laid out.
-pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double) -> Unit {
-  self.drawn_of(i).bottom = dmax(h, 0.0)
+/// tapped whole, where it is laid out. `soft`: what it draws fades out over this much before the cut, each thing by
+/// where its middle is (a line of words fading as a line), not cut off at a hard edge.
+pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) -> Unit {
+  let e = self.drawn_of(i)
+  e.bottom = dmax(h, 0.0)
+  e.cut_soft = soft
 }
 
 ///|
 /// Node `i` drawn only as its top `h` (what is below cut off, as something unrolling from its top shows it), and tapped
-/// whole, where it is laid out.
-pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double) -> Unit {
-  self.drawn_of(i).top = dmax(h, 0.0)
+/// whole, where it is laid out. `soft`: as cut_to_bottom's.
+pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) -> Unit {
+  let e = self.drawn_of(i)
+  e.top = dmax(h, 0.0)
+  e.cut_soft = soft
 }
 
 ///|
@@ -804,6 +812,49 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
     if look.rot != 0.0 {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
+    }
+  }
+  // cut softly: what it draws fading out to where it is cut, each by where it now stands; glyphs by their line (those
+  // whose height overlaps, by the foot of the lowest), so that a line of words fades as one, not a full stop before
+  // the characters beside it
+  if cutting && e.cut_soft > 0.0 {
+    let a = self.inst
+    let below = if e.top >= 0.0 && e.top < n.fh { n.y + e.top + dy } else { @double.infinity }
+    let above = if e.bottom >= 0.0 && e.bottom < n.fh { n.y + n.fh - e.bottom + dy } else { -@double.infinity }
+    let soft = e.cut_soft
+    let fade = fn(k : Int, at : Double) {
+      let b = k * inst_size
+      let f = dclamp(dmin(below - at, at - above) / soft, 0.0, 1.0)
+      if f < 1.0 {
+        a[b + 11] = a[b + 11] * f
+        // (a rect's border fades with it)
+        if a[b + 5] == 0.0 {
+          a[b + 15] = a[b + 15] * f
+        }
+      }
+    }
+    let glyphs : Array[Int] = []
+    for k in i0..<self.ninst {
+      let kind = a[k * inst_size + 5]
+      if kind == 1.0 || kind == 3.0 || kind == 7.0 {
+        glyphs.push(k)
+      } else {
+        fade(k, a[k * inst_size + 1] + a[k * inst_size + 3] / 2.0)
+      }
+    }
+    glyphs.sort_by_key(fn(k) { a[k * inst_size + 1] })
+    let mut q = 0
+    while q < glyphs.length() {
+      let mut foot = a[glyphs[q] * inst_size + 1] + a[glyphs[q] * inst_size + 3]
+      let mut end = q + 1
+      while end < glyphs.length() && a[glyphs[end] * inst_size + 1] < foot {
+        foot = dmax(foot, a[glyphs[end] * inst_size + 1] + a[glyphs[end] * inst_size + 3])
+        end += 1
+      }
+      for r in q..<end {
+        fade(glyphs[r], foot)
+      }
+      q = end
     }
   }
   match e.keep {

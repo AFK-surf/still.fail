@@ -1214,6 +1214,11 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// How far before the edge of the room left it a row coming into its place fades in (makes_room): about a line of
+/// words, so a line shows as it comes out, not cut through (the user, 2026-10-29: 「分界太生硬了」).
+let room_soft : Double = 24.0
+
+///|
 /// What comes into a list's place shows only in the room what was there has left (docs/motion.md rule 4, words over
 /// words): a row in its place (one new to the list, or one a row closes over) is not drawn where a row of the same
 /// list on its way to its place still is, as that one goes there (an agent's line gliding down from where a message
@@ -1261,11 +1266,13 @@ fn makes_room(c : @ui.Ctx) -> Unit {
           top = dmax(top, my + mdy + mh - (ny + dy))
         }
       }
+      // (its edge soft: what it draws fades in over room_soft as it is shown, the softness going as the room opens
+      // whole, so that the last of it shows as it was, not at once)
       if bottom < nh {
-        c.cut_to_top(e.node, dmax(bottom, 0.0))
+        c.cut_to_top(e.node, dmax(bottom, 0.0), soft=dmin(room_soft, nh - bottom))
       }
       if top > 0.0 {
-        c.cut_to_bottom(e.node, dmax(nh - top, 0.0))
+        c.cut_to_bottom(e.node, dmax(nh - top, 0.0), soft=dmin(room_soft, top))
       }
     })
   }
