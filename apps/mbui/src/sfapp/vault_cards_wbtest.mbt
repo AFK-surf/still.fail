@@ -298,6 +298,28 @@ test "a request another's to decide, or on a web page: no buttons, a line saying
 }
 
 ///|
+test "how a request ended, the phone's as the vault's: its dot beside its words, in the middle of their line" {
+  reset()
+  let lines : Array[(String, (@ui.Ctx) -> Unit)] = [
+    ("已允许调试手机 · 本对话内", fn(c) { @settings.phone_outcome(c, "granted", "chat", "") }),
+    ("已拒绝调试手机", fn(c) { @settings.phone_outcome(c, "denied", "", "") }),
+  ]
+  for line in lines {
+    let (words, outcome) = line
+    let t = @ui.Tester::new(fn(c) { c.box(w=Fill(1.0), fn() { outcome(c) }) |> ignore }, w=390.0, h=844.0, platform=2)
+    t.draw()
+    let bs = t.boxes()
+    let said = bs.filter(fn(b) { b.text.contains(words) })
+    let dots = bs.filter(fn(b) { b.bg != 0L && b.w == b.h && b.w < 10.0 && b.radius * 2.0 >= b.w })
+    assert_eq(said.length(), 1, msg=words)
+    assert_eq(dots.length(), 1, msg=words)
+    let (w, d) = (said[0], dots[0])
+    assert_true(d.x + d.w <= w.x, msg="\{words}: the dot before the words")
+    assert_true((d.y + d.h / 2.0 - (w.y + w.h / 2.0)).abs() < 1.0, msg="\{words}: the dot in the middle of their line")
+  }
+}
+
+///|
 test "the vault's page's request where it is not this device's to answer, or decided: a line saying so" {
   reset()
   let calls = []

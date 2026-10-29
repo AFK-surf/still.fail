@@ -39,6 +39,8 @@ pub fn ask_action(String) -> Unit
 
 pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn ask_outcome(@ui.Ctx, Bool, String, inline? : Bool) -> Unit
+
 pub fn ask_words(@ui.Ctx, String, String) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
@@ -222,9 +224,9 @@ pub fn panels_frame(Core) -> Unit
 
 pub fn pending_login(Core, String, String) -> Json?
 
-pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?) -> Unit
+pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit) -> Unit
 
-pub fn phone_outcome(@ui.Ctx, String, String, String) -> Unit
+pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool) -> Unit
 
 pub fn phone_outcome_words(String, String, String) -> String
 

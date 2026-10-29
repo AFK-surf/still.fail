@@ -10,7 +10,9 @@
 >   writing yes in the chat is not a grant.
 > - **Approved for a scope**, as a vault grant's: 本对话 1 小时内 (`hour`) or 本对话直到归档 (`chat`, 30 days at most),
 >   up to the owner's 默认最长授权 (a setting of theirs, default `chat`); the card offers what that allows and
->   recommends the longest. A grant ends as its scope does, when the chat is archived or deleted, or when the owner
+>   recommends the longest. Answered on the phone itself while it lacks something to be lent (Developer options, Wi-Fi,
+  Wireless debugging the app cannot turn on), the card says what first and 查看步骤 (the 共享调试 page) takes 允许's
+  place; Wireless debugging the app may turn on, it turns on as it is allowed. A grant ends as its scope does, when the chat is archived or deleted, or when the owner
 >   takes it back (the card, the phone's notification, settings).
 > - **Only that chat's agent reaches the phone.** The station runs an adb server of the grant's own
 >   (`adb -P <port> server`), the phone connected in it alone, and gives its port to that session's commands only

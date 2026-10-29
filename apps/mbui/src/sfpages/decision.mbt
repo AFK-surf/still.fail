@@ -278,11 +278,11 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   let decided = ask.status != ""
   let asking = fn() {
     c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None })
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.Route::AdbShare(""))) })
     })
     |> ignore
   }
-  let ended = fn() { @settings.phone_outcome(c, ask.status, ask.scope, ask.why) }
+  let ended = fn() { @settings.phone_outcome(c, ask.status, ask.scope, ask.why, inline=here.inline) }
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts

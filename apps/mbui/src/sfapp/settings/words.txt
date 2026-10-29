@@ -40,7 +40,9 @@ android-misc.adb.agentsUse
 android-misc.adb.ask.chat.title
 android-misc.adb.ask.denied
 android-misc.adb.ask.ended
+android-misc.adb.ask.first
 android-misc.adb.ask.granted
+android-misc.adb.ask.how
 android-misc.adb.chats.about
 android-misc.adb.chats.count
 android-misc.adb.chats.live

@@ -3,9 +3,12 @@
 // how long it is allowed a choice beside them that starts at the longest (`adb.decide` on the chat's station). Only the
 // viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it
 // keeps between frames (its menu, the length picked, the answer under way) is the vault card's, keyed `phone/<id>`.
+// Answered on the phone itself while it lacks something to be lent (Developer options, Wi-Fi, Wireless debugging the
+// app cannot turn on), it says what first and 查看步骤 takes the place of 允许: allowed then, nothing could reach it.
 
 ///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
+/// `how`: the 共享调试 page opened, where this phone lacks something first.
 pub fn phone_card(
   c : @ui.Ctx,
   core : Core?,
@@ -16,6 +19,7 @@ pub fn phone_card(
   lasts? : String = "chat",
   who? : String? = None,
   ended? : (String, String, String)? = None,
+  how? : () -> Unit = fn() {  },
 ) -> Unit {
   // (a card of words, as a vault request's: its answer in its foot corners; answered while it shows, how it went in its
   // answer's place: answered_in_place)
@@ -24,7 +28,7 @@ pub fn phone_card(
     match core {
       Some(core) if mine =>
         answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", phone_outcome_words(e.0, e.1, e.2)) }), fn() {
-          phone_foot(c, core, station, request, lasts)
+          phone_foot(c, core, station, request, lasts, how)
         })
       _ =>
         match who {
@@ -37,8 +41,14 @@ pub fn phone_card(
 }
 
 ///|
-/// Its answer: 允许 (for the length chosen), 拒绝, and the length's menu.
-fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String) -> Unit {
+/// Its answer: 允许 (for the length chosen), 拒绝, and the length's menu; on a phone that lacks something first, what,
+/// and 查看步骤 (`how`) in 允许's place.
+fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
+  // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
+  let lacks = match adb_ready(c) {
+    AdbLacks(step) => Some(step)
+    _ => None
+  }
   // (up to its owner's 默认最长授权, starting at the longest)
   let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
@@ -54,6 +64,10 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       return
     }
     vault_pending["phone/" + request] = yes
+    // (Wireless debugging the app may turn on itself: on as it is allowed, as a lending from the page does)
+    if yes {
+      adb_switch_on()
+    }
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
     if yes {
       params.push(("scope", str(scope)))
@@ -69,8 +83,16 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       }
     })
   }
+  match lacks {
+    Some(step) => c.text(fill("android-misc.adb.ask.first", [("step", step)]), style=ask_note) |> ignore
+    None => ()
+  }
   ask_buttons(c, fn() {
-    if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
+    if lacks is Some(_) {
+      if @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary) {
+        how()
+      }
+    } else if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
       decide(true)
     }
     if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
@@ -98,14 +120,9 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 
 ///|
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
-/// ended (已收回, 对话已归档, 授权已到期).
-pub fn phone_outcome(c : @ui.Ctx, status : String, scope : String, why : String) -> Unit {
-  let words = phone_outcome_words(status, scope, why)
-  c.box(style=ask_ended, fn() {
-    c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
-    c.text(words, style=ask_ended_words) |> ignore
-  })
-  |> ignore
+/// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture).
+pub fn phone_outcome(c : @ui.Ctx, status : String, scope : String, why : String, inline? : Bool = true) -> Unit {
+  ask_outcome(c, status == "granted", phone_outcome_words(status, scope, why), inline~)
 }
 
 ///|
