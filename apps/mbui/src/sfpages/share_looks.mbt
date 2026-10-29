@@ -100,11 +100,17 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       c.box(style=poster_hero, fn() {
         if spent.length() > 0 {
           let first = Some(spent[0])
-          let used = text(first, "tokensText")
+          let models = items(first, "models")
+          let top = models.get(0)
+          let used = text(top, "tokensText")
           let scale = if used.length() > 4 { @sf.share_poster_number_less } else { @sf.share_poster_number_scale }
           c.text(text(first, "lead"), style=poster_words) |> ignore
           c.rich([@ui.span(used, scale~)], style=poster_number) |> ignore
-          c.text(text(first, "of"), style=poster_words) |> ignore
+          c.text(text(top, "name") + " " + text(top, "of"), style=poster_words) |> ignore
+          // its other models, each its own tokens and cost (no kind adds its models' up)
+          for m in models[1:] {
+            c.text(text(Some(m), "name") + "  " + text(Some(m), "lineText"), style=poster_small) |> ignore
+          }
         } else {
           c.rich([@ui.span(count(fleet, "chats").to_string(), scale=@sf.share_poster_number_scale)], style=poster_number)
           |> ignore
@@ -144,8 +150,8 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
 ///|
 /// 小票: a till's receipt of the agents' week, on its paper. Read down: still.fail and when, in its middle; each day a
 /// line, its chats archived at its end (today's date in the orange); the chats archived and the tokens read as its
-/// subtotals; each kind of account a line (its accounts, its tokens and cost); between double dashes the week's spend,
-/// large, its total; a barcode made of what it says, still.fail's line under it.
+/// subtotals; each kind of account a line (its accounts), its models under it (each its tokens and cost); between
+/// double dashes the week's spend, large, its total; a barcode made of what it says, still.fail's line under it.
 fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
   let spent = items(fleet, "spent")
   let week = field(fleet, "week")
@@ -188,9 +194,16 @@ fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     }
     if spent.length() > 0 {
       c.box(style=receipt_items, fn() {
-        for q in spent {
+        // each kind a line, its models under it, each its own tokens and cost
+        for k, q in spent {
           let q = Some(q)
-          receipt_item(c, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"), false)
+          c.box(style=if k == 0 { receipt_kind_first } else { receipt_kind }, fn() {
+            c.text(text(q, "name") + " ×" + count(q, "accounts").to_string(), style=receipt_line) |> ignore
+          })
+          |> ignore
+          for m in items(q, "models") {
+            c.box(style=receipt_model, fn() { receipt_item(c, text(Some(m), "name"), text(Some(m), "lineText"), false) }) |> ignore
+          }
         }
       })
       |> ignore
@@ -304,7 +317,10 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         let q = Some(q)
         // (its tokens and cost under it, as the tasks' average under them: on its line a long name was cut short)
         term_key_line(c, if k == 0 { "accounts" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), "")
-        term_key_line(c, "", text(q, "lineText"), "")
+        // its models under it, each its own tokens and cost
+        for m in items(q, "models") {
+          term_key_line(c, "", "  " + text(Some(m), "name") + " · " + text(Some(m), "lineText"), "")
+        }
       }
       term_key_line(c, "chats", text(fleet, "chatsText"), "")
       term_key_line(c, "devices", text(fleet, "where"), "")
@@ -491,6 +507,22 @@ let receipt_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 ///|
 // kept across runs: a value (no field of it changes)
 let receipt_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
+
+///|
+/// A kind's line: as far from the model over it as its models' lines are from each other (receipt_item's top), and
+/// that again.
+// kept across runs: a value (no field of it changes)
+let receipt_kind : @ui.Style = @ui.css("w=Full pt=S2")
+
+///|
+/// The first kind's line: as far from the subtotals as a line is.
+// kept across runs: a value (no field of it changes)
+let receipt_kind_first : @ui.Style = @ui.css("w=Full")
+
+///|
+/// A kind's model, set in under its kind's line.
+// kept across runs: a value (no field of it changes)
+let receipt_model : @ui.Style = @ui.css("w=Full pl=S3")
 
 ///|
 /// A day's date (today's in the orange).

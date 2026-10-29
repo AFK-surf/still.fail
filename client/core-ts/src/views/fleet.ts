@@ -10,6 +10,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { isWatch, remoteOwner } from "../jobs.ts";
 import * as present from "../present.ts";
+import * as model from "../shapes/model.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { GROUPS, groupTitle } from "./profiles.ts";
 import { count, localDay, money } from "./usage.ts";
@@ -26,18 +27,24 @@ const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? 
 /// profile and model).
 export type FleetStation = { station: string; online: boolean; rows: J[]; archived: number[]; jobs: J[]; runs: { at: number; session: string }[]; calls: J[] };
 
+/// How many of a kind's models are said one by one when it has more than one past them, the rest together.
+const MODELS_NAMED = 3;
+
 /// What the workspace's chats used over the last 7 days, by kind of account (2026-10-29 用户：「应该是每个 chat 自己统计」
 /// 「用了哪些账号分别用了多少」「只算 token 和价格」; it was how full each account's week read, which counts what was used
 /// before the days and outside still.fail, and none of a week that reset in them): the calls each station's chats made
 /// on its accounts (`stations`' `calls`, the usage rows of the days `days`), each on the account its profile is (the
-/// profiles view's items, `profiles`: an account on two stations once), each kind the accounts that made any, their
-/// tokens (read and written, the cache's too) and what they would cost at API prices (as the usage page counts them,
-/// ≥ with calls of a model without a price), its share of all kinds' tokens its ring. The most tokens first; a call of
-/// an account no longer listed left out.
+/// profiles view's items, `profiles`: an account on two stations once), each kind the accounts that made any and, model by
+/// model, their tokens (read and written, the cache's too) and what they would cost at API prices (as the usage page
+/// counts them, ≥ with calls without a price): one model's tokens are not another's, so no kind adds its models' up
+/// (2026-10-30 用户「token 没有写模型」, then 「按模型分开写 token 和钱」). A kind's models the most tokens first, the first
+/// MODELS_NAMED by name, the rest one line; the kinds the most tokens first, each its share of all kinds' tokens its ring.
+/// A call of an account no longer listed left out.
 export function spentOf(profiles: J[], stations: FleetStation[], days: Set<string>): J[] {
   const accountOf = new Map<string, J>();
   for (const p of profiles) for (const m of arr(get(p, "members"))) accountOf.set(`${get(m, "station")}\n${get(m, "profileId")}`, p);
-  const kinds = new Map<string, { accounts: Set<string>; tokens: number; cost: number; unpriced: number }>();
+  type Spent = { tokens: number; cost: number; unpriced: number };
+  const kinds = new Map<string, { accounts: Set<string>; tokens: number; models: Map<string, Spent & { name: string }> }>();
   const n = (row: J, k: string) => (typeof get(row, k) === "number" ? row[k] : 0);
   for (const s of stations) {
     for (const row of s.calls) {
@@ -47,30 +54,51 @@ export function spentOf(profiles: J[], stations: FleetStation[], days: Set<strin
       if (account === undefined || kind === null) continue;
       const tokens = n(row, "input") + n(row, "cacheRead") + n(row, "cacheWrite") + n(row, "output");
       if (tokens === 0) continue;
-      const k = kinds.get(kind) ?? { accounts: new Set<string>(), tokens: 0, cost: 0, unpriced: 0 };
+      const k = kinds.get(kind) ?? { accounts: new Set<string>(), tokens: 0, models: new Map() };
       k.accounts.add(String(get(account, "key")));
       k.tokens += tokens;
-      if (typeof get(row, "cost") === "number") k.cost += row.cost;
-      else k.unpriced += n(row, "calls");
+      const id = str(get(row, "model"));
+      const key = id === null ? "" : model.key(id);
+      const m = k.models.get(key) ?? { name: id === null ? t("core-views.usage.unknown_which_model") : model.name(id), tokens: 0, cost: 0, unpriced: 0 };
+      m.tokens += tokens;
+      if (typeof get(row, "cost") === "number") m.cost += row.cost;
+      else m.unpriced += n(row, "calls");
+      k.models.set(key, m);
       kinds.set(kind, k);
     }
   }
+  // a model's tokens and cost: 2.1 亿 · $1,420 (≥$1,420 with calls without a price; none priced, its tokens alone)
+  const said = (name: string, m: Spent) => {
+    const tokensText = count(m.tokens);
+    const priced = m.cost > 0 || m.unpriced === 0;
+    const costText = priced ? `${m.unpriced > 0 ? "≥" : ""}${money(m.cost)}` : "";
+    return {
+      name, tokens: m.tokens, tokensText, costText,
+      lineText: priced ? `${tokensText} · ${costText}` : tokensText,
+      of: priced ? t("core-logic.fleet.tokens_of", { cost: costText }) : t("core-logic.fleet.tokens"),
+    };
+  };
   const all = [...kinds.values()].reduce((sum, k) => sum + k.tokens, 0);
   const order = (k: string) => GROUPS.indexOf(k as (typeof GROUPS)[number]);
   return [...kinds.entries()]
     .sort(([a, x], [b, y]) => y.tokens - x.tokens || order(a) - order(b))
     .map(([kind, k]) => {
       const accounts = k.accounts.size;
-      const tokensText = count(k.tokens);
-      const costText = `${k.unpriced > 0 ? "≥" : ""}${money(k.cost)}`;
-      // said as a sentence round its tokens (as the usage page says them): 用 6 个 Claude 订阅账号消耗了 | 3.1 亿 | token，折合
-      // $1,234; or as its ring's key, a line beside the others': Claude 订阅 · 6 个账号 … 3.1 亿 · $1,234
+      // said as a sentence round its first model's tokens: 用 6 个 Claude 订阅账号消耗了 | 2.1 亿 | Opus 5.5 | token，折合 $1,420;
+      // or as its ring's key, a line beside the others' (Claude 订阅 · 6 个账号), each model a line under it
       const name = groupTitle(kind as (typeof GROUPS)[number]);
       const lead = kind === "key" ? t("core-logic.fleet.keys_by", { n: accounts }) : t("core-logic.fleet.accounts_by", { n: accounts, kind: name });
+      const ranked = [...k.models.values()].sort((a, b) => b.tokens - a.tokens || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      const named = ranked.length > MODELS_NAMED + 1 ? ranked.slice(0, MODELS_NAMED) : ranked;
+      const rest = ranked.slice(named.length);
+      const models = named.map((m) => said(m.name, m));
+      if (rest.length > 0) {
+        const sum = (f: keyof Spent) => rest.reduce((x, m) => x + m[f], 0);
+        models.push(said(t("core-logic.fleet.other_models", { n: rest.length }), { tokens: sum("tokens"), cost: sum("cost"), unpriced: sum("unpriced") }));
+      }
       return {
         kind, name, accounts, accountsText: t("core-logic.fleet.accounts", { n: accounts }),
-        tokens: k.tokens, tokensText, costText, lineText: `${tokensText} · ${costText}`,
-        share: all > 0 ? k.tokens / all : 0, lead, of: t("core-logic.fleet.tokens_of", { cost: costText }),
+        tokens: k.tokens, share: all > 0 ? k.tokens / all : 0, lead, models,
       };
     });
 }

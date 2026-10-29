@@ -119,6 +119,11 @@
     "other": "{n} accounts"
   },
   "core-logic.fleet.tokens_of": "tokens, {cost} at API prices",
+  "core-logic.fleet.tokens": "tokens",
+  "core-logic.fleet.other_models": {
+    "one": "1 other model",
+    "other": "{n} other models"
+  },
   "core-logic.fleet.today": "Today",
   "core-logic.fleet.week": "Last 7 days",
   "core-logic.fleet.archived": "Chats archived",
