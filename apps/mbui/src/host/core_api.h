@@ -35,6 +35,13 @@ void mb_core_stop(void);
 /// call `call` itself (client/shell `istream.tap`): 1, else 0. Apple's (apple_core.mm) alone.
 int mb_core_screen_ack(double call, double ts);
 
+/// Where the shell offers a remote screen's records it reads itself (client/shell `Media`), before saying them to the
+/// app: `take(call, kind, key, seq, ts, bytes, len)`, from the shell's threads, a view's in order (2 a video frame, 6 a
+/// sound packet, 1 and 5 their configs, offered to be seen); 1 when it took it (nothing said to the app then). The
+/// app's host's (mbui's mb_stream_route_take), handed over as the app loads (src/sfcore/apple_engine.m). Apple's alone.
+typedef int (*mb_core_media_fn)(uint64_t call, int kind, int key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len);
+void mb_core_route_media(mb_core_media_fn take);
+
 #ifdef __cplusplus
 }
 #endif

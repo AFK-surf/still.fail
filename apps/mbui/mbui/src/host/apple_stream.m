@@ -12,13 +12,23 @@
 // Frames let go ("d TS": no session or not past a key frame, one that is not sound AVCC, the older of two it holds,
 // those inside it as it starts anew, one the decoder drops, a JPEG that does not decode) and the decoder broken ("b": an
 // error, a session the system invalidated, as iOS does in the background) are told the same way; each event asks for
-// a frame. The session's work runs on the stream's own serial queue; its output comes back to it.
+// a frame. The session's work runs on the stream's own serial queue; its output comes back to it. Its sound plays from
+// a queue of its own.
+//
+// Routed (mb_stream_route_take, @hostapi.stream_direct): where an app's engine reads a remote screen itself (its shell),
+// the frames and sound of the view the app routed to a stream come here from the engine's thread, not through the
+// app's queue: fed to the decoder as they come, each decoded one shown at once (on the main thread, nothing of the app's
+// run) and acknowledged to its sender (mb_stream_route_acks), one let go acknowledged too, the sound played. The app is
+// told what came so in one event when it next reads the stream's ("D TS N BYTES": the last shown, how many frames came
+// and their bytes since it was last told). A config (or the sound's) stops the route until the app has taken it and
+// routes it again, so what it says of it is in order with what the decoder is fed.
 #import "apple.h"
 #import <VideoToolbox/VideoToolbox.h>
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
 #import <AVFoundation/AVFoundation.h>
+#include <os/lock.h>
 #include "avc.h"
 
 // (linked wherever this is, whatever the app's own link flags say)
@@ -74,6 +84,17 @@ void mb_host_request_frame(void);
 // the system video layer its frames are put on as they are shown (a native view's of kind 4: apple_views.m), if any;
 // the picture's format there, made again as its size changes
 @property(weak) CALayer *display;
+// its sound (on audioQueue, the player's state there too)
+@property dispatch_queue_t audioQueue;
+// the frames fed it from a route (mb_stream_route_take), on its queue: by time, their bytes until their fate is known,
+// -1 once let go (acknowledged, its picture not shown if it still comes); the route they came by
+@property NSMutableDictionary<NSNumber *, NSNumber *> *direct;
+@property uint64_t directRoute;
+// (main thread) the last of them shown, and what the app was told of them ("D …": mb_host_stream_next)
+@property double directAt, directToldAt;
+@property long directToldFrames, directToldBytes;
+// (under @synchronized(self), from the engine's thread) how many came that way, and their bytes
+@property long directFrames, directBytes;
 @property CVPixelBufferRef displayed;  // retained: the last shown, put on a layer attached later
 @property NSMutableArray *onLayer;     // the pixel buffers last put on it (display)
 // a pointer over its picture on that layer (@hostapi.stream_pointer): its own sublayer, its picture and size (points),
@@ -126,6 +147,99 @@ static void display(MBStream *s, CVPixelBufferRef px);
 static BOOL wider_than_srgb(CVPixelBufferRef px);
 static void use_texture(MBStream *s, CVPixelBufferRef px, id<MTLTexture> tex, id keep);
 
+// ---- routes: a remote screen's frames straight from an app's engine ----
+
+// A route (the app's call a view is) and the streams its frames and sound go to (0: the app's to take), with the number
+// of the last record offered by it (the app routes it only as it has taken that one: nothing of it left in its queue).
+typedef struct {
+  uint64_t route, seq, used;
+  int32_t video, audio;
+} mb_route;
+#define MB_ROUTES 8
+static mb_route routes[MB_ROUTES];
+static uint64_t routes_used;
+static os_unfair_lock routes_lock = OS_UNFAIR_LOCK_INIT;
+static int (*route_ack)(double route, double ts);
+
+// (under routes_lock) route's entry; made where `make` (in a free one, else one routing nothing used least lately)
+static mb_route *route_at(uint64_t route, BOOL make) {
+  mb_route *empty = NULL, *old = NULL;
+  for (int i = 0; i < MB_ROUTES; i++) {
+    mb_route *r = &routes[i];
+    if (r->route == route && route) {
+      r->used = ++routes_used;
+      return r;
+    }
+    if (!r->route) {
+      if (!empty) empty = r;
+    } else if (!r->video && !r->audio && (!old || r->used < old->used)) {
+      old = r;
+    }
+  }
+  if (!make || !route) return NULL;
+  mb_route *r = empty ?: old;
+  if (r) *r = (mb_route){route, 0, ++routes_used, 0, 0};
+  return r;
+}
+
+// Whether route's frames go to stream sid now.
+static BOOL routed(uint64_t route, int32_t sid) {
+  os_unfair_lock_lock(&routes_lock);
+  mb_route *r = route_at(route, NO);
+  BOOL on = r && r->video == sid;
+  os_unfair_lock_unlock(&routes_lock);
+  return on;
+}
+
+// (main thread) frame ts of route taken, as far as its sender is concerned
+static void route_acked(uint64_t route, double ts) {
+  if (route_ack) route_ack((double)route, ts);
+}
+
+void mb_stream_route_acks(int (*ack)(double route, double ts)) { route_ack = ack; }
+
+// Frame ts let go (the stream's queue): one fed from a route acknowledged to its sender here, else said.
+static void let_go(MBStream *s, double ts) {
+  NSNumber *d = s.direct[@(ts)];
+  if (d) {
+    if (d.longValue >= 0) {
+      s.direct[@(ts)] = @(-1);
+      uint64_t route = s.directRoute;
+      dispatch_async(dispatch_get_main_queue(), ^{ route_acked(route, ts); });
+    }
+    return;
+  }
+  say(s, [@"d " stringByAppendingString:num(ts)]);
+}
+
+static void show_frame(MBStream *s, MBStreamFrame *f);
+static void unroute(int32_t sid, int what);
+static void audio_stop(MBStream *s);
+
+// A frame fed from a route decoded (main thread): shown and acknowledged here while the route still goes to it, nothing
+// of the app's run; else said, as the app's are.
+static void direct_shown(MBStream *s, MBStreamFrame *f, uint64_t route) {
+  if (s.closed) return;
+  if (!routed(route, s.sid)) {
+    @synchronized(s) {
+      [s.decoded addObject:f];
+    }
+    say(s, [NSString stringWithFormat:@"f %@ %d %d", num(f.ts), f.w, f.h]);
+    return;
+  }
+  // (what the app said decoded before it and has not shown yet: passed over)
+  @synchronized(s) {
+    NSMutableArray *left = [NSMutableArray new];
+    for (MBStreamFrame *g in s.decoded) {
+      if (g.ts > f.ts) [left addObject:g];
+    }
+    s.decoded = left;
+  }
+  show_frame(s, f);
+  s.directAt = f.ts;
+  route_acked(route, f.ts);
+}
+
 // ---- H.264 (the stream's queue) ----
 
 static void stop(MBStream *s);
@@ -157,11 +271,11 @@ static void decoded(void *out_ref, void *frame_ref, OSStatus status, VTDecodeInf
         if (image) CVPixelBufferRelease(image);
         [s.inside removeObject:@(ts)];
         if (flags & kVTDecodeInfo_FrameDropped) {
-          say(s, [@"d " stringByAppendingString:num(ts)]);
+          let_go(s, ts);
           return;
         }
         NSLog(@"stream %d: the H.264 decoder failed (%d)", s.sid, (int)status);
-        say(s, [@"d " stringByAppendingString:num(ts)]);
+        let_go(s, ts);
         // anew, from the next key frame
         if (start(s)) say(s, @"b");
         return;
@@ -172,6 +286,17 @@ static void decoded(void *out_ref, void *frame_ref, OSStatus status, VTDecodeInf
       f.w = (int)CVPixelBufferGetWidth(image);
       f.h = (int)CVPixelBufferGetHeight(image);
       f.pixels = image;
+      // one fed from a route: shown there (none let go already); those before it are done with
+      NSNumber *direct = s.direct[@(ts)];
+      if (direct) {
+        for (NSNumber *t in s.direct.allKeys) {
+          if (t.doubleValue <= ts) [s.direct removeObjectForKey:t];
+        }
+        if (direct.longValue < 0) return;
+        uint64_t route = s.directRoute;
+        dispatch_async(dispatch_get_main_queue(), ^{ direct_shown(s, f, route); });
+        return;
+      }
       @synchronized(s) {
         [s.decoded addObject:f];
       }
@@ -188,10 +313,20 @@ static void stop(MBStream *s) {
     s.session = NULL;
   }
   s.generation++;
-  double max = -INFINITY;
-  for (NSNumber *t in s.inside) max = fmax(max, t.doubleValue);
+  // (the app's said let go up to the newest; a route's acknowledged)
+  double max = -INFINITY, routed_max = -INFINITY;
+  for (NSNumber *t in s.inside) {
+    NSNumber *d = s.direct[t];
+    if (!d) max = fmax(max, t.doubleValue);
+    else if (d.longValue >= 0) routed_max = fmax(routed_max, t.doubleValue);
+  }
   [s.inside removeAllObjects];
+  [s.direct removeAllObjects];
   if (max != -INFINITY) say(s, [@"d " stringByAppendingString:num(max)]);
+  if (routed_max != -INFINITY) {
+    uint64_t route = s.directRoute;
+    dispatch_async(dispatch_get_main_queue(), ^{ route_acked(route, routed_max); });
+  }
   s.needKey = YES;
 }
 
@@ -286,13 +421,13 @@ static void configure_hevc(MBStream *s, NSData *hvcc, int w, int h) {
 
 static void feed(MBStream *s, NSData *data, BOOL key, double ts) {
   if (!s.session || (s.needKey && !key)) {
-    say(s, [@"d " stringByAppendingString:num(ts)]);
+    let_go(s, ts);
     return;
   }
   s.needKey = NO;
   if (mb_avc_annexb_size(data.bytes, data.length, s.lengthSize) < 0) {
     // not a frame it can take: the next key frame asked for
-    say(s, [@"d " stringByAppendingString:num(ts)]);
+    let_go(s, ts);
     s.needKey = YES;
     say(s, @"b");
     return;
@@ -307,7 +442,7 @@ static void feed(MBStream *s, NSData *data, BOOL key, double ts) {
   if (st == noErr) st = CMSampleBufferCreateReady(NULL, block, s.format, 1, 1, &timing, 1, &size, &sample);
   if (block) CFRelease(block);
   if (st != noErr) {
-    say(s, [@"d " stringByAppendingString:num(ts)]);
+    let_go(s, ts);
     return;
   }
   if (key) {
@@ -336,7 +471,7 @@ static void feed(MBStream *s, NSData *data, BOOL key, double ts) {
   if (s.inside.count >= 2) {
     double old = s.inside[0].doubleValue;
     [s.inside removeObjectAtIndex:0];
-    say(s, [@"d " stringByAppendingString:num(old)]);
+    let_go(s, old);
   }
 }
 
@@ -395,6 +530,9 @@ int32_t mb_host_stream_open(void) {
   s.retired = [NSMutableArray new];
   s.inside = [NSMutableArray new];
   s.onLayer = [NSMutableArray new];
+  s.audioQueue = dispatch_queue_create("mbui.stream.audio", DISPATCH_QUEUE_SERIAL);
+  s.direct = [NSMutableDictionary new];
+  s.directAt = s.directToldAt = -1;
   s.needKey = YES;
   if (!streams_lock) streams_lock = [NSLock new];
   [streams_lock lock];
@@ -407,6 +545,8 @@ void mb_host_stream_h264(int32_t sid, moonbit_bytes_t avcc, int32_t w, int32_t h
   MBStream *s = stream_of(sid);
   if (!s) return;
   NSData *d = [NSData dataWithBytes:avcc length:(NSUInteger)Moonbit_array_length(avcc)];
+  // (the frames after it the app's to show, whatever their times)
+  s.directAt = -1;
   dispatch_async(s.queue, ^{ configure(s, d, w, h); });
 }
 
@@ -414,6 +554,7 @@ void mb_host_stream_hevc(int32_t sid, moonbit_bytes_t hvcc, int32_t w, int32_t h
   MBStream *s = stream_of(sid);
   if (!s) return;
   NSData *d = [NSData dataWithBytes:hvcc length:(NSUInteger)Moonbit_array_length(hvcc)];
+  s.directAt = -1;
   dispatch_async(s.queue, ^{ configure_hevc(s, d, w, h); });
 }
 
@@ -435,11 +576,21 @@ moonbit_string_t mb_host_stream_next(int32_t sid) {
   MBStream *s = stream_of(sid);
   NSString *e = nil;
   if (s) {
+    long frames = 0, bytes = 0;
     @synchronized(s) {
       if (s.events.count > 0) {
         e = s.events[0];
         [s.events removeObjectAtIndex:0];
       }
+      frames = s.directFrames;
+      bytes = s.directBytes;
+    }
+    // what came by its route since it was last told, after all else it said
+    if (!e && (s.directAt != s.directToldAt || frames != s.directToldFrames)) {
+      e = [NSString stringWithFormat:@"D %@ %ld %ld", num(s.directAt), frames - s.directToldFrames, bytes - s.directToldBytes];
+      s.directToldAt = s.directAt;
+      s.directToldFrames = frames;
+      s.directToldBytes = bytes;
     }
   }
   return mb_string_from_ns(e ?: @"");
@@ -450,6 +601,15 @@ void mb_host_stream_show(int32_t sid, double ts) {
   if (!s) return;
   MBStreamFrame *f = nil;
   @synchronized(s) {
+    // (one older than a frame of its route shown since: passed over)
+    if (ts < s.directAt) {
+      NSMutableArray *left = [NSMutableArray new];
+      for (MBStreamFrame *g in s.decoded) {
+        if (g.ts > ts) [left addObject:g];
+      }
+      s.decoded = left;
+      return;
+    }
     // it, and those decoded before it passed over
     NSUInteger at = NSNotFound;
     for (NSUInteger i = 0; i < s.decoded.count; i++) {
@@ -463,6 +623,11 @@ void mb_host_stream_show(int32_t sid, double ts) {
     }
     s.decoded = left;
   }
+  show_frame(s, f);
+}
+
+// Frame f shown from now (main thread): on its system video layer and as its texture.
+static void show_frame(MBStream *s, MBStreamFrame *f) {
   // on its system video layer (if it has one) as well: what shows there
   if (f.pixels) {
     if (s.displayed) CVPixelBufferRelease(s.displayed);
@@ -587,10 +752,8 @@ void mb_host_stream_close(int32_t sid) {
     [s.events removeAllObjects];
     [s.decoded removeAllObjects];
   }
-  [s.audioPlayer stop];
-  [s.audioEngine stop];
-  s.audioGeneration++;
-  s.audioQueued = 0;
+  unroute(sid, 3);
+  dispatch_async(s.audioQueue, ^{ audio_stop(s); });
   s.display = nil;
   pointer_put(s);
   if (s.displayed) CVPixelBufferRelease(s.displayed);
@@ -713,20 +876,22 @@ id<MTLTexture> mb_stream_texture(int sid) {
   return s ? s.tex : nil;
 }
 
-// Audio belongs to the stream, not to its video decoder: changing picture size does not interrupt sound.
+// Audio belongs to the stream, not to its video decoder: changing picture size does not interrupt sound. Played on the
+// stream's audio queue, the app's packets and its route's alike.
 int32_t mb_host_stream_audio_here(void) { return 1; }
-void mb_host_stream_audio(int32_t sid, moonbit_bytes_t data) {
-  MBStream *s = stream_of(sid);
-  if (!s || s.closed) return;
-  NSUInteger length = (NSUInteger)Moonbit_array_length(data);
-  if (length == 0) {
-    [s.audioPlayer stop];
-    [s.audioEngine stop];
-    s.audioGeneration++;
-    s.audioQueued = 0;
-    return;
-  }
-  if (length != 3840) return;
+
+// (its audio queue) what is queued let go, the player stopped
+static void audio_stop(MBStream *s) {
+  [s.audioPlayer stop];
+  [s.audioEngine stop];
+  s.audioGeneration++;
+  s.audioQueued = 0;
+}
+
+// (its audio queue) one 20 ms packet played after those queued
+static void audio_play(MBStream *s, NSData *data) {
+  if (s.closed || data.length != 3840) return;
+  const uint8_t *bytes = data.bytes;
   AVAudioFormat *format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:48000 channels:2];
   if (!s.audioEngine) {
     s.audioEngine = [AVAudioEngine new];
@@ -756,18 +921,18 @@ void mb_host_stream_audio(int32_t sid, moonbit_bytes_t data) {
   AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:960];
   if (!buffer) return;
   buffer.frameLength = 960;
+  float *left = buffer.floatChannelData[0], *right = buffer.floatChannelData[1];
   for (NSUInteger frame = 0; frame < 960; frame++) {
-    for (NSUInteger channel = 0; channel < 2; channel++) {
-      NSUInteger i = (frame * 2 + channel) * 2;
-      int16_t sample = (int16_t)((uint16_t)data[i] | ((uint16_t)data[i + 1] << 8));
-      buffer.floatChannelData[channel][frame] = (float)sample / 32768.0f;
-    }
+    const uint8_t *p = bytes + frame * 4;
+    left[frame] = (float)(int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8)) / 32768.0f;
+    right[frame] = (float)(int16_t)((uint16_t)p[2] | ((uint16_t)p[3] << 8)) / 32768.0f;
   }
   NSUInteger generation = s.audioGeneration;
   s.audioQueued++;
   __weak MBStream *weak = s;
+  dispatch_queue_t queue = s.audioQueue;
   [s.audioPlayer scheduleBuffer:buffer completionCallbackType:AVAudioPlayerNodeCompletionDataPlayedBack completionHandler:^(AVAudioPlayerNodeCompletionCallbackType type) {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_async(queue, ^{
       MBStream *live = weak;
       if (live && live.audioGeneration == generation && live.audioQueued > 0) {
         live.audioQueued--;
@@ -777,4 +942,87 @@ void mb_host_stream_audio(int32_t sid, moonbit_bytes_t data) {
     });
   }];
   if (!s.audioPlayer.playing && s.audioQueued >= 3) [s.audioPlayer play];
+}
+
+void mb_host_stream_audio(int32_t sid, moonbit_bytes_t data) {
+  MBStream *s = stream_of(sid);
+  if (!s || s.closed) return;
+  NSUInteger length = (NSUInteger)Moonbit_array_length(data);
+  if (length == 0) {
+    // (stopped: what its route plays stops with it, until the app routes it again)
+    unroute(sid, 2);
+    dispatch_async(s.audioQueue, ^{ audio_stop(s); });
+    return;
+  }
+  if (length != 3840) return;
+  NSData *d = [NSData dataWithBytes:data length:length];
+  dispatch_async(s.audioQueue, ^{ audio_play(s, d); });
+}
+
+// ---- routes (an engine's thread; the app's calls on the main thread) ----
+
+// Stream sid no longer where a route's frames (`what` 1) or sound (2) go.
+static void unroute(int32_t sid, int what) {
+  os_unfair_lock_lock(&routes_lock);
+  for (int i = 0; i < MB_ROUTES; i++) {
+    if ((what & 1) && routes[i].video == sid) routes[i].video = 0;
+    if ((what & 2) && routes[i].audio == sid) routes[i].audio = 0;
+  }
+  os_unfair_lock_unlock(&routes_lock);
+}
+
+int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len) {
+  int32_t sid = 0;
+  os_unfair_lock_lock(&routes_lock);
+  mb_route *r = route_at(route, YES);
+  if (r) {
+    r->seq = seq;
+    // (a config: the app's to take, and what follows it, until it routes them again)
+    if (kind == 1) r->video = 0;
+    else if (kind == 5) r->audio = 0;
+    else if (kind == 2) sid = r->video;
+    else if (kind == 6 && len == 3840) sid = r->audio;
+  }
+  os_unfair_lock_unlock(&routes_lock);
+  if (!sid) return 0;
+  @autoreleasepool {
+    MBStream *s = stream_of(sid);
+    if (!s || s.closed) return 0;
+    NSData *d = [[NSData alloc] initWithBytes:bytes length:len];
+    if (kind == 6) {
+      dispatch_async(s.audioQueue, ^{ audio_play(s, d); });
+      return 1;
+    }
+    @synchronized(s) {
+      s.directFrames += 1;
+      s.directBytes += (long)len;
+    }
+    double t = (double)ts;
+    BOOL k = key != 0;
+    dispatch_async(s.queue, ^{
+      if (s.closed) {
+        // (closed meanwhile: taken, as far as its sender is concerned)
+        dispatch_async(dispatch_get_main_queue(), ^{ route_acked(route, t); });
+        return;
+      }
+      s.directRoute = route;
+      s.direct[@(t)] = @((long)d.length);
+      feed(s, d, k, t);
+    });
+  }
+  return 1;
+}
+
+// The app's (main thread): stream sid takes route's frames (`what` 1) and sound (2) from now, where the last record
+// offered by it is the `after`th (nothing of it left in the app's queue); those not asked no longer.
+void mb_host_stream_direct(int32_t sid, double route, double after, int32_t what) {
+  unroute(sid, ~what & 3);
+  if (!(what & 3) || route < 1) return;
+  os_unfair_lock_lock(&routes_lock);
+  mb_route *r = route_at((uint64_t)route, NO);
+  if (r && (double)r->seq == after) {
+    if (what & 1) r->video = sid;
+    if (what & 2) r->audio = sid;
+  }
+  os_unfair_lock_unlock(&routes_lock);
 }

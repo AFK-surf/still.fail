@@ -2144,11 +2144,13 @@ pub struct Stream {
 }
 pub fn Stream::audio(Self, Bytes) -> Unit
 pub fn Stream::close(Self) -> Unit
+pub fn Stream::direct_count(Self) -> (Int32, Int32)
 pub fn Stream::frame(Self, Bytes, Bool, Double) -> Unit
 pub fn Stream::h264(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::id(Self) -> Int32
 pub fn Stream::jpeg(Self, Bytes, Double) -> Unit
 pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Self
+pub fn Stream::route(Self, Int32, Double, video~ : Bool, audio~ : Bool) -> Unit
 pub fn Stream::shown_any(Self) -> Bool
 pub fn Stream::shown_at(Self) -> Double?
 pub fn Stream::size(Self) -> (Int32, Int32)?

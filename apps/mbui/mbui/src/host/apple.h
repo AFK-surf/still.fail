@@ -57,6 +57,14 @@ id<MTLTexture> mb_stream_texture(int sid);
 void mb_stream_attach_layer(int sid, CALayer *layer);
 // that layer placed anew (its view's rect: apple_views.m): what is over it on it (its pointer) put where it goes
 void mb_stream_layout(int sid, double w, double h);
+// a stream's records from another thread, an app's engine's (its shell reads a remote screen itself): record `kind` of
+// route `route` (2 a video frame, `key`, `ts`, its access unit; 6 a sound packet; 1 and 5 their configs, which stop the
+// route's frames or sound being taken until the app has taken them), the `seq`th of all said; 1 when it was taken (fed
+// to the stream the app routed it to, @hostapi.stream_direct: decoded, shown or played and acknowledged here), 0 when
+// it is the app's to take. Any thread, a route's in order.
+int mb_stream_route_take(uint64_t route, int kind, int key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len);
+// how a frame taken so is acknowledged to its sender (`ack(route, ts)`, on the main thread), handed over by the engine
+void mb_stream_route_acks(int (*ack)(double route, double ts));
 
 // text (apple_text.m)
 // drawn at this many pixels a point; a change draws every glyph again

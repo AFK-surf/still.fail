@@ -927,6 +927,15 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
   if o.contains("audio") && self.audio_ready && !self.audio_muted {
     match (self.stream, bytes) { (Some(st), Some(data)) => st.audio(data); _ => () }
   }
+  // (the engine's own read of the view numbers what it says: those after it the host may take, ScreenSess::route)
+  let seq = match (o.get("frame"), o.get("audio")) {
+    (Some(Object(_) as f), _) | (_, Some(Object(_) as f)) =>
+      match field(Some(f), "n") {
+        Some(Number(n, ..)) => Some(n)
+        _ => None
+      }
+    _ => None
+  }
   match o.get("config") {
     Some(Object(_) as c) => {
       let kind = text(Some(c), "codec")
@@ -1018,6 +1027,54 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     }
     _ => ()
   }
+  match seq {
+    Some(n) => self.route(n)
+    None => ()
+  }
+}
+
+///|
+/// The view's frames and sound after the `after`th the engine said (the last taken) taken by the host where they go,
+/// straight from the engine (@ui's Stream::route), while that changes nothing the app draws: the frames to the stream
+/// they show on (the whole's while no part shows over it, the part's while the last part begun shows), its picture on
+/// its system video layer; the sound while it plays. Elsewhere, or as soon as that is not so, they come here as before.
+fn ScreenSess::route(self : ScreenSess, after : Double) -> Unit {
+  if self.call == 0 {
+    return
+  }
+  let shown = self.part_shown()
+  let to_part = self.parting &&
+    self.part_next is None &&
+    shown is Some(_) &&
+    self.parts.last().map(fn(p) { p.1 }) == shown
+  let to_whole = !self.parting && shown is None
+  let audio = self.audio_ready && !self.audio_muted
+  match self.stream {
+    Some(st) => st.route(self.call, after, video=to_whole, audio~)
+    None => ()
+  }
+  match self.part {
+    Some(st) => st.route(self.call, after, video=to_part, audio=false)
+    None => ()
+  }
+}
+
+///|
+/// The frames that came and their bytes: those taken here and those the host took by its route (控制中心's 连接).
+fn ScreenSess::came(self : ScreenSess) -> (Int, Int) {
+  let mut frames = self.frames
+  let mut bytes = self.bytes
+  for st in [self.stream, self.part] {
+    match st {
+      Some(st) => {
+        let (f, b) = st.direct_count()
+        frames += f
+        bytes += b
+      }
+      None => ()
+    }
+  }
+  (frames, bytes)
 }
 
 ///|

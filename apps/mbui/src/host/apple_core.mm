@@ -30,6 +30,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -52,6 +53,7 @@ uint8_t *sf_shell_call_sync(const void *shell, const char *op, const uint8_t *js
 void sf_free(uint8_t *ptr, size_t len);
 void sf_shell_stop(void *shell);
 void sf_shell_set_say(const void *shell, void (*say)(void *, const uint8_t *, size_t, const uint8_t *, size_t), void *ctx);
+void sf_shell_set_media(const void *shell, uint8_t (*media)(void *, uint64_t, uint8_t, uint8_t, uint64_t, uint64_t, const uint8_t *, size_t), void *ctx);
 uint8_t sf_shell_screen_ack(const void *shell, uint64_t call, double ts);
 uint8_t *sf_shell_stats(size_t *out_len);
 int32_t sf_utc_offset_min(double at_ms);
@@ -208,7 +210,23 @@ void shell_say(void *ctx, const uint8_t *json, size_t jl, const uint8_t *bytes, 
   say(reinterpret_cast<const char *>(json), jl, bytes, bl);
 }
 
+/// Where a remote screen's records are offered before they are said (mb_core_route_media): the app's host's.
+std::atomic<mb_core_media_fn> media_take{nullptr};
+
+/// A remote screen's record the shell reads itself, offered to the app's host first (client/shell `Media`): whether it
+/// took it (decoded, played and acknowledged there; nothing said); nothing once the core is stopping.
+uint8_t shell_media(void *ctx, uint64_t call, uint8_t kind, uint8_t key, uint64_t seq, uint64_t ts, const uint8_t *bytes, size_t len) {
+  mb_core_media_fn take = media_take.load(std::memory_order_acquire);
+  if (!take) return 0;
+  auto *gate = static_cast<Gate *>(ctx);
+  std::lock_guard<std::mutex> lock(gate->mutex);
+  if (!gate->open) return 0;
+  return take(call, kind, key, seq, ts, bytes, len) ? 1 : 0;
+}
+
 }  // namespace
+
+void mb_core_route_media(mb_core_media_fn take) { media_take.store(take, std::memory_order_release); }
 
 // ── the host's own answers, from Objective-C ──
 
@@ -754,7 +772,11 @@ static void run(void) {
     C.shell = sf_shell_start(C.dataDir.c_str(), on_complete, C.gate);
     if (!C.shell) fatal("the core's files cannot be kept: " + C.dataDir);
     // (a remote screen's frames said to the app by the shell itself, not through the core's JS)
-    else sf_shell_set_say(C.shell, shell_say, C.gate);
+    else {
+      sf_shell_set_say(C.shell, shell_say, C.gate);
+      // (its picture and sound offered to the app's host first: decoded and played there, past the app's queue)
+      sf_shell_set_media(C.shell, shell_media, C.gate);
+    }
     NSString *path = script_path();
     NSData *script = path ? [NSData dataWithContentsOfFile:path] : nil;
     if (C.shell && !script) fatal(std::string("no core script (MB_CORE_BUNDLE, or core.hbc in the app): ") + (path ? path.UTF8String : "-"));
@@ -896,9 +918,10 @@ int mb_core_screen_ack(double call, double ts) {
   return sf_shell_screen_ack(shell, (uint64_t)call, ts);
 }
 
-// MBUI_PROBE=1: what the shell did of remote screens every 5 s (`PROBE core: tap views=… video=… audio=… acks=…`,
-// those said to the app and the acks it sent itself, and how many reads of streams the core asked meanwhile): whether
-// the views are tapped (client/shell istream.tap).
+// MBUI_PROBE=1: what the shell did of remote screens every 5 s (`PROBE core: tap views=… video=… direct.video=… audio=…
+// direct.audio=… acks=…`, those read, those of them the app's host took itself rather than the app's queue, and the
+// acks it sent itself, and how many reads of streams the core asked meanwhile): whether the views are tapped
+// (client/shell istream.tap) and their frames go straight to the decoder (mb_core_route_media).
 static void probe_taps(void) {
   static dispatch_source_t timer;
   if (timer || !getenv("MBUI_PROBE")) return;
@@ -917,7 +940,7 @@ static void probe_taps(void) {
       return a.count ? [a[0] longLongValue] : 0;
     };
     NSMutableString *line = [NSMutableString stringWithString:@"PROBE core:"];
-    for (NSString *k in @[ @"tap.views", @"tap.video", @"tap.audio", @"tap.acks", @"istream.read", @"istream.write" ])
+    for (NSString *k in @[ @"tap.views", @"tap.video", @"tap.direct.video", @"tap.audio", @"tap.direct.audio", @"tap.acks", @"istream.read", @"istream.write" ])
       [line appendFormat:@" %@=%lld", k, count(calls, k) - count(was, k)];
     was = calls;
     fprintf(stderr, "%s\n", line.UTF8String);

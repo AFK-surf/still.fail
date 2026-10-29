@@ -151,3 +151,59 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
   t.draw()
   assert_true(t.fake.views.last().unwrap() == "close 1", msg="\{t.fake.views}")
 }
+
+///|
+test "a stream shown by its layer has its route's frames taken by the host while it shows itself: what came so said by one event, nothing built" {
+  let cell : Ref[Stream?] = Ref::new(None)
+  let layer : Ref[Bool] = Ref::new(true)
+  let t = Tester::new(
+    fn(c) {
+      match cell.val {
+        Some(s) => c.stream(s, w=Px(320.0), h=Px(180.0), layer=layer.val) |> ignore
+        None => ()
+      }
+    },
+    h264=true,
+  )
+  t.set_stream_layers(true)
+  let acks = []
+  let s = Stream::new(shown=fn(ts) { acks.push(ts) }, broken=fn() {  }, layer=true, quiet=Some(fn(_) { true }))
+  cell.val = Some(s)
+  s.h264(wb_avcc, 640, 360)
+  t.draw()
+  let routes = fn() { t.stream_fed(s.id()).filter(fn(l) { l.has_prefix("route") }) }
+  // nothing shown yet: its sound alone
+  s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
+  s.route(7, 11.0, video=true, audio=true)
+  assert_eq(routes(), ["route 7 after=11 video=false audio=true"])
+  t.stream_shows(s.id(), 1.0, 640, 360)
+  t.draw()
+  // a frame of it shown on its layer: its frames too
+  s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
+  s.route(7, 12.0, video=true, audio=true)
+  assert_eq(routes()[1:].to_array(), ["route 7 after=12 video=true audio=true"])
+  t.stream_shows(s.id(), 2.0, 640, 360)
+  t.frame_at(t.fake.time + said_frame_ms)
+  assert_eq(acks, [1.0, 2.0])
+  // what the host took (shown and said shown there): counted and shown from, as it comes; nothing built, none said
+  // shown again
+  fake_said(t.fake, s.id(), "D 5 3 3000")
+  t.frame_at(t.fake.time + said_frame_ms)
+  assert_eq(t.built_why(), "")
+  assert_eq(s.shown_at(), Some(5.0))
+  assert_eq(s.direct_count(), (3, 3000))
+  assert_eq(acks, [1.0, 2.0])
+  // none shown yet by the route (a config since): counted alone
+  fake_said(t.fake, s.id(), "D -1 1 10")
+  t.frame_at(t.fake.time + said_frame_ms)
+  assert_eq((s.shown_at(), s.direct_count()), (Some(5.0), (4, 3010)))
+  // drawn by the app now (not on its layer): its frames its own again as the next frame begins, its sound still routed
+  layer.val = false
+  t.draw()
+  t.draw()
+  assert_eq(routes()[2:].to_array(), ["route 7 after=-1 video=false audio=true"])
+  // not asked again while nothing changes
+  t.draw()
+  assert_eq(routes().length(), 3)
+  s.close()
+}

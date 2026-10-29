@@ -60,3 +60,6 @@ fn st_pointer(_id : Int, _png : Bytes, _w : Double, _h : Double, _hx : Double, _
 
 ///|
 fn st_pointer_at(_id : Int, _x : Double, _y : Double, _shown : Int) -> Unit { () }
+
+///|
+fn st_direct(_id : Int, _route : Double, _after : Double, _what : Int) -> Unit { () }

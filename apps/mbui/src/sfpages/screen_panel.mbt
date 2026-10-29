@@ -98,14 +98,15 @@ fn screen_count(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     u.first_tick = n
   }
   if n != u.rate_tick {
+    let (frames, bytes) = s.came()
     if u.rate_tick >= 0 {
       let secs = (n - u.rate_tick).to_double()
-      u.fps = Some((s.frames - u.rate_frames).to_double() / secs)
-      u.bps = Some((s.bytes - u.rate_bytes).to_double() * 8.0 / secs)
+      u.fps = Some((frames - u.rate_frames).to_double() / secs)
+      u.bps = Some((bytes - u.rate_bytes).to_double() * 8.0 / secs)
     }
     u.rate_tick = n
-    u.rate_frames = s.frames
-    u.rate_bytes = s.bytes
+    u.rate_frames = frames
+    u.rate_bytes = bytes
   }
 }
 

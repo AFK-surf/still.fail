@@ -989,6 +989,10 @@ impl @hostapi.Host for Native with st_pointer(_, id, png, w, h, hx, hy) { st_poi
 
 ///|
 impl @hostapi.Host for Native with st_pointer_at(_, id, x, y, shown) { st_pointer_at(id, x, y, shown) }
+
+///|
+impl @hostapi.Host for Native with st_direct(_, id, route, after, what) { st_direct(id, route, after, what) }
+
 impl @hostapi.Host for Native with st_h265_here(_) { st_h265_here() }
 
 ///|
