@@ -2815,6 +2815,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tokensText", "String", { doc: "Those, short: 1.2B." }],
     ["costText", "String", { doc: "What they would cost at API prices: $1,234 (≥ with calls of a model without a price)." }],
     ["lineText", "String", { doc: "Both, as a line ends: 1.2B · $1,234." }],
+    ["modelsText", "String", { doc: "The models that made its tokens, the most first: Opus 5.5、Sonnet 5.5 等 4 个模型 (empty with none known)." }],
     ["share", "f64", { doc: "Its tokens as a share of all kinds', what its ring draws (0 to 1)." }],
     ["lead", "String", { doc: "What says it before its tokens: 用 6 个 Claude 订阅账号消耗了." }],
     ["of", "String", { doc: "What says it after: token，折合 $1,234." }],

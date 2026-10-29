@@ -47,6 +47,22 @@ test("the card shared says, by kind of account, how many accounts the chats used
   assert.deepEqual(spent.map((x: J) => Math.round(x.share * 1000) / 1000), [0.784, 0.196, 0.02]);
 });
 
+test("the card says each kind's models, the most tokens first, the first three by name (2026-10-30 用户「token 没有写模型」)", () => {
+  const profiles = [account("c", "claude", ["s", "c"]), account("k", "key", ["s", "k"])];
+  const by = (profile: string, model: string, input: number) => call("d", profile, input, 0, 1, { model });
+  const spent = spentOf(profiles, [at("s", [
+    by("c", "claude-sonnet-5-5", 300),
+    by("c", "claude-opus-5-5", 500),
+    // a model's calls under two spellings, one model
+    by("c", "anthropic/claude-opus-5-5", 200),
+    by("c", "claude-haiku-4-5-20251001", 100),
+    by("c", "claude-fable-5-1", 50),
+    // a call of no model said: its tokens counted, no model named
+    call("d", "k", 40, 0, 1),
+  ])], new Set(["d"]));
+  assert.deepEqual(spent.map((x: J) => [x.kind, x.modelsText]), [["claude", "Opus 5.5、Sonnet 5.5、Haiku 4.5 等 4 个模型"], ["key", ""]]);
+});
+
 test("the card's kinds rank by tokens, with a stable kind order for ties", () => {
   const profiles = [account("g", "grok", ["s", "g"]), account("c", "claude", ["s", "c"]), account("o", "chatgpt", ["s", "o"]), account("k", "kimi", ["s", "k"])];
   const calls = [call("d", "g", 80, 0, 1), call("d", "c", 60, 0, 1), call("d", "o", 90, 0, 1), call("d", "k", 80, 0, 1)];

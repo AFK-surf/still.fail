@@ -105,6 +105,9 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
           c.text(text(first, "lead"), style=poster_words) |> ignore
           c.rich([@ui.span(used, scale~)], style=poster_number) |> ignore
           c.text(text(first, "of"), style=poster_words) |> ignore
+          if text(first, "modelsText") != "" {
+            c.text(text(first, "modelsText"), style=poster_small) |> ignore
+          }
         } else {
           c.rich([@ui.span(count(fleet, "chats").to_string(), scale=@sf.share_poster_number_scale)], style=poster_number)
           |> ignore
@@ -191,6 +194,9 @@ fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         for q in spent {
           let q = Some(q)
           receipt_item(c, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"), false)
+          if text(q, "modelsText") != "" {
+            c.text(text(q, "modelsText"), style=receipt_models) |> ignore
+          }
         }
       })
       |> ignore
@@ -305,6 +311,9 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         // (its tokens and cost under it, as the tasks' average under them: on its line a long name was cut short)
         term_key_line(c, if k == 0 { "accounts" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), "")
         term_key_line(c, "", text(q, "lineText"), "")
+        if text(q, "modelsText") != "" {
+          term_key_line(c, "", text(q, "modelsText"), "")
+        }
       }
       term_key_line(c, "chats", text(fleet, "chatsText"), "")
       term_key_line(c, "devices", text(fleet, "where"), "")
@@ -491,6 +500,11 @@ let receipt_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 ///|
 // kept across runs: a value (no field of it changes)
 let receipt_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
+
+///|
+/// A kind's models under its line, smaller, cut short past it.
+// kept across runs: a value (no field of it changes)
+let receipt_models : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
 
 ///|
 /// A day's date (today's in the orange).

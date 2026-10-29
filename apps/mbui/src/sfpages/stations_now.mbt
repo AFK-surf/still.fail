@@ -109,6 +109,7 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         c.box(style=pic_hero_words, fn() {
           c.text(text(first, "tokensText"), style=pic_number) |> ignore
           c.text(text(first, "of"), style=pic_unit) |> ignore
+          pic_models(c, first)
         })
         |> ignore
       })
@@ -210,9 +211,26 @@ fn pic_other_kinds(c : @ui.Ctx, spent : Array[Json]) -> Unit {
         c.text(text(q, "lineText"), style=pic_key_share) |> ignore
       })
       |> ignore
+      // its models under its name, past where its dot is
+      if text(q, "modelsText") != "" {
+        c.box(style=pic_models_row, fn() {
+          c.box(style=pic_key_dot, fn() {  }) |> ignore
+          pic_models(c, q)
+        })
+        |> ignore
+      }
     }
   })
   |> ignore
+}
+
+///|
+/// The models that made a kind's tokens (the core's `modelsText`: Opus 5.5、Sonnet 5.5), dimmer; none when none is known.
+fn pic_models(c : @ui.Ctx, q : Json?) -> Unit {
+  let models = text(q, "modelsText")
+  if models != "" {
+    c.text(models, style=pic_models_words) |> ignore
+  }
 }
 
 ///|
@@ -357,6 +375,16 @@ let pic_key_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 ///|
 // kept across runs: a value (no field of it changes)
 let pic_key_accounts : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_dim), wrap=false)
+
+///|
+/// A kind's models under its line, where its name starts.
+// kept across runs: a value (no field of it changes)
+let pic_models_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+
+///|
+/// A kind's models: as its accounts are said, cut short past its line.
+// kept across runs: a value (no field of it changes)
+let pic_models_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_dim), w=Cut, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

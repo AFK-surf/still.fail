@@ -100,6 +100,8 @@
   "core-logic.fleet.accounts_by": "用 {n} 个 {kind}账号消耗了",
   "core-logic.fleet.keys_by": "用 {n} 个 API Key 消耗了",
   "core-logic.fleet.accounts": "{n} 个账号",
+  "core-logic.fleet.models_and": "、",
+  "core-logic.fleet.models_more": "{models} 等 {all} 个模型",
   "core-logic.fleet.tokens_of": "token，折合 {cost}",
   "core-logic.fleet.today": "今天",
   "core-logic.fleet.week": "近 7 天",

@@ -118,6 +118,8 @@
     "one": "1 account",
     "other": "{n} accounts"
   },
+  "core-logic.fleet.models_and": ", ",
+  "core-logic.fleet.models_more": "{models} and more, {all} models in all",
   "core-logic.fleet.tokens_of": "tokens, {cost} at API prices",
   "core-logic.fleet.today": "Today",
   "core-logic.fleet.week": "Last 7 days",

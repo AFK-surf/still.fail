@@ -3719,6 +3719,8 @@ export interface FleetSpent {
 	costText: string;
 	/** Both, as a line ends: 1.2B · $1,234. */
 	lineText: string;
+	/** The models that made its tokens, the most first: Opus 5.5、Sonnet 5.5 等 4 个模型 (empty with none known). */
+	modelsText: string;
 	/** Its tokens as a share of all kinds', what its ring draws (0 to 1). */
 	share: number;
 	/** What says it before its tokens: 用 6 个 Claude 订阅账号消耗了. */

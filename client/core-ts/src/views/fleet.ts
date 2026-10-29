@@ -10,6 +10,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { isWatch, remoteOwner } from "../jobs.ts";
 import * as present from "../present.ts";
+import * as model from "../shapes/model.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { GROUPS, groupTitle } from "./profiles.ts";
 import { count, localDay, money } from "./usage.ts";
@@ -26,6 +27,9 @@ const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? 
 /// profile and model).
 export type FleetStation = { station: string; online: boolean; rows: J[]; archived: number[]; jobs: J[]; runs: { at: number; session: string }[]; calls: J[] };
 
+/// How many of a kind's models its line names, the rest counted.
+const MODELS_NAMED = 3;
+
 /// What the workspace's chats used over the last 7 days, by kind of account (2026-10-29 用户：「应该是每个 chat 自己统计」
 /// 「用了哪些账号分别用了多少」「只算 token 和价格」; it was how full each account's week read, which counts what was used
 /// before the days and outside still.fail, and none of a week that reset in them): the calls each station's chats made
@@ -33,11 +37,12 @@ export type FleetStation = { station: string; online: boolean; rows: J[]; archiv
 /// profiles view's items, `profiles`: an account on two stations once), each kind the accounts that made any, their
 /// tokens (read and written, the cache's too) and what they would cost at API prices (as the usage page counts them,
 /// ≥ with calls of a model without a price), its share of all kinds' tokens its ring. The most tokens first; a call of
-/// an account no longer listed left out.
+/// an account no longer listed left out. Each kind says the models that made its tokens (2026-10-30 用户「token 没有写模型」),
+/// the most first, the first MODELS_NAMED by name.
 export function spentOf(profiles: J[], stations: FleetStation[], days: Set<string>): J[] {
   const accountOf = new Map<string, J>();
   for (const p of profiles) for (const m of arr(get(p, "members"))) accountOf.set(`${get(m, "station")}\n${get(m, "profileId")}`, p);
-  const kinds = new Map<string, { accounts: Set<string>; tokens: number; cost: number; unpriced: number }>();
+  const kinds = new Map<string, { accounts: Set<string>; tokens: number; cost: number; unpriced: number; models: Map<string, { name: string; tokens: number }> }>();
   const n = (row: J, k: string) => (typeof get(row, k) === "number" ? row[k] : 0);
   for (const s of stations) {
     for (const row of s.calls) {
@@ -47,9 +52,15 @@ export function spentOf(profiles: J[], stations: FleetStation[], days: Set<strin
       if (account === undefined || kind === null) continue;
       const tokens = n(row, "input") + n(row, "cacheRead") + n(row, "cacheWrite") + n(row, "output");
       if (tokens === 0) continue;
-      const k = kinds.get(kind) ?? { accounts: new Set<string>(), tokens: 0, cost: 0, unpriced: 0 };
+      const k = kinds.get(kind) ?? { accounts: new Set<string>(), tokens: 0, cost: 0, unpriced: 0, models: new Map() };
       k.accounts.add(String(get(account, "key")));
       k.tokens += tokens;
+      const m = str(get(row, "model"));
+      if (m !== null) {
+        const by = k.models.get(model.key(m)) ?? { name: model.name(m), tokens: 0 };
+        by.tokens += tokens;
+        k.models.set(model.key(m), by);
+      }
       if (typeof get(row, "cost") === "number") k.cost += row.cost;
       else k.unpriced += n(row, "calls");
       kinds.set(kind, k);
@@ -66,10 +77,14 @@ export function spentOf(profiles: J[], stations: FleetStation[], days: Set<strin
       // said as a sentence round its tokens (as the usage page says them): 用 6 个 Claude 订阅账号消耗了 | 3.1 亿 | token，折合
       // $1,234; or as its ring's key, a line beside the others': Claude 订阅 · 6 个账号 … 3.1 亿 · $1,234
       const name = groupTitle(kind as (typeof GROUPS)[number]);
+      // the models that made its tokens, the most first (Opus 5.5、Sonnet 5.5 等 4 个模型)
+      const models = [...k.models.values()].sort((a, b) => b.tokens - a.tokens || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map((m) => m.name);
+      const named = models.slice(0, MODELS_NAMED).join(t("core-logic.fleet.models_and"));
+      const modelsText = models.length > MODELS_NAMED ? t("core-logic.fleet.models_more", { models: named, all: models.length }) : named;
       const lead = kind === "key" ? t("core-logic.fleet.keys_by", { n: accounts }) : t("core-logic.fleet.accounts_by", { n: accounts, kind: name });
       return {
         kind, name, accounts, accountsText: t("core-logic.fleet.accounts", { n: accounts }),
-        tokens: k.tokens, tokensText, costText, lineText: `${tokensText} · ${costText}`,
+        tokens: k.tokens, tokensText, costText, modelsText, lineText: `${tokensText} · ${costText}`,
         share: all > 0 ? k.tokens / all : 0, lead, of: t("core-logic.fleet.tokens_of", { cost: costText }),
       };
     });
