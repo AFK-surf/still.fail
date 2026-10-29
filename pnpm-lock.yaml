@@ -41,6 +41,9 @@ importers:
       csstype:
         specifier: ^3.2.3
         version: 3.2.3
+      lightningcss:
+        specifier: 1.33.0
+        version: 1.33.0
       mediabunny:
         specifier: ^1.60.0
         version: 1.60.0

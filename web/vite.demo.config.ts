@@ -22,6 +22,19 @@ const betaHead: Plugin = {
 };
 
 /**
+ * How long a browser keeps the site's files (Cloudflare's static assets read `_headers`; without it each is asked for
+ * again on every visit): those under assets/ are named by what is in them, so for good; the pages and the files kept
+ * under their own names (web/public) are asked for each time, as before.
+ */
+const keptForGood: Plugin = {
+  name: "stillfail-site-kept",
+  apply: (_, env) => !env.isSsrBuild,
+  generateBundle() {
+    this.emitFile({ type: "asset", fileName: "_headers", source: "/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n" });
+  },
+};
+
+/**
  * The last release whose notes are in the repository (docs/releases/<0.1.n>.md, written as each stable release goes
  * out), for the site to say what it brought (src/site/Site.tsx Shipped): its number, its day, how many of its lines are
  * new, better and fixed, and the first few new things (better ones where none are new), each only up to its first pause.
@@ -50,7 +63,7 @@ export default defineConfig({
   root: here("../site"),
   publicDir: here("public"),
   base: "/",
-  plugins: [react(), vanillaExtractPlugin(), ...(beta ? [betaHead] : [])],
+  plugins: [react(), vanillaExtractPlugin(), keptForGood, ...(beta ? [betaHead] : [])],
   define: {
     __SITE_BETA__: JSON.stringify(beta),
     __SITE_RELEASE__: JSON.stringify(lastRelease()),
@@ -80,8 +93,9 @@ export default defineConfig({
     // The page (in Chinese, and in English: en/), and the phone beside the computer on it (site/phone.html: the app as
     // wide as a phone).
     rollupOptions: { input: { index: here("../site/index.html"), en: here("../site/en/index.html"), phone: here("../site/phone.html"), phoneEn: here("../site/en/phone.html") } },
-    // Every style in one sheet, in each page's head: the demo's script comes after the page's own (src/site/main.tsx),
-    // and the frame it was built with (its app as HTML) is drawn with the app's styles before it is here.
+    // Every style in one sheet: the demo's script comes after the page's own (src/site/main.tsx), and the frame it was
+    // built with (its app as HTML) is drawn with the app's styles before it is here. What the built page draws of it is
+    // also put in the page's head, and the sheet itself waits at the end of its body (web/site-prerender.mjs).
     cssCodeSplit: false,
   },
 });
