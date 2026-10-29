@@ -66,6 +66,12 @@ priv struct Composing {
   /// the composer's own)
   mut outside : Bool
   mut menu_up : Bool
+  /// what its field says while empty as it was last drawn, till another is to be said and it has faded out
+  /// (composer_text)
+  hint_shown : @signals.Signal[String]
+  /// the cursor asked into it in this frame (it has it from the next): what it says while empty is
+  /// what it says with the cursor in it already
+  mut taking : Bool
   /// its 抄送 menu open (cc_chooser)
   mut cc_open : Bool
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
@@ -107,6 +113,8 @@ let composing : Composing = {
   restore_errors: @sf.LiveMap::new(),
   outside: false,
   menu_up: false,
+  hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
+  taking: false,
   cc_open: false,
   wanted: false,
   grounds: {},
@@ -139,6 +147,8 @@ fn composing_reset() -> Unit {
   composing.menu_up = false
   composing.cc_open = false
   composing.wanted = false
+  composing.hint_shown.set("")
+  composing.taking = false
 }
 
 ///|
@@ -174,6 +184,7 @@ pub fn composer(
     composing.roomy_before = composing.roomy
     composing.draft_before = composing.draft
     composing.toolbar_before = composing.toolbar
+    composing.taking = false
   }
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
@@ -181,6 +192,7 @@ pub fn composer(
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
     if !@sf.soft_keyboard() && !c.field_focused() {
       c.focus_editor(composer_field_key)
+      composing.taking = true
     }
   }
   // asked for (a new chat: composer_take_focus), with touch too, its keyboard up
@@ -193,6 +205,7 @@ pub fn composer(
       // (the press that asked for it, lifted outside it, not taken for one letting go of the keyboard)
       composing.outside = false
       c.focus_editor(composer_field_key)
+      composing.taking = true
     }
   }
   let focused = c.editor_focused(composer_field_key)
@@ -580,67 +593,93 @@ fn composer_text(
   let no_files = spec.locked || spec.offline
   // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
   @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
+  // what it says while empty changed (the cursor gone from it: the key that brings it back; back in it: what to write)
+  // fades out, then the other in where it was, never one put for the other at once
+  let wanted = if hint != "" { hint } else { spec.placeholder }
+  // (another chat's, or its first: what it says from the first, as it is)
+  if composing.hint_shown.get() == "" || !composing.same_draft {
+    composing.hint_shown.set(wanted)
+  }
+  let said_key = "composer/said/" + spec.draft
+  let said_fade = @motion.trans(fade=0.0, spec=@motion.tween(@sf.hint_back_ms, ease=Out))
+  let said_leave = @motion.trans(fade=0.0, spec=@motion.tween(@sf.hint_back_ms, ease=Leave))
+  let said_look = match
+    @motion.presence(c, said_key, wanted == composing.hint_shown.get(), enter=said_fade, exit=said_leave) {
+    Some(look) => look
+    None => {
+      composing.hint_shown.set(wanted)
+      @motion.presence(c, said_key, true, enter=said_fade, exit=said_leave).unwrap_or(@ui.look(alpha=0.0))
+    }
+  }
+  let said = composing.hint_shown.get()
+  // (what moves with the box is the words' own room, not the room round them: their margins in it are other on one
+  // line than opened, and moved from where that room showed, the words jumped by the difference as it set out)
+  let mut words = -1
   c.box(style=if multiline { text_open } else { text_shut }, fn() {
-    // (what is typed set as its message will set it: the theme's words)
-    let (size, line) = c.style_size(@sf.theme().t.words)
-    let res = c.editor(
-      composer_field_key,
-      placeholder=if hint != "" { hint } else { spec.placeholder },
-      words=true,
-      font_size=size,
-      line~,
-      trim=true,
-      max_lines=text_lines(c),
-      plain=true,
-      color=p.text,
-      placeholder_color=@sf.alpha(p.subtle, hint_in.get()),
-      caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
-      enter_sends=@sf.enter_sends(),
-      // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
-      leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
-      files=!no_files,
-      // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
-      paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
-      look=@sfbase.refs_look(w.key, p.accent),
-      field=w.field,
-    )
-    match res.pasted {
-      Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
-      None => ()
-    }
-    // `@` and a few letters: the chats they find over the composer (Enter picks one there)
-    let menu = ref_menu(c, src, spec, w, cap, res.focused)
-    composing.menu_up = menu
-    match res.submitted {
-      // (they stay in the field until they go)
-      Some(words) => {
-        if words != w.text.get() {
-          writing_text(src, w, words)
-        }
-        submit()
+    words = c.box(style=text_own, fn() {
+      // (what is typed set as its message will set it: the theme's words)
+      let (size, line) = c.style_size(@sf.theme().t.words)
+      let res = c.editor(
+        composer_field_key,
+        placeholder=said,
+        words=true,
+        font_size=size,
+        line~,
+        trim=true,
+        max_lines=text_lines(c),
+        plain=true,
+        color=p.text,
+        placeholder_color=@sf.alpha(p.subtle, hint_in.get() * said_look.alpha),
+        caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
+        enter_sends=@sf.enter_sends(),
+        // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
+        leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
+        files=!no_files,
+        // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
+        paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
+        look=@sfbase.refs_look(w.key, p.accent),
+        field=w.field,
+      )
+      match res.pasted {
+        Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
+        None => ()
       }
-      None =>
-        if res.text != w.text.get() && !w.starting {
-          writing_text(src, w, res.text)
-          warm(c, src, spec)
+      // `@` and a few letters: the chats they find over the composer (Enter picks one there)
+      let menu = ref_menu(c, src, spec, w, cap, res.focused)
+      composing.menu_up = menu
+      match res.submitted {
+        // (they stay in the field until they go)
+        Some(words) => {
+          if words != w.text.get() {
+            writing_text(src, w, words)
+          }
+          submit()
         }
-    }
-    // nothing typed: the chat above or below, as the list shows them now
-    if res.focused && w.text.get() == "" && !(@sfbase.neighbour_held.val)() && !menu {
-      if c.key_pressed(@ui.key_code_up, in_field=true) {
-        (@sfbase.neighbour_go.val)(src, ws, -1)
-      } else if c.key_pressed(@ui.key_code_down, in_field=true) {
-        (@sfbase.neighbour_go.val)(src, ws, 1)
+        None =>
+          if res.text != w.text.get() && !w.starting {
+            writing_text(src, w, res.text)
+            warm(c, src, spec)
+          }
       }
-    }
+      // nothing typed: the chat above or below, as the list shows them now
+      if res.focused && w.text.get() == "" && !(@sfbase.neighbour_held.val)() && !menu {
+        if c.key_pressed(@ui.key_code_up, in_field=true) {
+          (@sfbase.neighbour_go.val)(src, ws, -1)
+        } else if c.key_pressed(@ui.key_code_down, in_field=true) {
+          (@sfbase.neighbour_go.val)(src, ws, 1)
+        }
+      }
+    })
   })
+  |> ignore
+  words
 }
 
 ///|
 /// What the box says instead of its placeholder with keyboard and mouse and nothing that takes keys focused: that the composer's
 /// key puts the cursor there ("" otherwise).
 fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
-  if locked || @sf.soft_keyboard() || c.field_focused() {
+  if locked || @sf.soft_keyboard() || c.field_focused() || composing.taking {
     return ""
   }
   match @settings.key_label(prefs, "composer.focus") {
@@ -1300,6 +1339,11 @@ let text_shut : @ui.Style = @ui.style(w=@sf.grow, pr=S2, py=S1_25)
 ///|
 // kept across runs: a value (no field of it changes)
 let text_open : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+
+///|
+/// The words' own room in it (composer_text): as wide as what is round them, what moves as the box changes shape.
+// kept across runs: a value (no field of it changes)
+let text_own : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// How wide the composer opened sets what is typed in it, at the foot of a pane `pane` wide (its box less its padding
