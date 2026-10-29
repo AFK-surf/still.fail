@@ -1159,7 +1159,7 @@ pub let quoted_into : Map[String, Array[(String, String, String, Json)]]
 
 pub let read_only_words : String
 
-pub fn read_place(Reading, ChatView, Array[Entry], @ui.ListReader, Double, Double) -> Unit
+pub fn read_place(Reading, ChatView, Array[Entry], @ui.ListReader, Double, Double, Int32) -> Unit
 
 pub fn reader_key(DriveAt) -> String
 
@@ -1474,6 +1474,8 @@ pub fn under_reset() -> Unit
 pub fn under_rest() -> Double
 
 pub fn under_turn(String) -> Double
+
+pub let unseen_at : Double
 
 pub let update : Update
 
@@ -2682,6 +2684,8 @@ pub(all) struct Reading {
   mut seen_whole : Double
   mut top_seq : Double
   mut bottom_seq : Double
+  mut view_frame : Int32
+  mut state_seen : Bool
   mut top_off : Double
   mut at_end : Bool
   mut told_place : String
@@ -2735,6 +2739,7 @@ pub(all) struct Reading {
   mut motion_list : String
   mut motion_keys : Array[String]
 }
+pub fn Reading::sees(Self, Int32, Double?) -> Bool
 
 pub(all) struct Relaying {
   station : @signals.Signal[String]
@@ -3034,12 +3039,13 @@ pub fn Turns::ask(Self, @ui.Ctx, TurnFor, Double, after? : Bool) -> Unit
 pub fn Turns::emits(Self, @ui.Ctx) -> Unit
 pub fn Turns::emitting(Self) -> Bool
 pub fn Turns::free_at(Self, TurnAsk) -> Double
-pub fn Turns::in_turn(Self, @ui.Ctx, String, Bool, Double) -> Bool
+pub fn Turns::in_turn(Self, @ui.Ctx, String, Bool, Double, seen~ : Bool) -> Bool
 pub fn Turns::keep_turn(Self, @ui.Ctx) -> Unit
 pub fn Turns::moment(Self, @ui.Ctx) -> Double
 pub fn Turns::next_ask(Self) -> Int32?
 pub fn Turns::over(Self, @ui.Ctx, TurnFor, Double) -> Unit
 pub fn Turns::send(Self, @ui.Ctx, Double) -> Unit
+pub fn Turns::start(Self, String) -> Double?
 pub fn Turns::start_of(Self, String) -> Double
 pub fn Turns::started_at(Self, String) -> Double
 pub fn Turns::step(Self, @ui.Ctx, Double) -> Unit

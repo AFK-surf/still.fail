@@ -58,6 +58,21 @@ pub fn button(
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
   let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
+  // (turning and greyed as a control answers: over dur_ms, never at once; turning, its size the same: the spinner in
+  // its icon's place, or over its words as they fade)
+  let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
+  let seen = @motion.animate(
+    c,
+    "sf-btn-seen/\{id}",
+    if disabled {
+      0.45
+    } else if busy {
+      0.7
+    } else {
+      1.0
+    },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
   let (ground, line, ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
@@ -112,22 +127,28 @@ pub fn button(
     radius=height / 2.0,
     border=if line != 0L && line != ground { 1.0 } else { 0.0 },
     border_color=line,
-    opacity=if disabled { 0.45 } else if busy { 0.7 } else { 1.0 },
+    opacity=seen,
     id=if live { id } else { 0 },
     fn() {
-      if busy {
+      let turn = fn() {
         spinner(
           c,
+          size=button_icon,
           ring=if solid { alpha(ink, 0.3) } else { p.line_strong },
           arc=if solid { ink } else { p.accent },
         )
         |> ignore
-      } else if icon != "" {
-        // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes
-        // taking none, so the two ends look alike)
-        draw_icon(c, icon, button_icon, ink, by_ink=true)
       }
-      c.text(
+      if icon != "" {
+        if busy {
+          turn()
+        } else {
+          // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes
+          // taking none, so the two ends look alike)
+          draw_icon(c, icon, button_icon, ink, by_ink=true)
+        }
+      }
+      let words = c.text(
         label,
         size=t.t.ui,
         weight=if t.touch { 600 } else { 500 },
@@ -135,7 +156,14 @@ pub fn button(
         wrap=false,
         line=t.t.ui_line,
       )
-      |> ignore
+      if icon == "" && turning > 0.0 {
+        c.look(words, @ui.look(alpha=1.0 - turning))
+        c.layer(fn() {
+          let s = c.box(style=button_turning, turn)
+          c.look(s, @ui.look(alpha=turning))
+        })
+        |> ignore
+      }
     },
   )
   // (in a page's bones, one piece where it has a ground; one of words alone, its words)
@@ -158,6 +186,11 @@ let button_padx : Double = 16.0
 ///|
 /// How big a button's icon is.
 let button_icon : Double = 16.0
+
+///|
+/// Where a button with no icon turns while busy: over its words, in the middle (button).
+// kept across runs: a value (no field of it changes)
+let button_turning : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
@@ -3576,6 +3609,27 @@ pub fn ask_line_mark() -> @ui.Style {
 }
 
 ///|
+/// How big the check in a picked option's disc is, of the disc (options_card).
+pub let option_check_share : Double = 0.6
+
+///|
+/// Where the check stands in a picked option's disc, over its number: its middle (options_card).
+// kept across runs: a value (no field of it changes)
+let option_check_room : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+
+///|
+/// How far an option's row keeps its words from its end, where the one being sent turns (options_card).
+let option_row_end : Double = 12.0
+
+///|
+/// Room at the start of ask_line_card's row where no mark leads it (what the chat needed, let go): its words where the
+/// mark `icon` wide would start in ask_line_mark's column, as far in as what ends the row (ask_line_end) is from its end.
+pub fn ask_line_start(icon : Double) -> @ui.Style {
+  let side = (ask_line_disc() - icon) / 2.0
+  @ui.style(pl=room(side))
+}
+
+///|
 /// Room at the end of ask_line_card's row for what ends it (忽略) to stand as far from the row's end as a mark `icon`
 /// wide in the middle of ask_line_mark's column stands from its start.
 pub fn ask_line_end(icon : Double) -> @ui.Style {
@@ -3649,33 +3703,51 @@ pub fn options_card(
         // under a mouse's pointer its row's ground, in any layout (Decisions.css.ts choice:hover)
         let mouse = @ui.pointing() is Mouse
         let hot = mouse && free && c.lit(id)
+        // (the one picked, answered: a check in its disc where its number was, on the accent; the rest half there, the
+        // one being sent turning at its end: each over dur_ms, as a control answers, never at once)
+        let picked_here = !history && chosen == Some(i)
+        let ease = @motion.tween(dur_ms, ease=Out)
+        let k = key + "/" + i.to_string()
+        let there = @motion.animate(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
+        let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
+        let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
         c.box(
           dir=Row,
           w=Fill(1.0),
           pl=ot.pad_in,
-          pr=12.0,
+          pr=option_row_end,
           pt=ot.pad_in,
           pb=ot.pad_in,
           gap=12.0,
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 },
+          opacity=there,
           id~,
           fn() {
             c.box(
               w=Px(ot.disc),
               h=Px(ot.disc),
               radius=ot.disc / 2.0,
-              bg=if o.2 { t.p.accent } else { alpha(t.p.text, 0.09) },
+              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked, alpha(t.p.text, 0.09)) },
               align=ACenter,
               justify=JCenter,
               fn() {
                 let color = if o.2 { 0xFFFFFFFFL } else { t.p.muted }
-                if i < 6 {
-                  icon(c, "option-\{i + 1}", size=ot.disc, color~) |> ignore
+                let number = if i < 6 {
+                  icon(c, "option-\{i + 1}", size=ot.disc, color~)
                 } else {
-                  c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false) |> ignore
+                  c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false)
+                }
+                if ticked > 0.0 {
+                  c.look(number, @ui.look(alpha=1.0 - ticked))
+                  c.layer(fn() {
+                    let mark = c.box(style=option_check_room, fn() {
+                      icon(c, "check", size=ot.disc * option_check_share, color=0xFFFFFFFFL) |> ignore
+                    })
+                    c.look(mark, @ui.look(alpha=ticked))
+                  })
+                  |> ignore
                 }
               },
             )
@@ -3687,8 +3759,14 @@ pub fn options_card(
               }
             })
             |> ignore
-            if busy == Some(i) {
-              c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore })
+            // (turning over the row's end, in what it leaves at the end of the words: never narrowing them)
+            if turning > 0.0 {
+              c.layer(fn() {
+                let s = c.box(style=@ui.style(w=Full, align=AEnd, pt=room_of(ot.pad_in), pr=room_of(option_row_end)), fn() {
+                  c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore }) |> ignore
+                })
+                c.look(s, @ui.look(alpha=turning))
+              })
               |> ignore
             }
             if history && chosen == Some(i) {

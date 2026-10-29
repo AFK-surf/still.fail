@@ -750,7 +750,7 @@ pub let quoted_into : Map[String, Array[(String, String, String, Json)]]
 
 pub let read_only_words : String
 
-pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double) -> Unit
+pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double, Int32) -> Unit
 
 pub fn reader_key(@sfbase.DriveAt) -> String
 
@@ -971,6 +971,8 @@ pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion
 pub fn under_rest() -> Double
 
 pub fn under_turn(String) -> Double
+
+pub let unseen_at : Double
 
 pub let update : @sfbase.Update
 

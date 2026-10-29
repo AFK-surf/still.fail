@@ -1,6 +1,6 @@
 // A chat's cards answered from the chat, over the fixture's own answers (chat_fixture.mbt: a card answered or let go
-// at once): what goes, what comes in its place, and how long it takes (Decisions.kt DecisionUnder,
-// Chat.kt AskDismiss, ChatBar).
+// at once): on screen the card stays as it is, none of it pressed any more; out of sight it is how it went
+// (sfbase's list_turns.mbt Turns::in_turn; the user, 2026-10-29: what is answered moves nothing in the list).
 
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
@@ -23,9 +23,14 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
 }
 
 ///|
-/// Answered options gone: faded out, their room closed on the rows' spring (a little late), how it went faded in.
-fn options_gone_ms() -> Double {
-  dmax(close_gap.duration(1.0, 0.0, 0.0), 2.0 * options_out_ms)
+/// The chat left for Home and opened again: what was answered in it has been out of sight.
+fn out_of_sight(t : @ui.Tester) -> Unit {
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.run_for(@ui.nav_push_ms)
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
 }
 
 ///|
@@ -35,8 +40,9 @@ test "answered options can be read again by hovering or holding the outcome, wit
     let t = cards_core(calls, platform~)
     scroll_to_words(t, "把首页和聊天页的截图都更新")
     tap_now(t, "把首页和聊天页的截图都更新")
-    let at = close_turn_start(t)
-    t.run_for(at + options_gone_ms() + @sfpages.reveal_ms - t.time())
+    t.run_for(turn_most_ms)
+    out_of_sight(t)
+    scroll_to_words(t, "你 选择了「一起换」")
     assert_true(t.find("这次只改列表，截图下次再说") is None)
     let (x, y) = t.find("你 选择了「一起换」").unwrap()
     let (_, _, width, _) = t.rect_of("你 选择了「一起换」").unwrap()
@@ -65,19 +71,6 @@ test "answered options can be read again by hovering or holding the outcome, wit
 }
 
 ///|
-/// When the first row's card's options start to close, once answered: their turn after the answer's coming in (and
-/// the list after it), declared once the answer is in the list and the list has set out after it: the answer taken
-/// in, its turn come, then the frame after (the list's glide after it laid out in its turn's frame).
-fn close_turn_start(t : @ui.Tester) -> Double raise {
-  t.draw()
-  t.draw()
-  t.draw()
-  let at = turns_of("ws1/st1\u{1}s-c1").start_of("ask/ts8")
-  assert_true(at < @double.infinity)
-  at
-}
-
-///|
 /// `words` tapped where it is, as two inputs (the press, the lift), each drawn.
 fn tap_now(t : @ui.Tester, words : String) -> Unit {
   let (x, y) = t.find(words).unwrap()
@@ -98,70 +91,69 @@ fn scroll_to_words(t : @ui.Tester, words : String) -> Unit {
 }
 
 ///|
-test "an option answered: the options go, how it went comes in their place, the picked one as it was" {
+/// Whether the words `what` are drawn faded out (there, their room kept, nothing of them seen).
+fn faded(t : @ui.Tester, what : String) -> Bool {
+  match t.look_of(what) {
+    Some((_, _, alpha)) => alpha < 0.01
+    None => false
+  }
+}
+
+///|
+/// How tall the card's options are, from the first's top to the last's foot.
+fn options_tall(t : @ui.Tester) -> Double {
+  let (_, top, _, _) = t.rect_of("把首页和聊天页的截图都更新").unwrap()
+  let (_, y, _, h) = t.rect_of("这次只改列表，截图下次再说").unwrap()
+  y + h - top
+}
+
+///|
+test "an option answered on screen: the card stays as it is, none pressed again; out of sight, how it went in its place" {
   let calls : Array[Made] = []
   let t = cards_core(calls)
   scroll_to_words(t, "把首页和聊天页的截图都更新")
+  let tall = options_tall(t)
   tap_now(t, "把首页和聊天页的截图都更新")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // they close in their turn, after the answer has come in (turns.mbt): its rise and the list after it
-  let at = close_turn_start(t)
-  // half way through their fade: the options still drawn as they go (only drawn: a tap on them answers nothing), 忽略
-  // going with them
-  t.run_for(at + options_out_ms / 2.0 - t.time())
-  assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
+  // all that comes of it come: the options still there as they were, 忽略 faded in its place, how it went said in the
+  // line that said who decides
+  t.run_for(turn_most_ms)
+  assert_eq(options_tall(t), tall)
+  assert_true(t.find("你 选择了「一起换」") is Some(_))
+  assert_true(t.find("等 林 决定") is None)
+  assert_true(faded(t, "忽略"))
+  // (none of them answers again)
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // once they have gone (faded, then their room closing on the delayed spring), how it went
-  t.run_for(options_gone_ms())
-  assert_true(t.find("把首页和聊天页的截图都更新") is None)
+  t.assert_idle()
+  // out of sight, it is how it went, at once
+  out_of_sight(t)
+  scroll_to_words(t, "你 选择了「一起换」")
   assert_true(t.find("你 选择了「一起换」") is Some(_))
-  assert_true(t.find("忽略") is None)
-  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
-  t.run_for(@sfpages.reveal_ms)
+  assert_true(t.find("把首页和聊天页的截图都更新") is None)
+  assert_true(t.rest_of("under/") < 0.0)
   t.assert_idle()
 }
 
 ///|
-test "the options' room closes on the rows' spring, a little late, and the line fades in after them" {
-  let calls : Array[Made] = []
-  let t = cards_core(calls)
-  scroll_to_words(t, "把首页和聊天页的截图都更新")
-  let (_, _, _, h0) = t.rect_of("你 选择了").unwrap_or((0.0, 0.0, 0.0, -1.0))
-  assert_eq(h0, -1.0)
-  tap_now(t, "把首页和聊天页的截图都更新")
-  // within their fade the options still are (from their turn: close_turn_start)
-  let at = close_turn_start(t)
-  t.run_for(at + options_out_ms / 2.0 - t.time())
-  assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
-  // once they have faded, the line is
-  t.run_for(options_out_ms)
-  assert_true(t.find("你 选择了「一起换」") is Some(_))
-  // and their room closed
-  t.run_for(options_gone_ms())
-  assert_true(t.find("把首页和聊天页的截图都更新") is None)
-  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
-  t.run_for(@sfpages.reveal_ms)
-  t.assert_idle()
-}
-
-///|
-test "忽略: it and the ask go at once (decision.dismiss), drawn going, then gone" {
+test "忽略 on screen: let go at once (decision.dismiss), faded where it is, the card as it was; out of sight, gone" {
   let calls : Array[Made] = []
   let t = cards_core(calls)
   scroll_to_words(t, "忽略")
+  let tall = options_tall(t)
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  // going: drawn, not tapped
-  t.run_for(archive_ms / 4.0)
-  assert_true(t.find("忽略") is Some(_))
-  tap_now(t, "忽略")
+  // faded where it is (only drawn: not tapped), its room kept
+  let (x, y) = t.find("忽略").unwrap()
+  t.run_for(turn_most_ms)
+  assert_true(faded(t, "忽略"))
+  assert_eq(options_tall(t), tall)
+  t.press_at(x, y)
+  t.release(x, y)
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  t.run_for(archive_ms)
+  t.assert_idle()
+  out_of_sight(t)
+  assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("忽略") is None)
-  // the ask's room closed after it
-  t.run_for(options_gone_ms())
-  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
-  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }

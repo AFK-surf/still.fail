@@ -1,6 +1,7 @@
 // 22-answer-option (e2e/traces/answer-option.trace: Studio against the local still.fail): the agent asks with an
 // options card (e2e/fake/claude.mjs `card:`), its options under its words, the recommended one marked; one tapped
-// answers it (decision.answer: the viewer's message quoting the post), the card saying how it went.
+// answers it (decision.answer: the viewer's message quoting the post), the card staying as it is on screen, the one
+// picked marked, none pressed any more (how it went is its line once out of sight: cards_wbtest.mbt).
 
 ///|
 test "22-answer-option" {
@@ -18,16 +19,13 @@ test "22-answer-option" {
     f.gone("正在发送")
     f.see("=一起换 083209")
     f.tap("=一起换 083209")
-    f.see("选择了")
-    // the options gone, 你 选择了「…」 in their place: their motions (from the chat's change saying the card decided,
-    // which may come after the message quoting it) to their end, in a scripted run too (the list back at its end as
-    // the room closes, told to the core)
-    f.until_moving("under-look/options/") |> ignore
-    f.run_to(@sfapp.under_rest())
-    f.gone("=先不换 083209")
+    f.answered("decision.answer", 1)
     // the answer handed to the agent, its turn on it to its end (the fake's own posts nothing: the station says so),
     // the chat's mark at work gone with it
     f.see("本轮 agent 未在对话中回复")
+    // the card decided long since: its options there as they were, nothing under the post going or coming
+    f.see("=先不换 083209")
+    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

@@ -15,12 +15,17 @@ pub fn phone_card(
   mine : Bool,
   lasts? : String = "chat",
   who? : String? = None,
+  ended? : (String, String, String)? = None,
 ) -> Unit {
-  // (a card of words, as a vault request's: its answer in its foot corners)
+  // (a card of words, as a vault request's: its answer in its foot corners; answered while it shows, how it went in its
+  // answer's place: answered_in_place)
   @sf.card(c, fn() {
     ask_words(c, tr("android-misc.adb.ask.chat.title"), reason)
     match core {
-      Some(core) if mine => phone_foot(c, core, station, request, lasts)
+      Some(core) if mine =>
+        answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", phone_outcome_words(e.0, e.1, e.2)) }), fn() {
+          phone_foot(c, core, station, request, lasts)
+        })
       _ =>
         match who {
           Some(w) if w != "" => c.text(w, style=ask_note) |> ignore
@@ -95,15 +100,21 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
 /// ended (已收回, 对话已归档, 授权已到期).
 pub fn phone_outcome(c : @ui.Ctx, status : String, scope : String, why : String) -> Unit {
-  let scope = if scope == "hour" { "hour" } else { "chat" }
-  let words = match status {
-    "granted" => fill("android-misc.adb.ask.granted", [("scope", tr("android-settings.vault.scope." + scope))])
-    "denied" if why == "" => tr("android-misc.adb.ask.denied")
-    _ => fill("android-misc.adb.ask.ended", [("why", if why == "" { tr("android-misc.adb.ask.denied") } else { why })])
-  }
+  let words = phone_outcome_words(status, scope, why)
   c.box(style=ask_ended, fn() {
     c.box(style=if status == "granted" { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
     c.text(words, style=ask_ended_words) |> ignore
   })
   |> ignore
+}
+
+///|
+/// How a request ended, in words (phone_outcome's).
+pub fn phone_outcome_words(status : String, scope : String, why : String) -> String {
+  let scope = if scope == "hour" { "hour" } else { "chat" }
+  match status {
+    "granted" => fill("android-misc.adb.ask.granted", [("scope", tr("android-settings.vault.scope." + scope))])
+    "denied" if why == "" => tr("android-misc.adb.ask.denied")
+    _ => fill("android-misc.adb.ask.ended", [("why", if why == "" { tr("android-misc.adb.ask.denied") } else { why })])
+  }
 }

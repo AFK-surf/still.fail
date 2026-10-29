@@ -1,7 +1,7 @@
-// 70-card-motion (e2e/traces/card-motion.trace): an options card answered in the chat as the Android app shows it
-// (Decisions.kt DecisionUnder): the option tapped, the options and 忽略 go and 你 选择了「…」 comes in their place; then
-// another card let go with 忽略 (280 ms, ArchiveEase, its room closing). The motions as the run's motion log had them:
-// the options fading to 90% and their room closing on the rows' spring after, the line's room opening; 忽略 to 85%.
+// 70-card-motion (e2e/traces/card-motion.trace): an options card answered in the chat: on screen it stays as it is,
+// the one picked marked, none pressed any more, nothing under the post going or coming; then another card let go
+// with 忽略, which fades where it is (280 ms, ArchiveEase), its room kept (sfbase's list_turns.mbt Turns::in_turn:
+// what is answered goes only out of sight).
 
 ///|
 test "70-card-motion" {
@@ -17,32 +17,12 @@ test "70-card-motion" {
     f.gone("正在发送")
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
-    // (the options go once the answer has been taken: decision.answer answered)
     f.answered("decision.answer", 1)
-    // answered (decision.answer): the options fade and shrink to 90% on their 200 ms from when their turn to close
-    // comes (turns.mbt, ListTurns.kt: after what came with the answer, the list at rest after it), their room closing
-    // on the rows' spring after them; how it went comes in their place, its room opening
-    f.until(fn() { @sfapp.under_turn("ask/") >= 0.0 && @sfapp.under_turn("ask/") < @double.infinity })
-    // (its start as declared then: the list's glide after what came, once set out, can put it later; run to it again
-    // until it has come)
-    let mut from = @sfapp.under_turn("ask/")
-    while from > f.t.time() {
-      f.run_to(from)
-      from = @sfapp.under_turn("ask/")
-    }
-    // (checks: while a script is written over a trace the app has outgrown, said and the steps after written all the
-    // same)
-    f.check(
-      f.t.rest_of("under-look/options/") == from + @sfapp.options_out_ms,
-      "the options at rest at \{f.t.rest_of("under-look/options/")}, not \{from + @sfapp.options_out_ms}",
-    )
-    f.check(f.t.rest_of("under/options/") > from + @sfapp.options_out_ms, "their room closes after them")
-    f.check(f.t.rest_of("under/outcome/") > from, "how it went comes in their place")
-    // (their shrinking to 90% not checked here: Tester::look_of by words takes the first node holding them, and the
-    // message sent, card: and all, holds the option's words before the option does)
-    f.run_to(@sfapp.under_rest())
-    f.see("选择了「橙色 083209」")
-    f.gone("=灰色 083209")
+    // answered on screen (decision.answer): the options stay as they are, the one picked marked, none pressed any
+    // more; nothing under the post goes or comes (how it went is its line once out of sight: cards_wbtest.mbt)
+    f.see("=灰色 083209")
+    f.check(@sfapp.under_turn("ask/") < 0.0, "the options asked a turn to change at \{@sfapp.under_turn("ask/")}")
+    f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
     f.tap("发消息")
     f.type_text("再选一个 083209 card:先做哪一页 083209|首页 083209|设置页 083209")
     // the words in the field long enough to be kept as the chat's draft, as the run's were (draft.put)
@@ -58,31 +38,13 @@ test "70-card-motion" {
     }
     f.see("=忽略")
     f.tap_now("=忽略") |> ignore
-    // let go (decision.dismiss): 忽略 goes in its turn (decide.mbt ask_dismiss, turns.mbt), on ArchiveEase's 280 ms, to
-    // 85% from its top left, its room closing
-    // (its start as declared once its turn is set: what goes before it (the list at rest after what came) can put it
-    // later; run to it again until it has come, as the options' above)
-    f.until(fn() { @sfapp.under_turn("dismiss/") >= 0.0 && @sfapp.under_turn("dismiss/") < @double.infinity })
-    let mut after = @sfapp.under_turn("dismiss/")
-    while after > f.t.time() {
-      f.run_to(after)
-      after = @sfapp.under_turn("dismiss/")
-    }
-    // (its start the frame's to draw: until then nothing of it moves)
-    if f.t.rest_of("under/dismiss/") < 0.0 || f.t.rest_of("under/dismiss/") == @double.infinity {
-      f.t.draw()
-    }
-    let end = f.t.rest_of("under/dismiss/")
-    f.check(end == after + @sfapp.archive_ms, "忽略 at rest at \{end}, not \{after + @sfapp.archive_ms}")
+    f.answered("decision.dismiss", 1)
+    // let go on screen (decision.dismiss): 忽略 fades where it is (ArchiveEase's 280 ms), its room kept, the card's
+    // options as they were (decision.mbt ask_dismiss)
+    f.run_for(@sfapp.archive_ms)
     f.gone("=忽略")
-    // to 85% on ArchiveEase, its room closing with it: gone at rest (while a script is written over a trace the app
-    // has outgrown, no motion to check: said above, the steps after written all the same)
-    if end >= 0.0 {
-      f.shrinks("忽略", to=@sfapp.archive_scale, ease=@sfapp.archive_ease, ms=@sfapp.archive_ms, rest=end)
-    }
-    // the card's options going with it, their room closing on the rows' spring after
-    f.run_to_rest("under/")
-    f.gone("=设置页 083209")
+    f.see("=设置页 083209")
+    f.check(f.t.rest_of("under/") < 0.0, "something under the post moves till \{f.t.rest_of("under/")}")
     f.end()
   })
 }

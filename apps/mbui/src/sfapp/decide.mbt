@@ -115,69 +115,6 @@ fn answering(station : String, m : Message, options : Array[Choice]) -> String? 
 }
 
 ///|
-/// 忽略 under a post that asks what no one has decided (Chat.kt AskDismiss): gone at once, back if letting it go
-/// failed (`decision.dismiss`). It goes as the archive buttons go (280 ms, ArchiveEase: fading, to 85% from its top
-/// left, its room closing), in its turn among what changes the list's height (`turns`), and with the options once the
-/// card is answered (`asking`, from `asked_at`).
-fn ask_dismiss(
-  c : @ui.Ctx,
-  src : Source,
-  here : Here,
-  m : Message,
-  asking : Bool,
-  asked_at : Double,
-  turns : Turns,
-) -> Unit {
-  let answered = match m.decision {
-    Some(d) => d.resolved || d.dismissed
-    None => false
-  }
-  if !m.asked && !answered {
-    return
-  }
-  let k = seq_key(here.station, m.thread, m.seq)
-  // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
-  let mine = turns.in_turn(c, "dismiss/" + k, (m.asked || answered) && !dui.gone.contains(k), dismiss_turn_ms)
-  let shown = asking && mine
-  let own_at = turns.started_at("dismiss/" + k)
-  let at = if !asking { asked_at } else { own_at }
-  let t = @sf.theme()
-  let id = c.id("ask-dismiss/" + m.ts)
-  if shown && c.clicked(id) {
-    dui.gone[k] = true
-    act(
-      src,
-      tr("android-misc.decisions.dismissWhat"),
-      "",
-      "decision.dismiss",
-      {
-        "station": Json::string(here.station),
-        "thread": Json::number(m.thread),
-        "seq": Json::number(m.seq),
-      },
-      failed=fn() { dui.gone.remove(k) },
-    )
-  }
-  under_post(
-    c,
-    "dismiss/" + k,
-    shown,
-    exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
-    start_at?=if at >= 0.0 { Some(at) } else { None },
-    fn() {
-      // (6 under the options)
-      c.box(pt=6.0, fn() {
-        c.box(id=if shown { id } else { 0 }, fn() {
-          c.rich([@ui.span(tr("android-chat.asks.dismiss"))], size=t.t.caption, color=t.p.muted, line=18.0) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    },
-  )
-}
-
-///|
 /// The chat into the archive (Chat.kt archiveChat; its bar's 归档, the one under its last 做完了, its sheet's): Home at
 /// once, the chat gone from the list (the core's), said at once by its title, or why not.
 fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {

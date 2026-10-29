@@ -21,7 +21,7 @@ import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ENTER, LEAVE_EASE_CSS, MOVE_EASE_CSS, MOVE_NEAR_MS, motionMs, play } from "@stillfail/ui/motion.ts";
 import { listPaneOf, reserveRow } from "./listQueue.ts";
-import { useSettling } from "./settling.tsx";
+import { SaidInPlace, useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { VaultCard } from "./VaultApproval.tsx";
@@ -31,7 +31,7 @@ import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import { t } from "./i18n.ts";
-import { Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
+import { Check, Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
 import { Spinner, Waiting, type WaitNote } from "@stillfail/ui/waiting.tsx";
 import { sampleDecisions } from "./samples.ts";
 
@@ -71,12 +71,14 @@ export function DecisionOptions({ station, thread, seq, options, onPick, settled
       {options.map((o, i) => {
         const busy = sending?.params.option === o.label;
         const Digit = DIGITS[i];
+        // (the one picked, answered: a check in its disc where its number was)
+        const chosen = settled !== undefined && settled === o.label;
         return (
           <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
-            data-chosen={(settled !== undefined && settled === o.label) || undefined}
+            data-chosen={chosen || undefined}
             disabled={!!sending || settled !== undefined} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined}
             onClick={(e) => pick(o, e.currentTarget)}>
-            <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
+            <span className={css.choiceNumber} aria-hidden="true">{chosen ? <Check size={12} /> : Digit ? <Digit size={20} /> : i + 1}</span>
             <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
             {busy && <Spinner inline className={css.choiceSpinner} />}
@@ -154,11 +156,11 @@ export function MessageDecision({ message: m, thread, children }: { message: Cha
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
   const box = useRef<HTMLDivElement>(null);
-  // Settled, the options are drawn once more, to be read as they go (useSettling); open again (an answer that failed),
-  // they are back at once.
+  // Settled on screen, the options stay as they were, the one picked marked, none pressed, till they are out of sight
+  // (useSettling: then how it went, at once); open again (an answer that failed), they are back at once.
   const [drawnOpen, setDrawnOpen] = useState(open);
   const shown = open || drawnOpen;
-  useSettling(box, open, drawnOpen, setDrawnOpen, { arriving: `.${css.settledLine}` });
+  useSettling(box, open, drawnOpen, setDrawnOpen);
   if (!m.card && !m.options?.length) return null;
   // A login card stays as its login goes (waiting, done, failed, cancelled): it says how it ended itself, once closed.
   if (m.card?.type === "login" && m.card.login) {
@@ -172,7 +174,8 @@ export function MessageDecision({ message: m, thread, children }: { message: Cha
   return (
     <div ref={box} className={css.decision}>
       {shown ? <>
-        {m.card?.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
+        {/* Who decides; settled while it shows, how it went in that line's place. */}
+        {m.card?.assigneeText && <SaidInPlace className={css.settledLine} text={!open && d?.text ? d.text : m.card.assigneeText} />}
         {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&

@@ -1,0 +1,7 @@
+# An agent's request to debug the person's phone, at the chat's end (MBUI_FIXTURE=chat-phone), answered 允许 there:
+# the card stays as it is on screen, the answer given as it was, the rest greyed, none pressed (phone_ask_card).
+timeout 20000
+until =允许
+wait 800
+tap =允许
+wait 2000

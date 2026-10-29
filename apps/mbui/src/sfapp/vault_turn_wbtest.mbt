@@ -1,6 +1,6 @@
 // An agent's request about a vault item in its chat's list (sfpages' decision.mbt vault_ask_card): whole as it comes,
-// as the core says it with the post; decided, its card goes in its turn as a post's answered options do, how it went
-// fading in after it in its place.
+// as the core says it with the post; decided on screen, its card stays, how it went said in its answer's place; out of
+// sight, only how it went, as a post's answered options are.
 
 ///|
 /// How the chat's request stands: how it went once decided (`status`), and the chat's version, moving on with it;
@@ -108,33 +108,40 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
 }
 
 ///|
-test "a request decided in its chat: its card goes in its turn, how it went fading in after it in its place" {
+test "a request decided in its chat: its card stays on screen, how it went in its answer's place; out of sight, only that" {
   reset()
   let vc : VaultChat = { status: "", version: 1, vaults_asked: false }
   let calls : Array[String] = []
   let src = vault_chat_src(vc, calls)
-  open_chat({ station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" })
+  let r : ChatRef = { station: "ws1/st1", session: "s-v1", title: "存密码", station_name: "Studio" }
+  open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   // whole as it comes: its buttons with it
   for words in ["存入密码「UniFi UX7」", "存入", "不存"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
+  let (_, top, _, _) = t.rect_of("存入密码「UniFi UX7」").unwrap()
+  let (nx, ny) = t.find("不存").unwrap()
   tap_now(t, "不存")
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
-  // decided: it goes in its turn
-  t.draw()
-  t.draw()
-  t.draw()
-  let at = turns_of("ws1/st1\u{1}s-v1").start_of("vault/v2")
-  assert_true(at < @double.infinity)
-  // half way through its fade: the card still drawn as it goes
-  t.run_for(at + options_out_ms / 2.0 - t.time())
-  assert_true(t.find("存入密码「UniFi UX7」") is Some(_))
-  // gone, its room closed, how it went in its place
-  t.run_for(options_gone_ms())
+  // decided: the card where it was, how it went in its answer's place, none of it pressed any more
+  t.run_for(turn_most_ms)
+  let (_, now, _, _) = t.rect_of("存入密码「UniFi UX7」").unwrap()
+  assert_eq(now, top)
+  assert_true(t.find("未存入「UniFi UX7」") is Some(_))
+  t.press_at(nx, ny)
+  t.release(nx, ny)
+  assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
+  t.assert_idle()
+  // out of sight: how it went in its place, at once
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  open_chat(r)
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("存入密码「UniFi UX7」") is None)
   assert_true(t.find("未存入「UniFi UX7」") is Some(_))
   assert_true(!vc.vaults_asked, msg="the card asked the vaults topic")
-  t.assert_idle()
+  // (nothing under the post moving into it: there at once)
+  assert_true(t.rest_of("under/") < 0.0)
 }

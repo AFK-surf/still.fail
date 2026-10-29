@@ -1,6 +1,6 @@
 // What changes the height of a chat's message list plays one at a time (docs/list-motion.md): a message flying in from
-// the composer, one coming out of its agent's avatar, one simply coming in, the agent's line coming, a decision's options
-// closing. Each waits its turn here, in the order they came; a turn is over once its own motion is and the list has gone
+// the composer, one coming out of its agent's avatar, one simply coming in, the agent's line coming, what comes under a
+// post (what is answered there goes only out of sight: settling.tsx). Each waits its turn here, in the order they came; a turn is over once its own motion is and the list has gone
 // where it moved it to (virtual/list.tsx `listStill`). What only fades, turns or changes its words is not in it.
 //
 // A row waiting its turn takes no room (`data-queued`, not displayed: the list counts it as it does a message held back,

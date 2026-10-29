@@ -211,10 +211,11 @@ function CcChooser({ station, thread, to }: { station: string; thread: number; t
 
 /**
  * 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`:
- * their lists and the bell say nothing of it any more), going at once (settling.tsx) and back if that fails.
+ * their lists and the bell say nothing of it any more), fading where it is at once (settling.tsx: its room going once
+ * out of sight) and back if that fails.
  */
 function AskDismiss({ thread, seq, asked, answered }: { thread: number; seq: number; asked: boolean;
-  /** Its post answered: it goes as the options it is under close (Decisions.tsx MessageDecision), not before. */
+  /** Its post answered: pressed no more, faded where it is with the options staying (Decisions.tsx MessageDecision). */
   answered: boolean;
 }) {
   const station = useStation().address;
@@ -222,7 +223,7 @@ function AskDismiss({ thread, seq, asked, answered }: { thread: number; seq: num
   const act = useAct();
   const [gone, setGone] = useState(false);
   return (
-    <Settles shown={(asked || answered) && !gone}>
+    <Settles shown={asked && !answered && !gone}>
       <button type="button" className={css.askDismiss} onClick={() => {
         setGone(true);
         act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));

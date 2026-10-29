@@ -1,9 +1,10 @@
 // What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
-// its avatar, a decision's options closing, what goes from under a post. Each waits its turn here, in the order they
-// came, but words sent: they fly at once, in the list the frame they are sent (flight.mbt), and what is asked after
-// them waits till they have landed (the list does not follow its end while they fly: a row come in then would move it
-// at once; an answer out of its avatar under way as they were sent waits for them too: emit_step). A turn is over once
+// its avatar, what comes under a post (what is answered there goes only out of sight: Turns::in_turn). Each waits its
+// turn here, in the order they came, but words sent: they fly at once, in the list the frame they are sent
+// (flight.mbt), and what is asked after them waits till they have landed (the list does not follow its end while they
+// fly: a row come in then would move it at once; an answer out of its avatar under way as they were sent waits for
+// them too: emit_step). A turn is over once
 // its own motion is and the list is where it moved it to (its glide after what came over: Ctx::list_info's
 // `glide_rest`; the reader's hand on it, a finger holding it, a fling, holds nothing back). What only fades, turns or
 // changes its words is not in it. A row waiting its turn is not in the list yet: its room comes when its turn does.
@@ -190,30 +191,48 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 }
 
 ///|
-/// `target` (something under a post shown or not: a decision's options, 忽略) as it shows, changed in its turn among
-/// what changes the list's height: the change waits for it, and holds the next for `ms` (its motion) once made. The
-/// first time it is asked, as it is.
-pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double) -> Bool {
+/// `target` (something under a post shown or not: a decision's options, 忽略, a card asking) as it shows. What changes
+/// out of sight (`seen` false: its row not on screen the frame before, Reading::sees) changes at once, its motion over
+/// before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what changes the
+/// list's height and holds the next for `ms` (its motion) once made; what goes does not go: it stays as it is, its
+/// room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the list
+/// changing only for what comes). The first time it is asked, as it is.
+pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double, seen~ : Bool) -> Bool {
   match self.shown.get(key) {
     None => {
       self.shown[key] = target
       target
     }
     Some(shown) => {
-      let asked = self.asks.iter().any(fn(a) { a.what == Change(key) })
-      if shown != target && !asked {
+      self.wants[key] = target
+      if shown == target {
+        return shown
+      }
+      if !seen {
+        match self.asks.search_by(fn(a) { a.what == Change(key) }) {
+          Some(i) => self.asks.remove(i) |> ignore
+          None => ()
+        }
+        self.shown[key] = target
+        self.started[key] = unseen_at
+        return target
+      }
+      if target && !self.asks.iter().any(fn(a) { a.what == Change(key) }) {
         self.ask(c, Change(key), ms)
       }
-      self.wants[key] = target
       shown
     }
   }
 }
 
 ///|
+/// When what changed out of sight is said to have changed (Turns::in_turn): long before any frame, its motion over.
+pub let unseen_at : Double = -1.0e9
+
+///|
 /// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
-/// they do it, before what comes of it (the options closing, asked once the core says they are answered): the next row
-/// asked comes in it (web/src/listQueue.ts reserveRow), the options still there, none pressed, meanwhile. No row by
+/// they do it, before what comes of it (the agent's line taking it up): the next row asked comes in it
+/// (web/src/listQueue.ts reserveRow), the options staying as they are, none pressed. No row by
 /// turn_most_ms (an option that closes the card without one), the turn goes.
 pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
   if self.asks.iter().any(fn(a) { a.what == Kept }) {
@@ -226,6 +245,13 @@ pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
 /// When what is under a post `key` last changed in its turn, or a row came in (-1: not in one).
 pub fn Turns::started_at(self : Turns, key : String) -> Double {
   self.started.get(key).unwrap_or(-1.0)
+}
+
+///|
+/// When what is under a post `key` last changed (in its turn, or out of sight: unseen_at), what plays for it from
+/// then; None: it has not changed since it was first asked.
+pub fn Turns::start(self : Turns, key : String) -> Double? {
+  self.started.get(key)
 }
 
 ///|

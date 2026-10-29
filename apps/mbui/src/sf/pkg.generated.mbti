@@ -66,6 +66,8 @@ pub fn ask_line_end(Double) -> @ui.Style
 
 pub fn ask_line_mark() -> @ui.Style
 
+pub fn ask_line_start(Double) -> @ui.Style
+
 pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
 
 pub fn at_head_end() -> Bool
@@ -1157,6 +1159,8 @@ pub fn on_corner(Double, Double, room? : Double) -> Double
 pub let one_line : @ui.TextStyle
 
 pub fn one_of(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit, label? : String, placeholder? : String, disabled? : Bool) -> Unit
+
+pub let option_check_share : Double
 
 pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, room? : Double, history? : Bool) -> Int32?
 
