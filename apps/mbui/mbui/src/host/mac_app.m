@@ -23,7 +23,8 @@ __asm__(".linker_option \"-framework\", \"Network\"");
 
 mb_callbacks mb_cb;
 
-// Back (host_native.mbt `set_back`): ⌘[ and a mouse's back button, while the app takes it.
+// Back (host_native.mbt `set_back`): a mouse's back button, while the app takes it (⌘[ is the app's key: its keymap's
+// nav.back, as Ctrl+[ elsewhere).
 typedef void (*mb_back_fn)(int32_t, double, double, int32_t);
 static mb_back_fn back_cb;
 static int back_on;
@@ -510,6 +511,8 @@ static NSCursor *cursor_of(int kind) {
 }
 - (void)otherMouseUp:(NSEvent *)e {
   if (e.buttonNumber == 3) go_back();
+  // the forward button: the app's key (key_forward), read as its forward
+  else if (e.buttonNumber == 4) mb_cb.key(40, 0);
 }
 - (void)scrollWheel:(NSEvent *)e {
   NSPoint p = [self pt:e];
@@ -588,7 +591,6 @@ static NSCursor *cursor_of(int kind) {
       if (self.imeActive) [self interpretKeyEvents:@[ e ]];
       else mb_cb.key(editing, mods);
     } else if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
-    else if ([c isEqualToString:@"["]) go_back();
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
     else if ([c isEqualToString:@"x"]) mb_cb.key(14, mods);

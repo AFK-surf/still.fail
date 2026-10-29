@@ -287,18 +287,90 @@ test "⌘K laid out Medium and Large: its panel, room round it on every side" {
 }
 
 ///|
-test "small with a mouse: back (⌘[, the Mac's host's own back) goes back one page only, the app's keys taking none of it" {
+test "small with a mouse: back (⌘[, the keymap's nav.back) goes back one page only; forward (⌘]) brings it again" {
   let calls : Array[Made] = []
   let t = small_mouse(calls)
   t.tap_text("夜里的构建又失败了")
   t.run_for(@ui.nav_push_ms)
   assert_eq(app.nav.depth(), 2)
-  // (⌘[ is the host's back, mac_app.m go_back: as the system's back reaches the app)
+  let chat = app.nav.top()
+  // ⌘[: the system's back, once (Ctx::back: the stack's, as a back key's)
   t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
   t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 1)
+  // ⌘]: what back took off, put back
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
   assert_eq(app.nav.depth(), 2)
+  assert_true(app.nav.top() == chat)
+  // forward again: nothing more to bring
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_eq(app.nav.depth(), 2)
+  // the system's back (a mouse's back button), then a mouse's forward button (the hosts' key_forward)
   t.back()
   t.frame()
   t.run_for(@ui.nav_push_ms)
   assert_eq(app.nav.depth(), 1)
+  t.key(@ui.key_forward)
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == chat)
+}
+
+///|
+test "wide, back then forward: the chat back took off comes again; a page opened since, forward brings nothing" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  t.tap_text("整理发布清单")
+  t.frame()
+  let chat = app.nav.top()
+  assert_true(chat is Chat({ title: "整理发布清单", .. }))
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.frame()
+  assert_false(app.nav.top() == chat)
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(app.nav.top() == chat)
+  // back, then another page opened (settings): what back took is forgotten
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.frame()
+  t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
+  t.frame()
+  let pages = app.nav.pages()
+  t.key(@ui.key_forward)
+  t.frame()
+  assert_true(app.nav.pages() == pages)
+}
+
+///|
+test "wide, chats chosen one after another beside the sidebar: back goes to the chat shown before, forward again" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  t.tap_text("整理发布清单")
+  t.frame()
+  let first = app.nav.top()
+  t.tap_text("夜里的构建又失败了")
+  t.frame()
+  let second = app.nav.top()
+  assert_true(second is Chat({ title: "夜里的构建又失败了", .. }))
+  // back: the chat shown before, in its place (the list and it alone on the stack)
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(app.nav.pages() == [Home, first])
+  // forward: the chat back went from
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(app.nav.pages() == [Home, second])
+  // back twice: the first chat, then what is under it (none shown before it: a new chat beside the list)
+  t.back()
+  t.frame()
+  assert_true(app.nav.top() == first)
+  t.back()
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
 }

@@ -702,9 +702,15 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       // Alt with a key: a key catcher's shortcut (win_device.h)
       if (key_catching && ime_active && catch_vk(wp)) return 0;
       if (wp == VK_LEFT && go_back()) return 0;
+      // Alt+Right: forward, the app's key (key_forward)
+      if (wp == VK_RIGHT) {
+        mb_cb.key(40, 0);
+        return 0;
+      }
       break;
     case WM_XBUTTONUP:
       if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) go_back();
+      else if (GET_XBUTTON_WPARAM(wp) == XBUTTON2) mb_cb.key(40, 0);
       return TRUE;
     case WM_CHAR: char_in((WCHAR)wp); return 0;
     case WM_SETFOCUS:

@@ -106,7 +106,8 @@ pub let left_pages : Array[Page] = []
 pub fn new_nav() -> @ui.Nav[Page] {
   // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
   // that way (App.kt transition, swipe)
-  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, on_leave=fn(p) {
+  // what its own back takes off kept for forward (shell.mbt went_back)
+  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, went_back~, on_leave=fn(p) {
     left_pages.push(p)
     match p {
       Setting(r) => @settings.left(r)
@@ -208,6 +209,9 @@ pub(all) struct DriveAt {
 /// toast's count goes on, as before it was here).
 pub fn reset() -> Unit {
   app.nav = new_nav()
+  // what back took off it, for forward, and the chats shown before (shell.mbt)
+  forward_steps.clear()
+  chat_trail.clear()
   app.picked = ""
   @ui.set_motion_chosen(None)
   app.filters.clear()

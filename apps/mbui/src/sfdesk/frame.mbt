@@ -1071,11 +1071,14 @@ pub fn wide_back() -> (() -> Unit)? {
             } else {
               None
             }
-          _ => Some(fn() { app.nav.pop() |> ignore })
+          _ => Some(@sfbase.back_pop)
         }
     }
+  } else if app.nav.pages() is [Home, Chat(open)] && @sfbase.chat_back(open) is Some(_) {
+    // a chat alone beside the sidebar: the chat shown before it (the web's history), else what is under it
+    @sfbase.chat_back(open)
   } else if app.nav.depth() > 2 || (app.nav.depth() == 2 && !(app.nav.pages() == [Home, NewChat])) {
-    Some(fn() { app.nav.pop() |> ignore })
+    Some(@sfbase.back_pop)
   } else {
     None
   }
@@ -1777,6 +1780,8 @@ fn land(src : Source, w : Workspace) -> Unit {
   }
   // come back to the chats (a chat closed, settings left): a new chat, as the web's empty place is
   if wide.landed == w.id {
+    // (come back by back: forward puts back what it took in the new chat's place)
+    @sfbase.forward_landed()
     app.nav.push(NewChat)
     return
   }

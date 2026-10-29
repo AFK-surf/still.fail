@@ -1,7 +1,7 @@
 // The frame's keys (ember web/src/keymap.ts useShortcut, Switcher.tsx GlobalShortcuts, Sidebar.tsx goToNeighbour,
 // brand.tsx's sidebar.toggle): ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after, ⌘\ the sidebar, ⌘,
-// settings, ⌘/ the shortcuts, Esc what the frame opened closed; the keys as the core's prefs keep them on this device
-// (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.
+// settings, ⌘/ the shortcuts, ⌘[ / ⌘] back and forward, Esc what the frame opened closed; the keys as the core's prefs
+// keep them on this device (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.
 
 ///|
 /// The app's keys, read as its frame is built in every tier (before the page's: Esc goes to what the frame opened over
@@ -32,6 +32,15 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   if pressed("shortcuts") {
     wide.keys_open = !wide.keys_open
+  }
+  // ⌘[ / ⌘] back and forward (Switcher.tsx history.back, history.forward): back as the system's back is, whose it is
+  // deciding (Ctx::back; the hosts' own Alt+← and a mouse's back button come so); forward what back took off put back
+  // (sfbase's back_pop, go_forward), also from a mouse's forward button and Alt+→ (the hosts' key_forward)
+  if pressed("nav.back") {
+    c.back() |> ignore
+  }
+  if pressed("nav.forward") || c.key_pressed(@ui.key_forward) {
+    @sfbase.go_forward() |> ignore
   }
   // (奏's page steps its own decisions: DecisionDesk.tsx step, the one before or after the one it shows)
   let way = if @settings.action_pressed(c, prefs, "chat.prev", in_field=true) {

@@ -75,6 +75,8 @@ pub fn attend(Source, String, Bool) -> Unit
 
 pub fn back_label(Page) -> String
 
+pub fn back_pop() -> Unit
+
 pub fn back_step() -> (() -> Unit)?
 
 pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
@@ -107,6 +109,8 @@ pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
 pub let card_head : @ui.Style
 
+pub fn chat_back(ChatRef) -> (() -> Unit)?
+
 pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
@@ -116,6 +120,8 @@ pub fn chat_keep(Map[String, Json], Double) -> Unit
 pub fn chat_kept(ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
+
+pub fn chat_left(ChatRef) -> Unit
 
 pub fn chat_link(String, String) -> String
 
@@ -579,6 +585,10 @@ pub let followed_into : Map[String, String]
 
 pub fn follows(@ui.ListInfo?) -> Bool?
 
+pub fn forward_landed() -> Unit
+
+pub fn forward_step() -> (() -> Unit)?
+
 pub let fresh : FreshChat
 
 pub fn fresh_picked(Json?) -> Unit
@@ -588,6 +598,8 @@ pub fn fresh_reset() -> Unit
 pub let globe_mark : LinkMark
 
 pub fn go_back() -> Bool
+
+pub fn go_forward() -> Bool
 
 pub fn go_place(String, way? : Int32) -> Bool
 

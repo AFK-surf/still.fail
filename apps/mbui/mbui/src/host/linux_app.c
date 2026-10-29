@@ -440,6 +440,11 @@ static gboolean on_key(GtkEventControllerKey *k, guint keyval, guint keycode, Gd
   // a key catcher's focus (linux_device.h): its keys (a composition under way keeps them)
   if (key_catching && ime_active && marked_len == 0 && catch_key(keyval, mods)) return TRUE;
   if ((mods & 4) && !(mods & 2) && keyval == GDK_KEY_Left && go_back()) return TRUE;
+  // Alt+Right: forward, the app's key (key_forward)
+  if ((mods & 4) && !(mods & 2) && keyval == GDK_KEY_Right) {
+    mb_cb.key(40, 0);
+    return TRUE;
+  }
   if (mods & 2) {
     int ch = key_char(keyval);
     switch (ch) {
@@ -597,6 +602,8 @@ static gboolean on_event(GtkEventControllerLegacy *c, GdkEvent *ev, gpointer dat
         mb_cb.pointer(2, x, y, 2);
       } else if (b == 8) {
         go_back();
+      } else if (b == 9) {
+        mb_cb.key(40, 0);
       }
       return TRUE;
     }
