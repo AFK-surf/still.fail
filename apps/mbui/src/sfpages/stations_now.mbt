@@ -60,8 +60,9 @@ let share_scale : Double = 3.0
 /// window has not the room for it (@sf.whole_fitted): what is copied is all of it, as it is laid out everywhere. Read down: still.fail's name (its dot orange) and when it is; what leads the first kind's share (用 6 个 Claude
 /// 订阅账号消耗了, its ring's dot before it); the tokens each kind of account used over the 7 days as rings, a kind each
 /// (Activity's rings: each its share of all kinds' tokens; 2026-10-29 用户「只算 token 和价格」, where it was a week's
-/// quota), beside them the first kind's tokens large and what they would cost (1.2B | token，折合 $1,234); each other
-/// kind a line; today over the last 7 days (the
+/// quota), beside them the first kind's first model's tokens large, the model and what they would cost (2.1 亿 | Opus 5.5
+/// token，折合 $1,420); each other model a line with its own, each other kind a line over its models (no kind's models
+/// added up: 2026-10-30 用户「按模型分开写 token 和钱」); today over the last 7 days (the
 /// chats archived, what was spent), each day's chats archived a bar under them (today's orange, each day's date under
 /// its bar); the chats at work now, a dot before them, and the tasks agents ran across devices over the 7 days (how
 /// many, and under it how many a chat on average), the devices' icon before them; still.fail's line. With nothing
@@ -99,22 +100,22 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     })
     |> ignore
     if spent.length() > 0 {
-      // the first kind's said round its tokens, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 1.2B | token，折合
-      // $1,234: 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」, then 「只算 token 和价格」), what leads
+      // the first kind's said round its first model's tokens, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 2.1 亿 |
+      // Opus 5.5 token，折合 $1,420: 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」, then 「只算 token 和价格」), what leads
       // it over the rings and the tokens
       let first = Some(spent[0])
+      let top = items(first, "models").get(0)
       pic_lead(c, first)
       c.box(style=pic_hero, fn() {
         pic_rings(c, spent)
         c.box(style=pic_hero_words, fn() {
-          c.text(text(first, "tokensText"), style=pic_number) |> ignore
-          c.text(text(first, "of"), style=pic_unit) |> ignore
-          pic_models(c, first)
+          c.text(text(top, "tokensText"), style=pic_number) |> ignore
+          c.text(text(top, "of"), style=pic_unit) |> ignore
         })
         |> ignore
       })
       |> ignore
-      pic_other_kinds(c, spent)
+      pic_models(c, spent)
     } else {
       c.box(style=pic_hero, fn() {
         c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
@@ -189,48 +190,43 @@ fn pic_lead(c : @ui.Ctx, first : Json?) -> Unit {
 }
 
 ///|
-/// Each kind but the first, a line as its ring's key (the first's said whole over them): its colour's dot, its name, its
-/// accounts dimmer, its tokens and cost at the line's end in ink, one under another. One line each whatever its name:
-/// said as a sentence, a name long enough broke it, a character on a line of its own (2026-10-26 用户：「这里折行了不太
-/// 好看」); a name too long for its line cut short, nothing else.
-fn pic_other_kinds(c : @ui.Ctx, spent : Array[Json]) -> Unit {
-  if spent.length() < 2 {
+/// The models but the one said large, one line each (its name, its tokens and cost at the line's end in ink), past where
+/// the dots are: the first kind's under it; then each other kind a line as its ring's key (its colour's dot, its name,
+/// its accounts dimmer), its models under it. One model's tokens are not another's, so no kind adds its models' up
+/// (2026-10-30 用户「按模型分开写 token 和钱」). One line each whatever its name: said as a sentence, a name long enough
+/// broke it, a character on a line of its own (2026-10-26 用户：「这里折行了不太好看」); a name too long for its line cut
+/// short, nothing else.
+fn pic_models(c : @ui.Ctx, spent : Array[Json]) -> Unit {
+  if spent.length() < 2 && items(Some(spent[0]), "models").length() < 2 {
     return
   }
-  c.box(style=@sf.full_width, fn() {
+  c.box(style=pic_models_box, fn() {
     for k, q in spent {
-      if k == 0 {
-        continue
-      }
       let q = Some(q)
-      c.box(style=pic_other, fn() {
-        c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
-        c.text(text(q, "name"), style=pic_key_name) |> ignore
-        c.text(text(q, "accountsText"), style=pic_key_accounts) |> ignore
-        c.box(style=pic_grow, fn() {  }) |> ignore
-        c.text(text(q, "lineText"), style=pic_key_share) |> ignore
-      })
-      |> ignore
-      // its models under its name, past where its dot is
-      if text(q, "modelsText") != "" {
-        c.box(style=pic_models_row, fn() {
+      if k > 0 {
+        c.box(style=pic_other, fn() {
+          c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
+          c.text(text(q, "name"), style=pic_key_name) |> ignore
+          c.text(text(q, "accountsText"), style=pic_key_accounts) |> ignore
+        })
+        |> ignore
+      }
+      for i, m in items(q, "models") {
+        if k == 0 && i == 0 {
+          continue
+        }
+        let m = Some(m)
+        c.box(style=pic_model, fn() {
           c.box(style=pic_key_dot, fn() {  }) |> ignore
-          pic_models(c, q)
+          c.text(text(m, "name"), style=pic_key_name) |> ignore
+          c.box(style=pic_grow, fn() {  }) |> ignore
+          c.text(text(m, "lineText"), style=pic_key_share) |> ignore
         })
         |> ignore
       }
     }
   })
   |> ignore
-}
-
-///|
-/// The models that made a kind's tokens (the core's `modelsText`: Opus 5.5、Sonnet 5.5), dimmer; none when none is known.
-fn pic_models(c : @ui.Ctx, q : Json?) -> Unit {
-  let models = text(q, "modelsText")
-  if models != "" {
-    c.text(models, style=pic_models_words) |> ignore
-  }
 }
 
 ///|
@@ -377,14 +373,14 @@ let pic_key_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 let pic_key_accounts : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_dim), wrap=false)
 
 ///|
-/// A kind's models under its line, where its name starts.
+/// The models' lines, one under another (a kind's line further from those over it: pic_other's top).
 // kept across runs: a value (no field of it changes)
-let pic_models_row : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+let pic_models_box : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
-/// A kind's models: as its accounts are said, cut short past its line.
+/// A model's line, where its kind's name starts (past a dot's room).
 // kept across runs: a value (no field of it changes)
-let pic_models_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_dim), w=Cut, wrap=false)
+let pic_model : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

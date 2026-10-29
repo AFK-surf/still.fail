@@ -82,7 +82,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     // each its own picture, saying what serves it (「信息甚至都不用一样」): what each says that another does not, and
     // what it leaves out
     for look in [
-      ("大字报", "2.5 亿", "OpenCode Go 订阅"),
+      ("大字报", "2.1 亿", "OpenCode Go 订阅"),
       ("小票", "5 个", "9 个对话正在运行"),
       ("终端", "still.fail fetch", "10/20"),
       ("夜色", "用 6 个 Claude 订阅账号消耗了", "5 个"),
@@ -114,7 +114,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [
-  "10月26日 04:12", "2.5 亿", "token，折合 $1,604", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
+  "10月26日 04:12", "2.1 亿", "Opus 5.5 token，折合 $1,420", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
   "一生万物，万物归一",
 ]
 
@@ -163,25 +163,38 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
 fn share_card_laid(t : @ui.Tester) -> Unit raise {
   t.run_for(@kit.presence_in_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  // the first kind's said round its tokens, read down: what leads it over the rings and the tokens, the tokens large,
-  // what they would cost under them; each other kind a line of its own, its ring's key: its name, its accounts, its
-  // tokens and cost at the line's end (one under another)
+  // the first kind's said round its first model's tokens, read down: what leads it over the rings and the tokens, the
+  // tokens large, the model and what they would cost under them; each other kind a line of its own, its ring's key: its
+  // name, its accounts; each other model a line, its tokens and cost at the line's end (2026-10-30 用户「按模型分开写
+  // token 和钱」: no kind's models added up)
   let lead = word("用 6 个 Claude 订阅账号消耗了")
-  let share = word("2.5 亿")
-  let of = word("token，折合 $1,604")
+  let share = word("2.1 亿")
+  let of = word("Opus 5.5 token，折合 $1,420")
   assert_true(lead.length() == 1 && share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(lead, share, of)}")
   assert_true(
     lead[0].2 < share[0].2 && of[0].2 > share[0].2 && of[0].1 == share[0].1 && lead[0].1 < share[0].1,
     msg="\{(lead, share, of)}",
   )
-  let keys = [("ChatGPT 订阅", "4700 万 · $262"), ("OpenCode Go 订阅", "1100 万 · $45.10")].map(fn(k) { (word(k.0), word("2 个账号"), word(k.1)) })
-  for k in keys {
-    let (name, accounts, used) = k
-    assert_true(name.length() == 1 && accounts.length() == 2 && used.length() == 1, msg="\{k}")
-    // (on its line: its accounts after its name, its share at the end)
-    assert_true(used[0].1 > name[0].1 + name[0].3 && (used[0].2 - name[0].2).abs() < 2.0, msg="\{k}")
+  let kinds = ["ChatGPT 订阅", "OpenCode Go 订阅"].map(fn(k) { word(k) })
+  let accounts = word("2 个账号")
+  assert_true(kinds.iter().all(fn(k) { k.length() == 1 }) && accounts.length() == 2, msg="\{(kinds, accounts)}")
+  for i, k in kinds {
+    // (on its line: its accounts after its name)
+    assert_true(accounts[i].1 > k[0].1 + k[0].3 && (accounts[i].2 - k[0].2).abs() < 2.0, msg="\{(k, accounts)}")
   }
-  assert_true((keys[0].2[0].1 + keys[0].2[0].3 - (keys[1].2[0].1 + keys[1].2[0].3)).abs() < 0.5, msg="\{keys}")
+  let models = [("Sonnet 5.5", "3800 万 · $171"), ("GPT-5.5 Codex", "4700 万 · $262"), ("Kimi K2", "800 万 · $32.40"), ("GLM-4.6", "300 万 · $12.70")].map(fn(m) {
+    (word(m.0), word(m.1))
+  })
+  for m in models {
+    let (name, used) = m
+    assert_true(name.length() == 1 && used.length() == 1, msg="\{m}")
+    // (on its line, past where the kinds' names start: its tokens and cost at the end, the ends one under another)
+    assert_true(used[0].1 > name[0].1 + name[0].3 && (used[0].2 - name[0].2).abs() < 2.0 && name[0].1 == kinds[0][0].1, msg="\{m}")
+    assert_true((used[0].1 + used[0].3 - (models[0].1[0].1 + models[0].1[0].3)).abs() < 0.5, msg="\{(m, models[0])}")
+  }
+  // each model under its kind: Sonnet under the first's tokens, GPT-5.5 Codex under ChatGPT, Kimi K2 under OpenCode
+  assert_true(models[0].0[0].2 > of[0].2 && models[0].0[0].2 < kinds[0][0].2 && kinds[0][0].2 < models[1].0[0].2, msg="\{models}")
+  assert_true(models[1].0[0].2 < kinds[1][0].2 && kinds[1][0].2 < models[2].0[0].2 && models[2].0[0].2 < models[3].0[0].2, msg="\{models}")
   // today over the last 7 days (under the share: 今天 is the chats' heading too); each day's date under its bar
   let today = word("今天").filter(fn(w) { w.2 > share[0].2 })
   let week = word("近 7 天")

@@ -118,9 +118,12 @@
     "one": "1 account",
     "other": "{n} accounts"
   },
-  "core-logic.fleet.models_and": ", ",
-  "core-logic.fleet.models_more": "{models} and more, {all} models in all",
-  "core-logic.fleet.tokens_of": "tokens, {cost} at API prices",
+  "core-logic.fleet.model_tokens_of": "{model} tokens, {cost} at API prices",
+  "core-logic.fleet.model_tokens": "{model} tokens",
+  "core-logic.fleet.other_models": {
+    "one": "1 other model",
+    "other": "{n} other models"
+  },
   "core-logic.fleet.today": "Today",
   "core-logic.fleet.week": "Last 7 days",
   "core-logic.fleet.archived": "Chats archived",

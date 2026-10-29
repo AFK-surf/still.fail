@@ -3702,6 +3702,21 @@ export interface FleetDay {
 	today: boolean;
 }
 
+export interface FleetModel {
+	/** The model as people call it: Opus 5.5 (or the rest's: 其他 3 个模型). */
+	name: string;
+	/** Its tokens, read and written, the cache's too. */
+	tokens: number;
+	/** Those, short: 2.1 亿. */
+	tokensText: string;
+	/** What they would cost at API prices: $1,420 (≥ with calls without a price; empty with none priced). */
+	costText: string;
+	/** Both, as a line ends: 2.1 亿 · $1,420. */
+	lineText: string;
+	/** What says it after its tokens: Opus 5.5 token，折合 $1,420. */
+	of: string;
+}
+
 export interface FleetSpent {
 	/** The kind of account (the profiles' group: claude, chatgpt…, key). */
 	kind: string;
@@ -3711,22 +3726,14 @@ export interface FleetSpent {
 	accounts: number;
 	/** Its accounts in words: 6 个账号. */
 	accountsText: string;
-	/** The tokens its calls read and wrote, the cache's too. */
+	/** The tokens its calls read and wrote, the cache's too (what ranks the kinds; never said: one model's tokens are not another's). */
 	tokens: number;
-	/** Those, short: 1.2B. */
-	tokensText: string;
-	/** What they would cost at API prices: $1,234 (≥ with calls of a model without a price). */
-	costText: string;
-	/** Both, as a line ends: 1.2B · $1,234. */
-	lineText: string;
-	/** The models that made its tokens, the most first: Opus 5.5、Sonnet 5.5 等 4 个模型 (empty with none known). */
-	modelsText: string;
 	/** Its tokens as a share of all kinds', what its ring draws (0 to 1). */
 	share: number;
-	/** What says it before its tokens: 用 6 个 Claude 订阅账号消耗了. */
+	/** What says it before its first model's tokens: 用 6 个 Claude 订阅账号消耗了. */
 	lead: string;
-	/** What says it after: token，折合 $1,234. */
-	of: string;
+	/** Its models, the most tokens first; past four, the first three and the rest together (其他 3 个模型). */
+	models: FleetModel[];
 }
 
 export interface FleetStat {

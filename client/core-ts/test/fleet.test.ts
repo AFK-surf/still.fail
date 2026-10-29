@@ -16,7 +16,7 @@ const account = (key: string, group: string, ...on: [string, string][]): J => ({
 const call = (day: string, profile: string, input: number, output: number, cost: number | null, more: J = {}): J => ({ day, profile, calls: 1, input, cacheRead: 0, cacheWrite: 0, output, cost, ...more });
 const at = (station: string, calls: J[]): J => ({ station, online: true, rows: [], archived: [], jobs: [], runs: [], calls });
 
-test("the card shared says, by kind of account, how many accounts the chats used over the last 7 days, their tokens and what they would cost; an account on two stations once", () => {
+test("the card shared says, by kind of account, how many accounts the chats used over the last 7 days and, model by model, their tokens and what they would cost; an account on two stations once", () => {
   const profiles = [
     account("claude-a", "claude", ["w/a", "p1"], ["w/b", "p1"]),
     account("claude-b", "claude", ["w/a", "p2"]),
@@ -25,42 +25,46 @@ test("the card shared says, by kind of account, how many accounts the chats used
     // not used in the days: not said
     account("claude-z", "claude", ["w/a", "p9"]),
   ];
+  const opus = { model: "claude-opus-5-5" };
   const spent = spentOf(profiles, [
     at("w/a", [
-      call("2026-10-26", "p1", 1000, 100, 2, { cacheRead: 500_000 }),
-      call("2026-10-25", "p2", 1_000_000, 0, 5),
-      call("2026-10-24", "p3", 300_000, 0, 1.5),
+      call("2026-10-26", "p1", 1000, 100, 2, { cacheRead: 500_000, ...opus }),
+      call("2026-10-25", "p2", 1_000_000, 0, 5, { model: "claude-sonnet-5-5" }),
+      call("2026-10-24", "p3", 300_000, 0, 1.5, { model: "gpt-5.5" }),
       // a model without a price: its tokens said, its cost at least what the rest's is
-      call("2026-10-24", "p3", 200_000, 0, null),
+      call("2026-10-24", "p3", 200_000, 0, null, { model: "gpt-5.5" }),
       // before the days, and of a profile no longer listed: none of them
-      call("2026-10-18", "p1", 9_000_000, 0, 50),
-      call("2026-10-26", "gone", 9_000_000, 0, 50),
+      call("2026-10-18", "p1", 9_000_000, 0, 50, opus),
+      call("2026-10-26", "gone", 9_000_000, 0, 50, opus),
     ]),
-    at("w/b", [call("2026-10-20", "p1", 400_000, 98_900, 3), call("2026-10-26", "pk", 50_000, 0, 0.25)]),
+    // the same model on another station, one line with the first's; a call of no model said
+    at("w/b", [call("2026-10-20", "p1", 400_000, 98_900, 3, { model: "anthropic/claude-opus-5-5" }), call("2026-10-26", "pk", 50_000, 0, 0.25)]),
   ], new Set(["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"]));
-  // said round its tokens: 用 2 个 Claude 订阅账号消耗了 | 200 万 | token，折合 $10.00; as its ring's key: Claude 订阅 · 2 个账号 … 200 万 · $10.00
-  assert.deepEqual(spent.map((x: J) => [x.kind, x.accounts, x.tokens, x.tokensText, x.costText, x.lineText, x.lead, x.of, x.accountsText]), [
-    ["claude", 2, 2_000_000, "200 万", "$10.00", "200 万 · $10.00", "用 2 个 Claude 订阅账号消耗了", "token，折合 $10.00", "2 个账号"],
-    ["chatgpt", 1, 500_000, "50 万", "≥$1.50", "50 万 · ≥$1.50", "用 1 个 ChatGPT 订阅账号消耗了", "token，折合 ≥$1.50", "1 个账号"],
-    ["key", 1, 50_000, "5 万", "$0.25", "5 万 · $0.25", "用 1 个 API Key 消耗了", "token，折合 $0.25", "1 个账号"],
+  // said round its first model's tokens: 用 2 个 Claude 订阅账号消耗了 | 100 万 | Opus 5.5 token，折合 $5.00
+  assert.deepEqual(spent.map((x: J) => [x.kind, x.accounts, x.tokens, x.lead, x.accountsText]), [
+    ["claude", 2, 2_000_000, "用 2 个 Claude 订阅账号消耗了", "2 个账号"],
+    ["chatgpt", 1, 500_000, "用 1 个 ChatGPT 订阅账号消耗了", "1 个账号"],
+    ["key", 1, 50_000, "用 1 个 API Key 消耗了", "1 个账号"],
+  ]);
+  assert.deepEqual(spent.map((x: J) => x.models.map((m: J) => [m.name, m.tokens, m.lineText, m.of])), [
+    [["Opus 5.5", 1_000_000, "100 万 · $5.00", "Opus 5.5 token，折合 $5.00"], ["Sonnet 5.5", 1_000_000, "100 万 · $5.00", "Sonnet 5.5 token，折合 $5.00"]],
+    [["GPT-5.5", 500_000, "50 万 · ≥$1.50", "GPT-5.5 token，折合 ≥$1.50"]],
+    [["未知模型", 50_000, "5 万 · $0.25", "未知模型 token，折合 $0.25"]],
   ]);
   assert.deepEqual(spent.map((x: J) => Math.round(x.share * 1000) / 1000), [0.784, 0.196, 0.02]);
 });
 
-test("the card says each kind's models, the most tokens first, the first three by name (2026-10-30 用户「token 没有写模型」)", () => {
-  const profiles = [account("c", "claude", ["s", "c"]), account("k", "key", ["s", "k"])];
-  const by = (profile: string, model: string, input: number) => call("d", profile, input, 0, 1, { model });
-  const spent = spentOf(profiles, [at("s", [
-    by("c", "claude-sonnet-5-5", 300),
-    by("c", "claude-opus-5-5", 500),
-    // a model's calls under two spellings, one model
-    by("c", "anthropic/claude-opus-5-5", 200),
-    by("c", "claude-haiku-4-5-20251001", 100),
-    by("c", "claude-fable-5-1", 50),
-    // a call of no model said: its tokens counted, no model named
-    call("d", "k", 40, 0, 1),
-  ])], new Set(["d"]));
-  assert.deepEqual(spent.map((x: J) => [x.kind, x.modelsText]), [["claude", "Opus 5.5、Sonnet 5.5、Haiku 4.5 等 4 个模型"], ["key", ""]]);
+test("a kind's models, the most tokens first: four said one by one, past four the first three and the rest together; one none of whose calls was priced, its tokens alone", () => {
+  const profiles = [account("c", "claude", ["s", "c"])];
+  const by = (model: string, input: number, cost: number | null = 1) => call("d", "c", input, 0, cost, { model });
+  const four = [by("claude-sonnet-5-5", 300), by("claude-opus-5-5", 500), by("claude-haiku-4-5", 100), by("claude-fable-5-1", 50, null)];
+  assert.deepEqual(spentOf(profiles, [at("s", four)], new Set(["d"]))[0].models.map((m: J) => [m.name, m.lineText]), [
+    ["Opus 5.5", "500 · $1.00"], ["Sonnet 5.5", "300 · $1.00"], ["Haiku 4.5", "100 · $1.00"], ["Fable 5.1", "50"],
+  ]);
+  const five = [...four, by("claude-opus-4-7", 20)];
+  assert.deepEqual(spentOf(profiles, [at("s", five)], new Set(["d"]))[0].models.map((m: J) => [m.name, m.lineText]), [
+    ["Opus 5.5", "500 · $1.00"], ["Sonnet 5.5", "300 · $1.00"], ["Haiku 4.5", "100 · $1.00"], ["其他 2 个模型", "70 · ≥$1.00"],
+  ]);
 });
 
 test("the card's kinds rank by tokens, with a stable kind order for ties", () => {
@@ -125,7 +129,7 @@ test("the card shared says how many chats are at work now, and on how many stati
   assert.deepEqual([v.chats, v.chatsText, v.where, v.at], [4, "4 个对话正在运行", "今天用了 6 台设备", "10月26日 04:12"]);
   assert.deepEqual([v.tasksText, v.tasksPer], ["近 7 天 agent 跨设备执行了 4 个任务", "平均每个对话 2 个"]);
   // the calls of the last 7 days
-  assert.deepEqual(v.spent.map((x: J) => [x.kind, x.tokensText]), [["claude", "100"]]);
+  assert.deepEqual(v.spent.map((x: J) => [x.kind, x.tokens]), [["claude", 100]]);
   assert.deepEqual(v.today, { title: "今天", stats: [{ label: "归档的对话", value: "4 个" }, { label: "折合费用", value: "$8" }] });
   assert.deepEqual(v.week.stats, [{ label: "归档的对话", value: "6 个" }, { label: "输入 token", value: "1.2M" }, { label: "折合费用", value: "$12" }]);
   assert.deepEqual(v.week.days, [{ label: "10/25", share: 0.5, value: "2 个", today: false }, { label: "10/26", share: 1, value: "4 个", today: true }]);

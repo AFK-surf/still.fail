@@ -100,13 +100,16 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       c.box(style=poster_hero, fn() {
         if spent.length() > 0 {
           let first = Some(spent[0])
-          let used = text(first, "tokensText")
+          let models = items(first, "models")
+          let top = models.get(0)
+          let used = text(top, "tokensText")
           let scale = if used.length() > 4 { @sf.share_poster_number_less } else { @sf.share_poster_number_scale }
           c.text(text(first, "lead"), style=poster_words) |> ignore
           c.rich([@ui.span(used, scale~)], style=poster_number) |> ignore
-          c.text(text(first, "of"), style=poster_words) |> ignore
-          if text(first, "modelsText") != "" {
-            c.text(text(first, "modelsText"), style=poster_small) |> ignore
+          c.text(text(top, "of"), style=poster_words) |> ignore
+          // its other models, each its own tokens and cost (no kind adds its models' up)
+          for m in models[1:] {
+            c.text(text(Some(m), "name") + "  " + text(Some(m), "lineText"), style=poster_small) |> ignore
           }
         } else {
           c.rich([@ui.span(count(fleet, "chats").to_string(), scale=@sf.share_poster_number_scale)], style=poster_number)
@@ -147,8 +150,8 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
 ///|
 /// 小票: a till's receipt of the agents' week, on its paper. Read down: still.fail and when, in its middle; each day a
 /// line, its chats archived at its end (today's date in the orange); the chats archived and the tokens read as its
-/// subtotals; each kind of account a line (its accounts, its tokens and cost); between double dashes the week's spend,
-/// large, its total; a barcode made of what it says, still.fail's line under it.
+/// subtotals; each kind of account a line (its accounts), its models under it (each its tokens and cost); between
+/// double dashes the week's spend, large, its total; a barcode made of what it says, still.fail's line under it.
 fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
   let spent = items(fleet, "spent")
   let week = field(fleet, "week")
@@ -191,11 +194,12 @@ fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     }
     if spent.length() > 0 {
       c.box(style=receipt_items, fn() {
+        // each kind a line, its models under it, each its own tokens and cost
         for q in spent {
           let q = Some(q)
-          receipt_item(c, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"), false)
-          if text(q, "modelsText") != "" {
-            c.text(text(q, "modelsText"), style=receipt_models) |> ignore
+          c.text(text(q, "name") + " ×" + count(q, "accounts").to_string(), style=receipt_line) |> ignore
+          for m in items(q, "models") {
+            c.box(style=receipt_model, fn() { receipt_item(c, text(Some(m), "name"), text(Some(m), "lineText"), false) }) |> ignore
           }
         }
       })
@@ -310,9 +314,9 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         let q = Some(q)
         // (its tokens and cost under it, as the tasks' average under them: on its line a long name was cut short)
         term_key_line(c, if k == 0 { "accounts" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), "")
-        term_key_line(c, "", text(q, "lineText"), "")
-        if text(q, "modelsText") != "" {
-          term_key_line(c, "", text(q, "modelsText"), "")
+        // its models under it, each its own tokens and cost
+        for m in items(q, "models") {
+          term_key_line(c, "", "  " + text(Some(m), "name") + " · " + text(Some(m), "lineText"), "")
         }
       }
       term_key_line(c, "chats", text(fleet, "chatsText"), "")
@@ -502,9 +506,9 @@ let receipt_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 let receipt_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
 
 ///|
-/// A kind's models under its line, smaller, cut short past it.
+/// A kind's model, set in under its kind's line.
 // kept across runs: a value (no field of it changes)
-let receipt_models : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
+let receipt_model : @ui.Style = @ui.css("w=Full pl=S3")
 
 ///|
 /// A day's date (today's in the orange).
