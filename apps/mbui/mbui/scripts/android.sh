@@ -36,8 +36,8 @@ TC=$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin
 # ABI: the libraries' (default arm64-v8a, a phone's; x86_64 for an x86 machine's emulator: CI's, scripts/render_android.sh)
 ABI=${ABI:-arm64-v8a}
 case $ABI in
-  arm64-v8a) CC="$TC/aarch64-linux-android29-clang" ;;
-  x86_64) CC="$TC/x86_64-linux-android29-clang" ;;
+  arm64-v8a) CC="$TC/aarch64-linux-android30-clang" ;;
+  x86_64) CC="$TC/x86_64-linux-android30-clang" ;;
   *) echo "android.sh: ABI $ABI: arm64-v8a or x86_64"; exit 1 ;;
 esac
 export MBUI_ABI=$ABI

@@ -2,7 +2,7 @@
   "//": "mbui's own apps' APK (dev.mbui.demo: scripts/android.sh APP=demo, kitdemo, render…), as scripts/apk builds it (no Gradle): the host's Java and resources here, libmbui.so and what an app adds put by scripts/android.sh where jniLibs and assets say. Only debug builds (no R8).",
   "namespace": "dev.mbui",
   "applicationId": "dev.mbui.demo",
-  "minSdk": 29,
+  "minSdk": 30,
   "targetSdk": 36,
   "compileSdk": 36,
   "manifest": "app/src/main/AndroidManifest.xml",

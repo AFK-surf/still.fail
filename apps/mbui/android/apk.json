@@ -2,7 +2,7 @@
   "//": "still.fail mbui's APK as mbui/scripts/apk builds it (no Gradle): fail.still.mbui, its debug build .debug; as still.fail's Android app in its place (variants stable and beta: fail.still.android and fail.still.android.beta, their names, icons' colours and update feeds, the beta's core a beta's, as still.fail mbui's is: a build of every commit, the test channel's). Its host is mbui's (the Java of apps/mbui/mbui/android) with the still.fail core's (CoreHost.java here); libmbui.so and the core's parts are put by scripts/android.sh where jniLibs and assets say. The release: R8 over the Java (Media3's most of it), signed as every still.fail Android release is (the debug keystore $ANDROID_USER_HOME holds), its versionCode the build (git rev-list --count HEAD), versionName 0.1.<build>, its update feed android/mbui. PostHog's project from the file $STILLFAIL_POSTHOG names ({host, key}: docs/telemetry.md), as string resources Crashes.java reads.",
   "namespace": "dev.mbui",
   "applicationId": "fail.still.mbui",
-  "minSdk": 29,
+  "minSdk": 30,
   "targetSdk": 36,
   "compileSdk": 36,
   "manifest": "app/src/main/AndroidManifest.xml",
