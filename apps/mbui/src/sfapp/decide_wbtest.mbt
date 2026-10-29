@@ -154,6 +154,10 @@ test "the desk's chat: 忽略 at the end of the line saying what an agent needs,
   let (said_x, said_y, said_w, said_h) = t.rect_of(@sffixture.need_state.2).unwrap()
   assert_true(x > said_x + said_w)
   assert_true(y >= said_y && y <= said_y + said_h)
+  // its words and 忽略 on lines as high as the bell's column (an option's disc, 20), the bell in their middle: on the
+  // state line's 18 laid from the top they stood 1 over it
+  let (_, end_y, _, end_h) = t.rect_of("忽略").unwrap()
+  assert_eq((said_h, end_y, end_h), (20.0, said_y, 20.0))
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
   assert_eq(made.length(), 1)

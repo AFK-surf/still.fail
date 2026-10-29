@@ -420,10 +420,12 @@ fn ask_dismiss(
   if at_end {
     if asking {
       let words = @sf.t("web-main.chat.asks.dismiss")
-      // (on the line's own leading, level with its first line; a press reaches it from round it, press_reach)
+      // (on the card row's lines, level with its first line and the bell: ask_line_words; a press reaches it from
+      // round it, press_reach)
       let look = @sf.theme().chat_list
       let b = c.box(id=if shown { id } else { 0 }, fn() {
-        c.text(words, style=(if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)) |> ignore
+        let said = (if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)
+        c.text(words, style=@sf.ask_line_words(said)) |> ignore
       })
       if shown {
         c.semantics(b, Button, id~, label=words)

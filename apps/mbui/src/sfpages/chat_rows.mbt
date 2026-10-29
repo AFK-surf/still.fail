@@ -107,12 +107,14 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
 /// nothing left to let go).
 fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest : String, seq : Double?) -> Unit {
   let look = @sf.theme().chat_list
-  let said = look.state_turn.then(chat_state_wraps)
+  let said = @sf.ask_line_words(look.state_turn.then(chat_state_wraps))
   let stacked = @sf.native_on() && c.width <= chat_narrow_w
   let dismiss = fn() {
     match seq {
       Some(seq) => ask_dismiss(c, src, here, seq, true, false, at_end=true)
-      None => c.text(@sf.t("web-main.chat.asks.dismiss"), style=look.state_quiet.then(dismiss_end)) |> ignore
+      None =>
+        c.text(@sf.t("web-main.chat.asks.dismiss"), style=@sf.ask_line_words(look.state_quiet.then(dismiss_end)))
+        |> ignore
     }
   }
   // (an option row's ground and room, @sf.ask_line_card: its corner and its sides an option's)

@@ -64,6 +64,8 @@ pub fn ask_line_end(Double) -> @ui.Style
 
 pub fn ask_line_mark() -> @ui.Style
 
+pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
+
 pub fn at_head_end() -> Bool
 
 pub fn at_point(Double, Double) -> Beside
@@ -2361,6 +2363,7 @@ pub(all) struct Items {
   name : @ui.TextStyle
   meta : @ui.TextStyle
   mark : Double
+  mark_line : @ui.Leading
 }
 
 pub(all) enum Layout {
