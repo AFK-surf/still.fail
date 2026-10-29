@@ -467,8 +467,12 @@ fn center_panel(
         let now = steps.search(percent).unwrap_or(-1)
         c.box(style=center_choice, fn() {
           let chosen = @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now)
-          if chosen != now && chosen >= 0 {
+          if percent == u.scale_asked || chosen == now {
+            u.scale_asked = 0
+          }
+          if chosen != now && chosen >= 0 && steps[chosen] != u.scale_asked {
             let p = steps[chosen]
+            u.scale_asked = p
             let n = c.frame_number()
             c.tell("screen-scale/" + s.view + "/\{n}", fn() {
               s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(p.to_double()) }))

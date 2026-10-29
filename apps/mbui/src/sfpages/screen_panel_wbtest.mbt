@@ -133,6 +133,33 @@ test "缩放 while driving a station that changes it: its steps, the recommended
 }
 
 ///|
+test "缩放 with more steps than fit side by side: picked from a list with no search line (no keyboard for it)" {
+  // (an iPhone Duo's inner screen, sideways: 控制中心 a panel beside its button, its steps too many for one row)
+  let r = screen_rig(w=951.0, h=669.0, platform=1)
+  r.live()
+  let scale : Json = {
+    "percent": 100.0,
+    "recommended": 150.0,
+    "steps": [100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0, 300.0, 350.0],
+  }
+  r.state("live", more={ "scale": scale })
+  open_center(r)
+  r.t.tap_text("100%")
+  r.t.run_for(@ui.nav_push_ms)
+  assert_true(r.t.find("350%") is Some(_))
+  assert_true(r.t.find(tr("common.search")) is None)
+  assert_false(r.t.key_catching())
+  r.t.tap_text("300%")
+  // asked once, not again each frame until the station says it took
+  r.t.run_for(@ui.nav_push_ms)
+  let ins = r.inputs()
+  assert_eq(ins.length(), 1)
+  assert_eq(number(Some(ins[0]), "percent"), 300.0)
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
 test "no 缩放 from a station that does not change it" {
   let r = screen_rig()
   r.live()

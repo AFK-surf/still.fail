@@ -1342,7 +1342,7 @@ pub let phone_page : @ui.Style
 
 pub let phone_row_in : @ui.Space
 
-pub fn pick(String, Array[Choice], String, (String) -> Unit, from~ : Beside, along? : @ui.Along) -> Unit
+pub fn pick(String, Array[Choice], String, (String) -> Unit, from~ : Beside, along? : @ui.Along, search? : Bool) -> Unit
 
 pub fn pick_high() -> @ui.Style
 

@@ -363,7 +363,8 @@ fn choice_pick(
   }
   if c.clicked(id) {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
-    pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id))
+    // (a segmented control's options, short words each: nothing to search them by)
+    pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id), search=false)
     p.serial = last_presented()
   }
   let words = labels.get(now).unwrap_or("")

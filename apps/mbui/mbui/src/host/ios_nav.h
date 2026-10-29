@@ -539,8 +539,10 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
     nav_title(slot.navigationItem, bare ? title : @"", ink);
     // (put away only when something is up over the whole window, its title alone: hidden with its items gone, the system's
     // column keeps showing the views of those it had, a page's actions on the next tab, the outer screen's workspace
-    // button on the inner one; the user, 2026-10-27. Shown with none it takes no room: there, its items are the column's)
-    [nav setNavigationBarHidden:(bare && made.count + lead.count == 0) animated:bare];
+    // button on the inner one; the user, 2026-10-27. Shown with none it takes no room: there, its items are the column's.
+    // Nor with no title either (a remote screen's 全屏): put away, the column showed the chat's actions under it; shown,
+    // it is told they are gone, the user 2026-10-29)
+    [nav setNavigationBarHidden:(bare && made.count + lead.count == 0 && title.length > 0) animated:bare];
   }
 }
 - (UINavigationController *)navFor:(NSString *)ident {

@@ -1,5 +1,5 @@
 ///|
-test "Duo remote screen fits clear of its system column with native controls, including full screen" {
+test "Duo remote screen fits clear of its system column with native controls; full screen puts the column away" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   defer { @sf.native_bars_reset() }
   r.live()
@@ -16,11 +16,37 @@ test "Duo remote screen fits clear of its system column with native controls, in
   for id in ["lead/over/screen-close", "over/screen-mode", "over/screen-keyboard", "over/screen-center"] {
     assert_true(@sf.native_over.acts.iter().any(fn(a) { a.0 == id }), msg=id)
   }
-  r.ui().full = true
+  // 全屏 from the column: the system's bars hold nothing (no title, no actions), the stage edge to edge, its tools
+  // folded into the button over its corner
+  for a in @sf.native_over.acts.copy() {
+    if a.0 == "over/screen-full" { (a.3)() }
+  }
   @sf.native_over_clear()
   r.t.run_for(@ui.nav_push_ms)
+  assert_true(r.ui().full)
+  assert_true(@sf.native_over.up)
+  assert_eq(@sf.native_over.title, "")
+  assert_eq(@sf.native_over.acts.length(), 0)
   let (x, _, w, _) = c.rect_of(stage).unwrap()
-  assert_true(x + w <= 951.0 - 84.0)
+  assert_true(x <= 0.1 && x + w >= 951.0 - 0.1, msg="stage \{x} + \{w}")
+  assert_true(r.labelled(tr("android-misc.screen.tools")) is Some(_))
+  // the folded tools dragged off the corner: where they were let go, a drag past the window's edge kept inside it
+  let (tx, ty) = r.labelled(tr("android-misc.screen.tools")).unwrap()
+  r.t.drag(tx, ty, tx - 300.0, ty + 200.0)
+  r.t.draw()
+  let (mx, my) = r.labelled(tr("android-misc.screen.tools")).unwrap()
+  assert_true((mx - (tx - 300.0)).abs() < 2.0 && (my - (ty + 200.0)).abs() < 2.0, msg="moved to \{mx}, \{my}")
+  assert_false(r.ui().tools_open)
+  r.t.drag(mx, my, 2.0, 667.0)
+  r.t.draw()
+  let (lx, ly) = r.labelled(tr("android-misc.screen.tools")).unwrap()
+  assert_true(lx > 0.0 && lx < 60.0 && ly < 669.0 && ly > 669.0 - 60.0, msg="kept at \{lx}, \{ly}")
+  // back out of it from the folded tools: the column again
+  r.tap_label(tr("android-misc.screen.tools"))
+  r.tap_label(tr("android-misc.screen.unfull"))
+  @sf.native_over_clear()
+  r.t.run_for(@ui.nav_push_ms)
+  assert_false(r.ui().full)
   assert_true(@sf.native_over.acts.iter().any(fn(a) { a.0 == "lead/over/screen-close" }))
 }
 

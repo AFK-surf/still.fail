@@ -71,8 +71,9 @@ pub fn choice(
 priv enum Shows {
   /// a menu: its items (None a line between), its title ("" none), where a small panel lines up with what opened it
   Menu(Array[MenuItem?], String, @ui.Along)
-  /// a pick: its title, the choices, the one chosen now, what choosing one does
-  Pick(String, Array[Choice], String, (String) -> Unit, @ui.Along)
+  /// a pick: its title, the choices, the one chosen now, what choosing one does; whether a long one has a line to
+  /// search them by
+  Pick(String, Array[Choice], String, (String) -> Unit, @ui.Along, Bool)
   /// a small panel, or with nothing that opened it a dialog (PanelOf)
   Panel(PanelOf)
   /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
@@ -212,7 +213,8 @@ pub fn link_menu(href : String, from~ : Beside, open : () -> Unit, copy : () -> 
 
 ///|
 /// A pick of one of `choices` (`chosen` the one now), titled `title` ("" none), opened by `from`: chosen, it closes and `choose`
-/// goes on with its key. Longer than pick_search_from, a line to search them by is over them.
+/// goes on with its key. Longer than pick_search_from, a line to search them by is over them, unless not `search`
+/// (a few steps of a number: nothing to look for, and no keyboard up for it).
 pub fn pick(
   title : String,
   choices : Array[Choice],
@@ -220,8 +222,9 @@ pub fn pick(
   choose : (String) -> Unit,
   from~ : Beside,
   along? : @ui.Along = Start,
+  search? : Bool = true,
 ) -> Unit {
-  present(Pick(title, choices, chosen, choose, along), from.anchor())
+  present(Pick(title, choices, chosen, choose, along, search), from.anchor())
 }
 
 ///|
@@ -828,7 +831,7 @@ fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
     (_, Panel(x)) if x.stage => AsDialog
     (true, _) => AsSheet
     (false, Panel(x)) if from == Unanchored || x.form => AsDialog
-    (false, Menu(_, _, _) | Pick(_, _, _, _, _) | Panel(_)) => AsPopover
+    (false, Menu(_, _, _) | Pick(_, _, _, _, _, _) | Panel(_)) => AsPopover
     (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _)) => AsDialog
   }
 }
@@ -854,7 +857,8 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   }
   match p.shows {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
-    Pick(title, choices, chosen, choose, along) => pick_popover(c, key, p, title, choices, chosen, choose, along)
+    Pick(title, choices, chosen, choose, along, search) =>
+      pick_popover(c, key, p, title, choices, chosen, choose, along, search)
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
@@ -988,11 +992,12 @@ fn pick_popover(
   chosen : String,
   choose : (String) -> Unit,
   along : @ui.Along,
+  search : Bool,
 ) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
   // short: a menu of choices (controls.css.ts chooserMenu: the one chosen checked before its words, the arrows,
   // letters and Enter a menu's; none chosen, each its icon there), what each is under its words
-  if choices.length() < pick_search_from {
+  if choices.length() < pick_search_from || !search {
     // (its title over the choices, as a menu's is)
     let entries : Array[@kit.Entry] = if title != "" { [@kit.menu_label(title)] } else { [] }
     let one_chosen = choices.iter().any(fn(x) { x.key == chosen })
@@ -1528,7 +1533,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   }
   let over = p.over
   let share = match p.shows {
-    Pick(_, choices, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
+    Pick(_, choices, _, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _, _) => Some(sheet_ask)
     Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
@@ -1628,11 +1633,12 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       })
       |> ignore
     }
-    Pick(title, choices, chosen, choose, _) => {
+    Pick(title, choices, chosen, choose, _, search) => {
       if title != "" {
         sheet_title(c, title)
       }
-      let long = choices.length() >= pick_search_from
+      let many = choices.length() >= pick_search_from
+      let long = search && many
       let found = if long {
         let mut text = ""
         c.box(style=sheet_search_at, fn() {
@@ -1663,7 +1669,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           }
         }
       }
-      if long {
+      if many {
         // the rest of the sheet, scrolling
         c.box(style=sheet_grows, fn() {
           c.capped(key + "/list", wh_of(c), shrinks=true, fn() { c.box(style=sheet_rows, rows) |> ignore }) |> ignore

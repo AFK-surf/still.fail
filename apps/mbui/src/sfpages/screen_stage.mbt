@@ -86,6 +86,8 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     None => u.zoom.natural(0.0, 0.0)
   }
   u.zoom.boxed(u.box_w, u.box_h)
+  // where a double tap's glide has got to
+  u.zoom.step()
   let fit = u.fit()
   // zoomed in, the part of the screen in sight told the core, in this device's pixels (the whole once it is not)
   let scale = c.scale
@@ -505,7 +507,7 @@ fn gesture_new() -> Gesture {
 /// two moving together scroll. Driving it directly: a tap is a click where it is (down and up, the primary button), a
 /// press held a right click, a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two
 /// fingers spreading zoom the frame here (it is not sent); only looking, moving together pan it when zoomed, one finger
-/// too. What is sent goes once the frame's builds are over (Ctx::tell), in the order it was done.
+/// too, and a double tap zooms in where it is (or back to fitted). What is sent goes once the frame's builds are over (Ctx::tell), in the order it was done.
 fn screen_gestures(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -725,6 +727,19 @@ fn screen_gestures(
                     sent.push(pointer_input("up", at, btn_primary))
                   }
                   None => ()
+                }
+              } else if fit.w > 0.0 {
+                // only looking: tapped twice near the same place, zoomed in there (or back to fitted)
+                let near = ((g.sx - g.tx) * (g.sx - g.tx) + (g.sy - g.ty) * (g.sy - g.ty)).sqrt() <
+                  screen_slop * 4.0
+                if g.tap_open && near {
+                  u.zoom.double_tap(g.sx, g.sy)
+                  g.tap_open = false
+                } else {
+                  g.taps += 1
+                  g.tap_open = true
+                  g.tx = g.sx
+                  g.ty = g.sy
                 }
               }
             1 if !g.pad =>
